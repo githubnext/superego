@@ -1,0 +1,8 @@
+{
+  "name": "@mu/settings",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./file": "./src/file-store.ts" },
+  "dependencies": { "@mu/protocol": "workspace:*" }
+}

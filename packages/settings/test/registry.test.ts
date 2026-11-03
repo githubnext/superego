@@ -1,0 +1,50 @@
+import { describe, expect, it } from 'vitest'
+import { MemorySettingsStore, SettingsRegistry } from '../src/index.ts'
+
+const flush = () => new Promise((resolve) => setTimeout(resolve))
+
+describe('SettingsRegistry', () => {
+  it('reads defaults, validates and stores values, and notifies watchers', async () => {
+    const store = new MemorySettingsStore()
+    const settings = new SettingsRegistry(store)
+    let changes = 0
+    settings.onChange(() => changes++)
+    let options = ['a', 'b']
+    settings.register({ id: 's', title: 'S', settings: [
+      { key: 'flag', title: 'Flag', default: false, type: { type: 'boolean' } },
+      { key: 'pick', title: 'Pick', default: null, type: () => ({ type: 'choice', nullable: true, options: options.map((value) => ({ value, label: value })) }) },
+      { key: 'n', title: 'N', default: 1, type: { type: 'number', min: 0, max: 3 } },
+    ] })
+    await flush()
+    changes = 0
+    expect(settings.get('flag')).toBe(false)
+
+    await settings.set('flag', true)
+    await settings.set('pick', 'b')
+    await flush()
+    expect(changes).toBeGreaterThan(0)
+    expect(store.values).toEqual({ flag: true, pick: 'b' })
+
+    await expect(settings.set('flag', 'yes')).rejects.toMatchObject({ kind: 'invalid_setting' })
+    await expect(settings.set('n', 9)).rejects.toMatchObject({ kind: 'invalid_setting' })
+    await expect(settings.set('pick', 'c')).rejects.toMatchObject({ kind: 'invalid_setting' })
+    options = ['a', 'b', 'c']
+    await settings.set('pick', 'c')
+    await expect(settings.set('missing', 1)).rejects.toMatchObject({ kind: 'unknown_setting' })
+
+    await settings.reset('flag')
+    expect(settings.get('flag')).toBe(false)
+    const snapshot = await settings.snapshot()
+    expect(snapshot.values).toEqual({ flag: false, pick: 'c', n: 1 })
+    expect(snapshot.sections[0]!.settings[1]).toMatchObject({ type: 'choice', options: [{ value: 'a' }, { value: 'b' }, { value: 'c' }] })
+  })
+
+  it('keeps values of sections that are not registered yet, and refuses duplicate keys', async () => {
+    const settings = new SettingsRegistry(new MemorySettingsStore({ later: 'kept' }))
+    const off = settings.register({ id: 'x', title: 'X', settings: [{ key: 'later', title: 'Later', default: '', type: { type: 'string' } }] })
+    expect(settings.get('later')).toBe('kept')
+    expect(() => settings.register({ id: 'y', title: 'Y', settings: [{ key: 'later', title: 'Again', default: '', type: { type: 'string' } }] })).toThrow()
+    off()
+    expect((await settings.snapshot()).sections).toEqual([])
+  })
+})

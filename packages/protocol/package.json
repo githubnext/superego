@@ -1,0 +1,8 @@
+{
+  "name": "@mu/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@earendil-works/pi-durable": "1.5.0" }
+}

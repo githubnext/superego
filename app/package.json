@@ -1,0 +1,32 @@
+{
+  "name": "@mu/app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "out/main/main.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "smoke": "electron-vite build && test/smoke.sh"
+  },
+  "dependencies": {
+    "@earendil-works/chord": "1.5.0",
+    "@earendil-works/pi-durable": "1.5.0",
+    "@mu/daemon": "workspace:*",
+    "@mu/protocol": "workspace:*",
+    "@mu/ui": "workspace:*",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "@earendil-works/pi-ai": "1.5.0",
+    "@mu/settings": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^6.0.4",
+    "electron": "45.2.1",
+    "electron-vite": "6.0.0",
+    "vite": "^8.2.0"
+  }
+}

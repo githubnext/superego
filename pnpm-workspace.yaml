@@ -1,0 +1,10 @@
+packages:
+  - packages/*
+  - app
+allowBuilds:
+  electron: true
+  esbuild: true
+  '@google/genai': false
+  protobufjs: false
+minimumReleaseAgeExclude:
+  - '@earendil-works/*'
