@@ -29,11 +29,17 @@ export function App() {
     }
     window.addEventListener('keydown', onKey)
     // A notification's click, or `mu` on the command line, selects a session.
-    const show = (open: Selection | null) => { if (open) { setSettingsOpen(false); setSelection(open) } }
+    // The menu bar's Settings… opens them too.
+    const show = ({ open, settings }: { open?: Selection; settings?: boolean }) => {
+      if (open) { setSettingsOpen(false); setSelection(open) }
+      if (settings) setSettingsOpen(true)
+    }
     const off = window.mu.onEvent((event) => {
-      if (event.machine === 'app' && event.method === 'app.select') show(event.params as Selection)
+      if (event.machine !== 'app') return
+      if (event.method === 'app.select') show({ open: event.params as Selection })
+      if (event.method === 'app.settings') show({ settings: true })
     })
-    void (window.mu.call('app', 'app.ready', {}) as Promise<Selection | null>).then(show)
+    void (window.mu.call('app', 'app.ready', {}) as Promise<{ open?: Selection; settings?: boolean }>).then(show)
     return () => { window.removeEventListener('keydown', onKey); off() }
   }, [])
   const [sessionsByMachine, setSessionsByMachine] = useState<Record<string, SessionInfo[] | undefined>>({})

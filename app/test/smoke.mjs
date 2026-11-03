@@ -90,6 +90,16 @@ if (phase === 'first') {
   await until(`document.querySelector('.settings')?.textContent.includes('Providers') && Boolean(document.querySelector('[data-key="agent.model"]'))`, 'machine settings')
   const hasFaux = await run(`[...document.querySelectorAll('[data-key="agent.model"] option')].some((o) => o.value === 'faux/faux-1')`)
   if (!hasFaux) { await fail('model choices'); throw new Error('failed') }
+  // The menu bar: on by default; "Hide Dock icon" needs it; turning it off takes the item away.
+  const desktop = () => run(`window.mu.call('app', 'app.desktop', {})`)
+  if (!(await desktop()).menuBar) { await fail('menu bar item not up by default'); throw new Error('failed') }
+  await run(`window.mu.call('app', 'settings.set', { key: 'app.hideDock', value: true })`)
+  if (process.platform === 'darwin' && !(await desktop()).dockHidden) { await fail('dock not hidden'); throw new Error('failed') }
+  await run(`window.mu.call('app', 'settings.set', { key: 'app.menuBar', value: false })`)
+  await until(`window.mu.call('app', 'app.desktop', {}).then((d) => !d.menuBar && !d.dockHidden)`, 'menu bar off, dock back')
+  const refused = await run(`window.mu.call('app', 'settings.set', { key: 'app.hideDock', value: true }).then(() => 'set', (e) => e.message)`)
+  if (process.platform === 'darwin' && !/menu bar/.test(refused)) { await fail(`hide dock without menu bar: ${refused}`); throw new Error('failed') }
+  await run(`window.mu.call('app', 'settings.set', { key: 'app.menuBar', value: true })`)
   // The dialog: Escape in the font picker closes only the picker; the next Escape closes Settings.
   const escape = async () => {
     const contents = BrowserWindow.getAllWindows()[0].webContents
