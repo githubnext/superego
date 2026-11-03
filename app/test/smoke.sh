@@ -4,7 +4,10 @@ set -e
 cd "$(dirname "$0")/.."
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export MU_HOME="$(mktemp -d)" MU_MODEL=faux MU_HEADLESS=1
-cleanup() { [ -f "$MU_HOME/daemon.pid" ] && kill "$(cat "$MU_HOME/daemon.pid")" 2>/dev/null; rm -rf "$MU_HOME"; }
+cleanup() {
+  for pid in "$MU_HOME/daemon.pid" "$MU_HOME/second/daemon.pid"; do [ -f "$pid" ] && kill "$(cat "$pid")" 2>/dev/null; done
+  rm -rf "$MU_HOME"
+}
 trap cleanup EXIT
 ELECTRON=node_modules/.bin/electron
 MU_SMOKE_PHASE=first $ELECTRON test/smoke.mjs

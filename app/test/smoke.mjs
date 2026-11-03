@@ -8,6 +8,8 @@ import { readFileSync } from 'node:fs'
 const fail = async (message) => {
   console.error(`smoke(${phase}): FAIL ${message}`)
   const window = BrowserWindow.getAllWindows()[0]
+  if (window) console.error('POPOVER:', await window.webContents.executeJavaScript(`document.querySelector('.mu-font-picker__popover')?.textContent ?? 'none'`).catch(String))
+  if (window) console.error('ROWS:', await window.webContents.executeJavaScript(`[...document.querySelectorAll('.machine-row')].map((r) => r.textContent).join(' | ')`).catch(String))
   if (window) console.error('DOM:', (await window.webContents.executeJavaScript('document.body.innerText').catch((e) => String(e))).slice(0, 2000))
   try { console.error('daemon.log:', readFileSync(`${process.env.MU_HOME}/daemon.log`, 'utf8').slice(-2000)) } catch {}
   app.exit(1)
@@ -66,6 +68,24 @@ if (phase === 'first') {
   await until(`[...document.querySelectorAll('.machine-row')].some((row) => row.textContent.includes('mu-smoke.invalid') && /disconnected/.test(row.textContent))`, 'ssh machine listed with its error')
   await run(`(async () => { const list = await window.mu.machines(); await window.mu.call('app', 'machines.remove', { id: list.find((m) => m.label === 'Nowhere').id }) })()`)
   await until(`![...document.querySelectorAll('.machine-row')].some((row) => row.textContent.includes('mu-smoke.invalid'))`, 'machine removed')
+  // A second machine: another daemon, reached through a command that pipes stdio to it (as docker exec would).
+  const second = `MU_HOME='${process.env.MU_HOME}/second' MU_MODEL=faux node '${new URL('../../packages/daemon/src/cli.ts', import.meta.url).pathname}' connect --start`
+  await run(`window.mu.call('app', 'machines.add', { label: 'Second', via: ${JSON.stringify(second)} })`)
+  await until(`[...document.querySelectorAll('.machine-row')].some((row) => row.querySelector('input')?.value === 'Second' && / · connected/.test(row.textContent))`, 'second machine connected', 30_000)
+  // All machines: a disagreement shows as Mixed, and one change reaches both.
+  await run(`window.mu.call('local', 'settings.set', { key: 'agent.model', value: 'faux/faux-1' })`)
+  await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent === 'All machines').click()`)
+  await until(`document.querySelector('[data-key="agent.model"]')?.textContent.includes('Mixed')`, 'mixed model across machines')
+  await run(`(() => {
+    const select = document.querySelector('[data-key="agent.model"] select')
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, 'faux/faux-1')
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+  })()`)
+  await until(`!document.querySelector('[data-key="agent.model"]')?.textContent.includes('Mixed')`, 'model set on all machines')
+  const secondId = await run(`window.mu.machines().then((list) => list.find((m) => m.label === 'Second').id)`)
+  const secondModel = await run(`window.mu.call('${secondId}', 'settings.watch', {}).then((r) => r.value.values['agent.model'])`)
+  if (secondModel !== 'faux/faux-1') { await fail(`second machine model is ${secondModel}`); throw new Error('failed') }
+  await until(`document.querySelectorAll('.app__sidebar .machine').length === 2`, 'both machines in the sidebar')
   await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent.includes('This computer')).click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Providers') && Boolean(document.querySelector('[data-key="agent.model"]'))`, 'machine settings')
   const hasFaux = await run(`[...document.querySelectorAll('[data-key="agent.model"] option')].some((o) => o.value === 'faux/faux-1')`)
@@ -87,6 +107,7 @@ if (phase === 'first') {
   console.log('smoke(first): ok')
 } else {
   await until(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'session after reopen')
+  await until(`document.querySelectorAll('.app__sidebar .machine:not(.is-stale)').length === 2`, 'second machine reconnected after reopen', 30_000)
   await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: typed message')`, 'transcript after reopen')
   // App settings persisted in the app's own file.

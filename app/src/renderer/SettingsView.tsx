@@ -4,16 +4,20 @@ import { useEffect, useRef, useState, type ComponentType } from 'react'
 import type { AuthEvent, AuthPrompt, Json, Notifications, ProviderAuthInfo, SectionInfo, SettingInfo, SettingsSnapshot } from '@mu/protocol'
 import { Button, Dialog, FontPicker, Select, StatusGlyph, Switch, TextField } from '@mu/ui'
 import { DEFAULT_REMOTE_COMMAND, type MachineEntry } from '../shared.ts'
-import { machine as client, loadFonts, useSettings } from './client.ts'
+import { machine as client, has, loadFonts, useSettings } from './client.ts'
+import { mergeSettings, type MergedSetting } from './merge-settings.ts'
 
 const APP = 'app'
 const MACHINES = '$machines'
+const ALL = '$all'
 
 export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; onClose(): void }) {
   const [target, setTarget] = useState(APP)
   const machine = machines.find((m) => m.id === target)
   const connected = target === APP || machine?.state === 'connected'
-  const snapshot = useSettings(target, target !== MACHINES && connected)
+  const supported = target === APP || has(machine, 'settings')
+  const snapshot = useSettings(target, target !== MACHINES && target !== ALL && connected && supported)
+  const editable = machines.filter((m) => m.state === 'connected' && has(m, 'settings'))
 
   return (
     <Dialog title="Settings" size="large" onClose={onClose} className="settings">
@@ -21,6 +25,7 @@ export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; 
         <nav className="settings__nav">
           <button className={target === APP ? 'is-selected' : ''} onClick={() => setTarget(APP)}>General</button>
           <button className={target === MACHINES ? 'is-selected' : ''} onClick={() => setTarget(MACHINES)}>Machines</button>
+          {editable.length > 1 && <button className={target === ALL ? 'is-selected' : ''} onClick={() => setTarget(ALL)}>All machines</button>}
           {machines.filter((m) => m.state !== 'disabled').map((m) => (
             <button key={m.id} className={`settings__nav-machine ${target === m.id ? 'is-selected' : ''}`} onClick={() => setTarget(m.id)}>
               <StatusGlyph status={{ state: m.state === 'connected' ? 'idle' : 'error' }} /> {m.label}
@@ -29,7 +34,9 @@ export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; 
         </nav>
         <div className="settings__content">
           {target === MACHINES ? <Machines machines={machines} onOpen={setTarget} />
+            : target === ALL ? <AllMachines machines={editable} />
             : !connected ? <p className="settings__note">{machine?.label} is {machine?.state}. Its settings live on it, so they show once it is back.</p>
+            : !supported ? <p className="settings__note">The mu on {machine?.label} is too old to change its settings from here. Update it there.</p>
             : !snapshot ? <p className="settings__note">Loading…</p>
             : snapshot.sections.map((section) => <Section key={section.id} target={target} section={section} values={snapshot.values} />)}
         </div>
@@ -47,24 +54,31 @@ function Section({ target, section, values }: { target: string; section: Section
     <section className="settings-section">
       <h2>{section.title}</h2>
       {section.description && <p className="settings__note">{section.description}</p>}
-      {section.settings.filter((s) => !s.hidden).map((setting) => <Setting key={setting.key} target={target} setting={setting} value={values[setting.key] ?? null} />)}
+      {section.settings.filter((s) => !s.hidden).map((setting) => (
+        <Setting key={setting.key} setting={setting} value={values[setting.key] ?? null}
+          apply={(value) => client(target).call('settings.set', { key: setting.key, value })} />
+      ))}
       {Custom && <Custom target={target} section={section} />}
     </section>
   )
 }
 
-function Setting({ target, setting, value }: { target: string; setting: SettingInfo; value: Json }) {
+/** One setting's row. `apply` changes it wherever it lives; `mixed` shows that the machines it spans disagree. */
+function Setting({ setting, value, apply, mixed, note }: {
+  setting: SettingInfo; value: Json; apply(value: Json): Promise<unknown>; mixed?: boolean; note?: string
+}) {
   const [error, setError] = useState<string>()
   const set = (next: Json) => {
     setError(undefined)
-    client(target).call('settings.set', { key: setting.key, value: next }).catch((e: Error) => setError(e.message))
+    apply(next).catch((e: Error) => setError(e.message))
   }
+  if (mixed) value = null
   const disabled = Boolean(setting.disabled)
   let control
   switch (setting.type) {
-    case 'boolean': control = <Switch label={setting.title} checked={value === true} disabled={disabled} onChange={set} />; break
+    case 'boolean': control = <Switch label={setting.title} checked={!mixed && value === true} disabled={disabled} onChange={set} />; break
     case 'choice': control = <Select aria-label={setting.title} options={setting.options} value={typeof value === 'string' ? value : null} disabled={disabled}
-      nullLabel={setting.nullable ? setting.nullLabel ?? 'Default' : undefined} onChange={set} />; break
+      placeholder={mixed ? 'Mixed' : undefined} nullLabel={setting.nullable ? setting.nullLabel ?? 'Default' : undefined} onChange={set} />; break
     case 'number': control = <TextField type="number" aria-label={setting.title} defaultValue={String(value ?? '')} min={setting.min} max={setting.max} step={setting.step}
       disabled={disabled} onBlur={(e) => set(Number(e.target.value))} />; break
     case 'font': control = <FontPicker label={setting.title} value={typeof value === 'string' ? value : null} monospace={setting.monospace}
@@ -77,6 +91,7 @@ function Setting({ target, setting, value }: { target: string; setting: SettingI
       <div className="setting__label">
         <div>{setting.title}</div>
         {(setting.description || setting.disabled) && <div className="settings__note">{setting.disabled ?? setting.description}</div>}
+        {(mixed || note) && <div className="settings__note">{[mixed && 'Mixed: the machines differ.', note].filter(Boolean).join(' ')}</div>}
         {error && <div className="setting__error">{error}</div>}
       </div>
       <div className="setting__control">{control}</div>
@@ -196,6 +211,7 @@ function PromptField({ prompt, onAnswer }: { prompt: AuthPrompt; onAnswer(value:
 /** The machines this app connects to: this computer, and any reached over ssh. */
 function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: string): void }) {
   const [adding, setAdding] = useState(false)
+  const [via, setVia] = useState(false)
   const [error, setError] = useState<string>()
   const app = client(APP) as unknown as { call(method: string, params: unknown): Promise<unknown> }
   const act = (method: string, params: unknown) => { setError(undefined); return app.call(method, params).catch((e: Error) => { setError(e.message); throw e }) }
@@ -205,24 +221,28 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
       <h2>Machines</h2>
       <p className="settings__note">
         Every machine runs its own mu daemon with its own sessions, models and credentials. Other machines are reached with
-        {' '}<code>ssh &lt;target&gt; {DEFAULT_REMOTE_COMMAND}</code>, so they need mu installed and key-based ssh access.
+        {' '}<code>ssh &lt;target&gt; {DEFAULT_REMOTE_COMMAND}</code> (they need mu installed and key-based ssh access), or with
+        any command that pipes stdio to a daemon, such as <code>docker exec -i</code>.
       </p>
       {machines.map((m) => (
         <div key={m.id} className="machine-row">
           <div className="setting__label">
             <div>
               <StatusGlyph status={{ state: m.state === 'connected' ? 'idle' : m.state === 'connecting' ? 'working' : m.state === 'disabled' ? 'idle' : 'error' }} />{' '}
-              {m.ssh ? <input className="machine-row__label" defaultValue={m.label} aria-label="Name"
+              {m.remote ? <input className="machine-row__label" defaultValue={m.label} aria-label="Name"
                 onBlur={(e) => { if (e.target.value.trim() && e.target.value !== m.label) void act('machines.update', { id: m.id, label: e.target.value.trim() }) }} /> : m.label}
             </div>
             <div className="settings__note">
-              {m.ssh ? <code>ssh {m.ssh.target} {m.ssh.command}</code> : 'Local daemon'} · {m.state}{m.error && m.state !== 'connected' ? ` — ${m.error}` : ''}
+              {m.remote ? <code>{m.remote.route}</code> : 'Local daemon'}
+              {m.machine && m.machine.hostname !== m.label ? ` · ${m.machine.hostname}` : ''} · {m.state}{m.error && m.state !== 'connected' ? ` — ${m.error}` : ''}
             </div>
           </div>
           <div className="provider__actions">
             {m.state === 'connected' && <Button variant="ghost" onClick={() => onOpen(m.id)}>Settings</Button>}
-            {m.ssh && <Switch label={`Connect to ${m.label}`} checked={m.ssh.enabled} onChange={(enabled) => void act('machines.update', { id: m.id, enabled })} />}
-            {m.ssh && <Button variant="ghost" onClick={() => void act('machines.remove', { id: m.id })}>Remove</Button>}
+            {m.errorKind === 'wrong_machine' && <Button onClick={() => void act('machines.trust', { id: m.id })} title="Use whichever machine answers there now, e.g. after a reinstall">Trust this machine</Button>}
+            {(m.errorKind === 'version_mismatch' || m.errorKind === 'duplicate_machine') && <Button onClick={() => void act('machines.reconnect', { id: m.id })}>Retry</Button>}
+            {m.remote && <Switch label={`Connect to ${m.label}`} checked={m.remote.enabled} onChange={(enabled) => void act('machines.update', { id: m.id, enabled })} />}
+            {m.remote && <Button variant="ghost" onClick={() => void act('machines.remove', { id: m.id })}>Remove</Button>}
           </div>
         </div>
       ))}
@@ -230,11 +250,20 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
         <form className="machine-add" onSubmit={(e) => {
           e.preventDefault()
           const form = new FormData(e.currentTarget)
-          void act('machines.add', { label: form.get('label'), target: form.get('target'), command: form.get('command') }).then(() => setAdding(false), () => {})
+          const fields = via ? { label: form.get('label'), via: form.get('via') } : { label: form.get('label'), target: form.get('target'), command: form.get('command') }
+          void act('machines.add', fields).then(() => setAdding(false), () => {})
         }}>
-          <TextField name="target" autoFocus required placeholder="ssh target: user@host, or a Host from ~/.ssh/config" />
+          <Select aria-label="Connect with" value={via ? 'via' : 'ssh'} onChange={(value) => setVia(value === 'via')}
+            options={[{ value: 'ssh', label: 'Connect with ssh' }, { value: 'via', label: 'Connect with a command (docker exec, fly ssh, …)' }]} />
+          {via ? (
+            <TextField name="via" autoFocus required placeholder={`A command piping stdio to mu, e.g. docker exec -i box ${DEFAULT_REMOTE_COMMAND}`} />
+          ) : (
+            <>
+              <TextField name="target" autoFocus required placeholder="ssh target: user@host, or a Host from ~/.ssh/config" />
+              <TextField name="command" placeholder={`Remote command (default: ${DEFAULT_REMOTE_COMMAND})`} />
+            </>
+          )}
           <TextField name="label" placeholder="Name (optional)" />
-          <TextField name="command" placeholder={`Remote command (default: ${DEFAULT_REMOTE_COMMAND})`} />
           <div className="provider__actions">
             <Button type="submit" variant="primary">Add machine</Button>
             <Button variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
@@ -243,5 +272,50 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
       ) : <div className="machine-add__open"><Button onClick={() => setAdding(true)}>Add machine…</Button></div>}
       {error && <p className="setting__error">{error}</p>}
     </section>
+  )
+}
+
+/** Report each machine's settings snapshot up, so the parent can merge them; hooks can't run in a loop. */
+function MachineSnapshot({ id, onSnapshot }: { id: string; onSnapshot(id: string, snapshot: SettingsSnapshot | undefined): void }) {
+  const snapshot = useSettings(id, true)
+  useEffect(() => { onSnapshot(id, snapshot) }, [snapshot])
+  useEffect(() => () => onSnapshot(id, undefined), [])
+  return null
+}
+
+/**
+ * Edit every connected machine's settings at once. A bulk edit, not a stored default: it changes the machines connected
+ * now; machines that are offline or added later keep their own values.
+ */
+function AllMachines({ machines }: { machines: MachineEntry[] }) {
+  const [snapshots, setSnapshots] = useState<Record<string, SettingsSnapshot>>({})
+  const onSnapshot = (id: string, snapshot: SettingsSnapshot | undefined) => setSnapshots((all) => {
+    const { [id]: _, ...rest } = all
+    return snapshot ? { ...rest, [id]: snapshot } : rest
+  })
+  const label = (id: string) => machines.find((m) => m.id === id)?.label ?? id
+  const sections = mergeSettings(snapshots)
+  const apply = async (setting: MergedSetting, value: Json) => {
+    const results = await Promise.allSettled(setting.machines.map((id) => client(id).call('settings.set', { key: setting.key, value })))
+    const failed = results.flatMap((result, index) => result.status === 'rejected' ? [`${label(setting.machines[index]!)}: ${(result.reason as Error).message}`] : [])
+    if (failed.length) throw new Error(failed.join('; '))
+  }
+  return (
+    <>
+      {machines.map((m) => <MachineSnapshot key={m.id} id={m.id} onSnapshot={onSnapshot} />)}
+      <p className="settings__note">
+        Changes go to the {machines.length} machines connected now: {machines.map((m) => m.label).join(', ')}.
+        Machines that are offline or added later keep their own settings. Model lists show only what every machine offers.
+      </p>
+      {sections.map((section) => (
+        <section key={section.id} className="settings-section">
+          <h2>{section.title}</h2>
+          {section.settings.map((setting) => (
+            <Setting key={setting.key} setting={setting} value={setting.value} mixed={setting.mixed} apply={(value) => apply(setting, value)}
+              note={setting.machines.length < machines.length ? `Only on ${setting.machines.map(label).join(', ')}.` : undefined} />
+          ))}
+        </section>
+      ))}
+    </>
   )
 }

@@ -1,7 +1,7 @@
 // The mu daemon: one per user per machine. It owns a pi-durable Harness on SQLite, the session catalog, and every
 // live subscription. Clients (the Electron app, the CLI, a remote app over ssh) speak the protocol in @mu/protocol.
 import { randomUUID } from 'node:crypto'
-import { mkdir } from 'node:fs/promises'
+import { link, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { hostname, platform } from 'node:os'
 import { join } from 'node:path'
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
@@ -13,7 +13,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  deriveStatus, PROTOCOL_VERSION, RpcError, type MachineInfo, type Methods, type Notifications, type RpcPeer, type SessionInfo,
+  deriveStatus, FEATURES, PROTOCOL_VERSION, RpcError, type MachineInfo, type Methods, type Notifications, type RpcPeer, type SessionInfo,
 } from '@mu/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@mu/settings'
 import { FileSettingsStore } from '@mu/settings/file'
@@ -56,6 +56,21 @@ export type Daemon = {
   close(): Promise<void>
 }
 
+/**
+ * This machine's identity, created once and kept in the data dir. Written to a temporary file and hard-linked into
+ * place, which is atomic and fails if the id exists: two daemons starting at once agree on whichever linked first.
+ */
+async function machineId(dataDir: string) {
+  const path = join(dataDir, 'machine-id')
+  const existing = (await readFile(path, 'utf8').catch(() => '')).trim()
+  if (existing) return existing
+  const temp = `${path}.${process.pid}.tmp`
+  await writeFile(temp, randomUUID(), { mode: 0o600 })
+  await link(temp, path).catch(() => {})
+  await rm(temp, { force: true })
+  return (await readFile(path, 'utf8')).trim()
+}
+
 export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
   const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')))
@@ -73,7 +88,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? defaultCwd }),
   }, context)
 
-  const machine: MachineInfo = { hostname: hostname(), platform: platform(), pid: process.pid, dataDir: options.dataDir }
+  const machine: MachineInfo = { id: await machineId(options.dataDir), hostname: hostname(), platform: platform(), pid: process.pid, dataDir: options.dataDir }
   const mounted = new Map<string, Mounted>()
   const listListeners = new Set<() => void>()
   let listQueued = false
@@ -152,8 +167,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       const notify = <N extends keyof Notifications>(event: N, params: Notifications[N]) => peer.notify(event, params)
       const handlers: H = {
         async hello({ version }) {
-          if (version !== PROTOCOL_VERSION) throw new RpcError('version_mismatch', `Daemon speaks protocol ${PROTOCOL_VERSION}, client ${version}`)
-          return { version: PROTOCOL_VERSION, machine, methods: Object.keys(handlers) }
+          if (version !== PROTOCOL_VERSION) {
+            throw new RpcError('version_mismatch', `This machine's mu speaks protocol ${PROTOCOL_VERSION}, the client ${version}`, { hint: 'Update mu on the older side.' })
+          }
+          return { version: PROTOCOL_VERSION, features: [...FEATURES], machine, methods: Object.keys(handlers) }
         },
         'session.list': () => list(),
         async 'session.create'({ cwd, title }) {

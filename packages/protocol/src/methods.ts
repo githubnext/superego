@@ -4,7 +4,18 @@ import type { ConversationView } from '@earendil-works/pi-durable'
 import type { AuthEvent, Json, SettingsSnapshot } from './settings.ts'
 import type { Status } from './status.ts'
 
+/**
+ * The protocol's generation. It changes only for a break no feature flag can bridge; a daemon and client of different
+ * generations refuse each other. Everything else is additive and announced in `FEATURES`.
+ */
 export const PROTOCOL_VERSION = 2
+
+/**
+ * What a daemon of this build offers, announced in `hello`. Clients check a feature before using it, so an older
+ * daemon on another machine keeps working with a newer app (and the other way round) for whatever both know.
+ */
+export const FEATURES = ['sessions', 'settings', 'auth'] as const
+export type Feature = (typeof FEATURES)[number]
 
 export type SessionId = string
 
@@ -16,10 +27,13 @@ export type SessionInfo = {
   status: Status
 }
 
-export type MachineInfo = { hostname: string; platform: string; pid: number; dataDir: string }
+/** `id` is the machine's identity: stable across restarts and routes, so a client can tell it is the same machine. */
+export type MachineInfo = { id: string; hostname: string; platform: string; pid: number; dataDir: string }
+
+export type Hello = { version: number; features: string[]; machine: MachineInfo; methods: string[] }
 
 export type Methods = {
-  hello: { params: { client: string; version: number }; result: { version: number; machine: MachineInfo; methods: string[] } }
+  hello: { params: { client: string; version: number; features?: string[] }; result: Hello }
   'session.list': { params: {}; result: SessionInfo[] }
   'session.create': { params: { cwd?: string; title?: string }; result: SessionInfo }
   'session.rename': { params: { id: SessionId; title: string }; result: null }

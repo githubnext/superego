@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
-import { PROTOCOL_VERSION, type AuthEvent, type Notifications, type ProviderAuthInfo, type RpcPeer, type SessionInfo, type SettingsSnapshot } from '@mu/protocol'
+import { PROTOCOL_VERSION, type AuthEvent, type Hello, type Notifications, type ProviderAuthInfo, type RpcPeer, type SessionInfo, type SettingsSnapshot } from '@mu/protocol'
 import { connectSocket, listen, openDaemon, type Daemon } from '../src/index.ts'
 
 // Only the scripted model, whatever keys the machine running the tests has.
@@ -39,6 +39,17 @@ describe('daemon', () => {
     const { peer, close } = await open()
     await expect(peer.call('hello', { client: 'test', version: 999 })).rejects.toMatchObject({ kind: 'version_mismatch' })
     await close()
+  })
+
+  it('announces its features and keeps one identity across restarts', async () => {
+    const first = await open()
+    const hello = await first.peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
+    expect(hello.features).toEqual(expect.arrayContaining(['sessions', 'settings', 'auth']))
+    expect(hello.machine.id).toMatch(/^[0-9a-f-]{36}$/)
+    await first.close()
+    const second = await open()
+    expect((await second.peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })).machine.id).toBe(hello.machine.id)
+    await second.close()
   })
 
   it('runs a session, streams its view as ops, and derives status', async () => {
@@ -127,5 +138,42 @@ describe('daemon', () => {
     await peer.call('auth.logout', { provider: 'anthropic' })
     await until(() => providers(snapshot).find((p) => p.id === 'anthropic')?.stored === false)
     await close()
+  })
+})
+
+describe('record and replay', () => {
+  it('records answers and plays them back in order', async () => {
+    const recording = join(dir, 'turns.jsonl')
+    process.env.MU_RECORD = recording
+    const first = await open()
+    const one = await first.peer.call<SessionInfo>('session.create', {})
+    await first.peer.call('session.submit', { id: one.id, text: 'first' })
+    await until(async () => (await sessions(first.peer))[0]!.status.state === 'done')
+    await first.peer.call('session.submit', { id: one.id, text: 'second' })
+    await until(async () => (await sessions(first.peer))[0]!.status.state === 'done')
+    await first.close()
+    delete process.env.MU_RECORD
+
+    const replayDir = join(dir, 'replay')
+    process.env.MU_MODEL = 'replay:' + recording
+    process.env.MU_REPLAY_SPEED = '0'
+    const daemon = await openDaemon({ dataDir: replayDir, defaultCwd: dir })
+    const server = await listen(daemon, join(replayDir, 'mu.sock'))
+    const { peer, socket } = await connectSocket(join(replayDir, 'mu.sock'))
+    await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
+    const created = await peer.call<SessionInfo>('session.create', {})
+    const answers: string[] = []
+    for (const text of ['anything', 'else', 'more']) {
+      await peer.call('session.submit', { id: created.id, text })
+      await until(async () => (await sessions(peer))[0]!.status.state === 'done')
+      const { value } = await peer.call<{ value: ConversationView }>('session.watch', { id: created.id })
+      answers.push(JSON.stringify(value.entries.filter((e) => e.kind === 'pi.assistant').at(-1)))
+      await peer.call('session.seen', { id: created.id })
+    }
+    expect(answers[0]).toContain('echo: first')
+    expect(answers[1]).toContain('echo: second')
+    expect(answers[2]).toContain('Replay finished')
+    socket.destroy(); server.close(); await daemon.close()
+    delete process.env.MU_REPLAY_SPEED
   })
 })

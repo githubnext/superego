@@ -1,5 +1,5 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": { "jsx": "react-jsx", "lib": ["es2023", "dom"], "types": ["node"], "module": "esnext", "moduleResolution": "bundler" },
-  "include": ["src", "electron.vite.config.ts"]
+  "include": ["src", "test", "electron.vite.config.ts"]
 }

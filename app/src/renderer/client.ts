@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
-import type { Client, MethodName, Notifications, Params, Result, SessionInfo, SettingsSnapshot } from '@mu/protocol'
+import type { Client, Feature, MethodName, Notifications, Params, Result, SessionInfo, SettingsSnapshot } from '@mu/protocol'
 import type { MachineEntry, MachineId, MuBridge } from '../shared.ts'
 
 declare global {
@@ -16,6 +16,9 @@ export function machine(id: MachineId): Client {
     on: (event, listener) => window.mu.onEvent((e) => { if (e.machine === id && e.method === event) listener(e.params as never) }),
   }
 }
+
+/** Whether a machine's daemon offers `feature` (from its hello); unknown until it has connected once. */
+export const has = (machine: MachineEntry | undefined, feature: Feature) => machine?.features?.includes(feature) ?? false
 
 export function useMachines(): MachineEntry[] {
   const [machines, setMachines] = useState<MachineEntry[]>([])

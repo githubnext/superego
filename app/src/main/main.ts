@@ -7,9 +7,10 @@ import { RpcError, type Notifications, type SessionInfo } from '@mu/protocol'
 import { serveSettings } from '@mu/settings'
 import { CHANNEL, DEFAULT_REMOTE_COMMAND, type CallResult, type MachineConfig, type MachineEntry, type MuEvent } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
+import { checkIdentity } from './identity.ts'
 import { Link, type Transport } from './link.ts'
 import { MachineStore } from './machines.ts'
-import { openSsh } from './ssh.ts'
+import { openSsh, openVia } from './ssh.ts'
 
 const dataDir = defaultDataDir()
 const socket = socketPath(dataDir)
@@ -55,9 +56,12 @@ function appEndpoint(contents: Electron.WebContents) {
   const handlers: Record<string, (params: any) => Promise<unknown>> = {
     ...serveSettings(appSettings, (params) => send('settings.changed', params), subs),
     async unwatch({ sub }: { sub: string }) { subs.get(sub)?.(); subs.delete(sub); return null },
-    'machines.add': (params: { label?: string; target: string; command?: string }) => machineStore.add(params),
+    'machines.add': (params: { label?: string; target?: string; command?: string; via?: string }) => machineStore.add(params),
     'machines.update': async ({ id, ...patch }: { id: string } & Partial<MachineConfig>) => { await machineStore.update(id, patch); return null },
     'machines.remove': async ({ id }: { id: string }) => { await machineStore.remove(id); return null },
+    'machines.trust': async ({ id }: { id: string }) => { await machineStore.forgetIdentity(id); restartLink(id); return null },
+    /** Try a machine that gave up (an incompatible or unexpected daemon) again. */
+    'machines.reconnect': async ({ id }: { id: string }) => { if (id === 'local') restartLocal(); else restartLink(id); return null },
   }
   return handlers
 }
@@ -76,26 +80,57 @@ function machineEntries(): MachineEntry[] {
   return [
     ...(local ? [local.entry()] : []),
     ...machineStore.list().map((config): MachineEntry => {
-      const ssh = { target: config.target, command: config.command ?? DEFAULT_REMOTE_COMMAND, enabled: config.enabled }
+      const remote = { route: routeOf(config), enabled: config.enabled }
       const link = links.get(config.id)
-      return link ? { ...link.entry(), label: config.label, ssh } : { id: config.id, label: config.label, state: 'disabled', ssh }
+      return link ? { ...link.entry(), label: config.label, remote } : { id: config.id, label: config.label, state: 'disabled', remote }
     }),
   ]
 }
+/** How a machine is reached, as the user would type it. */
+const routeOf = (config: MachineConfig) => config.via ?? `ssh ${config.target} ${config.command ?? DEFAULT_REMOTE_COMMAND}`
+
+/**
+ * A link to a configured machine. Identity is not the route: the first daemon to answer at the target is remembered,
+ * and later a different one there is refused until the user trusts it. One machine reached two ways is refused too.
+ */
+function sshLink(config: MachineConfig) {
+  return new Link({
+    id: config.id, label: config.label,
+    open: () => config.via ? openVia(config.via) : openSsh(config.target, config.command ?? DEFAULT_REMOTE_COMMAND),
+    onEvent: (method, params) => onMachineEvent(config.id, method, params),
+    verify(hello) {
+      const current = machineStore.get(config.id)
+      const connected = [...links.values()].filter((other) => other.id !== config.id && other.state === 'connected' && other.hello)
+        .map((other) => ({ label: other.label, id: other.hello!.machine.id }))
+      checkIdentity(hello, { target: config.via ? 'that command' : config.target, ...(current?.daemonId ? { expected: current.daemonId } : {}) }, connected)
+      if (!current?.daemonId) void machineStore.update(config.id, { daemonId: hello.machine.id })
+    },
+  })
+}
+function restartLocal() {
+  links.get('local')?.stop()
+  addLink(new Link({ id: 'local', label: 'This computer', open: openLocal, onEvent: (method, params) => onMachineEvent('local', method, params) }))
+}
+function restartLink(id: string) {
+  links.get(id)?.stop()
+  links.delete(id)
+  linkConfig.delete(id)
+  syncLinks()
+}
+
 /** Start, restart or stop links to match the configured machines. */
 function syncLinks() {
   const configs = machineStore.list()
   for (const [id, link] of links) {
     if (id === 'local') continue
     const config = configs.find((c) => c.id === id)
-    const key = config && JSON.stringify([config.target, config.command])
+    const key = config && routeOf(config)
     if (!config?.enabled || key !== linkConfig.get(id)) { link.stop(); links.delete(id); linkConfig.delete(id) }
   }
   for (const config of configs) {
     if (!config.enabled || links.has(config.id)) continue
-    linkConfig.set(config.id, JSON.stringify([config.target, config.command]))
-    addLink(new Link(config.id, config.label, () => openSsh(config.target, config.command ?? DEFAULT_REMOTE_COMMAND),
-      (method, params) => onMachineEvent(config.id, method, params)))
+    linkConfig.set(config.id, routeOf(config))
+    addLink(sshLink(config))
   }
   broadcast({ machine: APP, method: '$machines', params: machineEntries() })
 }
@@ -185,7 +220,7 @@ app.whenReady().then(() => {
   // Font pickers list the installed fonts (the Local Font Access API); nothing else is granted.
   session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(permission === 'local-fonts'))
   session.defaultSession.setPermissionCheckHandler((_contents, permission) => permission === 'local-fonts')
-  addLink(new Link('local', 'This computer', openLocal, (method, params) => onMachineEvent('local', method, params)))
+  restartLocal()
   syncLinks()
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })

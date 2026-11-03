@@ -4,7 +4,7 @@ import { Sidebar } from './Sidebar.tsx'
 import { SessionView } from './SessionView.tsx'
 import { SettingsView } from './SettingsView.tsx'
 import { Button } from '@mu/ui'
-import { machine, useMachines, useSessions, useSettings } from './client.ts'
+import { has, machine, useMachines, useSessions, useSettings } from './client.ts'
 import type { MachineEntry } from '../shared.ts'
 
 export type Selection = { machine: string; session: string } | undefined
@@ -70,7 +70,7 @@ export function App() {
 function MachineSessions({ entry, onSessions, children }: {
   entry: MachineEntry; onSessions(list: SessionInfo[] | undefined): void; children(list: SessionInfo[] | undefined): React.ReactNode
 }) {
-  const sessions = useSessions(entry.id, entry.state === 'connected')
+  const sessions = useSessions(entry.id, entry.state === 'connected' && has(entry, 'sessions'))
   useEffect(() => { onSessions(sessions) }, [sessions])
   return <>{children(sessions)}</>
 }

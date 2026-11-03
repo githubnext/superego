@@ -8,16 +8,20 @@ export const TextField = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLIn
 
 export type SelectOption = { value: string; label: string; group?: string }
 
-/** A native select; options with a `group` are gathered under it, in first-seen order. */
-export function Select({ options, value, onChange, nullLabel, className = '', ...props }:
-  Omit<SelectHTMLAttributes<HTMLSelectElement>, 'value' | 'onChange'> & {
-    options: SelectOption[]; value: string | null; onChange(value: string | null): void; nullLabel?: string
+const PLACEHOLDER = '\u0000placeholder'
+
+/** A native select; with `placeholder` it shows that text (e.g. "Mixed") until something is chosen. */
+export function Select({ options, value, onChange, nullLabel, placeholder, className = '', ...props }:
+  Omit<SelectHTMLAttributes<HTMLSelectElement>, 'value' | 'onChange' | 'placeholder'> & {
+    options: SelectOption[]; value: string | null; onChange(value: string | null): void; nullLabel?: string; placeholder?: string
   }) {
   const groups = new Map<string | undefined, SelectOption[]>()
   for (const option of options) groups.set(option.group, [...groups.get(option.group) ?? [], option])
   const render = (list: SelectOption[]) => list.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)
   return (
-    <select className={`mu-field mu-select ${className}`} value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)} {...props}>
+    <select className={`mu-field mu-select ${className}`} value={placeholder !== undefined ? PLACEHOLDER : value ?? ''}
+      onChange={(e) => { if (e.target.value !== PLACEHOLDER) onChange(e.target.value === '' ? null : e.target.value) }} {...props}>
+      {placeholder !== undefined && <option value={PLACEHOLDER} disabled hidden>{placeholder}</option>}
       {nullLabel !== undefined && <option value="">{nullLabel}</option>}
       {[...groups].map(([group, list]) => group === undefined ? render(list) : <optgroup key={group} label={group}>{render(list)}</optgroup>)}
     </select>

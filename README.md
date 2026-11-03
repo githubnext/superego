@@ -16,7 +16,9 @@ node packages/daemon/src/cli.ts help
 | Variable | Meaning |
 |---|---|
 | `MU_HOME` | Data dir (default `~/.mu`): `mu.sqlite`, `mu.sock`, `daemon.log`, `settings.json`, `auth.json`, `app-settings.json` |
-| `MU_MODEL` | Default model when none is chosen in Settings (`provider/model`), or `faux` for the echo model |
+| `MU_MODEL` | Default model when none is chosen in Settings (`provider/model`), `faux` for the echo model, or `replay:<file>` to play back recorded turns |
+| `MU_RECORD` | Append every real model answer to this JSONL file, for `replay:` later |
+| `MU_REPLAY_SPEED` | Replay pace in tokens per second (default 120; 0 is instant) |
 | `MU_CWD` | Default working directory for new sessions |
 
 **Layout**

@@ -11,6 +11,7 @@ import { openaiProvider } from '@earendil-works/pi-ai/providers/openai'
 import type { ModelRef } from '@earendil-works/pi-durable'
 import { RpcError, type AuthEvent, type AuthPrompt, type ProviderAuthInfo, type SettingOption } from '@mu/protocol'
 import type { SettingsRegistry } from '@mu/settings'
+import { replayProvider, withRecording } from './replay.ts'
 
 /** The model each provider starts on when it is the first one signed in. */
 const PREFERRED: Record<string, string> = { anthropic: 'claude-opus-5-5', openai: 'gpt-6.1-sol' }
@@ -112,10 +113,14 @@ export type AgentSettings = {
 export async function createAgentSettings(settings: SettingsRegistry, dataDir: string): Promise<AgentSettings> {
   const credentials = new FileCredentialStore(join(dataDir, 'auth.json'))
   const models = createModels({ credentials })
-  models.setProvider(anthropicProvider())
-  models.setProvider(withServiceTier(openaiProvider(), () => settings.get<boolean>(KEYS.fast) && FAST.has(chosen()?.provider ?? '')))
+  // MU_RECORD keeps every answer for replaying later; see replay.ts.
+  const record = process.env.MU_RECORD
+  const recorded = <T extends Provider>(provider: T) => record ? withRecording(provider, record) : provider
+  models.setProvider(recorded(anthropicProvider()))
+  models.setProvider(recorded(withServiceTier(openaiProvider(), () => settings.get<boolean>(KEYS.fast) && FAST.has(chosen()?.provider ?? ''))))
   const env = process.env.MU_MODEL
-  if (env === 'faux') models.setProvider(echoProvider().provider)
+  if (env === 'faux') models.setProvider(recorded(echoProvider().provider))
+  if (env?.startsWith('replay:')) models.setProvider(replayProvider(env.slice('replay:'.length)).provider)
 
   /** Which providers can be used, refreshed after every sign-in and sign-out; option lists are built from it. */
   let authed = new Map<string, Awaited<ReturnType<Models['checkAuth']>>>()
@@ -135,7 +140,8 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
   }
   /** The chosen model; with none chosen, `MU_MODEL`, else the preferred model of the first provider signed in. */
   function chosen(): ModelRef | undefined {
-    const explicit = parse(settings.get<string | null>(KEYS.model)) ?? parse(env === 'faux' ? `faux/${models.getModels('faux')[0]?.id}` : env)
+    const builtIn = env === 'faux' ? `faux/${models.getModels('faux')[0]?.id}` : env?.startsWith('replay:') ? 'replay/replay' : env
+    const explicit = parse(settings.get<string | null>(KEYS.model)) ?? parse(builtIn)
     if (explicit) return explicit
     for (const provider of models.getProviders()) {
       if (!authed.get(provider.id)) continue
@@ -185,7 +191,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
     id: 'providers', title: 'Providers', order: 20, ui: 'providers',
     description: `Credentials are stored on this machine in ${join(dataDir, 'auth.json')}.`,
     settings: [],
-    data: () => models.getProviders().filter((p) => p.id !== 'faux').map((provider): ProviderAuthInfo => {
+    data: () => models.getProviders().filter((p) => p.id !== 'faux' && p.id !== 'replay').map((provider): ProviderAuthInfo => {
       const auth = authed.get(provider.id)
       return {
         id: provider.id, name: provider.name, stored: stored.has(provider.id),
