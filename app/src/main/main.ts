@@ -268,8 +268,11 @@ function refreshDesktop() {
   menuBar.update(menuBarOn())
   if (!mac || headless) return
   const windows = BrowserWindow.getAllWindows().length > 0
-  if (dockHidden() || (!windows && menuBarOn())) app.dock?.hide()
-  else void app.dock?.show()
+  const visible = !(dockHidden() || (!windows && menuBarOn()))
+  // Only on a change: Electron's dock.show() briefly activates the Dock to redraw the menu bar, which flashes the app.
+  if (!app.dock || app.dock.isVisible() === visible) return
+  if (visible) void app.dock.show()
+  else app.dock.hide()
 }
 appSettings.onChange(refreshDesktop)
 

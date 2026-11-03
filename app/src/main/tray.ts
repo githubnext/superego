@@ -30,6 +30,8 @@ export class MenuBar {
   }
 
   #headlessShown = false
+  /** What the item last showed, so an unchanged redraw leaves it (and an open menu) alone. */
+  #drawn = ''
   /** Whether the item is up (or, headless, would be). */
   get shown() { return Boolean(this.#tray) || this.#headlessShown }
 
@@ -39,6 +41,7 @@ export class MenuBar {
       this.#tray?.destroy()
       this.#tray = undefined
       this.#headlessShown = false
+      this.#drawn = ''
       return
     }
     // Tests run headless: no item appears on the desktop, but they can tell it would, and break where it would.
@@ -53,8 +56,8 @@ export class MenuBar {
     const all = machines.flatMap((m) => this.#model.sessions(m.id).map((session) => ({ machine: m, session })))
     const wanting = all.filter(({ session }) => WANTS_A_LOOK.has(session.status.state))
     const working = all.filter(({ session }) => session.status.state === 'working')
-    this.#tray.setTitle(wanting.length ? `µ ${wanting.length}` : 'µ', { fontType: 'monospacedDigit' })
-    this.#tray.setToolTip(working.length ? `mu: ${working.length} working` : 'mu')
+    const title = wanting.length ? `µ ${wanting.length}` : 'µ'
+    const tooltip = working.length ? `mu: ${working.length} working` : 'mu'
 
     const item = ({ machine, session }: (typeof all)[number]): MenuItemConstructorOptions => ({
       label: `${GLYPH[session.status.state] ?? '○'}  ${session.title}${machines.length > 1 ? `  — ${machine.label}` : ''}`,
@@ -68,7 +71,7 @@ export class MenuBar {
       enabled: service.phase === 'required' || service.phase === 'error',
       click: () => this.#model.restart(),
     }, { type: 'separator' }]
-    this.#tray.setContextMenu(Menu.buildFromTemplate([
+    const template: MenuItemConstructorOptions[] = [
       { label: 'Open mu', click: () => this.#model.open() },
       { type: 'separator' },
       ...restart,
@@ -81,6 +84,12 @@ export class MenuBar {
       { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => this.#model.openSettings() },
       { label: 'Quit mu', click: () => this.#model.quit() },
       { label: 'Quit and Stop Agents', click: () => this.#model.quitAndStop() },
-    ]))
+    ]
+    const drawn = JSON.stringify([title, tooltip, template.map((item) => [item.label, item.enabled, item.type])])
+    if (drawn === this.#drawn) return
+    this.#drawn = drawn
+    this.#tray.setTitle(title, { fontType: 'monospacedDigit' })
+    this.#tray.setToolTip(tooltip)
+    this.#tray.setContextMenu(Menu.buildFromTemplate(template))
   }
 }

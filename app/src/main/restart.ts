@@ -36,8 +36,12 @@ export class ServiceRestart {
 
   constructor(io: RestartIO) { this.#io = io }
 
+  /** Tell watchers only of a real change: polls run every few seconds and mostly find nothing new. */
   #publish(patch: Partial<ServiceState>) {
-    this.state = { ...this.state, ...patch }
+    const next = { ...this.state, ...patch }
+    for (const key of Object.keys(next) as (keyof ServiceState)[]) if (next[key] === undefined) delete next[key]
+    if (JSON.stringify(next) === JSON.stringify(this.state)) return
+    this.state = next
     this.#io.changed(this.state)
   }
   #begin() {
