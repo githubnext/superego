@@ -1,6 +1,6 @@
 // The menu bar item: a µ (and a count when sessions want a look) while the "Show in menu bar" setting is on. Its menu
 // shows what the agents are doing on every machine and is the way back to the app when no window is open.
-import { Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
+import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
 import type { SessionInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
 
@@ -39,7 +39,8 @@ export class MenuBar {
       this.#headlessShown = false
       return
     }
-    // Tests run headless: no item appears on the desktop, but they can tell it would.
+    // Tests run headless: no item appears on the desktop, but they can tell it would, and break where it would.
+    if (!app.isReady()) throw new Error('Cannot create Tray before app is ready')
     if (this.#headless) { this.#headlessShown = true; return }
     if (!this.#tray) {
       // No image, just text: the title draws in the menu bar's own font and colour, light or dark.

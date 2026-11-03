@@ -253,6 +253,8 @@ const menuBar = new MenuBar({
 
 /** The Dock icon shows while a window is open, unless hidden in Settings; with no window it goes, if the menu bar has mu. */
 function refreshDesktop() {
+  // Settings announce changes from the start; the menu bar and the Dock exist only once the app is ready.
+  if (!app.isReady()) return
   menuBar.update(menuBarOn())
   if (!mac || headless) return
   const windows = BrowserWindow.getAllWindows().length > 0
@@ -303,6 +305,7 @@ function createWindow() {
 app.whenReady().then(() => {
   if (!primary) return
   if (headless) app.dock?.hide()
+  refreshDesktop()
   // Font pickers list the installed fonts (the Local Font Access API); nothing else is granted.
   session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(permission === 'local-fonts'))
   session.defaultSession.setPermissionCheckHandler((_contents, permission) => permission === 'local-fonts')

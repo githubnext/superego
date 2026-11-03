@@ -14,6 +14,9 @@ const fail = async (message) => {
   try { console.error('daemon.log:', readFileSync(`${process.env.MU_HOME}/daemon.log`, 'utf8').slice(-2000)) } catch {}
   app.exit(1)
 }
+// Any uncaught error in the main process fails the run; in the app it would be an error dialog.
+process.on('uncaughtException', (error) => void fail(`uncaught in main: ${error.stack ?? error}`))
+process.on('unhandledRejection', (error) => void fail(`unhandled in main: ${error?.stack ?? error}`))
 app.on('web-contents-created', (_e, contents) => contents.on('console-message', (event) => console.error('renderer:', event.message)))
 setTimeout(() => fail('timed out'), 90_000)
 
