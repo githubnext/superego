@@ -19,7 +19,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "@earendil-works/pi-ai": "1.5.0",
-    "@mu/settings": "workspace:*"
+    "@mu/settings": "workspace:*",
+    "@mu/client": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19",

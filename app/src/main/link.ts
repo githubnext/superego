@@ -1,9 +1,9 @@
 // A link to one machine's daemon. It connects, says hello, relays notifications, and reconnects with backoff when the
 // transport drops. While down, calls fail fast and the renderer keeps showing what it last knew (stale, not gone).
-import { FEATURES, PROTOCOL_VERSION, RpcError, type Hello, type RpcPeer } from '@mu/protocol'
+import { FEATURES, PROTOCOL_VERSION, RpcError, type Hello } from '@mu/protocol'
 import type { ConnectionState, MachineEntry, MachineId } from '../shared.ts'
 
-export type Transport = { peer: RpcPeer; closed: Promise<void>; close(): void }
+import type { Transport } from '@mu/client'
 
 /** Errors that another attempt can't fix: the link waits for the user (or a restart) instead of retrying. */
 const FINAL = new Set(['version_mismatch', 'wrong_machine', 'duplicate_machine'])

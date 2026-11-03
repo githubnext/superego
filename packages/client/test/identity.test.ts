@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Hello } from '@mu/protocol'
-import { checkIdentity } from '../src/main/identity.ts'
+import { checkIdentity } from '../src/identity.ts'
 
 const hello = (id: string): Hello => ({ version: 2, features: [], methods: [], machine: { id, hostname: `host-${id}`, platform: 'linux', pid: 1, dataDir: '/' } })
 

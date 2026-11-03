@@ -216,4 +216,7 @@ Still open:
 - **Fonts and machines done (2026-11-03).** A generic `font` setting type, with a picker that lists installed families through the Local Font Access API. Interface and monospace fonts can be set separately.
 
   Settings → Machines manages SSH machines (stored in `machines.json` in the app's data dir). Each machine becomes a link over `ssh -T <target> <command>`, so the connection side of M4 is in place. What M4 still needs: a real second machine with mu installed, and remote install.
+- **Borrowed from T3 Code, and the `mu` CLI.** Feature flags in `hello`; a stable machine id (refusing a different machine at a known route, or one machine reached twice); record and replay of model turns; "All machines" bulk settings edit; machines reached through any stdio command (`via`).
+
+  `packages/client` is shared by app and CLI: transports, `machines.json`, the identity check. `mu` (`packages/cli`, linked with `pnpm link:cli`) starts a session in the current directory and opens it in the app, which runs as a single instance per data dir. It also covers sessions, machines, settings, auth and the daemon, each with `-m <machine>` and `--json`.
 - **Next: M3**, the extension loader and slots. Chat and sidebar move out of `app/src/renderer` into extensions.

@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'electron-vite'
 
 // Workspace packages ship TypeScript source, so they are bundled; published deps stay external.
-const workspace = ['@mu/daemon', '@mu/protocol', '@mu/settings', '@mu/ui']
+const workspace = ['@mu/client', '@mu/daemon', '@mu/protocol', '@mu/settings', '@mu/ui']
 
 export default defineConfig({
   main: {

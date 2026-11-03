@@ -28,10 +28,12 @@ export function App() {
       if (event.metaKey && event.key === ',') { event.preventDefault(); setSettingsOpen(true) }
     }
     window.addEventListener('keydown', onKey)
-    // A notification's click selects its session.
+    // A notification's click, or `mu` on the command line, selects a session.
+    const show = (open: Selection | null) => { if (open) { setSettingsOpen(false); setSelection(open) } }
     const off = window.mu.onEvent((event) => {
-      if (event.machine === 'app' && event.method === 'app.select') { setSettingsOpen(false); setSelection(event.params as Selection) }
+      if (event.machine === 'app' && event.method === 'app.select') show(event.params as Selection)
     })
+    void (window.mu.call('app', 'app.ready', {}) as Promise<Selection | null>).then(show)
     return () => { window.removeEventListener('keydown', onKey); off() }
   }, [])
   const [sessionsByMachine, setSessionsByMachine] = useState<Record<string, SessionInfo[] | undefined>>({})

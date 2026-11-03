@@ -187,6 +187,9 @@ importers:
       '@earendil-works/pi-durable':
         specifier: 1.5.0
         version: 1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.1)
+      '@mu/client':
+        specifier: workspace:*
+        version: link:../packages/client
       '@mu/daemon':
         specifier: workspace:*
         version: link:../packages/daemon
@@ -224,6 +227,27 @@ importers:
       vite:
         specifier: ^8.2.0
         version: 8.3.5(@types/node@24.19.2)
+
+  packages/cli:
+    dependencies:
+      '@mu/client':
+        specifier: workspace:*
+        version: link:../client
+      '@mu/daemon':
+        specifier: workspace:*
+        version: link:../daemon
+      '@mu/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
+  packages/client:
+    dependencies:
+      '@mu/daemon':
+        specifier: workspace:*
+        version: link:../daemon
+      '@mu/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   packages/daemon:
     dependencies:

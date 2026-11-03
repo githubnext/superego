@@ -8,7 +8,8 @@ pnpm test                       # daemon e2e over the socket (scripted model)
 pnpm typecheck
 pnpm dev                        # the app; starts ~/.mu daemon on first launch
 pnpm --filter @mu/app smoke     # headless app e2e: chat, quit, reopen, reattach
-node packages/daemon/src/cli.ts help
+pnpm link:cli                   # put `mu` on your PATH (~/.local/bin/mu -> packages/cli/src/main.ts)
+mu help
 ```
 
 **Environment variables**
@@ -25,6 +26,14 @@ node packages/daemon/src/cli.ts help
 
 - `packages/protocol`: method table, JSON-RPC peer, status model
 - `packages/settings`: settings registry, used by the daemon (per machine) and the app
-- `packages/daemon`: the daemon (pi-durable Harness on SQLite), socket server, `mu` CLI
+- `packages/client`: how clients reach daemons (local socket, ssh, any stdio command), the shared machine list
+- `packages/cli`: the `mu` command
+- `packages/daemon`: the daemon (pi-durable Harness on SQLite) and its socket server
 - `packages/ui`: minimal component kit and design tokens
 - `app`: Electron main (machine links), preload bridge, renderer
+
+## The `mu` command
+
+`mu` with no arguments starts a session in the current directory and opens it in the app (starting the daemon and the app if needed). `mu <dir> -p "fix the tests"` starts one elsewhere with a first message. Every command takes `-m <machine>` to work on another machine and `--json` for scripts; `mu help` lists them all.
+
+Machines added with `mu machines add` show up in the app and the other way round; both use `machines.json` in the data dir. A remote machine needs `mu` on its PATH for `ssh <host> mu connect --start`.

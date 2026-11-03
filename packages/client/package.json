@@ -1,0 +1,8 @@
+{
+  "name": "@mu/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./shared": "./src/shared.ts" },
+  "dependencies": { "@mu/protocol": "workspace:*", "@mu/daemon": "workspace:*" }
+}

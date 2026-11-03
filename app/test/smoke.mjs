@@ -69,7 +69,7 @@ if (phase === 'first') {
   await run(`(async () => { const list = await window.mu.machines(); await window.mu.call('app', 'machines.remove', { id: list.find((m) => m.label === 'Nowhere').id }) })()`)
   await until(`![...document.querySelectorAll('.machine-row')].some((row) => row.textContent.includes('mu-smoke.invalid'))`, 'machine removed')
   // A second machine: another daemon, reached through a command that pipes stdio to it (as docker exec would).
-  const second = `MU_HOME='${process.env.MU_HOME}/second' MU_MODEL=faux node '${new URL('../../packages/daemon/src/cli.ts', import.meta.url).pathname}' connect --start`
+  const second = `MU_HOME='${process.env.MU_HOME}/second' MU_MODEL=faux node '${new URL('../../packages/cli/src/main.ts', import.meta.url).pathname}' connect --start`
   await run(`window.mu.call('app', 'machines.add', { label: 'Second', via: ${JSON.stringify(second)} })`)
   await until(`[...document.querySelectorAll('.machine-row')].some((row) => row.querySelector('input')?.value === 'Second' && / · connected/.test(row.textContent))`, 'second machine connected', 30_000)
   // All machines: a disagreement shows as Mixed, and one change reaches both.
@@ -110,6 +110,11 @@ if (phase === 'first') {
   await until(`document.querySelectorAll('.app__sidebar .machine:not(.is-stale)').length === 2`, 'second machine reconnected after reopen', 30_000)
   await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: typed message')`, 'transcript after reopen')
+  // `mu <dir> -p ...` from a terminal: a new session there, shown in this (already running) app.
+  const { execFileSync } = await import('node:child_process')
+  const cli = new URL('../../packages/cli/src/main.ts', import.meta.url).pathname
+  execFileSync('node', [cli, process.env.MU_HOME, '-p', 'from the cli'], { env: { ...process.env, MU_APP: new URL('..', import.meta.url).pathname } })
+  await until(`document.querySelector('.session__title')?.textContent === 'from the cli' && document.querySelector('.transcript')?.textContent.includes('echo: from the cli')`, 'session opened from the command line', 30_000)
   // App settings persisted in the app's own file.
   await until(`document.documentElement.style.getPropertyValue('--mu-mono').includes('Menlo')`, 'font after reopen')
   console.log('smoke(reopen): ok')

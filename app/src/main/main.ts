@@ -2,40 +2,26 @@ import { spawn } from 'node:child_process'
 import { mkdirSync, openSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, Notification, session, shell } from 'electron'
-import { connectSocket, defaultDataDir, isListening, socketPath } from '@mu/daemon/client'
+import { defaultDataDir, socketPath } from '@mu/daemon/client'
 import { RpcError, type Notifications, type SessionInfo } from '@mu/protocol'
 import { serveSettings } from '@mu/settings'
-import { CHANNEL, DEFAULT_REMOTE_COMMAND, type CallResult, type MachineConfig, type MachineEntry, type MuEvent } from '../shared.ts'
+import { CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type MuEvent } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
-import { checkIdentity } from './identity.ts'
-import { Link, type Transport } from './link.ts'
-import { MachineStore } from './machines.ts'
-import { openSsh, openVia } from './ssh.ts'
+import { checkIdentity, MachineStore, openLocal as openLocalSocket, openMachine, routeOf } from '@mu/client'
+import { Link } from './link.ts'
 
 const dataDir = defaultDataDir()
 const socket = socketPath(dataDir)
 
-/** Start the local daemon unless one answers. It is detached: quitting the app leaves agents running. */
-async function ensureLocalDaemon() {
-  if (await isListening(socket)) return
+/** Start the local daemon, detached: quitting the app leaves agents running. */
+function startDaemon() {
   mkdirSync(dataDir, { recursive: true })
   const log = openSync(join(dataDir, 'daemon.log'), 'a')
-  const child = spawn(process.execPath, [join(import.meta.dirname, 'daemon.js')], {
+  spawn(process.execPath, [join(import.meta.dirname, 'daemon.js')], {
     detached: true, stdio: ['ignore', log, log], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-  })
-  child.unref()
-  for (let i = 0; i < 100; i++) {
-    if (await isListening(socket)) return
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
-  throw new Error(`The daemon did not start; see ${join(dataDir, 'daemon.log')}`)
+  }).unref()
 }
-
-async function openLocal(): Promise<Transport> {
-  await ensureLocalDaemon()
-  const { peer, socket: conn } = await connectSocket(socket)
-  return { peer, closed: new Promise((resolve) => conn.once('close', () => resolve())), close: () => conn.destroy() }
-}
+const openLocal = () => openLocalSocket(socket, startDaemon)
 
 const broadcast = (event: MuEvent) => {
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send(CHANNEL.event, event)
@@ -56,6 +42,14 @@ function appEndpoint(contents: Electron.WebContents) {
   const handlers: Record<string, (params: any) => Promise<unknown>> = {
     ...serveSettings(appSettings, (params) => send('settings.changed', params), subs),
     async unwatch({ sub }: { sub: string }) { subs.get(sub)?.(); subs.delete(sub); return null },
+    /** The page is listening for app events: answer with a session it was asked to show before it was. */
+    async 'app.ready'() {
+      ready.add(contents.id)
+      contents.once('destroyed', () => ready.delete(contents.id))
+      const open = pending.get(contents.id)
+      pending.delete(contents.id)
+      return open ?? null
+    },
     'machines.add': (params: { label?: string; target?: string; command?: string; via?: string }) => machineStore.add(params),
     'machines.update': async ({ id, ...patch }: { id: string } & Partial<MachineConfig>) => { await machineStore.update(id, patch); return null },
     'machines.remove': async ({ id }: { id: string }) => { await machineStore.remove(id); return null },
@@ -86,9 +80,6 @@ function machineEntries(): MachineEntry[] {
     }),
   ]
 }
-/** How a machine is reached, as the user would type it. */
-const routeOf = (config: MachineConfig) => config.via ?? `ssh ${config.target} ${config.command ?? DEFAULT_REMOTE_COMMAND}`
-
 /**
  * A link to a configured machine. Identity is not the route: the first daemon to answer at the target is remembered,
  * and later a different one there is refused until the user trusts it. One machine reached two ways is refused too.
@@ -96,7 +87,7 @@ const routeOf = (config: MachineConfig) => config.via ?? `ssh ${config.target} $
 function sshLink(config: MachineConfig) {
   return new Link({
     id: config.id, label: config.label,
-    open: () => config.via ? openVia(config.via) : openSsh(config.target, config.command ?? DEFAULT_REMOTE_COMMAND),
+    open: () => openMachine(config),
     onEvent: (method, params) => onMachineEvent(config.id, method, params),
     verify(hello) {
       const current = machineStore.get(config.id)
@@ -135,6 +126,8 @@ function syncLinks() {
   broadcast({ machine: APP, method: '$machines', params: machineEntries() })
 }
 machineStore.onChange(syncLinks)
+// The CLI edits the same list; pick up its changes.
+machineStore.watch()
 
 /**
  * Notify when a session out of sight starts wanting a look: it finished, failed or needs the user. The app keeps its
@@ -171,12 +164,7 @@ function track(machine: string, sessions: SessionInfo[], announce: boolean) {
     const label = links.get(machine)?.label ?? machine
     const body = now === 'done' ? 'Finished' : now === 'error' ? `Failed${session.status.msg ? `: ${session.status.msg}` : ''}` : 'Needs you'
     const notification = new Notification({ title: session.title, subtitle: label, body })
-    notification.on('click', () => {
-      const window = BrowserWindow.getAllWindows()[0] ?? createWindow()
-      window.show()
-      window.focus()
-      window.webContents.send(CHANNEL.event, { machine: APP, method: 'app.select', params: { machine, session: session.id } })
-    })
+    notification.on('click', () => showSession({ machine, session: session.id }))
     notification.show()
   }
 }
@@ -195,6 +183,44 @@ ipcMain.handle(CHANNEL.call, async (event, machine: string, method: string, para
   } catch (error) {
     return { ok: false, error: { kind: error instanceof RpcError ? error.kind : 'error', message: error instanceof Error ? error.message : String(error) } }
   }
+})
+
+/**
+ * One app per data dir: its Electron state lives in the data dir, so the lock that keeps a second launch from opening
+ * a second app is per data dir too. A second launch (`mu`, `mu open`) hands its arguments over and exits.
+ */
+app.setName('mu')
+app.setPath('userData', join(dataDir, 'app'))
+const primary = app.requestSingleInstanceLock()
+if (!primary) app.quit()
+
+type Open = { machine: string; session: string }
+/** `--mu-open=<machine>/<session>`, as `mu` passes it. */
+function openArgument(argv: string[]): Open | undefined {
+  const value = argv.find((arg) => arg.startsWith('--mu-open='))?.slice('--mu-open='.length)
+  const slash = value?.lastIndexOf('/') ?? -1
+  return value && slash > 0 ? { machine: value.slice(0, slash), session: value.slice(slash + 1) } : undefined
+}
+
+/** Windows whose page is listening for app events; until then, what to show waits in `pending`. */
+const ready = new Set<number>()
+const pending = new Map<number, Open>()
+function showSession(open: Open) {
+  const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? createWindow()
+  if (window.isMinimized()) window.restore()
+  window.show()
+  window.focus()
+  app.focus({ steal: true })
+  if (ready.has(window.webContents.id)) window.webContents.send(CHANNEL.event, { machine: APP, method: 'app.select', params: open })
+  else pending.set(window.webContents.id, open)
+}
+
+app.on('second-instance', (_event, argv) => {
+  const open = openArgument(argv)
+  if (open) return showSession(open)
+  const window = BrowserWindow.getAllWindows()[0] ?? createWindow()
+  window.show()
+  window.focus()
 })
 
 function createWindow() {
@@ -217,12 +243,15 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (!primary) return
   // Font pickers list the installed fonts (the Local Font Access API); nothing else is granted.
   session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(permission === 'local-fonts'))
   session.defaultSession.setPermissionCheckHandler((_contents, permission) => permission === 'local-fonts')
   restartLocal()
   syncLinks()
-  createWindow()
+  const window = createWindow()
+  const open = openArgument(process.argv)
+  if (open) pending.set(window.webContents.id, open)
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })
 

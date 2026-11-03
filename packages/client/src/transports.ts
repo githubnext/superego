@@ -1,8 +1,29 @@
-// A machine over ssh (or any command, with `via`): `ssh -T <target> <command>`, where the command (`mu connect --start` by default) splices stdio to
-// that machine's daemon. ssh does all authentication; the transport parses nothing but lines.
+// Transports to a daemon. Locally, its unix socket. Elsewhere, `ssh -T <target> <command>`, where the command
+// (`mu connect --start` by default) splices stdio to that machine's daemon, or any command doing the same (`via`).
+// ssh does all authentication; transports parse nothing but lines.
 import { spawn } from 'node:child_process'
+import { connectSocket, isListening } from '@mu/daemon/client'
 import { lineSplitter, RpcError, RpcPeer } from '@mu/protocol'
-import type { Transport } from './link.ts'
+import { DEFAULT_REMOTE_COMMAND, type MachineConfig } from './shared.ts'
+
+export type Transport = { peer: RpcPeer; closed: Promise<void>; close(): void }
+
+/**
+ * The daemon on this computer, at `socket`. `start` launches one when nothing answers; how depends on the client (the
+ * app runs Electron as Node, the CLI runs Node), so it is the caller's.
+ */
+export async function openLocal(socket: string, start?: () => void): Promise<Transport> {
+  if (start && !(await isListening(socket))) {
+    start()
+    for (let i = 0; i < 100 && !(await isListening(socket)); i++) await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  const { peer, socket: conn } = await connectSocket(socket)
+  return { peer, closed: new Promise((resolve) => conn.once('close', () => resolve())), close: () => conn.destroy() }
+}
+
+/** A configured machine, by its route. */
+export const openMachine = (config: MachineConfig) =>
+  config.via ? openVia(config.via) : openSsh(config.target, config.command ?? DEFAULT_REMOTE_COMMAND)
 
 export function openSsh(target: string, command: string): Promise<Transport> {
   // BatchMode: never prompt (there is no terminal); keys or an agent must do. Keepalives notice a dead network.
