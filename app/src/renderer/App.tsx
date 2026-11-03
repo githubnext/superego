@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { SessionInfo } from '@mu/protocol'
 import { Sidebar } from './Sidebar.tsx'
 import { SessionView } from './SessionView.tsx'
+import { ServiceNotice } from './ServiceNotice.tsx'
 import { SettingsView } from './SettingsView.tsx'
 import { Button } from '@mu/ui'
 import { has, machine, useMachines, useSessions, useSettings } from './client.ts'
@@ -62,7 +63,7 @@ export function App() {
             {(sessions) => <Sidebar machine={m} sessions={sessions} selection={selection} onSelect={setSelection} />}
           </MachineSessions>
         ))}
-        <div className="app__footer"><Button variant="ghost" onClick={() => setSettingsOpen(true)}>Settings</Button></div>
+        <div className="app__footer"><ServiceNotice /><Button variant="ghost" onClick={() => setSettingsOpen(true)}>Settings</Button></div>
       </aside>
       <main className="app__main">
         <div className="app__drag" />

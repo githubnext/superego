@@ -4,7 +4,7 @@
 import { app, BrowserWindow } from 'electron'
 
 const phase = process.env.MU_SMOKE_PHASE ?? 'first'
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 const fail = async (message) => {
   console.error(`smoke(${phase}): FAIL ${message}`)
   const window = BrowserWindow.getAllWindows()[0]
@@ -36,6 +36,17 @@ const until = async (js, label, ms = 15_000) => {
   }
   await fail(`waiting for ${label}`)
   throw new Error('failed')
+}
+const STRAY = new URL('../out/main/zz-smoke-restart.js', import.meta.url).pathname
+async function restartOntoNewCode(change) {
+  const before = await run(`window.mu.machines().then((list) => list.find((m) => m.id === 'local'))`)
+  change()
+  await until(`document.querySelector('.service-notice')?.textContent.includes('Restart required')`, 'restart required shown')
+  await run(`[...document.querySelectorAll('.service-notice button')].find((b) => b.textContent === 'Restart now').click()`)
+  await until(`!document.querySelector('.service-notice')`, 'restart done', 40_000)
+  const after = await run(`window.mu.call('local', 'hello', { client: 'smoke', version: 2 })`)
+  if (after.machine.id !== before.machine.id || !(await run(`window.mu.call('local', 'session.list', {})`)).length) { await fail('restart lost the machine or its sessions'); throw new Error('failed') }
+  return after
 }
 const run = (js, gesture = false) => BrowserWindow.getAllWindows()[0].webContents.executeJavaScript(js, gesture)
 
@@ -103,6 +114,9 @@ if (phase === 'first') {
   const refused = await run(`window.mu.call('app', 'settings.set', { key: 'app.hideDock', value: true }).then(() => 'set', (e) => e.message)`)
   if (process.platform === 'darwin' && !/menu bar/.test(refused)) { await fail(`hide dock without menu bar: ${refused}`); throw new Error('failed') }
   await run(`window.mu.call('app', 'settings.set', { key: 'app.menuBar', value: true })`)
+  // Restart: new daemon code on disk (faked with an extra file in the build) shows "Restart required"; restarting
+  // brings up a daemon of that build, with the sessions still there.
+  await restartOntoNewCode(() => writeFileSync(STRAY, '// smoke\n'))
   // The dialog: Escape in the font picker closes only the picker; the next Escape closes Settings.
   const escape = async () => {
     const contents = BrowserWindow.getAllWindows()[0].webContents
@@ -128,6 +142,8 @@ if (phase === 'first') {
   const cli = new URL('../../packages/cli/src/main.ts', import.meta.url).pathname
   execFileSync('node', [cli, process.env.MU_HOME, '-p', 'from the cli'], { env: { ...process.env, MU_APP: new URL('..', import.meta.url).pathname } })
   await until(`document.querySelector('.session__title')?.textContent === 'from the cli' && document.querySelector('.transcript')?.textContent.includes('echo: from the cli')`, 'session opened from the command line', 30_000)
+  // The extra file is gone again: the daemon is out of date once more, and restarts back.
+  await restartOntoNewCode(() => rmSync(STRAY, { force: true }))
   // App settings persisted in the app's own file.
   await until(`document.documentElement.style.getPropertyValue('--mu-mono').includes('Menlo')`, 'font after reopen')
   console.log('smoke(reopen): ok')

@@ -6,7 +6,7 @@ unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export MU_HOME="$(mktemp -d)" MU_MODEL=faux MU_HEADLESS=1
 cleanup() {
   for pid in "$MU_HOME/daemon.pid" "$MU_HOME/second/daemon.pid"; do [ -f "$pid" ] && kill "$(cat "$pid")" 2>/dev/null; done
-  rm -rf "$MU_HOME"
+  rm -rf "$MU_HOME" out/main/zz-smoke-restart.js
 }
 trap cleanup EXIT
 ELECTRON=node_modules/.bin/electron

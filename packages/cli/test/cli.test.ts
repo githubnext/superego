@@ -80,6 +80,16 @@ describe('mu', () => {
     await expect(mu(['sessions', '-m', 'Second'])).rejects.toThrow(/No machine called Second/)
   })
 
+  it('restarts the daemon onto the installed code, keeping sessions', async () => {
+    const before = await muJson(['daemon', 'status'])
+    expect(before).toMatchObject({ running: true, current: true })
+    const restarted = await muJson(['daemon', 'restart'])
+    expect(restarted).toMatchObject({ restarted: true, from: before.build, build: before.build })
+    const after = await muJson(['daemon', 'status'])
+    expect(after.pid).not.toBe(before.pid)
+    expect((await muJson(['sessions'])).some((s: any) => s.title === 'hi from the cli')).toBe(true)
+  })
+
   it('stops the daemon', async () => {
     expect(await muJson(['daemon', 'stop'])).toMatchObject({ stopped: true })
     expect(await muJson(['daemon', 'status'])).toMatchObject({ running: false })

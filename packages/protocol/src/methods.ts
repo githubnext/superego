@@ -14,7 +14,7 @@ export const PROTOCOL_VERSION = 2
  * What a daemon of this build offers, announced in `hello`. Clients check a feature before using it, so an older
  * daemon on another machine keeps working with a newer app (and the other way round) for whatever both know.
  */
-export const FEATURES = ['sessions', 'settings', 'auth'] as const
+export const FEATURES = ['sessions', 'settings', 'auth', 'restart'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type SessionId = string
@@ -28,7 +28,11 @@ export type SessionInfo = {
 }
 
 /** `id` is the machine's identity: stable across restarts and routes, so a client can tell it is the same machine. */
-export type MachineInfo = { id: string; hostname: string; platform: string; pid: number; dataDir: string }
+export type MachineInfo = {
+  id: string; hostname: string; platform: string; pid: number; dataDir: string
+  /** The build of the code this daemon runs (see `readBuild`); clients compare it with what is on disk now. */
+  build: string
+}
 
 export type Hello = { version: number; features: string[]; machine: MachineInfo; methods: string[] }
 
@@ -55,6 +59,13 @@ export type Methods = {
   'auth.respond': { params: { flow: string; prompt: string; value: string }; result: null }
   'auth.cancel': { params: { flow: string }; result: null }
   'auth.logout': { params: { provider: string }; result: null }
+
+  /**
+   * Restart onto newer code: the daemon exits and the client starts the new one. Refused (`restarted: false`) while a
+   * session is working, unless `interrupt`; interrupted runs resume after the restart. `build` must be the running
+   * build, so a client never restarts a daemon it didn't inspect.
+   */
+  'daemon.restart': { params: { build: string; interrupt?: boolean }; result: { restarted: boolean; busy: boolean } }
 }
 
 export type Notifications = {

@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { mkdirSync, openSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from 'electron'
-import { defaultDataDir, socketPath } from '@mu/daemon/client'
+import { defaultDataDir, readBuild, socketPath } from '@mu/daemon/client'
 import { RpcError, type Notifications, type SessionInfo } from '@mu/protocol'
 import { serveSettings } from '@mu/settings'
 import { CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type MuEvent } from '../shared.ts'
@@ -10,6 +10,7 @@ import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
 import { checkIdentity, MachineStore, openLocal as openLocalSocket, openMachine, routeOf } from '@mu/client'
 import { Link } from './link.ts'
 import { MenuBar } from './tray.ts'
+import { ServiceRestart, type ServiceAction } from './restart.ts'
 
 const dataDir = defaultDataDir()
 const socket = socketPath(dataDir)
@@ -44,6 +45,12 @@ function appEndpoint(contents: Electron.WebContents) {
     ...serveSettings(appSettings, (params) => send('settings.changed', params), subs),
     async unwatch({ sub }: { sub: string }) { subs.get(sub)?.(); subs.delete(sub); return null },
     /** How mu sits on the desktop now. */
+    async 'service.get'() { return service.state },
+    async 'service.act'({ action }: { action: ServiceAction }) {
+      if (!['restart', 'interrupt', 'later', 'review'].includes(action)) throw new RpcError('invalid', `Unknown action ${action}`)
+      await service.act(action)
+      return service.state
+    },
     async 'app.desktop'() { return { menuBar: menuBar.shown, dockHidden: mac && dockHidden() } },
     /** The page is listening for app events: answer with a session it was asked to show before it was. */
     async 'app.ready'() {
@@ -145,6 +152,7 @@ function onMachineEvent(machine: string, method: string, params: unknown) {
     broadcast({ machine: APP, method: '$machines', params: machineEntries() })
     refreshDesktop()
     if ((params as { state: string }).state === 'connected') {
+      if (machine === 'local') setTimeout(pollService)
       void (links.get(machine)!.call('sessions.watch', {}) as Promise<{ sub: string; value: SessionInfo[] }>).then(({ sub, value }) => {
         watchSubs.set(machine, sub)
         track(machine, value, false)
@@ -249,6 +257,8 @@ const menuBar = new MenuBar({
   openSettings: () => show({ settings: true }),
   quit: () => { quitting = true; app.quit() },
   quitAndStop: () => void quitAndStop(),
+  service: () => service.state,
+  restart: () => void service.act('restart'),
 }, headless)
 
 /** The Dock icon shows while a window is open, unless hidden in Settings; with no window it goes, if the menu bar has mu. */
@@ -262,6 +272,60 @@ function refreshDesktop() {
   else void app.dock?.show()
 }
 appSettings.onChange(refreshDesktop)
+
+// ── Restarting this computer's daemon onto newer code ───────────────────────────────────────────────────────────────
+
+/** The local link once it is connected with a new daemon (not `pid`), or a timeout. */
+async function reconnected(pid: number | undefined) {
+  const deadline = Date.now() + 30_000
+  for (;;) {
+    const link = links.get('local')
+    if (link?.state === 'connected' && link.hello && link.hello.machine.pid !== pid) return link.hello
+    if (Date.now() > deadline) throw new Error('The background process did not come back. See daemon.log in the data dir.')
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+}
+
+const service = new ServiceRestart({
+  async inspect() {
+    const link = links.get('local')
+    if (!link?.hello || link.state !== 'connected') throw new Error('The background process is not connected.')
+    return {
+      // The daemon the app would start now is the code next to it on disk.
+      installedBuild: readBuild(import.meta.dirname),
+      runningBuild: link.hello.machine.build,
+      canRestartWhenIdle: link.has('restart'),
+      busy: (sessionsOf.get('local') ?? []).some((s) => s.status.state === 'working'),
+    }
+  },
+  async restart(snapshot, interrupt) {
+    const link = links.get('local')!
+    const pid = link.hello?.machine.pid
+    if (link.has('restart')) {
+      const result = await link.call('daemon.restart', { build: snapshot.runningBuild, interrupt }) as { restarted: boolean }
+      if (!result.restarted) return 'busy'
+    } else if (pid) {
+      // Too old to restart itself: stop it (consented to), and the link starts the new one.
+      process.kill(pid, 'SIGTERM')
+    }
+    return (await reconnected(pid)).machine.build
+  },
+  async confirmInterruption(snapshot) {
+    if (headless) return true
+    const { response } = await dialog.showMessageBox({
+      type: 'warning', buttons: ['Restart Now', 'Cancel'], defaultId: 1, cancelId: 1,
+      message: snapshot.canRestartWhenIdle ? 'Interrupt working agents?' : 'Restart the background process?',
+      detail: 'Agents stop mid-turn and pick up again after the restart. Sessions and their history are kept.',
+    })
+    return response === 0
+  },
+  changed(state) {
+    broadcast({ machine: APP, method: 'service.changed', params: state })
+    refreshDesktop()
+  },
+})
+const pollService = () => { if (links.get('local')?.state === 'connected') void service.poll() }
+setInterval(pollService, 3000).unref()
 
 /** Quit, and stop this computer's daemon and its agents too, asking first while any are working. */
 async function quitAndStop() {

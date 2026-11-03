@@ -43,6 +43,10 @@ export type DaemonOptions = {
   extensions?: Extension[]
   /** Where sessions work when created without a cwd. */
   defaultCwd?: string
+  /** The build of the code running, reported in `hello`. */
+  build?: string
+  /** Called once a restart was accepted and answered; the host closes the daemon and exits. */
+  onRestart?: () => void
 }
 
 /** One mounted session: its conversation and a small watch that keeps its status current. */
@@ -88,7 +92,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? defaultCwd }),
   }, context)
 
-  const machine: MachineInfo = { id: await machineId(options.dataDir), hostname: hostname(), platform: platform(), pid: process.pid, dataDir: options.dataDir }
+  const machine: MachineInfo = {
+    id: await machineId(options.dataDir), hostname: hostname(), platform: platform(), pid: process.pid, dataDir: options.dataDir,
+    build: options.build ?? 'dev',
+  }
+  /** Set once a restart is accepted: no new work starts, so nothing is cut off that wasn't agreed to. */
+  let restarting = false
   const mounted = new Map<string, Mounted>()
   const listListeners = new Set<() => void>()
   let listQueued = false
@@ -254,6 +263,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           await agent.logout(provider)
           return null
         },
+        async 'daemon.restart'({ build, interrupt }) {
+          if (build !== machine.build) throw new RpcError('changed', 'The running daemon changed. Check again.')
+          if (restarting) throw new RpcError('restarting', 'Already restarting')
+          // Decided synchronously from the mounted sessions, so no run can start between the check and the flag.
+          const busy = [...mounted.values()].some((m) => m.live?.run)
+          if (busy && !interrupt) return { restarted: false, busy }
+          restarting = true
+          setImmediate(() => options.onRestart?.())
+          return { restarted: true, busy }
+        },
         async unwatch({ sub }) {
           const stop = subs.get(sub)
           subs.delete(sub)
@@ -261,7 +280,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           return null
         },
       }
-      for (const [method, handler] of Object.entries(handlers)) peer.handle(method, handler as (params: unknown) => unknown)
+      for (const [method, handler] of Object.entries(handlers)) {
+        peer.handle(method, (params: unknown) => {
+          if (restarting && method !== 'hello') throw new RpcError('restarting', 'The daemon is restarting. Try again in a moment.')
+          return (handler as (params: unknown) => unknown)(params)
+        })
+      }
       return () => {
         for (const stop of subs.values()) void stop()
         subs.clear()

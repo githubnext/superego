@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -138,6 +138,35 @@ describe('daemon', () => {
     await peer.call('auth.logout', { provider: 'anthropic' })
     await until(() => providers(snapshot).find((p) => p.id === 'anthropic')?.stored === false)
     await close()
+  })
+})
+
+describe('restart', () => {
+  it('refuses while a session works unless interrupting, then stops taking work', async () => {
+    // A long answer replayed slowly keeps the session working for as long as the test needs.
+    const recording = join(dir, 'slow.jsonl')
+    await writeFile(recording, JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content: [{ type: 'text', text: 'word '.repeat(2000) }], stopReason: 'stop' } }) + '\n')
+    process.env.MU_MODEL = 'replay:' + recording
+    process.env.MU_REPLAY_SPEED = '20'
+    let restarts = 0
+    const daemon = await openDaemon({ dataDir: dir, defaultCwd: dir, build: 'b1', onRestart: () => restarts++ })
+    delete process.env.MU_REPLAY_SPEED
+    const server = await listen(daemon, join(dir, 'mu.sock'))
+    const { peer, socket } = await connectSocket(join(dir, 'mu.sock'))
+    await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
+    await peer.call('settings.set', { key: 'agent.model', value: 'replay/replay' })
+
+    await expect(peer.call('daemon.restart', { build: 'other' })).rejects.toMatchObject({ kind: 'changed' })
+    const created = await peer.call<SessionInfo>('session.create', {})
+    await peer.call('session.submit', { id: created.id, text: 'go' })
+    await until(async () => (await sessions(peer))[0]!.status.state === 'working')
+    expect(await peer.call('daemon.restart', { build: 'b1' })).toEqual({ restarted: false, busy: true })
+    expect(restarts).toBe(0)
+
+    expect(await peer.call('daemon.restart', { build: 'b1', interrupt: true })).toEqual({ restarted: true, busy: true })
+    await until(() => restarts === 1)
+    await expect(peer.call('session.list', {})).rejects.toMatchObject({ kind: 'restarting' })
+    socket.destroy(); server.close(); await daemon.close()
   })
 })
 

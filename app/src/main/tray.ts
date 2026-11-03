@@ -12,6 +12,8 @@ export type TrayModel = {
   openSettings(): void
   quit(): void
   quitAndStop(): void
+  service(): { phase: string; busy: boolean }
+  restart(): void
 }
 
 const GLYPH: Record<string, string> = { working: '●', done: '*', blocked: '?', error: '!' }
@@ -59,9 +61,17 @@ export class MenuBar {
       click: () => this.#model.openSession(machine.id, session.id),
     })
     const listed = [...wanting, ...working].slice(0, 12)
+    const service = this.#model.service()
+    const restart: MenuItemConstructorOptions[] = service.phase === 'current' ? [] : [{
+      label: service.phase === 'restarting' ? 'Restarting background process…' : service.phase === 'waiting' ? 'Restart waits until agents are idle'
+        : service.busy ? 'Restart background process when idle' : 'Restart background process (update ready)',
+      enabled: service.phase === 'required' || service.phase === 'error',
+      click: () => this.#model.restart(),
+    }, { type: 'separator' }]
     this.#tray.setContextMenu(Menu.buildFromTemplate([
       { label: 'Open mu', click: () => this.#model.open() },
       { type: 'separator' },
+      ...restart,
       ...(listed.length ? listed.map(item) : [{ label: 'Nothing running', enabled: false }]),
       { type: 'separator' },
       ...machines.map((m): MenuItemConstructorOptions => ({

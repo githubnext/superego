@@ -11,7 +11,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, type MachineConfig, type Transport } from '@mu/client'
-import { defaultDataDir, isListening, serveDaemon, socketPath } from '@mu/daemon'
+import { defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@mu/daemon'
 import {
   FEATURES, PROTOCOL_VERSION, RpcError, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type SessionInfo, type SettingsSnapshot,
@@ -45,6 +45,7 @@ Usage:
   mu auth logout <provider>     Remove a stored credential
 
   mu daemon [status|stop]       Run this computer's daemon in the foreground, or check on it
+  mu daemon restart [--now]     Restart it onto the installed code; --now interrupts working agents
   mu connect [--start]          Bridge stdio to this computer's daemon (ssh runs this)
 
 Options:
@@ -66,11 +67,27 @@ const GLYPH: Record<string, string> = { idle: '○', working: '●', done: '*', 
 
 // ── Reaching daemons ────────────────────────────────────────────────────────────────────────────────────────────────
 
+const appDir = () => process.env.MU_APP ?? fileURLToPath(new URL('../../../app/', import.meta.url))
+
+/**
+ * The daemon code this computer would run: the app's build when there is one (so the app and `mu` agree on what is
+ * current, and the app's restart notice means the same as ours), else this checkout's source.
+ */
+function installedDaemon(): { dir: string; command: string[]; env: NodeJS.ProcessEnv } {
+  const bundled = resolve(appDir(), 'out/main/daemon.js')
+  if (existsSync(bundled)) {
+    const electron = createRequire(resolve(appDir(), 'package.json'))('electron') as string
+    return { dir: resolve(appDir(), 'out/main'), command: [electron, bundled], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }
+  }
+  return { dir: fileURLToPath(new URL('../../daemon/src/', import.meta.url)), command: [process.execPath, self, 'daemon'], env: process.env }
+}
+
 /** Start this computer's daemon in the background, logging next to its data. */
 function startDaemon() {
   mkdirSync(dataDir, { recursive: true, mode: 0o700 })
   const log = openSync(`${dataDir}/daemon.log`, 'a')
-  spawn(process.execPath, [self, 'daemon'], { detached: true, stdio: ['ignore', log, log], env: process.env }).unref()
+  const { command: [program, ...args], env } = installedDaemon()
+  spawn(program!, args, { detached: true, stdio: ['ignore', log, log], env }).unref()
 }
 
 type Machine = { id: string; label: string; config?: MachineConfig }
@@ -112,12 +129,12 @@ async function on<T>(machine: Machine, work: (call: <M extends MethodName>(metho
  * its arguments to the running one and exits. `MU_APP` points at the app's directory; by default, this checkout's.
  */
 function openInApp(machine: string, session: string) {
-  const appDir = process.env.MU_APP ?? fileURLToPath(new URL('../../../app/', import.meta.url))
-  if (!existsSync(resolve(appDir, 'out/main/main.js'))) {
-    throw new RpcError('no_app', `The app isn't built in ${appDir}`, { hint: 'Run pnpm build in the mu checkout.' })
+  const dir = appDir()
+  if (!existsSync(resolve(dir, 'out/main/main.js'))) {
+    throw new RpcError('no_app', `The app isn't built in ${dir}`, { hint: 'Run pnpm build in the mu checkout.' })
   }
-  const electron = createRequire(resolve(appDir, 'package.json'))('electron') as string
-  spawn(electron, [appDir, `--mu-open=${machine}/${session}`], { detached: true, stdio: 'ignore' }).unref()
+  const electron = createRequire(resolve(dir, 'package.json'))('electron') as string
+  spawn(electron, [dir, `--mu-open=${machine}/${session}`], { detached: true, stdio: 'ignore' }).unref()
 }
 
 // ── Commands ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -274,22 +291,55 @@ async function authCommand(sub: string | undefined, rest: string[], machineName?
   return print({ ok: true }, () => console.log(`Stored an API key for ${provider} on ${machine.label}.`))
 }
 
-async function daemonCommand(sub: string | undefined) {
+async function daemonCommand(sub: string | undefined, now: boolean) {
   if (!sub) return serveDaemon({ dataDir, socket, defaultCwd: process.env.MU_CWD ?? process.cwd() })
+  const local: Machine = { id: 'local', label: 'This computer' }
   const running = await isListening(socket)
   if (sub === 'status') {
-    if (!running) return print({ running: false }, () => console.log('Not running.'))
-    const hello = await on({ id: 'local', label: 'This computer' }, async (_call, hello) => hello)
-    return print({ running: true, ...hello.machine }, () => console.log(`Running: pid ${hello.machine.pid}, ${socket}`))
+    const installed = readBuild(installedDaemon().dir)
+    if (!running) return print({ running: false, installed }, () => console.log('Not running.'))
+    const hello = await on(local, async (_call, hello) => hello)
+    const current = hello.machine.build === installed
+    return print({ running: true, ...hello.machine, installed, current }, () => {
+      console.log(`Running: pid ${hello.machine.pid}, build ${hello.machine.build}, ${socket}`)
+      if (!current) console.log(`An update is installed (build ${installed}). Restart with: mu daemon restart`)
+    })
   }
   if (sub === 'stop') {
     if (!running) return print({ stopped: false }, () => console.log('Not running.'))
-    const { pid } = (await on({ id: 'local', label: 'This computer' }, async (_call, hello) => hello)).machine
+    const { pid } = (await on(local, async (_call, hello) => hello)).machine
     process.kill(pid, 'SIGTERM')
-    for (let i = 0; i < 50 && await isListening(socket); i++) await new Promise((done) => setTimeout(done, 100))
+    await stopped()
     return print({ stopped: true, pid }, () => console.log(`Stopped daemon ${pid}. Running agents stop with it.`))
   }
+  if (sub === 'restart') {
+    if (!running) {
+      startDaemon()
+      const hello = await on(local, async (_call, hello) => hello)
+      return print({ restarted: true, build: hello.machine.build }, () => console.log(`Started daemon ${hello.machine.pid}, build ${hello.machine.build}.`))
+    }
+    const before = await on(local, async (call, hello) => {
+      if (!hello.features.includes('restart')) {
+        process.kill(hello.machine.pid, 'SIGTERM')
+        return hello
+      }
+      const result = await call('daemon.restart', { build: hello.machine.build, interrupt: now })
+      if (!result.restarted) {
+        throw new RpcError('busy', 'Agents are working, so the daemon was not restarted.', { hint: 'Wait for them, or: mu daemon restart --now (they resume after the restart).' })
+      }
+      return hello
+    })
+    await stopped()
+    const after = await on(local, async (_call, hello) => hello)
+    return print({ restarted: true, from: before.machine.build, build: after.machine.build }, () =>
+      console.log(`Restarted: build ${before.machine.build} → ${after.machine.build}, pid ${after.machine.pid}.`))
+  }
   throw new RpcError('usage', `Unknown: mu daemon ${sub}`)
+}
+
+/** Until nothing answers on the socket any more. */
+async function stopped() {
+  for (let i = 0; i < 100 && await isListening(socket); i++) await new Promise((done) => setTimeout(done, 100))
 }
 
 /** Splice stdio to this computer's daemon without parsing anything: the transport stays dumb, ssh does auth. */
@@ -312,7 +362,7 @@ async function main() {
     options: {
       machine: { type: 'string', short: 'm' }, prompt: { type: 'string', short: 'p' }, json: { type: 'boolean' },
       all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
-      start: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
+      start: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
     },
   })
   json = Boolean(values.json)
@@ -340,7 +390,7 @@ async function main() {
     case 'machines': return machinesCommand(rest[0], rest.slice(1), values)
     case 'settings': return settingsCommand(rest[0], rest.slice(1), values)
     case 'auth': return authCommand(rest[0], rest.slice(1), values.machine)
-    case 'daemon': return daemonCommand(rest[0])
+    case 'daemon': return daemonCommand(rest[0], Boolean(values.now))
     case 'connect': return bridge(Boolean(values.start))
   }
 }
