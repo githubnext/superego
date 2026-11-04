@@ -6,7 +6,7 @@
 // UI only: it uses the core's session methods and facts.
 import { Fragment, useMemo, useRef, useState } from 'react'
 import {
-  call, defineAction, defineUiExtension, useAllSessions, useAppSetting, useMachines, useSelection, useSessionView, useShell,
+  defineAction, type Dispatch, defineUiExtension, useAllSessions, useAppSetting, useMachines, useSelection, useSessionView, useShell,
   type MachineEntry,
 } from '@mu/app/ui'
 import type { SessionInfo, Status } from '@mu/protocol'
@@ -20,12 +20,14 @@ export const DETAILS = 'threads.details'
 export type View = 'list' | 'rail'
 
 /** Settings and commands act through the app's settings, so every window and the menu agree. */
-const set = (key: string, value: string | boolean) => call('app', 'settings.set', { key, value })
+let dispatch: Dispatch = () => Promise.reject(new Error('threads is not set up'))
+const set = (key: string, value: string | boolean) => dispatch('app.settings.set', { key, value }, { machine: 'app', source: 'threads' })
 let current: { sort: Sort; view: View; details: boolean } = { sort: 'created', view: 'list', details: false }
 
 export default defineUiExtension({
   name: 'threads',
   setup(mu) {
+    dispatch = mu.dispatch
     mu.appSettings({
       id: 'threads', title: 'Sidebar', order: 55,
       settings: [

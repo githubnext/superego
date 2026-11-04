@@ -2,7 +2,7 @@
 // ask-user, UI half: the question an agent is waiting on shows above the composer, with its options and room for a
 // free answer; in the transcript, the question and the answer it got.
 import { useState } from 'react'
-import { call, defineUiExtension, has, useComposerClaim, useValue, type MachineEntry, type ToolCallProps } from '@mu/app/ui'
+import { defineUiExtension, useDispatch, has, useComposerClaim, useValue, type MachineEntry, type ToolCallProps } from '@mu/app/ui'
 import type { SessionInfo } from '@mu/protocol'
 import { Button } from '@mu/ui'
 import { ANSWER, PENDING, TOOL, type AskDetails, type Question } from './shared.ts'
@@ -30,9 +30,10 @@ function Waiting({ machine, session }: { machine: MachineEntry; session: Session
 
 function QuestionCard({ machine, question }: { machine: MachineEntry; question: Question }) {
   const [error, setError] = useState<string>()
+  const dispatch = useDispatch()
   const answer = (value: string) => {
     setError(undefined)
-    return call(machine.id, ANSWER, { id: question.id, answer: value }).catch((e: Error) => { setError(e.message); throw e })
+    return dispatch(ANSWER, { id: question.id, answer: value }, { machine: machine.id, source: 'ask-user' }).catch((e: Error) => { setError(e.message); throw e })
   }
   // A free answer is typed in the composer itself.
   useComposerClaim({ placeholder: question.options.length ? 'Answer, or pick above' : 'Your answer', submit: answer })

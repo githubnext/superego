@@ -49,6 +49,7 @@ export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; 
 }
 
 function Section({ target, section, values }: { target: string; section: SectionInfo; values: SettingsSnapshot['values'] }) {
+  const dispatch = useRegistry().router.dispatch
   const custom = useRegistry().settings
   const Custom = section.ui ? custom.get(section.ui) : undefined
   return (
@@ -57,7 +58,7 @@ function Section({ target, section, values }: { target: string; section: Section
       {section.description && <p className="settings__note">{section.description}</p>}
       {section.settings.filter((s) => !s.hidden).map((setting) => (
         <Setting key={setting.key} setting={setting} value={values[setting.key] ?? null}
-          apply={(value) => client(target).call('settings.set', { key: setting.key, value })} />
+          apply={(value) => dispatch(target === APP ? 'app.settings.set' : 'settings.set', { key: setting.key, value }, { machine: target, source: 'settings' })} />
       ))}
       {Custom && <Custom target={target} section={section} />}
     </section>
@@ -101,6 +102,7 @@ function Setting({ setting, value, apply, mixed, note }: {
 }
 
 export function Providers({ target, section }: { target: string; section: SectionInfo }) {
+  const dispatch = useRegistry().router.dispatch
   const providers = (section.data ?? []) as ProviderAuthInfo[]
   const [flow, setFlow] = useState<{ provider: string; id?: string; events: AuthEvent[] }>()
   const [keyFor, setKeyFor] = useState<string>()
@@ -115,7 +117,7 @@ export function Providers({ target, section }: { target: string; section: Sectio
   const start = async (provider: string, type: 'api_key' | 'oauth', key?: string) => {
     setFlow({ provider, events: [] })
     try {
-      const { flow: id } = await machine.call('auth.login', { provider, type, ...(key ? { key } : {}) })
+      const { flow: id } = await dispatch('auth.login', { provider, type, ...(key ? { key } : {}) }, { machine: target, source: 'settings' }) as { flow: string }
       setFlow((current) => current && { ...current, id })
     } catch (error) {
       setFlow({ provider, events: [{ type: 'failed', message: (error as Error).message }] })
@@ -141,7 +143,7 @@ export function Providers({ target, section }: { target: string; section: Sectio
               <>
                 {provider.oauth && <Button onClick={() => void start(provider.id, 'oauth')}>{provider.oauth}</Button>}
                 {provider.apiKey && <Button onClick={() => setKeyFor(provider.id)}>API key…</Button>}
-                {provider.stored && <Button variant="ghost" onClick={() => void machine.call('auth.logout', { provider: provider.id })}>Sign out</Button>}
+                {provider.stored && <Button variant="ghost" onClick={() => void dispatch('auth.logout', { provider: provider.id }, { machine: target, source: 'settings' })}>Sign out</Button>}
               </>
             )}
           </div>
@@ -152,7 +154,7 @@ export function Providers({ target, section }: { target: string; section: Sectio
           <div className="auth-flow__head">
             <b>Signing in to {providers.find((p) => p.id === flow.provider)?.name ?? flow.provider}</b>
             {finished ? <Button variant="ghost" onClick={() => setFlow(undefined)}>Close</Button>
-              : <Button variant="ghost" onClick={() => { if (flow.id) void machine.call('auth.cancel', { flow: flow.id }) }}>Cancel</Button>}
+              : <Button variant="ghost" onClick={() => { if (flow.id) void dispatch('auth.cancel', { flow: flow.id }, { machine: target, source: 'settings' }) }}>Cancel</Button>}
           </div>
           <FlowEvents flowId={flow.id} events={flow.events} target={target} />
         </div>
@@ -168,6 +170,7 @@ function describe(provider: ProviderAuthInfo) {
 }
 
 function FlowEvents({ flowId, events, target }: { flowId?: string; events: AuthEvent[]; target: string }) {
+  const dispatch = useRegistry().router.dispatch
   const closed = new Set(events.flatMap((e) => e.type === 'prompt_closed' ? [e.id] : []))
   const [answered, setAnswered] = useState<Set<string>>(new Set())
   return (
@@ -184,7 +187,7 @@ function FlowEvents({ flowId, events, target }: { flowId?: string; events: AuthE
             if (closed.has(event.id) || answered.has(event.id) || !flowId) return null
             return <PromptField key={index} prompt={event.prompt} onAnswer={(value) => {
               setAnswered((set) => new Set(set).add(event.id))
-              void client(target).call('auth.respond', { flow: flowId, prompt: event.id, value })
+              void dispatch('auth.respond', { flow: flowId, prompt: event.id, value }, { machine: target, source: 'settings' })
             }} />
           default: return null
         }
@@ -217,7 +220,8 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
   const [via, setVia] = useState(false)
   const [error, setError] = useState<string>()
   const app = client(APP) as unknown as { call(method: string, params: unknown): Promise<unknown> }
-  const act = (method: string, params: unknown) => { setError(undefined); return app.call(method, params).catch((e: Error) => { setError(e.message); throw e }) }
+  const dispatch = useRegistry().router.dispatch
+  const act = (id: string, params: Record<string, unknown>) => { setError(undefined); return dispatch(id, params, { machine: APP, source: 'settings' }).catch((e: Error) => { setError(e.message); throw e }) }
 
   return (
     <section className="settings-section">
@@ -291,6 +295,7 @@ function MachineSnapshot({ id, onSnapshot }: { id: string; onSnapshot(id: string
  * now; machines that are offline or added later keep their own values.
  */
 function AllMachines({ machines }: { machines: MachineEntry[] }) {
+  const dispatch = useRegistry().router.dispatch
   const [snapshots, setSnapshots] = useState<Record<string, SettingsSnapshot>>({})
   const onSnapshot = (id: string, snapshot: SettingsSnapshot | undefined) => setSnapshots((all) => {
     const { [id]: _, ...rest } = all
@@ -299,7 +304,7 @@ function AllMachines({ machines }: { machines: MachineEntry[] }) {
   const label = (id: string) => machines.find((m) => m.id === id)?.label ?? id
   const sections = mergeSettings(snapshots)
   const apply = async (setting: MergedSetting, value: Json) => {
-    const results = await Promise.allSettled(setting.machines.map((id) => client(id).call('settings.set', { key: setting.key, value })))
+    const results = await Promise.allSettled(setting.machines.map((id) => dispatch('settings.set', { key: setting.key, value }, { machine: id, source: 'all machines' })))
     const failed = results.flatMap((result, index) => result.status === 'rejected' ? [`${label(setting.machines[index]!)}: ${(result.reason as Error).message}`] : [])
     if (failed.length) throw new Error(failed.join('; '))
   }

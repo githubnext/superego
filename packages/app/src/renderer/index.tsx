@@ -18,6 +18,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
     core.settings('providers', Providers)
     for (const action of coreActions) core.action(action)
   })
+  void registry.router.load('app')
   // Declared before anything renders, so a component reading or setting them finds them registered.
   for (const section of registry.appSettings) void window.mu.call('app', 'settings.register', { section }).catch((error) => console.error(error))
   createRoot(root).render(
@@ -35,6 +36,7 @@ export {
 } from './extension.tsx'
 export { useAppSetting } from './client.ts'
 export { useDispatch } from './Shell.tsx'
+export type { Dispatch } from './actions.tsx'
 export { runsBare, type WindowAction, type WindowContext } from './actions.tsx'
 export { defineAction } from '@mu/protocol'
 export { useAllSessions, useMachines, useSelection, useSessions, useShell, type Selection } from './state.tsx'

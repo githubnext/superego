@@ -14,10 +14,13 @@ const bridge: MuBridge = {
   },
   machines: () => ipcRenderer.invoke(CHANNEL.machines),
   onEvent(listener) {
-    const handler = (_event: IpcRendererEvent, event: MuEvent) => listener(event)
-    ipcRenderer.on(CHANNEL.event, handler)
-    return () => { ipcRenderer.off(CHANNEL.event, handler) }
+    listeners.add(listener)
+    return () => { listeners.delete(listener) }
   },
 }
+
+// One IPC listener for the window; every watch subscribes here instead.
+const listeners = new Set<(event: MuEvent) => void>()
+ipcRenderer.on(CHANNEL.event, (_event: IpcRendererEvent, event: MuEvent) => { for (const listener of listeners) listener(event) })
 
 contextBridge.exposeInMainWorld('mu', bridge)

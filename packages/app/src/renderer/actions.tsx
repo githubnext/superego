@@ -17,8 +17,15 @@ export type WindowContext = {
   newSession(start?: NewSessionStart): void
   togglePalette(): void
   showLog(): void
-  dispatch(id: string, params?: unknown, source?: string): Promise<unknown>
+  dispatch: Dispatch
 }
+
+/**
+ * Run an action by id, wherever it runs: a window action here; an app action in the main process; a machine action on
+ * `options.machine`, else the selected session's machine, else this computer. A session action takes the selected
+ * session when its `id` isn't given.
+ */
+export type Dispatch = (id: string, params?: Record<string, unknown>, options?: { source?: string; machine?: string }) => Promise<unknown>
 
 export type WindowAction = ActionDef<any, unknown, WindowContext>
 
@@ -26,14 +33,41 @@ export function createWindowRouter() {
   const router = new Router<WindowContext>()
   /** The shell keeps this current; actions read it when they run. */
   let context: WindowContext | undefined
-  const dispatch = (id: string, params: unknown = {}, source = 'ui') => {
-    if (!context) return Promise.reject(new Error('The window is not ready'))
-    return router.dispatch(id, params, context, { source })
+  /** What the app and each machine offer, by target ('app' or a machine id). */
+  const remote = new Map<string, ActionInfo[]>()
+  const listeners = new Set<() => void>()
+
+  const dispatch: Dispatch = (id, params = {}, { source = 'ui', machine } = {}) => {
+    if (router.has(id)) {
+      if (!context) return Promise.reject(new Error('The window is not ready'))
+      return router.dispatch(id, params, context, { source })
+    }
+    if (machine === 'app' || remote.get('app')?.some((a) => a.id === id)) {
+      return router.track(id, params, source, () => window.mu.call('app', id, params))
+    }
+    const target = machine ?? (typeof params.machine === 'string' ? params.machine : undefined) ?? context?.selection?.machine ?? 'local'
+    const action = remote.get(target)?.find((a) => a.id === id)
+    const { machine: _machine, ...rest } = params
+    const filled = action?.session && rest.id === undefined && context?.selection?.machine === target ? { ...rest, id: context.selection.session } : rest
+    return router.track(id, filled, `${source} → ${target}`, () => window.mu.call(target, id, filled))
   }
+
   return {
     router,
     dispatch,
     setContext(next: Omit<WindowContext, 'dispatch'>) { context = { ...next, dispatch } },
+    /** Fetch what `target` offers ('app', or a connected machine's id). */
+    async load(target: string) {
+      try {
+        remote.set(target, await window.mu.call(target, 'action.list', {}) as ActionInfo[])
+        for (const listener of listeners) listener()
+      } catch { /* an older daemon without actions: nothing to offer */ }
+    },
+    /** Every action this window can dispatch: its own, the app's, and `machine`'s. */
+    all(machine?: string): ActionInfo[] {
+      return [...router.list(), ...(remote.get('app') ?? []), ...(machine ? remote.get(machine) ?? [] : [])]
+    },
+    onChange(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
   }
 }
 export type WindowRouter = ReturnType<typeof createWindowRouter>

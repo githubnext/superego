@@ -1,7 +1,8 @@
 // The New session dialog: what to work on, where (machine and folder), and with which model and thinking. Everything
 // but the folder is optional; unset choices follow that machine's settings. ⌘⏎ starts it.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import type { ModelCatalog } from '@mu/protocol'
+import type { ModelCatalog, SessionInfo } from '@mu/protocol'
+import { useRegistry } from './extension.tsx'
 import { Button, Dialog, Select, TextArea, TextField } from '@mu/ui'
 import { has, machine as client } from './client.ts'
 import { shortPath } from './SessionView.tsx'
@@ -15,6 +16,7 @@ export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; o
   const machines = useMachines().filter((m) => m.state === 'connected' && has(m, 'sessions'))
   const sessions = useAllSessions()
   const { select } = useSelection()
+  const dispatch = useRegistry().router.dispatch
   const last = useMemo(readLast, [])
   const [machineId, setMachineId] = useState(start.machine ?? (machines.some((m) => m.id === last.machine) ? last.machine! : 'local'))
   const machine = machines.find((m) => m.id === machineId) ?? machines[0]
@@ -52,10 +54,10 @@ export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; o
     setBusy(true)
     setError(undefined)
     try {
-      const created = await client(machine.id).call('session.create', {
+      const created = await dispatch('session.create', {
         ...(cwd.trim() ? { cwd: cwd.trim() } : {}), ...(title.trim() ? { title: title.trim() } : {}),
         ...(model ? { model } : {}), ...(thinking && levels.length ? { thinking } : {}), ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
-      })
+      }, { machine: machine.id, source: 'new session' }) as SessionInfo
       localStorage.setItem(LAST, JSON.stringify({ machine: machine.id, cwd: { ...last.cwd, [machine.id]: created.cwd } } satisfies Last))
       onClose()
       select({ machine: machine.id, session: created.id })

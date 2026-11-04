@@ -167,6 +167,7 @@ function ToolCall({ block, result, slot }: { block: Block; result: Message | und
 
 function Composer({ machine, session, busy }: { machine: MachineEntry; session: SessionInfo; busy: boolean }) {
   const { openSettings: onOpenSettings } = useShell()
+  const dispatch = useRegistry().router.dispatch
   const [claims, setClaims] = useState<ComposerClaim[]>([])
   const register = useMemo(() => (claim: ComposerClaim) => {
     setClaims((list) => [...list, claim])
@@ -186,13 +187,13 @@ function Composer({ machine, session, busy }: { machine: MachineEntry; session: 
     setError(undefined)
     try {
       if (claim) { await claim.submit(value); return }
-      await client(machine.id).call('session.submit', { id: session.id, text: value, requestId: crypto.randomUUID(), ...(busy ? { whenBusy: 'steer' as const } : {}) })
+      await dispatch('session.submit', { id: session.id, text: value, requestId: crypto.randomUUID(), ...(busy ? { whenBusy: 'steer' as const } : {}) }, { machine: machine.id, source: 'composer' })
     } catch (error) {
       setText(value)
       setError(error as { kind?: string; message: string })
     }
   }
-  const abort = () => client(machine.id).call('session.abort', { id: session.id })
+  const abort = () => dispatch('session.abort', { id: session.id }, { machine: machine.id, source: 'composer' })
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send() }
     if (event.key === 'Escape' && busy) { event.preventDefault(); void abort() }

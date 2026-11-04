@@ -95,7 +95,7 @@ if (phase === 'first') {
   await until(`document.querySelector('.threads-details')?.textContent.includes('Machine')`, 'details pane')
   await key('i')
   await until(`!document.querySelector('.threads-details')`, 'details closed')
-  await run(`window.mu.call('app', 'settings.set', { key: 'threads.sort', value: 'created' })`)
+  await run(`window.mu.call('app', 'app.settings.set', { key: 'threads.sort', value: 'created' })`)
   // ⌘K: find a session by name and open it.
   await key('k')
   await until(`Boolean(document.querySelector('.palette__input'))`, 'palette')
@@ -128,7 +128,7 @@ if (phase === 'first') {
   await until(`document.querySelectorAll('.mu-font-picker__list button').length > 5`, 'installed fonts listed', 40_000)
   await run(`[...document.querySelectorAll('.mu-font-picker__list button')].find((b) => b.textContent === 'Helvetica' || b.textContent === 'Arial').click()`)
   await until(`/Helvetica|Arial/.test(document.documentElement.style.getPropertyValue('--mu-font'))`, 'interface font applied')
-  await run(`window.mu.call('app', 'settings.set', { key: 'app.font.mono', value: 'Menlo' })`)
+  await run(`window.mu.call('app', 'app.settings.set', { key: 'app.font.mono', value: 'Menlo' })`)
   await until(`document.documentElement.style.getPropertyValue('--mu-mono').includes('Menlo')`, 'mono font applied')
   // Machines: add one over ssh that can't connect; it shows its error, then goes away again.
   await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent === 'Machines').click()`)
@@ -161,13 +161,13 @@ if (phase === 'first') {
   // The menu bar: on by default; "Hide Dock icon" needs it; turning it off takes the item away.
   const desktop = () => run(`window.mu.call('app', 'app.desktop', {})`)
   if (!(await desktop()).menuBar) { await fail('menu bar item not up by default'); throw new Error('failed') }
-  await run(`window.mu.call('app', 'settings.set', { key: 'app.hideDock', value: true })`)
+  await run(`window.mu.call('app', 'app.settings.set', { key: 'app.hideDock', value: true })`)
   if (process.platform === 'darwin' && !(await desktop()).dockHidden) { await fail('dock not hidden'); throw new Error('failed') }
-  await run(`window.mu.call('app', 'settings.set', { key: 'app.menuBar', value: false })`)
+  await run(`window.mu.call('app', 'app.settings.set', { key: 'app.menuBar', value: false })`)
   await until(`window.mu.call('app', 'app.desktop', {}).then((d) => !d.menuBar && !d.dockHidden)`, 'menu bar off, dock back')
-  const refused = await run(`window.mu.call('app', 'settings.set', { key: 'app.hideDock', value: true }).then(() => 'set', (e) => e.message)`)
+  const refused = await run(`window.mu.call('app', 'app.settings.set', { key: 'app.hideDock', value: true }).then(() => 'set', (e) => e.message)`)
   if (process.platform === 'darwin' && !/menu bar/.test(refused)) { await fail(`hide dock without menu bar: ${refused}`); throw new Error('failed') }
-  await run(`window.mu.call('app', 'settings.set', { key: 'app.menuBar', value: true })`)
+  await run(`window.mu.call('app', 'app.settings.set', { key: 'app.menuBar', value: true })`)
   // Restart: new daemon code on disk (faked with an extra file in the build) shows "Restart required"; restarting
   // brings up a daemon of that build, with the sessions still there.
   await restartOntoNewCode(() => writeFileSync(STRAY, '// smoke\n'))

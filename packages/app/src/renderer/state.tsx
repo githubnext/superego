@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { SessionInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { has, useMachineList, useSessions as useSessionsWatch } from './client.ts'
+import { useRegistry } from './extension.tsx'
 
 export type Selection = { machine: string; session: string }
 
@@ -76,6 +77,9 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
 /** One sessions subscription per machine, kept while it is connected; the last list stays while it isn't. */
 function MachineSessions({ machine, onSessions }: { machine: MachineEntry; onSessions(machine: string, list: SessionInfo[] | undefined): void }) {
   const sessions = useSessionsWatch(machine.id, machine.state === 'connected' && has(machine, 'sessions'))
+  // What the machine offers, for the palette and for routing session actions.
+  const { router } = useRegistry()
+  useEffect(() => { if (machine.state === 'connected' && has(machine, 'actions')) void router.load(machine.id) }, [machine.state, machine.machine?.id])
   useEffect(() => { if (sessions) onSessions(machine.id, sessions) }, [sessions])
   return null
 }

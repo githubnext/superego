@@ -4,7 +4,7 @@
 import { createContext, useContext, type ComponentType, type ReactNode } from 'react'
 import type { AppConfig, DeclaredSection, SectionInfo, SessionInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
-import { createWindowRouter, type WindowAction, type WindowRouter } from './actions.tsx'
+import { createWindowRouter, type Dispatch, type WindowAction, type WindowRouter } from './actions.tsx'
 
 /** Where an extension can put UI. */
 export type SlotName =
@@ -52,6 +52,8 @@ export type UiApi = {
    * with the extension's name. `run` gets its parameters and the window's context.
    */
   action(action: WindowAction): void
+  /** Run any action (window, app or machine) through the window's router, outside React. In components: `useDispatch`. */
+  dispatch: Dispatch
   /**
    * Settings of this UI half, kept by the app (per user, not per machine) and shown in Settings → General. Keys are
    * named `<extension>.<key>`. Read and change them with `useAppSetting`.
@@ -96,6 +98,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     tool: (name, component) => { registry.tools.set(name, component) },
     entry: (kind, component) => { registry.entries.set(kind, component) },
     settings: (ui, component) => { registry.settings.set(ui, component) },
+    dispatch: (id, params, options) => registry.router.dispatch(id, params, { source: extension, ...options }),
     action(action) {
       if (extension !== 'core' && !action.id.startsWith(`${extension}.`)) throw new Error(`Extension ${extension} must name its actions "${extension}.<name>", not "${action.id}"`)
       registry.router.router.register({ ...action, runs: 'window' })

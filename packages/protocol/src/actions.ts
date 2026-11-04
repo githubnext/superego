@@ -98,6 +98,25 @@ export class Router<C = unknown> {
     }
   }
 
+  /** Time and log work done elsewhere for an action this router doesn't hold (a window forwarding to a daemon). */
+  async track<R>(id: string, params: unknown, source: string, run: () => Promise<R>): Promise<R> {
+    const started = Date.now()
+    const record = (ok: boolean, error?: string) => {
+      const entry: ActionLogEntry = { at: started, id, source, ms: Date.now() - started, ok, ...(params !== undefined ? { params: params as Json } : {}), ...(error ? { error } : {}) }
+      this.#log.push(entry)
+      if (this.#log.length > this.logSize) this.#log.splice(0, this.#log.length - this.logSize)
+      for (const listener of this.#listeners) listener(entry)
+    }
+    try {
+      const result = await run()
+      record(true)
+      return result
+    } catch (error) {
+      record(false, error instanceof Error ? error.message : String(error))
+      throw error
+    }
+  }
+
   /** The newest dispatches, oldest first. */
   log(): ActionLogEntry[] { return [...this.#log] }
   onDispatch(listener: (entry: ActionLogEntry) => void): () => void {

@@ -1,9 +1,10 @@
 // The daemon half of an extension. An extension is a package with up to two halves, imported by an app at build time:
 // `<pkg>/daemon` runs here, next to the agents; `<pkg>/ui` runs in the app's window. This half can give the agents
-// tools, prompt sections and hooks (pi-durable extensions), register settings, answer methods, publish live values
+// tools, prompt sections and hooks (pi-durable extensions), register settings, define actions, publish live values
 // for the UI to watch, and add to a session's status.
 import type { Conversation, Extension, Harness } from '@earendil-works/pi-durable'
-import type { AppConfig, BlockedKind, Json, SessionInfo } from '@mu/protocol'
+import type { ActionDef, AppConfig, BlockedKind, Json, SessionInfo } from '@mu/protocol'
+import type { DaemonContext } from './daemon.ts'
 import type { SettingsRegistry } from '@mu/settings'
 
 export type DaemonExtension = {
@@ -28,8 +29,11 @@ export type DaemonApi = {
   /** Give the agents tools, system prompt sections, hooks or tasks. */
   agent(extension: Extension): void
   settings: SettingsRegistry
-  /** Answer `<name>.<method>` for clients. Throw an `RpcError` for a clean error. */
-  method<P = any, R = unknown>(method: string, handler: (params: P) => R | Promise<R>): void
+  /**
+   * An action of this extension, named `<name>.<action>`: clients dispatch it by id, the command line and (later) MCP
+   * by its exposure. Define it with `defineAction` and a params schema. Throw an `RpcError` for a clean error.
+   */
+  action(action: ActionDef<any, unknown, DaemonContext>): void
   /** A live value named `<name>.<key>`, starting at `initial`. */
   value<T extends Json>(key: string, initial: T): LiveValue<T>
   /** Say a session needs the user (it shows as blocked) while `contribute` returns something for it. */

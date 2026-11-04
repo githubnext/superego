@@ -14,7 +14,7 @@ import { generate } from './generate.ts'
 import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, type MachineConfig, type Transport } from '@mu/client'
 import { appEnv, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@mu/daemon'
 import {
-  FEATURES, PROTOCOL_VERSION, RpcError, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
+  FEATURES, PROTOCOL_VERSION, RpcError, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type SessionInfo, type SettingsSnapshot,
 } from '@mu/protocol'
 
@@ -57,6 +57,11 @@ Usage:
   ${app.id} auth                       List providers and how they are signed in
   ${app.id} auth key <provider>        Store an API key (prompted, or read from stdin)
   ${app.id} auth logout <provider>     Remove a stored credential
+
+  ${app.id} actions [--all]            List the actions a machine takes from the command line (--all: every action)
+  ${app.id} do <action> [--<param> <value>...] [--params '<json>']
+                                Run an action; values are coerced to the action's schema
+  ${app.id} actions log                Its newest dispatches, from anywhere
 
   ${app.id} daemon [status|stop]       Run this computer's daemon in the foreground, or check on it
   ${app.id} daemon restart [--now]     Restart it onto the installed code; --now interrupts working agents
@@ -376,11 +381,71 @@ async function bridge(start: boolean) {
   conn.on('close', () => process.exit(0))
 }
 
+// ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** A one-line signature for an action's params: `id* text whenBusy?=steer|followUp`. */
+function signature(schema: ActionInfo['params']): string {
+  const props = (schema as { properties?: Record<string, { enum?: unknown[]; type?: unknown }> } | undefined)?.properties
+  if (!props) return ''
+  const required = new Set((schema as { required?: string[] }).required ?? [])
+  return Object.entries(props).map(([key, p]) => `${key}${required.has(key) ? '' : '?'}${p.enum ? '=' + p.enum.join('|') : ''}`).join(' ')
+}
+
+async function actionsCommand(sub: string | undefined, values: { machine?: string; all?: boolean }) {
+  const machine = resolveMachine(values.machine)
+  if (sub === 'log') {
+    const log = await on(machine, (call) => call('action.log', {}))
+    return print(log, () => table(log.map((e) => [new Date(e.at).toLocaleTimeString(), e.ok ? '✓' : '✗', e.id, e.source, `${e.ms}ms`, e.error ?? JSON.stringify(e.params ?? {})])))
+  }
+  if (sub) throw new RpcError('usage', `Unknown: ${app.id} actions ${sub}`)
+  const list = (await on(machine, (call) => call('action.list', {}))).filter((a) => values.all || a.expose.includes('cli'))
+  print(list, () => table(list.map((a) => [a.id, signature(a.params), a.title])))
+}
+
+/** `do <id> [-m machine] [--json] [--params json] [--key value | --key=value | --flag]...`, parsed by hand: keys are the action's. */
+export function parseDo(argv: string[]): { id?: string; machine?: string; json: boolean; params: Record<string, unknown> } {
+  const out: { id?: string; machine?: string; json: boolean; params: Record<string, unknown> } = { json: false, params: {} }
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!
+    if (arg === '-m' || arg === '--machine') { out.machine = argv[++i]; continue }
+    if (arg === '--json') { out.json = true; continue }
+    if (arg === '--params') {
+      const parsed: unknown = JSON.parse(argv[++i] ?? '{}')
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new RpcError('usage', '--params takes a JSON object')
+      Object.assign(out.params, parsed)
+      continue
+    }
+    if (arg.startsWith('--')) {
+      const eq = arg.indexOf('=')
+      if (eq > 0) { out.params[arg.slice(2, eq)] = arg.slice(eq + 1); continue }
+      const next = argv[i + 1]
+      out.params[arg.slice(2)] = next === undefined || next.startsWith('--') ? true : (i++, next)
+      continue
+    }
+    if (out.id) throw new RpcError('usage', `One action at a time; got "${out.id}" and "${arg}"`)
+    out.id = arg
+  }
+  return out
+}
+
+async function doCommand(argv: string[]) {
+  const parsed = parseDo(argv)
+  json = parsed.json
+  if (!parsed.id) throw new RpcError('usage', `${app.id} do <action> [--<param> <value>...]; list them with: ${app.id} actions`)
+  const result = await on(resolveMachine(parsed.machine), (call) => call('action.run', { id: parsed.id!, params: parsed.params, exposure: 'cli' }))
+  print(result ?? { ok: true }, () => { if (result !== undefined && result !== null) console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2)) })
+}
+
 // ── Dispatch ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const COMMANDS = new Set(['open', 'sessions', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create'])
+const COMMANDS = new Set(['open', 'sessions', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do'])
 
 async function main() {
+  // `do` takes the action's own --params, which parseArgs would refuse.
+  const at = process.argv.indexOf('do', 2)
+  if (at >= 0 && process.argv.slice(2, at).every((a, i, all) => a === '--json' || a === '-m' || a === '--machine' || all[i - 1] === '-m' || all[i - 1] === '--machine')) {
+    return doCommand([...process.argv.slice(2, at), ...process.argv.slice(at + 1)])
+  }
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
@@ -424,6 +489,7 @@ async function main() {
     case 'auth': return authCommand(rest[0], rest.slice(1), values.machine)
     case 'daemon': return daemonCommand(rest[0], Boolean(values.now))
     case 'connect': return bridge(Boolean(values.start))
+    case 'actions': return actionsCommand(rest[0], values)
   }
 }
 

@@ -3,7 +3,10 @@ import { mkdirSync, openSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from 'electron'
 import { appEnv, defaultDataDir, readBuild, socketPath } from '@mu/daemon/client'
-import { RpcError, type AppConfig, type DeclaredSection, type Notifications, type SessionInfo, type SettingType } from '@mu/protocol'
+import {
+  bool, defineAction, lit, obj, opt, Router, RpcError, str, union, unknown,
+  type AppConfig, type DeclaredSection, type Json, type Notifications, type SessionInfo, type SettingType,
+} from '@mu/protocol'
 import { serveSettings } from '@mu/settings'
 import { CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type MuEvent } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
@@ -48,7 +51,7 @@ export function startApp(appConfig: AppConfig) {
     }
     const send = (method: string, params: unknown) => { if (!contents.isDestroyed()) contents.send(CHANNEL.event, { machine: APP, method, params }) }
     const handlers: Record<string, (params: any) => Promise<unknown>> = {
-      ...serveSettings(appSettings, (params) => send('settings.changed', params), subs),
+      'settings.watch': serveSettings(appSettings, (params) => send('settings.changed', params), subs)['settings.watch'],
       async unwatch({ sub }: { sub: string }) { subs.get(sub)?.(); subs.delete(sub); return null },
       /** A folder on this computer, chosen in the system's dialog; null when cancelled. */
     async 'app.pickFolder'({ defaultPath }: { defaultPath?: string }) {
@@ -59,11 +62,6 @@ export function startApp(appConfig: AppConfig) {
     },
     /** How mu sits on the desktop now. */
       async 'service.get'() { return service.state },
-      async 'service.act'({ action }: { action: ServiceAction }) {
-        if (!['restart', 'interrupt', 'later', 'review'].includes(action)) throw new RpcError('invalid', `Unknown action ${action}`)
-        await service.act(action)
-        return service.state
-      },
       async 'app.desktop'() { return { menuBar: menuBar.shown, dockHidden: mac && dockHidden() } },
       /** The page is listening for app events: answer with a session it was asked to show before it was. */
       async 'app.ready'() {
@@ -81,13 +79,11 @@ export function startApp(appConfig: AppConfig) {
       })) })
       return null
     },
-    'machines.add': (params: { label?: string; target?: string; command?: string; via?: string }) => machineStore.add(params),
-      'machines.update': async ({ id, ...patch }: { id: string } & Partial<MachineConfig>) => { await machineStore.update(id, patch); return null },
-      'machines.remove': async ({ id }: { id: string }) => { await machineStore.remove(id); return null },
-      'machines.trust': async ({ id }: { id: string }) => { await machineStore.forgetIdentity(id); restartLink(id); return null },
-      /** Try a machine that gave up (an incompatible or unexpected daemon) again. */
-      'machines.reconnect': async ({ id }: { id: string }) => { if (id === 'local') restartLocal(); else restartLink(id); return null },
+      'action.list': async () => appRouter.list(),
+      'action.log': async () => appRouter.log(),
     }
+    // The app's intents, served under their ids like a daemon's.
+    for (const action of appRouter.list()) handlers[action.id] = (params) => appRouter.dispatch(action.id, params, {}, { source: 'window' })
     return handlers
   }
 
@@ -296,6 +292,46 @@ export function startApp(appConfig: AppConfig) {
     else app.dock.hide()
   }
   appSettings.onChange(refreshDesktop)
+
+  // ── The app's actions ──────────────────────────────────────────────────────────────────────────────────────────
+
+  const appRouter = new Router<Record<string, never>>()
+  appRouter.register(defineAction({
+    id: 'app.settings.set', title: 'Change an app setting', runs: 'app', expose: ['ui', 'cli'],
+    params: obj({ key: str(), value: unknown() }),
+    async run({ key, value }) { await appSettings.set(key, value as Json); return null },
+  }))
+  appRouter.register(defineAction({
+    id: 'machines.add', title: 'Add a machine', runs: 'app', expose: ['ui', 'cli'],
+    params: obj({ label: opt(str()), target: opt(str()), command: opt(str()), via: opt(str()) }),
+    run: (params) => machineStore.add(params),
+  }))
+  appRouter.register(defineAction({
+    id: 'machines.update', title: 'Change a machine', runs: 'app', expose: ['ui', 'cli'],
+    params: obj({ id: str(), label: opt(str()), target: opt(str()), command: opt(str()), via: opt(str()), enabled: opt(bool()) }),
+    async run({ id, ...patch }) { await machineStore.update(id, patch as Partial<MachineConfig>); return null },
+  }))
+  appRouter.register(defineAction({
+    id: 'machines.remove', title: 'Remove a machine', runs: 'app', expose: ['ui', 'cli'],
+    params: obj({ id: str() }),
+    async run({ id }) { await machineStore.remove(id); return null },
+  }))
+  appRouter.register(defineAction({
+    id: 'machines.trust', title: 'Trust the machine answering now', runs: 'app', expose: ['ui', 'cli'],
+    params: obj({ id: str() }),
+    async run({ id }) { await machineStore.forgetIdentity(id); restartLink(id); return null },
+  }))
+  appRouter.register(defineAction({
+    id: 'machines.reconnect', title: 'Reconnect a machine', runs: 'app', expose: ['ui', 'cli'],
+    params: obj({ id: str() }),
+    run({ id }) { if (id === 'local') restartLocal(); else restartLink(id); return null },
+  }))
+  appRouter.register(defineAction({
+    id: 'service.act', title: 'Restart the background process', runs: 'app', expose: ['ui'],
+    params: obj({ action: union([lit('restart'), lit('interrupt'), lit('later'), lit('review')]) }),
+    async run({ action }) { await service.act(action as ServiceAction); return service.state },
+  }))
+  appRouter.register(defineAction({ id: 'app.quit', title: `Quit ${appConfig.name}`, runs: 'app', run: () => { quitting = true; app.quit() } }))
 
   // ── Restarting this computer's daemon onto newer code ───────────────────────────────────────────────────────────────
 

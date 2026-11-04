@@ -5,6 +5,7 @@ import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import type { Client, Feature, Json, MethodName, Notifications, Params, Result, SessionInfo, SettingsSnapshot } from '@mu/protocol'
 import type { MachineEntry, MachineId, MuBridge } from '../shared.ts'
+import { useRegistry } from './extension.tsx'
 
 declare global {
   interface Window { mu: MuBridge }
@@ -107,5 +108,6 @@ export const useSettings = (machineId: MachineId, connected: boolean) =>
  */
 export function useAppSetting<T extends Json>(key: string): [T | undefined, (value: T) => Promise<unknown>] {
   const snapshot = useSettings('app', true)
-  return [snapshot?.values[key] as T | undefined, (value: T) => window.mu.call('app', 'settings.set', { key, value })]
+  const dispatch = useRegistry().router.dispatch
+  return [snapshot?.values[key] as T | undefined, (value: T) => dispatch('app.settings.set', { key, value }, { machine: 'app' })]
 }

@@ -5,7 +5,7 @@ import { Dialog, StatusGlyph } from '@mu/ui'
 import type { Status } from '@mu/protocol'
 import { score } from './score.ts'
 import { useRegistry } from './extension.tsx'
-import { useAllSessions, useMachines } from './state.tsx'
+import { useAllSessions, useMachines, useSelection } from './state.tsx'
 import { runsBare } from './actions.tsx'
 
 type Item = { id: string; title: string; detail?: string; status?: Status; keys?: string; run(): void }
@@ -17,6 +17,7 @@ export function Palette({ onClose }: { onClose(): void }) {
   const registry = useRegistry()
   const machines = useMachines().filter((m) => m.state !== 'disabled')
   const sessions = useAllSessions()
+  const { selection } = useSelection()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
 
@@ -25,12 +26,13 @@ export function Palette({ onClose }: { onClose(): void }) {
     const all: Item[] = [
       ...machines.flatMap((m) => (sessions[m.id] ?? []).map((s): Item => ({
         id: `session:${m.id}/${s.id}`, title: s.title, detail: machines.length > 1 ? m.label : undefined, status: s.status,
-        run: done(() => void registry.router.dispatch('session.select', { machine: m.id, session: s.id }, 'palette')),
+        run: done(() => void registry.router.dispatch('session.select', { machine: m.id, session: s.id }, { source: 'palette' })),
       }))),
       // Every action that can run as it is: the palette dispatches it like a key would.
-      ...registry.router.router.list('ui').filter((a) => runsBare(a) && a.id !== 'app.palette').map((a): Item => ({
-        id: a.id, title: a.title, ...(a.keys ? { keys: a.keys } : {}),
-        run: done(() => void registry.router.dispatch(a.id, {}, 'palette').catch((error) => console.error(error))),
+      // The app's and the selected machine's too: session actions apply to the selected session.
+      ...registry.router.all(selection?.machine).filter((a) => a.expose.includes('ui') && runsBare(a) && a.id !== 'app.palette' && (!a.session || selection)).map((a): Item => ({
+        id: a.id, title: a.title, ...(a.keys ? { keys: a.keys } : {}), ...(a.session && selection ? { detail: 'this session' } : {}),
+        run: done(() => void registry.router.dispatch(a.id, {}, { source: 'palette' }).catch((error) => console.error(error))),
       })),
     ]
     return all.map((item) => ({ item, rank: score(item.title, query) }))

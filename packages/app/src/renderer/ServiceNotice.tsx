@@ -2,6 +2,7 @@
 // modal: restart now, when idle, or later (which leaves a quiet reminder).
 import { useEffect, useState } from 'react'
 import { Button } from '@mu/ui'
+import { useRegistry } from './extension.tsx'
 import type { ServiceAction, ServiceState } from '../main/restart.ts'
 
 export function ServiceNotice() {
@@ -14,7 +15,8 @@ export function ServiceNotice() {
   }, [])
   if (!state || state.phase === 'current') return null
 
-  const act = (action: ServiceAction) => void window.mu.call('app', 'service.act', { action }).catch((error: Error) => {
+  const dispatch = useRegistry().router.dispatch
+  const act = (action: ServiceAction) => void dispatch('service.act', { action }, { machine: 'app', source: 'notice' }).catch((error: Error) => {
     setState((current) => current && { ...current, phase: 'error', deferred: false, error: error.message })
   })
   const restarting = state.phase === 'restarting'

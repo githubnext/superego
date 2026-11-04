@@ -13,7 +13,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  deriveStatus, FEATURES, PROTOCOL_VERSION, RpcError, type AppConfig, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type SessionInfo,
+  bool, defineAction, deriveStatus, FEATURES, lit, obj, opt, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type SessionInfo,
 } from '@mu/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@mu/settings'
 import { FileSettingsStore } from '@mu/settings/file'
@@ -37,6 +37,9 @@ const SessionDoc = defineDoc<SessionMeta>({
   kind: 'mu.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current',
   initial: () => ({ title: '', cwd: '', createdAt: 0 }), checkpointWhen: () => true,
 })
+
+/** What a daemon action gets besides its params: who called, and a way to tell that connection something. */
+export type DaemonContext = { source: string; notify(event: string, params: unknown): void }
 
 export type DaemonOptions = {
   app: AppConfig
@@ -205,7 +208,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   // ── Extensions ──────────────────────────────────────────────────────────────────────────────────────────────────
 
   const connections = new Set<RpcPeer>()
-  const extensionMethods = new Map<string, (params: any) => unknown>()
+  /** Every intent this daemon answers, its own and its extensions'. Reads and watches are plain methods. */
+  const router = new Router<DaemonContext>()
   const values = new Map<string, { value: Json; listeners: Set<(value: Json) => void> }>()
   const contributors: ((sessionId: string) => StatusContribution | undefined)[] = []
   const cleanups: (() => void)[] = []
@@ -228,7 +232,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       harness,
       agent: (agentExtension) => registry.install(agentExtension),
       settings,
-      method: (method, handler) => { extensionMethods.set(named(extension.name, method), handler) },
+      action: (action) => { router.register({ ...action, id: named(extension.name, action.id), runs: 'machine' }) },
       value<T extends Json>(key: string, initial: T): LiveValue<T> {
         const name = named(extension.name, key)
         const entry = { value: initial as Json, listeners: new Set<(value: Json) => void>() }
@@ -267,11 +271,109 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return String(submission.id)
   }
 
+  // ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  const session = { session: true as const }
+  router.register(defineAction({
+    id: 'session.create', title: 'New session', runs: 'machine', expose: ['ui', 'cli'],
+    params: obj({ cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()) }),
+    async run({ cwd, title, model: ownModel, thinking, prompt }) {
+      const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
+      if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${machine.hostname}`)
+      if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
+      const meta: SessionMeta = {
+        title: title?.trim() ?? '', cwd: dir, createdAt: Date.now(),
+        ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}),
+      }
+      const { model, thinkingLevel } = agent.resolve(meta)
+      const conversation = await harness.createConversation({
+        ownership: { kind: 'ownerless' },
+        agent: { ...(model ? { model } : {}), ...(thinkingLevel ? { thinkingLevel } : {}), cwd: meta.cwd },
+        init: async (tx, created) => {
+          Object.assign(await tx.doc(SessionDoc, created), meta)
+          ;(await tx.doc(Catalog)).ids.push(created)
+        },
+      }, context)
+      const m = await mount(conversation.id)
+      changed()
+      if (prompt?.trim()) await submit(String(conversation.id), prompt, randomUUID())
+      return info(String(conversation.id), m)
+    },
+  }))
+  router.register(defineAction({
+    id: 'session.submit', title: 'Send a message', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    params: obj({ id: str(), text: str({ minLength: 1 }), requestId: opt(str()), whenBusy: opt(union([lit('steer'), lit('followUp')])) }),
+    run: async ({ id, text, requestId, whenBusy }) => ({ submission: await submit(id, text, requestId ?? randomUUID(), whenBusy) }),
+  }))
+  router.register(defineAction({
+    id: 'session.abort', title: 'Stop the agent', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    params: obj({ id: str() }),
+    async run({ id }) { await (await get(id)).conversation.abort(context); return null },
+  }))
+  router.register(defineAction({
+    id: 'session.rename', title: 'Rename the session', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    params: obj({ id: str(), title: str({ minLength: 1 }) }),
+    async run({ id, title }) { await updateMeta(id, (meta) => { meta.title = title }); return null },
+  }))
+  router.register(defineAction({
+    id: 'session.seen', title: 'Mark as seen', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    params: obj({ id: str() }),
+    async run({ id }) {
+      const m = await get(id)
+      const seen: NonNullable<SessionMeta['seen']> = {}
+      if (m.lastEntryId !== undefined) seen.entryId = m.lastEntryId
+      if (m.live?.runFailure) seen.failureTaskId = m.live.runFailure.taskId
+      await updateMeta(id, (meta) => { meta.seen = seen })
+      return null
+    },
+  }))
+  router.register(defineAction({
+    id: 'settings.set', title: 'Change a setting', runs: 'machine', expose: ['ui', 'cli'],
+    params: obj({ key: str(), value: unknown() }),
+    async run({ key, value }) { await settings.set(key, value as Json); return null },
+  }))
+  router.register(defineAction({
+    id: 'auth.login', title: 'Sign in to a provider', runs: 'machine', expose: ['ui', 'cli'],
+    params: obj({ provider: str(), type: union([lit('api_key'), lit('oauth')]), key: opt(str()) }),
+    run({ provider, type, key }, ctx: DaemonContext) {
+      const flow: string = agent.login(provider, type, key, (event) => ctx.notify('auth.event', { flow, event }))
+      return { flow }
+    },
+  }))
+  router.register(defineAction({
+    id: 'auth.respond', title: 'Answer a sign-in step', runs: 'machine',
+    params: obj({ flow: str(), prompt: str(), value: str() }),
+    run({ flow, prompt, value }) { agent.respond(flow, prompt, value); return null },
+  }))
+  router.register(defineAction({
+    id: 'auth.cancel', title: 'Cancel a sign-in', runs: 'machine',
+    params: obj({ flow: str() }),
+    run({ flow }) { agent.cancel(flow); return null },
+  }))
+  router.register(defineAction({
+    id: 'auth.logout', title: 'Sign out of a provider', runs: 'machine', expose: ['ui', 'cli'],
+    params: obj({ provider: str() }),
+    async run({ provider }) { await agent.logout(provider); return null },
+  }))
+  router.register(defineAction({
+    id: 'daemon.restart', title: 'Restart the background process', runs: 'machine', expose: ['ui', 'cli'],
+    params: obj({ build: str(), interrupt: opt(bool()) }),
+    run({ build, interrupt }) {
+      if (build !== machine.build) throw new RpcError('changed', 'The running daemon changed. Check again.')
+      if (restarting) throw new RpcError('restarting', 'Already restarting')
+      // Decided synchronously from the mounted sessions, so no run can start between the check and the flag.
+      const busy = [...mounted.values()].some((m) => m.live?.run)
+      if (busy && !interrupt) return { restarted: false, busy }
+      restarting = true
+      setImmediate(() => options.onRestart?.())
+      return { restarted: true, busy }
+    },
+  }))
+
   // Mount everything once so statuses (and anything a previous process left running) are live from the start.
   await list()
   harness.resume()
 
-  type H = { [M in keyof Methods]: (params: Methods[M]['params']) => Promise<Methods[M]['result']> }
 
   return {
     machine,
@@ -279,57 +381,19 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     serve(peer) {
       const subs = new Map<string, () => unknown>()
       const notify = <N extends keyof Notifications>(event: N, params: Notifications[N]) => peer.notify(event, params)
-      const handlers: H = {
-        async hello({ version }) {
+      let client = 'client'
+      // Reads and watches; every intent is an action, served below under its id.
+      const handlers: Record<string, (params: any) => unknown> = {
+        async hello({ version, client: name }: Methods['hello']['params']) {
           if (version !== PROTOCOL_VERSION) {
             throw new RpcError('version_mismatch', `This machine's mu speaks protocol ${PROTOCOL_VERSION}, the client ${version}`, { hint: 'Update mu on the older side.' })
           }
-          return { version: PROTOCOL_VERSION, features, machine, methods: [...Object.keys(handlers), ...extensionMethods.keys()] }
+          if (typeof name === 'string') client = name
+          return { version: PROTOCOL_VERSION, features, machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id)] }
         },
         'session.list': () => list(),
-        async 'session.create'({ cwd, title, model: ownModel, thinking, prompt }) {
-          const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
-          if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${machine.hostname}`)
-          if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
-          const meta: SessionMeta = {
-            title: title?.trim() ?? '', cwd: dir, createdAt: Date.now(),
-            ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}),
-          }
-          const { model, thinkingLevel } = agent.resolve(meta)
-          const conversation = await harness.createConversation({
-            ownership: { kind: 'ownerless' },
-            agent: { ...(model ? { model } : {}), ...(thinkingLevel ? { thinkingLevel } : {}), cwd: meta.cwd },
-            init: async (tx, created) => {
-              Object.assign(await tx.doc(SessionDoc, created), meta)
-              ;(await tx.doc(Catalog)).ids.push(created)
-            },
-          }, context)
-          const m = await mount(conversation.id)
-          changed()
-          if (prompt?.trim()) await submit(String(conversation.id), prompt, randomUUID())
-          return info(String(conversation.id), m)
-        },
-        async 'agent.models'() { return agent.catalog() },
-        async 'session.rename'({ id, title }) {
-          await updateMeta(id, (meta) => { meta.title = title })
-          return null
-        },
-        async 'session.submit'({ id, text, requestId, whenBusy }) {
-          return { submission: await submit(id, text, requestId ?? randomUUID(), whenBusy) }
-        },
-        async 'session.abort'({ id }) {
-          await (await get(id)).conversation.abort(context)
-          return null
-        },
-        async 'session.seen'({ id }) {
-          const m = await get(id)
-          const seen: NonNullable<SessionMeta['seen']> = {}
-          if (m.lastEntryId !== undefined) seen.entryId = m.lastEntryId
-          if (m.live?.runFailure) seen.failureTaskId = m.live.runFailure.taskId
-          await updateMeta(id, (meta) => { meta.seen = seen })
-          return null
-        },
-        async 'session.watch'({ id }) {
+        'agent.models': async () => agent.catalog(),
+        async 'session.watch'({ id }: { id: string }) {
           const m = await get(id)
           const watch = await m.conversation.watch(context)
           const sub = randomUUID()
@@ -352,34 +416,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           last = JSON.stringify(value)
           return { sub, value }
         },
-        ...serveSettings(settings, (params) => notify('settings.changed', params), subs),
-        async 'auth.login'({ provider, type, key }) {
-          const flow: string = agent.login(provider, type, key, (event) => notify('auth.event', { flow, event }))
-          return { flow }
-        },
-        async 'auth.respond'({ flow, prompt, value }) {
-          agent.respond(flow, prompt, value)
-          return null
-        },
-        async 'auth.cancel'({ flow }) {
-          agent.cancel(flow)
-          return null
-        },
-        async 'auth.logout'({ provider }) {
-          await agent.logout(provider)
-          return null
-        },
-        async 'daemon.restart'({ build, interrupt }) {
-          if (build !== machine.build) throw new RpcError('changed', 'The running daemon changed. Check again.')
-          if (restarting) throw new RpcError('restarting', 'Already restarting')
-          // Decided synchronously from the mounted sessions, so no run can start between the check and the flag.
-          const busy = [...mounted.values()].some((m) => m.live?.run)
-          if (busy && !interrupt) return { restarted: false, busy }
-          restarting = true
-          setImmediate(() => options.onRestart?.())
-          return { restarted: true, busy }
-        },
-        async 'value.watch'({ key }) {
+        'settings.watch': serveSettings(settings, (params) => notify('settings.changed', params), subs)['settings.watch'],
+        async 'value.watch'({ key }: { key: string }) {
           const entry = values.get(key)
           if (!entry) throw new RpcError('not_found', `No value ${key}`)
           const sub = randomUUID()
@@ -388,15 +426,26 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           subs.set(sub, () => { entry.listeners.delete(listener) })
           return { sub, value: entry.value }
         },
-        async unwatch({ sub }) {
+        async unwatch({ sub }: { sub: string }) {
           const stop = subs.get(sub)
           subs.delete(sub)
           await stop?.()
           return null
         },
+        /** Every action here, as data: id, title, params schema, who may run it. */
+        'action.list': async () => router.list(),
+        /** Run an action by id, as `exposure` (the command line passes `cli`); params may be strings to coerce. */
+        'action.run': ({ id, params, exposure }: { id: string; params?: unknown; exposure?: Exposure }) =>
+          router.dispatch(id, params, { notify, source: client }, { source: exposure ?? client, ...(exposure ? { exposure } : {}) }),
+        /** The newest dispatches on this machine, oldest first. */
+        'action.log': async () => router.log(),
+      }
+      const ctx: DaemonContext = { notify: (event, params) => notify(event as keyof Notifications, params as never), source: client }
+      for (const action of router.list()) {
+        handlers[action.id] = (params: unknown) => router.dispatch(action.id, params, { ...ctx, source: client }, { source: client })
       }
       connections.add(peer)
-      for (const [method, handler] of [...Object.entries(handlers), ...extensionMethods]) {
+      for (const [method, handler] of Object.entries(handlers)) {
         peer.handle(method, (params: unknown) => {
           if (restarting && method !== 'hello') throw new RpcError('restarting', 'The daemon is restarting. Try again in a moment.')
           return (handler as (params: unknown) => unknown)(params)

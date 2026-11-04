@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
-import { defineApp, PROTOCOL_VERSION, type AuthEvent, type Hello, type ModelCatalog, type Notifications, type ProviderAuthInfo, type RpcPeer, type SessionInfo, type SettingsSnapshot } from '@mu/protocol'
+import { defineApp, PROTOCOL_VERSION, type ActionInfo, type ActionLogEntry, type AuthEvent, type Hello, type ModelCatalog, type Notifications, type ProviderAuthInfo, type RpcPeer, type SessionInfo, type SettingsSnapshot } from '@mu/protocol'
 import { connectSocket, listen, openDaemon, type Daemon } from '../src/index.ts'
 
 // Only the scripted model, whatever keys the machine running the tests has.
@@ -232,4 +232,24 @@ describe('record and replay', () => {
     socket.destroy(); server.close(); await daemon.close()
     delete process.env.MU_REPLAY_SPEED
   })
+
+  it('lists its actions, runs them from the command line with coerced params, and logs each dispatch', async () => {
+    const { peer, close } = await open()
+    const actions = await peer.call<ActionInfo[]>('action.list', {})
+    expect(actions.map((a) => a.id)).toEqual(expect.arrayContaining(['session.create', 'session.submit', 'settings.set', 'daemon.restart']))
+    expect(actions.find((a) => a.id === 'session.rename')).toMatchObject({ session: true, expose: expect.arrayContaining(['cli']) })
+    const created = await peer.call<SessionInfo>('action.run', { id: 'session.create', params: { title: 'from cli' }, exposure: 'cli' })
+    await peer.call('action.run', { id: 'session.rename', params: { id: created.id, title: 'renamed' }, exposure: 'cli' })
+    expect((await sessions(peer)).find((s) => s.id === created.id)?.title).toBe('renamed')
+    await expect(peer.call('action.run', { id: 'session.rename', params: { id: created.id }, exposure: 'cli' })).rejects.toMatchObject({ kind: 'invalid_params' })
+    await expect(peer.call('action.run', { id: 'nope.nope', exposure: 'cli' })).rejects.toMatchObject({ kind: 'unknown_action' })
+    // Served under its own id, too: the app calls actions directly.
+    await peer.call('session.seen', { id: created.id })
+    const log = await peer.call<ActionLogEntry[]>('action.log', {})
+    expect(log.map((e) => [e.id, e.source, e.ok])).toEqual(expect.arrayContaining([
+      ['session.create', 'cli', true], ['session.rename', 'cli', true], ['session.rename', 'cli', false], ['session.seen', 'test', true],
+    ]))
+    await close()
+  })
 })
+

@@ -3,7 +3,7 @@
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { arr, obj, opt, str } from '@earendil-works/pi-schema'
 import { defineDaemonExtension } from '@mu/daemon'
-import { RpcError } from '@mu/protocol'
+import { defineAction, RpcError } from '@mu/protocol'
 import { ANSWER, PENDING, TOOL, type AskDetails, type Question } from './shared.ts'
 
 export default defineDaemonExtension({
@@ -53,12 +53,15 @@ export default defineDaemonExtension({
       return question && { kind: 'question', msg: question.question }
     })
 
-    mu.method<{ id: string; answer: string }>(ANSWER, ({ id, answer }) => {
-      const resolve = answers.get(id)
-      if (!resolve) throw new RpcError('not_found', 'That question is no longer waiting')
-      if (typeof answer !== 'string' || !answer.trim()) throw new RpcError('invalid', 'An answer is needed')
-      resolve(answer.trim())
-      return null
-    })
+    mu.action(defineAction({
+      id: ANSWER, title: 'Answer the agent’s question', runs: 'machine', expose: ['ui', 'cli'],
+      params: obj({ id: str(), answer: str({ minLength: 1 }) }),
+      run({ id, answer }) {
+        const resolve = answers.get(id)
+        if (!resolve) throw new RpcError('not_found', 'That question is no longer waiting')
+        resolve(answer.trim())
+        return null
+      },
+    }))
   },
 })

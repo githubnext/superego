@@ -1,6 +1,7 @@
 // The daemon's public method table. One place names every method, its params and its result; the daemon's dispatch,
 // the typed client and (later) the CLI and schema are derived from it.
 import type { ConversationView } from '@earendil-works/pi-durable'
+import type { ActionInfo, ActionLogEntry, Exposure } from './actions.ts'
 import type { AuthEvent, Json, SettingsSnapshot } from './settings.ts'
 import type { Status } from './status.ts'
 
@@ -14,7 +15,7 @@ export const PROTOCOL_VERSION = 2
  * What a daemon of this build offers, announced in `hello`. Clients check a feature before using it, so an older
  * daemon on another machine keeps working with a newer app (and the other way round) for whatever both know.
  */
-export const FEATURES = ['sessions', 'settings', 'auth', 'restart'] as const
+export const FEATURES = ['sessions', 'settings', 'auth', 'restart', 'actions'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type SessionId = string
@@ -94,6 +95,12 @@ export type Methods = {
    */
   /** Snapshot of an extension's live value, then `value.changed` with each new one. */
   'value.watch': { params: { key: string }; result: { sub: string; value: Json } }
+  /** Every action on this machine, as data. */
+  'action.list': { params: {}; result: ActionInfo[] }
+  /** Run any action by id; `exposure` says who is asking (the command line passes `cli`), and params are coerced. */
+  'action.run': { params: { id: string; params?: unknown; exposure?: Exposure }; result: unknown }
+  /** This machine's newest dispatches. */
+  'action.log': { params: {}; result: ActionLogEntry[] }
   'daemon.restart': { params: { build: string; interrupt?: boolean }; result: { restarted: boolean; busy: boolean } }
 }
 

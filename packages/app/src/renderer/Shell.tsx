@@ -1,7 +1,7 @@
 // The shell every app gets: the sidebar slot (or, with nothing there, a compact session picker), the selected session,
 // the restart notice, Settings, and the app-wide reactions (fonts, ⌘, , sessions shown from the command line or a
 // notification, marking finished sessions seen).
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, Select } from '@mu/ui'
 import { machine as client, useSettings } from './client.ts'
 import { Slot, useRegistry } from './extension.tsx'
@@ -39,7 +39,7 @@ export function Shell() {
   // Looking at a finished or failed session marks it seen.
   useEffect(() => {
     if (!selection || !session || (session.status.state !== 'done' && session.status.state !== 'error') || !document.hasFocus()) return
-    void client(selection.machine).call('session.seen', { id: selection.session }).catch(() => {})
+    void registry.router.dispatch('session.seen', { id: selection.session }, { machine: selection.machine, source: 'auto' }).catch(() => {})
   }, [selection?.machine, selection?.session, session?.status.state])
 
   const actions = <><ServiceNotice /><Button variant="ghost" onClick={openSettings}>Settings</Button></>
@@ -94,6 +94,9 @@ function SessionPicker() {
 
 /** Fonts from the app's settings; ⌘, ; sessions and Settings shown from the command line, a notification or the menu bar. */
 function useAppEffects() {
+  const { selection } = useSelection()
+  const selectionRef = useRef(selection)
+  selectionRef.current = selection
   const appSettings = useSettings('app', true)
   const { select } = useSelection()
   const { openSettings } = useShell()
@@ -110,10 +113,10 @@ function useAppEffects() {
     document.title = registry.app.name
     const onKey = (event: KeyboardEvent) => {
       // Every shortcut is an action's: the same router the palette and other code dispatch through.
-      for (const action of registry.router.router.list()) {
+      for (const action of registry.router.all(selectionRef.current?.machine)) {
         if (action.keys && runsBare(action) && matches(event, action.keys)) {
           event.preventDefault()
-          void registry.router.dispatch(action.id, {}, 'keys').catch((error) => console.error(error))
+          void registry.router.dispatch(action.id, {}, { source: 'keys' }).catch((error) => console.error(error))
           return
         }
       }
