@@ -58,13 +58,13 @@
 <body>
 <main>
   <h1><span>µ</span> mu: structure</h1>
-  <p class="lede">A framework for agent apps. One daemon per machine, its own protocol, an Electron app layer, and extensions with a daemon half and a UI half. Apps are made with <code>mu new</code>. As of <code>239dd3b</code>, 13 commits.</p>
+  <p class="lede">A framework for agent apps. One daemon per machine, its own protocol, an Electron app layer, and extensions with a daemon half and a UI half. Apps are made with <code>mu new</code>. As of <code>620203c</code>, 21 commits.</p>
 
   <div class="grid g4" style="margin-top:24px">
-    <div class="card"><div class="stat">~4.6k<small>lines of source</small></div></div>
+    <div class="card"><div class="stat">~5.7k<small>lines of source</small></div></div>
     <div class="card"><div class="stat">7 · 2 · 2<small>packages · extensions · example apps</small></div></div>
     <div class="card"><div class="stat">18 + 12<small>daemon methods + app methods</small></div></div>
-    <div class="card"><div class="stat">28 + 3<small>tests + end-to-end runs (2 examples, 1 generated app)</small></div></div>
+    <div class="card"><div class="stat">35 + 3<small>tests + end-to-end runs (2 examples, 1 generated app)</small></div></div>
   </div>
 
   <h2>1 · Processes</h2>
@@ -76,8 +76,8 @@
       <text class="title" x="36" y="44">App window</text><text class="small" x="130" y="44">startApp(app) · mountApp(app, { extensions })</text>
       <rect class="box" x="40" y="62" width="190" height="130" rx="8"/>
       <text class="title" x="56" y="86">Renderer</text>
-      <text class="small" x="56" y="106">shell: sidebar slot or picker</text>
-      <text class="small" x="56" y="124">session view · settings dialog</text>
+      <text class="small" x="56" y="106">shell: slots · ⌘K palette</text>
+      <text class="small" x="56" y="124">session view · floating composer</text>
       <text class="small" x="56" y="142">UI halves of extensions</text>
       <text class="small" x="56" y="160">hooks for extensions</text>
       <rect class="box" x="250" y="62" width="90" height="130" rx="8"/>
@@ -191,20 +191,20 @@
       <text class="mono" x="38" y="186">harness · sessions</text>
       <rect class="hot" x="560" y="20" width="420" height="210" rx="10"/>
       <text class="title" x="578" y="46">ui half · defineUiExtension</text>
-      <text class="mono" x="578" y="76">slot(sidebar | session.header | composer.above)</text>
+      <text class="mono" x="578" y="76">slot(sidebar | session.header | composer.above | session.aside)</text>
       <text class="mono" x="578" y="98">tool(name, C)     draw tool calls</text>
       <text class="mono" x="578" y="120">entry(kind, C)    draw custom entries</text>
       <text class="mono" x="578" y="142">settings(ui, C)   custom sections</text>
-      <text class="mono" x="578" y="164">command({ keys })</text>
-      <text class="mono" x="578" y="186">hooks: useSessions · useSelection</text>
-      <text class="mono" x="578" y="204">       useValue · call · has</text>
+      <text class="mono" x="578" y="164">command({ keys }) · appSettings(section)</text>
+      <text class="mono" x="578" y="186">hooks: useSessions · useSelection · useAppSetting</text>
+      <text class="mono" x="578" y="204">       useValue · useComposerClaim · call · has</text>
       <path class="line" d="M440 110 H558" marker-end="url(#c)"/><text class="label" x="452" y="102">value.changed</text>
       <path class="line" d="M558 150 H442" marker-end="url(#c)"/><text class="label" x="452" y="168">call(&lt;name&gt;.…)</text>
     </svg>
   </div>
   <div class="grid g2" style="margin-top:12px">
-    <div class="card"><div class="k">threads · ui</div><p style="font-size:13px">The session sidebar by machine, with status rollups, "new session in…", and next/previous commands. Without it, the shell shows a top-bar picker.</p></div>
-    <div class="card"><div class="k">ask-user · daemon + ui</div><p style="font-size:13px">An <code>ask_user</code> tool that waits. The session shows as needing you, the question card sits above the composer, and any client can answer.</p></div>
+    <div class="card"><div class="k">threads · ui</div><p style="font-size:13px">The session sidebar. Its ··· menu and settings: sort (newest, needs you first, recently active), a list or a rail (⌘\), and a details pane in <code>session.aside</code> (⌘I). Without it, the shell shows a top-bar picker.</p></div>
+    <div class="card"><div class="k">ask-user · daemon + ui</div><p style="font-size:13px">An <code>ask_user</code> tool that waits. The session shows as needing you; the question sits in the composer, which it claims, so you answer by picking an option or typing.</p></div>
   </div>
 
   <h2>5 · Protocol</h2>
@@ -217,10 +217,12 @@
       </div>
       <div class="k" style="margin-top:12px">features</div>
       <div class="chips"><span>sessions</span><span>settings</span><span>auth</span><span>restart</span><span class="new">ext:&lt;name&gt;</span></div>
+      <div class="k" style="margin-top:12px">session facts</div>
+      <div class="chips"><span>title</span><span>cwd</span><span>status</span><span>createdAt</span><span class="new">activeAt</span><span class="new">model</span><span class="new">cost</span></div>
     </div>
     <div class="card">
       <div class="k">app · machine id "app"</div>
-      <div class="chips"><span>settings.watch</span><span>settings.set</span><span>machines.add</span><span>machines.update</span><span>machines.remove</span><span>machines.trust</span><span>machines.reconnect</span><span>service.get</span><span>service.act</span><span>app.ready</span><span>app.desktop</span></div>
+      <div class="chips"><span>settings.watch</span><span>settings.set</span><span>machines.add</span><span>machines.update</span><span>machines.remove</span><span>machines.trust</span><span>machines.reconnect</span><span>service.get</span><span>service.act</span><span>app.ready</span><span>app.desktop</span><span class="new">settings.register</span></div>
       <div class="k" style="margin-top:12px">events</div>
       <div class="chips"><span>watch.ops</span><span>sessions.changed</span><span>settings.changed</span><span>auth.event</span><span class="new">value.changed</span><span>service.changed</span><span>$machines</span><span>app.select</span></div>
     </div>
@@ -259,7 +261,7 @@
     <div class="card">
       <div class="k">the client · app and command</div>
       <table>
-        <tr><td>app-settings.json</td><td>fonts · notifications · menu bar · Dock</td></tr>
+        <tr><td>app-settings.json</td><td>fonts · notifications · menu bar · Dock · extensions' own (sidebar sort, view, details)</td></tr>
         <tr><td>machines.json</td><td>ssh / via machines, shared</td></tr>
         <tr><td>app/</td><td>Electron profile · single-instance lock</td></tr>
       </table>
@@ -273,23 +275,33 @@
       <tr><td>daemon</td><td>protocol over a real socket · status · restarts · settings · sign-in · restart refusal · record/replay</td></tr>
       <tr><td>ask-user</td><td>a replayed agent asks; blocked status; live pending list; answer from a client; agent carries on</td></tr>
       <tr><td>cli · generate</td><td>real commands on two machines · settings --all · auth · daemon restart · <code>mu new</code> for both templates</td></tr>
-      <tr><td>registry · identity · merge · restart</td><td>validation · wrong/duplicate machine · "Mixed" · restart state machine</td></tr>
-      <tr><td>examples/full smoke</td><td>two app processes: chat · ask-user card · fonts · machines · All machines · menu bar · restart ×2 · <code>mu</code> → running app</td></tr>
+      <tr><td>registry · identity · merge · restart · score · groups · title</td><td>validation and upsert · wrong/duplicate machine · "Mixed" · restart state machine · palette ranking · sidebar grouping · session titles</td></tr>
+      <tr><td>examples/full smoke</td><td>two app processes: chat · ask-user · sidebar menu, rail, details · ⌘K · fonts · machines · All machines · menu bar · restart ×2 · <code>mu</code> → running app</td></tr>
       <tr><td>examples/minimal smoke</td><td>core alone: picker instead of sidebar · chat · command hand-off · no extension features</td></tr>
     </table>
   </div>
 
-  <h2>9 · Next</h2>
+  <h2>9 · The look</h2>
+  <div class="grid g2">
+    <div class="card"><div class="k">tokens · @mu/ui</div><table>
+      <tr><td>type</td><td>13 UI · 15.5/1.7 reading · 26 title · mono for meta</td></tr>
+      <tr><td>space</td><td>4px grid · 600px reading column · 248px sidebar</td></tr>
+      <tr><td>overlays</td><td>Base UI: dialog · menu · popover · tooltip</td></tr>
+    </table></div>
+    <div class="card"><div class="k">from the explorations</div><p style="font-size:13px">D’s focus look, A’s sidebar rows, C’s status sorting and inspector, as modes of one sidebar. <code>design-explorations/threads-sidebar.html</code>.</p></div>
+  </div>
+
+  <h2>10 · Next</h2>
   <div class="card">
     <ul class="tight">
-      <li>Type, spacing and layout: four directions in <code>design-explorations/main-window.html</code></li>
+      <li>New session dialog: project, prompt, machine, model and thinking for that session</li>
       <li class="todo">Extensions: git/diff · background jobs and subagents · suggestions</li>
-      <li class="todo">A layout tree for panels · command palette</li>
-      <li class="todo">Publish the packages so new apps don't need the checkout · runtime-installed extensions</li>
+      <li class="todo">A layout tree for panels</li>
+      <li class="todo">Publish the packages · runtime-installed extensions · remote install</li>
     </ul>
   </div>
 
-  <footer>From the repo at 239dd3b · ~/dev/gh/mu · reasoning in PLAN.md</footer>
+  <footer>From the repo at 620203c · ~/dev/gh/mu · reasoning in PLAN.md</footer>
 </main>
 </body>
 </html>

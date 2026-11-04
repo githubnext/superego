@@ -68,22 +68,22 @@ The niche is real. We should borrow herdr-core's protocol hygiene wholesale, and
 
 **Electron main:** thin. Window management, machine catalog (`~/.mu/machines.json`: `{id,label,target,enabled}`), spawning ssh links, and relaying one generic `call/on` (no hand-maintained channel lists; that was a tremolo regret). Each machine link reconnects with backoff, and a disconnected machine stays visible but stale (fut).
 
-**Renderer:** React 19, Tailwind 4, shadcn/base-ui (tremolo stack, electron-vite). The shell provides only layout slots, the command palette, the action/keymap registry (port tremolo `src/actions`, `keymap`, `focus`) and the extension loader.
+**Renderer:** React 19, plain CSS on `@mu/ui` tokens, Base UI for overlays, electron-vite. The shell provides slots, the session view, Settings, the ⌘K palette and extensions' commands.
 
-### Protocol surface (v0)
+### Protocol surface (as built)
 
 ```
-hello {client, caps}                      → {version, methods, features, machine}
-session.list / create {cwd, title?} / fork / archive
-session.watch {id, window}                → snapshot + ops   (wraps conversation.watch)
-session.submit {id, text, requestId, whenBusy}
-session.abort {id}
-session.answer {id, promptId, value}      ← durable "ask the user" primitive (see §4)
-status.watch                              → per-session derived status, rollup per machine
-doc.get / doc.set {key, value, ifVersion} / doc.watch
-ext.list / ext.call {ext, method, params} / ext.reload
-events.subscribe                          → snapshot + seq + heartbeat + missed{snapshot}
+hello {client, version, features}         → {version, features, machine{id, build, …}, methods}
+session.list / create {cwd, title?} / rename / submit / abort / seen
+session.watch {id}                        → snapshot + watch.ops (Chord delta ops)
+sessions.watch                            → snapshot + sessions.changed (status, model, cost, activeAt)
+settings.watch / settings.set             auth.login / respond / cancel / logout
+value.watch {key}                         → an extension's live value + value.changed
+<extension>.<method>                      an extension's own methods
+daemon.restart {build, interrupt?}        unwatch {sub}
 ```
+
+Not built from the sketch: `fork`, `archive`, `doc.*`, a heartbeat/missed protocol. The current list is in `docs/structure.html`.
 
 ### Entities
 
@@ -99,94 +99,81 @@ Workspaces, tabs and splits are **not** daemon concepts. They live in a doc owne
 
 ## 3. Extension API
 
-pi-style: trusted TypeScript, loaded with jiti, hot-reloaded. One package, two sides; the shape is proven by pi-pocket's `(host, web)` split.
+As built (2026-11-04). An extension is a package with up to two halves, imported by an app at **build time**: `<pkg>/daemon` (listed in the app's `src/daemon.ts`) and `<pkg>/ui` (listed in `src/renderer/main.tsx`). Runtime-installed and user extensions come later. The current shape is in `docs/structure.html`.
 
-```
-~/.mu/extensions/<name>/        (and <project>/.mu/extensions/ once trusted)
-  package.json   { "mu": { "api": 1, "daemon": "daemon.ts", "ui": "ui.tsx" } }
-  daemon.ts      export default (mu: DaemonAPI) => void
-  ui.tsx         export default (mu: UIAPI) => void
-```
+**Daemon half** (`defineDaemonExtension`):
+- `mu.agent(ext)`: pi-durable tools, prompt sections, hooks, tasks
+- `mu.settings`: register settings sections
+- `mu.method('<name>.<m>', fn)`: methods for clients
+- `mu.value(key, initial)`: live values, watched with `value.watch`
+- `mu.status(fn)`: mark a session blocked
+- `mu.harness`, `mu.sessions`
+- Each one announces `ext:<name>` in `hello`.
 
-**`DaemonAPI`**: pi-durable's `Extension` plus what pi's CLI host adds.
-- `mu.agent(ext: Extension)`: tools, sections, hooks (`beforeRequest`, `beforeTool`/`afterTool`, `afterRun`…), wraps, tasks, docs. Passed straight through to Durable.
-- `mu.on('session_start' | 'session_end' | 'status' | 'input' | 'model_select' …)`: lifecycle derived from `pi.live` transitions.
-- `mu.method(name, schema, handler)`: RPC that the extension's UI side calls via `ext.call`.
-- `mu.registerProvider`, `mu.settings(schema)`, `mu.ask(sessionId, prompt)` → Promise (durable).
-- `mu.exec`, and later `mu.env(machine)`, which is pi-env's `RemoteExecutionEnv`.
+**UI half** (`defineUiExtension`):
+- Slots: `sidebar`, `session.header`, `composer.above`, `session.aside`
+- `mu.tool(name, C)` and `mu.entry(kind, C)`: transcript renderers
+- `mu.settings(ui, C)`: custom settings sections
+- `mu.appSettings(section)`: the UI half's own settings, kept by the app
+- `mu.command({ id, title, keys, run })`: keys and the ⌘K palette
+- Hooks: `useMachines`, `useSessions`, `useSelection`, `useSessionView`, `useValue`, `useAppSetting`, `useComposerClaim`, `call`, `has`.
 
-**`UIAPI`**: browser equivalents of pi's TUI hooks, plus panels.
+**Kit:** `@mu/ui` (Base UI underneath for dialog, menu, popover and tooltip) and its tokens.
 
-| pi TUI | mu UI |
-|---|---|
-| `setStatus`, `setWidget` | `mu.slot('statusbar' \| 'composer.above' \| 'sidebar' \| 'topbar', key, Component)` |
-| `setHeader`, `setFooter` | slot replacement |
-| `custom(..., {overlay})` | `mu.overlay(Component) → Promise<T>` |
-| `select`, `confirm`, `input` | `mu.dialog.*` |
-| `notify` | `mu.toast` |
-| `setEditorComponent`, autocomplete | `mu.composer.replace / decorate / complete` |
-| `registerMessageRenderer`, `renderCall`/`renderResult` | `mu.render.entry(kind, C)`, `mu.render.tool(name, C)` (fed by Durable's `details` channel) |
-| `registerCommand`, `registerShortcut` | `mu.command(id, {title, run})` and `mu.keys` (go through the action registry) |
-| — | `mu.panel(id, {title, Component})`: a full surface, placeable by the layout |
-| — | `mu.client`: typed `call/on` to the daemon (any machine), `ext.call` to its own daemon side |
+**Trust:** in-process, like pi. A sandboxed tier comes later, for agent-written UI.
 
-The UI side gets React plus `@mu/ui` (a shadcn-derived kit: Button, Input, List, Panel, Tabs, Dialog, Markdown, CodeBlock, StatusGlyph, Composer, Transcript).
+**Bundled extensions:**
+- `threads`: the sidebar, with sort, rail and details modes
+- `ask-user`: a tool, the blocked status, and the question in the composer
 
-**Trust:** in-process and trusted, like pi. A sandboxed-iframe tier (tremolo's `bench-frame.html` pattern) comes later for agent-authored or untrusted panels.
-
-**Where extensions live:** daemon sides run on the machine they're installed on; UI sides load from the client machine. A remote daemon advertises its extensions in `ext.list`, and if the client lacks the UI half, its panels show "not installed here". That's good enough for v0.
-
-### Layout
-
-The core ships a **layout tree** primitive borrowed from herdr-app: `row | column | stack | block{panel, props}`, persisted in a doc, with `resizable`, `size`, `hidden`. The default layout and the sidebar are **bundled extensions** built on it, which proves the API is enough. The bench (tremolo) is an extension too: an agent-writable panel in a doc, with a sandboxed figure.
+**Layout:** for now, the shell's slots. A layout tree for arbitrary panels is still open (§9).
 
 ---
 
 ## 4. Agent and activity
 
-- One agent runtime: pi-durable 1.5 with `CodingTools`, pi-ai models and auth (reuse `~/.pi/agent/auth.json` via pi-coding-agent's model registry, as pi-pocket does).
-- **Derived status** per session, computed from `docs["pi.live"]` plus mu's pending prompts:
+- One agent runtime: pi-durable 1.5 with `CodingTools` and pi-ai models. Credentials are mu's own (`<dataDir>/auth.json`), managed in Settings.
+- **Derived status** per session, from `pi.live` plus extension contributions:
   - `run` present → `working`
-  - a pending `mu.ask` → `blocked{question|permission}`
+  - an extension says blocked (ask-user's pending question) → `blocked{question}`
   - `runFailure` → `error`
-  - run ended with the result unseen → `done`
+  - an answer the user hasn't seen → `done`
   - otherwise `idle`
 
-  Attention/seen revisions are shared across clients (fut's read revision).
-- **Durable "ask the user"** (`mu.ask`), because Durable has no blocked state and both reference apps had to invent one. It's a durable task waiting on `session.answer`, which survives restarts and is shown on every client.
-- **Subagents:** `mu.spawn(childSession)` with die-with-parent, and child status changes delivered as a note into the parent (herdr's `notes.rs`, with a "can it take it" guard).
-- **External agents** (Claude Code, Codex) in terminals report via OSC 7501. That needs the pty extension and is post-v0.
+  "Seen" is stored per session, so every client agrees.
+- **Asking the user** is the `ask-user` extension, not core. A restart re-asks the question (the tool is `replay: "safe"`).
+- **Subagents and background jobs** are still to come, as an extension.
+- **External agents** (Claude Code, Codex) in terminals report via OSC 7501, once a terminal extension exists.
 
 ---
 
-## 5. Proof of concept: scope
+## 5. What a new app gets
 
-**In:**
-1. The daemon: Harness + SQLite, the session catalog, the protocol above, and `mu connect` (stdio).
-2. Electron: one window, the machine catalog (local + ssh), generic relay, reconnect + stale state.
-3. Shell: layout tree, slots, command palette, action/keymap registry, extension loader with hot reload.
-4. `@mu/ui`: about 10 components.
-5. Bundled extensions written **only** against the public API:
-   - `sessions-sidebar`: machines → sessions with status glyphs
-   - `chat`: transcript + composer, with tool renderers
-   - `status-bar`
-6. Example third-party extension, `todo`: an agent tool, a renderer and a sidebar panel. It proves both halves.
-7. A headless e2e smoke test with a real model (a tremolo lesson).
-
-**Out (next):** terminals/pty (or hc), bench, diff/changes view, iframe sandbox tier, MCP server for outside agents, `mu` CLI beyond `connect`/`daemon`, extension package manager, worktrees (wt integration via hooks), mobile/web client.
+- **`mu new <dir> [--minimal]`** copies `examples/full` or `examples/minimal`. Every name comes from `AppConfig`: data dir, socket, command, env prefix, menu bar glyph. `@mu/*` links to this checkout until the packages are published.
+- **The shell:**
+  - the focus look
+  - Settings: app, machines, every machine's own, "All machines"
+  - the ⌘K palette
+  - menu bar and Dock
+  - the restart notice
+  - single instance
+  - notifications
+- **The command:** `<id>`, plus sessions, machines, settings, auth and the daemon, each with `-m <machine>` and `--json`.
+- **Tests:** a smoke test that runs headless.
 
 ---
 
 ## 6. Milestones
 
-| # | Deliverable | Done when |
+| # | Deliverable | Status |
 |---|---|---|
-| M0 | Repo skeleton: pnpm workspace with `packages/{protocol,daemon,ui,sdk}`, `app/` (electron-vite), `extensions/*` | builds, lint/typecheck green |
-| M1 | Daemon + protocol + Node test client: create session, submit, watch ops, status | vitest against a real Harness in MemoryStorage |
-| M2 | Electron shell talking to the local daemon; chat as a hard-coded panel | can chat; quit app → agent keeps running → reopen and reattach |
-| M3 | Extension loader (both sides) + slots + layout tree; move chat and sidebar into extensions | sidebar and chat contain no core imports beyond `@mu/sdk` |
-| M4 | Machines: `ssh host mu connect`, federation, stale state | sessions on two machines in one sidebar |
-| M5 | `mu.ask` + derived status + `todo` example + e2e smoke | blocked/working/done visible across a restart |
+| M0–M2 | Daemon, protocol, Electron shell; agents outlive the app | done |
+| M3 | Extensions (both halves), slots; sidebar out of core | done (build-time) |
+| M4 | Machines: ssh / via, identity, stale state | done; needs a real second machine and remote install |
+| M5 | Asking the user, blocked status, end-to-end smoke | done (ask-user) |
+| M6 | Framework: AppConfig, @mu/app, examples, `mu new` | done |
+| M7 | Focus look, palette, sidebar modes, Base UI kit | done |
+| M8 | New session dialog | in progress |
 
 ---
 
@@ -196,11 +183,12 @@ The core ships a **layout tree** primitive borrowed from herdr-app: `row | colum
 2. **Electron, not Tauri.** Tauri's wins are bundle size and idle memory, because it uses the system webview. Rendering isn't faster, and WebKitGTK on Linux is slower. Its Rust backend would still need a Node sidecar for pi-durable, and extension authors would have to test three engines instead of Chromium. The daemon is UI-independent, so the shell stays swappable.
 3. **Terminals wait** until after the PoC, as a bundled extension.
 4. **Chord:** delta ops only (`applyImmutable` in the renderer), not the facet/plugin system.
+5. **A framework with a generator**, Rails-style: apps depend on mu's packages; extensions are packages any app imports.
+6. **Base UI** for the kit's overlays: portals, positioning, focus and Escape done right, instead of hand-rolled.
 
 Still open:
 - **Remote install.** v0 expects `node` and mu on the remote PATH. Later: self-install over ssh.
-- **Name and package scope.** `@mu/*` for now.
-- **Extension placement.** Daemon side per machine, UI side per client; revisit at M3.
+- **Name and package scope.** `@mu/*` for now; publishing decides it.
 
 ## 8. Progress
 
@@ -222,7 +210,21 @@ Still open:
 - **Framework (2026-11-04).** mu became a framework with a generator, Rails-style. `AppConfig` names everything per app. `@mu/app` is the app layer, there are two examples (`minimal`, `full`), and `mu new` copies one into a new project linked to this checkout.
 
   Extensions are packages with `./daemon` and `./ui` halves, imported at build time; runtime-installed extensions are later. First bundled: `threads` (sidebar) and `ask-user`.
-- **Next:**
-  - more bundled extensions: git/diff, background jobs and subagents, suggestions
-  - a layout tree for panels
-  - publishing the packages, so new apps don't need the checkout
+- **Focus look, palette, sidebar modes (2026-11-04).** Explored in `design-explorations/` (main window, then the threads sidebar's modes).
+
+  Built:
+  - D's look as `@mu/ui` tokens: a floating composer that slots can take over (`useComposerClaim`)
+  - UI-half settings and the `session.aside` slot
+  - session facts: model, cost, last activity
+  - the ⌘K palette
+  - the sidebar's sort, rail and details modes
+
+  The kit's overlays are on Base UI.
+
+## 9. Next
+
+- **New session dialog:** project, prompt, machine, model and thinking for that session.
+- **More bundled extensions:** git/diff, background jobs and subagents, suggestions.
+- **A layout tree for panels**, beyond fixed slots.
+- **Publishing the packages**, so new apps don't need this checkout; then runtime-installed extensions.
+- **Remote install** over ssh.
