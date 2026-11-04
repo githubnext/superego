@@ -7,12 +7,15 @@
   --mu-mono: var(--mu-mono-fallback);
   /* macOS's own: system grays, the system blue as accent, real controls. */
   --mu-bg: light-dark(#ffffff, #1e1e1e);          /* content */
-  --mu-sidebar-bg: light-dark(#e9e9ec, #2a2a2c);  /* sidebars and side panes */
-  --mu-surface: light-dark(#f2f2f5, #262628);     /* wells: code, tool output */
+  --mu-sidebar-bg: light-dark(#e9e9ec, #2c2c2e);  /* sidebars and side panes */
+  --mu-surface: light-dark(#f3f3f6, #2e2e31);     /* wells: code, tool output */
+  --mu-bubble: light-dark(#e8e8ed, #343437);      /* your messages */
+  --mu-code-chip: light-dark(rgb(0 0 0 / .045), rgb(255 255 255 / .09));
   --mu-raised: light-dark(#ffffff, #2c2c2e);      /* what floats: menus, popovers, the composer */
   --mu-border: light-dark(#c8c8cd, #48484a);      /* separators and frames */
   --mu-text: light-dark(#1d1d1f, #f5f5f7);
   --mu-muted: light-dark(#636366, #aeaeb2);
+  --mu-faint: light-dark(#7c7c80, #8e8e93);
   --mu-accent: light-dark(#007aff, #0a84ff);      /* system blue */
   --mu-accent-text: #ffffff;
   --mu-selected: light-dark(rgb(0 0 0 / .1), rgb(255 255 255 / .12));
@@ -37,10 +40,11 @@
   --mu-text-xs: 11px;
   --mu-text-sm: 12px;
   --mu-text-ui: 13px;
-  --mu-text-body: 15.5px;
+  --mu-text-body: 14.5px;
+  --mu-text-mono: 12.5px;
   --mu-text-title: 26px;
   --mu-leading-ui: 1.45;
-  --mu-leading-body: 1.7;
+  --mu-leading-body: 1.55;
   /* Space on a 4px grid. */
   --mu-space-1: 4px;
   --mu-space-2: 8px;
@@ -167,3 +171,9 @@ body { font: var(--mu-text-ui)/var(--mu-leading-ui) var(--mu-font); background: 
 /* Focus rings for the keyboard only. */
 :focus:not(:focus-visible) { outline: none; }
 .mu-button:focus-visible, .mu-switch:focus-visible { outline: none; box-shadow: var(--mu-control-edge), var(--mu-focus); }
+
+/* Scrollbars that stay out of the way: thin, no track, darker on hover. */
+::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
+::-webkit-scrollbar-thumb { background: light-dark(rgb(0 0 0 / .18), rgb(255 255 255 / .2)); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: light-dark(rgb(0 0 0 / .32), rgb(255 255 255 / .34)); }
+::-webkit-scrollbar-corner { background: transparent; }

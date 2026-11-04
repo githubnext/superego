@@ -6,4 +6,5 @@ it('titles a session with its first sentence, cut at a word when long', () => {
   expect(titleOf('  fix\n the   build  ')).toBe('fix the build')
   expect(titleOf('Refactor the settings registry so that fonts, colours and spacing all come from one place and every extension')).toBe('Refactor the settings registry so that fonts, colours and spacing all…')
   expect(titleOf('v1.2 is out. Ship it')).toBe('v1.2 is out.')
+  expect(titleOf('Add a --dry-run flag to the import command: show what would be saved, write nothing.')).toBe('Add a --dry-run flag to the import command')
 })

@@ -5,19 +5,21 @@
   "type": "module",
   "dependencies": {
     "@earendil-works/chord": "1.5.0",
+    "@earendil-works/pi-ai": "1.5.0",
     "@earendil-works/pi-durable": "1.5.0",
+    "@mu/client": "workspace:*",
     "@mu/daemon": "workspace:*",
     "@mu/protocol": "workspace:*",
+    "@mu/settings": "workspace:*",
     "@mu/ui": "workspace:*",
+    "@vitejs/plugin-react": "^6.0.4",
+    "electron": "45.2.1",
+    "electron-vite": "6.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "@earendil-works/pi-ai": "1.5.0",
-    "@mu/settings": "workspace:*",
-    "@mu/client": "workspace:*",
-    "@vitejs/plugin-react": "^6.0.4",
-    "electron-vite": "6.0.0",
-    "vite": "^8.2.0",
-    "electron": "45.2.1"
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "vite": "^8.2.0"
   },
   "devDependencies": {
     "@types/react": "^19",

@@ -5,7 +5,7 @@
   "type": "module",
   "main": "out/main/main.js",
   "bin": { "mu": "./bin/mu.ts" },
-  "scripts": { "dev": "electron-vite dev", "build": "electron-vite build", "start": "electron-vite preview", "smoke": "electron-vite build && test/smoke.sh" },
+  "scripts": { "dev": "electron-vite dev", "build": "electron-vite build", "start": "electron-vite preview", "smoke": "electron-vite build && test/smoke.sh", "showcase": "electron-vite build && test/showcase.sh" },
   "dependencies": {
     "@mu/app": "workspace:*",
     "@mu/cli": "workspace:*",

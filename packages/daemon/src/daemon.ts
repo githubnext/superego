@@ -102,6 +102,9 @@ export function titleOf(text: string): string {
   const flat = text.replace(/\s+/g, ' ').trim()
   const sentence = flat.match(/^.+?[.?!](?=\s|$)/)?.[0] ?? flat
   if (sentence.length <= 72) return sentence
+  // A long sentence's first clause, when it says enough on its own: "Add a --dry-run flag to the import command".
+  const clause = sentence.match(/^(.{24,72}?)[:;—]\s/)?.[1]
+  if (clause) return clause
   const cut = sentence.slice(0, 72)
   return `${cut.slice(0, cut.lastIndexOf(' ') > 40 ? cut.lastIndexOf(' ') : 72).replace(/[,;:]$/, '')}…`
 }
