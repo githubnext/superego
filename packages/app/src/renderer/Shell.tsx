@@ -11,6 +11,7 @@ import { SettingsView } from './SettingsView.tsx'
 import { Palette } from './Palette.tsx'
 import { ActionLog, runsBare } from './actions.tsx'
 import { NewSessionDialog } from './NewSession.tsx'
+import { bound, KEYMAP, shortcutOf, type Keymap } from './keys.ts'
 import { useAllSessions, useMachines, useNewSessionDialog, useSelection, useSettingsDialog, useShell, type Selection } from './state.tsx'
 
 /** Dispatch an action from this window: `dispatch('threads.rail')`, `dispatch('session.select', { machine, session })`. */
@@ -98,6 +99,8 @@ function useAppEffects() {
   const selectionRef = useRef(selection)
   selectionRef.current = selection
   const appSettings = useSettings('app', true)
+  const keymapRef = useRef<Keymap | undefined>(undefined)
+  keymapRef.current = appSettings?.values[KEYMAP] as Keymap | undefined
   const { select } = useSelection()
   const { openSettings } = useShell()
   const interfaceFont = appSettings?.values['app.font.interface']
@@ -112,9 +115,12 @@ function useAppEffects() {
   useEffect(() => {
     document.title = registry.app.name
     const onKey = (event: KeyboardEvent) => {
-      // Every shortcut is an action's: the same router the palette and other code dispatch through.
+      // Every shortcut is an action's: the same router the palette and other code dispatch through. With two on one
+      // shortcut, the first registered wins (Settings → Keyboard shows the clash).
+      const pressed = shortcutOf(event)
+      if (!pressed) return
       for (const action of registry.router.all(selectionRef.current?.machine)) {
-        if (action.keys && runsBare(action) && matches(event, action.keys)) {
+        if (runsBare(action) && bound(action, keymapRef.current) === pressed) {
           event.preventDefault()
           void registry.router.dispatch(action.id, {}, { source: 'keys' }).catch((error) => console.error(error))
           return
@@ -134,13 +140,4 @@ function useAppEffects() {
     void (window.mu.call('app', 'app.ready', {}) as Promise<{ open?: Selection; settings?: boolean }>).then(show)
     return () => { window.removeEventListener('keydown', onKey); off() }
   }, [])
-}
-
-/** Whether `event` is the shortcut `keys`, like `mod+shift+n`; `mod` is ⌘ on macOS and Ctrl elsewhere. */
-function matches(event: KeyboardEvent, keys: string) {
-  const parts = keys.toLowerCase().split('+')
-  const key = parts.pop()
-  const mac = navigator.platform.startsWith('Mac')
-  const want = { meta: parts.includes('meta') || (mac && parts.includes('mod')), ctrl: parts.includes('ctrl') || (!mac && parts.includes('mod')), shift: parts.includes('shift'), alt: parts.includes('alt') }
-  return event.key.toLowerCase() === key && event.metaKey === want.meta && event.ctrlKey === want.ctrl && event.shiftKey === want.shift && event.altKey === want.alt
 }

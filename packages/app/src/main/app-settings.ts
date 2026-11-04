@@ -8,7 +8,7 @@ import type { AppConfig } from '@mu/protocol'
 
 export const APP = 'app'
 export const APP_KEYS = {
-  interfaceFont: 'app.font.interface', monoFont: 'app.font.mono', notifications: 'app.notifications', menuBar: 'app.menuBar', hideDock: 'app.hideDock',
+  keymap: 'app.keys', interfaceFont: 'app.font.interface', monoFont: 'app.font.mono', notifications: 'app.notifications', menuBar: 'app.menuBar', hideDock: 'app.hideDock',
 } as const
 
 export function createAppSettings(dataDir: string, app: AppConfig) {
@@ -29,6 +29,14 @@ export function createAppSettings(dataDir: string, app: AppConfig) {
       key: APP_KEYS.notifications, title: 'Notify when a session needs a look', default: true,
       description: 'A system notification when a session finishes, fails or needs you while mu is not focused.',
       type: { type: 'boolean' },
+    }],
+  })
+  settings.register({
+    id: 'keyboard', title: 'Keyboard', order: 65,
+    settings: [{
+      key: APP_KEYS.keymap, title: 'Shortcuts', default: {},
+      description: 'Every action that runs without asking for more. Click a shortcut and press new keys; ⌫ removes it, Esc keeps it.',
+      type: { type: 'keymap' },
     }],
   })
   const mac = process.platform === 'darwin'

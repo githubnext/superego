@@ -48,6 +48,12 @@ async function restartOntoNewCode(change) {
   if (after.machine.id !== before.machine.id || !(await run(`window.mu.call('local', 'session.list', {})`)).length) { await fail('restart lost the machine or its sessions'); throw new Error('failed') }
   return after
 }
+/** With MU_SMOKE_SHOTS=<dir>, a screenshot of the window at this point. */
+const shot = async (name) => {
+  if (!process.env.MU_SMOKE_SHOTS) return
+  const image = await BrowserWindow.getAllWindows()[0].webContents.capturePage()
+  writeFileSync(`${process.env.MU_SMOKE_SHOTS}/${name}.png`, image.toPNG())
+}
 const run = (js, gesture = false) => BrowserWindow.getAllWindows()[0].webContents.executeJavaScript(js, gesture)
 
 await until(`document.querySelector('.threads-machine') && !document.querySelector('.threads-machine.is-stale')`, 'local machine connected')
@@ -130,6 +136,28 @@ if (phase === 'first') {
   await until(`/Helvetica|Arial/.test(document.documentElement.style.getPropertyValue('--mu-font'))`, 'interface font applied')
   await run(`window.mu.call('app', 'app.settings.set', { key: 'app.font.mono', value: 'Menlo' })`)
   await until(`document.documentElement.style.getPropertyValue('--mu-mono').includes('Menlo')`, 'mono font applied')
+  // Keyboard: record a new shortcut for an action; the old one stops working, the new one runs it; a clash shows.
+  const keysOf = (id) => `document.querySelector('[data-action="${id}"] .keymap__keys')`
+  await until(`${keysOf('threads.rail')}?.textContent === '${process.platform === 'darwin' ? '⌘\\\\' : 'Ctrl+\\\\'}'`, 'keyboard settings list the rail shortcut')
+  await run(`(() => { const b = ${keysOf('threads.rail')}; b.focus(); b.click() })()`)
+  await until(`${keysOf('threads.rail')}?.classList.contains('is-recording')`, 'recording')
+  await key('k', [])
+  await until(`${keysOf('threads.rail')}?.textContent.includes('typing stays typing')`, 'a bare key is refused')
+  await key('R', ['meta', 'shift'])
+  await until(`/⇧R|Shift\\+R/.test(${keysOf('threads.rail')}?.textContent ?? '') && Boolean(document.querySelector('[data-action="threads.rail"] button.keymap__reset'))`, 'new shortcut recorded')
+  await key('\\')
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  if (await run(`Boolean(document.querySelector('.threads-rail.is-compact'))`)) { await fail('the old shortcut still runs the action'); throw new Error('failed') }
+  await key('R', ['meta', 'shift'])
+  await until(`Boolean(document.querySelector('.threads-rail.is-compact'))`, 'the new shortcut runs the action')
+  await key('R', ['meta', 'shift'])
+  await until(`!document.querySelector('.threads-rail.is-compact')`, 'and back')
+  await run(`window.mu.call('app', 'app.settings.set', { key: 'app.keys', value: { 'threads.rail': 'mod+shift+r', 'threads.details': 'mod+shift+r' } })`)
+  await until(`document.querySelector('[data-action="threads.rail"] .keymap__clash')?.textContent.includes('Toggle session details')`, 'clash shown')
+  await run(`document.querySelector('.keymap').scrollIntoView()`)
+  await shot('keyboard')
+  await run(`[...document.querySelectorAll('.keymap__head button')].find((b) => b.textContent === 'Reset all').click()`)
+  await until(`!document.querySelector('.keymap__clash') && ${keysOf('threads.rail')}?.textContent.includes('\\\\')`, 'reset to the actions’ own')
   // Machines: add one over ssh that can't connect; it shows its error, then goes away again.
   await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent === 'Machines').click()`)
   await run(`window.mu.call('app', 'machines.add', { label: 'Nowhere', target: 'mu-smoke.invalid' })`)

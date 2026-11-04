@@ -275,7 +275,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   const session = { session: true as const }
   router.register(defineAction({
-    id: 'session.create', title: 'New session', runs: 'machine', expose: ['ui', 'cli'],
+    id: 'session.create', title: 'Start a session (no dialog)', runs: 'machine', expose: ['ui', 'cli'],
     params: obj({ cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()) }),
     async run({ cwd, title, model: ownModel, thinking, prompt }) {
       const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd

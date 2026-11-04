@@ -6,7 +6,7 @@
 // UI only: it uses the core's session methods and facts.
 import { Fragment, useMemo, useRef, useState } from 'react'
 import {
-  defineAction, type Dispatch, defineUiExtension, useAllSessions, useAppSetting, useMachines, useSelection, useSessionView, useShell,
+  defineAction, type Dispatch, defineUiExtension, useAllSessions, useAppSetting, useMachines, useSelection, useSessionView, useShell, useShortcut,
   type MachineEntry,
 } from '@mu/app/ui'
 import type { SessionInfo, Status } from '@mu/protocol'
@@ -141,6 +141,8 @@ const SORTS: { value: Sort; label: string }[] = [{ value: 'created', label: 'New
 
 /** The ··· menu: sort, show as, details. */
 function Options() {
+  const railKeys = useShortcut('threads.rail')
+  const detailsKeys = useShortcut('threads.details')
   return (
     <Menu.Root>
       <Menu.Trigger render={<IconButton label="Sidebar options" className="threads-menu-trigger" />}>···</Menu.Trigger>
@@ -156,11 +158,11 @@ function Options() {
           <Menu.GroupLabel>Show as</Menu.GroupLabel>
           <Menu.RadioGroup value={current.view} onValueChange={(value) => void set(VIEW, value as string)}>
             <Menu.RadioItem value="list">List</Menu.RadioItem>
-            <Menu.RadioItem value="rail" hint="⌘\">Rail</Menu.RadioItem>
+            <Menu.RadioItem value="rail" hint={railKeys}>Rail</Menu.RadioItem>
           </Menu.RadioGroup>
         </Menu.Group>
         <Menu.Separator />
-        <Menu.CheckboxItem checked={current.details} onCheckedChange={(checked) => void set(DETAILS, checked)} hint="⌘I">Session details</Menu.CheckboxItem>
+        <Menu.CheckboxItem checked={current.details} onCheckedChange={(checked) => void set(DETAILS, checked)} hint={detailsKeys}>Session details</Menu.CheckboxItem>
       </Menu.Popup>
     </Menu.Root>
   )

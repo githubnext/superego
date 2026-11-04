@@ -37,6 +37,7 @@ export {
 export { useAppSetting } from './client.ts'
 export { useDispatch } from './Shell.tsx'
 export type { Dispatch } from './actions.tsx'
+export { keyLabel, useActions, useKeymap, useShortcut } from './keys.ts'
 export { runsBare, type WindowAction, type WindowContext } from './actions.tsx'
 export { defineAction } from '@mu/protocol'
 export { useAllSessions, useMachines, useSelection, useSessions, useShell, type Selection } from './state.tsx'

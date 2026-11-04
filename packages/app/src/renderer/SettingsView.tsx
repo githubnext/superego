@@ -8,6 +8,7 @@ import type { MachineEntry } from '../shared.ts'
 
 import { machine as client, has, loadFonts, useSettings } from './client.ts'
 import { mergeSettings, type MergedSetting } from './merge-settings.ts'
+import { Keymap } from './Keymap.tsx'
 import { useApp, useRegistry } from './extension.tsx'
 
 const APP = 'app'
@@ -85,6 +86,7 @@ function Setting({ setting, value, apply, mixed, note }: {
       disabled={disabled} onBlur={(e) => set(Number(e.target.value))} />; break
     case 'font': control = <FontPicker label={setting.title} value={typeof value === 'string' ? value : null} monospace={setting.monospace}
       nullLabel={setting.nullLabel} loadFonts={loadFonts} onChange={set} />; break
+    case 'keymap': return <Keymap setting={setting} value={value} apply={apply} />
     case 'string': control = <TextField type={setting.secret ? 'password' : 'text'} aria-label={setting.title} defaultValue={typeof value === 'string' ? value : ''}
       placeholder={setting.placeholder} disabled={disabled} onBlur={(e) => set(e.target.value)} />; break
   }

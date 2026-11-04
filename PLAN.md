@@ -74,14 +74,19 @@ The niche is real. We should borrow herdr-core's protocol hygiene wholesale, and
 
 ```
 hello {client, version, features}         → {version, features, machine{id, build, …}, methods}
-session.list / create {cwd, title?} / rename / submit / abort / seen
+session.list                              agent.models
 session.watch {id}                        → snapshot + watch.ops (Chord delta ops)
 sessions.watch                            → snapshot + sessions.changed (status, model, cost, activeAt)
-settings.watch / settings.set             auth.login / respond / cancel / logout
-value.watch {key}                         → an extension's live value + value.changed
-<extension>.<method>                      an extension's own methods
-daemon.restart {build, interrupt?}        unwatch {sub}
+settings.watch                            value.watch {key} → an extension's live value + value.changed
+action.list / action.run {id, params, exposure} / action.log            unwatch {sub}
+
+actions, each also served under its id:
+session.create / submit / abort / rename / seen     settings.set
+auth.login / respond / cancel / logout              daemon.restart
+<extension>.<name>                                  an extension's own
 ```
+
+Reads and streams (`*.list`, `*.watch`) stay plain methods. Everything that changes something is an action (§3a).
 
 Not built from the sketch: `fork`, `archive`, `doc.*`, a heartbeat/missed protocol. The current list is in `docs/structure.html`.
 
@@ -104,7 +109,7 @@ As built (2026-11-04). An extension is a package with up to two halves, imported
 **Daemon half** (`defineDaemonExtension`):
 - `mu.agent(ext)`: pi-durable tools, prompt sections, hooks, tasks
 - `mu.settings`: register settings sections
-- `mu.method('<name>.<m>', fn)`: methods for clients
+- `mu.action(defineAction({ id: '<name>.<m>', params, run }))`: what clients can do (§3a)
 - `mu.value(key, initial)`: live values, watched with `value.watch`
 - `mu.status(fn)`: mark a session blocked
 - `mu.harness`, `mu.sessions`
@@ -115,8 +120,8 @@ As built (2026-11-04). An extension is a package with up to two halves, imported
 - `mu.tool(name, C)` and `mu.entry(kind, C)`: transcript renderers
 - `mu.settings(ui, C)`: custom settings sections
 - `mu.appSettings(section)`: the UI half's own settings, kept by the app
-- `mu.command({ id, title, keys, run })`: keys and the ⌘K palette
-- Hooks: `useMachines`, `useSessions`, `useSelection`, `useSessionView`, `useValue`, `useAppSetting`, `useComposerClaim`, `call`, `has`.
+- `mu.action(defineAction({ id, title, keys, run }))`: window actions, for keys and the ⌘K palette; `mu.dispatch` runs any action
+- Hooks: `useMachines`, `useSessions`, `useSelection`, `useSessionView`, `useValue`, `useAppSetting`, `useComposerClaim`, `useDispatch`, `useShortcut`, `call`, `has`.
 
 **Kit:** `@mu/ui` (Base UI underneath for dialog, menu, popover and tooltip) and its tokens.
 
@@ -127,6 +132,18 @@ As built (2026-11-04). An extension is a package with up to two halves, imported
 - `ask-user`: a tool, the blocked status, and the question in the composer
 
 **Layout:** for now, the shell's slots. A layout tree for arbitrary panels is still open (§9).
+
+## 3a. Actions
+
+Every intent is an action: an id, a title, a params schema (pi-schema), where it runs (`window`, `app` or `machine`), who may call it (`expose`: `ui`, `cli`, later `mcp`), a default shortcut, and whether it acts on the selected session. One `Router` (in `@mu/protocol`) validates and coerces params, runs the action and logs it.
+
+- **The window** has its own router. `dispatch(id, params)` runs window actions there, forwards app actions to the main process and machine actions to the right machine (`machine` option, else the selection's), filling in the session from the selection. Keys, the palette, buttons and extensions all dispatch.
+- **The log:** every dispatch with its source (`keys`, `palette`, `cli`, `composer`, an extension) and timing. *Show action log* in the window; `action.log` per machine; `mu actions log`.
+- **The command line:** `mu actions` lists what a machine takes, `mu do <id> --param value…` runs one (values coerced to the schema, or `--params <json>`).
+- **Shortcuts are data.** The setting `app.keys` holds only the user's changes by action id (`null`: none). Settings → Keyboard lists every action that runs without more input, records new shortcuts, and marks clashes; the first registered wins a clash. Plain keys without ⌘/⌃/⌥ are refused so typing stays typing.
+- **Not a store.** Streams (sessions, transcripts, settings, values) stay on watches; actions are intents only. Snapshots and the log make debugging output easy without one global state.
+
+**MCP (planned, not built):** a `mu mcp` server generated from the actions exposed to `mcp`: each becomes a tool with its schema, run through `action.run` with `exposure: 'mcp'`, so it lands in the same log. Watches could become resources. Open: which actions an outside agent may run by default, and per-machine routing (a `machine` param on every tool, or one server per machine).
 
 ---
 
@@ -159,6 +176,7 @@ As built (2026-11-04). An extension is a package with up to two halves, imported
   - single instance
   - notifications
 - **The command:** `<id>`, plus sessions, machines, settings, auth and the daemon, each with `-m <machine>` and `--json`.
+- **Actions:** one router for keys, palette, buttons, extensions and `mu do`, with a log, and shortcuts editable in Settings → Keyboard.
 - **Tests:** a smoke test that runs headless.
 
 ---
@@ -174,6 +192,7 @@ As built (2026-11-04). An extension is a package with up to two halves, imported
 | M6 | Framework: AppConfig, @mu/app, examples, `mu new` | done |
 | M7 | Focus look, palette, sidebar modes, Base UI kit | done |
 | M8 | New session dialog | done |
+| M9 | Actions: router, log, `mu do`, editable shortcuts | done; MCP planned |
 
 ---
 
@@ -221,10 +240,12 @@ Still open:
 
   The kit's overlays are on Base UI.
 
+- **Actions (2026-11-04).** Every intent in the window, the app and the daemons is a schema'd action through one router; keys, palette, buttons, extensions and the CLI (`mu actions`, `mu do`) all dispatch, and the action log shows each with its source. Shortcuts are data (`app.keys`) with a Keyboard settings section that records keys and flags clashes. Details in §3a.
 - **New session dialog (2026-11-04).** It opens from ⌘N, the palette, the sidebar's + and minimal's New. It sets a prompt, a project folder (recent folders, Browse… on this computer), the machine, the model and thinking, and a name. A session's own model and thinking win over the machine's default on every turn. The daemon refuses a missing folder or an unknown model.
 
 ## 9. Next
 
+- **MCP server from actions** (§3a): designed, not built.
 - **More bundled extensions:** git/diff, background jobs and subagents, suggestions.
 - **A layout tree for panels**, beyond fixed slots.
 - **Publishing the packages**, so new apps don't need this checkout; then runtime-installed extensions.

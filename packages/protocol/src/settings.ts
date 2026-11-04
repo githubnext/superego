@@ -14,6 +14,8 @@ export type SettingType =
   | { type: 'choice'; options: SettingOption[]; nullable?: boolean; nullLabel?: string }
   /** A font family installed where the client runs, or `null` for the default. The client lists the fonts. */
   | { type: 'font'; monospace?: boolean; nullLabel?: string }
+  /** Shortcuts by action id, like `mod+shift+k`, or `null` for none: only what differs from the actions' own. */
+  | { type: 'keymap' }
 
 /** A setting as clients see it: its type, with options resolved for the current state. */
 export type SettingInfo = SettingType & {

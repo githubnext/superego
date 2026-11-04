@@ -59,4 +59,15 @@ describe('upsert', () => {
     expect(snapshot.sections.map((s) => s.title)).toEqual(['Sessions'])
     expect(snapshot.values['threads.sort']).toBe('status')
   })
+
+  it('takes keymaps of shortcuts by action id', async () => {
+    const settings = new SettingsRegistry()
+    settings.register({ id: 'k', title: 'K', settings: [{ key: 'keys', title: 'Shortcuts', default: {}, type: { type: 'keymap' } }] })
+    await settings.set('keys', { 'threads.rail': 'mod+shift+r', 'app.palette': null, 'x.plus': 'mod++' })
+    expect(settings.get('keys')).toEqual({ 'threads.rail': 'mod+shift+r', 'app.palette': null, 'x.plus': 'mod++' })
+    await expect(settings.set('keys', ['mod+k'])).rejects.toMatchObject({ kind: 'invalid_setting' })
+    await expect(settings.set('keys', { 'a.b': 'mod+ k' })).rejects.toMatchObject({ kind: 'invalid_setting' })
+    await expect(settings.set('keys', { 'a.b': 3 })).rejects.toMatchObject({ kind: 'invalid_setting' })
+  })
 })
+

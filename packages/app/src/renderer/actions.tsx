@@ -36,6 +36,7 @@ export function createWindowRouter() {
   /** What the app and each machine offer, by target ('app' or a machine id). */
   const remote = new Map<string, ActionInfo[]>()
   const listeners = new Set<() => void>()
+  let version = 0
 
   const dispatch: Dispatch = (id, params = {}, { source = 'ui', machine } = {}) => {
     if (router.has(id)) {
@@ -60,6 +61,7 @@ export function createWindowRouter() {
     async load(target: string) {
       try {
         remote.set(target, await window.mu.call(target, 'action.list', {}) as ActionInfo[])
+        version++
         for (const listener of listeners) listener()
       } catch { /* an older daemon without actions: nothing to offer */ }
     },
@@ -67,6 +69,8 @@ export function createWindowRouter() {
     all(machine?: string): ActionInfo[] {
       return [...router.list(), ...(remote.get('app') ?? []), ...(machine ? remote.get(machine) ?? [] : [])]
     },
+    /** Changes whenever what `all` returns may have. */
+    version: () => version,
     onChange(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
   }
 }

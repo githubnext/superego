@@ -58,13 +58,13 @@
 <body>
 <main>
   <h1><span>µ</span> mu: structure</h1>
-  <p class="lede">A framework for agent apps. One daemon per machine, its own protocol, an Electron app layer, and extensions with a daemon half and a UI half. Apps are made with <code>mu new</code>. As of <code>620203c</code>, 19 commits.</p>
+  <p class="lede">A framework for agent apps. One daemon per machine, its own protocol, an Electron app layer, and extensions with a daemon half and a UI half. Apps are made with <code>mu new</code>. As of the actions work, 25 commits.</p>
 
   <div class="grid g4" style="margin-top:24px">
-    <div class="card"><div class="stat">~5.2k<small>lines of source</small></div></div>
+    <div class="card"><div class="stat">~6.4k<small>lines of source</small></div></div>
     <div class="card"><div class="stat">7 · 2 · 2<small>packages · extensions · example apps</small></div></div>
-    <div class="card"><div class="stat">18 + 12<small>daemon methods + app methods</small></div></div>
-    <div class="card"><div class="stat">35 + 3<small>tests + end-to-end runs (2 examples, 1 generated app)</small></div></div>
+    <div class="card"><div class="stat">11 · 8 · 12<small>actions: daemon · app · window (one router each, one log)</small></div></div>
+    <div class="card"><div class="stat">52 + 3<small>tests + end-to-end runs (2 examples, 1 generated app)</small></div></div>
   </div>
 
   <h2>1 · Processes</h2>
@@ -185,7 +185,7 @@
       <text class="title" x="38" y="46">daemon half · defineDaemonExtension</text>
       <text class="mono" x="38" y="76">agent(ext)        tools, prompt, hooks</text>
       <text class="mono" x="38" y="98">settings          sections</text>
-      <text class="mono" x="38" y="120">method(name, fn)  &lt;name&gt;.&lt;method&gt;</text>
+      <text class="mono" x="38" y="120">action(def)       &lt;name&gt;.&lt;id&gt;, schema'd</text>
       <text class="mono" x="38" y="142">value(key, init)  live, watched by UIs</text>
       <text class="mono" x="38" y="164">status(fn)        blocked while …</text>
       <text class="mono" x="38" y="186">harness · sessions</text>
@@ -195,11 +195,11 @@
       <text class="mono" x="578" y="98">tool(name, C)     draw tool calls</text>
       <text class="mono" x="578" y="120">entry(kind, C)    draw custom entries</text>
       <text class="mono" x="578" y="142">settings(ui, C)   custom sections</text>
-      <text class="mono" x="578" y="164">command({ keys }) · appSettings(section)</text>
-      <text class="mono" x="578" y="186">hooks: useSessions · useSelection · useAppSetting</text>
-      <text class="mono" x="578" y="204">       useValue · useComposerClaim · call · has</text>
+      <text class="mono" x="578" y="164">action({ keys }) · dispatch · appSettings</text>
+      <text class="mono" x="578" y="186">hooks: useSessions · useSelection · useDispatch</text>
+      <text class="mono" x="578" y="204">       useValue · useShortcut · useComposerClaim</text>
       <path class="line" d="M440 110 H558" marker-end="url(#c)"/><text class="label" x="452" y="102">value.changed</text>
-      <path class="line" d="M558 150 H442" marker-end="url(#c)"/><text class="label" x="452" y="168">call(&lt;name&gt;.…)</text>
+      <path class="line" d="M558 150 H442" marker-end="url(#c)"/><text class="label" x="452" y="168">dispatch(&lt;name&gt;.…)</text>
     </svg>
   </div>
   <div class="grid g2" style="margin-top:12px">
@@ -272,11 +272,11 @@
   <div class="card">
     <table>
       <tr><th>suite</th><th>covers</th></tr>
-      <tr><td>daemon</td><td>protocol over a real socket · status · restarts · settings · sign-in · restart refusal · record/replay</td></tr>
+      <tr><td>daemon</td><td>protocol over a real socket · actions: list, run with coerced params, log · status · restarts · settings · sign-in · restart refusal · record/replay</td></tr>
       <tr><td>ask-user</td><td>a replayed agent asks; blocked status; live pending list; answer from a client; agent carries on</td></tr>
-      <tr><td>cli · generate</td><td>real commands on two machines · settings --all · auth · daemon restart · <code>mu new</code> for both templates</td></tr>
-      <tr><td>registry · identity · merge · restart · score · groups · title</td><td>validation and upsert · wrong/duplicate machine · "Mixed" · restart state machine · palette ranking · sidebar grouping · session titles</td></tr>
-      <tr><td>examples/full smoke</td><td>two app processes: chat · ask-user · sidebar menu, rail, details · ⌘K · fonts · machines · All machines · menu bar · restart ×2 · <code>mu</code> → running app</td></tr>
+      <tr><td>cli · generate</td><td>real commands on two machines · settings --all · auth · <code>mu actions</code> / <code>mu do</code> · daemon restart · <code>mu new</code> for both templates</td></tr>
+      <tr><td>registry · identity · shortcuts · merge · restart · score · groups · title</td><td>validation and upsert · wrong/duplicate machine · "Mixed" · restart state machine · shortcuts and keymaps · palette ranking · sidebar grouping · session titles</td></tr>
+      <tr><td>examples/full smoke</td><td>two app processes: chat · ask-user · sidebar menu, rail, details · ⌘K · action log · Settings → Keyboard (record, clash, reset) · fonts · machines · All machines · menu bar · restart ×2 · <code>mu</code> → running app</td></tr>
       <tr><td>examples/minimal smoke</td><td>core alone: picker instead of sidebar · chat · command hand-off · no extension features</td></tr>
     </table>
   </div>

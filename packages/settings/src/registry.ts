@@ -52,6 +52,12 @@ function check(spec: SettingSpec, value: Json): void {
     case 'font':
       if (value !== null && (typeof value !== 'string' || !value.trim())) throw bad('expected a font family')
       return
+    case 'keymap':
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw bad('expected shortcuts by action id')
+      for (const [id, keys] of Object.entries(value)) {
+        if (keys !== null && (typeof keys !== 'string' || !/^([a-z]+\+)*(\+|[^+\s]+)$/i.test(keys))) throw bad(`${id}: ${JSON.stringify(keys)} is not a shortcut like mod+shift+k`)
+      }
+      return
     case 'choice':
       if (value === null && type.nullable) return
       if (typeof value !== 'string' || !type.options.some((option) => option.value === value)) throw bad(`unknown choice ${JSON.stringify(value)}`)
