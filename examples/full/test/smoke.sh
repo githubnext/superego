@@ -11,7 +11,8 @@ cat > "$MU_REPLAY" <<'TURNS'
 {"at":0,"provider":"x","model":"x","message":{"role":"assistant","content":[{"type":"text","text":"Blue it is."}],"stopReason":"stop"}}
 TURNS
 cleanup() {
-  for pid in "$MU_HOME/daemon.pid" "$MU_HOME/second/daemon.pid"; do [ -f "$pid" ] && kill "$(cat "$pid")" 2>/dev/null; done
+  # The daemons by their pid files, and anything still holding their sockets.
+  for pid in $(cat "$MU_HOME/daemon.pid" "$MU_HOME/second/daemon.pid" 2>/dev/null) $(lsof -t "$MU_HOME"/*.sock "$MU_HOME"/second/*.sock 2>/dev/null); do kill "$pid" 2>/dev/null || true; done
   rm -rf "$MU_HOME" out/main/zz-smoke-restart.js
 }
 trap cleanup EXIT
