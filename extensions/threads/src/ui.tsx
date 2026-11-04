@@ -6,7 +6,7 @@
 // UI only: it uses the core's session methods and facts.
 import { Fragment, useMemo, useRef, useState } from 'react'
 import {
-  call, defineUiExtension, machine as client, useAllSessions, useAppSetting, useMachines, useSelection, useSessionView,
+  call, defineUiExtension, useAllSessions, useAppSetting, useMachines, useSelection, useSessionView, useShell,
   type MachineEntry,
 } from '@mu/app/ui'
 import type { SessionInfo, Status } from '@mu/protocol'
@@ -126,27 +126,11 @@ function freeze(frozen: Group[], live: Group[]): Group[] {
   return kept.filter((g) => g.rows.length || g.machine)
 }
 
+/** + opens the New session dialog on this machine. */
 function NewSession({ machine }: { machine: MachineEntry | undefined }) {
-  const [cwd, setCwd] = useState<string>()
-  const { select } = useSelection()
+  const { newSession } = useShell()
   if (!machine) return null
-  const create = async (dir: string) => {
-    const created = await client(machine.id).call('session.create', { ...(dir.trim() ? { cwd: dir.trim() } : {}) })
-    localStorage.setItem('threads.lastCwd', dir.trim())
-    setCwd(undefined)
-    select({ machine: machine.id, session: created.id })
-  }
-  return (
-    <>
-      <IconButton label={`New session on ${machine.label}`} disabled={machine.state !== 'connected'} onClick={() => setCwd(localStorage.getItem('threads.lastCwd') ?? '')}>+</IconButton>
-      {cwd !== undefined && (
-        <form className="threads__new" onSubmit={(event) => { event.preventDefault(); void create(cwd) }}>
-          <input autoFocus placeholder={`Folder on ${machine.label} (empty: home)`} value={cwd} onChange={(e) => setCwd(e.target.value)}
-            onBlur={() => setCwd(undefined)} onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setCwd(undefined) } }} />
-        </form>
-      )}
-    </>
-  )
+  return <IconButton label={`New session on ${machine.label}`} disabled={machine.state !== 'connected'} onClick={() => newSession({ machine: machine.id })}>+</IconButton>
 }
 
 const SORTS: { value: Sort; label: string }[] = [{ value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' }, { value: 'recent', label: 'Recently active' }]

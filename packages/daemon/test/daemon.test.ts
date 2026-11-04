@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
-import { defineApp, PROTOCOL_VERSION, type AuthEvent, type Hello, type Notifications, type ProviderAuthInfo, type RpcPeer, type SessionInfo, type SettingsSnapshot } from '@mu/protocol'
+import { defineApp, PROTOCOL_VERSION, type AuthEvent, type Hello, type ModelCatalog, type Notifications, type ProviderAuthInfo, type RpcPeer, type SessionInfo, type SettingsSnapshot } from '@mu/protocol'
 import { connectSocket, listen, openDaemon, type Daemon } from '../src/index.ts'
 
 // Only the scripted model, whatever keys the machine running the tests has.
@@ -142,6 +142,28 @@ describe('daemon', () => {
 
     await peer.call('auth.logout', { provider: 'anthropic' })
     await until(() => providers(snapshot).find((p) => p.id === 'anthropic')?.stored === false)
+    await close()
+  })
+})
+
+describe('new sessions', () => {
+  it('start in a folder with a first prompt and their own model, which later turns keep', async () => {
+    const { peer, close } = await open()
+    const catalog = await peer.call<ModelCatalog>('agent.models', {})
+    expect(catalog.models.map((m) => m.value)).toContain('faux/faux-1')
+    expect(catalog.default.model).toBe('faux/faux-1')
+
+    await expect(peer.call('session.create', { cwd: join(dir, 'nope') })).rejects.toMatchObject({ kind: 'invalid', message: expect.stringContaining('No folder') })
+    await expect(peer.call('session.create', { model: 'nope/nope' })).rejects.toMatchObject({ kind: 'invalid' })
+
+    const created = await peer.call<SessionInfo>('session.create', { cwd: dir, model: 'faux/faux-1', prompt: 'first words' })
+    expect(created).toMatchObject({ cwd: dir, title: 'first words', ownModel: true })
+    await until(async () => (await sessions(peer))[0]!.status.state === 'done')
+    // Changing this machine's default leaves the session on its own model.
+    await peer.call('settings.set', { key: 'agent.model', value: 'faux/faux-1' })
+    await peer.call('session.submit', { id: created.id, text: 'again' })
+    await until(async () => (await sessions(peer))[0]!.status.state === 'done')
+    expect((await sessions(peer))[0]).toMatchObject({ model: 'faux-1', ownModel: true })
     await close()
   })
 })

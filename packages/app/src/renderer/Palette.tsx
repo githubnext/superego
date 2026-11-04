@@ -3,7 +3,6 @@
 import { useMemo, useState, type KeyboardEvent } from 'react'
 import { Dialog, StatusGlyph } from '@mu/ui'
 import type { Status } from '@mu/protocol'
-import { machine as client } from './client.ts'
 import { score } from './score.ts'
 import { useRegistry } from './extension.tsx'
 import { useAllSessions, useMachines, useSelection, useShell } from './state.tsx'
@@ -18,7 +17,7 @@ export function Palette({ onClose }: { onClose(): void }) {
   const machines = useMachines().filter((m) => m.state !== 'disabled')
   const sessions = useAllSessions()
   const { select } = useSelection()
-  const { openSettings } = useShell()
+  const { openSettings, newSession } = useShell()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
 
@@ -29,9 +28,7 @@ export function Palette({ onClose }: { onClose(): void }) {
         id: `session:${m.id}/${s.id}`, title: s.title, detail: machines.length > 1 ? m.label : undefined, status: s.status,
         run: done(() => select({ machine: m.id, session: s.id })),
       }))),
-      { id: 'core.new', title: 'New session', detail: 'This computer', run: done(() => {
-        void client('local').call('session.create', {}).then((created) => select({ machine: 'local', session: created.id }))
-      }) },
+      { id: 'core.new', title: 'New session…', keys: 'mod+n', run: done(() => newSession()) },
       { id: 'core.settings', title: 'Settings', keys: 'mod+,', run: done(openSettings) },
       ...registry.commands.map((c): Item => ({ id: c.id, title: c.title, ...(c.keys ? { keys: c.keys } : {}), run: done(c.run) })),
     ]

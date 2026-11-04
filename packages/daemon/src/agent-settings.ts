@@ -9,7 +9,7 @@ import { createModels, getSupportedThinkingLevels, clampThinkingLevel, type Mode
 import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic'
 import { openaiProvider } from '@earendil-works/pi-ai/providers/openai'
 import type { ModelRef } from '@earendil-works/pi-durable'
-import { RpcError, type AppConfig, type AuthEvent, type AuthPrompt, type ProviderAuthInfo, type SettingOption } from '@mu/protocol'
+import { RpcError, type AppConfig, type AuthEvent, type ModelCatalog, type AuthPrompt, type ProviderAuthInfo, type SettingOption } from '@mu/protocol'
 import type { SettingsRegistry } from '@mu/settings'
 import { appEnv } from './paths.ts'
 import { replayProvider, withRecording } from './replay.ts'
@@ -103,7 +103,13 @@ type Flow = { abort: AbortController; prompts: Map<string, { resolve(value: stri
 export type AgentSettings = {
   models: Models
   /** What a session runs with now; `model` is absent when no provider is signed in. */
-  resolve(): { model?: ModelRef; thinkingLevel?: ModelThinkingLevel }
+  /**
+   * What a turn runs with: the session's own choices (`override`) where it made them, else this machine's settings.
+   * `thinking: 'off'` turns thinking off; a level the model lacks is moved to the nearest it has.
+   */
+  resolve(override?: { model?: string; thinking?: string }): { model?: ModelRef; thinkingLevel?: ModelThinkingLevel }
+  /** The models a session can choose from here, with their thinking levels, and what a session gets by default. */
+  catalog(): ModelCatalog
   login(provider: string, type: 'api_key' | 'oauth', key: string | undefined, emit: (event: AuthEvent) => void): string
   respond(flow: string, prompt: string, value: string): void
   cancel(flow: string): void
@@ -223,14 +229,27 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
 
   return {
     models,
-    resolve() {
-      const ref = chosen()
-      const model = chosenModel()
-      const level = settings.get<ModelThinkingLevel | null>(KEYS.thinking)
+    resolve(override) {
+      const own = parse(override?.model)
+      const ownModel = own && models.getModel(own.provider, own.modelId)
+      const ref = ownModel ? own : chosen()
+      const model = ownModel ?? chosenModel()
+      const level = (override?.thinking ?? settings.get<ModelThinkingLevel | null>(KEYS.thinking)) as ModelThinkingLevel | null
       return {
         ...(ref ? { model: ref } : {}),
         ...(model && level && model.reasoning ? { thinkingLevel: clampThinkingLevel(model, level) } : {}),
       }
+    },
+    catalog() {
+      const list: ModelCatalog['models'] = []
+      for (const provider of models.getProviders()) {
+        if (!authed.get(provider.id)) continue
+        for (const model of models.getModels(provider.id)) {
+          list.push({ value: `${provider.id}/${model.id}`, label: model.name, group: provider.name, thinking: model.reasoning ? getSupportedThinkingLevels(model) : [] })
+        }
+      }
+      const ref = chosen()
+      return { models: list, default: { ...(ref ? { model: `${ref.provider}/${ref.modelId}` } : {}), thinking: settings.get<string | null>(KEYS.thinking) } }
     },
     login(provider, type, key, emit) {
       if (!models.getProviders().some((p) => p.id === provider)) throw new RpcError('unknown_provider', `No provider ${provider}`)

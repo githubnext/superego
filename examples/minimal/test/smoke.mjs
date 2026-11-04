@@ -34,16 +34,21 @@ void (async () => {
   if (hello.features.some((f) => f.startsWith('ext:'))) { await fail(`extension features: ${hello.features}`); return }
   if (!hello.machine.dataDir.endsWith(process.env.MU_MINIMAL_HOME.split('/').at(-1))) { await fail(`wrong data dir ${hello.machine.dataDir}`); return }
 
-  // New from the top bar, then chat.
+  // New from the top bar opens the New session dialog: a prompt and a folder, started with ⌘⏎.
   await run(`[...document.querySelectorAll('.session-picker button')].find((b) => b.textContent === 'New').click()`)
-  await until(`Boolean(document.querySelector('.composer textarea'))`, 'new session shown')
-  await run(`(() => {
-    const ta = document.querySelector('.composer textarea')
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(ta, 'hello minimal')
-    ta.dispatchEvent(new Event('input', { bubbles: true }))
-    ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  await until(`Boolean(document.querySelector('.new-session [aria-label="Prompt"]'))`, 'new session dialog')
+  const setValue = (selector, value) => run(`(() => {
+    const el = document.querySelector(${JSON.stringify(selector)})
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, ${JSON.stringify(value)})
+    el.dispatchEvent(new Event('input', { bubbles: true }))
   })()`)
-  await until(`document.querySelector('.transcript')?.textContent.includes('echo: hello minimal')`, 'answer')
+  await setValue('.new-session [aria-label="Project folder"]', '/nowhere/at/all')
+  await setValue('.new-session [aria-label="Prompt"]', 'hello minimal')
+  await run(`[...document.querySelectorAll('.new-session button')].find((b) => b.textContent.startsWith('Start')).click()`)
+  await until(`document.querySelector('.new-session__error')?.textContent.includes('No folder')`, 'missing folder refused')
+  await setValue('.new-session [aria-label="Project folder"]', process.env.MU_MINIMAL_HOME)
+  BrowserWindow.getAllWindows()[0].webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter', modifiers: ['meta'] })
+  await until(`!document.querySelector('.new-session') && document.querySelector('.transcript')?.textContent.includes('echo: hello minimal')`, 'started with the prompt')
 
   // `mu-minimal <dir> -p …` hands a new session to this app, which shows it.
   const bin = new URL('../bin/mu-minimal.ts', import.meta.url).pathname

@@ -7,6 +7,9 @@ import { has, useMachineList, useSessions as useSessionsWatch } from './client.t
 
 export type Selection = { machine: string; session: string }
 
+/** Where the New session dialog starts: a machine, a folder. */
+export type NewSessionStart = { machine?: string; cwd?: string }
+
 type ShellState = {
   machines: MachineEntry[]
   sessions: Record<string, SessionInfo[] | undefined>
@@ -14,6 +17,8 @@ type ShellState = {
   select(selection: Selection | undefined): void
   settingsOpen: boolean
   openSettings(open?: boolean): void
+  newSession: NewSessionStart | undefined
+  openNewSession(start?: NewSessionStart | false): void
 }
 
 const Context = createContext<ShellState | undefined>(undefined)
@@ -39,8 +44,12 @@ export function useSelection() {
 }
 /** The shell's own actions. */
 export function useShell() {
-  const { openSettings } = useShellState()
-  return { openSettings: () => openSettings(true) }
+  const { openSettings, openNewSession } = useShellState()
+  return {
+    openSettings: () => openSettings(true),
+    /** The New session dialog, optionally starting on a machine or folder. */
+    newSession: (start: NewSessionStart = {}) => openNewSession(start),
+  }
 }
 
 export function ShellStateProvider({ children }: { children: ReactNode }) {
@@ -48,12 +57,14 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<Record<string, SessionInfo[] | undefined>>({})
   const [selection, setSelection] = useState<Selection>()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [newSession, setNewSession] = useState<NewSessionStart>()
   const onSessions = useCallback((machine: string, list: SessionInfo[] | undefined) => setSessions((all) => all[machine] === list ? all : { ...all, [machine]: list }), [])
   const value = useMemo<ShellState>(() => ({
-    machines, sessions, selection, settingsOpen,
-    select: (next) => { setSettingsOpen(false); setSelection(next) },
+    machines, sessions, selection, settingsOpen, newSession,
+    select: (next) => { setSettingsOpen(false); setNewSession(undefined); setSelection(next) },
     openSettings: (open = true) => setSettingsOpen(open),
-  }), [machines, sessions, selection, settingsOpen])
+    openNewSession: (start = {}) => setNewSession(start === false ? undefined : start),
+  }), [machines, sessions, selection, settingsOpen, newSession])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineSessions key={m.id} machine={m} onSessions={onSessions} />)}
@@ -67,6 +78,12 @@ function MachineSessions({ machine, onSessions }: { machine: MachineEntry; onSes
   const sessions = useSessionsWatch(machine.id, machine.state === 'connected' && has(machine, 'sessions'))
   useEffect(() => { if (sessions) onSessions(machine.id, sessions) }, [sessions])
   return null
+}
+
+/** For the shell: whether the New session dialog is open, where it starts, and closing it. */
+export function useNewSessionDialog() {
+  const { newSession, openNewSession } = useShellState()
+  return { start: newSession, close: () => openNewSession(false) }
 }
 
 /** For the shell: whether the Settings dialog is open, and closing it. */

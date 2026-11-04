@@ -1,9 +1,9 @@
 // The mu daemon: one per user per machine. It owns a pi-durable Harness on SQLite, the session catalog, and every
 // live subscription. Clients (the Electron app, the CLI, a remote app over ssh) speak the protocol in @mu/protocol.
 import { randomUUID } from 'node:crypto'
-import { link, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { hostname, platform } from 'node:os'
-import { join } from 'node:path'
+import { link, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { homedir, hostname, platform } from 'node:os'
+import { join, resolve as resolvePath } from 'node:path'
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
 import {
   type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, Harness, type LiveState,
@@ -28,7 +28,11 @@ const Catalog = defineDoc<{ ids: number[] }>({
 })
 
 /** A session's own metadata, next to its transcript. */
-type SessionMeta = { title: string; cwd: string; createdAt: number; seen?: { entryId?: number; failureTaskId?: number } }
+type SessionMeta = {
+  title: string; cwd: string; createdAt: number; seen?: { entryId?: number; failureTaskId?: number }
+  /** The session's own model and thinking; unset follows this machine's settings. */
+  model?: string; thinking?: string
+}
 const SessionDoc = defineDoc<SessionMeta>({
   kind: 'mu.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current',
   initial: () => ({ title: '', cwd: '', createdAt: 0 }), checkpointWhen: () => true,
@@ -168,7 +172,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const info = (id: string, m: Mounted): SessionInfo => ({
     id, title: m.meta.title || 'New session', cwd: m.meta.cwd, createdAt: m.meta.createdAt,
     activeAt: Math.max(m.activeAt ?? 0, m.meta.createdAt),
-    ...(m.model ? { model: m.model } : {}), ...(m.cost ? { cost: m.cost } : {}),
+    ...(m.model ? { model: m.model } : {}), ...(m.cost ? { cost: m.cost } : {}), ...(m.meta.model ? { ownModel: true } : {}),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
   /** Only an assistant answer makes a session "done"; the user's own message does not. */
@@ -252,6 +256,17 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
   const features = [...FEATURES, ...(options.extensions ?? []).map((extension) => `ext:${extension.name}`)]
 
+  /** Send `text` to a session, with the model and thinking it chose, else what this machine's settings say now. */
+  async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp') {
+    const m = await get(id)
+    const { model, thinkingLevel } = agent.resolve(m.meta)
+    if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
+    await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null }, context)
+    if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text) })
+    const submission = await m.conversation.submit({ type: 'input', content: text, requestId, ...(whenBusy ? { whenBusy } : {}) }, context)
+    return String(submission.id)
+  }
+
   // Mount everything once so statuses (and anything a previous process left running) are live from the start.
   await list()
   harness.resume()
@@ -272,9 +287,15 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           return { version: PROTOCOL_VERSION, features, machine, methods: [...Object.keys(handlers), ...extensionMethods.keys()] }
         },
         'session.list': () => list(),
-        async 'session.create'({ cwd, title }) {
-          const meta: SessionMeta = { title: title ?? '', cwd: cwd || defaultCwd, createdAt: Date.now() }
-          const { model, thinkingLevel } = agent.resolve()
+        async 'session.create'({ cwd, title, model: ownModel, thinking, prompt }) {
+          const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
+          if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${machine.hostname}`)
+          if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
+          const meta: SessionMeta = {
+            title: title?.trim() ?? '', cwd: dir, createdAt: Date.now(),
+            ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}),
+          }
+          const { model, thinkingLevel } = agent.resolve(meta)
           const conversation = await harness.createConversation({
             ownership: { kind: 'ownerless' },
             agent: { ...(model ? { model } : {}), ...(thinkingLevel ? { thinkingLevel } : {}), cwd: meta.cwd },
@@ -285,21 +306,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           }, context)
           const m = await mount(conversation.id)
           changed()
+          if (prompt?.trim()) await submit(String(conversation.id), prompt, randomUUID())
           return info(String(conversation.id), m)
         },
+        async 'agent.models'() { return agent.catalog() },
         async 'session.rename'({ id, title }) {
           await updateMeta(id, (meta) => { meta.title = title })
           return null
         },
         async 'session.submit'({ id, text, requestId, whenBusy }) {
-          const m = await get(id)
-          // Every turn runs with the model and thinking level the settings say now.
-          const { model, thinkingLevel } = agent.resolve()
-          if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
-          await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null }, context)
-          if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text) })
-          const submission = await m.conversation.submit({ type: 'input', content: text, requestId: requestId ?? randomUUID(), ...(whenBusy ? { whenBusy } : {}) }, context)
-          return { submission: String(submission.id) }
+          return { submission: await submit(id, text, requestId ?? randomUUID(), whenBusy) }
         },
         async 'session.abort'({ id }) {
           await (await get(id)).conversation.abort(context)

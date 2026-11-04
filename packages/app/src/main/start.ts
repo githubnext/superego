@@ -50,7 +50,14 @@ export function startApp(appConfig: AppConfig) {
     const handlers: Record<string, (params: any) => Promise<unknown>> = {
       ...serveSettings(appSettings, (params) => send('settings.changed', params), subs),
       async unwatch({ sub }: { sub: string }) { subs.get(sub)?.(); subs.delete(sub); return null },
-      /** How mu sits on the desktop now. */
+      /** A folder on this computer, chosen in the system's dialog; null when cancelled. */
+    async 'app.pickFolder'({ defaultPath }: { defaultPath?: string }) {
+      const window = BrowserWindow.fromWebContents(contents)
+      const options = { properties: ['openDirectory', 'createDirectory'] as ('openDirectory' | 'createDirectory')[], ...(defaultPath ? { defaultPath } : {}) }
+      const { canceled, filePaths } = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
+      return canceled ? null : filePaths[0] ?? null
+    },
+    /** How mu sits on the desktop now. */
       async 'service.get'() { return service.state },
       async 'service.act'({ action }: { action: ServiceAction }) {
         if (!['restart', 'interrupt', 'later', 'review'].includes(action)) throw new RpcError('invalid', `Unknown action ${action}`)

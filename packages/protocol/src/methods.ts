@@ -28,12 +28,32 @@ export type SessionInfo = {
   activeAt: number
   /** The model its next turn runs with. */
   model?: string
+  /** Whether it chose its own model and thinking, rather than following the machine's settings. */
+  ownModel?: boolean
   /** What it has spent so far, in dollars, as the providers price it. */
   cost?: number
   status: Status
 }
 
 /** `id` is the machine's identity: stable across restarts and routes, so a client can tell it is the same machine. */
+/** The models a machine can run, and the default a new session gets there. */
+export type ModelCatalog = {
+  models: { value: string; label: string; group: string; thinking: string[] }[]
+  default: { model?: string; thinking: string | null }
+}
+
+/** What a new session starts with. Unset: this machine's defaults. */
+export type NewSession = {
+  cwd?: string
+  title?: string
+  /** `provider/model`, for this session's turns from now on. */
+  model?: string
+  /** A thinking level, or `off`. */
+  thinking?: string
+  /** A first message, sent right away. */
+  prompt?: string
+}
+
 export type MachineInfo = {
   id: string; hostname: string; platform: string; pid: number; dataDir: string
   /** The build of the code this daemon runs (see `readBuild`); clients compare it with what is on disk now. */
@@ -45,7 +65,8 @@ export type Hello = { version: number; features: string[]; machine: MachineInfo;
 export type Methods = {
   hello: { params: { client: string; version: number; features?: string[] }; result: Hello }
   'session.list': { params: {}; result: SessionInfo[] }
-  'session.create': { params: { cwd?: string; title?: string }; result: SessionInfo }
+  'session.create': { params: NewSession; result: SessionInfo }
+  'agent.models': { params: {}; result: ModelCatalog }
   'session.rename': { params: { id: SessionId; title: string }; result: null }
   'session.submit': { params: { id: SessionId; text: string; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
   'session.abort': { params: { id: SessionId }; result: null }

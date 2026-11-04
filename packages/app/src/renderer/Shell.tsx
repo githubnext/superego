@@ -9,7 +9,8 @@ import { ServiceNotice } from './ServiceNotice.tsx'
 import { SessionView } from './SessionView.tsx'
 import { SettingsView } from './SettingsView.tsx'
 import { Palette } from './Palette.tsx'
-import { useAllSessions, useMachines, useSelection, useSettingsDialog, useShell, type Selection } from './state.tsx'
+import { NewSessionDialog } from './NewSession.tsx'
+import { useAllSessions, useMachines, useNewSessionDialog, useSelection, useSettingsDialog, useShell, type Selection } from './state.tsx'
 
 export function Shell() {
   const registry = useRegistry()
@@ -17,6 +18,7 @@ export function Shell() {
   const machines = useMachines()
   const { selection, select, machine, session } = useSelection()
   const settings = useSettingsDialog()
+  const newSession = useNewSessionDialog()
   const { openSettings } = useShell()
   const hasSidebar = registry.slots.sidebar.length > 0
   useAppEffects(() => setPalette((open) => !open))
@@ -48,6 +50,7 @@ export function Shell() {
       )}
       {settings.open && <SettingsView machines={machines} onClose={settings.close} />}
       {palette && <Palette onClose={() => setPalette(false)} />}
+      {newSession.start && <NewSessionDialog start={newSession.start} onClose={newSession.close} />}
     </div>
   )
 }
@@ -60,10 +63,7 @@ function SessionPicker() {
   const options = machines.flatMap((m) => (sessions[m.id] ?? []).map((s) => ({
     value: `${m.id}/${s.id}`, label: s.title, ...(machines.length > 1 ? { group: m.label } : {}),
   })))
-  const start = async () => {
-    const created = await client('local').call('session.create', {})
-    select({ machine: 'local', session: created.id })
-  }
+  const { newSession } = useShell()
   return (
     <div className="session-picker">
       <Select aria-label="Session" options={options} value={selection ? `${selection.machine}/${selection.session}` : null}
@@ -73,7 +73,7 @@ function SessionPicker() {
           const slash = value.indexOf('/')
           select({ machine: value.slice(0, slash), session: value.slice(slash + 1) })
         }} />
-      <Button variant="ghost" onClick={() => void start()}>New</Button>
+      <Button variant="ghost" onClick={() => newSession()}>New</Button>
     </div>
   )
 }
@@ -82,7 +82,7 @@ function SessionPicker() {
 function useAppEffects(togglePalette: () => void) {
   const appSettings = useSettings('app', true)
   const { select } = useSelection()
-  const { openSettings } = useShell()
+  const { openSettings, newSession } = useShell()
   const interfaceFont = appSettings?.values['app.font.interface']
   const monoFont = appSettings?.values['app.font.mono']
   const registry = useRegistry()
@@ -97,6 +97,7 @@ function useAppEffects(togglePalette: () => void) {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === ',') { event.preventDefault(); openSettings() }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); togglePalette() }
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'n') { event.preventDefault(); newSession() }
       for (const command of registry.commands) if (command.keys && matches(event, command.keys)) { event.preventDefault(); command.run() }
     }
     window.addEventListener('keydown', onKey)

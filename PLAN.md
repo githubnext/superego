@@ -173,7 +173,7 @@ As built (2026-11-04). An extension is a package with up to two halves, imported
 | M5 | Asking the user, blocked status, end-to-end smoke | done (ask-user) |
 | M6 | Framework: AppConfig, @mu/app, examples, `mu new` | done |
 | M7 | Focus look, palette, sidebar modes, Base UI kit | done |
-| M8 | New session dialog | in progress |
+| M8 | New session dialog | done |
 
 ---
 
@@ -221,9 +221,10 @@ Still open:
 
   The kit's overlays are on Base UI.
 
+- **New session dialog (2026-11-04).** It opens from ⌘N, the palette, the sidebar's + and minimal's New. It sets a prompt, a project folder (recent folders, Browse… on this computer), the machine, the model and thinking, and a name. A session's own model and thinking win over the machine's default on every turn. The daemon refuses a missing folder or an unknown model.
+
 ## 9. Next
 
-- **New session dialog:** project, prompt, machine, model and thinking for that session.
 - **More bundled extensions:** git/diff, background jobs and subagents, suggestions.
 - **A layout tree for panels**, beyond fixed slots.
 - **Publishing the packages**, so new apps don't need this checkout; then runtime-installed extensions.

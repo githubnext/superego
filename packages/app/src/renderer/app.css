@@ -99,3 +99,22 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 .palette__detail { color: var(--mu-muted); font-size: var(--mu-text-sm); }
 .palette__list kbd { font: var(--mu-text-xs) var(--mu-mono); color: var(--mu-muted); }
 .palette__none { color: var(--mu-muted); }
+
+.new-session__body { padding: var(--mu-space-4); display: flex; flex-direction: column; gap: var(--mu-space-3); }
+.new-session__prompt { font-size: var(--mu-text-body); line-height: 1.5; border: 1px solid var(--mu-border); border-radius: var(--mu-radius-lg); padding: var(--mu-space-3); min-height: 6.5em; background: var(--mu-raised); }
+.new-session__prompt:focus { border-color: var(--mu-muted); }
+.new-session__field { display: flex; flex-direction: column; gap: var(--mu-space-1); min-width: 0; }
+.new-session__field > span { font-size: var(--mu-text-xs); color: var(--mu-muted); }
+.new-session__row { display: flex; gap: 6px; }
+.new-session__row .mu-field { flex: 1; }
+.new-session__recent { display: flex; flex-wrap: wrap; gap: 4px; margin-top: -4px; }
+.new-session__recent button { font: var(--mu-text-xs) var(--mu-mono); color: var(--mu-muted); background: var(--mu-surface); border: 1px solid transparent; border-radius: 999px; padding: 2px 8px; }
+.new-session__recent button:hover { color: var(--mu-text); }
+.new-session__recent button.is-on { color: var(--mu-text); border-color: var(--mu-border); }
+.new-session__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--mu-space-3); }
+.new-session__grid .mu-select { width: 100%; }
+.new-session__note { color: var(--mu-muted); margin: 0; }
+.new-session__error { color: var(--mu-status-error); margin: 0; font-size: var(--mu-text-ui); }
+.new-session__foot { display: flex; align-items: center; gap: var(--mu-space-2); padding: var(--mu-space-3) var(--mu-space-4); border-top: 1px solid color-mix(in srgb, var(--mu-border) 60%, transparent); }
+.new-session__hint { flex: 1; font: var(--mu-text-xs) var(--mu-mono); color: var(--mu-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.new-session__foot kbd { font: var(--mu-text-xs) var(--mu-mono); opacity: .7; margin-left: 4px; }
