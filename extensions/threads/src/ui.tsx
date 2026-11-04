@@ -1,26 +1,48 @@
 /// <reference path="./env.d.ts" />
-// threads: the sidebar of sessions, by machine. Each machine shows its sessions with their status, a rollup of them
-// in its heading, and a way to start one in a chosen directory. UI only: it uses the core's session methods.
-import { useState } from 'react'
-import { defineUiExtension, machine as client, useAllSessions, useMachines, useSelection, useSessions, type MachineEntry } from '@mu/app/ui'
-import { IconButton, List, ListItem, Panel, StatusGlyph } from '@mu/ui'
+// threads: the session sidebar. One extension with modes, all kept as app settings:
+// - sort: newest first (by machine), recently active (by machine), or needs you first (by status, across machines)
+// - show as: a list, or a rail of status glyphs
+// - details: a pane beside the session with what it runs with, spent and touched
+// UI only: it uses the core's session methods and facts.
+import { Fragment, useMemo, useRef, useState } from 'react'
+import {
+  call, defineUiExtension, machine as client, useAllSessions, useAppSetting, useMachines, useSelection, useSessionView,
+  type MachineEntry,
+} from '@mu/app/ui'
+import type { SessionInfo, Status } from '@mu/protocol'
+import { IconButton, List, ListItem, Menu, Panel, StatusGlyph, Tooltip, TooltipProvider } from '@mu/ui'
 import './styles.css'
+import { activity, ago, groupSessions, type Group, type Row, type Sort } from './groups.ts'
 
-/** How long ago, briefly: now, 5m, 2h, then the weekday, then the date. */
-export function ago(at: number, now = Date.now()): string {
-  const minutes = Math.floor((now - at) / 60_000)
-  if (minutes < 1) return 'now'
-  if (minutes < 60) return `${minutes}m`
-  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)}h`
-  const date = new Date(at)
-  if (minutes < 6 * 24 * 60) return date.toLocaleDateString(undefined, { weekday: 'short' })
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
+export const SORT = 'threads.sort'
+export const VIEW = 'threads.view'
+export const DETAILS = 'threads.details'
+export type View = 'list' | 'rail'
+
+/** Settings and commands act through the app's settings, so every window and the menu agree. */
+const set = (key: string, value: string | boolean) => call('app', 'settings.set', { key, value })
+let current: { sort: Sort; view: View; details: boolean } = { sort: 'created', view: 'list', details: false }
 
 export default defineUiExtension({
   name: 'threads',
   setup(mu) {
+    mu.appSettings({
+      id: 'threads', title: 'Sidebar', order: 55,
+      settings: [
+        { key: SORT, title: 'Sort sessions', default: 'created', type: 'choice', options: [
+          { value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' }, { value: 'recent', label: 'Recently active' },
+        ] },
+        { key: VIEW, title: 'Show as', default: 'list', type: 'choice', options: [{ value: 'list', label: 'List' }, { value: 'rail', label: 'Rail' }] },
+        { key: DETAILS, title: 'Session details', description: 'A pane beside the session: machine, model, cost, tools, files.', default: false, type: 'boolean' },
+      ],
+    })
     mu.slot('sidebar', Threads)
+    mu.slot('session.aside', Details)
+    mu.command({ id: 'threads.rail', title: 'Toggle sidebar rail', keys: 'mod+\\', run: () => void set(VIEW, current.view === 'rail' ? 'list' : 'rail') })
+    mu.command({ id: 'threads.details', title: 'Toggle session details', keys: 'mod+i', run: () => void set(DETAILS, !current.details) })
+    mu.command({ id: 'threads.sort.created', title: 'Sort sessions: newest first', run: () => void set(SORT, 'created') })
+    mu.command({ id: 'threads.sort.status', title: 'Sort sessions: needs you first', run: () => void set(SORT, 'status') })
+    mu.command({ id: 'threads.sort.recent', title: 'Sort sessions: recently active', run: () => void set(SORT, 'recent') })
     mu.command({ id: 'threads.next', title: 'Next session', keys: 'mod+alt+arrowdown', run: () => step(1) })
     mu.command({ id: 'threads.previous', title: 'Previous session', keys: 'mod+alt+arrowup', run: () => step(-1) })
   },
@@ -30,23 +52,84 @@ export default defineUiExtension({
 let step: (by: number) => void = () => {}
 
 function Threads() {
+  const [sort] = useAppSetting<Sort>(SORT)
+  const [view] = useAppSetting<View>(VIEW)
+  const [details] = useAppSetting<boolean>(DETAILS)
+  current = { sort: sort ?? 'created', view: view ?? 'list', details: details ?? false }
   const machines = useMachines().filter((m) => m.state !== 'disabled')
-  const { selection, select } = useSelection()
   const sessions = useAllSessions()
-  const all = machines.flatMap((m) => (sessions[m.id] ?? []).map((s) => ({ machine: m.id, session: s.id })))
+  const { selection, select } = useSelection()
+  const live = useMemo(() => groupSessions(machines, sessions, current.sort), [machines, sessions, current.sort])
+
+  // While the pointer is over the list, rows keep their places: a session changing state doesn't move under it.
+  const [hovering, setHovering] = useState(false)
+  const frozen = useRef(live)
+  if (!hovering) frozen.current = live
+  const groups = hovering ? freeze(frozen.current, live) : live
+
+  const order = groups.flatMap((g) => g.rows)
   step = (by) => {
-    const index = all.findIndex((s) => s.machine === selection?.machine && s.session === selection?.session)
-    const next = all[(index + by + all.length) % all.length]
-    if (next) select(next)
+    const index = order.findIndex((r) => r.machine.id === selection?.machine && r.session.id === selection.session)
+    const next = order[(index + by + order.length) % order.length]
+    if (next) select({ machine: next.machine.id, session: next.session.id })
   }
-  return <>{machines.map((m) => <Machine key={m.id} machine={m} />)}</>
+  const isOn = (r: Row) => selection?.machine === r.machine.id && selection.session === r.session.id
+
+  if (current.view === 'rail') return <Rail groups={groups} isOn={isOn} onPick={(r) => select({ machine: r.machine.id, session: r.session.id })} />
+  return (
+    <div className="threads" onPointerEnter={() => setHovering(true)} onPointerLeave={() => setHovering(false)}>
+      <div className="threads__head">
+        <span>Sessions</span>
+        <span className="threads__actions">
+          {current.sort === 'status' && <NewSession machine={machines.find((m) => m.id === 'local')} />}
+          <Options />
+        </span>
+      </div>
+      {groups.map((group) => (
+        <Panel key={group.id} className={`threads-group ${group.machine ? 'threads-machine' : ''} ${group.note ? 'is-stale' : ''}`}
+          title={<span className="threads-machine__title">{group.title}{group.note ? <em>{group.note}</em> : group.machine ? null : <em>{group.rows.length}</em>}</span>}
+          actions={group.machine && <NewSession machine={group.machine} />}>
+          <List>
+            {group.rows.map((r) => (
+              <ListItem key={`${r.machine.id}/${r.session.id}`} selected={isOn(r)} leading={<StatusGlyph status={r.session.status} />}
+                className={r.machine.state !== 'connected' ? 'is-stale' : ''}
+                trailing={!group.machine && machines.length > 1 && r.machine.state !== 'connected' ? r.machine.label : ago(activity(r.session))}
+                onClick={() => select({ machine: r.machine.id, session: r.session.id })}>
+                {r.session.title}
+              </ListItem>
+            ))}
+          </List>
+        </Panel>
+      ))}
+    </div>
+  )
 }
 
-function Machine({ machine }: { machine: MachineEntry }) {
-  const sessions = useSessions(machine.id)
-  const { selection, select } = useSelection()
+/** The frozen order, with each row's current data; rows that appeared since go at the end of their group. */
+function freeze(frozen: Group[], live: Group[]): Group[] {
+  const now = new Map(live.flatMap((g) => g.rows).map((r) => [`${r.machine.id}/${r.session.id}`, r]))
+  const seen = new Set<string>()
+  const kept = frozen.map((g) => ({ ...g, rows: g.rows.flatMap((r) => {
+    const key = `${r.machine.id}/${r.session.id}`
+    const row = now.get(key)
+    if (!row) return []
+    seen.add(key)
+    return [row]
+  }) }))
+  for (const g of live) {
+    const extra = g.rows.filter((r) => !seen.has(`${r.machine.id}/${r.session.id}`))
+    if (!extra.length) continue
+    const into = kept.find((k) => k.id === g.id)
+    if (into) into.rows.push(...extra)
+    else kept.push({ ...g, rows: extra })
+  }
+  return kept.filter((g) => g.rows.length || g.machine)
+}
+
+function NewSession({ machine }: { machine: MachineEntry | undefined }) {
   const [cwd, setCwd] = useState<string>()
-  const stale = machine.state !== 'connected'
+  const { select } = useSelection()
+  if (!machine) return null
   const create = async (dir: string) => {
     const created = await client(machine.id).call('session.create', { ...(dir.trim() ? { cwd: dir.trim() } : {}) })
     localStorage.setItem('threads.lastCwd', dir.trim())
@@ -54,28 +137,131 @@ function Machine({ machine }: { machine: MachineEntry }) {
     select({ machine: machine.id, session: created.id })
   }
   return (
-    <Panel
-      className={`threads-machine ${stale ? 'is-stale' : ''}`}
-      title={<span className="threads-machine__title">{machine.label}{stale && <em>{machine.state === 'connecting' ? 'connecting' : 'offline'}</em>}</span>}
-      actions={<IconButton label="New session" disabled={stale} onClick={() => setCwd(localStorage.getItem('threads.lastCwd') ?? '')}>+</IconButton>}
-    >
+    <>
+      <IconButton label={`New session on ${machine.label}`} disabled={machine.state !== 'connected'} onClick={() => setCwd(localStorage.getItem('threads.lastCwd') ?? '')}>+</IconButton>
       {cwd !== undefined && (
-        <form className="threads-machine__new" onSubmit={(event) => { event.preventDefault(); void create(cwd) }}>
-          <input autoFocus placeholder="Working directory (empty: home)" value={cwd} onChange={(e) => setCwd(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setCwd(undefined) } }} />
+        <form className="threads__new" onSubmit={(event) => { event.preventDefault(); void create(cwd) }}>
+          <input autoFocus placeholder={`Folder on ${machine.label} (empty: home)`} value={cwd} onChange={(e) => setCwd(e.target.value)}
+            onBlur={() => setCwd(undefined)} onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setCwd(undefined) } }} />
         </form>
       )}
-      <List>
-        {(sessions ?? []).map((session) => (
-          <ListItem key={session.id}
-            selected={selection?.machine === machine.id && selection.session === session.id}
-            leading={<StatusGlyph status={session.status} />}
-            trailing={ago(session.createdAt)}
-            onClick={() => select({ machine: machine.id, session: session.id })}>
-            {session.title}
-          </ListItem>
+    </>
+  )
+}
+
+const SORTS: { value: Sort; label: string }[] = [{ value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' }, { value: 'recent', label: 'Recently active' }]
+
+/** The ··· menu: sort, show as, details. */
+function Options() {
+  return (
+    <Menu.Root>
+      <Menu.Trigger render={<IconButton label="Sidebar options" className="threads-menu-trigger" />}>···</Menu.Trigger>
+      <Menu.Popup className="threads-menu">
+        <Menu.Group>
+          <Menu.GroupLabel>Sort</Menu.GroupLabel>
+          <Menu.RadioGroup value={current.sort} onValueChange={(value) => void set(SORT, value as string)}>
+            {SORTS.map((s) => <Menu.RadioItem key={s.value} value={s.value}>{s.label}</Menu.RadioItem>)}
+          </Menu.RadioGroup>
+        </Menu.Group>
+        <Menu.Separator />
+        <Menu.Group>
+          <Menu.GroupLabel>Show as</Menu.GroupLabel>
+          <Menu.RadioGroup value={current.view} onValueChange={(value) => void set(VIEW, value as string)}>
+            <Menu.RadioItem value="list">List</Menu.RadioItem>
+            <Menu.RadioItem value="rail" hint="⌘\">Rail</Menu.RadioItem>
+          </Menu.RadioGroup>
+        </Menu.Group>
+        <Menu.Separator />
+        <Menu.CheckboxItem checked={current.details} onCheckedChange={(checked) => void set(DETAILS, checked)} hint="⌘I">Session details</Menu.CheckboxItem>
+      </Menu.Popup>
+    </Menu.Root>
+  )
+}
+
+/** The sidebar as a column of status glyphs: hover for the title, ⌘\ for the list again. */
+function Rail({ groups, isOn, onPick }: { groups: Group[]; isOn(r: Row): boolean; onPick(r: Row): void }) {
+  return (
+    <TooltipProvider>
+      <nav className="threads-rail is-compact" aria-label="Sessions">
+        <Tooltip content="Show the list (⌘\)">
+          <button className="threads-rail__expand" aria-label="Show the list" onClick={() => void set(VIEW, 'list')}>›</button>
+        </Tooltip>
+        {groups.map((group, index) => (
+          <div key={group.id} className="threads-rail__group">
+            {index > 0 && <div className="threads-rail__sep" />}
+            {group.rows.map((r) => (
+              <Tooltip key={`${r.machine.id}/${r.session.id}`} content={<>{r.session.title}<small className="threads-rail__tipnote">{r.session.status.state} · {ago(activity(r.session))}</small></>}>
+                <button className={`threads-rail__dot ${isOn(r) ? 'is-on' : ''} ${r.machine.state !== 'connected' ? 'is-stale' : ''}`}
+                  aria-label={`${r.session.title}, ${r.session.status.state}`} onClick={() => onPick(r)}>
+                  <StatusGlyph status={r.session.status} />
+                </button>
+              </Tooltip>
+            ))}
+          </div>
         ))}
-      </List>
-    </Panel>
+      </nav>
+    </TooltipProvider>
+  )
+}
+
+/** The details pane: facts about the selected session, and what its tools did. Nothing while it's turned off. */
+function Details({ machine, session }: { machine: MachineEntry; session: SessionInfo }) {
+  const [on] = useAppSetting<boolean>(DETAILS)
+  if (!on) return null
+  return <DetailsPane machine={machine} session={session} />
+}
+
+type ToolCall = { name: string; arguments?: Record<string, unknown> }
+
+function DetailsPane({ machine, session }: { machine: MachineEntry; session: SessionInfo }) {
+  const view = useSessionView(machine.id, machine.state === 'connected', session.id)
+  const { tools, files } = useMemo(() => {
+    const tools = new Map<string, { count: number; failed: number }>()
+    const files = new Set<string>()
+    const failed = new Set<string>()
+    for (const entry of view?.entries ?? []) {
+      const message = entry.model?.[0] as { role?: string; isError?: boolean; toolCallId?: string; content?: unknown } | undefined
+      if (message?.role === 'toolResult' && message.isError && message.toolCallId) failed.add(message.toolCallId)
+    }
+    for (const entry of view?.entries ?? []) {
+      const message = entry.model?.[0] as { role?: string; content?: ({ type: string; id?: string } & ToolCall)[] } | undefined
+      if (message?.role !== 'assistant' || !Array.isArray(message.content)) continue
+      for (const block of message.content) {
+        if (block.type !== 'toolCall') continue
+        const t = tools.get(block.name) ?? { count: 0, failed: 0 }
+        t.count++
+        if (block.id && failed.has(block.id)) t.failed++
+        tools.set(block.name, t)
+        const path = block.arguments?.path
+        if (typeof path === 'string' && ['read', 'write', 'edit'].includes(block.name)) files.add(path)
+      }
+    }
+    return { tools, files: [...files] }
+  }, [view?.entries])
+  const time = (at: number) => new Date(at).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
+  return (
+    <div className="threads-details">
+      <h5>Session</h5>
+      <dl>
+        <dt>Machine</dt><dd>{machine.label}</dd>
+        <dt>Folder</dt><dd>{session.cwd.replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, '~')}</dd>
+        {session.model && <><dt>Model</dt><dd>{session.model}</dd></>}
+        <dt>Started</dt><dd>{time(session.createdAt)}</dd>
+        <dt>Active</dt><dd>{ago(activity(session))}</dd>
+        {session.cost !== undefined && <><dt>Cost</dt><dd>${session.cost.toFixed(2)}</dd></>}
+      </dl>
+      {tools.size > 0 && (
+        <>
+          <h5>Tools</h5>
+          <dl>{[...tools].map(([name, t]) => <Fragment key={name}><dt>{name}</dt><dd>{t.count}{t.failed ? ` · ${t.failed} failed` : ''}</dd></Fragment>)}</dl>
+        </>
+      )}
+      {files.length > 0 && (
+        <>
+          <h5>Files touched</h5>
+          {files.map((file) => <div key={file} className="threads-details__file">{file}</div>)}
+        </>
+      )}
+    </div>
   )
 }

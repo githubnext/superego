@@ -77,6 +77,36 @@ if (phase === 'first') {
   await until(`!document.querySelector('.ask-user') && document.querySelector('.ask-user-asked')?.textContent.includes('blue') && document.querySelector('.transcript').textContent.includes('Blue it is.')`, 'answered, agent carried on')
   await run(`window.mu.call('local', 'settings.set', { key: 'agent.model', value: 'faux/faux-1' })`)
   void asking
+  // The sidebar's modes: the ··· menu (portalled, so a scrolling sidebar can't cut it off), ⌘\\ rail, ⌘I details.
+  const key = async (keyCode, modifiers = ['meta']) => {
+    const contents = BrowserWindow.getAllWindows()[0].webContents
+    contents.sendInputEvent({ type: 'keyDown', keyCode, modifiers })
+    contents.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
+  }
+  await run(`document.querySelector('.threads-menu-trigger').click()`)
+  await until(`[...document.querySelectorAll('.mu-menu .mu-menu__item')].some((i) => i.textContent.includes('Needs you first'))`, 'sidebar menu open')
+  await run(`[...document.querySelectorAll('.mu-menu .mu-menu__item')].find((i) => i.textContent.includes('Needs you first')).click()`)
+  await until(`[...document.querySelectorAll('.threads-group .mu-panel__title')].some((t) => t.textContent.startsWith('Done'))`, 'grouped by status')
+  await key('\\')
+  await until(`Boolean(document.querySelector('.threads-rail.is-compact'))`, 'rail')
+  await key('\\')
+  await until(`Boolean(document.querySelector('.threads-machine')) || Boolean(document.querySelector('.threads-group'))`, 'list again')
+  await key('i')
+  await until(`document.querySelector('.threads-details')?.textContent.includes('Machine')`, 'details pane')
+  await key('i')
+  await until(`!document.querySelector('.threads-details')`, 'details closed')
+  await run(`window.mu.call('app', 'settings.set', { key: 'threads.sort', value: 'created' })`)
+  // ⌘K: find a session by name and open it.
+  await key('k')
+  await until(`Boolean(document.querySelector('.palette__input'))`, 'palette')
+  await run(`(() => {
+    const input = document.querySelector('.palette__input')
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'hello')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })()`)
+  await until(`document.querySelector('.palette__list li.is-active')?.textContent.includes('hello from smoke')`, 'palette finds the session')
+  await key('Enter', [])
+  await until(`!document.querySelector('.palette__input') && document.querySelector('.session__title')?.textContent === 'hello from smoke'`, 'palette opened it')
   // Settings: the app's own sections, then the machine's, drawn from what each registers.
   await run(`[...document.querySelectorAll('.app__footer button')].find((b) => b.textContent === 'Settings').click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Appearance') && document.querySelector('.settings').textContent.includes('Notifications')`, 'app settings')
@@ -139,9 +169,9 @@ if (phase === 'first') {
   await run(`document.querySelector('[data-key="app.font.mono"] .mu-font-picker__button').click()`, true)
   await until(`document.activeElement?.placeholder === 'Search fonts'`, 'picker focused')
   await escape()
-  await until(`!document.querySelector('.mu-font-picker__popover') && document.querySelector('dialog.settings')?.open === true`, 'picker closed, dialog open')
+  await until(`!document.querySelector('.mu-font-picker__popover') && Boolean(document.querySelector('.mu-dialog.settings'))`, 'picker closed, dialog open')
   await escape()
-  await until(`!document.querySelector('dialog.settings')`, 'dialog closed by Escape')
+  await until(`!document.querySelector('.mu-dialog.settings')`, 'dialog closed by Escape')
   console.log('smoke(first): ok')
 } else {
   await until(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'session after reopen')

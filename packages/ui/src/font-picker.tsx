@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { Popover } from './popover.tsx'
 
 /** Whether `family` draws every glyph the same width: "iiii" and "WWWW" measure alike. */
 export function isMonospace(family: string): boolean {
@@ -28,50 +29,37 @@ export function FontPicker({ value, onChange, loadFonts, monospace, nullLabel = 
   const [error, setError] = useState<string>()
   const [query, setQuery] = useState('')
   const [all, setAll] = useState(!monospace)
-  const root = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const close = (event: MouseEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false) }
-    window.addEventListener('mousedown', close)
-    return () => window.removeEventListener('mousedown', close)
-  }, [open])
 
   const mono = useMemo(() => fonts && monospace ? new Set(fonts.filter(isMonospace)) : undefined, [fonts, monospace])
   const shown = (fonts ?? []).filter((family) => (all || !mono || mono.has(family)) && family.toLowerCase().includes(query.toLowerCase()))
 
-  const toggle = () => {
-    setOpen(!open)
-    if (!fonts) loadFonts().then(setFonts, (e: Error) => setError(e.message))
+  const toggle = (next: boolean) => {
+    setOpen(next)
+    if (next && !fonts) loadFonts().then(setFonts, (e: Error) => setError(e.message))
   }
   const choose = (family: string | null) => { onChange(family); setOpen(false); setQuery('') }
 
   return (
-    <div className="mu-font-picker" ref={root}>
-      <button type="button" className="mu-field mu-font-picker__button" aria-label={label} aria-expanded={open} onClick={toggle}
-        style={value ? { fontFamily: `"${value}"` } : undefined}>
-        {value ?? nullLabel}
-      </button>
-      {open && (
-        <div className="mu-font-picker__popover" role="listbox">
-          <input className="mu-field" autoFocus placeholder="Search fonts" value={query} onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false) } if (e.key === 'Enter' && shown[0]) choose(shown[0]) }} />
-          {monospace && (
-            <label className="mu-font-picker__all"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Show all fonts</label>
-          )}
-          <div className="mu-font-picker__list">
-            {!query && <button type="button" role="option" aria-selected={value === null} onClick={() => choose(null)}>{nullLabel}</button>}
-            {error ? <div className="mu-font-picker__note">{error}</div>
-              : !fonts ? <div className="mu-font-picker__note">Loading fonts…</div>
-              : shown.length === 0 ? <div className="mu-font-picker__note">No fonts match</div>
-              : shown.map((family) => (
-                <button key={family} type="button" role="option" aria-selected={family === value} style={{ fontFamily: `"${family}"` }} onClick={() => choose(family)}>
-                  {family}
-                </button>
-              ))}
-          </div>
+    <div className="mu-font-picker">
+      <Popover open={open} onOpenChange={toggle} className="mu-font-picker__popover"
+        trigger={<button type="button" className="mu-field mu-font-picker__button" aria-label={label} style={value ? { fontFamily: `"${value}"` } : undefined}>{value ?? nullLabel}</button>}>
+        <input className="mu-field" autoFocus placeholder="Search fonts" value={query} onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && shown[0]) choose(shown[0]) }} />
+        {monospace && (
+          <label className="mu-font-picker__all"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Show all fonts</label>
+        )}
+        <div className="mu-font-picker__list" role="listbox">
+          {!query && <button type="button" role="option" aria-selected={value === null} onClick={() => choose(null)}>{nullLabel}</button>}
+          {error ? <div className="mu-font-picker__note">{error}</div>
+            : !fonts ? <div className="mu-font-picker__note">Loading fonts…</div>
+            : shown.length === 0 ? <div className="mu-font-picker__note">No fonts match</div>
+            : shown.map((family) => (
+              <button key={family} type="button" role="option" aria-selected={family === value} style={{ fontFamily: `"${family}"` }} onClick={() => choose(family)}>
+                {family}
+              </button>
+            ))}
         </div>
-      )}
+      </Popover>
     </div>
   )
 }

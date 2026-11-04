@@ -53,7 +53,7 @@ void (async () => {
 
   // Settings open from the top bar.
   await run(`[...document.querySelectorAll('.app__bar button')].find((b) => b.textContent === 'Settings').click()`)
-  await until(`document.querySelector('dialog.settings')?.textContent.includes('Appearance')`, 'settings')
+  await until(`document.querySelector('.mu-dialog.settings')?.textContent.includes('Appearance')`, 'settings')
   console.log('smoke(minimal): ok')
   app.exit(0)
 })().catch((error) => { if (error.message !== 'failed') void fail(error.stack ?? String(error)) })

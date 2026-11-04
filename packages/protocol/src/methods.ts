@@ -24,7 +24,7 @@ export type SessionInfo = {
   title: string
   cwd: string
   createdAt: number
-  /** When anything last happened in it: a message, or work going on. */
+  /** When anything last happened in it: a message, or work going on. Absent from older daemons. */
   activeAt: number
   /** The model its next turn runs with. */
   model?: string

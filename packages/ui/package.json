@@ -3,8 +3,19 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts", "./styles.css": "./src/styles.css" },
-  "dependencies": { "@mu/protocol": "workspace:*" },
-  "peerDependencies": { "react": "^19" },
-  "devDependencies": { "@types/react": "^19", "react": "^19" }
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
+  },
+  "dependencies": {
+    "@mu/protocol": "workspace:*",
+    "@base-ui/react": "^1.9.0"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "react": "^19"
+  }
 }
