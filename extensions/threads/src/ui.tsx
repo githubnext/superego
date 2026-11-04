@@ -6,7 +6,7 @@
 // UI only: it uses the core's session methods and facts.
 import { Fragment, useMemo, useRef, useState } from 'react'
 import {
-  call, defineUiExtension, useAllSessions, useAppSetting, useMachines, useSelection, useSessionView, useShell,
+  call, defineAction, defineUiExtension, useAllSessions, useAppSetting, useMachines, useSelection, useSessionView, useShell,
   type MachineEntry,
 } from '@mu/app/ui'
 import type { SessionInfo, Status } from '@mu/protocol'
@@ -38,13 +38,15 @@ export default defineUiExtension({
     })
     mu.slot('sidebar', Threads)
     mu.slot('session.aside', Details)
-    mu.command({ id: 'threads.rail', title: 'Toggle sidebar rail', keys: 'mod+\\', run: () => void set(VIEW, current.view === 'rail' ? 'list' : 'rail') })
-    mu.command({ id: 'threads.details', title: 'Toggle session details', keys: 'mod+i', run: () => void set(DETAILS, !current.details) })
-    mu.command({ id: 'threads.sort.created', title: 'Sort sessions: newest first', run: () => void set(SORT, 'created') })
-    mu.command({ id: 'threads.sort.status', title: 'Sort sessions: needs you first', run: () => void set(SORT, 'status') })
-    mu.command({ id: 'threads.sort.recent', title: 'Sort sessions: recently active', run: () => void set(SORT, 'recent') })
-    mu.command({ id: 'threads.next', title: 'Next session', keys: 'mod+alt+arrowdown', run: () => step(1) })
-    mu.command({ id: 'threads.previous', title: 'Previous session', keys: 'mod+alt+arrowup', run: () => step(-1) })
+    const action = (id: string, title: string, run: () => void, keys?: string) =>
+      mu.action(defineAction({ id, title, runs: 'window', ...(keys ? { keys } : {}), run }))
+    action('threads.rail', 'Toggle sidebar rail', () => void set(VIEW, current.view === 'rail' ? 'list' : 'rail'), 'mod+\\')
+    action('threads.details', 'Toggle session details', () => void set(DETAILS, !current.details), 'mod+i')
+    action('threads.sort.created', 'Sort sessions: newest first', () => void set(SORT, 'created'))
+    action('threads.sort.status', 'Sort sessions: needs you first', () => void set(SORT, 'status'))
+    action('threads.sort.recent', 'Sort sessions: recently active', () => void set(SORT, 'recent'))
+    action('threads.next', 'Next session', () => step(1), 'mod+alt+arrowdown')
+    action('threads.previous', 'Previous session', () => step(-1), 'mod+alt+arrowup')
   },
 })
 

@@ -107,6 +107,19 @@ if (phase === 'first') {
   await until(`document.querySelector('.palette__list li.is-active')?.textContent.includes('hello from smoke')`, 'palette finds the session')
   await key('Enter', [])
   await until(`!document.querySelector('.palette__input') && document.querySelector('.session__title')?.textContent === 'hello from smoke'`, 'palette opened it')
+  // Every key and palette pick went through the router; the action log shows them, with where they came from.
+  await key('k')
+  await until(`Boolean(document.querySelector('.palette__input'))`, 'palette for the log')
+  await run(`(() => {
+    const input = document.querySelector('.palette__input')
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'action log')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })()`)
+  await key('Enter', [])
+  await until(`[...document.querySelectorAll('.action-log__table tr')].some((tr) => tr.textContent.includes('threads.rail') && tr.textContent.includes('keys'))`, 'action log')
+  await until(`[...document.querySelectorAll('.action-log__table tr')].some((tr) => tr.textContent.includes('session.select') && tr.textContent.includes('palette'))`, 'palette dispatch logged')
+  await key('Escape', [])
+  await until(`!document.querySelector('.action-log')`, 'log closed')
   // Settings: the app's own sections, then the machine's, drawn from what each registers.
   await run(`[...document.querySelectorAll('.app__footer button')].find((b) => b.textContent === 'Settings').click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Appearance') && document.querySelector('.settings').textContent.includes('Notifications')`, 'app settings')

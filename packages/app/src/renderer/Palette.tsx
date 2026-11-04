@@ -5,7 +5,8 @@ import { Dialog, StatusGlyph } from '@mu/ui'
 import type { Status } from '@mu/protocol'
 import { score } from './score.ts'
 import { useRegistry } from './extension.tsx'
-import { useAllSessions, useMachines, useSelection, useShell } from './state.tsx'
+import { useAllSessions, useMachines } from './state.tsx'
+import { runsBare } from './actions.tsx'
 
 type Item = { id: string; title: string; detail?: string; status?: Status; keys?: string; run(): void }
 
@@ -16,8 +17,6 @@ export function Palette({ onClose }: { onClose(): void }) {
   const registry = useRegistry()
   const machines = useMachines().filter((m) => m.state !== 'disabled')
   const sessions = useAllSessions()
-  const { select } = useSelection()
-  const { openSettings, newSession } = useShell()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
 
@@ -26,11 +25,13 @@ export function Palette({ onClose }: { onClose(): void }) {
     const all: Item[] = [
       ...machines.flatMap((m) => (sessions[m.id] ?? []).map((s): Item => ({
         id: `session:${m.id}/${s.id}`, title: s.title, detail: machines.length > 1 ? m.label : undefined, status: s.status,
-        run: done(() => select({ machine: m.id, session: s.id })),
+        run: done(() => void registry.router.dispatch('session.select', { machine: m.id, session: s.id }, 'palette')),
       }))),
-      { id: 'core.new', title: 'New session…', keys: 'mod+n', run: done(() => newSession()) },
-      { id: 'core.settings', title: 'Settings', keys: 'mod+,', run: done(openSettings) },
-      ...registry.commands.map((c): Item => ({ id: c.id, title: c.title, ...(c.keys ? { keys: c.keys } : {}), run: done(c.run) })),
+      // Every action that can run as it is: the palette dispatches it like a key would.
+      ...registry.router.router.list('ui').filter((a) => runsBare(a) && a.id !== 'app.palette').map((a): Item => ({
+        id: a.id, title: a.title, ...(a.keys ? { keys: a.keys } : {}),
+        run: done(() => void registry.router.dispatch(a.id, {}, 'palette').catch((error) => console.error(error))),
+      })),
     ]
     return all.map((item) => ({ item, rank: score(item.title, query) }))
       .filter(({ rank }) => rank > 0).sort((a, b) => b.rank - a.rank).map(({ item }) => item).slice(0, 50)

@@ -10,10 +10,14 @@ import { createRegistry, RegistryProvider, type UiExtension } from './extension.
 import { Providers } from './SettingsView.tsx'
 import { Shell } from './Shell.tsx'
 import { ShellStateProvider } from './state.tsx'
+import { coreActions } from './actions.tsx'
 
 export function mountApp(app: AppConfig, { extensions = [], root = document.getElementById('root')! }: { extensions?: UiExtension[]; root?: HTMLElement } = {}) {
   // The Providers settings section is the core's own custom component.
-  const registry = createRegistry(app, extensions, (core) => core.settings('providers', Providers))
+  const registry = createRegistry(app, extensions, (core) => {
+    core.settings('providers', Providers)
+    for (const action of coreActions) core.action(action)
+  })
   // Declared before anything renders, so a component reading or setting them finds them registered.
   for (const section of registry.appSettings) void window.mu.call('app', 'settings.register', { section }).catch((error) => console.error(error))
   createRoot(root).render(
@@ -27,9 +31,12 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
 
 export {
   defineUiExtension, Slot, useApp, useRegistry,
-  type Command, type EntryProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type UiApi, type UiExtension,
+  type EntryProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type UiApi, type UiExtension,
 } from './extension.tsx'
 export { useAppSetting } from './client.ts'
+export { useDispatch } from './Shell.tsx'
+export { runsBare, type WindowAction, type WindowContext } from './actions.tsx'
+export { defineAction } from '@mu/protocol'
 export { useAllSessions, useMachines, useSelection, useSessions, useShell, type Selection } from './state.tsx'
 export { useComposerClaim, type ComposerClaim } from './SessionView.tsx'
 export { call, has, loadFonts, machine, useSessionView, useSettings, useValue, useWatch } from './client.ts'

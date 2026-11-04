@@ -9,19 +9,32 @@ import { ServiceNotice } from './ServiceNotice.tsx'
 import { SessionView } from './SessionView.tsx'
 import { SettingsView } from './SettingsView.tsx'
 import { Palette } from './Palette.tsx'
+import { ActionLog, runsBare } from './actions.tsx'
 import { NewSessionDialog } from './NewSession.tsx'
 import { useAllSessions, useMachines, useNewSessionDialog, useSelection, useSettingsDialog, useShell, type Selection } from './state.tsx'
+
+/** Dispatch an action from this window: `dispatch('threads.rail')`, `dispatch('session.select', { machine, session })`. */
+export function useDispatch() {
+  return useRegistry().router.dispatch
+}
 
 export function Shell() {
   const registry = useRegistry()
   const [palette, setPalette] = useState(false)
+  const [log, setLog] = useState(false)
   const machines = useMachines()
   const { selection, select, machine, session } = useSelection()
   const settings = useSettingsDialog()
   const newSession = useNewSessionDialog()
   const { openSettings } = useShell()
   const hasSidebar = registry.slots.sidebar.length > 0
-  useAppEffects(() => setPalette((open) => !open))
+  const { newSession: openNewSession } = useShell()
+  // Actions read the shell as it is when they run.
+  registry.router.setContext({
+    app: registry.app, machines, selection, select, openSettings, newSession: openNewSession,
+    togglePalette: () => setPalette((open) => !open), showLog: () => setLog(true),
+  })
+  useAppEffects()
 
   // Looking at a finished or failed session marks it seen.
   useEffect(() => {
@@ -50,6 +63,7 @@ export function Shell() {
       )}
       {settings.open && <SettingsView machines={machines} onClose={settings.close} />}
       {palette && <Palette onClose={() => setPalette(false)} />}
+      {log && <ActionLog router={registry.router.router} onClose={() => setLog(false)} />}
       {newSession.start && <NewSessionDialog start={newSession.start} onClose={newSession.close} />}
     </div>
   )
@@ -79,10 +93,10 @@ function SessionPicker() {
 }
 
 /** Fonts from the app's settings; ⌘, ; sessions and Settings shown from the command line, a notification or the menu bar. */
-function useAppEffects(togglePalette: () => void) {
+function useAppEffects() {
   const appSettings = useSettings('app', true)
   const { select } = useSelection()
-  const { openSettings, newSession } = useShell()
+  const { openSettings } = useShell()
   const interfaceFont = appSettings?.values['app.font.interface']
   const monoFont = appSettings?.values['app.font.mono']
   const registry = useRegistry()
@@ -95,10 +109,14 @@ function useAppEffects(togglePalette: () => void) {
   useEffect(() => {
     document.title = registry.app.name
     const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === ',') { event.preventDefault(); openSettings() }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); togglePalette() }
-      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'n') { event.preventDefault(); newSession() }
-      for (const command of registry.commands) if (command.keys && matches(event, command.keys)) { event.preventDefault(); command.run() }
+      // Every shortcut is an action's: the same router the palette and other code dispatch through.
+      for (const action of registry.router.router.list()) {
+        if (action.keys && runsBare(action) && matches(event, action.keys)) {
+          event.preventDefault()
+          void registry.router.dispatch(action.id, {}, 'keys').catch((error) => console.error(error))
+          return
+        }
+      }
     }
     window.addEventListener('keydown', onKey)
     const show = ({ open, settings }: { open?: Selection; settings?: boolean }) => {

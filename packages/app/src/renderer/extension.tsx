@@ -1,9 +1,10 @@
 // The UI half of an extension: `<pkg>/ui`, listed in the app's renderer entry. It fills named slots in the shell, draws
-// tool calls and entries in the transcript, adds custom settings components and keyboard commands. Components reach
+// tool calls and entries in the transcript, adds custom settings components and actions (with keys). Components reach
 // everything else (machines, sessions, selection, live values, calls) through the hooks this package exports.
 import { createContext, useContext, type ComponentType, type ReactNode } from 'react'
 import type { AppConfig, DeclaredSection, SectionInfo, SessionInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
+import { createWindowRouter, type WindowAction, type WindowRouter } from './actions.tsx'
 
 /** Where an extension can put UI. */
 export type SlotName =
@@ -37,13 +38,6 @@ export type EntryProps = { machine: MachineEntry; session: SessionInfo; entry: {
 
 export type SettingsComponentProps = { target: string; section: SectionInfo }
 
-export type Command = {
-  id: string
-  title: string
-  /** A shortcut such as `mod+shift+n`; `mod` is ⌘ on macOS and Ctrl elsewhere. */
-  keys?: string
-  run(): void
-}
 
 export type UiApi = {
   app: AppConfig
@@ -53,7 +47,11 @@ export type UiApi = {
   entry(kind: string, component: ComponentType<EntryProps>): void
   /** Draw the settings section that names `ui` (its daemon half registers the section). */
   settings(ui: string, component: ComponentType<SettingsComponentProps>): void
-  command(command: Command): void
+  /**
+   * An action of this extension: dispatched by its keys, from the palette, from other code (`useDispatch`). Ids start
+   * with the extension's name. `run` gets its parameters and the window's context.
+   */
+  action(action: WindowAction): void
   /**
    * Settings of this UI half, kept by the app (per user, not per machine) and shown in Settings → General. Keys are
    * named `<extension>.<key>`. Read and change them with `useAppSetting`.
@@ -78,7 +76,7 @@ export type Registry = {
   tools: Map<string, ComponentType<ToolCallProps>>
   entries: Map<string, ComponentType<EntryProps>>
   settings: Map<string, ComponentType<SettingsComponentProps>>
-  commands: Command[]
+  router: WindowRouter
   appSettings: DeclaredSection[]
 }
 
@@ -86,7 +84,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   const registry: Registry = {
     app, extensions: extensions.map((e) => e.name),
     slots: { 'sidebar': [], 'session.header': [], 'composer.above': [], 'session.aside': [] },
-    tools: new Map(), entries: new Map(), settings: new Map(), commands: [], appSettings: [],
+    tools: new Map(), entries: new Map(), settings: new Map(), router: createWindowRouter(), appSettings: [],
   }
   const api = (extension: string): UiApi => ({
     app,
@@ -98,7 +96,10 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     tool: (name, component) => { registry.tools.set(name, component) },
     entry: (kind, component) => { registry.entries.set(kind, component) },
     settings: (ui, component) => { registry.settings.set(ui, component) },
-    command: (command) => { registry.commands.push(command) },
+    action(action) {
+      if (extension !== 'core' && !action.id.startsWith(`${extension}.`)) throw new Error(`Extension ${extension} must name its actions "${extension}.<name>", not "${action.id}"`)
+      registry.router.router.register({ ...action, runs: 'window' })
+    },
     appSettings(section) {
       for (const setting of section.settings) {
         if (extension !== 'core' && !setting.key.startsWith(`${extension}.`)) throw new Error(`Extension ${extension} must name its settings "${extension}.<key>", not "${setting.key}"`)
