@@ -10,6 +10,7 @@ import { createConnection } from 'node:net'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
+import { generate } from './generate.ts'
 import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, type MachineConfig, type Transport } from '@mu/client'
 import { appEnv, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@mu/daemon'
 import {
@@ -22,6 +23,8 @@ export type CliOptions = {
   appDir: string
   /** The bin file itself, run with Node to start a daemon from source when the app isn't built. */
   bin: string
+  /** The mu checkout, for `new`: only mu's own command makes new apps. */
+  generator?: { root: string }
 }
 
 // One CLI run serves one app; `runCli` sets these before anything else runs.
@@ -37,7 +40,9 @@ Usage:
   ${app.id} [dir] [-p prompt]          Start a session in dir (default: here) and open it in the app
   ${app.id} open <session>             Open a session in the app
   ${app.id} sessions                   List sessions (also: mu ls)
-  ${app.id} new [dir] [-p prompt]      Start a session without opening the app; prints its id
+  ${app.id} create [dir] [-p prompt]   Start a session without opening the app; prints its id${options.generator ? `
+  ${app.id} new <dir> [--minimal] [--name N] [--id ID]
+                                Make a new app on mu, from the full (or minimal) example` : ''}
   ${app.id} send <session> <text...>   Send a message to a session
 
   ${app.id} machines                   List machines and whether they answer
@@ -351,6 +356,16 @@ async function stopped() {
   for (let i = 0; i < 100 && await isListening(socket); i++) await new Promise((done) => setTimeout(done, 100))
 }
 
+function newApp(dir: string, values: { name?: string; id?: string; minimal?: boolean }) {
+  const made = generate({ root: options.generator!.root, dir, template: values.minimal ? 'minimal' : 'full', ...(values.name ? { name: values.name } : {}), ...(values.id ? { id: values.id } : {}) })
+  print(made, () => {
+    console.log(`Made ${made.app.name} (${made.template}) in ${made.dir}\n`)
+    console.log(`  cd ${made.dir}`)
+    console.log('  pnpm install && pnpm dev')
+    console.log(`\nIts command is \`${made.app.id}\`; its data lives in ~/.${made.app.id}.`)
+  })
+}
+
 /** Splice stdio to this computer's daemon without parsing anything: the transport stays dumb, ssh does auth. */
 async function bridge(start: boolean) {
   if (start && !(await isListening(socket))) await openLocal(socket, startDaemon).then((t) => t.close())
@@ -363,7 +378,7 @@ async function bridge(start: boolean) {
 
 // ── Dispatch ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const COMMANDS = new Set(['open', 'sessions', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help'])
+const COMMANDS = new Set(['open', 'sessions', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create'])
 
 async function main() {
   const { values, positionals } = parseArgs({
@@ -371,7 +386,7 @@ async function main() {
     options: {
       machine: { type: 'string', short: 'm' }, prompt: { type: 'string', short: 'p' }, json: { type: 'boolean' },
       all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
-      start: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
+      start: { type: 'boolean' }, now: { type: 'boolean' }, minimal: { type: 'boolean' }, id: { type: 'string' }, help: { type: 'boolean', short: 'h' },
     },
   })
   json = Boolean(values.json)
@@ -389,7 +404,15 @@ async function main() {
       return openInApp(machine.id, rest[0])
     }
     case 'sessions': case 'ls': return sessions(values.machine)
-    case 'new': return startSession({ dir: rest[0], machine: values.machine, prompt: values.prompt, open: false })
+    case 'new': {
+      // mu's own `new` makes an app; in any other app it is `create`.
+      if (options.generator) {
+        if (!rest[0]) throw new RpcError('usage', `${app.id} new <dir> [--minimal] [--name N] [--id ID]`)
+        return newApp(rest[0], values)
+      }
+      return startSession({ dir: rest[0], machine: values.machine, prompt: values.prompt, open: false })
+    }
+    case 'create': return startSession({ dir: rest[0], machine: values.machine, prompt: values.prompt, open: false })
     case 'send': {
       const [id, ...text] = rest
       if (!id || !text.length) throw new RpcError('usage', `${app.id} send <session> <text...>`)

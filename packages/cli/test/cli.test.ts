@@ -37,7 +37,7 @@ afterAll(async () => {
 
 describe('mu', () => {
   it('starts the daemon on demand and runs sessions', async () => {
-    const created = await muJson(['new', home, '-p', 'hi from the cli'])
+    const created = await muJson(['create', home, '-p', 'hi from the cli'])
     expect(created).toMatchObject({ machine: 'local', cwd: home })
     await until(async () => (await muJson(['sessions']))[0]?.status.state === 'done')
     await mu(['send', created.id, 'again'])
@@ -64,7 +64,7 @@ describe('mu', () => {
     const list = await muJson(['machines'])
     expect(list.map((m: any) => [m.label, m.state])).toEqual([['This computer', 'answers'], ['Second', 'answers']])
 
-    const remote = await muJson(['new', '-m', 'second', '-p', 'over there'])
+    const remote = await muJson(['create', '-m', 'second', '-p', 'over there'])
     expect(remote.machine).not.toBe('local')
     await until(async () => (await muJson(['sessions', '-m', 'Second']))[0]?.status.state === 'done')
     expect((await muJson(['sessions'])).some((s: any) => s.id === remote.id && s.title === 'over there')).toBe(false)

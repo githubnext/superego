@@ -219,4 +219,10 @@ Still open:
 - **Borrowed from T3 Code, and the `mu` CLI.** Feature flags in `hello`; a stable machine id (refusing a different machine at a known route, or one machine reached twice); record and replay of model turns; "All machines" bulk settings edit; machines reached through any stdio command (`via`).
 
   `packages/client` is shared by app and CLI: transports, `machines.json`, the identity check. `mu` (`packages/cli`, linked with `pnpm link:cli`) starts a session in the current directory and opens it in the app, which runs as a single instance per data dir. It also covers sessions, machines, settings, auth and the daemon, each with `-m <machine>` and `--json`.
-- **Next: M3**, the extension loader and slots. Chat and sidebar move out of `app/src/renderer` into extensions.
+- **Framework (2026-11-04).** mu became a framework with a generator, Rails-style. `AppConfig` names everything per app. `@mu/app` is the app layer, there are two examples (`minimal`, `full`), and `mu new` copies one into a new project linked to this checkout.
+
+  Extensions are packages with `./daemon` and `./ui` halves, imported at build time; runtime-installed extensions are later. First bundled: `threads` (sidebar) and `ask-user`.
+- **Next:**
+  - more bundled extensions: git/diff, background jobs and subagents, suggestions
+  - a layout tree for panels
+  - publishing the packages, so new apps don't need the checkout

@@ -17,5 +17,5 @@ cleanup() {
 trap cleanup EXIT
 ELECTRON=node_modules/.bin/electron
 MU_SMOKE_PHASE=first $ELECTRON test/smoke.mjs
-[ -S "$MU_HOME/mu.sock" ] || { echo "daemon did not outlive the app"; exit 1; }
+kill -0 "$(cat "$MU_HOME/daemon.pid" 2>/dev/null)" 2>/dev/null || { echo "daemon did not outlive the app"; exit 1; }
 MU_SMOKE_PHASE=reopen $ELECTRON test/smoke.mjs
