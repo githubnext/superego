@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdirSync, openSync } from 'node:fs'
+import { existsSync, mkdirSync, openSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, session, shell, type MenuItemConstructorOptions } from 'electron'
 import { appEnv, defaultDataDir, readBuild, socketPath } from '@mu/daemon/client'
@@ -264,6 +264,8 @@ export function startApp(appConfig: AppConfig) {
   const menuBarOn = () => appSettings.get<boolean>(APP_KEYS.menuBar)
   const dockHidden = () => menuBarOn() && appSettings.get<boolean>(APP_KEYS.hideDock)
 
+  // The app's own files: `resources/` next to its package.json (the build puts main.js in out/main).
+  const resources = join(import.meta.dirname, '../../resources')
   const menuBar = new MenuBar(appConfig, {
     machines: () => machineEntries(),
     sessions: (machine) => sessionsOf.get(machine) ?? [],
@@ -274,7 +276,7 @@ export function startApp(appConfig: AppConfig) {
     quitAndStop: () => void quitAndStop(),
     service: () => service.state,
     restart: () => void service.act('restart'),
-  }, headless)
+  }, headless, join(resources, 'trayTemplate.png'))
 
   /** The Dock icon shows while a window is open, unless hidden in Settings; with no window it goes, if the menu bar has mu. */
   function refreshDesktop() {
@@ -426,6 +428,8 @@ export function startApp(appConfig: AppConfig) {
   app.whenReady().then(() => {
     if (!primary) return
     if (headless) app.dock?.hide()
+    // Run from source there's no bundle to carry the icon: the Dock takes the app's own.
+    else if (!app.isPackaged && existsSync(join(resources, 'icon.png'))) app.dock?.setIcon(join(resources, 'icon.png'))
     setMenu()
     refreshDesktop()
     // Font pickers list the installed fonts (the Local Font Access API); nothing else is granted.

@@ -1,5 +1,8 @@
-// The menu bar item: the app's glyph (µ for mu, and a count when sessions want a look) while the "Show in menu bar" setting is on. Its menu
-// shows what the agents are doing on every machine and is the way back to the app when no window is open.
+// The menu bar item: the app's icon (and a count when sessions want a look) while the "Show in menu bar" setting is on.
+// Its menu shows what the agents are doing on every machine and is the way back to the app when no window is open.
+// The icon is the app's `resources/trayTemplate.png` (with an @2x beside it): black on transparent, which macOS tints
+// for the menu bar it sits in. Without one, the app's glyph is drawn as text.
+import { existsSync } from 'node:fs'
 import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
 import type { AppConfig, SessionInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
@@ -26,10 +29,13 @@ export class MenuBar {
 
   #app: AppConfig
 
-  constructor(app: AppConfig, model: TrayModel, headless: boolean) {
+  #icon: string | undefined
+
+  constructor(app: AppConfig, model: TrayModel, headless: boolean, icon?: string) {
     this.#app = app
     this.#model = model
     this.#headless = headless
+    this.#icon = icon && existsSync(icon) ? icon : undefined
   }
 
   #headlessShown = false
@@ -51,8 +57,10 @@ export class MenuBar {
     if (!app.isReady()) throw new Error('Cannot create Tray before app is ready')
     if (this.#headless) { this.#headlessShown = true; return }
     if (!this.#tray) {
-      // No image, just text: the title draws in the menu bar's own font and colour, light or dark.
-      this.#tray = new Tray(nativeImage.createEmpty())
+      // A template image, or else just text: either way it takes the menu bar's own colour, light or dark.
+      const image = this.#icon ? nativeImage.createFromPath(this.#icon) : nativeImage.createEmpty()
+      image.setTemplateImage(true)
+      this.#tray = new Tray(image)
       this.#tray.setToolTip(this.#app.name)
     }
     const machines = this.#model.machines().filter((m) => m.state !== 'disabled')
@@ -60,7 +68,8 @@ export class MenuBar {
     const wanting = all.filter(({ session }) => WANTS_A_LOOK.has(session.status.state))
     const working = all.filter(({ session }) => session.status.state === 'working')
     const glyph = this.#app.glyph ?? this.#app.name
-    const title = wanting.length ? `${glyph} ${wanting.length}` : glyph
+    const count = wanting.length ? String(wanting.length) : ''
+    const title = this.#icon ? count : count ? `${glyph} ${count}` : glyph
     const tooltip = working.length ? `${this.#app.name}: ${working.length} working` : this.#app.name
 
     const item = ({ machine, session }: (typeof all)[number]): MenuItemConstructorOptions => ({
