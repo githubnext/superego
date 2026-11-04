@@ -1,7 +1,7 @@
-// The menu bar item: a µ (and a count when sessions want a look) while the "Show in menu bar" setting is on. Its menu
+// The menu bar item: the app's glyph (µ for mu, and a count when sessions want a look) while the "Show in menu bar" setting is on. Its menu
 // shows what the agents are doing on every machine and is the way back to the app when no window is open.
 import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
-import type { SessionInfo } from '@mu/protocol'
+import type { AppConfig, SessionInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
 
 export type TrayModel = {
@@ -24,7 +24,10 @@ export class MenuBar {
   #model: TrayModel
   #headless: boolean
 
-  constructor(model: TrayModel, headless: boolean) {
+  #app: AppConfig
+
+  constructor(app: AppConfig, model: TrayModel, headless: boolean) {
+    this.#app = app
     this.#model = model
     this.#headless = headless
   }
@@ -50,14 +53,15 @@ export class MenuBar {
     if (!this.#tray) {
       // No image, just text: the title draws in the menu bar's own font and colour, light or dark.
       this.#tray = new Tray(nativeImage.createEmpty())
-      this.#tray.setToolTip('mu')
+      this.#tray.setToolTip(this.#app.name)
     }
     const machines = this.#model.machines().filter((m) => m.state !== 'disabled')
     const all = machines.flatMap((m) => this.#model.sessions(m.id).map((session) => ({ machine: m, session })))
     const wanting = all.filter(({ session }) => WANTS_A_LOOK.has(session.status.state))
     const working = all.filter(({ session }) => session.status.state === 'working')
-    const title = wanting.length ? `µ ${wanting.length}` : 'µ'
-    const tooltip = working.length ? `mu: ${working.length} working` : 'mu'
+    const glyph = this.#app.glyph ?? this.#app.name
+    const title = wanting.length ? `${glyph} ${wanting.length}` : glyph
+    const tooltip = working.length ? `${this.#app.name}: ${working.length} working` : this.#app.name
 
     const item = ({ machine, session }: (typeof all)[number]): MenuItemConstructorOptions => ({
       label: `${GLYPH[session.status.state] ?? '○'}  ${session.title}${machines.length > 1 ? `  — ${machine.label}` : ''}`,
@@ -72,7 +76,7 @@ export class MenuBar {
       click: () => this.#model.restart(),
     }, { type: 'separator' }]
     const template: MenuItemConstructorOptions[] = [
-      { label: 'Open mu', click: () => this.#model.open() },
+      { label: `Open ${this.#app.name}`, click: () => this.#model.open() },
       { type: 'separator' },
       ...restart,
       ...(listed.length ? listed.map(item) : [{ label: 'Nothing running', enabled: false }]),
@@ -82,7 +86,7 @@ export class MenuBar {
       })),
       { type: 'separator' },
       { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => this.#model.openSettings() },
-      { label: 'Quit mu', click: () => this.#model.quit() },
+      { label: `Quit ${this.#app.name}`, click: () => this.#model.quit() },
       { label: 'Quit and Stop Agents', click: () => this.#model.quitAndStop() },
     ]
     const drawn = JSON.stringify([title, tooltip, template.map((item) => [item.label, item.enabled, item.type])])

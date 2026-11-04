@@ -4,7 +4,6 @@ export type MachineId = string
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected'
 import type { MachineConfig } from '@mu/client/shared'
 
-export { DEFAULT_REMOTE_COMMAND } from '@mu/client/shared'
 export type { MachineConfig }
 
 export type MachineEntry = {

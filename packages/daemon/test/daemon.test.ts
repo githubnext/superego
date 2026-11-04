@@ -4,17 +4,18 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
-import { PROTOCOL_VERSION, type AuthEvent, type Hello, type Notifications, type ProviderAuthInfo, type RpcPeer, type SessionInfo, type SettingsSnapshot } from '@mu/protocol'
+import { defineApp, PROTOCOL_VERSION, type AuthEvent, type Hello, type Notifications, type ProviderAuthInfo, type RpcPeer, type SessionInfo, type SettingsSnapshot } from '@mu/protocol'
 import { connectSocket, listen, openDaemon, type Daemon } from '../src/index.ts'
 
 // Only the scripted model, whatever keys the machine running the tests has.
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
 
+const MU = defineApp({ name: 'mu', id: 'mu' })
 let dir: string
 const open = async ({ faux = true } = {}) => {
   if (faux) process.env.MU_MODEL = 'faux'
   else delete process.env.MU_MODEL
-  const daemon = await openDaemon({ dataDir: dir, defaultCwd: dir })
+  const daemon = await openDaemon({ app: MU, dataDir: dir, defaultCwd: dir })
   const server = await listen(daemon, join(dir, 'mu.sock'))
   const { peer, socket } = await connectSocket(join(dir, 'mu.sock'))
   await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
@@ -149,7 +150,7 @@ describe('restart', () => {
     process.env.MU_MODEL = 'replay:' + recording
     process.env.MU_REPLAY_SPEED = '20'
     let restarts = 0
-    const daemon = await openDaemon({ dataDir: dir, defaultCwd: dir, build: 'b1', onRestart: () => restarts++ })
+    const daemon = await openDaemon({ app: MU, dataDir: dir, defaultCwd: dir, build: 'b1', onRestart: () => restarts++ })
     delete process.env.MU_REPLAY_SPEED
     const server = await listen(daemon, join(dir, 'mu.sock'))
     const { peer, socket } = await connectSocket(join(dir, 'mu.sock'))
@@ -186,7 +187,7 @@ describe('record and replay', () => {
     const replayDir = join(dir, 'replay')
     process.env.MU_MODEL = 'replay:' + recording
     process.env.MU_REPLAY_SPEED = '0'
-    const daemon = await openDaemon({ dataDir: replayDir, defaultCwd: dir })
+    const daemon = await openDaemon({ app: MU, dataDir: replayDir, defaultCwd: dir })
     const server = await listen(daemon, join(replayDir, 'mu.sock'))
     const { peer, socket } = await connectSocket(join(replayDir, 'mu.sock'))
     await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })

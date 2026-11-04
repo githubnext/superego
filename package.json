@@ -8,7 +8,7 @@
     "test": "vitest run",
     "dev": "pnpm --filter @mu/app dev",
     "build": "pnpm --filter @mu/app build",
-    "link:cli": "ln -sf \"$PWD/packages/cli/src/main.ts\" \"$HOME/.local/bin/mu\" && echo \"Linked $HOME/.local/bin/mu\""
+    "link:cli": "ln -sf \"$PWD/app/bin/mu.ts\" \"$HOME/.local/bin/mu\" && echo \"Linked $HOME/.local/bin/mu\""
   },
   "devDependencies": {
     "@types/node": "^24",

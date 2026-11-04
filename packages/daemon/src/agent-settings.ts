@@ -9,8 +9,9 @@ import { createModels, getSupportedThinkingLevels, clampThinkingLevel, type Mode
 import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic'
 import { openaiProvider } from '@earendil-works/pi-ai/providers/openai'
 import type { ModelRef } from '@earendil-works/pi-durable'
-import { RpcError, type AuthEvent, type AuthPrompt, type ProviderAuthInfo, type SettingOption } from '@mu/protocol'
+import { RpcError, type AppConfig, type AuthEvent, type AuthPrompt, type ProviderAuthInfo, type SettingOption } from '@mu/protocol'
 import type { SettingsRegistry } from '@mu/settings'
+import { appEnv } from './paths.ts'
 import { replayProvider, withRecording } from './replay.ts'
 
 /** The model each provider starts on when it is the first one signed in. */
@@ -84,7 +85,7 @@ function withServiceTier<T extends Provider>(provider: T, fast: () => boolean): 
   })
 }
 
-/** A scripted model that echoes the last user message: tests and demos, with `MU_MODEL=faux`. */
+/** A scripted model that echoes the last user message: tests and demos, with `<ID>_MODEL=faux`. */
 function echoProvider() {
   const faux = fauxProvider()
   const echo: FauxResponseStep = (context) => {
@@ -110,17 +111,18 @@ export type AgentSettings = {
   close(): void
 }
 
-export async function createAgentSettings(settings: SettingsRegistry, dataDir: string): Promise<AgentSettings> {
+export async function createAgentSettings(settings: SettingsRegistry, dataDir: string, app: AppConfig): Promise<AgentSettings> {
+  const env = appEnv(app)
   const credentials = new FileCredentialStore(join(dataDir, 'auth.json'))
   const models = createModels({ credentials })
-  // MU_RECORD keeps every answer for replaying later; see replay.ts.
-  const record = process.env.MU_RECORD
+  // <ID>_RECORD keeps every answer for replaying later; see replay.ts.
+  const record = env('RECORD')
   const recorded = <T extends Provider>(provider: T) => record ? withRecording(provider, record) : provider
   models.setProvider(recorded(anthropicProvider()))
   models.setProvider(recorded(withServiceTier(openaiProvider(), () => settings.get<boolean>(KEYS.fast) && FAST.has(chosen()?.provider ?? ''))))
-  const env = process.env.MU_MODEL
-  if (env === 'faux') models.setProvider(recorded(echoProvider().provider))
-  if (env?.startsWith('replay:')) models.setProvider(replayProvider(env.slice('replay:'.length)).provider)
+  const model = env('MODEL')
+  if (model === 'faux') models.setProvider(recorded(echoProvider().provider))
+  if (model?.startsWith('replay:')) models.setProvider(replayProvider(model.slice('replay:'.length), Number(env('REPLAY_SPEED') ?? 120)).provider)
 
   /** Which providers can be used, refreshed after every sign-in and sign-out; option lists are built from it. */
   let authed = new Map<string, Awaited<ReturnType<Models['checkAuth']>>>()
@@ -138,9 +140,9 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
     const slash = value.indexOf('/')
     return slash < 0 ? undefined : { provider: value.slice(0, slash), modelId: value.slice(slash + 1) }
   }
-  /** The chosen model; with none chosen, `MU_MODEL`, else the preferred model of the first provider signed in. */
+  /** The chosen model; with none chosen, `<ID>_MODEL`, else the preferred model of the first provider signed in. */
   function chosen(): ModelRef | undefined {
-    const builtIn = env === 'faux' ? `faux/${models.getModels('faux')[0]?.id}` : env?.startsWith('replay:') ? 'replay/replay' : env
+    const builtIn = model === 'faux' ? `faux/${models.getModels('faux')[0]?.id}` : model?.startsWith('replay:') ? 'replay/replay' : model
     const explicit = parse(settings.get<string | null>(KEYS.model)) ?? parse(builtIn)
     if (explicit) return explicit
     for (const provider of models.getProviders()) {
@@ -254,7 +256,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
         signal: flow.abort.signal,
         prompt,
         notify: (event) => emit(event.type === 'device_code' ? { type: 'device_code', userCode: event.userCode, verificationUri: event.verificationUri } : event as AuthEvent),
-      }, { agentName: 'mu', getDeviceId }).then(async () => {
+      }, { agentName: app.id, getDeviceId }).then(async () => {
         await refreshAuth()
         emit({ type: 'done' })
       }, (error: unknown) => {

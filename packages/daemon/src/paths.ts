@@ -1,13 +1,19 @@
 import { createHash } from 'node:crypto'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { envName, type AppConfig } from '@mu/protocol'
 
-export const defaultDataDir = () => process.env.MU_HOME ?? join(homedir(), '.mu')
+/** The app's environment variables: `env(app)('HOME')` reads `MU_HOME` for mu. */
+export const appEnv = (app: AppConfig) => (key: string): string | undefined => process.env[envName(app, key)] || undefined
+
+/** Where the app keeps its data: `<ID>_HOME`, else `~/.<id>`. */
+export const defaultDataDir = (app: AppConfig) => appEnv(app)('HOME') ?? join(homedir(), `.${app.id}`)
 
 /** The daemon's socket: inside the data dir when the path fits a socket's ~104 bytes, else in tmp. */
-export function socketPath(dataDir: string) {
-  if (process.env.MU_SOCKET) return process.env.MU_SOCKET
-  const inside = join(dataDir, 'mu.sock')
+export function socketPath(app: AppConfig, dataDir: string) {
+  const override = appEnv(app)('SOCKET')
+  if (override) return override
+  const inside = join(dataDir, `${app.id}.sock`)
   if (Buffer.byteLength(inside) < 100) return inside
-  return join(tmpdir(), `mu-${createHash('sha256').update(dataDir).digest('hex').slice(0, 16)}.sock`)
+  return join(tmpdir(), `${app.id}-${createHash('sha256').update(dataDir).digest('hex').slice(0, 16)}.sock`)
 }

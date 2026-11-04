@@ -1,7 +1,7 @@
-#!/usr/bin/env node
-// `mu`: the command line for mu. With no command it starts a session in the current directory and opens it in the
-// app. Everything else (sessions, machines, settings, sign-in, the daemon itself) works on this computer or, with
-// `-m <machine>`, on any machine the app knows. `mu connect` is what `ssh <host> mu connect` runs on the far side.
+// The command line of an app built on mu (`mu` for mu itself). With no command it starts a session in the current
+// directory and opens it in the app. Everything else (sessions, machines, settings, sign-in, the daemon itself) works on
+// this computer or, with `-m <machine>`, on any machine the app knows. `<id> connect` is what `ssh <host> <id> connect`
+// runs on the far side. An app's bin calls `runCli(app, { appDir, bin })`.
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, openSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -11,42 +11,51 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, type MachineConfig, type Transport } from '@mu/client'
-import { defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@mu/daemon'
+import { appEnv, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@mu/daemon'
 import {
-  FEATURES, PROTOCOL_VERSION, RpcError, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
+  FEATURES, PROTOCOL_VERSION, RpcError, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type SessionInfo, type SettingsSnapshot,
 } from '@mu/protocol'
 
-const dataDir = defaultDataDir()
-const socket = socketPath(dataDir)
-const machines = new MachineStore(dataDir)
-const self = fileURLToPath(import.meta.url)
+export type CliOptions = {
+  /** The app's directory: where its built Electron app (`out/`) and `package.json` are. */
+  appDir: string
+  /** The bin file itself, run with Node to start a daemon from source when the app isn't built. */
+  bin: string
+}
 
-const HELP = `mu: an agent environment
+// One CLI run serves one app; `runCli` sets these before anything else runs.
+let app: AppConfig
+let options: CliOptions
+let dataDir: string
+let socket: string
+let machines: MachineStore
+
+const help = () => `${app.id}: ${app.name}
 
 Usage:
-  mu [dir] [-p prompt]          Start a session in dir (default: here) and open it in the app
-  mu open <session>             Open a session in the app
-  mu sessions                   List sessions (also: mu ls)
-  mu new [dir] [-p prompt]      Start a session without opening the app; prints its id
-  mu send <session> <text...>   Send a message to a session
+  ${app.id} [dir] [-p prompt]          Start a session in dir (default: here) and open it in the app
+  ${app.id} open <session>             Open a session in the app
+  ${app.id} sessions                   List sessions (also: mu ls)
+  ${app.id} new [dir] [-p prompt]      Start a session without opening the app; prints its id
+  ${app.id} send <session> <text...>   Send a message to a session
 
-  mu machines                   List machines and whether they answer
-  mu machines add <ssh-target> [--name N] [--command C]
-  mu machines add --via '<cmd>' [--name N]
-                                Add a machine reached by any command piping stdio to mu
-  mu machines rm|enable|disable|trust <machine>
+  ${app.id} machines                   List machines and whether they answer
+  ${app.id} machines add <ssh-target> [--name N] [--command C]
+  ${app.id} machines add --via '<cmd>' [--name N]
+                                Add a machine reached by any command piping stdio to it
+  ${app.id} machines rm|enable|disable|trust <machine>
 
-  mu settings                   List settings and their values
-  mu settings set <key> <value> Change a setting (value is JSON, or plain text)
-  mu settings reset <key>       Back to the default
-  mu auth                       List providers and how they are signed in
-  mu auth key <provider>        Store an API key (prompted, or read from stdin)
-  mu auth logout <provider>     Remove a stored credential
+  ${app.id} settings                   List settings and their values
+  ${app.id} settings set <key> <value> Change a setting (value is JSON, or plain text)
+  ${app.id} settings reset <key>       Back to the default
+  ${app.id} auth                       List providers and how they are signed in
+  ${app.id} auth key <provider>        Store an API key (prompted, or read from stdin)
+  ${app.id} auth logout <provider>     Remove a stored credential
 
-  mu daemon [status|stop]       Run this computer's daemon in the foreground, or check on it
-  mu daemon restart [--now]     Restart it onto the installed code; --now interrupts working agents
-  mu connect [--start]          Bridge stdio to this computer's daemon (ssh runs this)
+  ${app.id} daemon [status|stop]       Run this computer's daemon in the foreground, or check on it
+  ${app.id} daemon restart [--now]     Restart it onto the installed code; --now interrupts working agents
+  ${app.id} connect [--start]          Bridge stdio to this computer's daemon (ssh runs this)
 
 Options:
   -m, --machine <name>          Work on another machine (default: this computer)
@@ -67,7 +76,7 @@ const GLYPH: Record<string, string> = { idle: '○', working: '●', done: '*', 
 
 // ── Reaching daemons ────────────────────────────────────────────────────────────────────────────────────────────────
 
-const appDir = () => process.env.MU_APP ?? fileURLToPath(new URL('../../../app/', import.meta.url))
+const appDir = () => appEnv(app)('APP') ?? options.appDir
 
 /**
  * The daemon code this computer would run: the app's build when there is one (so the app and `mu` agree on what is
@@ -79,7 +88,7 @@ function installedDaemon(): { dir: string; command: string[]; env: NodeJS.Proces
     const electron = createRequire(resolve(appDir(), 'package.json'))('electron') as string
     return { dir: resolve(appDir(), 'out/main'), command: [electron, bundled], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }
   }
-  return { dir: fileURLToPath(new URL('../../daemon/src/', import.meta.url)), command: [process.execPath, self, 'daemon'], env: process.env }
+  return { dir: fileURLToPath(new URL('../../daemon/src/', import.meta.url)), command: [process.execPath, options.bin, 'daemon'], env: process.env }
 }
 
 /** Start this computer's daemon in the background, logging next to its data. */
@@ -95,16 +104,16 @@ type Machine = { id: string; label: string; config?: MachineConfig }
 function resolveMachine(name: string | undefined): Machine {
   if (!name || name === 'local' || name === 'this') return { id: 'local', label: 'This computer' }
   const config = machines.find(name)
-  if (!config) throw new RpcError('not_found', `No machine called ${name}. See: mu machines`)
+  if (!config) throw new RpcError('not_found', `No machine called ${name}. See: ${app.id} machines`)
   return { id: config.id, label: config.label, config }
 }
 
 /** Connect to a machine, say hello, and check it is who it should be. */
 async function connect(machine: Machine): Promise<{ transport: Transport; hello: Hello }> {
-  const transport = machine.config ? await openMachine(machine.config) : await openLocal(socket, startDaemon)
+  const transport = machine.config ? await openMachine(machine.config, app) : await openLocal(socket, startDaemon)
   try {
-    const hello = await transport.peer.call<Hello>('hello', { client: 'mu-cli', version: PROTOCOL_VERSION, features: [...FEATURES] })
-    if (machine.config) checkIdentity(hello, { target: routeOf(machine.config), ...(machine.config.daemonId ? { expected: machine.config.daemonId } : {}) }, [])
+    const hello = await transport.peer.call<Hello>('hello', { client: `${app.id}-cli`, version: PROTOCOL_VERSION, features: [...FEATURES] })
+    if (machine.config) checkIdentity(hello, { target: routeOf(machine.config, app), ...(machine.config.daemonId ? { expected: machine.config.daemonId } : {}) }, [])
     return { transport, hello }
   } catch (error) {
     transport.close()
@@ -126,12 +135,12 @@ async function on<T>(machine: Machine, work: (call: <M extends MethodName>(metho
 
 /**
  * Show a session in the app, starting the app if it isn't running. The app is single-instance: a second launch hands
- * its arguments to the running one and exits. `MU_APP` points at the app's directory; by default, this checkout's.
+ * its arguments to the running one and exits. `<ID>_APP` overrides where the app is.
  */
 function openInApp(machine: string, session: string) {
   const dir = appDir()
   if (!existsSync(resolve(dir, 'out/main/main.js'))) {
-    throw new RpcError('no_app', `The app isn't built in ${dir}`, { hint: 'Run pnpm build in the mu checkout.' })
+    throw new RpcError('no_app', `The app isn't built in ${dir}`, { hint: 'Build it: pnpm build in the app.' })
   }
   const electron = createRequire(resolve(dir, 'package.json'))('electron') as string
   spawn(electron, [dir, `--mu-open=${machine}/${session}`], { detached: true, stdio: 'ignore' }).unref()
@@ -159,7 +168,7 @@ async function sessions(machineName?: string) {
   const machine = resolveMachine(machineName)
   const list = await on(machine, (call) => call('session.list', {}))
   print(list, () => {
-    if (!list.length) return console.log(`No sessions on ${machine.label}. Start one with: mu`)
+    if (!list.length) return console.log(`No sessions on ${machine.label}. Start one with: ${app.id}`)
     table(list.map((s: SessionInfo) => [s.id, `${GLYPH[s.status.state]} ${s.status.state}`, s.title, s.cwd]))
   })
 }
@@ -177,7 +186,7 @@ async function listMachines() {
     }
   }))
   print(rows, () => table(rows.map((row) => [
-    row.id === 'local' ? 'local' : row.id.slice(0, 8), row.label, row.config ? routeOf(row.config) : 'this computer',
+    row.id === 'local' ? 'local' : row.id.slice(0, 8), row.label, row.config ? routeOf(row.config, app) : 'this computer',
     'error' in row ? `error: ${row.error}` : 'hostname' in row ? `${row.state} (${row.hostname})` : row.state,
   ])))
 }
@@ -201,11 +210,11 @@ async function machinesCommand(sub: string | undefined, rest: string[], options:
     }
   }
   const machine = resolveMachine(rest[0])
-  if (!machine.config) throw new RpcError('invalid', rest[0] ? 'This computer is always there.' : `Which machine? mu machines ${sub} <machine>`)
+  if (!machine.config) throw new RpcError('invalid', rest[0] ? 'This computer is always there.' : `Which machine? ${app.id} machines ${sub} <machine>`)
   if (sub === 'rm' || sub === 'remove') await machines.remove(machine.id)
   else if (sub === 'enable' || sub === 'disable') await machines.update(machine.id, { enabled: sub === 'enable' })
   else if (sub === 'trust') await machines.forgetIdentity(machine.id)
-  else throw new RpcError('usage', `Unknown: mu machines ${sub}`)
+  else throw new RpcError('usage', `Unknown: ${app.id} machines ${sub}`)
   print({ ok: true }, () => console.log(`${sub === 'rm' ? 'Removed' : sub === 'trust' ? 'Will trust whoever answers at' : `${sub[0]!.toUpperCase()}${sub.slice(1)}d`} ${machine.label}.`))
 }
 
@@ -228,7 +237,7 @@ async function settingsCommand(sub: string | undefined, rest: string[], options:
     })
   }
   const [key, ...value] = rest
-  if (!key || (sub === 'set' && !value.length)) throw new RpcError('usage', `mu settings ${sub} <key>${sub === 'set' ? ' <value>' : ''}`)
+  if (!key || (sub === 'set' && !value.length)) throw new RpcError('usage', `${app.id} settings ${sub} <key>${sub === 'set' ? ' <value>' : ''}`)
   const next = sub === 'reset' ? undefined : parseValue(value.join(' '))
   for (const target of targets) {
     try {
@@ -268,12 +277,12 @@ async function authCommand(sub: string | undefined, rest: string[], machineName?
     return print(providers, () => table(providers.map((p) => [p.id, p.auth ? `${p.auth.type === 'oauth' ? 'signed in' : 'api key'}${p.auth.source ? ` (${p.auth.source})` : ''}` : 'not signed in'])))
   }
   const provider = rest[0]
-  if (!provider) throw new RpcError('usage', `mu auth ${sub} <provider>`)
+  if (!provider) throw new RpcError('usage', `${app.id} auth ${sub} <provider>`)
   if (sub === 'logout') {
     await on(machine, (call) => call('auth.logout', { provider }))
     return print({ ok: true }, () => console.log(`Signed out of ${provider} on ${machine.label}.`))
   }
-  if (sub !== 'key') throw new RpcError('usage', `Unknown: mu auth ${sub}. Sign in with a browser from the app's Settings.`)
+  if (sub !== 'key') throw new RpcError('usage', `Unknown: ${app.id} auth ${sub}. Sign in with a browser from the app's Settings.`)
   const key = await readSecret(`API key for ${provider}: `)
   if (!key) throw new RpcError('usage', 'No key given')
   // Sign in on that machine and wait for it to say how it went.
@@ -292,7 +301,7 @@ async function authCommand(sub: string | undefined, rest: string[], machineName?
 }
 
 async function daemonCommand(sub: string | undefined, now: boolean) {
-  if (!sub) return serveDaemon({ dataDir, socket, defaultCwd: process.env.MU_CWD ?? process.cwd() })
+  if (!sub) return serveDaemon({ app, dataDir, socket })
   const local: Machine = { id: 'local', label: 'This computer' }
   const running = await isListening(socket)
   if (sub === 'status') {
@@ -302,7 +311,7 @@ async function daemonCommand(sub: string | undefined, now: boolean) {
     const current = hello.machine.build === installed
     return print({ running: true, ...hello.machine, installed, current }, () => {
       console.log(`Running: pid ${hello.machine.pid}, build ${hello.machine.build}, ${socket}`)
-      if (!current) console.log(`An update is installed (build ${installed}). Restart with: mu daemon restart`)
+      if (!current) console.log(`An update is installed (build ${installed}). Restart with: ${app.id} daemon restart`)
     })
   }
   if (sub === 'stop') {
@@ -325,7 +334,7 @@ async function daemonCommand(sub: string | undefined, now: boolean) {
       }
       const result = await call('daemon.restart', { build: hello.machine.build, interrupt: now })
       if (!result.restarted) {
-        throw new RpcError('busy', 'Agents are working, so the daemon was not restarted.', { hint: 'Wait for them, or: mu daemon restart --now (they resume after the restart).' })
+        throw new RpcError('busy', 'Agents are working, so the daemon was not restarted.', { hint: `Wait for them, or: ${app.id} daemon restart --now (they resume after the restart).` })
       }
       return hello
     })
@@ -334,7 +343,7 @@ async function daemonCommand(sub: string | undefined, now: boolean) {
     return print({ restarted: true, from: before.machine.build, build: after.machine.build }, () =>
       console.log(`Restarted: build ${before.machine.build} → ${after.machine.build}, pid ${after.machine.pid}.`))
   }
-  throw new RpcError('usage', `Unknown: mu daemon ${sub}`)
+  throw new RpcError('usage', `Unknown: ${app.id} daemon ${sub}`)
 }
 
 /** Until nothing answers on the socket any more. */
@@ -346,7 +355,7 @@ async function stopped() {
 async function bridge(start: boolean) {
   if (start && !(await isListening(socket))) await openLocal(socket, startDaemon).then((t) => t.close())
   const conn = createConnection(socket)
-  conn.on('error', (error) => { console.error(`mu connect: ${error.message}`); process.exit(1) })
+  conn.on('error', (error) => { console.error(`${app.id} connect: ${error.message}`); process.exit(1) })
   process.stdin.pipe(conn)
   conn.pipe(process.stdout)
   conn.on('close', () => process.exit(0))
@@ -367,12 +376,12 @@ async function main() {
   })
   json = Boolean(values.json)
   const [first, ...rest] = positionals
-  if (values.help || first === 'help') return console.log(HELP)
+  if (values.help || first === 'help') return console.log(help())
   // No command, or a directory: start a session there and open it.
   if (!first || !COMMANDS.has(first)) return startSession({ dir: first, machine: values.machine, prompt: values.prompt, open: true })
   switch (first) {
     case 'open': {
-      if (!rest[0]) throw new RpcError('usage', 'mu open <session>')
+      if (!rest[0]) throw new RpcError('usage', `${app.id} open <session>`)
       const machine = resolveMachine(values.machine)
       await on(machine, (call) => call('session.list', {})).then((list) => {
         if (!list.some((s) => s.id === rest[0])) throw new RpcError('not_found', `No session ${rest[0]} on ${machine.label}`)
@@ -383,7 +392,7 @@ async function main() {
     case 'new': return startSession({ dir: rest[0], machine: values.machine, prompt: values.prompt, open: false })
     case 'send': {
       const [id, ...text] = rest
-      if (!id || !text.length) throw new RpcError('usage', 'mu send <session> <text...>')
+      if (!id || !text.length) throw new RpcError('usage', `${app.id} send <session> <text...>`)
       await on(resolveMachine(values.machine), (call) => call('session.submit', { id, text: text.join(' ') }))
       return print({ ok: true }, () => {})
     }
@@ -395,8 +404,16 @@ async function main() {
   }
 }
 
-main().catch((error: unknown) => {
-  const hint = error instanceof RpcError && error.hint ? `\n${error.hint}` : ''
-  console.error(`mu: ${error instanceof Error ? error.message : String(error)}${hint}`)
-  process.exit(1)
-})
+/** Run the command line for `config`, with `process.argv`. */
+export function runCli(config: AppConfig, cliOptions: CliOptions) {
+  app = config
+  options = cliOptions
+  dataDir = defaultDataDir(app)
+  socket = socketPath(app, dataDir)
+  machines = new MachineStore(dataDir)
+  main().catch((error: unknown) => {
+    const hint = error instanceof RpcError && error.hint ? `\n${error.hint}` : ''
+    console.error(`${app.id}: ${error instanceof Error ? error.message : String(error)}${hint}`)
+    process.exit(1)
+  })
+}

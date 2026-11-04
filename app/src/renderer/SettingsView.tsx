@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react'
 import type { AuthEvent, AuthPrompt, Json, Notifications, ProviderAuthInfo, SectionInfo, SettingInfo, SettingsSnapshot } from '@mu/protocol'
 import { Button, Dialog, FontPicker, Select, StatusGlyph, Switch, TextField } from '@mu/ui'
-import { DEFAULT_REMOTE_COMMAND, type MachineEntry } from '../shared.ts'
+import { remoteCommand } from '@mu/protocol'
+import appConfig from '../../mu.config.ts'
+import type { MachineEntry } from '../shared.ts'
+
+const DEFAULT_REMOTE_COMMAND = remoteCommand(appConfig)
 import { machine as client, has, loadFonts, useSettings } from './client.ts'
 import { mergeSettings, type MergedSetting } from './merge-settings.ts'
 
@@ -220,8 +224,8 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
     <section className="settings-section">
       <h2>Machines</h2>
       <p className="settings__note">
-        Every machine runs its own mu daemon with its own sessions, models and credentials. Other machines are reached with
-        {' '}<code>ssh &lt;target&gt; {DEFAULT_REMOTE_COMMAND}</code> (they need mu installed and key-based ssh access), or with
+        Every machine runs its own {appConfig.name} daemon with its own sessions, models and credentials. Other machines are reached with
+        {' '}<code>ssh &lt;target&gt; {DEFAULT_REMOTE_COMMAND}</code> (they need {appConfig.name} installed and key-based ssh access), or with
         any command that pipes stdio to a daemon, such as <code>docker exec -i</code>.
       </p>
       {machines.map((m) => (
@@ -256,7 +260,7 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
           <Select aria-label="Connect with" value={via ? 'via' : 'ssh'} onChange={(value) => setVia(value === 'via')}
             options={[{ value: 'ssh', label: 'Connect with ssh' }, { value: 'via', label: 'Connect with a command (docker exec, fly ssh, …)' }]} />
           {via ? (
-            <TextField name="via" autoFocus required placeholder={`A command piping stdio to mu, e.g. docker exec -i box ${DEFAULT_REMOTE_COMMAND}`} />
+            <TextField name="via" autoFocus required placeholder={`A command piping stdio to ${appConfig.name}, e.g. docker exec -i box ${DEFAULT_REMOTE_COMMAND}`} />
           ) : (
             <>
               <TextField name="target" autoFocus required placeholder="ssh target: user@host, or a Host from ~/.ssh/config" />

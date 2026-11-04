@@ -1,5 +1,5 @@
-// Record real model turns and play them back. `MU_RECORD=<file>` appends every answer the models give to a JSONL file;
-// `MU_MODEL=replay:<file>` serves those answers again, in order, streamed at a readable pace. Development gets real
+// Record real model turns and play them back. `<ID>_RECORD=<file>` appends every answer the models give to a JSONL file;
+// `<ID>_MODEL=replay:<file>` serves those answers again, in order, streamed at a readable pace. Development gets real
 // shapes (thinking, tool calls, long answers) without paying for turns. Replayed tool calls run for real, in the
 // session's directory, as the original ones did.
 import { appendFileSync, readFileSync } from 'node:fs'
@@ -30,7 +30,7 @@ export function withRecording<T extends Provider>(provider: T, path: string): T 
 }
 
 /** A provider that answers with the turns recorded in `path`, one per request, then says it ran out. */
-export function replayProvider(path: string, tokensPerSecond = Number(process.env.MU_REPLAY_SPEED ?? 120)) {
+export function replayProvider(path: string, tokensPerSecond = 120) {
   const turns = readFileSync(path, 'utf8').split('\n').filter(Boolean).map((line) => (JSON.parse(line) as Recorded).message)
   const faux = fauxProvider({ provider: 'replay', api: 'replay', models: [{ id: 'replay', name: `Replay (${turns.length} turns)`, reasoning: true }], tokensPerSecond })
   let next = 0

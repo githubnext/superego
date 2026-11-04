@@ -2,10 +2,10 @@
 // working after the app quits.
 import { homedir } from 'node:os'
 import { serveDaemon } from '@mu/daemon'
-import { defaultDataDir, socketPath } from '@mu/daemon/client'
 
-const dataDir = defaultDataDir()
-serveDaemon({ dataDir, socket: socketPath(dataDir), defaultCwd: process.env.MU_CWD ?? homedir() }).catch((error) => {
+import app from '../../mu.config.ts'
+
+serveDaemon({ app, defaultCwd: homedir() }).catch((error) => {
   console.error(error)
   process.exit(1)
 })

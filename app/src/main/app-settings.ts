@@ -4,13 +4,14 @@
 import { join } from 'node:path'
 import { SettingsRegistry } from '@mu/settings'
 import { FileSettingsStore } from '@mu/settings/file'
+import type { AppConfig } from '@mu/protocol'
 
 export const APP = 'app'
 export const APP_KEYS = {
   interfaceFont: 'app.font.interface', monoFont: 'app.font.mono', notifications: 'app.notifications', menuBar: 'app.menuBar', hideDock: 'app.hideDock',
 } as const
 
-export function createAppSettings(dataDir: string) {
+export function createAppSettings(dataDir: string, app: AppConfig) {
   const settings = new SettingsRegistry(new FileSettingsStore(join(dataDir, 'app-settings.json')))
   settings.register({
     id: 'appearance', title: 'Appearance', order: 50,
@@ -37,7 +38,7 @@ export function createAppSettings(dataDir: string) {
     settings: [
       {
         key: APP_KEYS.menuBar, title: 'Show in menu bar', default: true,
-        description: 'A µ in the menu bar while mu runs, with the sessions that need you. Closing the windows (or ⌘Q) leaves it there.',
+        description: `${app.glyph ?? app.name} in the menu bar while ${app.name} runs, with the sessions that need you. Closing the windows (or ⌘Q) leaves it there.`,
         type: { type: 'boolean' },
       },
       {
@@ -45,7 +46,7 @@ export function createAppSettings(dataDir: string) {
         description: 'Live in the menu bar only.',
         type: { type: 'boolean' },
         hidden: () => !mac,
-        disabled: () => settings.get<boolean>(APP_KEYS.menuBar) ? undefined : 'Needs “Show in menu bar”, or mu could not be reached.',
+        disabled: () => settings.get<boolean>(APP_KEYS.menuBar) ? undefined : `Needs “Show in menu bar”, or ${app.name} could not be reached.`,
       },
     ],
   })

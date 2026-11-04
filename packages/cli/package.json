@@ -3,12 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": {
-    "mu": "./src/main.ts"
-  },
   "dependencies": {
     "@mu/client": "workspace:*",
     "@mu/daemon": "workspace:*",
     "@mu/protocol": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts"
   }
 }

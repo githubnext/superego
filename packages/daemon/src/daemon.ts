@@ -13,7 +13,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  deriveStatus, FEATURES, PROTOCOL_VERSION, RpcError, type MachineInfo, type Methods, type Notifications, type RpcPeer, type SessionInfo,
+  deriveStatus, FEATURES, PROTOCOL_VERSION, RpcError, type AppConfig, type MachineInfo, type Methods, type Notifications, type RpcPeer, type SessionInfo,
 } from '@mu/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@mu/settings'
 import { FileSettingsStore } from '@mu/settings/file'
@@ -34,6 +34,7 @@ const SessionDoc = defineDoc<SessionMeta>({
 })
 
 export type DaemonOptions = {
+  app: AppConfig
   dataDir: string
   /** Defaults to `settings.json` in `dataDir`. */
   settingsStore?: SettingsStore
@@ -78,17 +79,18 @@ async function machineId(dataDir: string) {
 export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
   const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')))
-  const agent = await createAgentSettings(settings, options.dataDir)
+  const agent = await createAgentSettings(settings, options.dataDir, options.app)
   const registry = createRegistry()
   registry.install(createCodingTools())
   for (const extension of options.extensions ?? []) registry.install(extension)
 
-  const storage = options.storage ?? await openNodeSqliteStorage(join(options.dataDir, 'mu.sqlite'))
+  const storage = options.storage ?? await openNodeSqliteStorage(join(options.dataDir, `${options.app.id}.sqlite`))
   const defaultCwd = options.defaultCwd ?? process.cwd()
   const harness = await Harness.open(storage, {
     models: agent.models,
     registry,
-    identity: { attribution: { name: 'mu', url: 'https://github.com/mikker/mu' } },
+    // Attribution names the app to providers that show it; without a url there is nothing to show.
+    identity: { attribution: options.app.url ? { name: options.app.name, url: options.app.url } : null },
     env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? defaultCwd }),
   }, context)
 

@@ -1,10 +1,11 @@
 // Transports to a daemon. Locally, its unix socket. Elsewhere, `ssh -T <target> <command>`, where the command
-// (`mu connect --start` by default) splices stdio to that machine's daemon, or any command doing the same (`via`).
+// (`<id> connect --start` by default) splices stdio to that machine's daemon, or any command doing the same (`via`).
 // ssh does all authentication; transports parse nothing but lines.
 import { spawn } from 'node:child_process'
 import { connectSocket, isListening } from '@mu/daemon/client'
 import { lineSplitter, RpcError, RpcPeer } from '@mu/protocol'
-import { DEFAULT_REMOTE_COMMAND, type MachineConfig } from './shared.ts'
+import { remoteCommand, type AppConfig } from '@mu/protocol'
+import type { MachineConfig } from './shared.ts'
 
 export type Transport = { peer: RpcPeer; closed: Promise<void>; close(): void }
 
@@ -22,8 +23,8 @@ export async function openLocal(socket: string, start?: () => void): Promise<Tra
 }
 
 /** A configured machine, by its route. */
-export const openMachine = (config: MachineConfig) =>
-  config.via ? openVia(config.via) : openSsh(config.target, config.command ?? DEFAULT_REMOTE_COMMAND)
+export const openMachine = (config: MachineConfig, app: AppConfig) =>
+  config.via ? openVia(config.via) : openSsh(config.target, config.command ?? remoteCommand(app))
 
 export function openSsh(target: string, command: string): Promise<Transport> {
   // BatchMode: never prompt (there is no terminal); keys or an agent must do. Keepalives notice a dead network.

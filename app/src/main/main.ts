@@ -2,7 +2,8 @@ import { spawn } from 'node:child_process'
 import { mkdirSync, openSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from 'electron'
-import { defaultDataDir, readBuild, socketPath } from '@mu/daemon/client'
+import { appEnv, defaultDataDir, readBuild, socketPath } from '@mu/daemon/client'
+import appConfig from '../../mu.config.ts'
 import { RpcError, type Notifications, type SessionInfo } from '@mu/protocol'
 import { serveSettings } from '@mu/settings'
 import { CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type MuEvent } from '../shared.ts'
@@ -12,8 +13,8 @@ import { Link } from './link.ts'
 import { MenuBar } from './tray.ts'
 import { ServiceRestart, type ServiceAction } from './restart.ts'
 
-const dataDir = defaultDataDir()
-const socket = socketPath(dataDir)
+const dataDir = defaultDataDir(appConfig)
+const socket = socketPath(appConfig, dataDir)
 
 /** Start the local daemon, detached: quitting the app leaves agents running. */
 function startDaemon() {
@@ -29,7 +30,7 @@ const broadcast = (event: MuEvent) => {
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send(CHANNEL.event, event)
 }
 
-const appSettings = createAppSettings(dataDir)
+const appSettings = createAppSettings(dataDir, appConfig)
 
 /** The app's own endpoint: its settings, per window so a closed window's subscriptions go with it. */
 const appSubs = new Map<number, Map<string, () => unknown>>()
@@ -84,7 +85,7 @@ function machineEntries(): MachineEntry[] {
   return [
     ...(local ? [local.entry()] : []),
     ...machineStore.list().map((config): MachineEntry => {
-      const remote = { route: routeOf(config), enabled: config.enabled }
+      const remote = { route: routeOf(config, appConfig), enabled: config.enabled }
       const link = links.get(config.id)
       return link ? { ...link.entry(), label: config.label, remote } : { id: config.id, label: config.label, state: 'disabled', remote }
     }),
@@ -97,7 +98,7 @@ function machineEntries(): MachineEntry[] {
 function sshLink(config: MachineConfig) {
   return new Link({
     id: config.id, label: config.label,
-    open: () => openMachine(config),
+    open: () => openMachine(config, appConfig),
     onEvent: (method, params) => onMachineEvent(config.id, method, params),
     verify(hello) {
       const current = machineStore.get(config.id)
@@ -125,12 +126,12 @@ function syncLinks() {
   for (const [id, link] of links) {
     if (id === 'local') continue
     const config = configs.find((c) => c.id === id)
-    const key = config && routeOf(config)
+    const key = config && routeOf(config, appConfig)
     if (!config?.enabled || key !== linkConfig.get(id)) { link.stop(); links.delete(id); linkConfig.delete(id) }
   }
   for (const config of configs) {
     if (!config.enabled || links.has(config.id)) continue
-    linkConfig.set(config.id, routeOf(config))
+    linkConfig.set(config.id, routeOf(config, appConfig))
     addLink(sshLink(config))
   }
   broadcast({ machine: APP, method: '$machines', params: machineEntries() })
@@ -205,7 +206,7 @@ ipcMain.handle(CHANNEL.call, async (event, machine: string, method: string, para
  * One app per data dir: its Electron state lives in the data dir, so the lock that keeps a second launch from opening
  * a second app is per data dir too. A second launch (`mu`, `mu open`) hands its arguments over and exits.
  */
-app.setName('mu')
+app.setName(appConfig.name)
 app.setPath('userData', join(dataDir, 'app'))
 const primary = app.requestSingleInstanceLock()
 /** Set by the quits that really end the app; any other quit, with the menu bar on, only closes the windows. */
@@ -244,12 +245,12 @@ app.on('second-instance', (_event, argv) => {
 
 // ── On the desktop: the menu bar item and the Dock icon ─────────────────────────────────────────────────────────────
 
-const headless = Boolean(process.env.MU_HEADLESS)
+const headless = Boolean(appEnv(appConfig)('HEADLESS'))
 const mac = process.platform === 'darwin'
 const menuBarOn = () => appSettings.get<boolean>(APP_KEYS.menuBar)
 const dockHidden = () => menuBarOn() && appSettings.get<boolean>(APP_KEYS.hideDock)
 
-const menuBar = new MenuBar({
+const menuBar = new MenuBar(appConfig, {
   machines: () => machineEntries(),
   sessions: (machine) => sessionsOf.get(machine) ?? [],
   open: () => show(),
@@ -351,10 +352,10 @@ async function quitAndStop() {
 function createWindow() {
   const window = new BrowserWindow({
     width: 1100, height: 760, minWidth: 600, minHeight: 400,
-    title: 'mu',
+    title: appConfig.name,
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#09090b',
-    show: !process.env.MU_HEADLESS,
+    show: !headless,
     webPreferences: { preload: join(import.meta.dirname, '../preload/preload.cjs'), sandbox: true, contextIsolation: true },
   })
   // Links (sign-in pages, docs) open in the browser, never in the app.
