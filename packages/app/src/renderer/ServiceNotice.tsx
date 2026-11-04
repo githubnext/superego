@@ -27,7 +27,7 @@ export function ServiceNotice() {
     : 'The background process runs older code than is installed. Restart it to use the new version; sessions and their history are kept.')
 
   if (state.deferred) {
-    return <div className="service-notice is-deferred"><button type="button" title={detail} onClick={() => act('review')}>Restart required</button></div>
+    return <div className="service-notice is-deferred"><Button title={detail} onClick={() => act('review')}>Restart required…</Button></div>
   }
   return (
     <div className="service-notice" role="status" aria-live="polite">
@@ -38,8 +38,8 @@ export function ServiceNotice() {
           {!waiting && (state.busy
             ? <Button onClick={() => act('restart')}>Restart when idle</Button>
             : <Button variant="primary" onClick={() => act('restart')}>{state.phase === 'error' ? 'Try again' : 'Restart now'}</Button>)}
-          {(waiting || state.busy) && <Button variant="ghost" onClick={() => act('interrupt')} title="Stops working agents now; they resume after the restart">Now…</Button>}
-          <Button variant="ghost" onClick={() => act('later')}>{waiting ? 'Cancel' : 'Later'}</Button>
+          {(waiting || state.busy) && <Button onClick={() => act('interrupt')} title="Stops working agents now; they resume after the restart">Now…</Button>}
+          <Button onClick={() => act('later')}>{waiting ? 'Cancel' : 'Later'}</Button>
         </div>
       )}
     </div>

@@ -43,7 +43,7 @@ export function Shell() {
     void registry.router.dispatch('session.seen', { id: selection.session }, { machine: selection.machine, source: 'auto' }).catch(() => {})
   }, [selection?.machine, selection?.session, session?.status.state])
 
-  const actions = <><ServiceNotice /><Button variant="ghost" onClick={openSettings}>Settings</Button></>
+  const actions = <><ServiceNotice /><Button onClick={openSettings}>Settings</Button></>
   return (
     <div className={`app ${hasSidebar ? 'has-sidebar' : ''}`}>
       {hasSidebar && (
@@ -88,7 +88,7 @@ function SessionPicker() {
           const slash = value.indexOf('/')
           select({ machine: value.slice(0, slash), session: value.slice(slash + 1) })
         }} />
-      <Button variant="ghost" onClick={() => newSession()}>New</Button>
+      <Button onClick={() => newSession()}>New</Button>
     </div>
   )
 }

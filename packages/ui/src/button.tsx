@@ -6,6 +6,7 @@ export function Button({ variant = 'default', className = '', ...props }: Props)
   return <button type="button" className={`mu-button mu-button--${variant} ${className}`} {...props} />
 }
 
+/** A small square push button holding a glyph. */
 export function IconButton({ label, className = '', ...props }: Props & { label: string }) {
-  return <Button variant="ghost" aria-label={label} title={label} className={`mu-icon-button ${className}`} {...props} />
+  return <Button aria-label={label} title={label} className={`mu-icon-button ${className}`} {...props} />
 }

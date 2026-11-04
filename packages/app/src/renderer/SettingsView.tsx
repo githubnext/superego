@@ -145,7 +145,7 @@ export function Providers({ target, section }: { target: string; section: Sectio
               <>
                 {provider.oauth && <Button onClick={() => void start(provider.id, 'oauth')}>{provider.oauth}</Button>}
                 {provider.apiKey && <Button onClick={() => setKeyFor(provider.id)}>API key…</Button>}
-                {provider.stored && <Button variant="ghost" onClick={() => void dispatch('auth.logout', { provider: provider.id }, { machine: target, source: 'settings' })}>Sign out</Button>}
+                {provider.stored && <Button onClick={() => void dispatch('auth.logout', { provider: provider.id }, { machine: target, source: 'settings' })}>Sign out</Button>}
               </>
             )}
           </div>
@@ -155,8 +155,8 @@ export function Providers({ target, section }: { target: string; section: Sectio
         <div className="auth-flow">
           <div className="auth-flow__head">
             <b>Signing in to {providers.find((p) => p.id === flow.provider)?.name ?? flow.provider}</b>
-            {finished ? <Button variant="ghost" onClick={() => setFlow(undefined)}>Close</Button>
-              : <Button variant="ghost" onClick={() => { if (flow.id) void dispatch('auth.cancel', { flow: flow.id }, { machine: target, source: 'settings' }) }}>Cancel</Button>}
+            {finished ? <Button onClick={() => setFlow(undefined)}>Close</Button>
+              : <Button onClick={() => { if (flow.id) void dispatch('auth.cancel', { flow: flow.id }, { machine: target, source: 'settings' }) }}>Cancel</Button>}
           </div>
           <FlowEvents flowId={flow.id} events={flow.events} target={target} />
         </div>
@@ -247,11 +247,11 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
             </div>
           </div>
           <div className="provider__actions">
-            {m.state === 'connected' && <Button variant="ghost" onClick={() => onOpen(m.id)}>Settings</Button>}
+            {m.state === 'connected' && <Button onClick={() => onOpen(m.id)}>Settings</Button>}
             {m.errorKind === 'wrong_machine' && <Button onClick={() => void act('machines.trust', { id: m.id })} title="Use whichever machine answers there now, e.g. after a reinstall">Trust this machine</Button>}
             {(m.errorKind === 'version_mismatch' || m.errorKind === 'duplicate_machine') && <Button onClick={() => void act('machines.reconnect', { id: m.id })}>Retry</Button>}
             {m.remote && <Switch label={`Connect to ${m.label}`} checked={m.remote.enabled} onChange={(enabled) => void act('machines.update', { id: m.id, enabled })} />}
-            {m.remote && <Button variant="ghost" onClick={() => void act('machines.remove', { id: m.id })}>Remove</Button>}
+            {m.remote && <Button onClick={() => void act('machines.remove', { id: m.id })}>Remove</Button>}
           </div>
         </div>
       ))}
@@ -275,7 +275,7 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
           <TextField name="label" placeholder="Name (optional)" />
           <div className="provider__actions">
             <Button type="submit" variant="primary">Add machine</Button>
-            <Button variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+            <Button onClick={() => setAdding(false)}>Cancel</Button>
           </div>
         </form>
       ) : <div className="machine-add__open"><Button onClick={() => setAdding(true)}>Add machine…</Button></div>}

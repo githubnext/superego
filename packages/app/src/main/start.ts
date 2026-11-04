@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { mkdirSync, openSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, session, shell, type MenuItemConstructorOptions } from 'electron'
 import { appEnv, defaultDataDir, readBuild, socketPath } from '@mu/daemon/client'
 import {
   bool, defineAction, lit, obj, opt, Router, RpcError, str, union, unknown,
@@ -225,8 +225,6 @@ export function startApp(appConfig: AppConfig) {
   app.setName(appConfig.name)
   app.setPath('userData', join(dataDir, 'app'))
   const primary = app.requestSingleInstanceLock()
-  /** Set by the quits that really end the app; any other quit, with the menu bar on, only closes the windows. */
-  let quitting = !primary
   if (!primary) app.quit()
 
   type Open = { machine: string; session: string }
@@ -272,7 +270,7 @@ export function startApp(appConfig: AppConfig) {
     open: () => show(),
     openSession: (machine, session) => show({ open: { machine, session } }),
     openSettings: () => show({ settings: true }),
-    quit: () => { quitting = true; app.quit() },
+    quit: () => app.quit(),
     quitAndStop: () => void quitAndStop(),
     service: () => service.state,
     restart: () => void service.act('restart'),
@@ -331,7 +329,7 @@ export function startApp(appConfig: AppConfig) {
     params: obj({ action: union([lit('restart'), lit('interrupt'), lit('later'), lit('review')]) }),
     async run({ action }) { await service.act(action as ServiceAction); return service.state },
   }))
-  appRouter.register(defineAction({ id: 'app.quit', title: `Quit ${appConfig.name}`, runs: 'app', run: () => { quitting = true; app.quit() } }))
+  appRouter.register(defineAction({ id: 'app.quit', title: `Quit ${appConfig.name}`, runs: 'app', run: () => app.quit() }))
 
   // ── Restarting this computer's daemon onto newer code ───────────────────────────────────────────────────────────────
 
@@ -399,7 +397,6 @@ export function startApp(appConfig: AppConfig) {
       if (response !== 0) return
     }
     const pid = links.get('local')?.hello?.machine.pid
-    quitting = true
     for (const link of links.values()) link.stop()
     if (pid) try { process.kill(pid, 'SIGTERM') } catch {}
     app.quit()
@@ -429,6 +426,7 @@ export function startApp(appConfig: AppConfig) {
   app.whenReady().then(() => {
     if (!primary) return
     if (headless) app.dock?.hide()
+    setMenu()
     refreshDesktop()
     // Font pickers list the installed fonts (the Local Font Access API); nothing else is granted.
     session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(permission === 'local-fonts'))
@@ -446,14 +444,24 @@ export function startApp(appConfig: AppConfig) {
     refreshDesktop()
     if (!mac && !menuBarOn()) app.quit()
   })
-  app.on('before-quit', (event) => {
-    // ⌘Q with the menu bar on closes the windows; the menu bar's Quit ends the app.
-    if (menuBarOn() && !quitting && !headless) {
-      event.preventDefault()
-      for (const window of BrowserWindow.getAllWindows()) window.close()
-      return
-    }
-    for (const link of links.values()) link.stop()
-  })
-  process.on('SIGTERM', () => { quitting = true; app.quit() })
+  // Every quit quits: the menu bar's Quit, SIGTERM (Electron turns it into app.quit), logout. Only the ⌘Q menu item
+  // is softer: with the menu bar on, it closes the windows and leaves the app there.
+  app.on('before-quit', () => { for (const link of links.values()) link.stop() })
+  const quitKey = () => {
+    if (menuBarOn() && !headless) for (const window of BrowserWindow.getAllWindows()) window.close()
+    else app.quit()
+  }
+  const setMenu = () => Menu.setApplicationMenu(Menu.buildFromTemplate([
+    ...(mac ? [{
+      label: appConfig.name,
+      submenu: [
+        { role: 'about' }, { type: 'separator' }, { role: 'services' }, { type: 'separator' },
+        { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' },
+        { label: `Quit ${appConfig.name}`, accelerator: 'CommandOrControl+Q', click: quitKey },
+      ],
+    } satisfies MenuItemConstructorOptions] : [{
+      label: 'File', submenu: [{ label: 'Quit', accelerator: 'CommandOrControl+Q', click: quitKey }],
+    } satisfies MenuItemConstructorOptions]),
+    { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' },
+  ]))
 }

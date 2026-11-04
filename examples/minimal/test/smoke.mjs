@@ -14,6 +14,13 @@ process.on('uncaughtException', (error) => void fail(`uncaught in main: ${error.
 setTimeout(() => fail('timed out'), 60_000)
 
 await import('../out/main/main.js')
+/** With MU_SMOKE_SHOTS=<dir>, a screenshot of the window at this point. */
+const shot = async (name) => {
+  if (!process.env.MU_SMOKE_SHOTS) return
+  const image = await BrowserWindow.getAllWindows()[0].webContents.capturePage()
+  const { writeFileSync } = await import('node:fs')
+  writeFileSync(`${process.env.MU_SMOKE_SHOTS}/${name}.png`, image.toPNG())
+}
 void (async () => {
   await app.whenReady()
   const run = (js) => BrowserWindow.getAllWindows()[0].webContents.executeJavaScript(js)
@@ -37,6 +44,8 @@ void (async () => {
   // New from the top bar opens the New session dialog: a prompt and a folder, started with ⌘⏎.
   await run(`[...document.querySelectorAll('.session-picker button')].find((b) => b.textContent === 'New').click()`)
   await until(`Boolean(document.querySelector('.new-session [aria-label="Prompt"]'))`, 'new session dialog')
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  await shot('new-session')
   const setValue = (selector, value) => run(`(() => {
     const el = document.querySelector(${JSON.stringify(selector)})
     Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, ${JSON.stringify(value)})
@@ -54,6 +63,7 @@ void (async () => {
   const bin = new URL('../bin/mu-minimal.ts', import.meta.url).pathname
   execFileSync('node', [bin, process.env.MU_MINIMAL_HOME, '-p', 'from the cli'], { env: { ...process.env, MU_MINIMAL_APP: new URL('..', import.meta.url).pathname } })
   await until(`document.querySelector('.session__title')?.textContent === 'from the cli' && document.querySelector('.transcript')?.textContent.includes('echo: from the cli')`, 'session from the command line')
+  await shot('minimal-main')
   await until(`document.querySelectorAll('.session-picker option').length >= 3`, 'both sessions in the picker')
 
   // Settings open from the top bar.

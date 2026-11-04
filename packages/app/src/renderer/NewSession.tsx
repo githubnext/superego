@@ -122,7 +122,7 @@ export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; o
       </div>
       <footer className="new-session__foot">
         <span className="new-session__hint">{machine ? `${machine.label}${cwd ? ` · ${shortPath(cwd)}` : ''}` : ''}</span>
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>Cancel</Button>
         <Button variant="primary" disabled={!machine || busy} onClick={() => void create()}>Start <kbd>⌘⏎</kbd></Button>
       </footer>
     </Dialog>

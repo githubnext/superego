@@ -2,7 +2,7 @@
 // change it; ⌫ removes it, Esc keeps it. What differs from the actions' own is all that is stored (`app.keys`).
 import { useState, type KeyboardEvent } from 'react'
 import type { ActionInfo, Json, SettingInfo } from '@mu/protocol'
-import { Button } from '@mu/ui'
+import { Button, IconButton } from '@mu/ui'
 import { runsBare } from './actions.tsx'
 import { bound, conflicts, keyLabel, normalize, safe, shortcutOf, useActions, type Keymap as KeymapValue } from './keys.ts'
 import { useSelection } from './state.tsx'
@@ -35,7 +35,7 @@ export function Keymap({ setting, value, apply }: { setting: SettingInfo; value:
     <div className="keymap" data-key={setting.key}>
       <div className="keymap__head">
         <div className="settings__note">{setting.description}</div>
-        {Object.keys(keymap).length > 0 && <Button variant="ghost" onClick={() => { setError(undefined); apply({}).catch((e: Error) => setError(e.message)) }}>Reset all</Button>}
+        {Object.keys(keymap).length > 0 && <Button onClick={() => { setError(undefined); apply({}).catch((e: Error) => setError(e.message)) }}>Reset all</Button>}
       </div>
       {error && <div className="setting__error">{error}</div>}
       {[...groups].map(([group, list]) => (
@@ -52,7 +52,7 @@ export function Keymap({ setting, value, apply }: { setting: SettingInfo; value:
                 </div>
                 <Recorder keys={keys} clash={others.length > 0} onChange={(next) => change(action, next)} />
                 {action.id in keymap
-                  ? <button className="keymap__reset" title={action.keys ? `Back to ${keyLabel(action.keys)}` : 'Back to none'} onClick={() => change(action, undefined)}>↺</button>
+                  ? <IconButton className="keymap__reset" label={action.keys ? `Back to ${keyLabel(action.keys)}` : 'Back to none'} onClick={() => change(action, undefined)}>↺</IconButton>
                   : <span className="keymap__reset" />}
               </div>
             )

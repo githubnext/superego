@@ -5,19 +5,29 @@
   --mu-mono-fallback: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   --mu-font: var(--mu-font-fallback);
   --mu-mono: var(--mu-mono-fallback);
-  /* Monochrome: white/black with the Tailwind zinc scale for grays. */
-  --mu-bg: light-dark(#ffffff, #09090b);         /* white / zinc-950 */
-  --mu-surface: light-dark(#fafafa, #18181b);    /* zinc-50 / zinc-900 */
-  --mu-raised: light-dark(#ffffff, #27272a);     /* white / zinc-800 */
-  --mu-border: light-dark(#e4e4e7, #3f3f46);     /* zinc-200 / zinc-700 */
-  --mu-text: light-dark(#18181b, #f4f4f5);       /* zinc-900 / zinc-100 */
-  --mu-muted: light-dark(#71717a, #a1a1aa);      /* zinc-500 / zinc-400 */
-  --mu-accent: light-dark(#18181b, #f4f4f5);     /* zinc-900 / zinc-100 */
-  --mu-accent-text: light-dark(#ffffff, #18181b);
-  --mu-status-working: var(--mu-text);
+  /* macOS's own: system grays, the system blue as accent, real controls. */
+  --mu-bg: light-dark(#ffffff, #1e1e1e);          /* content */
+  --mu-sidebar-bg: light-dark(#e9e9ec, #2a2a2c);  /* sidebars and side panes */
+  --mu-surface: light-dark(#f2f2f5, #262628);     /* wells: code, tool output */
+  --mu-raised: light-dark(#ffffff, #2c2c2e);      /* what floats: menus, popovers, the composer */
+  --mu-border: light-dark(#c8c8cd, #48484a);      /* separators and frames */
+  --mu-text: light-dark(#1d1d1f, #f5f5f7);
+  --mu-muted: light-dark(#636366, #aeaeb2);
+  --mu-accent: light-dark(#007aff, #0a84ff);      /* system blue */
+  --mu-accent-text: #ffffff;
+  --mu-selected: light-dark(rgb(0 0 0 / .1), rgb(255 255 255 / .12));
+  --mu-hover: light-dark(rgb(0 0 0 / .05), rgb(255 255 255 / .06));
+  /* Controls: push buttons, pop-ups, fields. */
+  --mu-control: light-dark(#ffffff, #5a5a5e);
+  --mu-control-active: light-dark(#e3e3e8, #6e6e73);
+  --mu-control-edge: 0 0 0 .5px light-dark(rgb(0 0 0 / .22), rgb(0 0 0 / .5)), 0 1px 1.5px light-dark(rgb(0 0 0 / .14), rgb(0 0 0 / .35));
+  --mu-field-bg: light-dark(#ffffff, #2a2a2c);
+  --mu-field-edge: light-dark(#bdbdc2, #545458);
+  --mu-focus: 0 0 0 3px color-mix(in srgb, var(--mu-accent) 45%, transparent);
+  --mu-status-working: var(--mu-accent);
   --mu-status-done: var(--mu-text);
-  --mu-status-blocked: var(--mu-text);
-  --mu-status-error: var(--mu-text);
+  --mu-status-blocked: light-dark(#e07800, #ff9f0a);
+  --mu-status-error: light-dark(#d70015, #ff453a);
   --mu-status-idle: var(--mu-muted);
   --mu-radius: 6px;
   --mu-radius-lg: 14px;
@@ -42,7 +52,7 @@
   /* The reading column, the sidebar, and what floats over content. */
   --mu-column: 600px;
   --mu-sidebar: 248px;
-  --mu-shadow-float: 0 12px 40px -12px rgb(9 9 11 / .18), 0 1px 2px rgb(9 9 11 / .04);
+  --mu-shadow-float: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(0 0 0 / .6)), 0 12px 36px -8px rgb(0 0 0 / .28), 0 2px 6px rgb(0 0 0 / .08);
 }
 
 * { box-sizing: border-box; }
@@ -50,15 +60,19 @@ html, body, #root { height: 100%; margin: 0; }
 body { font: var(--mu-text-ui)/var(--mu-leading-ui) var(--mu-font); background: var(--mu-bg); color: var(--mu-text); -webkit-font-smoothing: antialiased; }
 
 .mu-button {
-  font: inherit; color: var(--mu-text); background: var(--mu-raised); border: 1px solid var(--mu-border);
-  border-radius: var(--mu-radius); padding: 4px 10px; cursor: default;
+  font: inherit; font-weight: 500; color: var(--mu-text); background: var(--mu-control); border: 0; box-shadow: var(--mu-control-edge);
+  border-radius: var(--mu-radius); padding: 3px 11px; min-height: 24px; cursor: default; white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
-.mu-button:hover { border-color: var(--mu-muted); }
-.mu-button:disabled { opacity: .5; }
-.mu-button--primary { background: var(--mu-accent); border-color: var(--mu-accent); color: var(--mu-accent-text); }
-.mu-button--ghost { background: transparent; border-color: transparent; }
-.mu-button--ghost:hover { background: var(--mu-surface); border-color: transparent; }
-.mu-icon-button { padding: 2px 6px; color: var(--mu-muted); }
+.mu-button:active:not(:disabled) { background: var(--mu-control-active); }
+.mu-button:disabled { opacity: .45; }
+/* The one action a view is for: few of these. */
+.mu-button--primary { background: var(--mu-accent); color: var(--mu-accent-text); box-shadow: 0 0 0 .5px rgb(0 0 0 / .15), 0 1px 1.5px rgb(0 0 0 / .18), inset 0 .5px 0 rgb(255 255 255 / .25); }
+.mu-button--primary:active:not(:disabled) { background: color-mix(in srgb, var(--mu-accent) 85%, #000); }
+/* No background until hovered; for the rare control that sits inside text. */
+.mu-button--ghost { background: transparent; box-shadow: none; font-weight: 400; }
+.mu-button--ghost:hover { background: var(--mu-hover); }
+.mu-icon-button { padding: 0; width: 24px; min-height: 24px; height: 24px; font-size: 14px; line-height: 1; }
 
 .mu-textarea {
   font: inherit; color: inherit; width: 100%; resize: none; field-sizing: content; min-height: 1.5em;
@@ -75,25 +89,32 @@ body { font: var(--mu-text-ui)/var(--mu-leading-ui) var(--mu-font); background: 
 
 .mu-list { list-style: none; margin: 0; padding: 0; }
 .mu-list-item { display: flex; align-items: center; gap: var(--mu-space-2); height: 32px; padding: 0 10px; border-radius: var(--mu-radius); }
-.mu-list-item:hover { background: color-mix(in srgb, var(--mu-text) 5%, transparent); }
-.mu-list-item.is-selected { background: color-mix(in srgb, var(--mu-text) 6%, transparent); font-weight: 500; }
+.mu-list-item:hover { background: var(--mu-hover); }
+.mu-list-item.is-selected { background: var(--mu-selected); font-weight: 500; }
 .mu-list-item__body { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mu-list-item__trailing { color: var(--mu-muted); font-size: var(--mu-text-xs); font-variant-numeric: tabular-nums; font-weight: 400; }
 
 .mu-panel { display: flex; flex-direction: column; min-height: 0; }
-.mu-panel__header { display: flex; align-items: center; justify-content: space-between; padding: var(--mu-space-3) 10px 6px; color: var(--mu-muted); font-size: var(--mu-text-sm); }
+.mu-panel__header { display: flex; align-items: center; justify-content: space-between; padding: var(--mu-space-3) 10px 6px; color: var(--mu-muted); font-size: var(--mu-text-xs); font-weight: 600; }
 .mu-panel__body { flex: 1; min-height: 0; overflow: auto; }
 
 .mu-field {
-  font: inherit; color: inherit; background: var(--mu-raised); border: 1px solid var(--mu-border);
-  border-radius: var(--mu-radius); padding: 4px 8px; min-width: 0;
+  font: inherit; color: inherit; background: var(--mu-field-bg); border: 1px solid var(--mu-field-edge);
+  border-radius: 5px; padding: 3px 7px; min-width: 0; min-height: 24px; box-shadow: inset 0 1px 1px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .2));
 }
-.mu-field:focus { outline: none; border-color: var(--mu-accent); }
-.mu-select { padding-right: 4px; }
-.mu-switch { width: 30px; height: 18px; border-radius: 9px; border: 0; padding: 2px; background: var(--mu-border); display: inline-flex; transition: background .15s; }
+.mu-field::placeholder { color: var(--mu-muted); }
+.mu-field:focus { outline: none; border-color: var(--mu-accent); box-shadow: var(--mu-focus); }
+/* A pop-up button, as macOS draws it: a push button with ⌃⌄ on the right. */
+.mu-select {
+  appearance: none; font-weight: 500; background-color: var(--mu-control); border: 0; box-shadow: var(--mu-control-edge); padding: 3px 26px 3px 10px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='12' viewBox='0 0 8 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 4.5 4 1.5 7 4.5M1 7.5 4 10.5 7 7.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 9px center;
+}
+.mu-select:focus { box-shadow: var(--mu-control-edge), var(--mu-focus); }
+.mu-switch { width: 34px; height: 20px; border-radius: 10px; border: 0; padding: 2px; background: light-dark(#d9d9de, #48484a); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .12); display: inline-flex; transition: background .15s; }
 .mu-switch.is-on { background: var(--mu-accent); }
-.mu-switch__thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
-.mu-switch.is-on .mu-switch__thumb { transform: translateX(12px); background: var(--mu-accent-text); }
+.mu-switch__thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .3), 0 0 0 .5px rgb(0 0 0 / .08); transition: transform .15s; }
+.mu-switch.is-on .mu-switch__thumb { transform: translateX(14px); }
 .mu-switch:disabled { opacity: .5; }
 
 .mu-font-picker { position: relative; }
@@ -102,8 +123,8 @@ body { font: var(--mu-text-ui)/var(--mu-leading-ui) var(--mu-font); background: 
 .mu-font-picker__all { font-size: 12px; color: var(--mu-muted); display: flex; gap: 6px; align-items: center; }
 .mu-font-picker__list { max-height: 280px; overflow: auto; display: flex; flex-direction: column; }
 .mu-font-picker__list button { font-size: 14px; color: inherit; text-align: left; background: none; border: 0; padding: 4px 8px; border-radius: 4px; }
-.mu-font-picker__list button:hover { background: var(--mu-surface); }
-.mu-font-picker__list button[aria-selected="true"] { background: color-mix(in srgb, var(--mu-accent) 14%, transparent); }
+.mu-font-picker__list button:hover { background: var(--mu-accent); color: var(--mu-accent-text); }
+.mu-font-picker__list button[aria-selected="true"]:not(:hover) { background: var(--mu-selected); }
 .mu-font-picker__note { color: var(--mu-muted); font-size: 12px; padding: 4px 8px; }
 
 /* Layers: dialogs, then what opens from anything (menus, popovers, tooltips) above them. */
@@ -112,8 +133,8 @@ body { font: var(--mu-text-ui)/var(--mu-leading-ui) var(--mu-font); background: 
 .mu-dialog__backdrop[data-starting-style], .mu-dialog__backdrop[data-ending-style] { opacity: 0; }
 .mu-dialog {
   position: fixed; z-index: 51; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  border: 1px solid var(--mu-border); border-radius: 10px; color: var(--mu-text); background: var(--mu-bg);
-  box-shadow: 0 24px 64px rgb(0 0 0 / .24); max-width: 92vw; max-height: 86vh; overflow: hidden; outline: none;
+  border: 0; border-radius: 12px; color: var(--mu-text); background: var(--mu-bg);
+  box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .25), rgb(255 255 255 / .15)), 0 24px 64px rgb(0 0 0 / .32); max-width: 92vw; max-height: 86vh; overflow: hidden; outline: none;
   transition: opacity .14s, transform .14s;
 }
 .mu-dialog[data-starting-style], .mu-dialog[data-ending-style] { opacity: 0; transform: translate(-50%, calc(-50% + 6px)) scale(.985); }
@@ -121,27 +142,28 @@ body { font: var(--mu-text-ui)/var(--mu-leading-ui) var(--mu-font); background: 
 .mu-dialog--medium { width: 640px; }
 .mu-dialog--large { width: 880px; height: 640px; }
 .mu-dialog__frame { display: flex; flex-direction: column; height: 100%; max-height: 86vh; }
-.mu-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px 8px 16px; border-bottom: 1px solid var(--mu-border); }
+.mu-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 10px 10px 16px; border-bottom: 1px solid var(--mu-border); background: var(--mu-sidebar-bg); }
 .mu-dialog__title { font-size: 13px; font-weight: 600; margin: 0; }
 .mu-dialog__actions { display: flex; gap: 4px; align-items: center; }
 .mu-dialog__body { flex: 1; min-height: 0; overflow: auto; }
 
 .mu-menu, .mu-popover {
-  min-width: 200px; background: var(--mu-raised); border: 1px solid var(--mu-border); border-radius: 10px;
+  min-width: 200px; background: var(--mu-raised); border: 0; border-radius: 10px;
   box-shadow: var(--mu-shadow-float); padding: 6px; outline: none; font-size: var(--mu-text-ui);
   transform-origin: var(--transform-origin); transition: opacity .1s, transform .1s;
 }
 .mu-menu[data-starting-style], .mu-menu[data-ending-style], .mu-popover[data-starting-style], .mu-popover[data-ending-style] { opacity: 0; transform: scale(.98); }
 .mu-menu__item { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 5px 8px; border-radius: var(--mu-radius); cursor: default; outline: none; user-select: none; }
-.mu-menu__item[data-highlighted] { background: color-mix(in srgb, var(--mu-text) 6%, transparent); }
+.mu-menu__item[data-highlighted] { background: var(--mu-accent); color: var(--mu-accent-text); }
+.mu-menu__item[data-highlighted] .mu-menu__hint, .mu-menu__item[data-highlighted] .mu-menu__check { color: inherit; }
 .mu-menu__item[data-disabled] { opacity: .5; }
 .mu-menu__hint { display: inline-flex; gap: 6px; align-items: center; color: var(--mu-muted); font: var(--mu-text-xs) var(--mu-mono); }
 .mu-menu__check { color: var(--mu-text); }
 .mu-menu__label { margin: 6px 8px 4px; font-size: var(--mu-text-xs); color: var(--mu-muted); }
-.mu-menu__separator { border-top: 1px solid color-mix(in srgb, var(--mu-border) 60%, transparent); margin: 6px 0; }
+.mu-menu__separator { border-top: 1px solid var(--mu-border); margin: 5px 8px; }
 .mu-tooltip { background: var(--mu-text); color: var(--mu-bg); font-size: var(--mu-text-sm); border-radius: 6px; padding: 5px 8px; white-space: nowrap; transition: opacity .1s; }
 .mu-tooltip[data-starting-style], .mu-tooltip[data-ending-style] { opacity: 0; }
 
 /* Focus rings for the keyboard only. */
 :focus:not(:focus-visible) { outline: none; }
-.mu-button:focus-visible, .mu-switch:focus-visible { outline: 2px solid color-mix(in srgb, var(--mu-accent) 60%, transparent); outline-offset: 1px; }
+.mu-button:focus-visible, .mu-switch:focus-visible { outline: none; box-shadow: var(--mu-control-edge), var(--mu-focus); }

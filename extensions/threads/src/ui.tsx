@@ -174,7 +174,7 @@ function Rail({ groups, isOn, onPick }: { groups: Group[]; isOn(r: Row): boolean
     <TooltipProvider>
       <nav className="threads-rail is-compact" aria-label="Sessions">
         <Tooltip content="Show the list (⌘\)">
-          <button className="threads-rail__expand" aria-label="Show the list" onClick={() => void set(VIEW, 'list')}>›</button>
+          <IconButton label="Show the list" className="threads-rail__expand" onClick={() => void set(VIEW, 'list')}>›</IconButton>
         </Tooltip>
         {groups.map((group, index) => (
           <div key={group.id} className="threads-rail__group">

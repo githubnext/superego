@@ -42,7 +42,7 @@ export function FontPicker({ value, onChange, loadFonts, monospace, nullLabel = 
   return (
     <div className="mu-font-picker">
       <Popover open={open} onOpenChange={toggle} className="mu-font-picker__popover"
-        trigger={<button type="button" className="mu-field mu-font-picker__button" aria-label={label} style={value ? { fontFamily: `"${value}"` } : undefined}>{value ?? nullLabel}</button>}>
+        trigger={<button type="button" className="mu-field mu-select mu-font-picker__button" aria-label={label} style={value ? { fontFamily: `"${value}"` } : undefined}>{value ?? nullLabel}</button>}>
         <input className="mu-field" autoFocus placeholder="Search fonts" value={query} onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && shown[0]) choose(shown[0]) }} />
         {monospace && (

@@ -64,6 +64,7 @@ if (phase === 'first') {
   await until(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'session in sidebar')
   await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: hello from smoke')`, 'answer rendered')
+  await shot('main')
   // Type into the composer like a user: React needs the native setter and an input event.
   await run(`(() => {
     const ta = document.querySelector('.composer textarea')
@@ -91,6 +92,7 @@ if (phase === 'first') {
   }
   await run(`document.querySelector('.threads-menu-trigger').click()`)
   await until(`[...document.querySelectorAll('.mu-menu .mu-menu__item')].some((i) => i.textContent.includes('Needs you first'))`, 'sidebar menu open')
+  await shot('menu')
   await run(`[...document.querySelectorAll('.mu-menu .mu-menu__item')].find((i) => i.textContent.includes('Needs you first')).click()`)
   await until(`[...document.querySelectorAll('.threads-group .mu-panel__title')].some((t) => t.textContent.startsWith('Done'))`, 'grouped by status')
   await key('\\')
@@ -129,6 +131,7 @@ if (phase === 'first') {
   // Settings: the app's own sections, then the machine's, drawn from what each registers.
   await run(`[...document.querySelectorAll('.app__footer button')].find((b) => b.textContent === 'Settings').click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Appearance') && document.querySelector('.settings').textContent.includes('Notifications')`, 'app settings')
+  await shot('settings')
   // Fonts: the picker lists installed families (needs a user gesture), and a choice sets the CSS variable.
   await run(`document.querySelector('[data-key="app.font.interface"] .mu-font-picker__button').click()`, true)
   await until(`document.querySelectorAll('.mu-font-picker__list button').length > 5`, 'installed fonts listed', 40_000)
@@ -168,6 +171,7 @@ if (phase === 'first') {
   const second = `MU_HOME='${process.env.MU_HOME}/second' MU_MODEL=faux node '${new URL('../bin/mu.ts', import.meta.url).pathname}' connect --start`
   await run(`window.mu.call('app', 'machines.add', { label: 'Second', via: ${JSON.stringify(second)} })`)
   await until(`[...document.querySelectorAll('.machine-row')].some((row) => row.querySelector('input')?.value === 'Second' && / · connected/.test(row.textContent))`, 'second machine connected', 30_000)
+  await shot('machines')
   // All machines: a disagreement shows as Mixed, and one change reaches both.
   await run(`window.mu.call('local', 'settings.set', { key: 'agent.model', value: 'faux/faux-1' })`)
   await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent === 'All machines').click()`)
@@ -184,6 +188,7 @@ if (phase === 'first') {
   await until(`document.querySelectorAll('.threads-machine').length === 2`, 'both machines in the sidebar')
   await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent.includes('This computer')).click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Providers') && Boolean(document.querySelector('[data-key="agent.model"]'))`, 'machine settings')
+  await shot('providers')
   const hasFaux = await run(`[...document.querySelectorAll('[data-key="agent.model"] option')].some((o) => o.value === 'faux/faux-1')`)
   if (!hasFaux) { await fail('model choices'); throw new Error('failed') }
   // The menu bar: on by default; "Hide Dock icon" needs it; turning it off takes the item away.

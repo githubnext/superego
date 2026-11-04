@@ -211,8 +211,8 @@ function Composer({ machine, session, busy }: { machine: MachineEntry; session: 
       <TextArea ref={input} rows={1} value={text} disabled={disabled} onChange={(e) => setText(e.target.value)} onKeyDown={onKeyDown}
         placeholder={disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the running agent…' : 'Ask anything'} />
       <div className="composer__actions">
-        {busy && !claim && <Button variant="ghost" className="composer__hint" onClick={() => void abort()}>esc stop</Button>}
-        <Button variant="ghost" className="composer__hint" aria-label={claim ? 'Answer' : busy ? 'Steer' : 'Send'} disabled={disabled || !text.trim()} onClick={() => void send()}>⏎ {claim ? 'answer' : busy ? 'steer' : 'send'}</Button>
+        {busy && !claim && <Button className="composer__button" onClick={() => void abort()}>Stop <kbd>esc</kbd></Button>}
+        <Button className="composer__button" aria-label={claim ? 'Answer' : busy ? 'Steer' : 'Send'} disabled={disabled || !text.trim()} onClick={() => void send()}>{claim ? 'Answer' : busy ? 'Steer' : 'Send'} <kbd>⏎</kbd></Button>
       </div>
     </div>
     </div>
