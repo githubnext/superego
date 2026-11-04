@@ -48,3 +48,15 @@ describe('SettingsRegistry', () => {
     expect((await settings.snapshot()).sections).toEqual([])
   })
 })
+
+describe('upsert', () => {
+  it('replaces a section declared again, keeping stored values', async () => {
+    const settings = new SettingsRegistry(new MemorySettingsStore({ 'threads.sort': 'status' }))
+    const section = { id: 'threads', title: 'Sidebar', settings: [{ key: 'threads.sort', title: 'Sort', default: 'created', type: { type: 'choice' as const, options: [{ value: 'created', label: 'Newest' }, { value: 'status', label: 'Needs you' }] } }] }
+    settings.upsert(section)
+    settings.upsert({ ...section, title: 'Sessions' })
+    const snapshot = await settings.snapshot()
+    expect(snapshot.sections.map((s) => s.title)).toEqual(['Sessions'])
+    expect(snapshot.values['threads.sort']).toBe('status')
+  })
+})

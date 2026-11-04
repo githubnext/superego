@@ -76,7 +76,11 @@ describe('daemon', () => {
     expect(changes.flat().some((s) => s.status.state === 'working')).toBe(true)
 
     await peer.call('session.seen', { id: created.id })
-    expect((await sessions(peer))[0]!.status.state).toBe('idle')
+    const [seen] = await sessions(peer)
+    expect(seen!.status.state).toBe('idle')
+    // Facts for clients: the model it runs with, and when it last did something.
+    expect(seen).toMatchObject({ model: 'faux-1' })
+    expect(seen!.activeAt).toBeGreaterThanOrEqual(seen!.createdAt)
     await close()
   })
 

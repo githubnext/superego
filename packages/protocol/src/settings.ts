@@ -40,6 +40,15 @@ export type SectionInfo = {
 
 export type SettingsSnapshot = { sections: SectionInfo[]; values: Record<string, Json> }
 
+/** A section declared as plain data, as a client sends it: no computed types, no custom component data. */
+export type DeclaredSection = {
+  id: string
+  title: string
+  description?: string
+  order?: number
+  settings: (SettingType & { key: string; title: string; description?: string; default: Json })[]
+}
+
 export type ProviderAuthInfo = {
   id: string
   name: string

@@ -41,6 +41,9 @@ export function Shell() {
           ? <SessionView key={`${selection.machine}/${selection.session}`} machine={machine} session={session} />
           : <div className="app__empty">{hasSidebar ? 'Select or start a session.' : `Start a session with: ${registry.app.id}`}</div>}
       </main>
+      {selection && session && machine && registry.slots['session.aside'].length > 0 && (
+        <aside className="app__aside"><div className="app__drag" /><Slot name="session.aside" props={{ machine, session }} /></aside>
+      )}
       {settings.open && <SettingsView machines={machines} onClose={settings.close} />}
     </div>
   )

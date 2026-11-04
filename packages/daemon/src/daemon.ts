@@ -52,7 +52,17 @@ export type DaemonOptions = {
 }
 
 /** One mounted session: its conversation and a small watch that keeps its status current. */
-type Mounted = { conversation: Conversation; meta: SessionMeta; live?: LiveState; lastEntryId?: number; stop(): Promise<unknown> }
+type Mounted = {
+  conversation: Conversation; meta: SessionMeta; live?: LiveState; lastEntryId?: number
+  /** What the session runs with and has spent, and when anything last happened in it. */
+  model?: string; cost?: number; activeAt?: number
+  stop(): Promise<unknown>
+}
+
+type Usage = { cost?: { total?: number } }
+/** Everything a session spent: every model's answers and every tool's own usage. */
+const costOf = (usage: { models?: Record<string, Usage>; tools?: Record<string, Usage> } | undefined) =>
+  usage && [...Object.values(usage.models ?? {}), ...Object.values(usage.tools ?? {})].reduce((sum, u) => sum + (u.cost?.total ?? 0), 0)
 
 export type Daemon = {
   machine: MachineInfo
@@ -135,8 +145,18 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       stop: () => watch.stop(),
     }
     const absorb = (view: ConversationView) => {
+      const wasRunning = Boolean(entry.live?.run)
       entry.live = view.docs['pi.live'] as LiveState | undefined
-      entry.lastEntryId = view.entries.at(-1)?.id
+      const last = view.entries.at(-1)
+      // Activity is a new entry or a run starting, not every streamed chunk (which would churn the session list).
+      // A message's own timestamp survives restarts.
+      if (last?.id !== entry.lastEntryId) {
+        entry.activeAt = (last?.model?.at(-1) as { timestamp?: number } | undefined)?.timestamp ?? Date.now()
+      } else if (entry.live?.run && !wasRunning) entry.activeAt = Date.now()
+      entry.lastEntryId = last?.id
+      const agent = view.docs['pi.agent'] as { model?: { modelId?: string } } | undefined
+      entry.model = agent?.model?.modelId
+      entry.cost = costOf(view.docs['pi.usage'] as Parameters<typeof costOf>[0])
       changed()
     }
     absorb(watch.value)
@@ -147,6 +167,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   const info = (id: string, m: Mounted): SessionInfo => ({
     id, title: m.meta.title || 'New session', cwd: m.meta.cwd, createdAt: m.meta.createdAt,
+    activeAt: Math.max(m.activeAt ?? 0, m.meta.createdAt),
+    ...(m.model ? { model: m.model } : {}), ...(m.cost ? { cost: m.cost } : {}),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
   /** Only an assistant answer makes a session "done"; the user's own message does not. */

@@ -2,7 +2,7 @@
 // tool calls and entries in the transcript, adds custom settings components and keyboard commands. Components reach
 // everything else (machines, sessions, selection, live values, calls) through the hooks this package exports.
 import { createContext, useContext, type ComponentType, type ReactNode } from 'react'
-import type { AppConfig, SectionInfo, SessionInfo } from '@mu/protocol'
+import type { AppConfig, DeclaredSection, SectionInfo, SessionInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
 
 /** Where an extension can put UI. */
@@ -13,11 +13,14 @@ export type SlotName =
   | 'session.header'
   /** Above the composer: things waiting on the user, suggestions. */
   | 'composer.above'
+  /** A pane beside the session: details, diffs, files. Hidden while everything in it renders nothing. */
+  | 'session.aside'
 
 export type SlotProps = {
   'sidebar': Record<string, never>
   'session.header': { machine: MachineEntry; session: SessionInfo }
   'composer.above': { machine: MachineEntry; session: SessionInfo }
+  'session.aside': { machine: MachineEntry; session: SessionInfo }
 }
 
 /** A tool call in the transcript. `result` is there once it finished; `live` while it runs. */
@@ -51,6 +54,11 @@ export type UiApi = {
   /** Draw the settings section that names `ui` (its daemon half registers the section). */
   settings(ui: string, component: ComponentType<SettingsComponentProps>): void
   command(command: Command): void
+  /**
+   * Settings of this UI half, kept by the app (per user, not per machine) and shown in Settings → General. Keys are
+   * named `<extension>.<key>`. Read and change them with `useAppSetting`.
+   */
+  appSettings(section: DeclaredSection): void
 }
 
 export type UiExtension = {
@@ -71,13 +79,14 @@ export type Registry = {
   entries: Map<string, ComponentType<EntryProps>>
   settings: Map<string, ComponentType<SettingsComponentProps>>
   commands: Command[]
+  appSettings: DeclaredSection[]
 }
 
 export function createRegistry(app: AppConfig, extensions: UiExtension[], core: (mu: UiApi) => void): Registry {
   const registry: Registry = {
     app, extensions: extensions.map((e) => e.name),
-    slots: { 'sidebar': [], 'session.header': [], 'composer.above': [] },
-    tools: new Map(), entries: new Map(), settings: new Map(), commands: [],
+    slots: { 'sidebar': [], 'session.header': [], 'composer.above': [], 'session.aside': [] },
+    tools: new Map(), entries: new Map(), settings: new Map(), commands: [], appSettings: [],
   }
   const api = (extension: string): UiApi => ({
     app,
@@ -90,6 +99,12 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     entry: (kind, component) => { registry.entries.set(kind, component) },
     settings: (ui, component) => { registry.settings.set(ui, component) },
     command: (command) => { registry.commands.push(command) },
+    appSettings(section) {
+      for (const setting of section.settings) {
+        if (extension !== 'core' && !setting.key.startsWith(`${extension}.`)) throw new Error(`Extension ${extension} must name its settings "${extension}.<key>", not "${setting.key}"`)
+      }
+      registry.appSettings.push(section)
+    },
   })
   core(api('core'))
   for (const extension of extensions) {

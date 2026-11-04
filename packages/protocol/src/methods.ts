@@ -24,6 +24,12 @@ export type SessionInfo = {
   title: string
   cwd: string
   createdAt: number
+  /** When anything last happened in it: a message, or work going on. */
+  activeAt: number
+  /** The model its next turn runs with. */
+  model?: string
+  /** What it has spent so far, in dollars, as the providers price it. */
+  cost?: number
   status: Status
 }
 

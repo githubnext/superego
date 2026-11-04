@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
-import type { Client, Feature, MethodName, Notifications, Params, Result, SessionInfo, SettingsSnapshot } from '@mu/protocol'
+import type { Client, Feature, Json, MethodName, Notifications, Params, Result, SessionInfo, SettingsSnapshot } from '@mu/protocol'
 import type { MachineEntry, MachineId, MuBridge } from '../shared.ts'
 
 declare global {
@@ -100,3 +100,12 @@ export const useSessionView = (machineId: MachineId, connected: boolean, id: str
 export const useSettings = (machineId: MachineId, connected: boolean) =>
   useWatch<SettingsSnapshot>(machineId, connected, 'settings', (client) => client.call('settings.watch', {}),
     (_value, _method, params: Notifications['settings.changed']) => params.value, ['settings.changed'])
+
+/**
+ * One of the app's settings (those UI halves declare with `mu.appSettings`, or the core's), and a way to change it.
+ * Undefined until the app's settings have loaded.
+ */
+export function useAppSetting<T extends Json>(key: string): [T | undefined, (value: T) => Promise<unknown>] {
+  const snapshot = useSettings('app', true)
+  return [snapshot?.values[key] as T | undefined, (value: T) => window.mu.call('app', 'settings.set', { key, value })]
+}

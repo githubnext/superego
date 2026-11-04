@@ -3,7 +3,7 @@ import { mkdirSync, openSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from 'electron'
 import { appEnv, defaultDataDir, readBuild, socketPath } from '@mu/daemon/client'
-import { RpcError, type AppConfig, type Notifications, type SessionInfo } from '@mu/protocol'
+import { RpcError, type AppConfig, type DeclaredSection, type Notifications, type SessionInfo, type SettingType } from '@mu/protocol'
 import { serveSettings } from '@mu/settings'
 import { CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type MuEvent } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
@@ -66,7 +66,15 @@ export function startApp(appConfig: AppConfig) {
         pending.delete(contents.id)
         return what ?? {}
       },
-      'machines.add': (params: { label?: string; target?: string; command?: string; via?: string }) => machineStore.add(params),
+      /** A window's UI extensions declare their settings; the app keeps them in its own settings file. */
+    'settings.register': async ({ section }: { section: DeclaredSection }) => {
+      if (!section?.id || !Array.isArray(section.settings)) throw new RpcError('invalid', 'A section needs an id and settings')
+      appSettings.upsert({ ...section, settings: section.settings.map(({ key, title, description, default: initial, ...type }) => ({
+        key, title, default: initial, type: type as SettingType, ...(description ? { description } : {}),
+      })) })
+      return null
+    },
+    'machines.add': (params: { label?: string; target?: string; command?: string; via?: string }) => machineStore.add(params),
       'machines.update': async ({ id, ...patch }: { id: string } & Partial<MachineConfig>) => { await machineStore.update(id, patch); return null },
       'machines.remove': async ({ id }: { id: string }) => { await machineStore.remove(id); return null },
       'machines.trust': async ({ id }: { id: string }) => { await machineStore.forgetIdentity(id); restartLink(id); return null },

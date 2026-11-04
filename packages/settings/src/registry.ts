@@ -86,6 +86,16 @@ export class SettingsRegistry {
     }
   }
 
+  /** Add a section, or replace the one with its id (and its keys): for sections a client declares on every start. */
+  upsert(section: SectionSpec): () => void {
+    const existing = this.#sections.get(section.id)
+    if (existing) {
+      this.#sections.delete(section.id)
+      for (const setting of existing.settings) this.#settings.delete(setting.key)
+    }
+    return this.register(section)
+  }
+
   /** The stored value, or the default when none is stored. Unknown keys read as undefined. */
   get<T extends Json>(key: string): T {
     const spec = this.#settings.get(key)
