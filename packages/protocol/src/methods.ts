@@ -65,6 +65,8 @@ export type Methods = {
    * session is working, unless `interrupt`; interrupted runs resume after the restart. `build` must be the running
    * build, so a client never restarts a daemon it didn't inspect.
    */
+  /** Snapshot of an extension's live value, then `value.changed` with each new one. */
+  'value.watch': { params: { key: string }; result: { sub: string; value: Json } }
   'daemon.restart': { params: { build: string; interrupt?: boolean }; result: { restarted: boolean; busy: boolean } }
 }
 
@@ -74,6 +76,7 @@ export type Notifications = {
   'sessions.changed': { sub: string; value: SessionInfo[] }
   'settings.changed': { sub: string; value: SettingsSnapshot }
   'auth.event': { flow: string; event: AuthEvent }
+  'value.changed': { sub: string; key: string; value: Json }
 }
 
 /** The methods every settings endpoint (a daemon, or the app itself) answers. */

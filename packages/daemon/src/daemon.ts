@@ -6,18 +6,19 @@ import { hostname, platform } from 'node:os'
 import { join } from 'node:path'
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
 import {
-  type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, Harness, type Extension, type LiveState,
+  type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, Harness, type LiveState,
   type Storage,
 } from '@earendil-works/pi-durable'
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  deriveStatus, FEATURES, PROTOCOL_VERSION, RpcError, type AppConfig, type MachineInfo, type Methods, type Notifications, type RpcPeer, type SessionInfo,
+  deriveStatus, FEATURES, PROTOCOL_VERSION, RpcError, type AppConfig, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type SessionInfo,
 } from '@mu/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@mu/settings'
 import { FileSettingsStore } from '@mu/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
+import type { DaemonApi, DaemonExtension, LiveValue, StatusContribution } from './extension.ts'
 
 const context = BACKGROUND_CONTEXT
 
@@ -40,8 +41,8 @@ export type DaemonOptions = {
   settingsStore?: SettingsStore
   /** Defaults to SQLite in `dataDir`. */
   storage?: Storage
-  /** Extensions installed besides the coding tools. */
-  extensions?: Extension[]
+  /** The app's extensions (their daemon halves), set up in order. */
+  extensions?: DaemonExtension[]
   /** Where sessions work when created without a cwd. */
   defaultCwd?: string
   /** The build of the code running, reported in `hello`. */
@@ -82,7 +83,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const agent = await createAgentSettings(settings, options.dataDir, options.app)
   const registry = createRegistry()
   registry.install(createCodingTools())
-  for (const extension of options.extensions ?? []) registry.install(extension)
 
   const storage = options.storage ?? await openNodeSqliteStorage(join(options.dataDir, `${options.app.id}.sqlite`))
   const defaultCwd = options.defaultCwd ?? process.cwd()
@@ -135,7 +135,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   const info = (id: string, m: Mounted): SessionInfo => ({
     id, title: m.meta.title || 'New session', cwd: m.meta.cwd, createdAt: m.meta.createdAt,
-    status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen }),
+    status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
   /** Only an assistant answer makes a session "done"; the user's own message does not. */
   const lastAnswer = (m: Mounted) => m.live?.run ? undefined : m.lastEntryId
@@ -164,6 +164,60 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     changed()
   }
 
+  // ── Extensions ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+  const connections = new Set<RpcPeer>()
+  const extensionMethods = new Map<string, (params: any) => unknown>()
+  const values = new Map<string, { value: Json; listeners: Set<(value: Json) => void> }>()
+  const contributors: ((sessionId: string) => StatusContribution | undefined)[] = []
+  const cleanups: (() => void)[] = []
+  const blockedOf = (id: string) => {
+    for (const contribute of contributors) {
+      const blocked = contribute(id)
+      if (blocked) return { blocked }
+    }
+    return {}
+  }
+  const named = (extension: string, name: string) => {
+    if (!name.startsWith(`${extension}.`)) throw new Error(`Extension ${extension} must name things "${extension}.<name>", not "${name}"`)
+    return name
+  }
+
+  for (const extension of options.extensions ?? []) {
+    if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
+    const api: DaemonApi = {
+      app: options.app,
+      harness,
+      agent: (agentExtension) => registry.install(agentExtension),
+      settings,
+      method: (method, handler) => { extensionMethods.set(named(extension.name, method), handler) },
+      value<T extends Json>(key: string, initial: T): LiveValue<T> {
+        const name = named(extension.name, key)
+        const entry = { value: initial as Json, listeners: new Set<(value: Json) => void>() }
+        values.set(name, entry)
+        const set = (next: T) => {
+          entry.value = next
+          for (const listener of entry.listeners) listener(next)
+        }
+        return { get: () => entry.value as T, set, update: (edit) => set(edit(entry.value as T)) }
+      },
+      status: (contribute) => { contributors.push(contribute) },
+      invalidate: changed,
+      sessions: {
+        list: () => list(),
+        conversation: async (id) => (await get(id)).conversation,
+        of: (conversationId) => mounted.has(String(conversationId)) ? String(conversationId) : undefined,
+      },
+    }
+    try {
+      const cleanup = await extension.setup(api)
+      if (cleanup) cleanups.push(cleanup)
+    } catch (error) {
+      throw new Error(`Extension ${extension.name} failed to start: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+    }
+  }
+  const features = [...FEATURES, ...(options.extensions ?? []).map((extension) => `ext:${extension.name}`)]
+
   // Mount everything once so statuses (and anything a previous process left running) are live from the start.
   await list()
   harness.resume()
@@ -181,7 +235,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           if (version !== PROTOCOL_VERSION) {
             throw new RpcError('version_mismatch', `This machine's mu speaks protocol ${PROTOCOL_VERSION}, the client ${version}`, { hint: 'Update mu on the older side.' })
           }
-          return { version: PROTOCOL_VERSION, features: [...FEATURES], machine, methods: Object.keys(handlers) }
+          return { version: PROTOCOL_VERSION, features, machine, methods: [...Object.keys(handlers), ...extensionMethods.keys()] }
         },
         'session.list': () => list(),
         async 'session.create'({ cwd, title }) {
@@ -275,6 +329,15 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           setImmediate(() => options.onRestart?.())
           return { restarted: true, busy }
         },
+        async 'value.watch'({ key }) {
+          const entry = values.get(key)
+          if (!entry) throw new RpcError('not_found', `No value ${key}`)
+          const sub = randomUUID()
+          const listener = (value: Json) => notify('value.changed', { sub, key, value })
+          entry.listeners.add(listener)
+          subs.set(sub, () => { entry.listeners.delete(listener) })
+          return { sub, value: entry.value }
+        },
         async unwatch({ sub }) {
           const stop = subs.get(sub)
           subs.delete(sub)
@@ -282,18 +345,21 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           return null
         },
       }
-      for (const [method, handler] of Object.entries(handlers)) {
+      connections.add(peer)
+      for (const [method, handler] of [...Object.entries(handlers), ...extensionMethods]) {
         peer.handle(method, (params: unknown) => {
           if (restarting && method !== 'hello') throw new RpcError('restarting', 'The daemon is restarting. Try again in a moment.')
           return (handler as (params: unknown) => unknown)(params)
         })
       }
       return () => {
+        connections.delete(peer)
         for (const stop of subs.values()) void stop()
         subs.clear()
       }
     },
     async close() {
+      for (const cleanup of cleanups.reverse()) cleanup()
       agent.close()
       for (const m of mounted.values()) await m.stop()
       await harness.close(context)

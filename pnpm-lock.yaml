@@ -231,6 +231,21 @@ importers:
         specifier: ^8.2.0
         version: 8.3.5(@types/node@24.19.2)
 
+  extensions/ask-user:
+    dependencies:
+      '@earendil-works/pi-durable':
+        specifier: 1.5.0
+        version: 1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.1)
+      '@earendil-works/pi-schema':
+        specifier: 1.5.0
+        version: 1.5.0
+      '@mu/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
+      '@mu/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+
   packages/cli:
     dependencies:
       '@mu/client':
