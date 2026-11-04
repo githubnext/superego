@@ -5,14 +5,15 @@ import { openDaemon } from './daemon.ts'
 import { listen } from './server.ts'
 import { appEnv, defaultDataDir, socketPath } from './paths.ts'
 import type { AppConfig } from '@mu/protocol'
+import type { DaemonExtension } from './extension.ts'
 
 /** Run a daemon on `socket` until SIGINT/SIGTERM. Used by `mu daemon` and by the Electron app's daemon process. */
-export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket = socketPath(app, dataDir), defaultCwd }: {
-  app: AppConfig; dataDir?: string; socket?: string; defaultCwd?: string
+export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket = socketPath(app, dataDir), defaultCwd, extensions = [] }: {
+  app: AppConfig; dataDir?: string; socket?: string; defaultCwd?: string; extensions?: DaemonExtension[]
 }) {
   const build = readBuild(import.meta.dirname)
   let stop = async () => {}
-  const daemon = await openDaemon({ app, dataDir, defaultCwd: defaultCwd ?? appEnv(app)('CWD') ?? process.cwd(), build, onRestart: () => void stop() })
+  const daemon = await openDaemon({ app, dataDir, defaultCwd: appEnv(app)('CWD') ?? defaultCwd ?? process.cwd(), build, extensions, onRestart: () => void stop() })
   const server = await listen(daemon, socket)
   const pidFile = join(dataDir, 'daemon.pid')
   await writeFile(pidFile, String(process.pid))

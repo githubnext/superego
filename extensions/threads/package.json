@@ -1,0 +1,10 @@
+{
+  "name": "@mu/threads",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { "./ui": "./src/ui.tsx" },
+  "dependencies": { "@mu/app": "workspace:*", "@mu/protocol": "workspace:*", "@mu/ui": "workspace:*" },
+  "peerDependencies": { "react": "^19" },
+  "devDependencies": { "@types/react": "^19", "react": "^19" }
+}

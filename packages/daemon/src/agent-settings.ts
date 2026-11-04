@@ -122,7 +122,9 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
   models.setProvider(recorded(withServiceTier(openaiProvider(), () => settings.get<boolean>(KEYS.fast) && FAST.has(chosen()?.provider ?? ''))))
   const model = env('MODEL')
   if (model === 'faux') models.setProvider(recorded(echoProvider().provider))
-  if (model?.startsWith('replay:')) models.setProvider(replayProvider(model.slice('replay:'.length), Number(env('REPLAY_SPEED') ?? 120)).provider)
+  // A recording to replay: as the default model (<ID>_MODEL=replay:<file>), or offered beside it (<ID>_REPLAY=<file>).
+  const replay = model?.startsWith('replay:') ? model.slice('replay:'.length) : env('REPLAY')
+  if (replay) models.setProvider(replayProvider(replay, Number(env('REPLAY_SPEED') ?? 120)).provider)
 
   /** Which providers can be used, refreshed after every sign-in and sign-out; option lists are built from it. */
   let authed = new Map<string, Awaited<ReturnType<Models['checkAuth']>>>()

@@ -1,0 +1,10 @@
+.ask-user { max-width: 760px; width: calc(100% - 40px); margin: 0 auto 8px; padding: 10px 12px; border: 1px solid var(--mu-status-blocked); border-radius: 10px; background: color-mix(in srgb, var(--mu-status-blocked) 8%, var(--mu-raised)); display: flex; flex-direction: column; gap: 8px; }
+.ask-user__label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--mu-muted); }
+.ask-user__question { font-weight: 600; white-space: pre-wrap; }
+.ask-user__options { display: flex; gap: 6px; flex-wrap: wrap; }
+.ask-user__free { display: flex; gap: 6px; }
+.ask-user__free .mu-field { flex: 1; }
+.ask-user__error { color: var(--mu-status-error); font-size: 12px; }
+.ask-user-asked { font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 8px; border-left: 2px solid var(--mu-status-blocked); }
+.ask-user-asked__q { font-weight: 600; }
+.ask-user-asked__a.is-muted { color: var(--mu-muted); }

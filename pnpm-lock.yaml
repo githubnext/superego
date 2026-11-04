@@ -176,7 +176,110 @@ importers:
         specifier: ^5
         version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2))
 
-  app:
+  examples/full:
+    dependencies:
+      '@mu/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@mu/ask-user':
+        specifier: workspace:*
+        version: link:../../extensions/ask-user
+      '@mu/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@mu/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
+      '@mu/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@mu/threads':
+        specifier: workspace:*
+        version: link:../../extensions/threads
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.19.2
+      electron:
+        specifier: 45.2.1
+        version: 45.2.1
+      electron-vite:
+        specifier: 6.0.0
+        version: 6.0.0(vite@8.3.5(@types/node@24.19.2))
+
+  examples/minimal:
+    dependencies:
+      '@mu/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@mu/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@mu/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
+      '@mu/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.19.2
+      electron:
+        specifier: 45.2.1
+        version: 45.2.1
+      electron-vite:
+        specifier: 6.0.0
+        version: 6.0.0(vite@8.3.5(@types/node@24.19.2))
+
+  extensions/ask-user:
+    dependencies:
+      '@earendil-works/pi-durable':
+        specifier: 1.5.0
+        version: 1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.1)
+      '@earendil-works/pi-schema':
+        specifier: 1.5.0
+        version: 1.5.0
+      '@mu/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@mu/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
+      '@mu/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@mu/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      react:
+        specifier: ^19
+        version: 19.3.1
+
+  extensions/threads:
+    dependencies:
+      '@mu/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@mu/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@mu/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      react:
+        specifier: ^19
+        version: 19.3.1
+
+  packages/app:
     dependencies:
       '@earendil-works/chord':
         specifier: 1.5.0
@@ -187,37 +290,21 @@ importers:
       '@earendil-works/pi-durable':
         specifier: 1.5.0
         version: 1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.1)
-      '@mu/cli':
-        specifier: workspace:*
-        version: link:../packages/cli
       '@mu/client':
         specifier: workspace:*
-        version: link:../packages/client
+        version: link:../client
       '@mu/daemon':
         specifier: workspace:*
-        version: link:../packages/daemon
+        version: link:../daemon
       '@mu/protocol':
         specifier: workspace:*
-        version: link:../packages/protocol
+        version: link:../protocol
       '@mu/settings':
         specifier: workspace:*
-        version: link:../packages/settings
+        version: link:../settings
       '@mu/ui':
         specifier: workspace:*
-        version: link:../packages/ui
-      react:
-        specifier: ^19.2.0
-        version: 19.3.1
-      react-dom:
-        specifier: ^19.2.0
-        version: 19.3.1(react@19.3.1)
-    devDependencies:
-      '@types/react':
-        specifier: ^19
-        version: 19.3.0
-      '@types/react-dom':
-        specifier: ^19
-        version: 19.3.0(@types/react@19.3.0)
+        version: link:../ui
       '@vitejs/plugin-react':
         specifier: ^6.0.4
         version: 6.2.1(vite@8.3.5(@types/node@24.19.2))
@@ -227,24 +314,22 @@ importers:
       electron-vite:
         specifier: 6.0.0
         version: 6.0.0(vite@8.3.5(@types/node@24.19.2))
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.3.1(react@19.3.1)
       vite:
         specifier: ^8.2.0
         version: 8.3.5(@types/node@24.19.2)
-
-  extensions/ask-user:
-    dependencies:
-      '@earendil-works/pi-durable':
-        specifier: 1.5.0
-        version: 1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.1)
-      '@earendil-works/pi-schema':
-        specifier: 1.5.0
-        version: 1.5.0
-      '@mu/daemon':
-        specifier: workspace:*
-        version: link:../../packages/daemon
-      '@mu/protocol':
-        specifier: workspace:*
-        version: link:../../packages/protocol
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.3.0(@types/react@19.3.0)
 
   packages/cli:
     dependencies:
