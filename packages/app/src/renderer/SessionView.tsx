@@ -6,7 +6,7 @@ import type { MachineEntry } from '../shared.ts'
 import { machine as client, useSessionView } from './client.ts'
 import { Slot, useRegistry, type ToolCallProps } from './extension.tsx'
 import { useShell } from './state.tsx'
-import { Markdown } from './Markdown.tsx'
+import { Markdown, Scroll } from './Markdown.tsx'
 
 type Block = { type: string; text?: string; thinking?: string; id?: string; name?: string; arguments?: unknown }
 type Message = { role: string; content: string | Block[]; toolCallId?: string; isError?: boolean; details?: unknown }
@@ -101,6 +101,7 @@ function Transcript({ view, live }: { view: ConversationView; live: LiveState | 
             <div key={item.key} className={`msg msg__text ${item.narration ? 'msg__text--narration' : ''} ${item.streaming ? 'is-streaming' : ''}`}><Markdown text={item.text} /></div>
           )
           case 'work': return <Work key={item.key} blocks={item.blocks} results={results} running={running} active={last && Boolean(live?.run)} />
+          case 'end': return <TurnEnd key={item.key} blocks={item.blocks} results={results} />
         }
       })}
       {live?.run && !partial && here.session.status.state === 'working' && <div className="transcript__thinking">working…</div>}
@@ -122,6 +123,7 @@ type Item =
   | { type: 'entry'; key: string; entry: EntryRecord }
   | { type: 'text'; key: string; text: string; narration: boolean; streaming?: boolean }
   | { type: 'work'; key: string; blocks: Block[] }
+  | { type: 'end'; key: string; blocks: Block[] }
 
 function flatten(entries: readonly EntryRecord[], partial: Message | undefined): Item[] {
   const items: Item[] = []
@@ -138,14 +140,44 @@ function flatten(entries: readonly EntryRecord[], partial: Message | undefined):
       }
     })
   }
+  // A turn that did work ends with a line saying what it did: the anchor between one turn and the next.
+  let turn: Block[] = []
+  const end = (key: string) => {
+    if (turn.some((b) => b.type === 'toolCall')) items.push({ type: 'end', key: `end:${key}`, blocks: turn })
+    turn = []
+  }
   for (const entry of entries) {
     const message = entry.model?.[0] as Message | undefined
-    if (message?.role === 'assistant') add(message, String(entry.id))
+    if (message?.role === 'assistant') { add(message, String(entry.id)); turn.push(...blocks(message)) }
     else if (message?.role === 'toolResult' || entry.kind === 'pi.system') continue
-    else items.push({ type: 'entry', key: String(entry.id), entry })
+    else { if (message?.role === 'user') end(String(entry.id)); items.push({ type: 'entry', key: String(entry.id), entry }) }
   }
   if (partial) add(partial, 'live', true)
+  else end('last')
   return items
+}
+
+/** "6 steps · +11 −2 · 1 failed" under a finished turn. */
+function TurnEnd({ blocks, results }: { blocks: Block[]; results: Map<string, Message> }) {
+  const calls = blocks.filter((b) => b.type === 'toolCall')
+  const failed = calls.filter((b) => results.get(b.id!)?.isError).length
+  const stats = sumStats(calls, results)
+  return (
+    <div className="turn-end">
+      <span>{calls.length === 1 ? '1 step' : `${calls.length} steps`}</span>
+      {(stats.added > 0 || stats.removed > 0) && <span><Stat {...stats} /></span>}
+      {failed > 0 && <span>{failed} retried</span>}
+    </div>
+  )
+}
+
+function sumStats(calls: Block[], results: Map<string, Message>) {
+  return calls.reduce((sum, b) => {
+    const diff = diffOf(results.get(b.id!)?.details)
+    if (!diff) return sum
+    const stat = diffStat(diff)
+    return { added: sum.added + stat.added, removed: sum.removed + stat.removed }
+  }, { added: 0, removed: 0 })
 }
 
 function Entry({ entry }: { entry: EntryRecord }) {
@@ -160,53 +192,66 @@ function Entry({ entry }: { entry: EntryRecord }) {
     const title = here.session.title
     // A rest that starts mid-sentence (", write nothing") reads better whole, too.
     const tail = entry.id === firstUser(here) && !title.endsWith('…') && text.replace(/\s+/g, ' ').trim().startsWith(title) ? text.trim().slice(title.length).trim() : text
-    const rest = /^[,:;—–-]/.test(tail) ? text : tail
+    // After a title that is the message's first clause, the rest reads as its own sentence.
+    const clause = /^[:;—–]\s*/.exec(tail)
+    const rest = clause ? tail.slice(clause[0].length).replace(/^./, (c) => c.toUpperCase()) : /^[,-]/.test(tail) ? text : tail
     return rest ? <div className="msg msg--user">{rest}</div> : null
   }
   return <div className="msg msg--note">{entry.kind}</div>
 }
 
 /**
- * A run of work. One step shows as itself; more fold into one line saying what was done ("Read 2 files, ran a
+ * A run of work. One step shows as itself; more fold into one line saying what was done ("Read 2 files and ran a
  * command"), open while the run is going and closed once the agent has moved on.
+ *
+ * Rows share one anatomy: a chevron hung in the gutter, then an icon at the text's edge, then the label. What a row
+ * opens to sits under its icon; inside a run, rows sit under the run's label.
  */
 function Work({ blocks, results, running, active }: { blocks: Block[]; results: Map<string, Message>; running: Slots; active: boolean }) {
   const [open, setOpen] = useState<boolean>()
-  const nested = blocks.length > 1
   const rows = blocks.map((block, index) => block.type === 'thinking'
-    ? <Thinking key={index} text={block.thinking ?? ''} nested={nested} />
-    : <ToolCall key={block.id ?? index} block={block} result={results.get(block.id!)} slot={running.get(block.id!)} nested={nested} />)
+    ? <Thinking key={index} text={block.thinking ?? ''} />
+    : <ToolCall key={block.id ?? index} block={block} result={results.get(block.id!)} slot={running.get(block.id!)} />)
   if (blocks.length === 1) return <div className="steps">{rows}</div>
-  const failed = blocks.filter((b) => b.type === 'toolCall' && results.get(b.id!)?.isError).length
-  const stats = blocks.reduce((sum, b) => {
-    const diff = b.type === 'toolCall' ? diffOf(results.get(b.id!)?.details) : undefined
-    if (!diff) return sum
-    const stat = diffStat(diff)
-    return { added: sum.added + stat.added, removed: sum.removed + stat.removed }
-  }, { added: 0, removed: 0 })
+  const calls = blocks.filter((b) => b.type === 'toolCall')
+  const failed = calls.filter((b) => results.get(b.id!)?.isError).length
+  const stats = sumStats(calls, results)
   const shown = open ?? active
   return (
     <details className="steps steps--run" open={shown} onToggle={(e) => { const next = e.currentTarget.open; if (next !== shown) setOpen(next) }}>
-      <summary className="run">
+      <summary className="row">
         <Chevron />
-        <Icon name="run" />
-        <span className="run__label">{describe(blocks)}</span>
-        {(stats.added > 0 || stats.removed > 0) && <span className="tool__meta"><Stat {...stats} /></span>}
-        {failed > 0 && <span className="run__failed">{failed} failed</span>}
+        <Icon name={mainKind(blocks)} />
+        <span className="row__label">{describe(blocks).map((part, i) => i % 2 ? <code key={i} className="row__path">{part}</code> : part)}</span>
+        {(stats.added > 0 || stats.removed > 0) && <span className="row__meta"><Stat {...stats} /></span>}
+        {failed > 0 && <span className="row__failed">{failed} failed</span>}
       </summary>
       <div className="run__steps">{rows}</div>
     </details>
   )
 }
 
-/** "Read 2 files, ran 3 commands and edited a file." */
-function describe(blocks: Block[]): string {
+/** What a run mostly did, by weight: an edit matters more than a command, a command more than a read. */
+const WEIGHT = ['edit', 'write', 'bash', 'read']
+function mainKind(blocks: Block[]): string {
+  const names = blocks.filter((b) => b.type === 'toolCall').map((b) => b.name ?? '')
+  return WEIGHT.find((kind) => names.includes(kind)) ?? names[0] ?? 'thinking'
+}
+
+/** "Read 2 files, ran 3 commands and edited a file", as text and paths in turn: ['Edited ', 'src/a.ts', ' and ran a command']. */
+function describe(blocks: Block[]): string[] {
   const count = new Map<string, number>()
   // Thinking between steps is part of the work; it's named only when that's all there is.
   const tools = blocks.filter((b) => b.type === 'toolCall')
   for (const b of tools.length ? tools : blocks) { const kind = b.type === 'thinking' ? 'thinking' : b.name ?? 'tool'; count.set(kind, (count.get(kind) ?? 0) + 1) }
   const n = (k: number, one: string, many: string) => k === 1 ? one : `${k} ${many}`
-  const phrases = [...count].map(([kind, k]) => {
+  // The weightiest kind leads, naming its file when there's one.
+  const main = mainKind(blocks)
+  const paths = tools.filter((b) => b.name === main).map((b) => (b.arguments as { path?: unknown } | undefined)?.path)
+  const only = paths.length === 1 && typeof paths[0] === 'string' ? paths[0] : undefined
+  const ordered = [...count].sort((a, b) => (a[0] === main ? -1 : b[0] === main ? 1 : 0))
+  const phrases = ordered.map(([kind, k]) => {
+    if (kind === main && only) return `${{ read: 'read', edit: 'edited', write: 'wrote' }[kind] ?? kind} \u0000${only}\u0000`
     switch (kind) {
       case 'thinking': return 'thought'
       case 'read': return `read ${n(k, 'a file', 'files')}`
@@ -217,20 +262,16 @@ function describe(blocks: Block[]): string {
     }
   })
   const text = phrases.length > 1 ? `${phrases.slice(0, -1).join(', ')} and ${phrases.at(-1)}` : phrases[0] ?? ''
-  return text.charAt(0).toUpperCase() + text.slice(1)
+  return (text.charAt(0).toUpperCase() + text.slice(1)).split('\u0000')
 }
 
-/**
- * Rows share one anatomy: a chevron (only on rows that stand alone; inside a run the run has it), an icon, a label.
- * What a row opens to sits under its icon, so a fold has two left edges: the column and one indent.
- */
 const Chevron = () => <span className="row__chevron" aria-hidden="true">›</span>
 
-function Thinking({ text, nested }: { text: string; nested?: boolean }) {
+function Thinking({ text }: { text: string }) {
   return (
-    <details className={`tool tool--thinking ${nested ? 'is-nested' : ''}`}>
-      <summary>{!nested && <Chevron />}<Icon name="thinking" /><b>Thinking</b></summary>
-      <div className="msg__thinking-body">{text}</div>
+    <details className="step step--thinking">
+      <summary className="row"><Chevron /><Icon name="thinking" /><span className="row__label">Thinking</span></summary>
+      <div className="step__thinking">{text}</div>
     </details>
   )
 }
@@ -239,21 +280,32 @@ function Thinking({ text, nested }: { text: string; nested?: boolean }) {
 function Output({ text, className = '' }: { text: string; className?: string }) {
   const [all, setAll] = useState(false)
   const lines = text.replace(/\n+$/, '').split('\n')
-  const cut = !all && lines.length > CAP + 3
+  const long = lines.length > CAP + 3
   return (
-    <div className={`tool__output ${cut ? 'is-cut' : ''} ${className}`}>
-      <pre>{cut ? lines.slice(0, CAP).join('\n') : lines.join('\n')}</pre>
-      {lines.length > CAP + 3 && <button type="button" className="tool__more" onClick={() => setAll(!all)}>{all ? 'Show less' : `Show all ${lines.length} lines`}</button>}
+    <div className={`step__output ${long && !all ? 'is-cut' : ''} ${className}`}>
+      <Scroll>{long && !all ? lines.slice(0, CAP).join('\n') : lines.join('\n')}</Scroll>
+      {long && <button type="button" className="step__more" onClick={() => setAll(!all)}>{all ? 'Show less' : `Show all ${lines.length} lines`}</button>}
     </div>
   )
 }
 const CAP = 12
 
 const Stat = ({ added, removed }: { added: number; removed: number }) => (
-  <>{added > 0 && <span className="tool__add">+{added}</span>}{added > 0 && removed > 0 && ' '}{removed > 0 && <span className="tool__del">−{removed}</span>}</>
+  <>{added > 0 && <span className="stat--add">+{added}</span>}{added > 0 && removed > 0 && ' '}{removed > 0 && <span className="stat--del">−{removed}</span>}</>
 )
 
-function ToolCall({ block, result, slot, nested }: { block: Block; result: Message | undefined; slot: ReturnType<Slots['get']>; nested?: boolean }) {
+/** What a step did, as a verb: "Read", "Ran", "Edited"; "Running" while it runs, "Edit failed" when it failed. */
+function verbOf(name: string, state: string): string {
+  const verbs: Record<string, [string, string, string]> = {
+    read: ['Read', 'Reading', 'Read failed'], bash: ['Ran', 'Running', 'Command failed'],
+    edit: ['Edited', 'Editing', 'Edit failed'], write: ['Wrote', 'Writing', 'Write failed'],
+  }
+  const verb = verbs[name]
+  if (!verb) return state === 'error' ? `${name} failed` : name
+  return state === 'error' ? verb[2] : state === 'working' ? verb[1] : verb[0]
+}
+
+function ToolCall({ block, result, slot }: { block: Block; result: Message | undefined; slot: ReturnType<Slots['get']> }) {
   const custom = useRegistry().tools.get(block.name ?? '')
   const here = useContext(Here)
   if (custom) {
@@ -272,17 +324,15 @@ function ToolCall({ block, result, slot, nested }: { block: Block; result: Messa
   const diff = !result?.isError ? diffOf(result?.details) : undefined
   const written = block.name === 'write' && typeof args.content === 'string' ? args.content : undefined
   const stat = diff ? diffStat(diff) : undefined
-
   return (
-    <details className={`tool tool--${state} ${nested ? 'is-nested' : ''}`}>
-      <summary>
-        {!nested && <Chevron />}
-        {state === 'working' ? <StatusGlyph status={{ state }} /> : <Icon name={block.name ?? ''} state={state} />}
-        <b>{block.name}</b>
-        <span className="tool__summary">{summaryOf(block.name ?? '', args)}</span>
-        {stat && <span className="tool__meta"><Stat {...stat} /></span>}
-        {written !== undefined && <span className="tool__meta">{lineCount(written)} lines</span>}
-        {state === 'error' && <span className="tool__failed">failed</span>}
+    <details className={`step step--${state}`}>
+      <summary className="row">
+        <Chevron />
+        {state === 'working' ? <StatusGlyph status={{ state }} /> : <Icon name={block.name ?? ''} />}
+        <span className="row__label">{verbOf(block.name ?? '', state)}</span>
+        <span className="row__arg">{summaryOf(block.name ?? '', args)}</span>
+        {stat && <span className="row__meta"><Stat {...stat} /></span>}
+        {written !== undefined && <span className="row__meta">{lineCount(written)} lines</span>}
       </summary>
       {diff ? <Diff diff={diff} />
         : written !== undefined ? <Output text={written} />
@@ -309,18 +359,17 @@ function diffStat(diff: string) {
   return { added: lines.filter((l) => l.startsWith('+')).length, removed: lines.filter((l) => l.startsWith('-')).length }
 }
 
-/** A small glyph per kind of row: a page to read, a prompt to run, a pencil to edit, a new page to write, a stack for a run, a spark for thinking. */
-function Icon({ name, state = 'done' }: { name: string; state?: string }) {
+/** A small, static glyph per kind of row: a page to read, a prompt to run, a pencil, a new page, a bubble for thinking. */
+function Icon({ name }: { name: string }) {
   const paths: Record<string, string> = {
-    run: 'M2.5 4.5h11M2.5 8h11M2.5 11.5h7',
-    thinking: 'M8 2v3M8 11v3M2 8h3M11 8h3M4 4l1.8 1.8M10.2 10.2L12 12M12 4l-1.8 1.8M5.8 10.2L4 12',
+    thinking: 'M8 2.5l1.3 3.2 3.2 1.3-3.2 1.3L8 11.5 6.7 8.3 3.5 7l3.2-1.3zM12.5 11l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z',
     read: 'M4 1.5h5l3 3v10H4zM9 1.5v3h3M6 8h4M6 10.5h4',
     bash: 'M1.5 3h13v10h-13zM4 6.5l2 1.5-2 1.5M7.5 10h3.5',
     edit: 'M10.5 2.5l3 3-7.5 7.5H3v-3zM9 4l3 3',
     write: 'M4 1.5h5l3 3v10H4zM9 1.5v3h3M8 7.5v4M6 9.5h4',
   }
   return (
-    <svg className={`tool__icon tool__icon--${state}`} viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+    <svg className="row__icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
       <path d={paths[name] ?? 'M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zM8 6v4'} fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   )
@@ -328,27 +377,35 @@ function Icon({ name, state = 'done' }: { name: string; state?: string }) {
 
 /** An edit's diff, as the edit tool reports it: `+12 added`, `-12 removed`, ` 12 context`, and `...` between hunks. */
 function Diff({ diff }: { diff: string }) {
-  // The tool numbers context and removed lines by the old file and added lines by the new one. Shown by the new
-  // file only: context is shifted by what was added and removed above it, and removed lines get no number.
+  // The tool numbers context and removed lines by the old file, added lines by the new one. Both columns show:
+  // the old number (context, removed) and the new one (context shifted by what changed above it, added).
+  const [all, setAll] = useState(false)
   let shift = 0
+  const lines = diff.split('\n').map((line) => {
+    const kind = line.startsWith('+') ? 'add' : line.startsWith('-') ? 'del' : /^\s*\.\.\.\s*$/.test(line) ? 'gap' : 'ctx'
+    const match = /^[+\- ](\s*\d+) (.*)$/.exec(line)
+    const n = match ? Number(match[1]) : undefined
+    const old = n === undefined || kind === 'add' ? '' : String(n)
+    const next = n === undefined || kind === 'del' ? '' : kind === 'add' ? String(n) : String(n + shift)
+    if (kind === 'add') shift++
+    if (kind === 'del') shift--
+    return { kind, old, next, text: match ? match[2]! : kind === 'gap' ? '⋯' : line }
+  })
+  const long = lines.length > CAP * 2
   return (
-    <pre className="tool__output tool__diff">
-      {diff.split('\n').map((line, index) => {
-        const kind = line.startsWith('+') ? 'add' : line.startsWith('-') ? 'del' : /^\s*\.\.\.\s*$/.test(line) ? 'gap' : 'ctx'
-        const match = /^[+\- ](\s*\d+) (.*)$/.exec(line)
-        const n = match ? Number(match[1]) : undefined
-        if (kind === 'add') shift++
-        if (kind === 'del') shift--
-        const number = n === undefined || kind === 'del' ? '' : kind === 'add' ? String(n) : String(n + shift)
-        return (
-          <span key={index} className={`diff__line diff__line--${kind}`}>
-            <span className="diff__num">{number}</span>
-            <span className="diff__sign">{kind === 'add' ? '+' : kind === 'del' ? '−' : ''}</span>
-            <span className="diff__text">{match ? match[2] : kind === 'gap' ? '⋯' : line}</span>
+    <div className="step__output step__diff">
+      <Scroll>
+        {(long && !all ? lines.slice(0, CAP * 2) : lines).map((line, index) => (
+          <span key={index} className={`diff__line diff__line--${line.kind}`}>
+            <span className="diff__num">{line.old}</span>
+            <span className="diff__num">{line.next}</span>
+            <span className="diff__sign">{line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ''}</span>
+            <span className="diff__text">{line.text}</span>
           </span>
-        )
-      })}
-    </pre>
+        ))}
+      </Scroll>
+      {long && <button type="button" className="step__more" onClick={() => setAll(!all)}>{all ? 'Show less' : `Show all ${lines.length} lines`}</button>}
+    </div>
   )
 }
 

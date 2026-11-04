@@ -9,8 +9,8 @@
   --mu-bg: light-dark(#ffffff, #1e1e1e);          /* content */
   --mu-sidebar-bg: light-dark(#e9e9ec, #2c2c2e);  /* sidebars and side panes */
   --mu-surface: light-dark(#f3f3f6, #2e2e31);     /* wells: code, tool output */
-  --mu-bubble: light-dark(#e8e8ed, #343437);      /* your messages */
-  --mu-code-chip: light-dark(rgb(0 0 0 / .045), rgb(255 255 255 / .09));
+  --mu-bubble: light-dark(color-mix(in srgb, #007aff 11%, #fff), color-mix(in srgb, #0a84ff 13%, #2a2a2c));      /* your messages */
+  --mu-code-chip: light-dark(rgb(0 0 0 / .055), rgb(255 255 255 / .08));
   --mu-raised: light-dark(#ffffff, #2c2c2e);      /* what floats: menus, popovers, the composer */
   --mu-border: light-dark(#c8c8cd, #48484a);      /* separators and frames */
   --mu-text: light-dark(#1d1d1f, #f5f5f7);
@@ -33,14 +33,14 @@
   --mu-status-error: light-dark(#d70015, #ff453a);
   --mu-status-idle: var(--mu-muted);
   --mu-radius: 6px;
-  --mu-radius-lg: 14px;
+  --mu-radius-lg: 16px;
   --mu-space: 8px;
 
   /* Type: UI text at 13, reading text at 15.5, one title size; mono for meta. */
   --mu-text-xs: 11px;
   --mu-text-sm: 12px;
   --mu-text-ui: 13px;
-  --mu-text-body: 14.5px;
+  --mu-text-body: 14px;
   --mu-text-mono: 12.5px;
   --mu-text-title: 26px;
   --mu-leading-ui: 1.45;
@@ -54,7 +54,7 @@
   --mu-space-6: 32px;
   --mu-space-7: 52px;
   /* The reading column, the sidebar, and what floats over content. */
-  --mu-column: 600px;
+  --mu-column: 580px;
   --mu-sidebar: 248px;
   --mu-shadow-float: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(0 0 0 / .6)), 0 12px 36px -8px rgb(0 0 0 / .28), 0 2px 6px rgb(0 0 0 / .08);
 }

@@ -18,84 +18,88 @@
 
 /* The session: a crumb, a title and a reading column; the composer floats at the bottom. */
 .session { display: flex; flex-direction: column; flex: 1; min-height: 0; position: relative; }
-.session__scroll { flex: 1; overflow: auto; }
-.session__column { width: var(--mu-column); max-width: calc(100% - 2 * var(--mu-space-6)); margin: 0 auto; padding: var(--mu-space-4) 0 220px; }
+.session__scroll { flex: 1; overflow: auto; scrollbar-gutter: stable; }
+.session__column { width: var(--mu-column); max-width: calc(100% - 2 * var(--mu-space-6)); margin: 0 auto; padding: var(--mu-space-4) 0 170px; }
 .session__crumb { display: flex; justify-content: space-between; align-items: center; gap: var(--mu-space-3); font-size: var(--mu-text-sm); line-height: 1.4; color: var(--mu-muted); margin-bottom: var(--mu-space-2); }
 .session__crumb > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.session__title { font-size: 20px; line-height: 1.3; font-weight: 650; letter-spacing: -0.015em; margin: 0 0 var(--mu-space-5); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.session__title { font-size: 20px; line-height: 1.3; font-weight: 650; letter-spacing: -0.015em; margin: 0 0 var(--mu-space-6); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 /* Text scrolls away under soft edges: at the top, and behind the floating composer. */
 .session::before, .session::after { content: ''; position: absolute; left: 0; right: 12px; pointer-events: none; z-index: 1; }
 .session::before { top: 0; height: 16px; background: linear-gradient(var(--mu-bg), transparent); opacity: 0; transition: opacity .15s; }
 .session.is-scrolled::before { opacity: 1; }
-.session::after { bottom: 0; height: 96px; background: linear-gradient(transparent, var(--mu-bg) 70%); }
+.session::after { bottom: 0; height: 140px; background: linear-gradient(transparent, var(--mu-bg) 62%); }
 .session .dock { z-index: 2; }
 
-.transcript { display: flex; flex-direction: column; gap: var(--mu-space-3); font-size: var(--mu-text-body); line-height: var(--mu-leading-body); }
+.transcript { display: flex; flex-direction: column; gap: 14px; font-size: var(--mu-text-body); line-height: var(--mu-leading-body); }
 .transcript__more, .transcript__thinking { color: var(--mu-muted); font-size: var(--mu-text-sm); }
 .transcript__error { color: var(--mu-status-error); font-size: var(--mu-text-ui); border-left: 2px solid currentColor; padding-left: var(--mu-space-3); }
 .msg { overflow-wrap: anywhere; }
 /* Your turns: a bubble on the right, with clear air above; the agent's work reads down the column. */
 .msg--user { white-space: pre-wrap; align-self: flex-end; max-width: 75%; background: var(--mu-bubble); border-radius: var(--mu-radius-lg); padding: 9px 14px; line-height: 1.5; }
 /* A turn starts well clear of the last one (56px against 12px inside a turn). */
-.msg--user:not(:first-child) { margin-top: 44px; }
+.msg--user:not(:first-child) { margin-top: 18px; }
+.turn-end + .msg--user { margin-top: 30px; }
+.msg__text + .msg--user, .steps + .msg--user { margin-top: 40px; }
 .msg--user + * { margin-top: var(--mu-space-1); }
 /* Narration leads straight into the work it announces. */
 .msg__text.is-streaming .md > :last-child::after { content: '▍'; color: var(--mu-muted); animation: mu-pulse 1s infinite; }
 .msg--note { color: var(--mu-muted); font: var(--mu-text-xs) var(--mu-mono); }
-.msg__thinking-body { white-space: pre-wrap; font-size: var(--mu-text-ui); line-height: var(--mu-leading-ui); color: var(--mu-muted); margin: 2px 0 8px 21px; max-width: 64ch; }
-.is-nested > .msg__thinking-body { margin-left: 0; }
-
 /*
- * Work. Every row: [chevron] icon label, 26px tall. Rows standing alone carry the chevron; inside a run the run has it.
- * What a row opens to sits under its icon: a fold has two left edges, the column and one 21px indent.
+ * Work. Every row: an icon on the text's edge, a verb, what it acted on; its chevron hangs in the gutter and shows on
+ * hover or while open. What a row opens to sits under its icon; inside a run, rows sit under the run's label.
  */
 .steps { display: flex; flex-direction: column; }
-.msg__text--narration + .steps { margin-top: calc(-1 * var(--mu-space-1)); }
-.steps + .msg__text { margin-top: var(--mu-space-1); }
-.run, .tool summary { display: flex; gap: var(--mu-space-2); align-items: center; height: 26px; min-width: 0; cursor: default; list-style: none; border-radius: 6px; padding: 0 6px; margin: 0 -6px; font-size: var(--mu-text-ui); color: var(--mu-muted); }
-.run::-webkit-details-marker, .tool summary::-webkit-details-marker { display: none; }
-.run:hover, .tool summary:hover { background: var(--mu-hover); }
-.row__chevron { flex: none; width: 13px; text-align: center; font-size: 15px; line-height: 1; color: var(--mu-faint); transition: transform .12s; }
-.steps--run[open] > .run .row__chevron, .tool[open] > summary .row__chevron { transform: rotate(90deg); }
-.run__steps { margin: 0 0 6px 21px; }
-.tool { font-size: var(--mu-text-ui); color: var(--mu-muted); }
-.tool summary b { font-weight: 400; color: var(--mu-muted); flex: none; }
-.tool--thinking summary b { font-style: italic; }
-.tool summary .mu-status, .tool__icon { flex: none; width: 13px; text-align: center; color: var(--mu-faint); }
-.tool__icon--error { color: var(--mu-status-error); }
-.tool__summary { font: var(--mu-text-mono) var(--mu-mono); color: var(--mu-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
-.tool__meta { flex: none; font: var(--mu-text-xs) var(--mu-mono); color: var(--mu-faint); }
-.tool__add { color: light-dark(#248a3d, #30d158); }
-.tool__del { color: light-dark(#d70015, #ff6961); }
-.tool__failed, .run__failed { color: var(--mu-status-error); font-size: var(--mu-text-sm); }
-.tool__failed::before, .run__failed::before { content: '· '; color: var(--mu-faint); }
-/* Output: smaller than code in an answer, a dozen lines at most until asked. */
-.tool__output { margin: 2px 0 var(--mu-space-2) 21px; background: var(--mu-surface); border-radius: 10px; color: var(--mu-text); overflow: hidden; }
-.is-nested > .tool__output { margin-left: 0; }
-.tool__output pre { margin: 0; padding: var(--mu-space-3) var(--mu-space-4); font: 12px/1.45 var(--mu-mono); white-space: pre; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(to left, transparent, #000 var(--mu-space-4)); }
-.tool__output pre::-webkit-scrollbar { display: none; }
-.tool__output.is-cut pre { mask-image: linear-gradient(to left, transparent, #000 var(--mu-space-4)), linear-gradient(to top, transparent, #000 28px); mask-composite: intersect; }
-.tool__output.is-error { background: color-mix(in srgb, var(--mu-status-error) 7%, var(--mu-bg)); }
-/* An error is a sentence, not output: it wraps. */
-.tool__output.is-error pre { white-space: pre-wrap; mask-image: none; font-family: var(--mu-font); font-size: var(--mu-text-ui); }
-.tool__more { display: block; width: 100%; text-align: left; font: inherit; font-size: var(--mu-text-sm); color: var(--mu-muted); background: none; border: 0; border-top: 1px solid color-mix(in srgb, var(--mu-border) 60%, transparent); padding: 5px var(--mu-space-4); cursor: default; }
-.tool__more:hover { color: var(--mu-text); }
-.tool__diff { margin: 2px 0 var(--mu-space-2) 21px; padding: var(--mu-space-3) 0; font: 12px/1.45 var(--mu-mono); background: var(--mu-surface); border-radius: 10px; color: var(--mu-text); max-height: 360px; overflow: auto; scrollbar-width: none; }
-.tool__diff::-webkit-scrollbar { display: none; }
-.is-nested > .tool__diff { margin-left: 0; }
-.diff__line { display: flex; width: max-content; min-width: 100%; padding-right: var(--mu-space-4); }
-.diff__num { flex: none; width: 3em; text-align: right; color: var(--mu-faint); user-select: none; }
+.msg__text--narration + .steps { margin-top: -8px; }
+.steps + .msg__text { margin-top: 0; }
+.row { position: relative; display: flex; gap: var(--mu-space-2); align-items: center; height: 26px; min-width: 0; cursor: default; list-style: none; border-radius: 6px; padding: 0 6px 0 27px; margin: 0 -6px 0 -27px; font-size: var(--mu-text-ui); color: var(--mu-muted); }
+.row::-webkit-details-marker { display: none; }
+.row:hover { background: var(--mu-hover); }
+.row__chevron { position: absolute; left: 8px; width: 13px; text-align: center; font-size: 15px; line-height: 1; color: var(--mu-faint); opacity: 0; transition: transform .12s, opacity .12s; }
+.row:hover > .row__chevron, .row:focus-visible > .row__chevron, details[open] > .row > .row__chevron { opacity: 1; }
+details[open] > .row > .row__chevron { transform: rotate(90deg); }
+.row__icon, .row > .mu-status { flex: none; width: 13px; text-align: center; color: var(--mu-faint); }
+.row__label { flex: none; color: var(--mu-muted); }
+.row__label--quiet { color: var(--mu-faint); }
+.row__path { font: var(--mu-text-mono) var(--mu-mono); }
+.row__arg { font: var(--mu-text-mono) var(--mu-mono); color: var(--mu-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
+.row__label + .row__arg { margin-left: -2px; }
+.row__meta { flex: none; font: var(--mu-text-xs) var(--mu-mono); color: var(--mu-faint); }
+.row__failed { color: var(--mu-status-error); font-size: var(--mu-text-sm); }
+.step--error > .row .row__label, .step--error > .row .row__icon { color: var(--mu-status-error); }
+.stat--add { color: light-dark(#248a3d, rgb(48 209 88 / .85)); }
+.stat--del { color: light-dark(#d70015, rgb(255 105 97 / .85)); }
+.run__steps { margin: 0 0 var(--mu-space-1) 21px; }
+.step__thinking { white-space: pre-wrap; font-size: var(--mu-text-ui); line-height: 1.45; color: var(--mu-muted); margin: 2px 0 var(--mu-space-2); }
+/* Bodies align under the label: alone, 21px in; inside a run (already 21px in), flush. */
+.steps:not(.steps--run) > .step > :is(.step__output, .step__thinking) { margin-left: 21px; }
+/* One container for all code: a fill, no border. Output and answers wrap; diffs scroll; long ones stop at "Show all". */
+.step__output { margin: 2px 0 var(--mu-space-2); background: var(--mu-surface); border-radius: 10px; color: var(--mu-text); overflow: hidden; }
+.step__output pre { margin: 0; padding: 10px var(--mu-space-3); font: 12px/1.45 var(--mu-mono); white-space: pre; overflow-x: auto; }
+.step__output.is-cut pre { mask-image: linear-gradient(to top, transparent, #000 28px); }
+.step__output.is-cut pre.is-overflowing { mask-image: linear-gradient(to top, transparent, #000 28px), linear-gradient(to left, transparent, #000 32px); mask-composite: intersect; }
+.step__output.is-error pre { white-space: pre-wrap; }
+.step__output.is-error { background: color-mix(in srgb, var(--mu-status-error) 7%, var(--mu-bg)); }
+.step__more { display: block; width: 100%; text-align: left; font: inherit; font-size: var(--mu-text-sm); color: var(--mu-muted); background: none; border: 0; border-top: 1px solid color-mix(in srgb, var(--mu-border) 50%, transparent); padding: 5px var(--mu-space-3); cursor: default; }
+.step__more:hover { color: var(--mu-text); }
+.step__diff pre { padding: 8px 0; }
+.diff__line { display: flex; width: max-content; min-width: 100%; padding-right: var(--mu-space-3); }
+.diff__num { flex: none; width: 2.6em; text-align: right; font-size: 11px; color: var(--mu-faint); user-select: none; }
 .diff__sign { flex: none; width: 2em; text-align: center; color: var(--mu-faint); user-select: none; }
-.diff__line--add { background: light-dark(rgb(52 199 89 / .14), rgb(48 209 88 / .16)); }
-.diff__line--del { background: light-dark(rgb(255 59 48 / .11), rgb(255 69 58 / .16)); }
+.diff__line--add { background: light-dark(rgb(52 199 89 / .14), rgb(48 209 88 / .15)); }
+.diff__line--del { background: light-dark(rgb(255 59 48 / .11), rgb(255 69 58 / .15)); }
 .diff__line--gap { color: var(--mu-muted); }
+/* A turn that did work ends on a hairline, with what it did at the right: the boundary between turns. */
+.turn-end { display: flex; gap: 6px; margin-top: -4px; font-size: var(--mu-text-xs); color: var(--mu-faint); font-variant-numeric: tabular-nums; }
+.turn-end > * + *::before { content: '·'; margin-right: 6px; }
 
 /* Markdown: the reading column's rhythm, one step of space between blocks. */
 .md > :first-child { margin-top: 0; }
 .md > :last-child { margin-bottom: 0; }
 .md p, .md ul, .md ol, .md pre, .md blockquote, .md .md__table { margin: 0 0 var(--mu-space-3); }
-.md h1, .md h2, .md h3, .md h4 { font-size: 1.07em; font-weight: 650; line-height: 1.35; margin: 20px 0 var(--mu-space-2); }
-.md h1 { font-size: 1.25em; }
+.md h1, .md h2, .md h3, .md h4 { font-size: 1em; font-weight: 650; line-height: 1.35; margin: 22px 0 6px; }
+.md h1 { font-size: 1.35em; }
+.md h2 { font-size: 1.2em; }
+.md h3 { font-size: 1.07em; }
 .md ul, .md ol { padding-left: 1.35em; }
 .md li { margin: 0 0 var(--mu-space-1); padding-left: 2px; }
 .md li > p { margin: 0; }
@@ -104,8 +108,11 @@
 .md a { color: var(--mu-accent); text-decoration: none; }
 .md a:hover { text-decoration: underline; }
 .md code { font: 0.86em var(--mu-mono); letter-spacing: -0.01em; background: var(--mu-code-chip); border-radius: 4px; padding: 1px 3px; white-space: nowrap; }
-.md pre { font: var(--mu-text-mono)/1.6 var(--mu-mono); background: var(--mu-surface); border-radius: 10px; padding: var(--mu-space-3) var(--mu-space-4); overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(to left, transparent, #000 var(--mu-space-4)); }
-.md pre::-webkit-scrollbar { display: none; }
+.md pre { font: 12.5px/1.5 var(--mu-mono); background: var(--mu-surface); border-radius: 10px; padding: 10px var(--mu-space-3); white-space: pre; overflow-x: auto; }
+/* Sideways-scrolling code: the scrollbar shows on hover; the edge fades only while a line runs past it. */
+:is(.md, .step__output) pre::-webkit-scrollbar { height: 0; }
+:is(.md, .step__output) pre:hover::-webkit-scrollbar { height: 8px; }
+.md pre.is-overflowing, .step__output:not(.is-cut) pre.is-overflowing { mask-image: linear-gradient(to left, transparent, #000 32px); }
 .md pre code { font: inherit; background: none; padding: 0; white-space: pre; }
 /* Code scrolls sideways; its scrollbar shows only while the pointer is over it. */
 
@@ -113,8 +120,8 @@
 .md hr { border: 0; border-top: 1px solid var(--mu-border); margin: var(--mu-space-5) 0; }
 .md__table { overflow-x: auto; }
 .md table { border-collapse: collapse; font-size: var(--mu-text-ui); line-height: var(--mu-leading-ui); width: 100%; table-layout: fixed; font-variant-numeric: tabular-nums; }
-.md th, .md td { text-align: left; padding: 5px 24px 5px 0; border-bottom: 1px solid color-mix(in srgb, var(--mu-border) 70%, transparent); vertical-align: top; }
-.md th { font-weight: 600; color: var(--mu-muted); border-bottom-color: var(--mu-border); }
+.md th, .md td { text-align: left; padding: 6px 24px 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--mu-border) 45%, transparent); vertical-align: top; }
+.md th { font-size: var(--mu-text-sm); font-weight: 600; color: var(--mu-muted); border-bottom-color: var(--mu-border); }
 .md tr:last-child td { border-bottom: 0; }
 
 .dock { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); width: calc(var(--mu-column) + 2 * var(--mu-space-4)); max-width: calc(100% - 2 * var(--mu-space-5)); background: var(--mu-raised); border: 0; border-radius: var(--mu-radius-lg); box-shadow: var(--mu-shadow-float); padding: 14px var(--mu-space-4) 10px; }
