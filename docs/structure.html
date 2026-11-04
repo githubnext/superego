@@ -6,311 +6,290 @@
 <style>
   :root {
     color-scheme: light dark;
-    --bg: light-dark(#fbfaf8, #161514); --surface: light-dark(#f3f1ee, #1e1d1b); --raised: light-dark(#fff, #262422);
-    --border: light-dark(#e4e0da, #3a3633); --text: light-dark(#1d1b19, #ece8e3); --muted: light-dark(#7a746c, #9a928a);
-    --accent: light-dark(#d4572a, #f07a4a); --blue: light-dark(#2f6fb5, #6aa6e8); --green: light-dark(#2f8f5b, #5cc98d);
-    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+    --bg: light-dark(#fafafa, #09090b); --raised: light-dark(#fff, #18181b); --surface: light-dark(#f4f4f5, #27272a);
+    --border: light-dark(#e4e4e7, #3f3f46); --text: light-dark(#18181b, #f4f4f5); --muted: light-dark(#71717a, #a1a1aa);
+    --ink: light-dark(#18181b, #f4f4f5);
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 ui-sans-serif, -apple-system, sans-serif; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
   main { max-width: 1040px; margin: 0 auto; padding: 48px 28px 80px; }
-  h1 { font-size: 28px; margin: 0; letter-spacing: -.01em; }
-  h1 span { color: var(--accent); }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 48px 0 12px; }
+  h1 { font-size: 28px; margin: 0; letter-spacing: -0.02em; font-weight: 650; }
+  h1 span { font-family: var(--mono); }
+  h2 { font: 500 11.5px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 48px 0 12px; }
   p { margin: 6px 0; }
   .lede { color: var(--muted); margin-top: 6px; }
-  code, .mono { font-family: var(--mono); font-size: .9em; }
+  code { font-family: var(--mono); font-size: .88em; }
   .card { background: var(--raised); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
   svg { width: 100%; height: auto; display: block; }
-  svg text { font: 13px ui-sans-serif, -apple-system, sans-serif; fill: var(--text); }
+  svg text { font: 13px var(--sans); fill: var(--text); }
   svg .small { font-size: 11px; fill: var(--muted); }
   svg .mono { font: 11px var(--mono); fill: var(--muted); }
   svg .title { font-weight: 650; }
   svg .box { fill: var(--raised); stroke: var(--border); stroke-width: 1.2; }
   svg .group { fill: var(--surface); stroke: var(--border); stroke-dasharray: 4 4; }
-  svg .hot { fill: color-mix(in srgb, var(--accent) 10%, var(--raised)); stroke: var(--accent); }
+  svg .hot { fill: var(--raised); stroke: var(--ink); stroke-width: 1.5; }
   svg .line { stroke: var(--muted); stroke-width: 1.4; fill: none; }
-  svg .accent { stroke: var(--accent); }
-  svg .blue { stroke: var(--blue); }
+  svg .strong { stroke: var(--ink); }
   svg .label { font-size: 11px; fill: var(--muted); }
   .grid { display: grid; gap: 12px; }
   .g2 { grid-template-columns: 1fr 1fr; }
-  .g3 { grid-template-columns: repeat(3, 1fr); }
-  .stat { font-size: 26px; font-weight: 650; }
-  .stat small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .stat { font-size: 24px; font-weight: 650; letter-spacing: -0.01em; }
+  .stat small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); letter-spacing: 0; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
   th { color: var(--muted); font-weight: 500; font-size: 12px; }
   td:first-child { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
   .chips span { display: inline-block; font: 11.5px var(--mono); padding: 2px 7px; margin: 2px 3px 2px 0; border-radius: 5px; background: var(--surface); border: 1px solid var(--border); }
-  .chips span.new { border-color: var(--accent); }
-  .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  .chips span.new { border-color: var(--ink); }
+  .k { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 8px; }
+  pre { margin: 0; font: 12px/1.6 var(--mono); white-space: pre-wrap; }
+  pre b { color: var(--text); font-weight: 600; }
+  pre i { color: var(--muted); font-style: normal; }
   ul.tight { margin: 4px 0; padding-left: 18px; }
-  ul.tight li { margin: 2px 0; }
-  .ok { color: var(--green); }
+  ul.tight li { margin: 3px 0; }
   .todo { color: var(--muted); }
   footer { margin-top: 56px; color: var(--muted); font-size: 12px; }
-  @media (max-width: 760px) { .g2, .g3 { grid-template-columns: 1fr; } }
+  @media (max-width: 760px) { .g2, .g4 { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <main>
   <h1><span>µ</span> mu: structure</h1>
-  <p class="lede">An Electron agent environment with a small core: one daemon per machine, its own protocol, thin clients. As of <span class="mono">c88a748</span>, 7 commits.</p>
+  <p class="lede">A framework for agent apps. One daemon per machine, its own protocol, an Electron app layer, and extensions with a daemon half and a UI half. Apps are made with <code>mu new</code>. As of <code>239dd3b</code>, 13 commits.</p>
 
-  <div class="grid g3" style="margin-top:24px">
-    <div class="card"><div class="stat">~3.9k<small>lines of TypeScript, 7 packages</small></div></div>
-    <div class="card"><div class="stat">17 + 12<small>daemon methods + app-only methods</small></div></div>
-    <div class="card"><div class="stat">25 + e2e<small>unit tests + a two-process Electron smoke test</small></div></div>
+  <div class="grid g4" style="margin-top:24px">
+    <div class="card"><div class="stat">~4.6k<small>lines of source</small></div></div>
+    <div class="card"><div class="stat">7 · 2 · 2<small>packages · extensions · example apps</small></div></div>
+    <div class="card"><div class="stat">18 + 12<small>daemon methods + app methods</small></div></div>
+    <div class="card"><div class="stat">28 + 3<small>tests + end-to-end runs (2 examples, 1 generated app)</small></div></div>
   </div>
 
-  <!-- 1. Processes -->
   <h2>1 · Processes</h2>
-  <p>Agents live in the daemon. Apps and the CLI are clients. Quitting the app never stops an agent.</p>
+  <p>Agents live in the daemon; every window and command is a client. Each app has its own daemon, data dir and command.</p>
   <div class="card">
-    <svg viewBox="0 0 1000 470" role="img" aria-label="Process diagram">
-      <defs>
-        <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="color:var(--muted)"/></marker>
-      </defs>
-      <!-- App -->
-      <rect class="group" x="20" y="20" width="560" height="200" rx="12"/>
-      <text class="title" x="36" y="44">Electron app</text><text class="small" x="140" y="44">single instance per data dir · menu bar µ</text>
-      <rect class="box" x="40" y="62" width="160" height="140" rx="8"/>
+    <svg viewBox="0 0 1000 440" role="img" aria-label="Processes">
+      <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
+      <rect class="group" x="20" y="20" width="580" height="190" rx="12"/>
+      <text class="title" x="36" y="44">App window</text><text class="small" x="130" y="44">startApp(app) · mountApp(app, { extensions })</text>
+      <rect class="box" x="40" y="62" width="190" height="130" rx="8"/>
       <text class="title" x="56" y="86">Renderer</text>
-      <text class="small" x="56" y="106">React · @mu/ui</text>
-      <text class="small" x="56" y="124">sidebar · transcript</text>
-      <text class="small" x="56" y="142">composer · settings</text>
-      <text class="small" x="56" y="160">restart notice</text>
-      <rect class="box" x="220" y="62" width="110" height="140" rx="8"/>
-      <text class="title" x="236" y="86">Preload</text>
-      <text class="small" x="236" y="106">window.mu</text>
-      <text class="small" x="236" y="124">call · on</text>
-      <rect class="box" x="350" y="62" width="210" height="140" rx="8"/>
-      <text class="title" x="366" y="86">Main</text>
-      <text class="small" x="366" y="106">machine links (reconnect)</text>
-      <text class="small" x="366" y="124">app settings · tray · Dock</text>
-      <text class="small" x="366" y="142">notifications</text>
-      <text class="small" x="366" y="160">restart state machine</text>
-      <text class="small" x="366" y="178">endpoint "app"</text>
-      <path class="line" d="M200 132 H218" marker-end="url(#a)"/>
-      <path class="line" d="M330 132 H348" marker-end="url(#a)"/>
-
-      <!-- CLI -->
-      <rect class="group" x="610" y="20" width="370" height="200" rx="12"/>
-      <text class="title" x="626" y="44">mu CLI</text><text class="small" x="690" y="44">~/.local/bin/mu</text>
-      <rect class="box" x="630" y="62" width="330" height="140" rx="8"/>
-      <text x="646" y="86"><tspan class="title">mu</tspan><tspan class="small"> new session here → opens app</tspan></text>
-      <text class="mono" x="646" y="110">sessions · new · send · open</text>
-      <text class="mono" x="646" y="128">machines add|rm|enable|trust</text>
-      <text class="mono" x="646" y="146">settings [--all] · auth key</text>
-      <text class="mono" x="646" y="164">daemon status|restart|stop</text>
-      <text class="mono" x="646" y="182">connect   (what ssh runs)</text>
-      <path class="line" d="M630 100 C 600 100, 600 100, 562 100" marker-end="url(#a)"/>
-      <text class="label" x="566" y="94">--mu-open</text>
-
-      <!-- client layer -->
-      <rect class="box" x="250" y="250" width="500" height="44" rx="8"/>
-      <text class="title" x="266" y="277">@mu/client</text>
-      <text class="small" x="356" y="277">transports · machines.json · identity check</text>
-      <path class="line" d="M455 202 V248" marker-end="url(#a)"/>
-      <path class="line" d="M795 202 V230 H650 V248" marker-end="url(#a)"/>
-
-      <!-- daemons -->
-      <rect class="hot" x="40" y="330" width="440" height="120" rx="10"/>
-      <text class="title" x="58" y="356">daemon: this computer</text>
-      <text class="small" x="58" y="376">pi-durable Harness on SQLite · sessions · OSC 7501 status</text>
-      <text class="small" x="58" y="394">settings: model, thinking, fast · providers + sign-in</text>
-      <text class="small" x="58" y="412">build id · daemon.restart · record/replay</text>
-      <text class="mono" x="58" y="434">~/.mu/mu.sock (0600) · no network port</text>
-
-      <rect class="hot" x="520" y="330" width="440" height="120" rx="10"/>
-      <text class="title" x="538" y="356">daemon: other machines</text>
-      <text class="small" x="538" y="376">same code, own sessions, models, credentials</text>
-      <text class="mono" x="538" y="400">ssh -T host mu connect --start</text>
-      <text class="mono" x="538" y="418">via: any stdio command (docker exec -i …)</text>
-      <text class="small" x="538" y="436">ssh does all auth</text>
-
-      <path class="line accent" d="M380 294 V328" marker-end="url(#a)"/>
-      <text class="label" x="388" y="316">unix socket</text>
-      <path class="line blue" d="M620 294 V328" marker-end="url(#a)"/>
-      <text class="label" x="628" y="316">ssh / via → stdio</text>
+      <text class="small" x="56" y="106">shell: sidebar slot or picker</text>
+      <text class="small" x="56" y="124">session view · settings dialog</text>
+      <text class="small" x="56" y="142">UI halves of extensions</text>
+      <text class="small" x="56" y="160">hooks for extensions</text>
+      <rect class="box" x="250" y="62" width="90" height="130" rx="8"/>
+      <text class="title" x="264" y="86">Preload</text>
+      <text class="small" x="264" y="106">window.mu</text>
+      <rect class="box" x="360" y="62" width="220" height="130" rx="8"/>
+      <text class="title" x="376" y="86">Main</text>
+      <text class="small" x="376" y="106">machine links · app settings</text>
+      <text class="small" x="376" y="124">menu bar · Dock · notifications</text>
+      <text class="small" x="376" y="142">restart onto new code</text>
+      <text class="small" x="376" y="160">single instance per data dir</text>
+      <path class="line" d="M230 127 H248" marker-end="url(#a)"/><path class="line" d="M340 127 H358" marker-end="url(#a)"/>
+      <rect class="group" x="630" y="20" width="350" height="190" rx="12"/>
+      <text class="title" x="646" y="44">Command</text><text class="small" x="722" y="44">runCli(app) · mu, mu-minimal, …</text>
+      <rect class="box" x="650" y="62" width="310" height="130" rx="8"/>
+      <text x="666" y="86"><tspan class="title">&lt;id&gt;</tspan><tspan class="small">  new session here → opens app</tspan></text>
+      <text class="mono" x="666" y="110">create · send · open · sessions</text>
+      <text class="mono" x="666" y="128">machines · settings [--all] · auth</text>
+      <text class="mono" x="666" y="146">daemon status|restart|stop</text>
+      <text class="mono" x="666" y="164">connect   ·   mu only: new &lt;dir&gt;</text>
+      <path class="line" d="M650 100 H582" marker-end="url(#a)"/><text class="label" x="590" y="94">--mu-open</text>
+      <rect class="box" x="250" y="240" width="500" height="40" rx="8"/>
+      <text class="title" x="266" y="265">@mu/client</text><text class="small" x="356" y="265">socket · ssh · any stdio command · machines.json · identity</text>
+      <path class="line" d="M470 192 V238" marker-end="url(#a)"/><path class="line" d="M805 192 V220 H650 V238" marker-end="url(#a)"/>
+      <rect class="hot" x="40" y="310" width="440" height="110" rx="10"/>
+      <text class="title" x="58" y="336">daemon · this computer</text>
+      <text class="small" x="58" y="356">pi-durable harness on SQLite · sessions · status</text>
+      <text class="small" x="58" y="374">settings: model, thinking, providers, sign-in</text>
+      <text class="small" x="58" y="392">daemon halves of extensions (tools, values, status)</text>
+      <text class="mono" x="58" y="410">~/.&lt;id&gt;/&lt;id&gt;.sock · no network port</text>
+      <rect class="hot" x="520" y="310" width="440" height="110" rx="10"/>
+      <text class="title" x="538" y="336">daemon · other machines</text>
+      <text class="small" x="538" y="356">same app code; own sessions, models, credentials</text>
+      <text class="mono" x="538" y="380">ssh -T host &lt;id&gt; connect --start</text>
+      <text class="mono" x="538" y="398">via: docker exec -i … (any stdio)</text>
+      <path class="line strong" d="M380 280 V308" marker-end="url(#a)"/><text class="label" x="388" y="298">unix socket</text>
+      <path class="line" d="M620 280 V308" marker-end="url(#a)"/><text class="label" x="628" y="298">ssh / via</text>
     </svg>
   </div>
 
-  <!-- 2. Packages -->
-  <h2>2 · Packages</h2>
-  <p>Arrows point at dependencies. <span class="mono">protocol</span> is the contract; everything else builds on it.</p>
+  <h2>2 · Layers</h2>
+  <p>Daemon halves go in <code>src/daemon.ts</code>, UI halves in <code>src/renderer/main.tsx</code>. Apps import extensions and the framework; extensions import the framework only. Arrows point at dependencies.</p>
   <div class="card">
-    <svg viewBox="0 0 1000 330" role="img" aria-label="Package dependency diagram">
+    <svg viewBox="0 0 1000 360" role="img" aria-label="Layers">
       <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
-      <!-- top row -->
-      <rect class="box" x="140" y="20" width="220" height="56" rx="8"/><text class="title" x="156" y="44">app</text><text class="small" x="156" y="62">Electron · 1.6k lines</text>
-      <rect class="box" x="640" y="20" width="220" height="56" rx="8"/><text class="title" x="656" y="44">cli</text><text class="small" x="656" y="62">mu command · 400 lines</text>
-      <!-- middle -->
-      <rect class="box" x="20" y="140" width="190" height="56" rx="8"/><text class="title" x="36" y="164">ui</text><text class="small" x="36" y="182">kit · dialog · font picker</text>
-      <rect class="box" x="240" y="140" width="220" height="56" rx="8"/><text class="title" x="256" y="164">client</text><text class="small" x="256" y="182">transports · machines</text>
-      <rect class="hot" x="500" y="140" width="220" height="56" rx="8"/><text class="title" x="516" y="164">daemon</text><text class="small" x="516" y="182">harness · server · models</text>
-      <rect class="box" x="760" y="140" width="220" height="56" rx="8"/><text class="title" x="776" y="164">settings</text><text class="small" x="776" y="182">registry · file store</text>
-      <!-- bottom -->
-      <rect class="hot" x="300" y="260" width="240" height="56" rx="8"/><text class="title" x="316" y="284">protocol</text><text class="small" x="316" y="302">methods · JSON-RPC · status</text>
-      <rect class="box" x="640" y="260" width="300" height="56" rx="8"/><text class="title" x="656" y="284">pi-durable · pi-ai · chord</text><text class="small" x="656" y="302">agent runtime (npm, 1.5.0)</text>
-      <!-- edges -->
-      <path class="line" d="M190 76 L130 138" marker-end="url(#b)"/>
-      <path class="line" d="M250 76 L330 138" marker-end="url(#b)"/>
-      <path class="line" d="M330 76 L560 138" marker-end="url(#b)"/>
-      <path class="line" d="M350 76 C 600 100, 760 110, 820 138" marker-end="url(#b)"/>
-      <path class="line" d="M700 76 L420 138" marker-end="url(#b)"/>
-      <path class="line" d="M740 76 L640 138" marker-end="url(#b)"/>
-      <path class="line" d="M115 196 L330 258" marker-end="url(#b)"/>
-      <path class="line" d="M350 196 L400 258" marker-end="url(#b)"/>
-      <path class="line" d="M460 168 H498" marker-end="url(#b)"/>
-      <path class="line" d="M570 196 L500 258" marker-end="url(#b)"/>
-      <path class="line" d="M650 196 L760 258" marker-end="url(#b)"/>
-      <path class="line" d="M720 168 L758 168" marker-end="url(#b)"/>
-      <path class="line" d="M840 196 L520 262" marker-end="url(#b)"/>
+      <text class="mono" x="20" y="32">APPS</text>
+      <rect class="box" x="120" y="12" width="200" height="40" rx="8"/><text class="title" x="136" y="37">examples/minimal</text>
+      <rect class="box" x="360" y="12" width="200" height="40" rx="8"/><text class="title" x="376" y="37">examples/full = mu</text>
+      <rect class="box" x="600" y="12" width="200" height="40" rx="8" style="stroke-dasharray:4 4"/><text class="title" x="616" y="37">your app</text><text class="small" x="700" y="37">mu new</text>
+      <text class="mono" x="20" y="112">EXTENSIONS</text>
+      <rect class="box" x="360" y="92" width="200" height="40" rx="8"/><text class="title" x="376" y="117">threads</text><text class="small" x="440" y="117">ui</text>
+      <rect class="box" x="600" y="92" width="200" height="40" rx="8"/><text class="title" x="616" y="117">ask-user</text><text class="small" x="690" y="117">daemon + ui</text>
+      <text class="mono" x="20" y="192">APP LAYER</text>
+      <rect class="hot" x="120" y="172" width="200" height="40" rx="8"/><text class="title" x="136" y="197">app</text><text class="small" x="170" y="197">main · ui · preload · vite</text>
+      <rect class="box" x="360" y="172" width="200" height="40" rx="8"/><text class="title" x="376" y="197">cli</text><text class="small" x="404" y="197">runCli · new</text>
+      <rect class="box" x="600" y="172" width="200" height="40" rx="8"/><text class="title" x="616" y="197">ui</text><text class="small" x="640" y="197">kit · tokens</text>
+      <text class="mono" x="20" y="272">CORE</text>
+      <rect class="box" x="120" y="252" width="200" height="40" rx="8"/><text class="title" x="136" y="277">client</text>
+      <rect class="hot" x="360" y="252" width="200" height="40" rx="8"/><text class="title" x="376" y="277">daemon</text>
+      <rect class="box" x="600" y="252" width="200" height="40" rx="8"/><text class="title" x="616" y="277">settings</text>
+      <rect class="hot" x="360" y="312" width="200" height="40" rx="8"/><text class="title" x="376" y="337">protocol</text><text class="small" x="446" y="337">+ AppConfig</text>
+      <rect class="box" x="840" y="252" width="140" height="40" rx="8"/><text class="title" x="856" y="277">pi-durable</text>
+      <path class="line" d="M460 52 V90" marker-end="url(#b)"/><path class="line" d="M520 52 L660 90" marker-end="url(#b)"/>
+      <path class="line" d="M700 52 V90" marker-end="url(#b)"/><path class="line" d="M640 52 L520 90" marker-end="url(#b)"/>
+      <path class="line" d="M220 52 V170" marker-end="url(#b)"/><path class="line" d="M400 52 C 300 120, 260 140, 240 170" marker-end="url(#b)"/>
+      <path class="line" d="M420 132 L300 170" marker-end="url(#b)"/><path class="line" d="M680 132 L320 180" marker-end="url(#b)"/>
+      <path class="line" d="M220 212 V250" marker-end="url(#b)"/><path class="line" d="M300 212 L400 250" marker-end="url(#b)"/>
+      <path class="line" d="M460 212 V250" marker-end="url(#b)"/><path class="line" d="M560 272 H598" marker-end="url(#b)"/>
+      <path class="line" d="M460 292 V310" marker-end="url(#b)"/><path class="line" d="M560 262 C 700 240, 800 250, 838 262" marker-end="url(#b)"/>
+      <path class="line" d="M220 292 L380 312" marker-end="url(#b)"/><path class="line" d="M700 292 L540 312" marker-end="url(#b)"/>
     </svg>
   </div>
 
-  <!-- 3. Protocol -->
-  <h2>3 · Protocol</h2>
-  <p>JSON-RPC 2.0, one message per line, any transport. <code>hello</code> checks the generation and announces features and the machine's identity and build. Watches send a snapshot, then deltas.</p>
+  <h2>3 · An app</h2>
   <div class="grid g2">
     <div class="card">
-      <div class="k">daemon · every machine</div>
-      <div class="chips">
-        <span>hello</span><span>session.list</span><span>session.create</span><span>session.rename</span><span>session.submit</span>
-        <span>session.abort</span><span>session.seen</span><span>session.watch</span><span>sessions.watch</span><span>unwatch</span>
-        <span>settings.watch</span><span>settings.set</span><span>auth.login</span><span>auth.respond</span><span>auth.cancel</span>
-        <span>auth.logout</span><span class="new">daemon.restart</span>
-      </div>
-      <div class="k" style="margin-top:12px">features</div>
-      <div class="chips"><span>sessions</span><span>settings</span><span>auth</span><span>restart</span></div>
+      <div class="k">files</div>
+<pre><b>mu.config.ts</b>           defineApp({ name, id, glyph })
+<b>src/daemon.ts</b>          serveDaemon({ app, extensions })
+<b>src/renderer/main.tsx</b>  mountApp(app, { extensions })
+<b>src/main.ts</b>            startApp(app)
+<b>bin/&lt;id&gt;.ts</b>            runCli(app, …)
+<b>electron.vite.config</b>   muConfig(import.meta.dirname)
+<b>test/smoke.mjs</b>         headless end to end</pre>
     </div>
     <div class="card">
-      <div class="k">app endpoint · machine id "app"</div>
-      <div class="chips">
-        <span>settings.watch</span><span>settings.set</span><span>machines.add</span><span>machines.update</span><span>machines.remove</span>
-        <span>machines.trust</span><span>machines.reconnect</span><span>service.get</span><span>service.act</span>
-        <span>app.ready</span><span>app.desktop</span>
-      </div>
-      <div class="k" style="margin-top:12px">events</div>
-      <div class="chips"><span>watch.ops</span><span>sessions.changed</span><span>settings.changed</span><span>auth.event</span><span>service.changed</span><span>$machines</span><span>app.select</span></div>
+      <div class="k">the id names everything</div>
+      <table>
+        <tr><td>~/.&lt;id&gt;/</td><td>data dir; <code>&lt;id&gt;.sock</code>, <code>&lt;id&gt;.sqlite</code></td></tr>
+        <tr><td>&lt;id&gt;</td><td>the command, and what ssh runs remotely</td></tr>
+        <tr><td>&lt;ID&gt;_HOME, _MODEL, …</td><td>environment</td></tr>
+        <tr><td>name, glyph</td><td>window, menus, menu bar</td></tr>
+      </table>
+      <div class="k" style="margin-top:14px">mu new &lt;dir&gt; [--minimal]</div>
+      <p style="font-size:13px">Copies an example, renames everything (smoke test included), links <code>@mu/*</code> to this checkout. A generated app installs, builds and passes its smoke test outside the repo.</p>
     </div>
   </div>
 
-  <!-- 4. Status -->
-  <h2>4 · Session status</h2>
-  <p>Derived from durable state, not events. Uses the OSC 7501 vocabulary, so any agent reads alike.</p>
+  <h2>4 · Extensions</h2>
+  <p>A package with <code>./daemon</code> and/or <code>./ui</code>, imported at build time. The daemon half announces <code>ext:&lt;name&gt;</code>, so the UI knows which machines have it.</p>
   <div class="card">
-    <svg viewBox="0 0 1000 120" role="img" aria-label="Status states">
+    <svg viewBox="0 0 1000 250" role="img" aria-label="Extension halves">
       <defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
-      <rect class="box" x="20" y="30" width="150" height="54" rx="27"/><text x="60" y="62">○ idle</text>
+      <rect class="hot" x="20" y="20" width="420" height="210" rx="10"/>
+      <text class="title" x="38" y="46">daemon half · defineDaemonExtension</text>
+      <text class="mono" x="38" y="76">agent(ext)        tools, prompt, hooks</text>
+      <text class="mono" x="38" y="98">settings          sections</text>
+      <text class="mono" x="38" y="120">method(name, fn)  &lt;name&gt;.&lt;method&gt;</text>
+      <text class="mono" x="38" y="142">value(key, init)  live, watched by UIs</text>
+      <text class="mono" x="38" y="164">status(fn)        blocked while …</text>
+      <text class="mono" x="38" y="186">harness · sessions</text>
+      <rect class="hot" x="560" y="20" width="420" height="210" rx="10"/>
+      <text class="title" x="578" y="46">ui half · defineUiExtension</text>
+      <text class="mono" x="578" y="76">slot(sidebar | session.header | composer.above)</text>
+      <text class="mono" x="578" y="98">tool(name, C)     draw tool calls</text>
+      <text class="mono" x="578" y="120">entry(kind, C)    draw custom entries</text>
+      <text class="mono" x="578" y="142">settings(ui, C)   custom sections</text>
+      <text class="mono" x="578" y="164">command({ keys })</text>
+      <text class="mono" x="578" y="186">hooks: useSessions · useSelection</text>
+      <text class="mono" x="578" y="204">       useValue · call · has</text>
+      <path class="line" d="M440 110 H558" marker-end="url(#c)"/><text class="label" x="452" y="102">value.changed</text>
+      <path class="line" d="M558 150 H442" marker-end="url(#c)"/><text class="label" x="452" y="168">call(&lt;name&gt;.…)</text>
+    </svg>
+  </div>
+  <div class="grid g2" style="margin-top:12px">
+    <div class="card"><div class="k">threads · ui</div><p style="font-size:13px">The session sidebar by machine, with status rollups, "new session in…", and next/previous commands. Without it, the shell shows a top-bar picker.</p></div>
+    <div class="card"><div class="k">ask-user · daemon + ui</div><p style="font-size:13px">An <code>ask_user</code> tool that waits. The session shows as needing you, the question card sits above the composer, and any client can answer.</p></div>
+  </div>
+
+  <h2>5 · Protocol</h2>
+  <p>JSON-RPC 2.0, a line per message, any transport. <code>hello</code> checks the generation and announces features, identity and build. Watches send a snapshot, then changes.</p>
+  <div class="grid g2">
+    <div class="card">
+      <div class="k">daemon</div>
+      <div class="chips">
+        <span>hello</span><span>session.list</span><span>session.create</span><span>session.rename</span><span>session.submit</span><span>session.abort</span><span>session.seen</span><span>session.watch</span><span>sessions.watch</span><span>unwatch</span><span>settings.watch</span><span>settings.set</span><span>auth.login</span><span>auth.respond</span><span>auth.cancel</span><span>auth.logout</span><span>daemon.restart</span><span class="new">value.watch</span>
+      </div>
+      <div class="k" style="margin-top:12px">features</div>
+      <div class="chips"><span>sessions</span><span>settings</span><span>auth</span><span>restart</span><span class="new">ext:&lt;name&gt;</span></div>
+    </div>
+    <div class="card">
+      <div class="k">app · machine id "app"</div>
+      <div class="chips"><span>settings.watch</span><span>settings.set</span><span>machines.add</span><span>machines.update</span><span>machines.remove</span><span>machines.trust</span><span>machines.reconnect</span><span>service.get</span><span>service.act</span><span>app.ready</span><span>app.desktop</span></div>
+      <div class="k" style="margin-top:12px">events</div>
+      <div class="chips"><span>watch.ops</span><span>sessions.changed</span><span>settings.changed</span><span>auth.event</span><span class="new">value.changed</span><span>service.changed</span><span>$machines</span><span>app.select</span></div>
+    </div>
+  </div>
+
+  <h2>6 · Session status</h2>
+  <p>Derived from durable state in the OSC 7501 vocabulary. Extensions can add <i>blocked</i>.</p>
+  <div class="card">
+    <svg viewBox="0 0 1000 120" role="img" aria-label="Status">
+      <defs><marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
+      <rect class="box" x="20" y="30" width="150" height="54" rx="27"/><text x="62" y="62">○ idle</text>
       <rect class="hot" x="230" y="30" width="170" height="54" rx="27"/><text x="268" y="62">● working</text>
       <rect class="box" x="470" y="30" width="150" height="54" rx="27"/><text x="512" y="62">* done</text>
       <rect class="box" x="680" y="30" width="140" height="54" rx="27"/><text x="718" y="62">! error</text>
-      <rect class="box" x="860" y="30" width="120" height="54" rx="27" style="stroke-dasharray:4 4"/><text x="884" y="62">? blocked</text>
-      <path class="line" d="M170 57 H228" marker-end="url(#c)"/><text class="label" x="176" y="50">submit</text>
-      <path class="line" d="M400 57 H468" marker-end="url(#c)"/><text class="label" x="406" y="50">answer</text>
-      <path class="line" d="M400 72 C 520 110, 600 110, 690 84" marker-end="url(#c)"/><text class="label" x="540" y="112">run failed</text>
-      <path class="line" d="M545 30 C 500 4, 140 4, 95 28" marker-end="url(#c)"/><text class="label" x="306" y="30">seen</text>
-      <text class="small" x="862" y="104">reserved: needs mu.ask</text>
+      <rect class="hot" x="860" y="30" width="120" height="54" rx="27"/><text x="884" y="62">? blocked</text>
+      <path class="line" d="M170 57 H228" marker-end="url(#d)"/><text class="label" x="176" y="50">submit</text>
+      <path class="line" d="M400 57 H468" marker-end="url(#d)"/><text class="label" x="406" y="50">answer</text>
+      <path class="line" d="M400 72 C 520 110, 600 110, 690 84" marker-end="url(#d)"/><text class="label" x="540" y="112">run failed</text>
+      <path class="line" d="M545 30 C 500 4, 140 4, 95 28" marker-end="url(#d)"/><text class="label" x="306" y="30">seen</text>
+      <path class="line" d="M400 40 C 600 -10, 820 0, 900 28" marker-end="url(#d)"/><text class="label" x="760" y="14">ask_user</text>
     </svg>
   </div>
 
-  <!-- 5. Flows -->
-  <h2>5 · Key flows</h2>
+  <h2>7 · Who owns what</h2>
   <div class="grid g2">
     <div class="card">
-      <div class="k">mu (in a project)</div>
-      <svg viewBox="0 0 460 200" role="img" aria-label="mu flow">
-        <defs><marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
-        <rect class="box" x="10" y="10" width="140" height="40" rx="6"/><text x="24" y="35">mu</text>
-        <rect class="box" x="10" y="80" width="140" height="40" rx="6"/><text class="small" x="24" y="104">daemon up? else start</text>
-        <rect class="hot" x="10" y="150" width="140" height="40" rx="6"/><text class="small" x="24" y="174">session.create {cwd}</text>
-        <rect class="box" x="230" y="150" width="220" height="40" rx="6"/><text class="small" x="244" y="174">launch app --mu-open=local/id</text>
-        <rect class="box" x="230" y="80" width="220" height="40" rx="6"/><text class="small" x="244" y="104">running? hand off (second-instance)</text>
-        <rect class="box" x="230" y="10" width="220" height="40" rx="6"/><text class="small" x="244" y="35">window selects the session</text>
-        <path class="line" d="M80 50 V78" marker-end="url(#d)"/><path class="line" d="M80 120 V148" marker-end="url(#d)"/>
-        <path class="line" d="M150 170 H228" marker-end="url(#d)"/><path class="line" d="M340 150 V122" marker-end="url(#d)"/><path class="line" d="M340 80 V52" marker-end="url(#d)"/>
-      </svg>
-    </div>
-    <div class="card">
-      <div class="k">restart onto new code</div>
-      <svg viewBox="0 0 460 200" role="img" aria-label="restart flow">
-        <defs><marker id="e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
-        <rect class="box" x="10" y="10" width="200" height="40" rx="6"/><text class="small" x="24" y="35">poll 3s: installed ≠ running build</text>
-        <rect class="hot" x="10" y="80" width="200" height="40" rx="6"/><text class="small" x="24" y="104">"Restart required" notice</text>
-        <rect class="box" x="10" y="150" width="200" height="40" rx="6"/><text class="small" x="24" y="174">busy? wait for idle / Now…</text>
-        <rect class="box" x="250" y="150" width="200" height="40" rx="6"/><text class="small" x="264" y="174">daemon.restart → exit</text>
-        <rect class="box" x="250" y="80" width="200" height="40" rx="6"/><text class="small" x="264" y="104">link starts new daemon</text>
-        <rect class="box" x="250" y="10" width="200" height="40" rx="6"/><text class="small" x="264" y="35">verify build · runs resume</text>
-        <path class="line" d="M110 50 V78" marker-end="url(#e)"/><path class="line" d="M110 120 V148" marker-end="url(#e)"/>
-        <path class="line" d="M210 170 H248" marker-end="url(#e)"/><path class="line" d="M350 150 V122" marker-end="url(#e)"/><path class="line" d="M350 80 V52" marker-end="url(#e)"/>
-      </svg>
-    </div>
-  </div>
-
-  <!-- 6. Ownership -->
-  <h2>6 · Who owns what</h2>
-  <div class="grid g2">
-    <div class="card">
-      <div class="k">on each machine · ~/.mu (daemon)</div>
+      <div class="k">each machine · daemon</div>
       <table>
-        <tr><td>mu.sqlite</td><td>sessions, transcripts, durable tasks</td></tr>
-        <tr><td>settings.json</td><td>model · thinking · fast mode</td></tr>
-        <tr><td>auth.json</td><td>provider credentials (0600)</td></tr>
-        <tr><td>machine-id</td><td>identity, stable across routes</td></tr>
-        <tr><td>mu.sock · daemon.pid · daemon.log</td><td>runtime</td></tr>
+        <tr><td>&lt;id&gt;.sqlite</td><td>sessions, transcripts, durable tasks</td></tr>
+        <tr><td>settings.json</td><td>model · thinking · fast</td></tr>
+        <tr><td>auth.json</td><td>credentials (0600)</td></tr>
+        <tr><td>machine-id</td><td>identity across routes</td></tr>
+        <tr><td>&lt;id&gt;.sock · daemon.pid/.log</td><td>runtime</td></tr>
       </table>
     </div>
     <div class="card">
-      <div class="k">on the client · ~/.mu (app + CLI)</div>
+      <div class="k">the client · app and command</div>
       <table>
         <tr><td>app-settings.json</td><td>fonts · notifications · menu bar · Dock</td></tr>
-        <tr><td>machines.json</td><td>ssh / via machines, shared by app and CLI</td></tr>
-        <tr><td>app/</td><td>Electron profile; single-instance lock</td></tr>
+        <tr><td>machines.json</td><td>ssh / via machines, shared</td></tr>
+        <tr><td>app/</td><td>Electron profile · single-instance lock</td></tr>
       </table>
-      <p class="small" style="color:var(--muted);margin-top:10px">Rule (from T3 Code): client preferences stay in the client; machine defaults stay on the machine. "All machines" is a bulk edit, not a global default.</p>
     </div>
   </div>
 
-  <!-- 7. Quality -->
-  <h2>7 · Tests</h2>
+  <h2>8 · Tests</h2>
   <div class="card">
     <table>
       <tr><th>suite</th><th>covers</th></tr>
-      <tr><td>daemon.test.ts</td><td>protocol over a real socket · status · restart across daemons · settings · API-key sign-in · restart refusal · record/replay</td></tr>
-      <tr><td>cli.test.ts</td><td>real <code>mu</code> commands: sessions, settings --all, auth, machines via a second daemon, daemon restart/stop</td></tr>
-      <tr><td>registry · identity · merge · restart</td><td>settings validation · wrong/duplicate machine · "Mixed" merge · restart state machine</td></tr>
-      <tr><td>smoke.mjs</td><td>headless Electron, two app processes: chat, fonts, machines, All machines, menu bar, Escape, restart ×2, <code>mu</code> → running app, reattach. Fails on any uncaught main-process error.</td></tr>
+      <tr><td>daemon</td><td>protocol over a real socket · status · restarts · settings · sign-in · restart refusal · record/replay</td></tr>
+      <tr><td>ask-user</td><td>a replayed agent asks; blocked status; live pending list; answer from a client; agent carries on</td></tr>
+      <tr><td>cli · generate</td><td>real commands on two machines · settings --all · auth · daemon restart · <code>mu new</code> for both templates</td></tr>
+      <tr><td>registry · identity · merge · restart</td><td>validation · wrong/duplicate machine · "Mixed" · restart state machine</td></tr>
+      <tr><td>examples/full smoke</td><td>two app processes: chat · ask-user card · fonts · machines · All machines · menu bar · restart ×2 · <code>mu</code> → running app</td></tr>
+      <tr><td>examples/minimal smoke</td><td>core alone: picker instead of sidebar · chat · command hand-off · no extension features</td></tr>
     </table>
   </div>
 
-  <!-- 8. Status -->
-  <h2>8 · Done / next</h2>
-  <div class="grid g2">
-    <div class="card">
-      <div class="k">done</div>
-      <ul class="tight">
-        <li class="ok">M0–M2: daemon, protocol, app</li>
-        <li class="ok">settings registry · model + auth</li>
-        <li class="ok">machines over ssh / via · stable identity · feature flags</li>
-        <li class="ok"><code>mu</code> CLI · menu bar · restart onto new code</li>
-        <li class="ok">record/replay · All machines</li>
-      </ul>
-    </div>
-    <div class="card">
-      <div class="k">next</div>
-      <ul class="tight">
-        <li class="todo"><b>M3</b>: two-sided extension loader; move sidebar + chat into extensions</li>
-        <li class="todo">layout tree + slots · <code>mu.ask</code> (blocked status)</li>
-        <li class="todo">terminals as an extension · remote install of mu</li>
-        <li class="todo">popover primitive (font list clipping)</li>
-      </ul>
-    </div>
+  <h2>9 · Next</h2>
+  <div class="card">
+    <ul class="tight">
+      <li>Type, spacing and layout: four directions in <code>design-explorations/main-window.html</code></li>
+      <li class="todo">Extensions: git/diff · background jobs and subagents · suggestions</li>
+      <li class="todo">A layout tree for panels · command palette</li>
+      <li class="todo">Publish the packages so new apps don't need the checkout · runtime-installed extensions</li>
+    </ul>
   </div>
 
-  <footer>Generated from the repo at c88a748 · ~/dev/gh/mu · see PLAN.md for the reasoning.</footer>
+  <footer>From the repo at 239dd3b · ~/dev/gh/mu · reasoning in PLAN.md</footer>
 </main>
 </body>
 </html>

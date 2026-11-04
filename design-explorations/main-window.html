@@ -1,0 +1,613 @@
+<!--
+  mu: main window, typography, spacing and layout. Four directions.
+  Source: examples/full (packages/app/src/renderer, extensions/threads, extensions/ask-user), packages/ui/src/styles.css
+  Date: 2026-11-04
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mu: type, spacing and layout</title>
+  <style>
+    /* ----------------------------------------------------------------
+       NEUTRAL DEFAULTS — override these with the host repo's brand
+       tokens when detected (see header comment). Deliberately quiet so
+       the chrome reads as neutral tooling, not a competing brand.
+    ---------------------------------------------------------------- */
+    :root {
+      --brand-50: #f4f4f5;
+      --brand-100: #e4e4e7;
+      --brand-300: #a1a1aa;
+      --brand-500: #52525b;
+      --brand-700: #27272a;
+      --accent-50: #f4f4f5;
+      --accent-500: #3f3f46;
+      --accent-700: #18181b;
+      --ink: #18181b;
+      --ink-soft: #3f3f46;
+      --ink-mute: #71717a;
+      --line: #e4e4e7;
+      --line-soft: #f4f4f5;
+      --paper: #ffffff;
+      --bg: #fafafa;
+      --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+      --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      --shadow-sm: 0 1px 2px rgba(9, 9, 11, 0.04);
+      --shadow-md: 0 4px 24px -8px rgba(9, 9, 11, 0.08), 0 2px 4px rgba(9, 9, 11, 0.03);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      line-height: 1.5;
+    }
+
+    .page {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 72px 48px 160px;
+    }
+
+    /* ---------- Page header ---------- */
+    .doc-header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 40px;
+      margin-bottom: 80px;
+    }
+    .doc-eyebrow {
+      font-family: var(--mono);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--brand-500);
+      background: var(--brand-50);
+      padding: 6px 12px;
+      border-radius: 999px;
+      margin-bottom: 20px;
+    }
+    .doc-eyebrow::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--brand-500);
+    }
+    .doc-title {
+      font-family: var(--sans);
+      font-size: 44px;
+      line-height: 1.08;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      margin: 0 0 16px;
+      color: var(--ink);
+    }
+    .doc-subtitle {
+      font-size: 19px;
+      color: var(--ink-soft);
+      max-width: 720px;
+      margin: 0 0 32px;
+      line-height: 1.45;
+    }
+    .doc-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      font-size: 13px;
+      color: var(--ink-mute);
+    }
+    .doc-meta > div { display: flex; gap: 6px; }
+    .doc-meta b {
+      color: var(--ink-soft);
+      font-weight: 600;
+    }
+
+    /* ---------- Variant section ---------- */
+    .variant {
+      margin-bottom: 96px;
+    }
+    .variant:last-child { margin-bottom: 0; }
+
+    .variant-head {
+      display: grid;
+      grid-template-columns: 64px 1fr;
+      gap: 20px;
+      align-items: start;
+      margin-bottom: 28px;
+    }
+    .variant-letter {
+      width: 48px;
+      height: 48px;
+      border-radius: 999px;
+      background: var(--ink);
+      color: white;
+      font-family: var(--mono);
+      font-weight: 500;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      letter-spacing: -0.02em;
+    }
+    .variant-meta h2 {
+      margin: 4px 0 6px;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      color: var(--ink);
+    }
+    .variant-tradeoff {
+      font-size: 15px;
+      color: var(--ink-soft);
+      margin: 0;
+      max-width: 760px;
+    }
+    .variant-tradeoff b {
+      color: var(--brand-500);
+      font-weight: 600;
+    }
+
+    /* ---------- Preview frame ---------- */
+    .preview-frame {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      margin-left: 84px;
+      position: relative;
+    }
+    .preview-frame::before {
+      content: '';
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #e4e4e7;
+      box-shadow: 18px 0 0 #e4e4e7, 36px 0 0 #e4e4e7;
+      z-index: 2;
+    }
+    .preview-frame-bar {
+      font-family: var(--mono);
+      background: #fafafa;
+      border-bottom: 1px solid var(--line-soft);
+      padding: 14px 16px 14px 76px;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-mute);
+      font-weight: 600;
+    }
+    .preview {
+      padding: 0;
+      min-height: 200px;
+    }
+
+    /* ---------- Analysis ---------- */
+    .variant-analysis {
+      margin: 24px 0 0 84px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 24px;
+    }
+    .analysis-block {
+      padding: 18px 20px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--paper);
+    }
+    .analysis-block h4 {
+      font-family: var(--mono);
+      margin: 0 0 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--brand-500);
+    }
+    .analysis-block.is-risk h4 { color: #b8341f; }
+    .analysis-block.is-pick h4 { color: var(--accent-700); }
+    .analysis-block p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--ink-soft);
+    }
+
+    /* ---------- Decision row ---------- */
+    .decision {
+      margin-top: 120px;
+      padding: 40px 48px;
+      background: var(--ink);
+      color: white;
+      border-radius: 20px;
+    }
+    .decision h3 {
+      font-family: var(--sans);
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin: 0 0 8px;
+    }
+    .decision-sub {
+      color: rgba(255, 255, 255, 0.65);
+      font-size: 14px;
+      margin: 0 0 28px;
+    }
+    .decision-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+    }
+    .decision-cell b {
+      display: block;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--brand-100);
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .decision-cell span {
+      font-size: 15px;
+      color: rgba(255, 255, 255, 0.85);
+      line-height: 1.45;
+    }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 900px) {
+      .page { padding: 40px 20px 80px; }
+      .doc-title { font-size: 36px; }
+      .variant-head { grid-template-columns: 48px 1fr; gap: 12px; }
+      .preview-frame { margin-left: 0; }
+      .variant-analysis { margin-left: 0; grid-template-columns: 1fr; }
+    }
+
+    /* ---------- Variant preview reset ----------
+       Anything inside .preview is the variant's own canvas.
+       Use scoped class prefixes per variant (.va-, .vb-, .vc-, .vd-)
+       to avoid cross-bleed of styles between variants.
+    */
+
+    .preview { height: 620px; overflow: hidden; }
+    .frame { height: 100%; font-family: var(--sans); color: #18181b; background: #fff; -webkit-font-smoothing: antialiased; }
+    .frame code { font-family: var(--mono); font-size: .88em; }
+    .glyph { font-family: var(--mono); display: inline-block; width: 1em; text-align: center; }
+    .g-idle { color: #a1a1aa; }
+    .g-working { animation: pulse 1.2s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .3; } }
+
+    .va { display: grid; grid-template-columns: 248px 1fr; }
+    .va-side { background: #fafafa; border-right: 1px solid #e4e4e7; padding: 44px 12px 12px; display: flex; flex-direction: column; }
+    .va-group { font-size: 12px; color: #71717a; padding: 0 10px 8px; display: flex; justify-content: space-between; }
+    .va-row { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 6px; font-size: 13px; }
+    .va-row span:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .va-row small { font-size: 11px; color: #a1a1aa; font-variant-numeric: tabular-nums; }
+    .va-row.is-on { background: #f0f0f1; font-weight: 500; }
+    .va-row.is-stale { color: #a1a1aa; }
+    .va-gap { height: 20px; }
+    .va-foot { margin-top: auto; font-size: 13px; color: #71717a; padding: 8px 10px; }
+    .va-main { display: flex; flex-direction: column; min-width: 0; }
+    .va-head { padding: 22px 0 16px; border-bottom: 1px solid #f4f4f5; }
+    .va-col { width: 640px; margin: 0 auto; }
+    .va-title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+    .va-meta { font-family: var(--mono); font-size: 11.5px; color: #71717a; margin-top: 4px; }
+    .va-body { flex: 1; overflow: hidden; padding-top: 28px; }
+    .va-turn { margin-bottom: 26px; font-size: 15px; line-height: 1.65; }
+    .va-you { border-left: 2px solid #18181b; padding-left: 14px; color: #3f3f46; }
+    .va-tool { font-family: var(--mono); font-size: 12px; color: #71717a; line-height: 1.9; }
+    .va-tool b { color: #18181b; font-weight: 500; }
+    .va-out { font-family: var(--mono); font-size: 12px; background: #fafafa; border-radius: 6px; padding: 8px 12px; color: #3f3f46; margin: 4px 0 0; }
+    .va-ask { border: 1px solid #18181b; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+    .va-ask-q { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+    .va-btn { font: inherit; font-size: 13px; border: 1px solid #e4e4e7; background: #fff; border-radius: 6px; padding: 5px 12px; margin-right: 6px; }
+    .va-comp { border-top: 1px solid #e4e4e7; padding: 14px 0 22px; font-size: 15px; color: #a1a1aa; display: flex; justify-content: space-between; }
+    .va-comp small { font-family: var(--mono); font-size: 11px; }
+
+    .vb { display: grid; grid-template-columns: 224px 1fr; font-size: 12.5px; line-height: 1.45; }
+    .vb-side { background: #fafafa; border-right: 1px solid #e4e4e7; padding: 36px 6px 6px; display: flex; flex-direction: column; }
+    .vb-group { font-family: var(--mono); font-size: 10.5px; color: #71717a; padding: 4px 8px; display: flex; justify-content: space-between; }
+    .vb-row { display: grid; grid-template-columns: 14px 1fr 34px; gap: 6px; align-items: center; height: 24px; padding: 0 8px; border-radius: 4px; }
+    .vb-row span:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vb-row small { font-family: var(--mono); font-size: 10.5px; color: #a1a1aa; text-align: right; }
+    .vb-row.is-on { background: #18181b; color: #fff; }
+    .vb-row.is-on small { color: #a1a1aa; }
+    .vb-row.is-stale { color: #a1a1aa; }
+    .vb-foot { margin-top: auto; font-family: var(--mono); font-size: 11px; color: #71717a; padding: 6px 8px; display: flex; justify-content: space-between; }
+    .vb-main { display: flex; flex-direction: column; min-width: 0; }
+    .vb-head { height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid #e4e4e7; font-family: var(--mono); font-size: 11.5px; color: #71717a; }
+    .vb-head b { font-family: var(--sans); font-size: 12.5px; color: #18181b; font-weight: 600; }
+    .vb-head .sp { margin-left: auto; }
+    .vb-body { flex: 1; overflow: hidden; padding: 8px 0; }
+    .vb-line { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 4px 16px; }
+    .vb-when { font-family: var(--mono); font-size: 10.5px; color: #a1a1aa; padding-top: 2px; text-align: right; }
+    .vb-you { font-weight: 600; }
+    .vb-tools { display: grid; grid-template-columns: 14px 48px 1fr auto; gap: 8px; font-family: var(--mono); font-size: 11.5px; padding: 2px 0; color: #3f3f46; }
+    .vb-tools small { color: #a1a1aa; }
+    .vb-out { font-family: var(--mono); font-size: 11px; color: #71717a; border-left: 1px solid #e4e4e7; padding-left: 10px; margin: 2px 0 2px 22px; }
+    .vb-ask { margin: 6px 16px; border: 1px solid #18181b; border-radius: 4px; padding: 8px 10px; display: flex; gap: 10px; align-items: center; }
+    .vb-ask b { flex: 1; font-weight: 600; }
+    .vb-btn { font: inherit; font-size: 11.5px; border: 1px solid #e4e4e7; background: #fff; border-radius: 4px; padding: 2px 8px; }
+    .vb-comp { border-top: 1px solid #e4e4e7; padding: 8px 16px; display: flex; gap: 10px; color: #a1a1aa; }
+    .vb-comp span:first-child { flex: 1; }
+    .vb-comp small { font-family: var(--mono); font-size: 10.5px; }
+
+    .vc { display: grid; grid-template-columns: 236px 1fr 248px; font-size: 13.5px; }
+    .vc-side { background: #fafafa; border-right: 1px solid #e4e4e7; padding: 40px 10px 10px; display: flex; flex-direction: column; gap: 14px; }
+    .vc-h { font-size: 11px; font-weight: 600; color: #71717a; padding: 0 8px 4px; display: flex; gap: 6px; }
+    .vc-h i { font-style: normal; color: #a1a1aa; font-weight: 400; }
+    .vc-row { padding: 6px 8px; border-radius: 6px; }
+    .vc-row div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vc-row small { display: block; font-size: 11px; color: #a1a1aa; }
+    .vc-row.is-on { background: #fff; box-shadow: 0 0 0 1px #e4e4e7; }
+    .vc-main { display: flex; flex-direction: column; min-width: 0; border-right: 1px solid #e4e4e7; }
+    .vc-head { padding: 18px 24px 14px; display: flex; align-items: baseline; gap: 10px; }
+    .vc-title { font-size: 16px; font-weight: 600; }
+    .vc-chip { font-size: 11px; border: 1px solid #e4e4e7; border-radius: 999px; padding: 1px 8px; color: #3f3f46; }
+    .vc-body { flex: 1; overflow: hidden; padding: 8px 24px; }
+    .vc-msg { display: grid; grid-template-columns: 28px 1fr; gap: 12px; margin-bottom: 18px; line-height: 1.6; }
+    .vc-av { width: 24px; height: 24px; border-radius: 999px; background: #f4f4f5; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+    .vc-av.is-you { background: #18181b; color: #fff; }
+    .vc-name { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+    .vc-name small { font-weight: 400; color: #a1a1aa; margin-left: 6px; }
+    .vc-tool { border: 1px solid #e4e4e7; border-radius: 6px; padding: 6px 10px; font-size: 12.5px; margin: 6px 0; display: flex; gap: 8px; }
+    .vc-tool code { color: #71717a; }
+    .vc-ask { margin: 0 24px 10px; background: #fafafa; border: 1px solid #e4e4e7; border-radius: 10px; padding: 12px 14px; }
+    .vc-ask b { display: block; margin-bottom: 8px; }
+    .vc-btn { font: inherit; font-size: 12.5px; border: 1px solid #e4e4e7; background: #fff; border-radius: 6px; padding: 4px 10px; margin-right: 6px; }
+    .vc-btn.is-main { background: #18181b; color: #fff; border-color: #18181b; }
+    .vc-comp { margin: 0 24px 18px; border: 1px solid #e4e4e7; border-radius: 10px; padding: 12px 14px 8px; color: #a1a1aa; }
+    .vc-comp-bar { display: flex; gap: 6px; margin-top: 10px; }
+    .vc-insp { padding: 40px 18px 18px; font-size: 12.5px; }
+    .vc-insp h5 { font-size: 11px; font-weight: 600; color: #71717a; margin: 0 0 8px; }
+    .vc-kv { display: grid; grid-template-columns: 72px 1fr; gap: 4px 8px; margin-bottom: 22px; }
+    .vc-kv span:nth-child(odd) { color: #a1a1aa; }
+    .vc-file { font-family: var(--mono); font-size: 11.5px; padding: 3px 0; color: #3f3f46; }
+
+    .vd { display: grid; grid-template-columns: 52px 1fr; background: #fff; }
+    .vd-rail { border-right: 1px solid #f4f4f5; padding: 48px 0 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .vd-dot { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-family: var(--mono); }
+    .vd-dot.is-on { background: #18181b; color: #fff; }
+    .vd-dot.is-stale { color: #d4d4d8; }
+    .vd-sep { width: 20px; height: 1px; background: #e4e4e7; margin: 6px 0; }
+    .vd-main { position: relative; overflow: hidden; }
+    .vd-col { width: 600px; margin: 0 auto; padding-top: 56px; }
+    .vd-crumb { font-family: var(--mono); font-size: 11.5px; color: #a1a1aa; margin-bottom: 10px; }
+    .vd-title { font-size: 26px; line-height: 1.2; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 30px; }
+    .vd-turn { font-size: 15.5px; line-height: 1.7; margin-bottom: 24px; }
+    .vd-you { font-size: 15.5px; color: #71717a; margin-bottom: 24px; }
+    .vd-steps { font-size: 13px; color: #71717a; margin: -8px 0 24px; display: flex; gap: 14px; }
+    .vd-steps span { font-family: var(--mono); font-size: 12px; }
+    .vd-dock { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); width: 640px; background: #fff; border: 1px solid #e4e4e7; border-radius: 14px; box-shadow: 0 12px 40px -12px rgba(9,9,11,.18); padding: 14px 16px; }
+    .vd-ask { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+    .vd-btn { font: inherit; font-size: 13px; border: 1px solid #e4e4e7; background: #fff; border-radius: 8px; padding: 6px 12px; margin-right: 6px; }
+    .vd-input { margin-top: 12px; padding-top: 12px; border-top: 1px solid #f4f4f5; color: #a1a1aa; font-size: 15px; display: flex; justify-content: space-between; }
+    .vd-input small { font-family: var(--mono); font-size: 11px; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="doc-header">
+      <div class="doc-eyebrow">Design exploration</div>
+      <h1 class="doc-title">mu’s main window: type, spacing, layout</h1>
+      <p class="doc-subtitle">Four directions for the full example: sidebar, session header, transcript with tool calls, the ask-user card and the composer. Same session, same monochrome zinc tokens, system fonts.</p>
+      <div class="doc-meta">
+        <div><b>Source</b> examples/full · packages/app/src/renderer · extensions/threads, ask-user</div>
+        <div><b>Generated</b> 2026-11-04</div>
+        <div><b>Variants</b> 4</div>
+        <div><b>Data</b> main-window.manifest.md</div>
+      </div>
+    </header>
+
+    <section class="variant">
+      <div class="variant-head">
+        <div class="variant-letter">A</div>
+        <div class="variant-meta">
+          <h2>Document</h2>
+          <p class="variant-tradeoff"><b>Optimizes for</b> reading the agent: a 640px column, 15/1.65 body, quiet one-line tool calls, two-line header. <b>·  Tradeoff</b> density. About a third fewer turns per screen than today; tool output is tucked away.</p>
+        </div>
+      </div>
+      <div class="preview-frame">
+        <div class="preview-frame-bar">Variant A · main window · 1100 × 620</div>
+        <div class="preview"><div class="frame va">
+  <aside class="va-side">
+    <div class="va-group"><span>This computer</span><span>+</span></div>
+    <div class="va-row is-on"><span class="glyph">?</span><span>Why does the smoke test flake on fonts?</span><small>2m</small></div>
+    <div class="va-row"><span class="glyph g-working">●</span><span>Add a git diff extension</span><small>now</small></div>
+    <div class="va-row"><span class="glyph">*</span><span>Refactor the settings registry to support font pickers</span><small>1h</small></div>
+    <div class="va-row"><span class="glyph g-idle">○</span><span>hi</span><small>Tue</small></div>
+    <div class="va-gap"></div>
+    <div class="va-group"><span>Build box · offline</span><span></span></div>
+    <div class="va-row is-stale"><span class="glyph">○</span><span>Profile the replay provider</span><small>Mon</small></div>
+    <div class="va-foot">Settings</div>
+  </aside>
+  <main class="va-main">
+    <header class="va-head"><div class="va-col">
+      <div class="va-title">Why does the smoke test flake on fonts?</div>
+      <div class="va-meta">This computer · ~/dev/gh/mu · claude-opus-5-5 · needs you</div>
+    </div></header>
+    <div class="va-body"><div class="va-col">
+      <div class="va-turn va-you">Why does the smoke test flake on fonts? It failed once right after a build.</div>
+      <div class="va-turn">Let me look at how the smoke test waits for the font list.
+        <div class="va-tool">↳ <b>read</b> examples/full/test/smoke.mjs</div>
+        <div class="va-tool">↳ <b>bash</b> pnpm --filter mu smoke · exit 1</div>
+        <div class="va-out">smoke(first): FAIL waiting for installed fonts listed</div>
+      </div>
+      <div class="va-turn">The picker calls <code>queryLocalFonts()</code> on first open. Right after a build, a fresh Electron profile can take longer to enumerate fonts than the test’s 40 seconds.</div>
+    </div></div>
+    <div class="va-col">
+      <div class="va-ask"><div class="va-ask-q">Prefetch fonts when Settings opens, or keep the test’s longer wait?</div><button class="va-btn">Prefetch on open</button><button class="va-btn">Keep the wait</button></div>
+      <div class="va-comp"><span>Reply, or answer above</span><small>⏎ send</small></div>
+    </div>
+  </main>
+</div>
+</div>
+      </div>
+      <div class="variant-analysis">
+        <div class="analysis-block"><h4>What works</h4><p>Clear hierarchy from one scale (11.5 mono · 13 · 15 · 17) and an 8px rhythm with 24–28px between turns. The user turn as a left rule reads like a question in a document, not a chat bubble far right.</p></div>
+        <div class="analysis-block is-risk"><h4>What risks</h4><p>Long tool-heavy runs become a stack of grey lines; you need to click to see output. 15px body makes the sidebar (13px) feel like a different app unless both scale together.</p></div>
+        <div class="analysis-block is-pick"><h4>Pick this if</h4><p>You mostly read and steer one session at a time and want mu to feel calm, like a document you’re working in.</p></div>
+      </div>
+    </section>
+    <section class="variant">
+      <div class="variant-head">
+        <div class="variant-letter">B</div>
+        <div class="variant-meta">
+          <h2>Dense log</h2>
+          <p class="variant-tradeoff"><b>Optimizes for</b> seeing a lot at once: a 4px grid, 12.5px base, a mono gutter with times, tool calls as rows with status, exit codes and durations. <b>·  Tradeoff</b> warmth and reading comfort; it looks like a tool, and long prose answers are tiring at 12.5px.</p>
+        </div>
+      </div>
+      <div class="preview-frame">
+        <div class="preview-frame-bar">Variant B · main window · 1100 × 620</div>
+        <div class="preview"><div class="frame vb">
+  <aside class="vb-side">
+    <div class="vb-group"><span>this computer</span><span>4</span></div>
+    <div class="vb-row is-on"><span class="glyph">?</span><span>Why does the smoke test flake on fonts?</span><small>13:52</small></div>
+    <div class="vb-row"><span class="glyph g-working">●</span><span>Add a git diff extension</span><small>13:54</small></div>
+    <div class="vb-row"><span class="glyph">*</span><span>Refactor the settings registry to support font pickers</span><small>12:40</small></div>
+    <div class="vb-row"><span class="glyph g-idle">○</span><span>hi</span><small>tue</small></div>
+    <div class="vb-group" style="margin-top:8px"><span>build-box · offline</span><span>1</span></div>
+    <div class="vb-row is-stale"><span class="glyph">○</span><span>Profile the replay provider</span><small>mon</small></div>
+    <div class="vb-foot"><span>settings</span><span>⌘,</span></div>
+  </aside>
+  <main class="vb-main">
+    <header class="vb-head"><span>this computer</span>/<span>~/dev/gh/mu</span>/<b>Why does the smoke test flake on fonts?</b><span class="sp">claude-opus-5-5 · ? needs you</span></header>
+    <div class="vb-body">
+      <div class="vb-line"><span class="vb-when">13:52 you</span><span class="vb-you">Why does the smoke test flake on fonts? It failed once right after a build.</span></div>
+      <div class="vb-line"><span class="vb-when">13:52</span><span>Let me look at how the smoke test waits for the font list.
+        <div class="vb-tools"><span class="glyph">✓</span><span>read</span><span>examples/full/test/smoke.mjs</span><small>0.1s</small></div>
+        <div class="vb-tools"><span class="glyph">!</span><span>bash</span><span>pnpm --filter mu smoke</span><small>exit 1 · 74s</small></div>
+        <div class="vb-out">smoke(first): FAIL waiting for installed fonts listed</div>
+      </span></div>
+      <div class="vb-line"><span class="vb-when">13:54</span><span>The picker calls queryLocalFonts() on first open. Right after a build, a fresh Electron profile can take longer to enumerate fonts than the test’s 40 seconds.</span></div>
+    </div>
+    <div class="vb-ask"><span class="glyph">?</span><b>Prefetch fonts when Settings opens, or keep the test’s longer wait?</b><button class="vb-btn">1 Prefetch on open</button><button class="vb-btn">2 Keep the wait</button></div>
+    <div class="vb-comp"><span>Reply…</span><small>⏎ send · esc stop · ⌘⌥↓ next session</small></div>
+  </main>
+</div>
+</div>
+      </div>
+      <div class="variant-analysis">
+        <div class="analysis-block"><h4>What works</h4><p>Every line earns its place: times, durations, exit codes and shortcuts are visible without opening anything. The inverted selected row and the one-line breadcrumb header make position obvious.</p></div>
+        <div class="analysis-block is-risk"><h4>What risks</h4><p>Mono everywhere tips into the “terminal cosplay” look. Needs real timestamps and durations, which sessions don’t expose yet (see manifest).</p></div>
+        <div class="analysis-block is-pick"><h4>Pick this if</h4><p>You run many sessions and machines and scan them like logs; the agent’s tool work matters as much as its prose.</p></div>
+      </div>
+    </section>
+    <section class="variant">
+      <div class="variant-head">
+        <div class="variant-letter">C</div>
+        <div class="variant-meta">
+          <h2>Status-grouped workspace</h2>
+          <p class="variant-tradeoff"><b>Optimizes for</b> triage across machines: the sidebar sorts by what needs you, and a right inspector holds the session’s facts, tools and files. <b>·  Tradeoff</b> horizontal room; three columns need a wide window, and grouping by status moves sessions around as they change.</p>
+        </div>
+      </div>
+      <div class="preview-frame">
+        <div class="preview-frame-bar">Variant C · main window · 1100 × 620</div>
+        <div class="preview"><div class="frame vc">
+  <aside class="vc-side">
+    <div><div class="vc-h">Needs you <i>1</i></div>
+      <div class="vc-row is-on"><div>? Why does the smoke test flake on fonts?</div><small>This computer · mu · 2m</small></div></div>
+    <div><div class="vc-h">Working <i>1</i></div>
+      <div class="vc-row"><div><span class="g-working">●</span> Add a git diff extension</div><small>This computer · mu · now</small></div></div>
+    <div><div class="vc-h">Done <i>1</i></div>
+      <div class="vc-row"><div>* Refactor the settings registry to support font pickers</div><small>This computer · mu · 1h</small></div></div>
+    <div><div class="vc-h">Idle <i>2</i></div>
+      <div class="vc-row"><div><span class="g-idle">○</span> hi</div><small>This computer · mu · Tue</small></div>
+      <div class="vc-row" style="color:#a1a1aa"><div>○ Profile the replay provider</div><small>Build box (offline) · mu-bench</small></div></div>
+  </aside>
+  <main class="vc-main">
+    <header class="vc-head"><span class="vc-title">Why does the smoke test flake on fonts?</span><span class="vc-chip">? needs you</span></header>
+    <div class="vc-body">
+      <div class="vc-msg"><div class="vc-av is-you">M</div><div><div class="vc-name">You<small>13:52</small></div>Why does the smoke test flake on fonts? It failed once right after a build.</div></div>
+      <div class="vc-msg"><div class="vc-av">µ</div><div><div class="vc-name">Agent<small>13:52</small></div>Let me look at how the smoke test waits for the font list.
+        <div class="vc-tool">✓ read <code>examples/full/test/smoke.mjs</code></div>
+        <div class="vc-tool">! bash <code>pnpm --filter mu smoke · exit 1</code></div>
+        The picker calls queryLocalFonts() on first open; a fresh profile can take longer than the test’s 40 seconds.</div></div>
+    </div>
+    <div class="vc-ask"><b>Prefetch fonts when Settings opens, or keep the test’s longer wait?</b><button class="vc-btn is-main">Prefetch on open</button><button class="vc-btn">Keep the wait</button></div>
+    <div class="vc-comp">Reply…<div class="vc-comp-bar"><span class="vc-chip">~/dev/gh/mu</span><span class="vc-chip">claude-opus-5-5</span></div></div>
+  </main>
+  <aside class="vc-insp">
+    <h5>Session</h5>
+    <div class="vc-kv"><span>Machine</span><span>This computer</span><span>Folder</span><span>~/dev/gh/mu</span><span>Model</span><span>claude-opus-5-5</span><span>Started</span><span>13:52</span><span>Cost</span><span>$0.42</span></div>
+    <h5>Tools</h5>
+    <div class="vc-kv"><span>read</span><span>1</span><span>bash</span><span>1 · 1 failed</span></div>
+    <h5>Files touched</h5>
+    <div class="vc-file">examples/full/test/smoke.mjs</div>
+  </aside>
+</div>
+</div>
+      </div>
+      <div class="variant-analysis">
+        <div class="analysis-block"><h4>What works</h4><p>Needs-you sits on top whatever the machine; the transcript stays uncluttered because facts moved to the inspector. It is also the first real use of a panel layout, which the framework needs anyway.</p></div>
+        <div class="analysis-block is-risk"><h4>What risks</h4><p>Sessions jumping between groups can disorient. The inspector shows data we don’t surface yet (model, cost, files touched), so it starts thin. Avatars add chat chrome a monochrome UI doesn’t need.</p></div>
+        <div class="analysis-block is-pick"><h4>Pick this if</h4><p>You want the window to answer “what needs me?” first, and you plan to build panels (git, diff, files) next.</p></div>
+      </div>
+    </section>
+    <section class="variant">
+      <div class="variant-head">
+        <div class="variant-letter">D</div>
+        <div class="variant-meta">
+          <h2>Focus</h2>
+          <p class="variant-tradeoff"><b>Optimizes for</b> one session at a time: the sidebar shrinks to a rail of status glyphs, a 26px title, 15.5/1.7 prose, and a floating composer that holds the question. <b>·  Tradeoff</b> navigation and context. Titles hide behind the rail (⌘K to switch), and tool steps compress to a line.</p>
+        </div>
+      </div>
+      <div class="preview-frame">
+        <div class="preview-frame-bar">Variant D · main window · 1100 × 620</div>
+        <div class="preview"><div class="frame vd">
+  <nav class="vd-rail">
+    <div class="vd-dot is-on">?</div>
+    <div class="vd-dot"><span class="g-working">●</span></div>
+    <div class="vd-dot">*</div>
+    <div class="vd-dot" style="color:#a1a1aa">○</div>
+    <div class="vd-sep"></div>
+    <div class="vd-dot is-stale">○</div>
+  </nav>
+  <main class="vd-main">
+    <div class="vd-col">
+      <div class="vd-crumb">This computer · ~/dev/gh/mu · needs you</div>
+      <div class="vd-title">Why does the smoke test flake on fonts?</div>
+      <div class="vd-you">It failed once right after a build.</div>
+      <div class="vd-turn">Let me look at how the smoke test waits for the font list.</div>
+      <div class="vd-steps"><span>read smoke.mjs</span><span>bash pnpm --filter mu smoke · exit 1</span></div>
+      <div class="vd-turn">The picker calls queryLocalFonts() on first open. Right after a build, a fresh Electron profile can take longer to enumerate fonts than the test’s 40 seconds.</div>
+    </div>
+    <div class="vd-dock">
+      <div class="vd-ask">Prefetch fonts when Settings opens, or keep the test’s longer wait?</div>
+      <button class="vd-btn">Prefetch on open</button><button class="vd-btn">Keep the wait</button>
+      <div class="vd-input"><span>Reply, or pick above</span><small>⌘K sessions · ⏎ send</small></div>
+    </div>
+  </main>
+</div>
+</div>
+      </div>
+      <div class="variant-analysis">
+        <div class="analysis-block"><h4>What works</h4><p>The most generous type and whitespace of the four; the question and the reply live in one floating card, so what the agent needs is always in reach.</p></div>
+        <div class="analysis-block is-risk"><h4>What risks</h4><p>Without titles in view, switching depends on a command palette mu doesn’t have yet. The floating dock covers content on short windows.</p></div>
+        <div class="analysis-block is-pick"><h4>Pick this if</h4><p>mu is mostly launched per project with <code>mu</code>, and you want each window to be about the one thing it was opened for.</p></div>
+      </div>
+    </section>
+    <section class="decision">
+      <h3>How to pick a direction</h3>
+      <p class="decision-sub">The pick’s type scale and spacing become tokens in @mu/ui; its layout becomes the shell’s default.</p>
+      <div class="decision-grid">
+        <div class="decision-cell"><b>Calm reading →</b><span>A. Document</span></div>
+        <div class="decision-cell"><b>Many sessions, logs →</b><span>B. Dense log</span></div>
+        <div class="decision-cell"><b>Triage, panels next →</b><span>C. Workspace</span></div>
+        <div class="decision-cell"><b>One thing per window →</b><span>D. Focus</span></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
