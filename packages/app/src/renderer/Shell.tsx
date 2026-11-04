@@ -1,23 +1,25 @@
 // The shell every app gets: the sidebar slot (or, with nothing there, a compact session picker), the selected session,
 // the restart notice, Settings, and the app-wide reactions (fonts, ⌘, , sessions shown from the command line or a
 // notification, marking finished sessions seen).
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Button, Select } from '@mu/ui'
 import { machine as client, useSettings } from './client.ts'
 import { Slot, useRegistry } from './extension.tsx'
 import { ServiceNotice } from './ServiceNotice.tsx'
 import { SessionView } from './SessionView.tsx'
 import { SettingsView } from './SettingsView.tsx'
+import { Palette } from './Palette.tsx'
 import { useAllSessions, useMachines, useSelection, useSettingsDialog, useShell, type Selection } from './state.tsx'
 
 export function Shell() {
   const registry = useRegistry()
+  const [palette, setPalette] = useState(false)
   const machines = useMachines()
   const { selection, select, machine, session } = useSelection()
   const settings = useSettingsDialog()
   const { openSettings } = useShell()
   const hasSidebar = registry.slots.sidebar.length > 0
-  useAppEffects()
+  useAppEffects(() => setPalette((open) => !open))
 
   // Looking at a finished or failed session marks it seen.
   useEffect(() => {
@@ -45,6 +47,7 @@ export function Shell() {
         <aside className="app__aside"><div className="app__drag" /><Slot name="session.aside" props={{ machine, session }} /></aside>
       )}
       {settings.open && <SettingsView machines={machines} onClose={settings.close} />}
+      {palette && <Palette onClose={() => setPalette(false)} />}
     </div>
   )
 }
@@ -76,7 +79,7 @@ function SessionPicker() {
 }
 
 /** Fonts from the app's settings; ⌘, ; sessions and Settings shown from the command line, a notification or the menu bar. */
-function useAppEffects() {
+function useAppEffects(togglePalette: () => void) {
   const appSettings = useSettings('app', true)
   const { select } = useSelection()
   const { openSettings } = useShell()
@@ -93,6 +96,7 @@ function useAppEffects() {
     document.title = registry.app.name
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === ',') { event.preventDefault(); openSettings() }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); togglePalette() }
       for (const command of registry.commands) if (command.keys && matches(event, command.keys)) { event.preventDefault(); command.run() }
     }
     window.addEventListener('keydown', onKey)
