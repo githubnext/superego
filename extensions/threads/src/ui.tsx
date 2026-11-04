@@ -3,9 +3,19 @@
 // in its heading, and a way to start one in a chosen directory. UI only: it uses the core's session methods.
 import { useState } from 'react'
 import { defineUiExtension, machine as client, useAllSessions, useMachines, useSelection, useSessions, type MachineEntry } from '@mu/app/ui'
-import { rollup } from '@mu/protocol'
 import { IconButton, List, ListItem, Panel, StatusGlyph } from '@mu/ui'
 import './styles.css'
+
+/** How long ago, briefly: now, 5m, 2h, then the weekday, then the date. */
+export function ago(at: number, now = Date.now()): string {
+  const minutes = Math.floor((now - at) / 60_000)
+  if (minutes < 1) return 'now'
+  if (minutes < 60) return `${minutes}m`
+  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)}h`
+  const date = new Date(at)
+  if (minutes < 6 * 24 * 60) return date.toLocaleDateString(undefined, { weekday: 'short' })
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
 
 export default defineUiExtension({
   name: 'threads',
@@ -46,7 +56,7 @@ function Machine({ machine }: { machine: MachineEntry }) {
   return (
     <Panel
       className={`threads-machine ${stale ? 'is-stale' : ''}`}
-      title={<span className="threads-machine__title"><StatusGlyph status={rollup((sessions ?? []).map((s) => s.status))} /> {machine.label}{stale && <em> · {machine.state}</em>}</span>}
+      title={<span className="threads-machine__title">{machine.label}{stale && <em>{machine.state === 'connecting' ? 'connecting' : 'offline'}</em>}</span>}
       actions={<IconButton label="New session" disabled={stale} onClick={() => setCwd(localStorage.getItem('threads.lastCwd') ?? '')}>+</IconButton>}
     >
       {cwd !== undefined && (
@@ -60,7 +70,7 @@ function Machine({ machine }: { machine: MachineEntry }) {
           <ListItem key={session.id}
             selected={selection?.machine === machine.id && selection.session === session.id}
             leading={<StatusGlyph status={session.status} />}
-            trailing={session.cwd.split('/').at(-1)}
+            trailing={ago(session.createdAt)}
             onClick={() => select({ machine: machine.id, session: session.id })}>
             {session.title}
           </ListItem>

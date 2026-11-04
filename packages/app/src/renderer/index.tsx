@@ -28,5 +28,6 @@ export {
   type Command, type EntryProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type UiApi, type UiExtension,
 } from './extension.tsx'
 export { useAllSessions, useMachines, useSelection, useSessions, useShell, type Selection } from './state.tsx'
+export { useComposerClaim, type ComposerClaim } from './SessionView.tsx'
 export { call, has, loadFonts, machine, useSessionView, useSettings, useValue, useWatch } from './client.ts'
 export type { MachineEntry } from '../shared.ts'

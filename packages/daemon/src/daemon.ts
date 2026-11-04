@@ -77,6 +77,18 @@ async function machineId(dataDir: string) {
   return (await readFile(path, 'utf8')).trim()
 }
 
+/**
+ * A session's title from its first message: the first sentence, up to 72 characters, cut at a word with an ellipsis
+ * when longer. The rest of the message stays in the transcript.
+ */
+export function titleOf(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  const sentence = flat.match(/^.+?[.?!](?=\s|$)/)?.[0] ?? flat
+  if (sentence.length <= 72) return sentence
+  const cut = sentence.slice(0, 72)
+  return `${cut.slice(0, cut.lastIndexOf(' ') > 40 ? cut.lastIndexOf(' ') : 72).replace(/[,;:]$/, '')}…`
+}
+
 export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
   const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')))
@@ -263,7 +275,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           const { model, thinkingLevel } = agent.resolve()
           if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
           await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null }, context)
-          if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = text.replace(/\s+/g, ' ').trim().slice(0, 60) })
+          if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text) })
           const submission = await m.conversation.submit({ type: 'input', content: text, requestId: requestId ?? randomUUID(), ...(whenBusy ? { whenBusy } : {}) }, context)
           return { submission: String(submission.id) }
         },

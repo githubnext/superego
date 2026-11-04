@@ -1,4 +1,4 @@
 .threads-machine.is-stale { opacity: .6; }
 .threads-machine__title { display: inline-flex; gap: 4px; align-items: center; }
-.threads-machine__title em { font-style: normal; text-transform: none; }
+.threads-machine__title em { font-style: normal; color: var(--mu-muted); opacity: .7; margin-left: 6px; }
 .threads-machine__new input { width: 100%; font: inherit; color: inherit; background: var(--mu-raised); border: 1px solid var(--mu-border); border-radius: var(--mu-radius); padding: 4px 8px; margin-bottom: 6px; }
