@@ -9,3 +9,37 @@ allowBuilds:
   protobufjs: false
 minimumReleaseAgeExclude:
   - '@earendil-works/*'
+# The six @earendil-works packages mu is built on aren't on the approved package feed at 1.5.0 (npmjs.org is
+# blocked here): they come from vendor/, packed from the published 1.5.0 tarballs. The rest are pinned to the newest
+# versions the feed carries (it lags npm by a few days). Drop these once the feed has caught up.
+overrides:
+  '@earendil-works/chord': file:vendor/earendil-works-chord-1.5.0.tgz
+  '@earendil-works/pi-ai': file:vendor/earendil-works-pi-ai-1.5.0.tgz
+  '@earendil-works/pi-codemode': file:vendor/earendil-works-pi-codemode-1.5.0.tgz
+  '@earendil-works/pi-durable': file:vendor/earendil-works-pi-durable-1.5.0.tgz
+  '@earendil-works/pi-schema': file:vendor/earendil-works-pi-schema-1.5.0.tgz
+  '@earendil-works/pi-telemetry': file:vendor/earendil-works-pi-telemetry-1.5.0.tgz
+  '@aws-sdk/credential-provider-login': 3.972.86
+  '@aws-sdk/credential-provider-http': 3.972.81
+  '@aws-sdk/middleware-websocket': 3.972.61
+  '@aws-sdk/eventstream-handler-node': 3.972.39
+  '@aws-sdk/credential-provider-process': 3.972.79
+  '@aws-sdk/credential-provider-env': 3.972.79
+  '@aws-sdk/core': 3.979.0
+  '@aws-sdk/credential-provider-web-identity': 3.972.85
+  '@aws-sdk/signature-v4-multi-region': 3.996.50
+  '@aws-sdk/token-providers': 3.1160.0
+  '@aws-sdk/credential-provider-sso': 3.973.23
+  '@aws-sdk/credential-provider-node': 3.972.91
+  '@aws-sdk/nested-clients': 3.997.53
+  '@aws-sdk/credential-provider-ini': 3.973.24
+  '@aws-sdk/middleware-eventstream': 3.972.35
+  '@smithy/node-http-handler': 4.14.0
+  '@smithy/core': 3.38.0
+  '@vitejs/plugin-react': 6.1.2
+  'electron': 45.1.0
+  'electron-to-chromium': 1.5.467
+  'hast-util-to-jsx-runtime': 2.3.6
+  'node-releases': 2.0.61
+  'tinybench': 6.2.2
+  'ws': 8.22.0
