@@ -109,7 +109,7 @@ describe('daemon', () => {
   it('serves settings: sections, validated values, persisted across restarts', async () => {
     const first = await open()
     const { value } = await first.peer.call<{ value: SettingsSnapshot }>('settings.watch', {})
-    expect(value.sections.map((s) => s.id)).toEqual(['model', 'providers'])
+    expect(value.sections.map((s) => s.id)).toEqual(['model', 'providers', 'web'])
     const model = value.sections[0]!.settings.find((s) => s.key === 'agent.model')!
     expect(model.type === 'choice' && model.options.map((o) => o.value)).toContain('faux/faux-1')
     await expect(first.peer.call('settings.set', { key: 'agent.model', value: 'nope/nope' })).rejects.toMatchObject({ kind: 'invalid_setting' })
