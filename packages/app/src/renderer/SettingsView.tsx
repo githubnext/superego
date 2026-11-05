@@ -28,7 +28,7 @@ export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; 
       <div className="settings__body">
         <nav className="settings__nav">
           <button className={target === APP ? 'is-selected' : ''} onClick={() => setTarget(APP)}>General</button>
-          <button className={target === MACHINES ? 'is-selected' : ''} onClick={() => setTarget(MACHINES)}>Machines</button>
+          {!window.mu.web && <button className={target === MACHINES ? 'is-selected' : ''} onClick={() => setTarget(MACHINES)}>Machines</button>}
           {editable.length > 1 && <button className={target === ALL ? 'is-selected' : ''} onClick={() => setTarget(ALL)}>All machines</button>}
           {machines.filter((m) => m.state !== 'disabled').map((m) => (
             <button key={m.id} className={`settings__nav-machine ${target === m.id ? 'is-selected' : ''}`} onClick={() => setTarget(m.id)}>
@@ -99,6 +99,20 @@ function Setting({ setting, value, apply, mixed, note }: {
         {error && <div className="setting__error">{error}</div>}
       </div>
       <div className="setting__control">{control}</div>
+    </div>
+  )
+}
+
+/** Settings → a machine → Web access: the address a browser or phone opens (it carries the token), to copy. */
+export function WebAccess({ section }: { target: string; section: SectionInfo }) {
+  const { url, error } = (section.data ?? {}) as { url?: string | null; error?: string | null }
+  const [copied, setCopied] = useState(false)
+  if (error) return <p className="setting__error">{error}</p>
+  if (!url) return null
+  return (
+    <div className="web-access">
+      <code className="web-access__url">{url.replace(/#token=.*/, '#token=…')}</code>
+      <Button onClick={() => { void navigator.clipboard.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }) }}>{copied ? 'Copied' : 'Copy address'}</Button>
     </div>
   )
 }

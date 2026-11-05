@@ -229,3 +229,31 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 .action-log__table tr.is-error td:nth-child(2) { color: var(--mu-status-error); }
 .action-log__error { font-size: var(--mu-text-xs); }
 .action-log__none { color: var(--mu-muted); }
+
+.web-access { display: flex; align-items: center; gap: var(--mu-space-3); padding: var(--mu-space-2) 0; }
+.web-access__url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mu-muted); }
+
+/* Phones and narrow windows: one column, the sidebar a drawer, nothing hovering where a thumb goes. */
+.app__mobilebar { display: flex; align-items: center; gap: var(--mu-space-2); padding: calc(env(safe-area-inset-top) + 8px) var(--mu-space-3) 8px; border-bottom: 1px solid var(--mu-border); background: var(--mu-sidebar-bg); flex: none; }
+.app__mobiletitle { flex: 1; min-width: 0; text-align: center; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app__mobilebar .mu-button { min-width: 36px; min-height: 32px; }
+.app__scrim { position: fixed; inset: 0; z-index: 20; background: rgb(0 0 0 / .3); }
+.app.is-narrow .app__sidebar { position: fixed; z-index: 21; top: 0; bottom: 0; left: 0; width: min(85vw, 320px); box-shadow: var(--mu-shadow-float); padding-top: env(safe-area-inset-top); }
+.app.is-narrow .app__sidebar .app__drag { height: 12px; }
+.app.is-narrow .session__column { width: auto; max-width: none; padding: var(--mu-space-4) var(--mu-space-4) 150px; }
+.app.is-narrow .session__crumb { display: none; }
+.app.is-narrow .session__title { display: none; }
+.app.is-narrow .dock { left: var(--mu-space-2); right: var(--mu-space-2); bottom: calc(env(safe-area-inset-bottom) + var(--mu-space-2)); width: auto; max-width: none; transform: none; }
+/* 16px keeps iOS from zooming into the field. */
+.app.is-narrow .composer, .app.is-narrow .mu-field, .app.is-narrow .new-session__prompt { font-size: 16px; }
+.app.is-narrow .msg--user { max-width: 88%; }
+.app.is-narrow .md pre, .app.is-narrow .step__output, .app.is-narrow .step__diff { margin-left: 0; margin-right: 0; }
+@media (max-width: 760px) {
+  .mu-dialog { width: 100vw !important; max-width: 100vw; height: 100dvh !important; max-height: 100dvh; border-radius: 0; }
+  .mu-dialog__frame { max-height: 100dvh; }
+  .settings__body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .settings__nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--mu-border); padding: 8px; }
+  .settings__nav button { white-space: nowrap; }
+  .settings__content { padding: 8px 16px 40px; }
+  .setting, .provider, .machine-row { flex-wrap: wrap; }
+}

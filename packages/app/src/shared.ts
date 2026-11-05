@@ -25,6 +25,8 @@ export type MuBridge = {
   call(machine: MachineId, method: string, params: unknown): Promise<unknown>
   machines(): Promise<MachineEntry[]>
   onEvent(listener: (event: MuEvent) => void): () => void
+  /** Set in a browser (the daemon's Web access), where there is no desktop: no machines to add, no folders to pick. */
+  web?: boolean
 }
 
 export const CHANNEL = { call: 'mu:call', machines: 'mu:machines', event: 'mu:event' } as const

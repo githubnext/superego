@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import type { Json, Methods, Notifications } from '@mu/protocol'
 import type { SettingsRegistry } from './registry.ts'
 
@@ -11,7 +10,7 @@ type Handlers = { [M in 'settings.watch' | 'settings.set']: (params: Methods[M][
 export function serveSettings(registry: SettingsRegistry, notify: (params: Notifications['settings.changed']) => void, subs: Map<string, () => unknown>): Handlers {
   return {
     async 'settings.watch'() {
-      const sub = randomUUID()
+      const sub = crypto.randomUUID()
       let last = ''
       const push = async () => {
         const value = await registry.snapshot()

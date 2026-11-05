@@ -19,6 +19,19 @@ export function useDispatch() {
   return useRegistry().router.dispatch
 }
 
+/** Whether the window is phone-narrow. */
+function useNarrow() {
+  const query = '(max-width: 760px)'
+  const [narrow, setNarrow] = useState(() => matchMedia(query).matches)
+  useEffect(() => {
+    const list = matchMedia(query)
+    const change = () => setNarrow(list.matches)
+    list.addEventListener('change', change)
+    return () => list.removeEventListener('change', change)
+  }, [])
+  return narrow
+}
+
 export function Shell() {
   const registry = useRegistry()
   const [palette, setPalette] = useState(false)
@@ -43,23 +56,38 @@ export function Shell() {
     void registry.router.dispatch('session.seen', { id: selection.session }, { machine: selection.machine, source: 'auto' }).catch(() => {})
   }, [selection?.machine, selection?.session, session?.status.state])
 
+  // A phone (or a narrow window): the sidebar becomes a drawer over the session, opened from a bar at the top.
+  const narrow = useNarrow()
+  const [drawer, setDrawer] = useState(false)
+  useEffect(() => { setDrawer(false) }, [selection?.machine, selection?.session, narrow])
+
   const actions = <><ServiceNotice /><Button onClick={openSettings}>Settings</Button></>
   return (
-    <div className={`app ${hasSidebar ? 'has-sidebar' : ''}`}>
-      {hasSidebar && (
-        <aside className="app__sidebar">
+    <div className={`app ${hasSidebar ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''}`}>
+      {narrow && hasSidebar && drawer && <div className="app__scrim" onClick={() => setDrawer(false)} />}
+      {hasSidebar && (!narrow || drawer) && (
+        // In the drawer, picking a session (even the open one) closes it.
+        <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.mu-list-item')) setDrawer(false) } : undefined}>
           <div className="app__drag" />
           <Slot name="sidebar" props={{}} />
           <div className="app__footer">{actions}</div>
         </aside>
       )}
       <main className="app__main">
-        <div className="app__drag">{!hasSidebar && <div className="app__bar"><SessionPicker />{actions}</div>}</div>
+        {narrow && hasSidebar
+          ? (
+            <div className="app__mobilebar">
+              <Button onClick={() => setDrawer(true)} aria-label="Sessions">☰</Button>
+              <span className="app__mobiletitle">{session?.title ?? registry.app.name}</span>
+              <Button onClick={() => openNewSession()} aria-label="New session">+</Button>
+            </div>
+          )
+          : <div className="app__drag">{!hasSidebar && <div className="app__bar"><SessionPicker />{actions}</div>}</div>}
         {selection && session && machine
           ? <SessionView key={`${selection.machine}/${selection.session}`} machine={machine} session={session} />
           : <div className="app__empty">{hasSidebar ? 'Select or start a session.' : `Start a session with: ${registry.app.id}`}</div>}
       </main>
-      {selection && session && machine && registry.slots['session.aside'].length > 0 && (
+      {!narrow && selection && session && machine && registry.slots['session.aside'].length > 0 && (
         <aside className="app__aside"><div className="app__drag" /><Slot name="session.aside" props={{ machine, session }} /></aside>
       )}
       {settings.open && <SettingsView machines={machines} onClose={settings.close} />}

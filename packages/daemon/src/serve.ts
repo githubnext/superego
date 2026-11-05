@@ -8,12 +8,14 @@ import type { AppConfig } from '@mu/protocol'
 import type { DaemonExtension } from './extension.ts'
 
 /** Run a daemon on `socket` until SIGINT/SIGTERM. Used by `mu daemon` and by the Electron app's daemon process. */
-export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket = socketPath(app, dataDir), defaultCwd, extensions = [] }: {
+export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket = socketPath(app, dataDir), defaultCwd, extensions = [], webRoot }: {
   app: AppConfig; dataDir?: string; socket?: string; defaultCwd?: string; extensions?: DaemonExtension[]
+  /** The window's build, for Web access. */
+  webRoot?: string
 }) {
   const build = readBuild(import.meta.dirname)
   let stop = async () => {}
-  const daemon = await openDaemon({ app, dataDir, defaultCwd: appEnv(app)('CWD') ?? defaultCwd ?? process.cwd(), build, extensions, onRestart: () => void stop() })
+  const daemon = await openDaemon({ app, dataDir, defaultCwd: appEnv(app)('CWD') ?? defaultCwd ?? process.cwd(), build, extensions, ...(webRoot ? { webRoot } : {}), onRestart: () => void stop() })
   const server = await listen(daemon, socket)
   const pidFile = join(dataDir, 'daemon.pid')
   await writeFile(pidFile, String(process.pid))

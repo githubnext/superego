@@ -103,7 +103,7 @@ export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; o
             <span>Project</span>
             <div className="new-session__row">
               <TextField aria-label="Project folder" placeholder="Folder (empty: home)" value={cwd} onChange={(e) => setCwd(e.target.value)} />
-              {machine?.id === 'local' && <Button onClick={() => void browse()}>Browse…</Button>}
+              {machine?.id === 'local' && !window.mu.web && <Button onClick={() => void browse()}>Browse…</Button>}
             </div>
           </label>
           {recent.length > 0 && (

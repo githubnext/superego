@@ -7,15 +7,19 @@ import '@mu/ui/styles.css'
 import './app.css'
 import type { AppConfig } from '@mu/protocol'
 import { createRegistry, RegistryProvider, type UiExtension } from './extension.tsx'
-import { Providers } from './SettingsView.tsx'
+import { Providers, WebAccess } from './SettingsView.tsx'
 import { Shell } from './Shell.tsx'
 import { ShellStateProvider } from './state.tsx'
 import { coreActions } from './actions.tsx'
+import { webBridge } from './web-bridge.ts'
 
 export function mountApp(app: AppConfig, { extensions = [], root = document.getElementById('root')! }: { extensions?: UiExtension[]; root?: HTMLElement } = {}) {
+  // In a browser there is no preload: the bridge is a WebSocket to the daemon that served the page.
+  if (!window.mu) window.mu = webBridge()
   // The Providers settings section is the core's own custom component.
   const registry = createRegistry(app, extensions, (core) => {
     core.settings('providers', Providers)
+    core.settings('web', WebAccess)
     for (const action of coreActions) core.action(action)
   })
   void registry.router.load('app')

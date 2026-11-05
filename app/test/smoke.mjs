@@ -237,6 +237,35 @@ if (phase === 'first') {
   await until(`!document.querySelector('.mu-font-picker__popover') && Boolean(document.querySelector('.mu-dialog.settings'))`, 'picker closed, dialog open')
   await escape()
   await until(`!document.querySelector('.mu-dialog.settings')`, 'dialog closed by Escape')
+  // Web access: the daemon serves the same window to a browser. A window without the preload is just a web page.
+  const port = 20000 + Math.floor(Math.random() * 20000)
+  await run(`window.mu.call('local', 'settings.set', { key: 'web.port', value: ${port} })`)
+  await run(`window.mu.call('local', 'settings.set', { key: 'web.access', value: 'local' })`)
+  const url = await until(`window.mu.call('local', 'settings.watch', {}).then((r) => r.value.sections.find((s) => s.id === 'web')?.data?.url)`, 'web address')
+  const browser = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } })
+  await browser.loadURL(url)
+  const inBrowser = async (js, label) => {
+    for (let i = 0; i < 150; i++) { if (await browser.webContents.executeJavaScript(js).catch(() => false)) return; await new Promise((r) => setTimeout(r, 100)) }
+    await fail(`web: waiting for ${label}`); throw new Error('failed')
+  }
+  await inBrowser(`window.mu.web === true && location.hash === ''`, 'web bridge, token out of the address bar')
+  await inBrowser(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'sessions in the browser')
+  await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
+  await inBrowser(`document.querySelector('.transcript')?.textContent.includes('echo: hello from smoke')`, 'a transcript in the browser')
+  // A phone: one column, the sessions in a drawer from the bar at the top.
+  browser.setContentSize(390, 844)
+  await inBrowser(`Boolean(document.querySelector('.app__mobilebar')) && !document.querySelector('.app__sidebar')`, 'phone layout')
+  if (process.env.MU_SMOKE_SHOTS) writeFileSync(`${process.env.MU_SMOKE_SHOTS}/phone-session.png`, (await browser.webContents.capturePage()).toPNG())
+  await browser.webContents.executeJavaScript(`document.querySelector('.app__mobilebar button').click()`)
+  await inBrowser(`Boolean(document.querySelector('.app.has-drawer .app__sidebar'))`, 'drawer open')
+  await new Promise((r) => setTimeout(r, 300))
+  if (process.env.MU_SMOKE_SHOTS) writeFileSync(`${process.env.MU_SMOKE_SHOTS}/phone-drawer.png`, (await browser.webContents.capturePage()).toPNG())
+  await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
+  await inBrowser(`!document.querySelector('.app__sidebar')`, 'drawer closes on picking a session')
+  const wrongToken = await browser.webContents.executeJavaScript(`new Promise((resolve) => { const ws = new WebSocket('ws://' + location.host + '/rpc?token=wrong'); ws.onopen = () => resolve('open'); ws.onerror = () => resolve('refused') })`)
+  if (wrongToken !== 'refused') { await fail(`a wrong token got in: ${wrongToken}`); throw new Error('failed') }
+  browser.destroy()
+  await run(`window.mu.call('local', 'settings.set', { key: 'web.access', value: 'off' })`)
   console.log('smoke(first): ok')
 } else {
   await until(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'session after reopen')

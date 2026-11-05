@@ -19,6 +19,7 @@ import { serveSettings, SettingsRegistry, type SettingsStore } from '@mu/setting
 import { FileSettingsStore } from '@mu/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
 import type { DaemonApi, DaemonExtension, LiveValue, StatusContribution } from './extension.ts'
+import { serveWeb, webToken, type WebServer } from './web.ts'
 import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileRef } from './profiles.ts'
 
 const context = BACKGROUND_CONTEXT
@@ -59,6 +60,8 @@ export type DaemonOptions = {
   build?: string
   /** Called once a restart was accepted and answered; the host closes the daemon and exits. */
   onRestart?: () => void
+  /** The app's window build (index.html and assets), served to browsers when Web access is on. */
+  webRoot?: string
 }
 
 /** One mounted session: its conversation and a small watch that keeps its status current. */
@@ -446,7 +449,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   harness.resume()
 
 
-  return {
+  const daemon: Daemon = {
     machine,
     settings,
     serve(peer) {
@@ -540,10 +543,50 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       }
     },
     async close() {
+      await web?.close()
       for (const cleanup of cleanups.reverse()) cleanup()
       agent.close()
       for (const m of mounted.values()) await m.stop()
       await harness.close(context)
     },
   }
+
+  // ── Web access ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+  let web: WebServer | undefined
+  let webKey = ''
+  let webError: string | undefined
+  /** Serve (or stop serving) browsers as the Web access settings say, whenever they change. */
+  const applyWeb = async () => {
+    const access = settings.get<string>('web.access') ?? 'off'
+    const port = settings.get<number>('web.port') ?? 7777
+    const key = access === 'off' || !options.webRoot ? '' : `${access}:${port}`
+    if (key === webKey) return
+    webKey = key
+    await web?.close()
+    web = undefined
+    webError = undefined
+    if (key) {
+      try {
+        web = await serveWeb({ root: options.webRoot!, host: access === 'network' ? '0.0.0.0' : '127.0.0.1', port, token: await webToken(options.dataDir), serve: daemon.serve })
+      } catch (error) {
+        webError = (error as Error).message
+      }
+    }
+    settings.invalidate()
+  }
+  settings.register({
+    id: 'web', title: 'Web access', order: 80, ui: 'web',
+    description: 'Use this machine from a browser or a phone: it serves the app and its sessions.',
+    settings: [
+      { key: 'web.access', title: 'Serve the app', default: 'off', type: { type: 'choice', options: [
+        { value: 'off', label: 'Off' }, { value: 'local', label: 'To this computer' }, { value: 'network', label: 'To the local network' },
+      ] }, disabled: () => options.webRoot ? undefined : 'This daemon has no web app to serve.' },
+      { key: 'web.port', title: 'Port', default: 7777, type: { type: 'number', min: 1024, max: 65535, step: 1 } },
+    ],
+    data: () => ({ url: web?.url ?? null, error: webError ?? null }),
+  })
+  settings.onChange(() => void applyWeb())
+  await applyWeb()
+  return daemon
 }
