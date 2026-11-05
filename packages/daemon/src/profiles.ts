@@ -19,6 +19,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { registerHooks } from 'node:module'
+import { stripTypeScriptTypes } from 'node:module'
 import type { Extension } from '@earendil-works/pi-durable'
 import { RpcError } from '@mu/protocol'
 
@@ -31,6 +32,11 @@ export type ProfileSpec = {
   prompt?: string
   /** Agent extensions, as paths from the profile's folder: modules whose default export is an extension. */
   extensions?: string[]
+  /**
+   * UI extensions, as paths from the profile's folder: modules whose default export is defineUiExtension({ … }), drawn
+   * for this profile's sessions. They import from 'mu/ui' (hooks, components, `h` for elements) and 'react'.
+   */
+  ui?: string[]
   /** Built-in extensions this profile does without: 'coding-tools', 'ask-user', … */
   without?: string[]
   /** Start from another profile and add to it: 'user:<name>' (a project's profile on the user's). */
@@ -179,6 +185,31 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
     ...base?.spec, ...spec,
     prompt: [base?.spec.prompt, spec.prompt].filter(Boolean).join('\n\n') || undefined,
     without: [...new Set([...(base?.spec.without ?? []), ...(spec.without ?? [])])],
+    // UI paths are relative to their own profile's folder: only this profile's are served from here.
+    ui: spec.ui,
   }
   return { ...ref, spec: merged, extensions, hash }
+}
+
+/** Whether `dir` is a profile folder at all: under the user's profiles, or a project's `.mu/profiles`. */
+export function isProfileDir(ref: ProfileRef, userRoot: string): boolean {
+  const parent = dirname(ref.dir)
+  const ok = ref.scope === 'user' ? resolve(parent) === resolve(userRoot) : parent.endsWith(join('.mu', 'profiles'))
+  return ok && ref.name === ref.dir.split(/[\\/]/).at(-1) && existsSync(join(ref.dir, 'profile.ts'))
+}
+
+/**
+ * One module of a profile's UI, as the window loads it: the file at `path` (tried as given, then with .ts, .js or
+ * /index.ts), inside the profile's folder, with its TypeScript types stripped. JSX isn't compiled yet: UI extensions
+ * build elements with `h(…)` from 'mu/ui'.
+ */
+export async function profileModule(dir: string, path: string): Promise<{ path: string; code: string }> {
+  const base = resolve(dir, path)
+  if (base !== dir && !base.startsWith(dir + '/')) throw new RpcError('invalid', `${path} is outside the profile`)
+  const found = [base, `${base}.ts`, `${base}.js`, join(base, 'index.ts'), join(base, 'index.js')].find((p) => existsSync(p) && statSync(p).isFile())
+  if (!found) throw new RpcError('not_found', `No module ${path} in the profile`)
+  if (/\.[cm]?tsx$|\.jsx$/.test(found)) throw new RpcError('invalid', `${relative(dir, found)}: JSX isn't supported yet; build elements with h() from 'mu/ui'`)
+  const source = await readFile(found, 'utf8')
+  const code = /\.[cm]?ts$/.test(found) ? stripTypeScriptTypes(source, { mode: 'strip' }) : source
+  return { path: relative(dir, found), code }
 }

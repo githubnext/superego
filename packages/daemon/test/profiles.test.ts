@@ -65,7 +65,7 @@ it("takes the user's default profile: its prompt and model", async () => {
   })
   const { peer, close } = await open()
   const session = await peer.call<SessionInfo>('session.create', { cwd: project, prompt: 'hello' })
-  expect(session.profile).toEqual({ name: 'default', scope: 'user' })
+  expect(session.profile).toMatchObject({ name: 'default', scope: 'user' })
   await done(peer, session.id)
   const agent = await agentOf(peer, session.id)
   expect(agent.instructions).toBe('Answer in haiku.')
@@ -94,7 +94,7 @@ export default defineExtension({
 
   await peer.call('profile.allow', { cwd: project, name: 'support' })
   const session = await peer.call<SessionInfo>('session.create', { cwd: join(project, 'src'), profile: 'support', prompt: 'where is 42?' })
-  expect(session.profile).toEqual({ name: 'support', scope: 'project' })
+  expect(session.profile).toMatchObject({ name: 'support', scope: 'project' })
   await done(peer, session.id)
   const agent = await agentOf(peer, session.id)
   expect(agent.extensions).toContain('project:support/orders')
@@ -119,7 +119,7 @@ it("lets a project's profile replace the user's, or extend it", async () => {
   expect((await peer.call<ProfileInfo[]>('profile.list', { cwd: project })).map((p) => `${p.scope}:${p.name}`)).toEqual(['project:default'])
   await peer.call('profile.allow', { cwd: project })
   const session = await peer.call<SessionInfo>('session.create', { cwd: project, prompt: 'hi' })
-  expect(session.profile).toEqual({ name: 'default', scope: 'project' })
+  expect(session.profile).toMatchObject({ name: 'default', scope: 'project' })
   await done(peer, session.id)
   expect((await agentOf(peer, session.id)).instructions).toBe('Be kind.\n\nKnow the Acme codebase.')
   await close()
@@ -129,4 +129,25 @@ it("keeps the test shim for 'mu' in step with the SDK", async () => {
   const { SDK_EXPORTS } = await import('../src/profiles.ts')
   const shim = await import('../src/sdk-shim.ts')
   expect(Object.keys(shim).filter((key) => key !== 'default').sort()).toEqual([...SDK_EXPORTS].sort())
+})
+
+it("serves a profile's UI modules, types stripped, only from inside it and only once allowed", async () => {
+  const profile = join(project, '.mu', 'profiles', 'default')
+  write(profile, {
+    'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ ui: ['./ui/badge.ts'] })\n`,
+    'ui/badge.ts': `import { defineUiExtension, h } from 'mu/ui'\nimport { label } from './label.ts'\nconst n: number = 1\nexport default defineUiExtension({ name: 'badge', setup(mu) { mu.slot('session.header', () => h('span', null, label)) } })\n`,
+    'ui/label.ts': `export const label: string = 'Acme'\n`,
+  })
+  const { peer, close } = await open()
+  const ref = { scope: 'project', name: 'default', dir: profile }
+  await expect(peer.call('profile.ui', ref)).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await peer.call('profile.allow', { cwd: project })
+  expect(await peer.call('profile.ui', ref)).toMatchObject({ entries: ['./ui/badge.ts'] })
+  const badge = await peer.call<{ path: string; code: string }>('profile.module', { ...ref, path: 'ui/badge' })
+  expect(badge.path).toBe('ui/badge.ts')
+  expect(badge.code).not.toContain(': number')
+  expect(badge.code).toContain(`from './label.ts'`)
+  await expect(peer.call('profile.module', { ...ref, path: '../../../src/secret.ts' })).rejects.toMatchObject({ kind: 'invalid' })
+  await expect(peer.call('profile.ui', { ...ref, dir: join(project, 'src') })).rejects.toMatchObject({ kind: 'not_found' })
+  await close()
 })

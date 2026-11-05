@@ -34,7 +34,7 @@ export type SessionInfo = {
   /** What it has spent so far, in dollars, as the providers price it. */
   cost?: number
   /** The profile it runs with: one of the project's, or one of the user's. Absent: plain mu. */
-  profile?: { name: string; scope: 'user' | 'project' }
+  profile?: ProfileRef
   status: Status
 }
 
@@ -46,8 +46,10 @@ export type ModelCatalog = {
 }
 
 /** What a new session starts with. Unset: this machine's defaults. */
+/** A profile: the user's (`~/.mu/profiles/<name>`) or a project's (`.mu/profiles/<name>`), and its folder. */
+export type ProfileRef = { name: string; scope: 'user' | 'project'; dir: string }
 /** A profile a session in some folder could start with (see the daemon's profiles.ts). */
-export type ProfileInfo = { name: string; scope: 'user' | 'project'; dir: string; description?: string; allowed: boolean }
+export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean }
 
 export type NewSession = {
   cwd?: string
@@ -75,6 +77,10 @@ export type Methods = {
   'session.list': { params: {}; result: SessionInfo[] }
   'session.create': { params: NewSession; result: SessionInfo }
   'agent.models': { params: {}; result: ModelCatalog }
+  /** A profile's UI extensions: their entry modules, and a hash that changes when any of its files do. */
+  'profile.ui': { params: ProfileRef; result: { hash: string; entries: string[] } }
+  /** One module of a profile's UI, as JavaScript (types stripped); its own imports are left for the window to load. */
+  'profile.module': { params: ProfileRef & { path: string }; result: { path: string; code: string } }
   'session.rename': { params: { id: SessionId; title: string }; result: null }
   'session.submit': { params: { id: SessionId; text: string; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
   'session.abort': { params: { id: SessionId }; result: null }

@@ -7,6 +7,7 @@ import { machine as client, useSessionView } from './client.ts'
 import { Slot, useRegistry, type ToolCallProps } from './extension.tsx'
 import { useShell } from './state.tsx'
 import { Markdown, Scroll } from './Markdown.tsx'
+import { useProfileUi } from './profile-ui.ts'
 
 type Block = { type: string; text?: string; thinking?: string; id?: string; name?: string; arguments?: unknown }
 type Message = { role: string; content: string | Block[]; toolCallId?: string; isError?: boolean; details?: unknown }
@@ -35,6 +36,8 @@ const blocks = (message: Message | undefined): Block[] =>
 const textOf = (message: Message | undefined) => blocks(message).map((b) => b.text ?? '').join('')
 
 export function SessionView({ machine, session }: { machine: MachineEntry; session: SessionInfo }) {
+  // The session's profile may bring UI of its own (header, aside, composer, tool renderers).
+  useProfileUi(machine.id, session)
   const view = useSessionView(machine.id, machine.state === 'connected', session.id)
   const live = view?.docs['pi.live'] as LiveState | undefined
   const scroller = useRef<HTMLDivElement>(null)

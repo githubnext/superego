@@ -19,7 +19,7 @@ import { serveSettings, SettingsRegistry, type SettingsStore } from '@mu/setting
 import { FileSettingsStore } from '@mu/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
 import type { DaemonApi, DaemonExtension, LiveValue, StatusContribution } from './extension.ts'
-import { defineProfile, findProfile, hashProfile, listProfiles, loadProfile, provideSdk, Trust, type LoadedProfile, type ProfileRef } from './profiles.ts'
+import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileRef } from './profiles.ts'
 
 const context = BACKGROUND_CONTEXT
 
@@ -194,7 +194,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     id, title: m.meta.title || 'New session', cwd: m.meta.cwd, createdAt: m.meta.createdAt,
     activeAt: Math.max(m.activeAt ?? 0, m.meta.createdAt),
     ...(m.model ? { model: m.model } : {}), ...(m.cost ? { cost: m.cost } : {}), ...(m.meta.model ? { ownModel: true } : {}),
-    ...(m.meta.profile ? { profile: { name: m.meta.profile.name, scope: m.meta.profile.scope } } : {}),
+    ...(m.meta.profile ? { profile: m.meta.profile } : {}),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
   /** Only an assistant answer makes a session "done"; the user's own message does not. */
@@ -464,6 +464,17 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         },
         'session.list': () => list(),
         'agent.models': async () => agent.catalog(),
+        // A profile's UI is its code too: served only for a real profile folder, and only once it is allowed.
+        'profile.ui': async (ref: ProfileRef) => {
+          if (!isProfileDir(ref, userProfiles)) throw new RpcError('not_found', `No profile at ${ref.dir}`)
+          const loaded = await profileOf({ scope: ref.scope, name: ref.name, dir: ref.dir })
+          return { hash: loaded.hash, entries: loaded.spec.ui ?? [] }
+        },
+        'profile.module': async ({ path, ...ref }: ProfileRef & { path: string }) => {
+          if (!isProfileDir(ref, userProfiles)) throw new RpcError('not_found', `No profile at ${ref.dir}`)
+          await profileOf({ scope: ref.scope, name: ref.name, dir: ref.dir })
+          return profileModule(ref.dir, path)
+        },
         async 'session.watch'({ id }: { id: string }) {
           const m = await get(id)
           const watch = await m.conversation.watch(context)

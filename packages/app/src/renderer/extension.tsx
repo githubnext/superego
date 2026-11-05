@@ -1,7 +1,7 @@
 // The UI half of an extension: `<pkg>/ui`, listed in the app's renderer entry. It fills named slots in the shell, draws
 // tool calls and entries in the transcript, adds custom settings components and actions (with keys). Components reach
 // everything else (machines, sessions, selection, live values, calls) through the hooks this package exports.
-import { createContext, useContext, type ComponentType, type ReactNode } from 'react'
+import { createContext, useContext, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
 import type { AppConfig, DeclaredSection, SectionInfo, SessionInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowRouter } from './actions.tsx'
@@ -74,12 +74,18 @@ export const defineUiExtension = (extension: UiExtension) => extension
 export type Registry = {
   app: AppConfig
   extensions: string[]
-  slots: { [S in SlotName]: { component: ComponentType<SlotProps[S]>; order: number; extension: string }[] }
+  /** `profile`: the folder of the profile whose UI added it; it draws only for that profile's sessions. */
+  slots: { [S in SlotName]: { component: ComponentType<SlotProps[S]>; order: number; extension: string; profile?: string }[] }
   tools: Map<string, ComponentType<ToolCallProps>>
   entries: Map<string, ComponentType<EntryProps>>
   settings: Map<string, ComponentType<SettingsComponentProps>>
   router: WindowRouter
   appSettings: DeclaredSection[]
+  /** Add a profile's UI extensions at runtime (replacing what that profile added before). */
+  installProfile(profile: string, extensions: UiExtension[]): void
+  /** Changes whenever extensions are added at runtime; `subscribe` to hear it. */
+  version: number
+  subscribe(listener: () => void): () => void
 }
 
 export function createRegistry(app: AppConfig, extensions: UiExtension[], core: (mu: UiApi) => void): Registry {
@@ -87,12 +93,27 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     app, extensions: extensions.map((e) => e.name),
     slots: { 'sidebar': [], 'session.header': [], 'composer.above': [], 'session.aside': [] },
     tools: new Map(), entries: new Map(), settings: new Map(), router: createWindowRouter(), appSettings: [],
+    version: 0,
+    subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
+    installProfile(profile, list) {
+      for (const slot of Object.keys(registry.slots) as SlotName[]) {
+        ;(registry.slots[slot] as { profile?: string }[]).splice(0, Infinity, ...(registry.slots[slot] as { profile?: string }[]).filter((e) => e.profile !== profile))
+      }
+      for (const extension of list) {
+        try { extension.setup(api(extension.name, profile)) } catch (error) { console.error(`Profile extension ${extension.name} failed to start`, error) }
+      }
+      registry.version++
+      for (const listener of listeners) listener()
+    },
   }
-  const api = (extension: string): UiApi => ({
+  const listeners = new Set<() => void>()
+  const api = (extension: string, profile?: string): UiApi => ({
     app,
     slot(slot, component, options) {
+      // A profile's UI draws in its sessions' slots; the sidebar is the app's.
+      if (profile && slot === 'sidebar') return console.warn(`Profile extension ${extension} can't fill the sidebar`)
       const list = registry.slots[slot] as Registry['slots'][typeof slot]
-      list.push({ component: component as never, order: options?.order ?? 100, extension })
+      list.push({ component: component as never, order: options?.order ?? 100, extension, ...(profile ? { profile } : {}) })
       list.sort((a, b) => a.order - b.order)
     },
     tool: (name, component) => { registry.tools.set(name, component) },
@@ -100,10 +121,12 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     settings: (ui, component) => { registry.settings.set(ui, component) },
     dispatch: (id, params, options) => registry.router.dispatch(id, params, { source: extension, ...options }),
     action(action) {
+      if (profile) return console.warn(`Profile extension ${extension}: actions from a profile's UI aren't supported yet`)
       if (extension !== 'core' && !action.id.startsWith(`${extension}.`)) throw new Error(`Extension ${extension} must name its actions "${extension}.<name>", not "${action.id}"`)
       registry.router.router.register({ ...action, runs: 'window' })
     },
     appSettings(section) {
+      if (profile) return console.warn(`Profile extension ${extension}: app settings from a profile's UI aren't supported yet`)
       for (const setting of section.settings) {
         if (extension !== 'core' && !setting.key.startsWith(`${extension}.`)) throw new Error(`Extension ${extension} must name its settings "${extension}.<key>", not "${setting.key}"`)
       }
@@ -133,6 +156,11 @@ export const useApp = () => useRegistry().app
 
 /** Draw every component in `slot`, with `props`. */
 export function Slot<S extends SlotName>({ name, props }: { name: S; props: SlotProps[S] }) {
-  const entries = useRegistry().slots[name] as { component: ComponentType<SlotProps[S]>; extension: string }[]
-  return <>{entries.map(({ component: Component, extension }, index) => <Component key={`${extension}-${index}`} {...props} />)}</>
+  const registry = useRegistry()
+  useSyncExternalStore(registry.subscribe, () => registry.version)
+  // A profile's extensions draw only for that profile's sessions.
+  const profile = (props as { session?: SessionInfo }).session?.profile?.dir
+  const entries = (registry.slots[name] as { component: ComponentType<SlotProps[S]>; extension: string; profile?: string }[])
+    .filter((entry) => !entry.profile || entry.profile === profile)
+  return <>{entries.map(({ component: Component, extension, profile }, index) => <Component key={`${profile ?? ''}${extension}-${index}`} {...props} />)}</>
 }

@@ -87,7 +87,7 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     await expect(mu(['create', project, '-P', 'support'])).rejects.toThrow(/allow/)
     await mu(['profile', 'allow', 'support'], undefined, project)
     const session = await muJson(['create', project, '-P', 'support', '-p', 'hello'])
-    expect(session.profile).toEqual({ name: 'support', scope: 'project' })
+    expect(session.profile).toMatchObject({ name: 'support', scope: 'project' })
     await until(async () => (await muJson(['sessions'])).find((s: any) => s.id === session.id)?.status.state === 'done')
   })
 
