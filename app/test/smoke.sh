@@ -6,6 +6,10 @@ unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export MU_HOME="$(mktemp -d)" MU_MODEL=faux MU_HEADLESS=1
 # A recorded agent that asks the user something, then uses the answer: offered as the model "replay/replay".
 export MU_REPLAY="$MU_HOME/ask.jsonl" MU_REPLAY_SPEED=0
+# A user profile: every session here starts with it, loaded by the daemon on Electron's own Node.
+mkdir -p "$MU_HOME/profiles/default"
+printf "import { defineProfile } from 'mu'\nexport default defineProfile({ description: 'smoke', prompt: 'Be brief.' })\n" > "$MU_HOME/profiles/default/profile.ts"
+
 cat > "$MU_REPLAY" <<'TURNS'
 {"at":0,"provider":"x","model":"x","message":{"role":"assistant","content":[{"type":"toolCall","id":"ask-1","name":"ask_user","arguments":{"question":"Which colour?","options":["red","blue"]}}],"stopReason":"toolUse"}}
 {"at":0,"provider":"x","model":"x","message":{"role":"assistant","content":[{"type":"text","text":"Blue it is."}],"stopReason":"stop"}}

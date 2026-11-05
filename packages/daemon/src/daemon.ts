@@ -6,19 +6,20 @@ import { homedir, hostname, platform } from 'node:os'
 import { join, resolve as resolvePath } from 'node:path'
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
 import {
-  type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, Harness, type LiveState,
-  type Storage,
+  type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, defineExtension, defineTool, type Extension, Harness, hook,
+  type LiveState, section, type Storage, wrapSection, wrapTool,
 } from '@earendil-works/pi-durable'
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  bool, defineAction, deriveStatus, FEATURES, lit, obj, opt, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type SessionInfo,
+  arr, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type SessionInfo,
 } from '@mu/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@mu/settings'
 import { FileSettingsStore } from '@mu/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
 import type { DaemonApi, DaemonExtension, LiveValue, StatusContribution } from './extension.ts'
+import { defineProfile, findProfile, hashProfile, listProfiles, loadProfile, provideSdk, Trust, type LoadedProfile, type ProfileRef } from './profiles.ts'
 
 const context = BACKGROUND_CONTEXT
 
@@ -30,8 +31,10 @@ const Catalog = defineDoc<{ ids: number[] }>({
 /** A session's own metadata, next to its transcript. */
 type SessionMeta = {
   title: string; cwd: string; createdAt: number; seen?: { entryId?: number; failureTaskId?: number }
-  /** The session's own model and thinking; unset follows this machine's settings. */
+  /** The session's own model and thinking; unset follows its profile, else this machine's settings. */
   model?: string; thinking?: string
+  /** The profile it started with (see profiles.ts); unset runs plain mu. */
+  profile?: ProfileRef
 }
 const SessionDoc = defineDoc<SessionMeta>({
   kind: 'mu.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current',
@@ -114,7 +117,17 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')))
   const agent = await createAgentSettings(settings, options.dataDir, options.app)
   const registry = createRegistry()
-  registry.install(createCodingTools())
+  /** What every session has unless its profile does without: coding tools and the bundled extensions' agent parts. */
+  const builtins: Extension[] = []
+  const installBuiltin = (extension: Extension) => { registry.install(extension); builtins.push(extension) }
+  installBuiltin(createCodingTools())
+  // Profiles and their extensions import from 'mu'; this is what they get.
+  provideSdk({
+    defineProfile, defineExtension, defineTool, section, hook, wrapTool, wrapSection,
+    arr, bool, int, lit, nullable, num, obj, opt, str, union, unknown,
+  })
+  const trust = new Trust(options.dataDir)
+  const userProfiles = join(options.dataDir, 'profiles')
 
   const storage = options.storage ?? await openNodeSqliteStorage(join(options.dataDir, `${options.app.id}.sqlite`))
   const defaultCwd = options.defaultCwd ?? process.cwd()
@@ -124,6 +137,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     // Attribution names the app to providers that show it; without a url there is nothing to show.
     identity: { attribution: options.app.url ? { name: options.app.name, url: options.app.url } : null },
     env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? defaultCwd }),
+    // A session without a profile selects the built-ins only: profiles' extensions are installed too, but are theirs.
+    settings: () => ({ extensions: builtins }),
   }, context)
 
   const machine: MachineInfo = {
@@ -179,6 +194,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     id, title: m.meta.title || 'New session', cwd: m.meta.cwd, createdAt: m.meta.createdAt,
     activeAt: Math.max(m.activeAt ?? 0, m.meta.createdAt),
     ...(m.model ? { model: m.model } : {}), ...(m.cost ? { cost: m.cost } : {}), ...(m.meta.model ? { ownModel: true } : {}),
+    ...(m.meta.profile ? { profile: { name: m.meta.profile.name, scope: m.meta.profile.scope } } : {}),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
   /** Only an assistant answer makes a session "done"; the user's own message does not. */
@@ -233,7 +249,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const api: DaemonApi = {
       app: options.app,
       harness,
-      agent: (agentExtension) => registry.install(agentExtension),
+      agent: (agentExtension) => installBuiltin(agentExtension),
       settings,
       action: (action) => { router.register({ ...action, id: named(extension.name, action.id), runs: 'machine' }) },
       value<T extends Json>(key: string, initial: T): LiveValue<T> {
@@ -263,12 +279,39 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
   const features = [...FEATURES, ...(options.extensions ?? []).map((extension) => `ext:${extension.name}`)]
 
+  // ── Profiles ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  const profiles = new Map<string, LoadedProfile>()
+  /** A profile as its files are now: loaded again (and its extensions reinstalled) when they changed. */
+  async function profileOf(ref: ProfileRef): Promise<LoadedProfile> {
+    const cached = profiles.get(ref.dir)
+    if (cached && cached.hash === hashProfile(ref.dir)) return cached
+    const loaded = await loadProfile(ref, userProfiles, trust)
+    for (const old of cached?.extensions ?? []) if (!loaded.extensions.some((e) => e.name === old.name)) registry.uninstall(old)
+    for (const extension of loaded.extensions) registry.install(extension)
+    profiles.set(ref.dir, loaded)
+    return loaded
+  }
+
+  /** What a turn runs with: the session's own choices, else its profile's, else this machine's settings. */
+  async function agentOf(meta: SessionMeta) {
+    const profile = meta.profile ? await profileOf(meta.profile) : undefined
+    const { model, thinkingLevel } = agent.resolve({ model: meta.model ?? profile?.spec.model, thinking: meta.thinking ?? profile?.spec.thinking })
+    if (!profile) return { model, thinkingLevel }
+    const without = new Set(profile.spec.without ?? [])
+    return {
+      model, thinkingLevel,
+      extensions: [...builtins.filter((e) => !without.has(e.name)), ...profile.extensions],
+      instructions: profile.spec.prompt ?? null,
+    }
+  }
+
   /** Send `text` to a session, with the model and thinking it chose, else what this machine's settings say now. */
   async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp') {
     const m = await get(id)
-    const { model, thinkingLevel } = agent.resolve(m.meta)
+    const { model, thinkingLevel, ...rest } = await agentOf(m.meta)
     if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
-    await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null }, context)
+    await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null, ...rest }, context)
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text) })
     const submission = await m.conversation.submit({ type: 'input', content: text, requestId, ...(whenBusy ? { whenBusy } : {}) }, context)
     return String(submission.id)
@@ -279,16 +322,19 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const session = { session: true as const }
   router.register(defineAction({
     id: 'session.create', title: 'Start a session (no dialog)', runs: 'machine', expose: ['ui', 'cli'],
-    params: obj({ cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()) }),
-    async run({ cwd, title, model: ownModel, thinking, prompt }) {
+    params: obj({ cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), profile: opt(str()) }),
+    async run({ cwd, title, model: ownModel, thinking, prompt, profile: profileName }) {
       const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
       if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${machine.hostname}`)
       if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
+      // The project's profile (or the user's) of that name, else the default one there is; checked (and allowed) now.
+      const ref = findProfile(dir, userProfiles, profileName?.trim() || undefined)
+      if (ref) await profileOf(ref)
       const meta: SessionMeta = {
         title: title?.trim() ?? '', cwd: dir, createdAt: Date.now(),
-        ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}),
+        ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}), ...(ref ? { profile: ref } : {}),
       }
-      const { model, thinkingLevel } = agent.resolve(meta)
+      const { model, thinkingLevel } = await agentOf(meta)
       const conversation = await harness.createConversation({
         ownership: { kind: 'ownerless' },
         agent: { ...(model ? { model } : {}), ...(thinkingLevel ? { thinkingLevel } : {}), cwd: meta.cwd },
@@ -301,6 +347,28 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       changed()
       if (prompt?.trim()) await submit(String(conversation.id), prompt, randomUUID())
       return info(String(conversation.id), m)
+    },
+  }))
+  router.register(defineAction({
+    id: 'profile.list', title: 'List profiles', runs: 'machine', expose: ['ui', 'cli'],
+    params: obj({ cwd: opt(str()) }),
+    async run({ cwd }) {
+      const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
+      return Promise.all(listProfiles(dir, userProfiles).map(async (ref) => {
+        const hash = hashProfile(ref.dir)
+        const description = profiles.get(ref.dir)?.spec.description
+        return { ...ref, ...(description ? { description } : {}), allowed: await trust.allowed(ref, hash) }
+      }))
+    },
+  }))
+  router.register(defineAction({
+    id: 'profile.allow', title: 'Allow a project profile to run', runs: 'machine', expose: ['ui', 'cli'],
+    params: obj({ cwd: opt(str()), name: opt(str()) }),
+    async run({ cwd, name }) {
+      const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
+      const ref = findProfile(dir, userProfiles, name?.trim() || undefined)
+      if (!ref) throw new RpcError('not_found', `No profile in ${dir}`)
+      return { ...ref, hash: await trust.allow(ref) }
     },
   }))
   router.register(defineAction({

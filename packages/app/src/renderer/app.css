@@ -214,7 +214,8 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 .new-session__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--mu-space-3); }
 .new-session__grid .mu-select { width: 100%; }
 .new-session__note { color: var(--mu-muted); margin: 0; }
-.new-session__error { color: var(--mu-status-error); margin: 0; font-size: var(--mu-text-ui); }
+.new-session__error { color: var(--mu-status-error); margin: 0; font-size: var(--mu-text-ui); display: flex; align-items: center; justify-content: space-between; gap: var(--mu-space-3); }
+.new-session__error p { margin: 0; }
 .new-session__foot { display: flex; align-items: center; gap: var(--mu-space-2); padding: var(--mu-space-3) var(--mu-space-4); border-top: 1px solid var(--mu-border); background: var(--mu-sidebar-bg); }
 .new-session__hint { flex: 1; font: var(--mu-text-xs) var(--mu-mono); color: var(--mu-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .new-session__foot kbd { font: var(--mu-text-xs) var(--mu-mono); opacity: .75; }

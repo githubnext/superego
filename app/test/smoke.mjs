@@ -64,6 +64,7 @@ if (phase === 'first') {
   await until(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'session in sidebar')
   await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: hello from smoke')`, 'answer rendered')
+  await until(`document.querySelector('.session__profile')?.textContent === 'default'`, "the user's default profile, shown in the header")
   await shot('main')
   // Type into the composer like a user: React needs the native setter and an input event.
   await run(`(() => {

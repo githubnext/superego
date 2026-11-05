@@ -1,7 +1,8 @@
-// The New session dialog: what to work on, where (machine and folder), and with which model and thinking. Everything
-// but the folder is optional; unset choices follow that machine's settings. ⌘⏎ starts it.
+// The New session dialog: what to work on, where (machine and folder), with which profile, model and thinking. Unset
+// choices follow the folder's default profile and that machine's settings. ⌘⏎ starts it. A project's profile that
+// isn't allowed yet (it runs that repo's code) can be allowed here, and started.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import type { ModelCatalog, SessionInfo } from '@mu/protocol'
+import type { ModelCatalog, ProfileInfo, SessionInfo } from '@mu/protocol'
 import { useRegistry } from './extension.tsx'
 import { Button, Dialog, Select, TextArea, TextField } from '@mu/ui'
 import { has, machine as client } from './client.ts'
@@ -26,7 +27,9 @@ export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; o
   const [model, setModel] = useState<string | null>(null)
   const [thinking, setThinking] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<ModelCatalog>()
-  const [error, setError] = useState<string>()
+  const [error, setError] = useState<{ kind?: string; message: string }>()
+  const [profiles, setProfiles] = useState<ProfileInfo[]>([])
+  const [profile, setProfile] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const promptRef = useRef<HTMLTextAreaElement>(null)
 
@@ -39,6 +42,19 @@ export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; o
     return () => { live = false }
   }, [machine?.id])
 
+  // The profiles a session in this folder could start with, as the folder is typed (a moment after the last key).
+  useEffect(() => {
+    if (!machine) return
+    let live = true
+    const timer = setTimeout(() => {
+      dispatch('profile.list', cwd.trim() ? { cwd: cwd.trim() } : {}, { machine: machine.id, source: 'new session' })
+        .then((list) => { if (live) { setProfiles(list as ProfileInfo[]); setProfile(null) } }, () => { if (live) setProfiles([]) })
+    }, 250)
+    return () => { live = false; clearTimeout(timer) }
+  }, [machine?.id, cwd])
+  const defaultProfile = profiles.find((p) => p.name === 'default')
+  const picked = profiles.find((p) => p.name === (profile ?? 'default'))
+
   /** Folders sessions on this machine worked in, most recent first. */
   const recent = useMemo(() => {
     const list = (sessions[machine?.id ?? ''] ?? []).slice().sort((a, b) => (b.activeAt ?? b.createdAt) - (a.activeAt ?? a.createdAt))
@@ -49,12 +65,14 @@ export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; o
   const levels = chosen?.thinking ?? []
   const defaultLabel = catalog?.default.model ? `Default · ${catalog.models.find((m) => m.value === catalog.default.model)?.label ?? catalog.default.model}` : 'Default'
 
-  const create = async () => {
+  const create = async ({ allow = false } = {}) => {
     if (!machine || busy) return
     setBusy(true)
     setError(undefined)
     try {
+      if (allow && picked) await dispatch('profile.allow', { ...(cwd.trim() ? { cwd: cwd.trim() } : {}), name: picked.name }, { machine: machine.id, source: 'new session' })
       const created = await dispatch('session.create', {
+        ...(profile ? { profile } : {}),
         ...(cwd.trim() ? { cwd: cwd.trim() } : {}), ...(title.trim() ? { title: title.trim() } : {}),
         ...(model ? { model } : {}), ...(thinking && levels.length ? { thinking } : {}), ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
       }, { machine: machine.id, source: 'new session' }) as SessionInfo
@@ -62,7 +80,7 @@ export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; o
       onClose()
       select({ machine: machine.id, session: created.id })
     } catch (e) {
-      setError((e as Error).message)
+      setError(e as { kind?: string; message: string })
       setBusy(false)
     }
   }
@@ -101,6 +119,13 @@ export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; o
                   onChange={(value) => { if (value) { setMachineId(value); setCwd(last.cwd?.[value] ?? '') } }} />
               </label>
             )}
+            {profiles.length > 0 && (
+              <label className="new-session__field"><span>Profile</span>
+                <Select aria-label="Profile" value={profile}
+                  options={profiles.filter((p) => p.name !== 'default').map((p) => ({ value: p.name, label: `${p.name}${p.scope === 'user' ? ' (yours)' : ''}` }))}
+                  nullLabel={defaultProfile ? `default${defaultProfile.scope === 'user' ? ' (yours)' : ''}` : 'None'} onChange={setProfile} />
+              </label>
+            )}
             <label className="new-session__field"><span>Model</span>
               <Select aria-label="Model" options={catalog?.models ?? []} value={model} nullLabel={catalog ? defaultLabel : 'Loading…'} disabled={!catalog}
                 onChange={(value) => { setModel(value); setThinking(null) }} />
@@ -118,7 +143,15 @@ export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; o
             <TextField aria-label="Name" placeholder="From the prompt (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
           </label>
         </>}
-        {error && <p className="new-session__error">{error}</p>}
+        {picked && !picked.allowed && !error && (
+          <p className="new-session__note">The {picked.name} profile runs this project's own code. Starting will ask to allow it.</p>
+        )}
+        {error && (
+          <div className="new-session__error">
+            <p>{error.message}</p>
+            {error.kind === 'untrusted_profile' && <Button onClick={() => void create({ allow: true })}>Allow and start</Button>}
+          </div>
+        )}
       </div>
       <footer className="new-session__foot">
         <span className="new-session__hint">{machine ? `${machine.label}${cwd ? ` · ${shortPath(cwd)}` : ''}` : ''}</span>

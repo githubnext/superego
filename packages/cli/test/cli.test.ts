@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,16 +12,16 @@ let home: string
 const env = () => ({ ...process.env, MU_HOME: home, MU_MODEL: 'faux', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '' })
 
 /** Run `mu` with `args`; resolves with stdout, rejects with stderr. */
-function mu(args: string[], input?: string): Promise<string> {
+function mu(args: string[], input?: string, cwd?: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = execFile(process.execPath, [CLI, ...args], { env: env(), timeout: 30_000 }, (error, stdout, stderr) => {
+    const child = execFile(process.execPath, [CLI, ...args], { env: env(), timeout: 30_000, ...(cwd ? { cwd } : {}) }, (error, stdout, stderr) => {
       if (error) reject(new Error(stderr || error.message))
       else resolve(stdout)
     })
     if (input !== undefined) child.stdin!.end(input)
   })
 }
-const muJson = async <T = any>(args: string[], input?: string): Promise<T> => JSON.parse(await mu([...args, '--json'], input))
+const muJson = async <T = any>(args: string[], input?: string, cwd?: string): Promise<T> => JSON.parse(await mu([...args, '--json'], input, cwd))
 const until = async (check: () => Promise<boolean>) => {
   for (let i = 0; i < 100; i++) { if (await check()) return; await new Promise((r) => setTimeout(r, 100)) }
   throw new Error('timed out')
@@ -70,6 +71,24 @@ describe('mu', () => {
     await expect(mu(['do', 'session.rename', '--id', created.id])).rejects.toThrow(/title/)
     await expect(mu(['do', 'nope.nope'])).rejects.toThrow(/nope\.nope/)
     expect((await muJson(['actions', 'log'])).some((e: any) => e.id === 'session.rename' && e.source === 'cli')).toBe(true)
+  })
+
+  it("makes a project's profile, loads its extensions in the real daemon, and asks again after an edit", async () => {
+    mkdirSync(join(home, 'acme'), { recursive: true })
+    const project = realpathSync(join(home, 'acme'))
+    const made = await muJson(['profile', 'new', 'support'], undefined, project)
+    expect(made.dir).toBe(join(project, '.mu', 'profiles', 'support'))
+    expect(await muJson(['profile'], undefined, project)).toMatchObject([{ name: 'support', scope: 'project', allowed: true }])
+    // A prompt and a tool, imported from 'mu' as a profile does: Node's loader in the daemon answers it.
+    writeFileSync(join(made.dir, 'profile.ts'), `import { defineProfile } from 'mu'\nexport default defineProfile({ prompt: 'Answer customers.', extensions: ['./orders.ts'] })\n`)
+    writeFileSync(join(made.dir, 'orders.ts'), `import { defineExtension, defineTool, obj, str } from 'mu'
+export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'find_order', label: 'Find order', description: 'Find an order.', parameters: obj({ number: str() }), async execute() { return { output: [{ type: 'text', text: 'shipped' }] } } })] })
+`)
+    await expect(mu(['create', project, '-P', 'support'])).rejects.toThrow(/allow/)
+    await mu(['profile', 'allow', 'support'], undefined, project)
+    const session = await muJson(['create', project, '-P', 'support', '-p', 'hello'])
+    expect(session.profile).toEqual({ name: 'support', scope: 'project' })
+    await until(async () => (await muJson(['sessions'])).find((s: any) => s.id === session.id)?.status.state === 'done')
   })
 
   it('manages machines and works on them with -m', async () => {

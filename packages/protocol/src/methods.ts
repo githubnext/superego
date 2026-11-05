@@ -33,6 +33,8 @@ export type SessionInfo = {
   ownModel?: boolean
   /** What it has spent so far, in dollars, as the providers price it. */
   cost?: number
+  /** The profile it runs with: one of the project's, or one of the user's. Absent: plain mu. */
+  profile?: { name: string; scope: 'user' | 'project' }
   status: Status
 }
 
@@ -44,6 +46,9 @@ export type ModelCatalog = {
 }
 
 /** What a new session starts with. Unset: this machine's defaults. */
+/** A profile a session in some folder could start with (see the daemon's profiles.ts). */
+export type ProfileInfo = { name: string; scope: 'user' | 'project'; dir: string; description?: string; allowed: boolean }
+
 export type NewSession = {
   cwd?: string
   title?: string
@@ -53,6 +58,8 @@ export type NewSession = {
   thinking?: string
   /** A first message, sent right away. */
   prompt?: string
+  /** The profile to run with; unset takes the folder's default (the project's, else the user's). */
+  profile?: string
 }
 
 export type MachineInfo = {

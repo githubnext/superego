@@ -56,7 +56,7 @@ export function SessionView({ machine, session }: { machine: MachineEntry; sessi
         }}>
         <div className="session__column">
           <div className="session__crumb">
-            <span>{machine.label} · <span title={session.cwd}>{folderName(session.cwd)}</span> · {statusLabel(session.status)}</span>
+            <span>{machine.label} · <span title={session.cwd}>{folderName(session.cwd)}</span>{session.profile && <> · <span className="session__profile" title={session.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{session.profile.name}</span></>} · {statusLabel(session.status)}</span>
             <Slot name="session.header" props={{ machine, session }} />
           </div>
           <h1 className="session__title">{session.title.replace(/\.$/, '')}</h1>

@@ -3,18 +3,18 @@
 // this computer or, with `-m <machine>`, on any machine the app knows. `<id> connect` is what `ssh <host> <id> connect`
 // runs on the far side. An app's bin calls `runCli(app, { appDir, bin })`.
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, openSync } from 'node:fs'
+import { existsSync, mkdirSync, openSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createInterface } from 'node:readline'
 import { createConnection } from 'node:net'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, type MachineConfig, type Transport } from '@mu/client'
 import { appEnv, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@mu/daemon'
 import {
   FEATURES, PROTOCOL_VERSION, RpcError, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
-  type SessionInfo, type SettingsSnapshot,
+  type ProfileInfo, type SessionInfo, type SettingsSnapshot,
 } from '@mu/protocol'
 
 export type CliOptions = {
@@ -39,6 +39,11 @@ Usage:
   ${app.id} sessions                   List sessions (also: mu ls)
   ${app.id} create [dir] [-p prompt]   Start a session without opening the app; prints its id (also: new)
   ${app.id} send <session> <text...>   Send a message to a session
+      -P, --profile <name>        Start with this profile (default: the folder's default, the project's before yours)
+
+  ${app.id} profile                    List the profiles a session here could start with
+  ${app.id} profile new [name] [--user] Make a profile in this project's .mu/profiles (or yours, ~/.${app.id}/profiles)
+  ${app.id} profile allow [name]       Let this project's profile run (again, after it changed)
 
   ${app.id} machines                   List machines and whether they answer
   ${app.id} machines add <ssh-target> [--name N] [--command C]
@@ -153,13 +158,13 @@ function openInApp(machine: string, session: string) {
 
 // ── Commands ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-async function startSession(args: { dir?: string; machine?: string; prompt?: string; open: boolean }) {
+async function startSession(args: { dir?: string; machine?: string; prompt?: string; profile?: string; open: boolean }) {
   const machine = resolveMachine(args.machine)
   // A local directory is resolved here; on another machine it is passed as given, or left to that daemon's default.
   const cwd = machine.config ? args.dir : resolve(args.dir ?? '.')
   const session = await on(machine, async (call) => {
-    const created = await call('session.create', cwd ? { cwd } : {})
-    if (args.prompt) await call('session.submit', { id: created.id, text: args.prompt })
+    // Actions take their parameters by name; session.create picks the folder's profile unless one is named.
+    const created = await call('action.run', { id: 'session.create', params: { ...(cwd ? { cwd } : {}), ...(args.profile ? { profile: args.profile } : {}), ...(args.prompt ? { prompt: args.prompt } : {}) }, exposure: 'cli' }) as SessionInfo
     return created
   })
   if (args.open) openInApp(machine.id, session.id)
@@ -366,6 +371,53 @@ async function bridge(start: boolean) {
   conn.on('close', () => process.exit(0))
 }
 
+// ── Profiles ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+const PROFILE_TEMPLATE = (name: string) => `// The ${name} profile: what an agent started with it is. Sessions in this folder (and below) can start with it;
+// "default" is the one they get unless they ask for another. Edits apply from the next turn.
+import { defineProfile } from 'mu'
+
+export default defineProfile({
+  description: '',
+  // model: 'anthropic/claude-sonnet-4-5',
+  // thinking: 'medium',
+  // prompt: 'You work on this project. …',
+  // extensions: ['./extensions/example.ts'],   // agent extensions: tools, prompt sections, hooks
+  // without: ['ask-user'],                       // built-ins this profile does without
+  // extends: 'user:default',                     // start from your own profile of that name
+})
+`
+
+async function profileCommand(sub: string | undefined, rest: string[], values: { machine?: string; user?: boolean }) {
+  const machine = resolveMachine(values.machine)
+  const run = (id: string, params: Record<string, unknown>) => on(machine, (call) => call('action.run', { id, params, exposure: 'cli' }))
+  const cwd = machine.config ? undefined : process.cwd()
+  if (!sub || sub === 'ls' || sub === 'list') {
+    const list = await run('profile.list', cwd ? { cwd } : {}) as ProfileInfo[]
+    return print(list, () => {
+      if (!list.length) return console.log(`No profiles here. Make one: ${app.id} profile new`)
+      table(list.map((p) => [p.name, p.scope === 'project' ? 'project' : 'yours', p.allowed ? '' : 'not allowed', p.dir]))
+    })
+  }
+  if (sub === 'new') {
+    if (machine.config) throw new RpcError('usage', `${app.id} profile new makes a profile here; on ${machine.label}, run it there`)
+    const name = rest[0] ?? 'default'
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) throw new RpcError('usage', 'A profile name is lowercase letters, digits and dashes')
+    const dir = values.user ? join(dataDir, 'profiles', name) : join(process.cwd(), '.mu', 'profiles', name)
+    if (existsSync(join(dir, 'profile.ts'))) throw new RpcError('exists', `${join(dir, 'profile.ts')} is there already`)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'profile.ts'), PROFILE_TEMPLATE(name))
+    // You wrote it, so it may run.
+    if (!values.user) await run('profile.allow', { cwd: process.cwd(), name })
+    return print({ name, dir }, () => console.log(`Made ${join(dir, 'profile.ts')}`))
+  }
+  if (sub === 'allow') {
+    const allowed = await run('profile.allow', { ...(cwd ? { cwd } : {}), ...(rest[0] ? { name: rest[0] } : {}) }) as ProfileInfo
+    return print(allowed, () => console.log(`Allowed ${allowed.name} (${allowed.dir}) as it is now`))
+  }
+  throw new RpcError('usage', `Unknown: ${app.id} profile ${sub}`)
+}
+
 // ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** A one-line signature for an action's params: `id* text whenBusy?=steer|followUp`. */
@@ -423,7 +475,7 @@ async function doCommand(argv: string[]) {
 
 // ── Dispatch ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const COMMANDS = new Set(['open', 'sessions', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do'])
+const COMMANDS = new Set(['open', 'sessions', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles'])
 
 async function main() {
   // `do` takes the action's own --params, which parseArgs would refuse.
@@ -434,7 +486,8 @@ async function main() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
-      machine: { type: 'string', short: 'm' }, prompt: { type: 'string', short: 'p' }, json: { type: 'boolean' },
+      machine: { type: 'string', short: 'm' }, prompt: { type: 'string', short: 'p' }, json: { type: 'boolean' }, profile: { type: 'string', short: 'P' },
+      user: { type: 'boolean' },
       all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
       start: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
     },
@@ -443,7 +496,7 @@ async function main() {
   const [first, ...rest] = positionals
   if (values.help || first === 'help') return console.log(help())
   // No command, or a directory: start a session there and open it.
-  if (!first || !COMMANDS.has(first)) return startSession({ dir: first, machine: values.machine, prompt: values.prompt, open: true })
+  if (!first || !COMMANDS.has(first)) return startSession({ dir: first, machine: values.machine, prompt: values.prompt, profile: values.profile, open: true })
   switch (first) {
     case 'open': {
       if (!rest[0]) throw new RpcError('usage', `${app.id} open <session>`)
@@ -454,7 +507,8 @@ async function main() {
       return openInApp(machine.id, rest[0])
     }
     case 'sessions': case 'ls': return sessions(values.machine)
-    case 'new': case 'create': return startSession({ dir: rest[0], machine: values.machine, prompt: values.prompt, open: false })
+    case 'new': case 'create': return startSession({ dir: rest[0], machine: values.machine, prompt: values.prompt, profile: values.profile, open: false })
+    case 'profile': case 'profiles': return profileCommand(rest[0], rest.slice(1), values)
     case 'send': {
       const [id, ...text] = rest
       if (!id || !text.length) throw new RpcError('usage', `${app.id} send <session> <text...>`)
