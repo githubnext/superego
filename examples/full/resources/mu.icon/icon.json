@@ -1,14 +1,60 @@
 {
   "fill" : {
     "linear-gradient" : [
-      "display-p3:0.42068,1.00000,0.89746,1.00000",
-      "display-p3:0.96783,0.79858,0.87485,1.00000"
+      "extended-gray:1.00000,1.00000",
+      "extended-gray:0.96050,1.00000"
     ]
   },
   "groups" : [
     {
       "layers" : [
         {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "gray:1.00000,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+              }
+            }
+          ],
+          "image-name" : "µ 2.svg",
+          "name" : "µ 2",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              50.10000000000002
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "extended-gray:0.00000,1.00000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "gray:1.00000,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "gray:0.55696,1.00000"
+              }
+            }
+          ],
+          "glass" : true,
+          "hidden" : true,
           "image-name" : "mu.svg",
           "name" : "mu",
           "position" : {

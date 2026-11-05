@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, openSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, session, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, session, shell, type MenuItemConstructorOptions } from 'electron'
 import { appEnv, defaultDataDir, readBuild, socketPath } from '@mu/daemon/client'
 import {
   bool, defineAction, lit, obj, opt, Router, RpcError, str, union, unknown,
@@ -266,6 +266,19 @@ export function startApp(appConfig: AppConfig) {
 
   // The app's own files: `resources/` next to its package.json (the build puts main.js in out/main).
   const resources = join(import.meta.dirname, '../../resources')
+  /**
+   * Run from source there's no bundle to carry the icon, so the Dock takes the app's own images: `icon.png`, and
+   * `icon-dark.png` while the system is dark. A packaged app's icon (`mu.icon`) does all of this, and more, itself.
+   */
+  function dockIcon() {
+    const pick = () => {
+      const dark = join(resources, 'icon-dark.png')
+      const icon = nativeTheme.shouldUseDarkColors && existsSync(dark) ? dark : join(resources, 'icon.png')
+      if (existsSync(icon)) app.dock?.setIcon(icon)
+    }
+    pick()
+    nativeTheme.on('updated', pick)
+  }
   const menuBar = new MenuBar(appConfig, {
     machines: () => machineEntries(),
     sessions: (machine) => sessionsOf.get(machine) ?? [],
@@ -428,8 +441,7 @@ export function startApp(appConfig: AppConfig) {
   app.whenReady().then(() => {
     if (!primary) return
     if (headless) app.dock?.hide()
-    // Run from source there's no bundle to carry the icon: the Dock takes the app's own.
-    else if (!app.isPackaged && existsSync(join(resources, 'icon.png'))) app.dock?.setIcon(join(resources, 'icon.png'))
+    else if (!app.isPackaged) dockIcon()
     setMenu()
     refreshDesktop()
     // Font pickers list the installed fonts (the Local Font Access API); nothing else is granted.

@@ -30,6 +30,7 @@
     "./ui": "./src/renderer/index.tsx",
     "./preload": "./src/preload/preload.ts",
     "./vite": "./src/vite.ts",
+    "./package": "./src/package.ts",
     "./shared": "./src/shared.ts"
   }
 }
