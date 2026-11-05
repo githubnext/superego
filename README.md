@@ -49,5 +49,30 @@ status) and a UI half (`defineUiExtension`: slots, tool and entry renderers, set
 ## The command
 
 `mu` starts a session in the current directory and opens it in the app. `mu <dir> -p "fix the tests"` starts one
-elsewhere with a first message. Every command takes `-m <machine>` and `--json`; `mu help` lists them. A remote machine
-needs `mu` on its PATH for `ssh <host> mu connect --start`.
+elsewhere with a first message; `-P <profile>` picks a profile. Every command takes `-m <machine>` and `--json`; `mu help`
+lists them. A remote machine needs `mu` on its PATH for `ssh <host> mu connect --start`.
+
+## Profiles
+
+```sh
+mu profile new            # .mu/profiles/default/profile.ts in this project (allowed, since you made it)
+mu profile new support    # another, for `mu -P support`
+mu profile new --user     # ~/.mu/profiles/default: yours, everywhere a project has none
+mu profile allow support  # after pulling someone else's changes to it
+```
+
+```ts
+import { defineProfile } from 'mu'
+export default defineProfile({
+  description: 'Answers customer mail',
+  prompt: 'You answer customer email for Acme. Be brief.',
+  extensions: ['./orders.ts'],     // defineExtension({ name, tools: [defineTool(…)] }) from 'mu'
+  ui: ['./ui/badge.ts'],           // defineUiExtension({ name, setup(mu) { … } }) from 'mu/ui'
+  without: ['ask-user'],
+})
+```
+
+## In a browser or on a phone
+
+Settings → a machine → Web access: serve the app to this computer or the local network. Open the address it shows (it
+carries a token); on a phone, add it to the home screen.

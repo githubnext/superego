@@ -1,6 +1,17 @@
-# mu — plan v0
+# mu — plan
 
-> An Electron version of pi: a sturdy, bare-bones core with an agent, sessions across machines, and an extension API that lets you turn it into whatever a browser can show.
+> One app for running agents: a desktop app, a daemon per machine, and the same window in a browser or on a phone. What an agent *is* comes from profiles: files in `~/.mu` or inside a project's own `.mu`, so a repo carries the harness it needs.
+
+## The pivot (2026-11-05)
+
+mu was a framework with a generator (`mu new`, each app its own build). That is tagged `pre-embedded`. Now:
+
+- **One app** (`app/`): the desktop app, its daemon and the `mu` command. No generator, no per-app builds.
+- **Profiles** (§3b): `profile.ts` (`defineProfile` from `'mu'`) in `~/.mu/profiles/<name>` or `<repo>/.mu/profiles/<name>`, with a model, a prompt, agent extensions (tools, prompt sections, hooks) and UI extensions. A session takes its folder's profile when it starts; a project's profile runs only once allowed.
+- **Web and phone** (§3c): a machine's daemon serves the same window to browsers (Web access), over a WebSocket guarded by a token; narrow windows get a phone layout, and it installs as a PWA.
+- Packaging the one app (`pnpm --filter mu package`) is set up and waits on installing electron-builder.
+
+Principle 6 below (no network listener) gave way: Web access is a network listener, off by default, with a token. Real auth (accounts, TLS) is still to come.
 
 Research sources: `~/dev/fut`, `~/dev/wt`, `~/dev/gh/tremolo`, pi-mono (`~/.cache/checkouts/github.com/badlogic/pi-mono`, v1.5.0), herdr / herdr-core / herdr-app (`~/.cache/checkouts/github.com/herdrdev/*`), pi-pocket, durable-pi.
 
@@ -146,6 +157,24 @@ Every intent is an action: an id, a title, a params schema (pi-schema), where it
 **MCP (planned, not built):** a `mu mcp` server generated from the actions exposed to `mcp`: each becomes a tool with its schema, run through `action.run` with `exposure: 'mcp'`, so it lands in the same log. Watches could become resources. Open: which actions an outside agent may run by default, and per-machine routing (a `machine` param on every tool, or one server per machine).
 
 ---
+
+## 3b. Profiles
+
+- **Where:** `~/.mu/profiles/<name>/profile.ts` (yours) and `<repo>/.mu/profiles/<name>/profile.ts` (the project's; the nearest `.mu/profiles` at or above a session's folder). A project's replaces yours of the same name, unless it `extends: 'user:<name>'`.
+- **What:** `defineProfile({ description, model, thinking, prompt, extensions, ui, without, extends })`. `extensions` are agent extensions (pi-durable `defineExtension`: tools, prompt sections, hooks); `ui` are UI extensions (`defineUiExtension`); `without` drops built-ins (`coding-tools`, `ask-user`).
+- **'mu':** profiles and their extensions `import … from 'mu'` (the daemon's SDK, through a loader hook: nothing to install) and `'mu/ui'` (the window's hooks and components, `h` for elements; JSX isn't compiled yet).
+- **Sessions:** a session takes the folder's `default` (or a named) profile when it starts, and keeps it. Each turn selects that profile's extensions and instructions in the one harness (pi-durable selects extensions per conversation); a session without a profile gets the built-ins. Edits reload from the next turn.
+- **Trust:** a project's profile is that repo's code: it runs only once allowed (`mu profile allow`, or Allow and start in the app), and again after any of its files change.
+- **UI:** the daemon serves a profile's UI modules (types stripped, only once allowed); the window rewrites their imports to its own React and `mu/ui` and installs them for that profile's sessions only.
+- **The command:** `mu profile` (list), `mu profile new [name] [--user]`, `mu profile allow [name]`, `-P <profile>` when starting.
+- Not yet: profile extensions with actions, values or settings; JSX in UI extensions; a profile's UI in the sidebar.
+
+## 3c. Web and phone
+
+- **Web access** (a machine setting: off, to this computer, to the local network; a port): the daemon serves the window's build over HTTP and the protocol over a WebSocket at `/rpc`, guarded by a token in its data dir. Settings shows the address with the token.
+- **In a browser** the window has no preload: `window.mu` is a WebSocket bridge to that daemon (the one machine, "local"); app settings live in the browser; machines and folder picking are desktop-only.
+- **Phones:** under 760px wide, one column: a bar with the sessions in a drawer, the composer at the bottom, full-screen dialogs. A web manifest and icons for the home screen.
+- Not yet: accounts and TLS (put it behind Tailscale or a proxy for now), a service worker for offline, the desktop app as a wrapper of a remote daemon's web UI.
 
 ## 4. Agent and activity
 
