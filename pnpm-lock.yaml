@@ -350,6 +350,9 @@ importers:
       '@mu/settings':
         specifier: workspace:*
         version: link:../settings
+      ws:
+        specifier: 8.22.1
+        version: 8.22.1
 
   packages/protocol:
     dependencies:
