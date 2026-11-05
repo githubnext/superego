@@ -4,11 +4,11 @@
   "type": "module",
   "packageManager": "pnpm@12.14.0",
   "scripts": {
-    "typecheck": "tsc -p packages/protocol && tsc -p packages/settings && tsc -p packages/daemon && tsc -p packages/client && tsc -p packages/cli && tsc -p packages/ui && tsc -p packages/app && tsc -p extensions/threads && tsc -p extensions/ask-user && tsc -p examples/minimal && tsc -p examples/full",
+    "typecheck": "tsc -p packages/protocol && tsc -p packages/settings && tsc -p packages/daemon && tsc -p packages/client && tsc -p packages/cli && tsc -p packages/ui && tsc -p packages/app && tsc -p extensions/threads && tsc -p extensions/ask-user && tsc -p app",
     "test": "vitest run",
     "dev": "pnpm --filter mu dev",
-    "build": "pnpm -r --filter \"./examples/*\" build",
-    "link:cli": "ln -sf \"$PWD/examples/full/bin/mu.ts\" \"$HOME/.local/bin/mu\" && echo \"Linked $HOME/.local/bin/mu\""
+    "build": "pnpm --filter mu build",
+    "link:cli": "ln -sf \"$PWD/app/bin/mu.ts\" \"$HOME/.local/bin/mu\" && echo \"Linked $HOME/.local/bin/mu\""
   },
   "devDependencies": {
     "@types/node": "^24",

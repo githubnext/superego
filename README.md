@@ -1,54 +1,41 @@
 # mu
 
-A framework for agent apps: an Electron shell, a pi-durable daemon per machine, its own protocol, and extensions that
-add to both. Apps are made with `mu new` and depend on mu's packages, as a Rails app depends on Rails. See [PLAN.md](PLAN.md)
-and [docs/structure.html](docs/structure.html).
+One app for running agents: a desktop app, a daemon per machine that keeps agents running when the app is closed, and
+(coming) a web and mobile client. What an agent is (its model, prompt, tools, extensions) comes from **profiles**: files
+in `~/.mu/profiles/` or inside a project's own `.mu/profiles/`, so a repo can carry the harness it needs. See
+[PLAN.md](PLAN.md) and [docs/structure.html](docs/structure.html). The framework-with-a-generator version is tagged
+`pre-embedded`.
 
 ```sh
 pnpm install
-pnpm test                       # unit + daemon/CLI e2e (scripted models)
+pnpm test               # unit + daemon/CLI e2e (scripted models)
 pnpm typecheck
-pnpm dev                        # mu itself (examples/full); its daemon lives in ~/.mu
-pnpm --filter mu smoke          # headless e2e of the full app
-pnpm --filter mu-minimal smoke  # … and of the core alone
-pnpm link:cli                   # `mu` on your PATH (~/.local/bin/mu -> examples/full/bin/mu.ts)
-mu new ~/dev/my-agent           # a new app from the full example (--minimal for the core alone)
+pnpm dev                # the app; its daemon lives in ~/.mu
+pnpm --filter mu smoke  # headless e2e of the app
+pnpm --filter mu showcase /tmp/shots   # scripted threads, screenshotted
+pnpm --filter mu package               # mu.app in app/dist
+pnpm link:cli           # `mu` on your PATH (~/.local/bin/mu -> app/bin/mu.ts)
 ```
 
 ## Layout
 
 | | |
 |---|---|
-| `packages/protocol` | the contract: methods, JSON-RPC peer, status, `AppConfig` |
-| `packages/settings` | settings registry, used by daemons (per machine) and apps |
+| `app` | the mu app: Electron main, window, daemon entry, the `mu` command, icons |
+| `packages/protocol` | the contract: methods, JSON-RPC peer, actions, status |
+| `packages/settings` | settings registry, used by daemons (per machine) and the app |
 | `packages/daemon` | the daemon: pi-durable harness, sessions, models and sign-in; the daemon half of the extension API |
 | `packages/client` | reaching daemons: local socket, ssh, any stdio command; the machine list |
-| `packages/cli` | `runCli(app)`, every app's command line, and `mu new` |
+| `packages/cli` | the command line |
 | `packages/ui` | component kit and design tokens |
-| `packages/app` | `startApp` (main), `mountApp` (window), preload, build preset; the UI half of the extension API |
+| `packages/app` | main process, window, preload, build and packaging; the UI half of the extension API |
 | `extensions/threads` | the session sidebar (UI) |
 | `extensions/ask-user` | an `ask_user` tool; the question card and blocked status (daemon + UI) |
-| `examples/minimal` | the core alone |
-| `examples/full` | mu itself: core plus every bundled extension |
 
-## An app
-
-```
-mu.config.ts           defineApp({ name, id, glyph })
-src/daemon.ts          serveDaemon({ app, extensions: [askUser] })        ← daemon halves
-src/renderer/main.tsx  mountApp(app, { extensions: [threads, askUser] })  ← UI halves
-src/main.ts            startApp(app)
-bin/<id>.ts            runCli(app, …)
-```
-
-An extension is a package with `./daemon` and/or `./ui`. The daemon half (`defineDaemonExtension`) can add agent tools
-and hooks, settings, methods (`<name>.<method>`), live values and session status. The UI half (`defineUiExtension`)
-fills slots (`sidebar`, `session.header`, `composer.above`), draws tool calls and entries, settings sections and commands,
-using hooks such as `useSessions`, `useSelection`, `useValue` and `call`.
+An extension has a daemon half (`defineDaemonExtension`: agent tools and hooks, settings, actions, live values, session
+status) and a UI half (`defineUiExtension`: slots, tool and entry renderers, settings sections, actions).
 
 ## Environment
-
-Every app reads `<ID>_…` (here `MU_…`):
 
 | Variable | Meaning |
 |---|---|
@@ -63,4 +50,4 @@ Every app reads `<ID>_…` (here `MU_…`):
 
 `mu` starts a session in the current directory and opens it in the app. `mu <dir> -p "fix the tests"` starts one
 elsewhere with a first message. Every command takes `-m <machine>` and `--json`; `mu help` lists them. A remote machine
-needs the app's command on its PATH for `ssh <host> <id> connect --start`.
+needs `mu` on its PATH for `ssh <host> mu connect --start`.

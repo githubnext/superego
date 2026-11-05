@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-const CLI = fileURLToPath(new URL('../../../examples/full/bin/mu.ts', import.meta.url))
+const CLI = fileURLToPath(new URL('../../../app/bin/mu.ts', import.meta.url))
 let home: string
 const env = () => ({ ...process.env, MU_HOME: home, MU_MODEL: 'faux', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '' })
 
