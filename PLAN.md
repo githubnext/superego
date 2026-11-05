@@ -164,20 +164,34 @@ Every intent is an action: an id, a title, a params schema (pi-schema), where it
 
 ---
 
+## 4a. Threads
+
+How a session reads. One list of your turns, the agent's text and runs of work:
+
+- **Markdown** for the agent's text (GFM: tables, task lists); links open in the browser.
+- **Runs of work:** tool calls and thinking back to back, even across the agent's turns, fold into one row that says what was done: "Edited `src/dates.mjs` and ran a command +3 −1". Open while running, closed once the agent moves on.
+- **Rows:** an icon on the text's edge, a verb ("Read", "Ran", "Edited", "Edit failed"), what it acted on in mono. Chevrons hang in the gutter and show on hover.
+- **Output** is capped at a dozen lines ("Show all N lines"); edits show their diff with old and new line numbers; code never wraps, it scrolls and fades only while a line overflows.
+- **Turns:** your messages are tinted bubbles with clear air above; a turn that did work ends with what it did ("5 steps · +3 −1"). The title is the first message's first sentence or clause; the bubble shows the rest.
+
+Styled over eight rounds of impartial review of the showcase screenshots (scores 5.75 → 6.75 of 10, flat for the last rounds as reviewers began contradicting each other). Pacing is the weakest point left.
+
 ## 5. What a new app gets
 
 - **`mu new <dir> [--minimal]`** copies `examples/full` or `examples/minimal`. Every name comes from `AppConfig`: data dir, socket, command, env prefix, menu bar glyph. `@mu/*` links to this checkout until the packages are published.
 - **The shell:**
-  - the focus look
+  - a macOS look: system colours, the system blue, real push buttons, pop-up selects
+  - threads that read well (§4a)
   - Settings: app, machines, every machine's own, "All machines"
   - the ⌘K palette
   - menu bar and Dock
   - the restart notice
-  - single instance
+  - single instance; quits on SIGTERM (only the ⌘Q item keeps it in the menu bar)
   - notifications
+- **Icons:** the app's `resources/`: `trayTemplate.png` (+ @2x) for the menu bar, `mu.icon` (Icon Composer) for the app, with `icon.png` for the Dock when run from source. Without them, the glyph is drawn as text.
 - **The command:** `<id>`, plus sessions, machines, settings, auth and the daemon, each with `-m <machine>` and `--json`.
 - **Actions:** one router for keys, palette, buttons, extensions and `mu do`, with a log, and shortcuts editable in Settings → Keyboard.
-- **Tests:** a smoke test that runs headless.
+- **Tests:** a smoke test that runs headless, and `pnpm showcase <dir>`: scripted threads with real tool calls on a fixture project, screenshotted top, middle and end in light and dark (and expanded), with `MU_SMOKE_SHOTS=<dir>` for the smoke test's own screenshots.
 
 ---
 
@@ -193,6 +207,8 @@ Every intent is an action: an id, a title, a params schema (pi-schema), where it
 | M7 | Focus look, palette, sidebar modes, Base UI kit | done |
 | M8 | New session dialog | done |
 | M9 | Actions: router, log, `mu do`, editable shortcuts | done; MCP planned |
+| M10 | macOS look; threads (markdown, runs, diffs); showcase; icons | done |
+| M11 | Packaging: a signed `mu.app` with the `.icon` and its variants | in progress |
 
 ---
 
@@ -241,10 +257,15 @@ Still open:
   The kit's overlays are on Base UI.
 
 - **Actions (2026-11-04).** Every intent in the window, the app and the daemons is a schema'd action through one router; keys, palette, buttons, extensions and the CLI (`mu actions`, `mu do`) all dispatch, and the action log shows each with its source. Shortcuts are data (`app.keys`) with a Keyboard settings section that records keys and flags clashes. Details in §3a.
+- **macOS look (2026-11-04).** System colours and the system blue, darker separators, tinted sidebars; every button a real push button (ghost buttons gone, one primary per view), pop-up selects, inset fields. The app quits on SIGTERM.
+- **Threads (2026-11-04).** §4a. Markdown, runs of work, diffs and capped output, turn ends, a centred composer; the showcase harness to look at them.
+- **Icons (2026-11-05).** The µ in the menu bar (a template image macOS tints) and `mu.icon` as the app icon, kept in the app's `resources/` (the source lives in the repo's `resources/`).
 - **New session dialog (2026-11-04).** It opens from ⌘N, the palette, the sidebar's + and minimal's New. It sets a prompt, a project folder (recent folders, Browse… on this computer), the machine, the model and thinking, and a name. A session's own model and thinking win over the machine's default on every turn. The daemon refuses a missing folder or an unknown model.
 
 ## 9. Next
 
+- **Packaging** (M11): electron-builder; everything bundled into `out/` so the app needs no `node_modules`; `mu.icon` compiled into the bundle so macOS draws its light, dark, tinted and clear variants; the `mu` command shipped inside the app.
+- **Web and mobile (direction):** the daemon on the network (WebSocket, token auth), a browser bridge with app state moved into the daemon, a PWA served by the daemon, a responsive shell; Electron and native shells as wrappers. Then extensions that own data and the main view, so apps that aren't agent sessions (notes, say) can be built on mu.
 - **MCP server from actions** (§3a): designed, not built.
 - **More bundled extensions:** git/diff, background jobs and subagents, suggestions.
 - **A layout tree for panels**, beyond fixed slots.

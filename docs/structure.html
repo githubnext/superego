@@ -58,10 +58,10 @@
 <body>
 <main>
   <h1><span>µ</span> mu: structure</h1>
-  <p class="lede">A framework for agent apps. One daemon per machine, its own protocol, an Electron app layer, and extensions with a daemon half and a UI half. Apps are made with <code>mu new</code>. As of the actions work, 25 commits.</p>
+  <p class="lede">A framework for agent apps. One daemon per machine, its own protocol, an Electron app layer, and extensions with a daemon half and a UI half. Apps are made with <code>mu new</code>. As of the icon work, 33 commits.</p>
 
   <div class="grid g4" style="margin-top:24px">
-    <div class="card"><div class="stat">~6.4k<small>lines of source</small></div></div>
+    <div class="card"><div class="stat">~6.8k<small>lines of source</small></div></div>
     <div class="card"><div class="stat">7 · 2 · 2<small>packages · extensions · example apps</small></div></div>
     <div class="card"><div class="stat">11 · 8 · 12<small>actions: daemon · app · window (one router each, one log)</small></div></div>
     <div class="card"><div class="stat">52 + 3<small>tests + end-to-end runs (2 examples, 1 generated app)</small></div></div>
@@ -277,6 +277,7 @@
       <tr><td>cli · generate</td><td>real commands on two machines · settings --all · auth · <code>mu actions</code> / <code>mu do</code> · daemon restart · <code>mu new</code> for both templates</td></tr>
       <tr><td>registry · identity · shortcuts · merge · restart · score · groups · title</td><td>validation and upsert · wrong/duplicate machine · "Mixed" · restart state machine · shortcuts and keymaps · palette ranking · sidebar grouping · session titles</td></tr>
       <tr><td>examples/full smoke</td><td>two app processes: chat · ask-user · sidebar menu, rail, details · ⌘K · action log · Settings → Keyboard (record, clash, reset) · fonts · machines · All machines · menu bar · restart ×2 · <code>mu</code> → running app</td></tr>
+      <tr><td>examples/full showcase</td><td>three scripted threads with real tool calls (a failing test, edits, a missed edit) on a fixture project · screenshots top/middle/end · light/dark · expanded</td></tr>
       <tr><td>examples/minimal smoke</td><td>core alone: picker instead of sidebar · chat · command hand-off · no extension features</td></tr>
     </table>
   </div>
@@ -284,9 +285,11 @@
   <h2>9 · The look</h2>
   <div class="grid g2">
     <div class="card"><div class="k">tokens · @mu/ui</div><table>
-      <tr><td>type</td><td>13 UI · 15.5/1.7 reading · 26 title · mono for meta</td></tr>
-      <tr><td>space</td><td>4px grid · 600px reading column · 248px sidebar</td></tr>
-      <tr><td>overlays</td><td>Base UI: dialog · menu · popover · tooltip</td></tr>
+      <tr><td>colour</td><td>macOS system greys · system blue accent · tinted sidebars</td></tr>
+      <tr><td>type</td><td>13 UI · 14/1.55 reading · 20 title · 12.5 mono</td></tr>
+      <tr><td>space</td><td>4px grid · 580px reading column · 248px sidebar</td></tr>
+      <tr><td>controls</td><td>real push buttons · pop-up selects · inset fields · Base UI overlays</td></tr>
+      <tr><td>threads</td><td>markdown · runs of work fold to one row · diffs · capped output · turn ends</td></tr>
     </table></div>
     <div class="card"><div class="k">from the explorations</div><p style="font-size:13px">D’s focus look, A’s sidebar rows, C’s status sorting and inspector, as modes of one sidebar. <code>design-explorations/threads-sidebar.html</code>.</p></div>
   </div>
@@ -294,14 +297,16 @@
   <h2>10 · Next</h2>
   <div class="card">
     <ul class="tight">
-      <li>New session dialog: project, prompt, machine, model and thinking for that session</li>
+      <li class="todo">Packaging: <code>mu.app</code> with <code>mu.icon</code> and its variants, the command inside</li>
+      <li class="todo">Web and mobile: daemon on the network · browser bridge · PWA · responsive shell</li>
+      <li class="todo">MCP server from actions</li>
       <li class="todo">Extensions: git/diff · background jobs and subagents · suggestions</li>
       <li class="todo">A layout tree for panels</li>
       <li class="todo">Publish the packages · runtime-installed extensions · remote install</li>
     </ul>
   </div>
 
-  <footer>From the repo at 620203c · ~/dev/gh/mu · reasoning in PLAN.md</footer>
+  <footer>From the repo at f1da69a · ~/dev/gh/mu · reasoning in PLAN.md</footer>
 </main>
 </body>
 </html>
