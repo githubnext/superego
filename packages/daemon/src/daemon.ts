@@ -331,7 +331,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const pending = loading.get(key) ?? (async () => {
       const loaded = await loadProfile(ref, userProfiles, trust)
       teardowns.get(ref.dir)?.()
-      for (const old of cached?.extensions ?? []) registry.uninstall(old)
+      teardowns.delete(ref.dir)
+      profiles.delete(ref.dir)
+      // Everything it sets up is undone together: when a later step fails too, so a fixed profile can load again.
       const undo: (() => void)[] = []
       try {
         for (const extension of loaded.daemon) {
@@ -340,11 +342,14 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
             loaded.extensions.push(scoped)
           }))
         }
+        for (const extension of loaded.extensions) {
+          registry.install(extension)
+          undo.push(() => registry.uninstall(extension))
+        }
       } catch (error) {
         for (const step of undo.reverse()) step()
         throw new RpcError('invalid', `Profile ${ref.name}: ${(error as Error).message}`)
       }
-      for (const extension of loaded.extensions) registry.install(extension)
       teardowns.set(ref.dir, () => { for (const step of undo.reverse()) step() })
       profiles.set(ref.dir, loaded)
       return loaded

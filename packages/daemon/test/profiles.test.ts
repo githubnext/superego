@@ -196,3 +196,24 @@ export default defineDaemonExtension({
   expect(await peer.call('action.run', { id: 'vault.answer', params: { id: session.id } })).toMatchObject({ answer: 'two' })
   await close()
 })
+
+it("undoes a profile's actions when a later part of it fails, so it loads once fixed", async () => {
+  const profile = join(home, 'profiles', 'default')
+  // Its action registers, then its agent extension fails to install (a section key pi refuses).
+  const extension = (key: string) => `import { defineDaemonExtension, defineAction, defineExtension, obj, section } from 'mu'
+export default defineDaemonExtension({
+  name: 'vault',
+  setup(mu) {
+    mu.action(defineAction({ id: 'vault.ping', title: 'Ping', params: obj({}), async run() { return 'pong' } }))
+    mu.agent(defineExtension({ name: 'notes', sections: [section('${key}', () => 'notes')] }))
+  },
+})
+`
+  write(profile, { 'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': extension('Not A Key') })
+  const { peer, close } = await open()
+  await expect(peer.call('session.create', { cwd: project })).rejects.toThrow(/Section key/)
+  write(profile, { 'vault.ts': extension('notes') })
+  await peer.call<SessionInfo>('session.create', { cwd: project })
+  expect(await peer.call('action.run', { id: 'vault.ping', params: {} })).toBe('pong')
+  await close()
+})
