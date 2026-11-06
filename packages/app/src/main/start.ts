@@ -444,7 +444,8 @@ export function startApp(appConfig: AppConfig) {
   app.whenReady().then(() => {
     if (!primary) return
     if (headless) app.dock?.hide()
-    else if (!app.isPackaged) dockIcon()
+    // From source on the stock Electron.app (tests), the Dock needs telling; the app's own dev bundle has the icon.
+    else if (!app.isPackaged && process.execPath.includes('/Electron.app/')) dockIcon()
     setMenu()
     refreshDesktop()
     // Font pickers list the installed fonts (the Local Font Access API); nothing else is granted.

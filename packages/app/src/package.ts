@@ -42,7 +42,7 @@ export async function packageApp(root: string, app: AppConfig, options: PackageO
   const electron = dirname(createRequire(join(root, 'package.json')).resolve('electron/package.json'))
   const electronVersion = (JSON.parse(readFileSync(join(electron, 'package.json'), 'utf8')) as { version: string }).version
   const config = {
-    appId: options.bundleId ?? `dev.mu.${app.id}`,
+    appId: options.bundleId ?? app.bundleId ?? `dev.mu.${app.id}`,
     productName: app.name,
     electronVersion,
     electronDist: join(electron, 'dist'),

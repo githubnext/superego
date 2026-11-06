@@ -13,6 +13,8 @@ export type AppConfig = {
   glyph?: string
   /** Where the app lives; sent to model providers as attribution. */
   url?: string
+  /** macOS bundle identifier, reverse-DNS (`com.githubnext.mu`). Running from source it gets `.dev` added. */
+  bundleId?: string
 }
 
 export function defineApp(config: AppConfig): AppConfig {

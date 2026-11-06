@@ -4,12 +4,12 @@
 // runs on the far side. An app's bin calls `runCli(app, { appDir, bin })`.
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, openSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { createInterface } from 'node:readline'
 import { createConnection } from 'node:net'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
+import { devApp } from './dev-app.ts'
 import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, type MachineConfig, type Transport } from '@mu/client'
 import { appEnv, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@mu/daemon'
 import {
@@ -95,8 +95,8 @@ const appDir = () => appEnv(app)('APP') ?? options.appDir
 function installedDaemon(): { dir: string; command: string[]; env: NodeJS.ProcessEnv } {
   const bundled = resolve(appDir(), 'out/main/daemon.js')
   if (existsSync(bundled)) {
-    const electron = createRequire(resolve(appDir(), 'package.json'))('electron') as string
-    return { dir: resolve(appDir(), 'out/main'), command: [electron, bundled], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }
+    // The app's own (development) bundle, so the daemon is "mu" in Activity Monitor, not "Electron".
+    return { dir: resolve(appDir(), 'out/main'), command: [devApp(appDir(), app), bundled], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }
   }
   return { dir: fileURLToPath(new URL('../../daemon/src/', import.meta.url)), command: [process.execPath, options.bin, 'daemon'], env: process.env }
 }
@@ -152,8 +152,7 @@ function openInApp(machine: string, session: string) {
   if (!existsSync(resolve(dir, 'out/main/main.js'))) {
     throw new RpcError('no_app', `The app isn't built in ${dir}`, { hint: 'Build it: pnpm build in the app.' })
   }
-  const electron = createRequire(resolve(dir, 'package.json'))('electron') as string
-  spawn(electron, [dir, `--mu-open=${machine}/${session}`], { detached: true, stdio: 'ignore' }).unref()
+  spawn(devApp(dir, app), [dir, `--mu-open=${machine}/${session}`], { detached: true, stdio: 'ignore' }).unref()
 }
 
 // ── Commands ────────────────────────────────────────────────────────────────────────────────────────────────────────
