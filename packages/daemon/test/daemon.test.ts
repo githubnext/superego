@@ -251,5 +251,18 @@ describe('record and replay', () => {
     ]))
     await close()
   })
+
+  it('archives a session out of the list, and back', async () => {
+    const { peer, close } = await open()
+    const kept = await peer.call<SessionInfo>('session.create', { title: 'kept' })
+    const old = await peer.call<SessionInfo>('session.create', { title: 'old' })
+    await peer.call('session.archive', { id: old.id })
+    expect((await sessions(peer)).map((s) => s.id)).toEqual([kept.id])
+    expect((await peer.call<SessionInfo[]>('session.list', { archived: true })).map((s) => s.id)).toEqual([old.id])
+    await peer.call('session.unarchive', { id: old.id })
+    expect((await sessions(peer)).map((s) => s.id).sort()).toEqual([kept.id, old.id].sort())
+    await close()
+  })
 })
+
 

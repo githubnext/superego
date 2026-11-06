@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ConversationView, EntryRecord, LiveState } from '@earendil-works/pi-durable'
 import type { SessionInfo } from '@mu/protocol'
-import { Button, StatusGlyph, statusLabel, TextArea } from '@mu/ui'
+import { Button, IconButton, StatusGlyph, statusLabel, TextArea } from '@mu/ui'
 import type { MachineEntry } from '../shared.ts'
 import { machine as client, useSessionView } from './client.ts'
 import { Slot, useRegistry, type ToolCallProps } from './extension.tsx'
@@ -38,6 +38,7 @@ const textOf = (message: Message | undefined) => blocks(message).map((b) => b.te
 export function SessionView({ machine, session }: { machine: MachineEntry; session: SessionInfo }) {
   // The session's profile may bring UI of its own (header, aside, composer, tool renderers).
   useProfileUi(machine.id, session)
+  const dispatch = useRegistry().router.dispatch
   const view = useSessionView(machine.id, machine.state === 'connected', session.id)
   const live = view?.docs['pi.live'] as LiveState | undefined
   const scroller = useRef<HTMLDivElement>(null)
@@ -60,7 +61,12 @@ export function SessionView({ machine, session }: { machine: MachineEntry; sessi
         <div className="session__column">
           <div className="session__crumb">
             <span>{machine.label} · <span title={session.cwd}>{folderName(session.cwd)}</span>{session.profile && <> · <span className="session__profile" title={session.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{session.profile.name}</span></>} · {statusLabel(session.status)}</span>
-            <Slot name="session.header" props={{ machine, session }} />
+            <span className="session__tools">
+              <Slot name="session.header" props={{ machine, session }} />
+              <IconButton label="Archive" className="session__archive" onClick={() => void dispatch('session.archive', { id: session.id }, { machine: machine.id, source: 'header' })}>
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 3.5h12v3H2zM3 6.5v6h10v-6M6.5 9h3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round" /></svg>
+              </IconButton>
+            </span>
           </div>
           <h1 className="session__title">{session.title.replace(/\.$/, '')}</h1>
           {view ? <Transcript view={view} live={live} /> : <div className="transcript__more">Loading…</div>}

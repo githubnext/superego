@@ -36,6 +36,8 @@ type SessionMeta = {
   model?: string; thinking?: string
   /** The profile it started with (see profiles.ts); unset runs plain mu. */
   profile?: ProfileRef
+  /** Put away: left out of the session list (and the sidebar) until unarchived. */
+  archived?: boolean
 }
 const SessionDoc = defineDoc<SessionMeta>({
   kind: 'mu.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current',
@@ -203,10 +205,14 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** Only an assistant answer makes a session "done"; the user's own message does not. */
   const lastAnswer = (m: Mounted) => m.live?.run ? undefined : m.lastEntryId
 
-  async function list(): Promise<SessionInfo[]> {
+  /** The sessions, newest first: the ones in use, or (`archived`) the ones put away. */
+  async function list({ archived = false } = {}): Promise<SessionInfo[]> {
     const catalog = await harness.snapshot(Catalog, context)
     const items: SessionInfo[] = []
-    for (const id of [...(catalog?.ids ?? [])].reverse()) items.push(info(String(id), await mount(id as ConversationId)))
+    for (const id of [...(catalog?.ids ?? [])].reverse()) {
+      const m = await mount(id as ConversationId)
+      if (Boolean(m.meta.archived) === archived) items.push(info(String(id), m))
+    }
     return items
   }
 
@@ -385,6 +391,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     async run({ id }) { await (await get(id)).conversation.abort(context); return null },
   }))
   router.register(defineAction({
+    id: 'session.archive', title: 'Archive the session', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    params: obj({ id: str() }),
+    async run({ id }) { await get(id); await updateMeta(id, (meta) => { meta.archived = true }); changed(); return null },
+  }))
+  router.register(defineAction({
+    id: 'session.unarchive', title: 'Unarchive the session', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    params: obj({ id: str() }),
+    async run({ id }) { await get(id); await updateMeta(id, (meta) => { delete meta.archived }); changed(); return null },
+  }))
+  router.register(defineAction({
     id: 'session.rename', title: 'Rename the session', runs: 'machine', expose: ['ui', 'cli'], ...session,
     params: obj({ id: str(), title: str({ minLength: 1 }) }),
     async run({ id, title }) { await updateMeta(id, (meta) => { meta.title = title }); return null },
@@ -465,7 +481,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           if (typeof name === 'string') client = name
           return { version: PROTOCOL_VERSION, features, machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id)] }
         },
-        'session.list': () => list(),
+        'session.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),
         // A profile's UI is its code too: served only for a real profile folder, and only once it is allowed.
         'profile.ui': async (ref: ProfileRef) => {

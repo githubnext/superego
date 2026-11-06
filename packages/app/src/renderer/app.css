@@ -257,3 +257,6 @@ code { font-family: var(--mu-mono); font-size: .92em; }
   .settings__content { padding: 8px 16px 40px; }
   .setting, .provider, .machine-row { flex-wrap: wrap; }
 }
+
+.session__tools { display: inline-flex; align-items: center; gap: var(--mu-space-2); flex: none; }
+.session__archive { width: 24px; height: 24px; }

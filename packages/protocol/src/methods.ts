@@ -74,7 +74,8 @@ export type Hello = { version: number; features: string[]; machine: MachineInfo;
 
 export type Methods = {
   hello: { params: { client: string; version: number; features?: string[] }; result: Hello }
-  'session.list': { params: {}; result: SessionInfo[] }
+  /** The sessions, newest first; `archived` lists the ones put away instead. */
+  'session.list': { params: { archived?: boolean }; result: SessionInfo[] }
   'session.create': { params: NewSession; result: SessionInfo }
   'agent.models': { params: {}; result: ModelCatalog }
   /** A profile's UI extensions: their entry modules, and a hash that changes when any of its files do. */

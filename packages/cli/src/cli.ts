@@ -36,7 +36,7 @@ const help = () => `${app.id}: ${app.name}
 Usage:
   ${app.id} [dir] [-p prompt]          Start a session in dir (default: here) and open it in the app
   ${app.id} open <session>             Open a session in the app
-  ${app.id} sessions                   List sessions (also: mu ls)
+  ${app.id} sessions [--archived]      List sessions, or the archived ones (also: mu ls)
   ${app.id} create [dir] [-p prompt]   Start a session without opening the app; prints its id (also: new)
   ${app.id} send <session> <text...>   Send a message to a session
       -P, --profile <name>        Start with this profile (default: the folder's default, the project's before yours)
@@ -173,9 +173,9 @@ async function startSession(args: { dir?: string; machine?: string; prompt?: str
   })
 }
 
-async function sessions(machineName?: string) {
+async function sessions(machineName?: string, archived = false) {
   const machine = resolveMachine(machineName)
-  const list = await on(machine, (call) => call('session.list', {}))
+  const list = await on(machine, (call) => call('session.list', archived ? { archived: true } : {}))
   print(list, () => {
     if (!list.length) return console.log(`No sessions on ${machine.label}. Start one with: ${app.id}`)
     table(list.map((s: SessionInfo) => [s.id, `${GLYPH[s.status.state]} ${s.status.state}`, s.title, s.cwd]))
@@ -486,7 +486,7 @@ async function main() {
     allowPositionals: true,
     options: {
       machine: { type: 'string', short: 'm' }, prompt: { type: 'string', short: 'p' }, json: { type: 'boolean' }, profile: { type: 'string', short: 'P' },
-      user: { type: 'boolean' },
+      user: { type: 'boolean' }, archived: { type: 'boolean' },
       all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
       start: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
     },
@@ -505,7 +505,7 @@ async function main() {
       })
       return openInApp(machine.id, rest[0])
     }
-    case 'sessions': case 'ls': return sessions(values.machine)
+    case 'sessions': case 'ls': return sessions(values.machine, Boolean(values.archived))
     case 'new': case 'create': return startSession({ dir: rest[0], machine: values.machine, prompt: values.prompt, profile: values.profile, open: false })
     case 'profile': case 'profiles': return profileCommand(rest[0], rest.slice(1), values)
     case 'send': {
