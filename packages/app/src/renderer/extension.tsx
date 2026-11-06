@@ -2,7 +2,7 @@
 // tool calls and entries in the transcript, adds custom settings components and actions (with keys). Components reach
 // everything else (machines, sessions, selection, live values, calls) through the hooks this package exports.
 import { createContext, useContext, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
-import type { AppConfig, DeclaredSection, SectionInfo, SessionInfo } from '@mu/protocol'
+import type { AppConfig, DeclaredSection, Pane, SectionInfo, SessionInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowRouter } from './actions.tsx'
 
@@ -25,6 +25,11 @@ export type SlotProps = {
 }
 
 /** A tool call in the transcript. `result` is there once it finished; `live` while it runs. */
+/** What a pane is drawn with: where it is, and its own params. */
+export type PaneProps = { machine: MachineEntry; session: SessionInfo; pane: Pane }
+/** A kind of pane: its default tab title and what draws it. */
+export type PaneKind = { title: string; component: ComponentType<PaneProps> }
+
 export type ToolCallProps = {
   machine: MachineEntry
   session: SessionInfo
@@ -47,6 +52,11 @@ export type UiApi = {
   entry(kind: string, component: ComponentType<EntryProps>): void
   /** Draw the settings section that names `ui` (its daemon half registers the section). */
   settings(ui: string, component: ComponentType<SettingsComponentProps>): void
+  /**
+   * A kind of pane: a view opened beside a thread (`pane.open`, or the agent's open_pane tool) with params of its own.
+   * A profile's pane kinds exist in that profile's sessions only.
+   */
+  pane(kind: string, pane: PaneKind): void
   /**
    * An action of this extension: dispatched by its keys, from the palette, from other code (`useDispatch`). Ids start
    * with the extension's name. `run` gets its parameters and the window's context.
@@ -77,6 +87,8 @@ export type Registry = {
   /** `profile`: the folder of the profile whose UI added it; it draws only for that profile's sessions. */
   slots: { [S in SlotName]: { component: ComponentType<SlotProps[S]>; order: number; extension: string; profile?: string }[] }
   tools: Map<string, ComponentType<ToolCallProps>>
+  /** Pane kinds; `profile`: the folder of the profile that added it. */
+  panes: Map<string, (PaneKind & { profile?: string })[]>
   entries: Map<string, ComponentType<EntryProps>>
   settings: Map<string, ComponentType<SettingsComponentProps>>
   router: WindowRouter
@@ -92,13 +104,14 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   const registry: Registry = {
     app, extensions: extensions.map((e) => e.name),
     slots: { 'sidebar': [], 'session.header': [], 'composer.above': [], 'session.aside': [] },
-    tools: new Map(), entries: new Map(), settings: new Map(), router: createWindowRouter(), appSettings: [],
+    tools: new Map(), panes: new Map(), entries: new Map(), settings: new Map(), router: createWindowRouter(), appSettings: [],
     version: 0,
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
     installProfile(profile, list) {
       for (const slot of Object.keys(registry.slots) as SlotName[]) {
         ;(registry.slots[slot] as { profile?: string }[]).splice(0, Infinity, ...(registry.slots[slot] as { profile?: string }[]).filter((e) => e.profile !== profile))
       }
+      for (const [kind, entries] of registry.panes) registry.panes.set(kind, entries.filter((e) => e.profile !== profile))
       for (const extension of list) {
         try { extension.setup(api(extension.name, profile)) } catch (error) { console.error(`Profile extension ${extension.name} failed to start`, error) }
       }
@@ -119,6 +132,10 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     tool: (name, component) => { registry.tools.set(name, component) },
     entry: (kind, component) => { registry.entries.set(kind, component) },
     settings: (ui, component) => { registry.settings.set(ui, component) },
+    pane(kind, pane) {
+      const list = (registry.panes.get(kind) ?? []).filter((entry) => entry.profile !== profile)
+      registry.panes.set(kind, [...list, { ...pane, ...(profile ? { profile } : {}) }])
+    },
     dispatch: (id, params, options) => registry.router.dispatch(id, params, { source: extension, ...options }),
     action(action) {
       if (profile) return console.warn(`Profile extension ${extension}: actions from a profile's UI aren't supported yet`)
@@ -163,4 +180,10 @@ export function Slot<S extends SlotName>({ name, props }: { name: S; props: Slot
   const entries = (registry.slots[name] as { component: ComponentType<SlotProps[S]>; extension: string; profile?: string }[])
     .filter((entry) => !entry.profile || entry.profile === profile)
   return <>{entries.map(({ component: Component, extension, profile }, index) => <Component key={`${profile ?? ''}${extension}-${index}`} {...props} />)}</>
+}
+
+/** The pane kind `kind` as `session` sees it: its profile's own first, else the app's. */
+export function paneKind(registry: Registry, kind: string, session: SessionInfo): PaneKind | undefined {
+  const entries = registry.panes.get(kind) ?? []
+  return entries.find((e) => e.profile && e.profile === session.profile?.dir) ?? entries.find((e) => !e.profile)
 }

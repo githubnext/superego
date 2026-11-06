@@ -263,6 +263,45 @@ describe('record and replay', () => {
     expect((await sessions(peer)).map((s) => s.id).sort()).toEqual([kept.id, old.id].sort())
     await close()
   })
+
+  it('keeps panes with a session: open (the same one again comes forward), focus, close', async () => {
+    const { peer, close } = await open()
+    const session = await peer.call<SessionInfo>('session.create', { title: 'panes' })
+    const diff = await peer.call<{ id: string }>('pane.open', { id: session.id, kind: 'diff' })
+    const preview = await peer.call<{ id: string }>('pane.open', { id: session.id, kind: 'preview', params: { url: 'http://localhost:3000' } })
+    expect((await peer.call<{ id: string }>('pane.open', { id: session.id, kind: 'diff' })).id).toBe(diff.id)
+    let info = (await sessions(peer)).find((s) => s.id === session.id)!
+    expect(info.panes?.map((p) => p.kind)).toEqual(['diff', 'preview'])
+    expect(info.pane).toBe(diff.id)
+    await peer.call('pane.focus', { id: session.id })
+    expect((await sessions(peer)).find((s) => s.id === session.id)!.pane).toBeUndefined()
+    await peer.call('pane.focus', { id: session.id, pane: preview.id })
+    await peer.call('pane.close', { id: session.id, pane: preview.id })
+    info = (await sessions(peer)).find((s) => s.id === session.id)!
+    expect(info.panes?.map((p) => p.kind)).toEqual(['diff'])
+    expect(info.pane).toBe(diff.id)
+    await close()
+  })
+
+  it("reads and writes files in a session's folder only, and diffs it by git", async () => {
+    const { execFileSync } = await import('node:child_process')
+    execFileSync('git', ['init', '-q', dir]); execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'start'])
+    await writeFile(join(dir, 'notes.md'), 'one\n')
+    execFileSync('git', ['-C', dir, 'add', 'notes.md']); execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'notes'])
+    const { peer, close } = await open()
+    const session = await peer.call<SessionInfo>('session.create', { cwd: dir })
+    expect((await peer.call<{ content: string }>('file.read', { id: session.id, path: 'notes.md' })).content).toBe('one\n')
+    await expect(peer.call('file.read', { id: session.id, path: '../../etc/passwd' })).rejects.toMatchObject({ kind: 'invalid' })
+    await peer.call('file.write', { id: session.id, path: 'notes.md', content: 'two\n' })
+    await writeFile(join(dir, 'new.md'), 'new\n')
+    const changes = await peer.call<{ diff: string; untracked: string[]; repo: boolean }>('session.diff', { id: session.id })
+    expect(changes.repo).toBe(true)
+    expect(changes.diff).toContain('-one')
+    expect(changes.diff).toContain('+two')
+    expect(changes.untracked).toContain('new.md')
+    await close()
+  })
 })
+
 
 

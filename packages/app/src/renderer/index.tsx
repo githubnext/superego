@@ -12,6 +12,7 @@ import { Shell } from './Shell.tsx'
 import { ShellStateProvider } from './state.tsx'
 import { coreActions } from './actions.tsx'
 import { webBridge } from './web-bridge.ts'
+import { registerBuiltInPanes } from './panes.tsx'
 
 export function mountApp(app: AppConfig, { extensions = [], root = document.getElementById('root')! }: { extensions?: UiExtension[]; root?: HTMLElement } = {}) {
   // In a browser there is no preload: the bridge is a WebSocket to the daemon that served the page.
@@ -20,6 +21,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
   const registry = createRegistry(app, extensions, (core) => {
     core.settings('providers', Providers)
     core.settings('web', WebAccess)
+    registerBuiltInPanes(core)
     for (const action of coreActions) core.action(action)
   })
   void registry.router.load('app')
@@ -36,7 +38,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
 
 export {
   defineUiExtension, Slot, useApp, useRegistry,
-  type EntryProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type UiApi, type UiExtension,
+  type EntryProps, type PaneKind, type PaneProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type UiApi, type UiExtension,
 } from './extension.tsx'
 export { useAppSetting } from './client.ts'
 export { useDispatch } from './Shell.tsx'

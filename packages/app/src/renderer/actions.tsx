@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import { defineAction, obj, Router, str, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig } from '@mu/protocol'
 import { Dialog } from '@mu/ui'
+import type { SessionInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
 import type { NewSessionStart, Selection } from './state.tsx'
 
@@ -17,6 +18,8 @@ export type WindowContext = {
   newSession(start?: NewSessionStart): void
   togglePalette(): void
   showLog(): void
+  /** The session a selection points at, as the window has it. */
+  sessionOf(selection: Selection): SessionInfo | undefined
   dispatch: Dispatch
 }
 
@@ -81,6 +84,19 @@ export const coreActions: WindowAction[] = [
   defineAction({ id: 'app.palette', title: 'Command palette', runs: 'window', keys: 'mod+k', run: (_p, c: WindowContext) => c.togglePalette() }),
   defineAction({ id: 'app.settings', title: 'Settings', runs: 'window', keys: 'mod+,', run: (_p, c: WindowContext) => c.openSettings() }),
   defineAction({ id: 'app.log', title: 'Show action log', runs: 'window', run: (_p, c: WindowContext) => c.showLog() }),
+  // Panes of the selected session.
+  defineAction({
+    id: 'panes.changes', title: 'Show changes', runs: 'window', keys: 'mod+shift+d',
+    run: async (_p, c: WindowContext) => { if (c.selection) await c.dispatch('pane.open', { id: c.selection.session, kind: 'diff' }, { machine: c.selection.machine, source: 'panes' }) },
+  }),
+  defineAction({
+    id: 'panes.close', title: 'Close pane', runs: 'window', keys: 'mod+shift+w',
+    run: async (_p, c: WindowContext) => {
+      const session = c.selection && c.sessionOf(c.selection)
+      const front = session?.panes?.find((p) => p.id === session.pane) ?? session?.panes?.at(-1)
+      if (c.selection && front) await c.dispatch('pane.close', { id: c.selection.session, pane: front.id }, { machine: c.selection.machine, source: 'panes' })
+    },
+  }),
   defineAction({
     id: 'session.new', title: 'New session…', runs: 'window', keys: 'mod+n',
     params: obj({}), run: (_p, c: WindowContext) => c.newSession(),

@@ -147,6 +147,40 @@ if (phase === 'first') {
   await setValue('.new-session [aria-label="Project folder"]', process.env.MU_HOME)
   await key('Enter', ['meta'])
   await until(`!document.querySelector('.new-session') && document.querySelector('.transcript')?.textContent.includes('echo: hello from the dialog')`, 'started with the prompt')
+  // Panes: in a git repo, the changes, the editor and an artifact the agent could have written, beside the thread.
+  const { execFileSync: git } = await import('node:child_process')
+  const repo = `${process.env.MU_HOME}/repo`
+  git('mkdir', ['-p', repo]); git('git', ['init', '-q', repo])
+  writeFileSync(`${repo}/notes.md`, 'one\n')
+  git('git', ['-C', repo, 'add', '.']); git('git', ['-C', repo, '-c', 'user.email=s@s', '-c', 'user.name=s', 'commit', '-q', '-m', 'start'])
+  const paned = await run(`window.mu.call('local', 'session.create', { cwd: ${JSON.stringify(repo)}, title: 'panes' }).then((s) => s.id)`)
+  await run(`window.mu.call('local', 'file.write', { id: '${paned}', path: 'notes.md', content: 'two\\n' })`)
+  await run(`window.mu.call('local', 'file.write', { id: '${paned}', path: 'page.html', content: '<body><script>document.body.dataset.ok = \\'yes\\'</script>An artifact</body>' })`)
+  await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('panes')).click()`)
+  await until(`document.querySelector('.session__title')?.textContent === 'panes'`, 'pane session open')
+  await key('d', ['meta', 'shift'])
+  await until(`[...document.querySelectorAll('.diff-row--add')].some((r) => r.textContent === '+two')`, 'changes pane shows the edit')
+  await run(`window.mu.call('local', 'pane.open', { id: '${paned}', kind: 'editor', params: { path: 'notes.md' } })`)
+  await until(`document.querySelector('.cm-content')?.textContent.includes('two')`, 'editor pane shows the file')
+  await run(`window.mu.call('local', 'pane.open', { id: '${paned}', kind: 'artifact', params: { path: 'page.html' } })`)
+  const artifactRan = async () => {
+    for (let i = 0; i < 100; i++) {
+      const frame = BrowserWindow.getAllWindows()[0].webContents.mainFrame.framesInSubtree.find((f) => f.url.startsWith('mu-artifact:'))
+      if (frame && await frame.executeJavaScript('document.body?.dataset.ok').catch(() => undefined) === 'yes') return
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    await fail('the artifact did not run'); throw new Error('failed')
+  }
+  await artifactRan()
+  if (await run(`document.querySelectorAll('.panes__tab').length`) !== 3) { await fail('three pane tabs'); throw new Error('failed') }
+  await shot('panes')
+  // Keys typed into a frame stay in it: back to the window first, as a click there would.
+  await run(`document.querySelector('.composer textarea').focus()`)
+  for (let left = 2; left >= 0; left--) {
+    await key('w', ['meta', 'shift'])
+    await until("document.querySelectorAll('.panes__tab').length === " + left, 'a pane closed, ' + left + ' left')
+  }
+  await until(`!document.querySelector('.panes')`, 'panes closed')
   // Settings: the app's own sections, then the machine's, drawn from what each registers.
   await run(`[...document.querySelectorAll('.app__footer button')].find((b) => b.textContent === 'Settings').click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Appearance') && document.querySelector('.settings').textContent.includes('Notifications')`, 'app settings')

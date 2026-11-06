@@ -37,6 +37,11 @@ export type ProfileSpec = {
    * for this profile's sessions. They import from 'mu/ui' (hooks, components, `h` for elements) and 'react'.
    */
   ui?: string[]
+  /**
+   * Pane kinds this profile's UI adds, and what each shows: told to the agent, so it can open them (open_pane). The UI
+   * registers them with mu.pane(kind, …).
+   */
+  panes?: Record<string, string>
   /** Built-in extensions this profile does without: 'coding-tools', 'ask-user', … */
   without?: string[]
   /** Start from another profile and add to it: 'user:<name>' (a project's profile on the user's). */

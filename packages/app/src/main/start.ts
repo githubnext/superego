@@ -1,14 +1,14 @@
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, openSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, session, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, protocol, session, shell, type MenuItemConstructorOptions } from 'electron'
 import { appEnv, defaultDataDir, readBuild, socketPath } from '@mu/daemon/client'
 import {
   bool, defineAction, lit, obj, opt, Router, RpcError, str, union, unknown,
   type AppConfig, type DeclaredSection, type Json, type Notifications, type SessionInfo, type SettingType,
 } from '@mu/protocol'
 import { serveSettings } from '@mu/settings'
-import { CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type MuEvent } from '../shared.ts'
+import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type MuEvent } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
 import { checkIdentity, MachineStore, openLocal as openLocalSocket, openMachine, routeOf } from '@mu/client'
 import { Link } from './link.ts'
@@ -441,7 +441,25 @@ export function startApp(appConfig: AppConfig) {
     return window
   }
 
+  // Artifacts: HTML the agent wrote, served from the session's machine on a scheme of their own, sandboxed.
+  protocol.registerSchemesAsPrivileged([{ scheme: 'mu-artifact', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
   app.whenReady().then(() => {
+    protocol.handle('mu-artifact', async (request) => {
+      const url = new URL(request.url)
+      const [session, ...rest] = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
+      const link = links.get(decodeURIComponent(url.hostname))
+      if (!link || !session || !rest.length) return new Response('Not found', { status: 404 })
+      try {
+        const path = rest.join('/')
+        const { content } = await link.call('file.read', { id: session, path, base64: true }) as { content: string }
+        return new Response(Buffer.from(content, 'base64'), { headers: {
+          'content-type': ARTIFACT_TYPES[path.split('.').at(-1)?.toLowerCase() ?? ''] ?? 'application/octet-stream',
+          'content-security-policy': ARTIFACT_POLICY,
+        } })
+      } catch (error) {
+        return new Response(error instanceof Error ? error.message : 'Not found', { status: 404 })
+      }
+    })
     if (!primary) return
     if (headless) app.dock?.hide()
     // From source on the stock Electron.app (tests), the Dock needs telling; the app's own dev bundle has the icon.

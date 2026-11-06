@@ -1,5 +1,6 @@
 // The mu daemon: one per user per machine. It owns a pi-durable Harness on SQLite, the session catalog, and every
 // live subscription. Clients (the Electron app, the CLI, a remote app over ssh) speak the protocol in @mu/protocol.
+import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { link, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, hostname, platform } from 'node:os'
@@ -13,7 +14,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  arr, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type SessionInfo,
+  arr, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type SessionInfo,
 } from '@mu/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@mu/settings'
 import { FileSettingsStore } from '@mu/settings/file'
@@ -38,6 +39,9 @@ type SessionMeta = {
   profile?: ProfileRef
   /** Put away: left out of the session list (and the sidebar) until unarchived. */
   archived?: boolean
+  /** The panes open beside it, and the one in front. */
+  panes?: Pane[]
+  pane?: string
 }
 const SessionDoc = defineDoc<SessionMeta>({
   kind: 'mu.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current',
@@ -126,6 +130,21 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const builtins: Extension[] = []
   const installBuiltin = (extension: Extension) => { registry.install(extension); builtins.push(extension) }
   installBuiltin(createCodingTools())
+  // Panes: the agent opens them beside its thread (a diff, a preview, an artifact it wrote, a profile's own).
+  installBuiltin(defineExtension({
+    name: 'panes',
+    tools: [defineTool({
+      name: 'open_pane',
+      description: 'Open a pane beside this conversation for the user to look at. Built-in kinds: "diff" (the changes in the working folder; no params), ' +
+        '"preview" ({ url }: a web page, such as a local dev server), "artifact" ({ path }: an HTML file in the working folder, shown as a page; write it first), ' +
+        '"editor" ({ path }: a file, for the user to read and edit), "thread" ({ session }: another conversation). A profile may add kinds; its instructions name them.',
+      parameters: obj({ kind: str({ minLength: 1 }), title: opt(str()), params: opt(unknown()) }),
+      async execute({ kind, title, params }, api) {
+        const pane = await openPane(String(api.conversationId), { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}) })
+        return { output: [{ type: 'text', text: `Opened the ${kind} pane (${pane.id}).` }] }
+      },
+    })],
+  }))
   // Profiles and their extensions import from 'mu'; this is what they get.
   provideSdk({
     defineProfile, defineExtension, defineTool, section, hook, wrapTool, wrapSection,
@@ -200,6 +219,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     activeAt: Math.max(m.activeAt ?? 0, m.meta.createdAt),
     ...(m.model ? { model: m.model } : {}), ...(m.cost ? { cost: m.cost } : {}), ...(m.meta.model ? { ownModel: true } : {}),
     ...(m.meta.profile ? { profile: m.meta.profile } : {}),
+    ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
   /** Only an assistant answer makes a session "done"; the user's own message does not. */
@@ -311,7 +331,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return {
       model, thinkingLevel,
       extensions: [...builtins.filter((e) => !without.has(e.name)), ...profile.extensions],
-      instructions: profile.spec.prompt ?? null,
+      instructions: [profile.spec.prompt, profile.spec.panes && Object.keys(profile.spec.panes).length
+        ? `Panes this profile adds, for open_pane:\n${Object.entries(profile.spec.panes).map(([kind, about]) => `- "${kind}": ${about}`).join('\n')}`
+        : undefined].filter(Boolean).join('\n\n') || null,
     }
   }
 
@@ -324,6 +346,32 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text) })
     const submission = await m.conversation.submit({ type: 'input', content: text, requestId, ...(whenBusy ? { whenBusy } : {}) }, context)
     return String(submission.id)
+  }
+
+  // ── Panes and files ─────────────────────────────────────────────────────────────────────────────────────────────
+
+  /** Open a pane beside session `id`, or bring forward the same one already open. */
+  async function openPane(id: string, pane: Omit<Pane, 'id'>): Promise<Pane> {
+    await get(id)
+    let opened: Pane | undefined
+    await updateMeta(id, (meta) => {
+      const same = (meta.panes ?? []).find((p) => p.kind === pane.kind && JSON.stringify(p.params ?? null) === JSON.stringify(pane.params ?? null))
+      opened = same ?? { id: randomUUID().slice(0, 8), ...pane }
+      if (!same) meta.panes = [...(meta.panes ?? []), opened]
+      else if (pane.title) same.title = pane.title
+      meta.pane = opened.id
+      // A plain copy: what the transaction hands over is only valid inside it.
+      opened = JSON.parse(JSON.stringify(opened)) as Pane
+    })
+    changed()
+    return opened!
+  }
+
+  /** `path` inside `folder` (relative to it, or absolute within it); a path that leaves it is refused. */
+  const inFolder = (folder: string, path: string) => {
+    const file = resolvePath(folder, path)
+    if (file !== folder && !file.startsWith(folder.endsWith('/') ? folder : `${folder}/`)) throw new RpcError('invalid', `${path} is outside ${folder}`)
+    return file
   }
 
   // ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -399,6 +447,48 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     id: 'session.unarchive', title: 'Unarchive the session', runs: 'machine', expose: ['ui', 'cli'], ...session,
     params: obj({ id: str() }),
     async run({ id }) { await get(id); await updateMeta(id, (meta) => { delete meta.archived }); changed(); return null },
+  }))
+  router.register(defineAction({
+    id: 'pane.open', title: 'Open a pane', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    params: obj({ id: str(), kind: str({ minLength: 1 }), title: opt(str()), params: opt(unknown()) }),
+    run: ({ id, kind, title, params }) => openPane(id, { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}) }),
+  }))
+  router.register(defineAction({
+    id: 'pane.close', title: 'Close a pane', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    params: obj({ id: str(), pane: str() }),
+    async run({ id, pane }) {
+      await get(id)
+      await updateMeta(id, (meta) => {
+        const index = (meta.panes ?? []).findIndex((p) => p.id === pane)
+        if (index < 0) return
+        meta.panes!.splice(index, 1)
+        // The one beside it comes forward; none left, the thread.
+        if (meta.pane === pane) meta.pane = meta.panes![Math.min(index, meta.panes!.length - 1)]?.id
+        if (!meta.pane) delete meta.pane
+        if (!meta.panes!.length) delete meta.panes
+      })
+      changed()
+      return null
+    },
+  }))
+  router.register(defineAction({
+    id: 'pane.focus', title: 'Bring a pane to the front', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    params: obj({ id: str(), pane: opt(str()) }),
+    async run({ id, pane }) {
+      await get(id)
+      await updateMeta(id, (meta) => { if (pane && meta.panes?.some((p) => p.id === pane)) meta.pane = pane; else delete meta.pane })
+      changed()
+      return null
+    },
+  }))
+  router.register(defineAction({
+    id: 'file.write', title: 'Save a file', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    params: obj({ id: str(), path: str({ minLength: 1 }), content: str() }),
+    async run({ id, path, content }) {
+      const file = inFolder((await get(id)).meta.cwd, path)
+      await writeFile(file, content)
+      return { path: file }
+    },
   }))
   router.register(defineAction({
     id: 'session.rename', title: 'Rename the session', runs: 'machine', expose: ['ui', 'cli'], ...session,
@@ -483,6 +573,22 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         },
         'session.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),
+        'file.read': async ({ id, path, base64 }: { id: string; path: string; base64?: boolean }) => {
+          const file = inFolder((await get(id)).meta.cwd, path)
+          const info = await stat(file).catch(() => undefined)
+          if (!info?.isFile()) throw new RpcError('not_found', `No file ${path}`)
+          if (info.size > 16 * 1024 * 1024) throw new RpcError('too_large', `${path} is larger than 16 MB`)
+          return { path: file, content: await readFile(file, base64 ? 'base64' : 'utf8') }
+        },
+        'session.diff': async ({ id }: { id: string }) => {
+          const cwd = (await get(id)).meta.cwd
+          const git = (args: string[]) => new Promise<string>((done, fail) => execFile('git', ['-C', cwd, ...args], { maxBuffer: 16 * 1024 * 1024 }, (error, out) => error ? fail(error) : done(out)))
+          const repo = await git(['rev-parse', '--is-inside-work-tree']).then(() => true, () => false)
+          if (!repo) return { diff: '', untracked: [], repo: false }
+          const diff = await git(['diff', 'HEAD', '--no-color', '--no-ext-diff']).catch(() => git(['diff', '--no-color']))
+          const untracked = (await git(['ls-files', '--others', '--exclude-standard'])).split('\n').filter(Boolean)
+          return { diff, untracked, repo: true }
+        },
         // A profile's UI is its code too: served only for a real profile folder, and only once it is allowed.
         'profile.ui': async (ref: ProfileRef) => {
           if (!isProfileDir(ref, userProfiles)) throw new RpcError('not_found', `No profile at ${ref.dir}`)
@@ -584,7 +690,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     webError = undefined
     if (key) {
       try {
-        web = await serveWeb({ root: options.webRoot!, host: access === 'network' ? '0.0.0.0' : '127.0.0.1', port, token: await webToken(options.dataDir), serve: daemon.serve })
+        web = await serveWeb({ root: options.webRoot!, host: access === 'network' ? '0.0.0.0' : '127.0.0.1', port, token: await webToken(options.dataDir), serve: daemon.serve,
+          artifact: async (session, path) => readFile(inFolder((await get(session)).meta.cwd, path)) })
       } catch (error) {
         webError = (error as Error).message
       }

@@ -31,17 +31,42 @@ export function lanAddress(): string | undefined {
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
-  '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
+  '.webmanifest': 'application/manifest+json', '.htm': 'text/html; charset=utf-8', '.mjs': 'text/javascript', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.txt': 'text/plain; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
 }
 
 export type WebServer = { url: string; close(): Promise<void> }
 
 /** Serve `root` (the window's build) and the protocol on host:port, each connection a peer handed to `serve`. */
-export async function serveWeb({ root, host, port, token, serve }: {
+export async function serveWeb({ root, host, port, token, serve, artifact }: {
   root: string; host: string; port: number; token: string; serve(peer: RpcPeer): () => void
+  /** A file of an artifact (an HTML page in a session's folder, and what it links to), at /artifact/<session>/<path>. */
+  artifact?(session: string, path: string): Promise<Buffer>
 }): Promise<WebServer> {
+  const expected = Buffer.from(token)
+  const allowed = (given: string | null) => { const b = Buffer.from(given ?? ''); return b.length === expected.length && timingSafeEqual(b, expected) }
   const server: Server = createServer(async (request, response) => {
-    const path = decodeURIComponent(new URL(request.url ?? '/', 'http://x').pathname)
+    const requested = new URL(request.url ?? '/', 'http://x')
+    const path = decodeURIComponent(requested.pathname)
+    // Artifacts: token-checked (a cookie set by the first request, so the page's relative links work too), sandboxed.
+    if (path.startsWith('/artifact/') && artifact) {
+      const cookie = /(?:^|; )mu-artifact=([^;]+)/.exec(request.headers.cookie ?? '')?.[1]
+      const given = requested.searchParams.get('token') ?? (cookie ? decodeURIComponent(cookie) : null)
+      if (!allowed(given)) { response.writeHead(401).end(); return }
+      const [session, ...rest] = path.slice('/artifact/'.length).split('/')
+      try {
+        const content = await artifact(session!, rest.join('/'))
+        response.writeHead(200, {
+          'content-type': TYPES[extname(path)] ?? 'application/octet-stream',
+          'content-security-policy': "sandbox allow-scripts allow-forms allow-popups; default-src 'self' data: blob: https: 'unsafe-inline' 'unsafe-eval'",
+          'set-cookie': `mu-artifact=${encodeURIComponent(token)}; Path=/artifact/; HttpOnly; SameSite=Strict`,
+          'cache-control': 'no-cache',
+        })
+        response.end(content)
+      } catch (error) {
+        response.writeHead(404, { 'content-type': 'text/plain' }).end((error as Error).message)
+      }
+      return
+    }
     const file = normalize(join(root, path === '/' ? 'index.html' : path))
     if (!file.startsWith(root + sep) && file !== root) { response.writeHead(403).end(); return }
     // Unknown paths are the app's own (it has no routes yet), so they get the page.
@@ -55,11 +80,9 @@ export async function serveWeb({ root, host, port, token, serve }: {
     response.end(await readFile(target))
   })
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 32 * 1024 * 1024 })
-  const expected = Buffer.from(token)
   server.on('upgrade', (request, socket, head) => {
     const url = new URL(request.url ?? '/', 'http://x')
-    const given = Buffer.from(url.searchParams.get('token') ?? '')
-    if (url.pathname !== '/rpc' || given.length !== expected.length || !timingSafeEqual(given, expected)) {
+    if (url.pathname !== '/rpc' || !allowed(url.searchParams.get('token'))) {
       socket.end('HTTP/1.1 401 Unauthorized\r\n\r\n')
       return
     }

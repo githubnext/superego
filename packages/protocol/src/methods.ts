@@ -33,6 +33,9 @@ export type SessionInfo = {
   ownModel?: boolean
   /** What it has spent so far, in dollars, as the providers price it. */
   cost?: number
+  /** The panes open beside it, and the one in front (none: the thread itself). */
+  panes?: Pane[]
+  pane?: string
   /** The profile it runs with: one of the project's, or one of the user's. Absent: plain mu. */
   profile?: ProfileRef
   status: Status
@@ -46,6 +49,12 @@ export type ModelCatalog = {
 }
 
 /** What a new session starts with. Unset: this machine's defaults. */
+/**
+ * A pane: a view beside a thread (a diff, an editor, a preview, a profile's graph, another thread). `kind` names what
+ * draws it; `params` are its own. Kept with the session, so it follows the session to every client.
+ */
+export type Pane = { id: string; kind: string; title?: string; params?: Json }
+
 /** A profile: the user's (`~/.mu/profiles/<name>`) or a project's (`.mu/profiles/<name>`), and its folder. */
 export type ProfileRef = { name: string; scope: 'user' | 'project'; dir: string }
 /** A profile a session in some folder could start with (see the daemon's profiles.ts). */
@@ -78,6 +87,10 @@ export type Methods = {
   'session.list': { params: { archived?: boolean }; result: SessionInfo[] }
   'session.create': { params: NewSession; result: SessionInfo }
   'agent.models': { params: {}; result: ModelCatalog }
+  /** A file in a session's folder (not outside it), as text. */
+  'file.read': { params: { id: SessionId; path: string; base64?: boolean }; result: { path: string; content: string } }
+  /** What changed in a session's folder, by git: the unified diff against HEAD, and files git doesn't track yet. */
+  'session.diff': { params: { id: SessionId }; result: { diff: string; untracked: string[]; repo: boolean } }
   /** A profile's UI extensions: their entry modules, and a hash that changes when any of its files do. */
   'profile.ui': { params: ProfileRef; result: { hash: string; entries: string[] } }
   /** One module of a profile's UI, as JavaScript (types stripped); its own imports are left for the window to load. */

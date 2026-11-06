@@ -8,6 +8,7 @@ import { Slot, useRegistry, type ToolCallProps } from './extension.tsx'
 import { useShell } from './state.tsx'
 import { Markdown, Scroll } from './Markdown.tsx'
 import { useProfileUi } from './profile-ui.ts'
+import { SessionPanes } from './panes.tsx'
 
 type Block = { type: string; text?: string; thinking?: string; id?: string; name?: string; arguments?: unknown }
 type Message = { role: string; content: string | Block[]; toolCallId?: string; isError?: boolean; details?: unknown }
@@ -35,9 +36,15 @@ const blocks = (message: Message | undefined): Block[] =>
   !message ? [] : typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content
 const textOf = (message: Message | undefined) => blocks(message).map((b) => b.text ?? '').join('')
 
+/** A session: its thread, and the panes open beside it. */
 export function SessionView({ machine, session }: { machine: MachineEntry; session: SessionInfo }) {
-  // The session's profile may bring UI of its own (header, aside, composer, tool renderers).
+  // The session's profile may bring UI of its own (header, aside, composer, tool renderers, panes).
   useProfileUi(machine.id, session)
+  return <SessionPanes machine={machine} session={session} thread={<ThreadView machine={machine} session={session} />} />
+}
+
+/** A session's thread: its transcript and composer. Also what a "thread" pane draws. */
+export function ThreadView({ machine, session }: { machine: MachineEntry; session: SessionInfo }) {
   const dispatch = useRegistry().router.dispatch
   const view = useSessionView(machine.id, machine.state === 'connected', session.id)
   const live = view?.docs['pi.live'] as LiveState | undefined

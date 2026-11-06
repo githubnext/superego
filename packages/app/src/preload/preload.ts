@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import { CHANNEL, type CallResult, type MuBridge, type MuEvent } from '../shared.ts'
+import { artifactUrl, CHANNEL, type CallResult, type MuBridge, type MuEvent } from '../shared.ts'
 
 class BridgeError extends Error {
   kind: string
@@ -13,6 +13,7 @@ const bridge: MuBridge = {
     return response.result
   },
   machines: () => ipcRenderer.invoke(CHANNEL.machines),
+  artifactUrl,
   onEvent(listener) {
     listeners.add(listener)
     return () => { listeners.delete(listener) }

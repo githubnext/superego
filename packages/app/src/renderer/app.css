@@ -260,3 +260,47 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 
 .session__tools { display: inline-flex; align-items: center; gap: var(--mu-space-2); flex: none; }
 .session__archive { width: 24px; height: 24px; }
+
+/* Panes: the thread left, panes right as tabs, a divider between; on a phone, tabs switch. */
+.panes { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.panes__thread { display: flex; min-width: 0; min-height: 0; flex-grow: 0; flex-shrink: 1; overflow: hidden; position: relative; }
+.panes__thread > .session { flex: 1; min-width: 0; }
+.panes__thread .session__column { max-width: calc(100% - 2 * var(--mu-space-5)); }
+.panes__thread .dock { max-width: calc(100% - 2 * var(--mu-space-4)); }
+.panes__divider { flex: none; width: 5px; margin: 0 -2px; cursor: col-resize; z-index: 3; background: linear-gradient(to right, transparent 2px, var(--mu-border) 2px, var(--mu-border) 3px, transparent 3px); }
+.panes__divider:hover { background: linear-gradient(to right, transparent 1px, var(--mu-accent) 1px, var(--mu-accent) 4px, transparent 4px); }
+.panes__side { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex-grow: 0; flex-shrink: 1; background: var(--mu-bg); }
+.panes__tabs { display: flex; gap: 2px; align-items: flex-end; padding: 8px var(--mu-space-2) 0; border-bottom: 1px solid var(--mu-border); background: var(--mu-sidebar-bg); flex: none; overflow-x: auto; -webkit-app-region: drag; }
+.panes__tab { display: inline-flex; align-items: center; border: 1px solid transparent; border-bottom: 0; border-radius: 7px 7px 0 0; font: inherit; font-size: var(--mu-text-ui); color: var(--mu-muted); background: none; padding: 0; -webkit-app-region: no-drag; white-space: nowrap; }
+.panes__tab.is-active { background: var(--mu-bg); border-color: var(--mu-border); color: var(--mu-text); margin-bottom: -1px; }
+button.panes__tab, .panes__label { font: inherit; color: inherit; background: none; border: 0; padding: 5px 10px; cursor: default; }
+.panes__close { font: inherit; color: var(--mu-faint); background: none; border: 0; padding: 0 8px 0 0; cursor: default; }
+.panes__close:hover { color: var(--mu-text); }
+.panes__body { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.panes--narrow { flex-direction: column; }
+.panes--narrow .panes__tabs { padding-top: 6px; }
+.pane-empty { margin: auto; color: var(--mu-muted); padding: var(--mu-space-5); text-align: center; }
+.pane-scroll { flex: 1; overflow: auto; }
+.pane-bar { display: flex; align-items: center; gap: var(--mu-space-3); padding: 6px var(--mu-space-3); border-bottom: 1px solid color-mix(in srgb, var(--mu-border) 60%, transparent); font-size: var(--mu-text-sm); color: var(--mu-muted); flex: none; min-height: 38px; }
+.pane-bar > :first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pane-bar code { font: var(--mu-text-sm) var(--mu-mono); color: var(--mu-text); }
+.pane-bar a { color: var(--mu-accent); text-decoration: none; }
+.pane-bar__note { flex: none; }
+.diff-file { border-bottom: 1px solid color-mix(in srgb, var(--mu-border) 60%, transparent); }
+.diff-file summary { display: flex; gap: var(--mu-space-2); align-items: center; padding: 8px var(--mu-space-3); font: var(--mu-text-sm) var(--mu-mono); cursor: default; }
+.diff-file__path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.diff-file__body { margin: 0; font: 12px/1.5 var(--mu-mono); overflow-x: auto; padding-bottom: var(--mu-space-2); }
+.diff-row { display: block; padding: 0 var(--mu-space-3); white-space: pre; min-width: max-content; }
+.diff-row--add { background: light-dark(rgb(52 199 89 / .14), rgb(48 209 88 / .15)); }
+.diff-row--del { background: light-dark(rgb(255 59 48 / .11), rgb(255 69 58 / .15)); }
+.diff-row--hunk { color: var(--mu-faint); padding-top: 6px; }
+.diff-untracked { padding: 8px var(--mu-space-3); font-size: var(--mu-text-sm); color: var(--mu-muted); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.diff-untracked__file { font: var(--mu-text-sm) var(--mu-mono); color: var(--mu-accent); background: none; border: 0; padding: 0; cursor: default; }
+.editor-pane, .frame-pane, .thread-pane { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.editor-pane__host { flex: 1; min-height: 0; overflow: hidden; }
+.editor-pane__host .cm-editor { height: 100%; font-size: 13px; }
+.editor-pane__host .cm-editor.cm-focused { outline: none; }
+.editor-pane__host .cm-scroller { font-family: var(--mu-mono); }
+.editor-pane__host .cm-gutters { background: var(--mu-sidebar-bg); border-right: 1px solid var(--mu-border); color: var(--mu-faint); }
+.frame-pane iframe { flex: 1; border: 0; width: 100%; background: #fff; }
+.thread-pane > .session { flex: 1; }

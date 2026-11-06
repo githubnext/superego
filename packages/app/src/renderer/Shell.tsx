@@ -42,11 +42,13 @@ export function Shell() {
   const newSession = useNewSessionDialog()
   const { openSettings } = useShell()
   const hasSidebar = registry.slots.sidebar.length > 0
+  const allSessions = useAllSessions()
   const { newSession: openNewSession } = useShell()
   // Actions read the shell as it is when they run.
   registry.router.setContext({
     app: registry.app, machines, selection, select, openSettings, newSession: openNewSession,
     togglePalette: () => setPalette((open) => !open), showLog: () => setLog(true),
+    sessionOf: (s) => allSessions[s.machine]?.find((x) => x.id === s.session),
   })
   useAppEffects()
 
