@@ -37,7 +37,10 @@ export function SessionPanes({ machine, session, thread }: { machine: PaneProps[
   const front = panes.find((p) => p.id === session.pane) ?? (narrow ? undefined : panes.at(-1))
   const focus = (pane?: Pane) => void dispatch('pane.focus', { id: session.id, ...(pane ? { pane: pane.id } : {}) }, { machine: machine.id, source: 'panes' })
   const close = (pane: Pane) => void dispatch('pane.close', { id: session.id, pane: pane.id }, { machine: machine.id, source: 'panes' })
-  const title = (pane: Pane) => pane.title ?? paneKind(registry, pane.kind, session)?.title ?? pane.kind
+  const title = (pane: Pane) => {
+    const named = paneKind(registry, pane.kind, session)?.title
+    return pane.title ?? (typeof named === 'function' ? named(pane) : named) ?? pane.kind
+  }
 
   const tabs = (
     <div className="panes__tabs" role="tablist">
@@ -86,11 +89,14 @@ function PaneBody({ machine, session, pane }: PaneProps) {
 
 // ── Built-in panes ──────────────────────────────────────────────────────────────────────────────────────────────
 
+/** The file a pane shows, by name: its tab's title. */
+const fileName = (pane: Pane) => (pane.params as { path?: string } | undefined)?.path?.split('/').at(-1)
+
 export function registerBuiltInPanes(mu: UiApi) {
   mu.pane('diff', { title: 'Changes', component: DiffPane })
-  mu.pane('editor', { title: 'Editor', component: EditorPane })
+  mu.pane('editor', { title: (pane) => fileName(pane) ?? 'Editor', component: EditorPane })
   mu.pane('preview', { title: 'Preview', component: PreviewPane })
-  mu.pane('artifact', { title: 'Artifact', component: ArtifactPane })
+  mu.pane('artifact', { title: (pane) => fileName(pane) ?? 'Artifact', component: ArtifactPane })
   mu.pane('thread', { title: 'Thread', component: ThreadPane })
 }
 

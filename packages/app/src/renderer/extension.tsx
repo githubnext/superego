@@ -28,7 +28,8 @@ export type SlotProps = {
 /** What a pane is drawn with: where it is, and its own params. */
 export type PaneProps = { machine: MachineEntry; session: SessionInfo; pane: Pane }
 /** A kind of pane: its default tab title and what draws it. */
-export type PaneKind = { title: string; component: ComponentType<PaneProps> }
+/** A kind of pane. `title` names its tab when the pane wasn't given one: fixed, or from the pane (its params, say). */
+export type PaneKind = { title: string | ((pane: Pane) => string | undefined); component: ComponentType<PaneProps> }
 
 export type ToolCallProps = {
   machine: MachineEntry
