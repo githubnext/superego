@@ -53,7 +53,8 @@ export function createWindowRouter() {
     const action = remote.get(target)?.find((a) => a.id === id)
     const { machine: _machine, ...rest } = params
     const filled = action?.session && rest.id === undefined && context?.selection?.machine === target ? { ...rest, id: context.selection.session } : rest
-    return router.track(id, filled, `${source} → ${target}`, () => window.mu.call(target, id, filled))
+    // Through action.run: it finds actions registered after this window connected (a profile's, as it loads).
+    return router.track(id, filled, `${source} → ${target}`, () => window.mu.call(target, 'action.run', { id, params: filled }))
   }
 
   return {

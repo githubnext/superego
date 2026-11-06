@@ -19,7 +19,7 @@ import {
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@mu/settings'
 import { FileSettingsStore } from '@mu/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
-import type { DaemonApi, DaemonExtension, LiveValue, StatusContribution } from './extension.ts'
+import { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveValue, type StatusContribution } from './extension.ts'
 import { serveWeb, webToken, type WebServer } from './web.ts'
 import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileRef } from './profiles.ts'
 
@@ -147,7 +147,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }))
   // Profiles and their extensions import from 'mu'; this is what they get.
   provideSdk({
-    defineProfile, defineExtension, defineTool, section, hook, wrapTool, wrapSection,
+    defineProfile, defineExtension, defineTool, section, hook, wrapTool, wrapSection, defineDaemonExtension, defineAction, RpcError,
     arr, bool, int, lit, nullable, num, obj, opt, str, union, unknown,
   })
   const trust = new Trust(options.dataDir)
@@ -273,25 +273,31 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return name
   }
 
-  for (const extension of options.extensions ?? []) {
+  /**
+   * Set up a daemon extension: a bundled one (for the daemon's life), or a profile's (`agent` then adds to that
+   * profile's selection, and the returned teardown removes its actions, values and status when the profile reloads).
+   */
+  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension) => void): Promise<() => void> {
     if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
+    const undo: (() => void)[] = []
     const api: DaemonApi = {
       app: options.app,
       harness,
-      agent: (agentExtension) => installBuiltin(agentExtension),
+      agent: agentExtension,
       settings,
-      action: (action) => { router.register({ ...action, id: named(extension.name, action.id), runs: 'machine' }) },
+      action: (action) => { undo.push(router.register({ ...action, id: named(extension.name, action.id), runs: 'machine' })) },
       value<T extends Json>(key: string, initial: T): LiveValue<T> {
         const name = named(extension.name, key)
         const entry = { value: initial as Json, listeners: new Set<(value: Json) => void>() }
         values.set(name, entry)
+        undo.push(() => { if (values.get(name) === entry) values.delete(name) })
         const set = (next: T) => {
           entry.value = next
           for (const listener of entry.listeners) listener(next)
         }
         return { get: () => entry.value as T, set, update: (edit) => set(edit(entry.value as T)) }
       },
-      status: (contribute) => { contributors.push(contribute) },
+      status: (contribute) => { contributors.push(contribute); undo.push(() => { contributors.splice(contributors.indexOf(contribute), 1) }) },
       invalidate: changed,
       sessions: {
         list: () => list(),
@@ -301,25 +307,50 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     try {
       const cleanup = await extension.setup(api)
-      if (cleanup) cleanups.push(cleanup)
+      if (cleanup) undo.push(cleanup)
     } catch (error) {
+      for (const step of undo.reverse()) step()
       throw new Error(`Extension ${extension.name} failed to start: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
     }
+    return () => { for (const step of undo.reverse()) step() }
   }
+  for (const extension of options.extensions ?? []) cleanups.push(await setUp(extension, installBuiltin))
   const features = [...FEATURES, ...(options.extensions ?? []).map((extension) => `ext:${extension.name}`)]
 
   // ── Profiles ────────────────────────────────────────────────────────────────────────────────────────────────────
 
   const profiles = new Map<string, LoadedProfile>()
-  /** A profile as its files are now: loaded again (and its extensions reinstalled) when they changed. */
-  async function profileOf(ref: ProfileRef): Promise<LoadedProfile> {
+  const teardowns = new Map<string, () => void>()
+  const loading = new Map<string, Promise<LoadedProfile>>()
+  /** A profile as its files are now: loaded again (its extensions torn down and set up again) when they changed. */
+  function profileOf(ref: ProfileRef): Promise<LoadedProfile> {
     const cached = profiles.get(ref.dir)
-    if (cached && cached.hash === hashProfile(ref.dir)) return cached
-    const loaded = await loadProfile(ref, userProfiles, trust)
-    for (const old of cached?.extensions ?? []) if (!loaded.extensions.some((e) => e.name === old.name)) registry.uninstall(old)
-    for (const extension of loaded.extensions) registry.install(extension)
-    profiles.set(ref.dir, loaded)
-    return loaded
+    const hash = hashProfile(ref.dir)
+    if (cached && cached.hash === hash) return Promise.resolve(cached)
+    const key = `${ref.dir}:${hash}`
+    const pending = loading.get(key) ?? (async () => {
+      const loaded = await loadProfile(ref, userProfiles, trust)
+      teardowns.get(ref.dir)?.()
+      for (const old of cached?.extensions ?? []) registry.uninstall(old)
+      const undo: (() => void)[] = []
+      try {
+        for (const extension of loaded.daemon) {
+          undo.push(await setUp(extension, (agentExtension) => {
+            const scoped = { ...agentExtension, name: `${ref.scope}:${ref.name}/${agentExtension.name}` }
+            loaded.extensions.push(scoped)
+          }))
+        }
+      } catch (error) {
+        for (const step of undo.reverse()) step()
+        throw new RpcError('invalid', `Profile ${ref.name}: ${(error as Error).message}`)
+      }
+      for (const extension of loaded.extensions) registry.install(extension)
+      teardowns.set(ref.dir, () => { for (const step of undo.reverse()) step() })
+      profiles.set(ref.dir, loaded)
+      return loaded
+    })().finally(() => loading.delete(key))
+    loading.set(key, pending)
+    return pending
   }
 
   /** What a turn runs with: the session's own choices, else its profile's, else this machine's settings. */

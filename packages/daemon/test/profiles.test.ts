@@ -166,3 +166,33 @@ it("compiles a profile's UI written in TSX to calls into the window's React", as
   expect(badge.code).not.toContain(': string')
   await close()
 })
+
+it("sets up a profile's daemon extensions (actions, values, tools of their own) and tears them down when it changes", async () => {
+  const profile = join(home, 'profiles', 'default')
+  const extension = (answer: string) => `import { defineDaemonExtension, defineAction, defineExtension, defineTool, obj, str } from 'mu'
+export default defineDaemonExtension({
+  name: 'vault',
+  setup(mu) {
+    const count = mu.value('vault.count', 0)
+    mu.action(defineAction({ id: 'vault.answer', title: 'Answer', params: obj({ id: str() }), async run({ id }) {
+      const session = (await mu.sessions.list()).find((s) => s.id === id)
+      count.update((n) => n + 1)
+      return { answer: '${answer}', cwd: session.cwd }
+    } }))
+    mu.agent(defineExtension({ name: 'notes', tools: [defineTool({ name: 'note', description: 'A note.', parameters: obj({}), async execute() { return { output: [{ type: 'text', text: 'hi' }] } } })] }))
+  },
+})
+`
+  write(profile, { 'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': extension('one') })
+  const { peer, close } = await open()
+  const session = await peer.call<SessionInfo>('session.create', { cwd: project, prompt: 'hi' })
+  await done(peer, session.id)
+  expect(await peer.call('action.run', { id: 'vault.answer', params: { id: session.id } })).toEqual({ answer: 'one', cwd: project })
+  expect((await peer.call<{ value: number }>('value.watch', { key: 'vault.count' })).value).toBe(1)
+  expect((await agentOf(peer, session.id)).extensions).toContain('user:default/notes')
+  // Changed: the old action goes, the new one answers.
+  write(profile, { 'vault.ts': extension('two') })
+  await peer.call('session.submit', { id: session.id, text: 'again' })
+  expect(await peer.call('action.run', { id: 'vault.answer', params: { id: session.id } })).toMatchObject({ answer: 'two' })
+  await close()
+})

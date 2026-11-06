@@ -21,6 +21,7 @@ import { pathToFileURL } from 'node:url'
 import { registerHooks } from 'node:module'
 import { transform } from 'sucrase'
 import type { Extension } from '@earendil-works/pi-durable'
+import type { DaemonExtension } from './extension.ts'
 import { RpcError } from '@mu/protocol'
 
 export type ProfileSpec = {
@@ -30,7 +31,11 @@ export type ProfileSpec = {
   thinking?: string
   /** Instructions for the agent, after the extensions' prompt sections. */
   prompt?: string
-  /** Agent extensions, as paths from the profile's folder: modules whose default export is an extension. */
+  /**
+   * Extensions, as paths from the profile's folder. A module's default export is an agent extension (defineExtension:
+   * tools, prompt sections, hooks) or a daemon extension (defineDaemonExtension: actions, live values, agent extensions
+   * of its own), set up when the profile loads and torn down when its files change.
+   */
   extensions?: string[]
   /**
    * UI extensions, as paths from the profile's folder: modules whose default export is defineUiExtension({ … }), drawn
@@ -55,8 +60,10 @@ export type ProfileRef = { scope: 'user' | 'project'; name: string; dir: string 
 
 export type LoadedProfile = ProfileRef & {
   spec: ProfileSpec
-  /** Its extensions, installed under names of their own: `<scope>:<name>/<extension>`. */
+  /** Its agent extensions, installed under names of their own: `<scope>:<name>/<extension>`. */
   extensions: Extension[]
+  /** Its daemon extensions, for the daemon to set up. */
+  daemon: DaemonExtension[]
   /** What its files hash to: a change means reloading it, and (for a project's) allowing it again. */
   hash: string
 }
@@ -139,7 +146,7 @@ const load = (url: string) => nativeImport(url).catch((error: unknown) => {
 
 /** What 'mu' exports: kept in step with sdk-shim.ts (a test checks). */
 export const SDK_EXPORTS = [
-  'defineProfile', 'defineExtension', 'defineTool', 'section', 'hook', 'wrapTool', 'wrapSection',
+  'defineProfile', 'defineExtension', 'defineTool', 'section', 'hook', 'wrapTool', 'wrapSection', 'defineDaemonExtension', 'defineAction', 'RpcError',
   'arr', 'bool', 'int', 'lit', 'nullable', 'num', 'obj', 'opt', 'str', 'union', 'unknown',
 ] as const
 
@@ -180,11 +187,13 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
     base = await loadProfile({ scope: 'user', name, dir: join(userRoot, name) }, userRoot, trust)
   }
   const extensions: Extension[] = [...(base?.extensions ?? [])]
+  const daemon: DaemonExtension[] = [...(base?.daemon ?? [])]
   for (const path of spec.extensions ?? []) {
-    const module = await load(fresh(resolve(ref.dir, path))) as { default?: Extension }
+    const module = await load(fresh(resolve(ref.dir, path))) as { default?: Extension | DaemonExtension }
     const extension = module.default
     if (!extension?.name) throw new RpcError('invalid', `${path} in profile ${ref.name} must export default an extension with a name`)
-    extensions.push({ ...extension, name: `${ref.scope}:${ref.name}/${extension.name}` })
+    if (typeof (extension as DaemonExtension).setup === 'function') daemon.push(extension as DaemonExtension)
+    else extensions.push({ ...(extension as Extension), name: `${ref.scope}:${ref.name}/${extension.name}` })
   }
   const merged: ProfileSpec = {
     ...base?.spec, ...spec,
@@ -193,7 +202,7 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
     // UI paths are relative to their own profile's folder: only this profile's are served from here.
     ui: spec.ui,
   }
-  return { ...ref, spec: merged, extensions, hash }
+  return { ...ref, spec: merged, extensions, daemon, hash }
 }
 
 /** Whether `dir` is a profile folder at all: under the user's profiles, or a project's `.mu/profiles`. */
