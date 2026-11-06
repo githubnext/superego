@@ -269,6 +269,9 @@ export function startApp(appConfig: AppConfig) {
   /**
    * Run from source there's no bundle to carry the icon, so the Dock takes the app's own images: `icon.png`, and
    * `icon-dark.png` while the system is dark. A packaged app's icon (`mu.icon`) does all of this, and more, itself.
+   * They must sit on macOS's icon grid like any app icon: the tile 824px inside a transparent 1024px canvas. Icon
+   * Composer exports fill the canvas, so pad them (magick in.png -resize 824 -background none -gravity center
+   * -extent 1024x1024 out.png) or the Dock shows them a quarter larger than every other icon.
    */
   function dockIcon() {
     const pick = () => {
