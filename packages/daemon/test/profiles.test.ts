@@ -151,3 +151,18 @@ it("serves a profile's UI modules, types stripped, only from inside it and only 
   await expect(peer.call('profile.ui', { ...ref, dir: join(project, 'src') })).rejects.toMatchObject({ kind: 'not_found' })
   await close()
 })
+
+it("compiles a profile's UI written in TSX to calls into the window's React", async () => {
+  write(join(home, 'profiles', 'default'), {
+    'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ ui: ['./ui/badge.tsx'] })\n`,
+    'ui/badge.tsx': `import { defineUiExtension } from 'mu/ui'\nconst label: string = 'Acme'\nexport default defineUiExtension({ name: 'badge', setup(mu) { mu.slot('session.header', () => <span className="badge">{label}</span>) } })\n`,
+  })
+  const { peer, close } = await open()
+  const ref = { scope: 'user', name: 'default', dir: join(home, 'profiles', 'default') }
+  const badge = await peer.call<{ path: string; code: string }>('profile.module', { ...ref, path: 'ui/badge' })
+  expect(badge.path).toBe('ui/badge.tsx')
+  expect(badge.code).toContain('react/jsx-runtime')
+  expect(badge.code).not.toContain('<span')
+  expect(badge.code).not.toContain(': string')
+  await close()
+})

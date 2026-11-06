@@ -19,7 +19,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { registerHooks } from 'node:module'
-import { stripTypeScriptTypes } from 'node:module'
+import { transform } from 'sucrase'
 import type { Extension } from '@earendil-works/pi-durable'
 import { RpcError } from '@mu/protocol'
 
@@ -199,17 +199,26 @@ export function isProfileDir(ref: ProfileRef, userRoot: string): boolean {
 }
 
 /**
- * One module of a profile's UI, as the window loads it: the file at `path` (tried as given, then with .ts, .js or
- * /index.ts), inside the profile's folder, with its TypeScript types stripped. JSX isn't compiled yet: UI extensions
- * build elements with `h(…)` from 'mu/ui'.
+ * One module of a profile's UI, as the window loads it: the file at `path` (tried as given, then with .tsx, .ts, .jsx,
+ * .js or /index.*), inside the profile's folder, compiled to JavaScript: types stripped, JSX turned into calls to
+ * 'react/jsx-runtime' (the window's own React). Its imports are left for the window to load.
  */
 export async function profileModule(dir: string, path: string): Promise<{ path: string; code: string }> {
   const base = resolve(dir, path)
   if (base !== dir && !base.startsWith(dir + '/')) throw new RpcError('invalid', `${path} is outside the profile`)
-  const found = [base, `${base}.ts`, `${base}.js`, join(base, 'index.ts'), join(base, 'index.js')].find((p) => existsSync(p) && statSync(p).isFile())
+  const candidates = [base, ...['.tsx', '.ts', '.jsx', '.js'].map((ext) => `${base}${ext}`), ...['tsx', 'ts', 'jsx', 'js'].map((ext) => join(base, `index.${ext}`))]
+  const found = candidates.find((p) => existsSync(p) && statSync(p).isFile())
   if (!found) throw new RpcError('not_found', `No module ${path} in the profile`)
-  if (/\.[cm]?tsx$|\.jsx$/.test(found)) throw new RpcError('invalid', `${relative(dir, found)}: JSX isn't supported yet; build elements with h() from 'mu/ui'`)
   const source = await readFile(found, 'utf8')
-  const code = /\.[cm]?ts$/.test(found) ? stripTypeScriptTypes(source, { mode: 'strip' }) : source
-  return { path: relative(dir, found), code }
+  const typed = /\.[cm]?tsx?$/.test(found)
+  const jsx = /x$/.test(found)
+  try {
+    const { code } = transform(source, {
+      transforms: [...(typed ? ['typescript' as const] : []), ...(jsx ? ['jsx' as const] : [])],
+      jsxRuntime: 'automatic', production: true, filePath: found, disableESTransforms: true,
+    })
+    return { path: relative(dir, found), code }
+  } catch (error) {
+    throw new RpcError('invalid', `${relative(dir, found)}: ${(error as Error).message}`)
+  }
 }

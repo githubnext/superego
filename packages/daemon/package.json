@@ -13,6 +13,7 @@
     "@earendil-works/pi-durable": "1.5.0",
     "@mu/protocol": "workspace:*",
     "@mu/settings": "workspace:*",
+    "sucrase": "^3.35.1",
     "ws": "8.22.1"
   }
 }
