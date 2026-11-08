@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ConversationView, EntryRecord, LiveState } from '@earendil-works/pi-durable'
 import type { SessionInfo } from '@mu/protocol'
-import { Button, IconButton, StatusGlyph, statusLabel, TextArea } from '@mu/ui'
+import { Button, IconButton, Menu, StatusGlyph, statusLabel, TextArea } from '@mu/ui'
 import type { MachineEntry } from '../shared.ts'
 import { machine as client, useSessionView } from './client.ts'
-import { Slot, useRegistry, type ToolCallProps } from './extension.tsx'
+import { paneMenu, Slot, useRegistry, type ToolCallProps } from './extension.tsx'
 import { useShell } from './state.tsx'
 import { Markdown, Scroll } from './Markdown.tsx'
 import { useProfileUi } from './profile-ui.ts'
@@ -70,6 +70,7 @@ export function ThreadView({ machine, session }: { machine: MachineEntry; sessio
             <span>{machine.label} · <span title={session.cwd}>{folderName(session.cwd)}</span>{session.profile && <> · <span className="session__profile" title={session.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{session.profile.name}</span></>} · {statusLabel(session.status)}</span>
             <span className="session__tools">
               <Slot name="session.header" props={{ machine, session }} />
+              <PaneMenu machine={machine} session={session} />
               <IconButton label="Archive" className="session__archive" onClick={() => void dispatch('session.archive', { id: session.id }, { machine: machine.id, source: 'header' })}>
                 <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 3.5h12v3H2zM3 6.5v6h10v-6M6.5 9h3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round" /></svg>
               </IconButton>
@@ -477,5 +478,23 @@ function Composer({ machine, session, busy }: { machine: MachineEntry; session: 
     </div>
     </div>
     </ClaimContext.Provider>
+  )
+}
+
+/** Open a pane beside the thread: the kinds that show something without being told what (Changes, a profile's own). */
+function PaneMenu({ machine, session }: { machine: MachineEntry; session: SessionInfo }) {
+  const registry = useRegistry()
+  const kinds = paneMenu(registry, session)
+  if (!kinds.length) return null
+  const open = (kind: string) => void registry.router.dispatch('pane.open', { id: session.id, kind }, { machine: machine.id, source: 'header' })
+  return (
+    <Menu.Root>
+      <Menu.Trigger render={<IconButton label="Open a pane" className="session__panes" />}>
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M9 3v10" stroke="currentColor" strokeWidth="1.3" /></svg>
+      </Menu.Trigger>
+      <Menu.Popup align="end">
+        {kinds.map(({ kind, title }) => <Menu.Item key={kind} onClick={() => open(kind)}>{title}</Menu.Item>)}
+      </Menu.Popup>
+    </Menu.Root>
   )
 }

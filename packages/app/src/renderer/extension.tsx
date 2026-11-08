@@ -29,7 +29,12 @@ export type SlotProps = {
 export type PaneProps = { machine: MachineEntry; session: SessionInfo; pane: Pane }
 /** A kind of pane: its default tab title and what draws it. */
 /** A kind of pane. `title` names its tab when the pane wasn't given one: fixed, or from the pane (its params, say). */
-export type PaneKind = { title: string | ((pane: Pane) => string | undefined); component: ComponentType<PaneProps> }
+export type PaneKind = {
+  title: string | ((pane: Pane) => string | undefined)
+  component: ComponentType<PaneProps>
+  /** Offered in the session's pane menu: it shows something without being given params. */
+  menu?: boolean
+}
 
 export type ToolCallProps = {
   machine: MachineEntry
@@ -187,4 +192,13 @@ export function Slot<S extends SlotName>({ name, props }: { name: S; props: Slot
 export function paneKind(registry: Registry, kind: string, session: SessionInfo): PaneKind | undefined {
   const entries = registry.panes.get(kind) ?? []
   return entries.find((e) => e.profile && e.profile === session.profile?.dir) ?? entries.find((e) => !e.profile)
+}
+
+/** The panes a session's menu offers: the built-in ones and its profile's that open without params. */
+export function paneMenu(registry: Registry, session: SessionInfo): { kind: string; title: string }[] {
+  return [...registry.panes.keys()].flatMap((kind) => {
+    const found = paneKind(registry, kind, session)
+    if (!found?.menu) return []
+    return [{ kind, title: (typeof found.title === 'function' ? found.title({ id: '', kind }) : found.title) ?? kind }]
+  })
 }

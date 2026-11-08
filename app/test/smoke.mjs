@@ -181,6 +181,13 @@ if (phase === 'first') {
     await until("document.querySelectorAll('.panes__tab').length === " + left, 'a pane closed, ' + left + ' left')
   }
   await until(`!document.querySelector('.panes')`, 'panes closed')
+  // The header's pane menu opens one too.
+  await run(`document.querySelector('.session__panes').click()`)
+  await until(`[...document.querySelectorAll('.mu-menu__item')].some((i) => i.textContent === 'Changes')`, 'pane menu offers Changes')
+  await run(`[...document.querySelectorAll('.mu-menu__item')].find((i) => i.textContent === 'Changes').click()`)
+  await until(`document.querySelector('.panes__tab')?.textContent.startsWith('Changes')`, 'pane menu opened Changes')
+  await key('w', ['meta', 'shift'])
+  await until(`!document.querySelector('.panes')`, 'menu pane closed')
   // Settings: the app's own sections, then the machine's, drawn from what each registers.
   await run(`[...document.querySelectorAll('.app__footer button')].find((b) => b.textContent === 'Settings').click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Appearance') && document.querySelector('.settings').textContent.includes('Notifications')`, 'app settings')

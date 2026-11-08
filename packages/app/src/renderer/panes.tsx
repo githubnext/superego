@@ -93,7 +93,7 @@ function PaneBody({ machine, session, pane }: PaneProps) {
 const fileName = (pane: Pane) => (pane.params as { path?: string } | undefined)?.path?.split('/').at(-1)
 
 export function registerBuiltInPanes(mu: UiApi) {
-  mu.pane('diff', { title: 'Changes', component: DiffPane })
+  mu.pane('diff', { title: 'Changes', component: DiffPane, menu: true })
   mu.pane('editor', { title: (pane) => fileName(pane) ?? 'Editor', component: EditorPane })
   mu.pane('preview', { title: 'Preview', component: PreviewPane })
   mu.pane('artifact', { title: (pane) => fileName(pane) ?? 'Artifact', component: ArtifactPane })
