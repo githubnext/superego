@@ -7,6 +7,7 @@ import { machine as client, useSessionView } from './client.ts'
 import { fileKind, paneMenu, Slot, useRegistry, type ToolCallProps } from './extension.tsx'
 import { useShell } from './state.tsx'
 import { Markdown, OpenFile, Scroll } from './Markdown.tsx'
+import { useLocalState } from './local-state.ts'
 import { useProfileUi } from './profile-ui.ts'
 import { SessionPanes } from './panes.tsx'
 
@@ -446,7 +447,8 @@ function Composer({ machine, session, busy }: { machine: MachineEntry; session: 
     return () => setClaims((list) => list.filter((c) => c !== claim))
   }, [])
   const claim = claims.at(-1)
-  const [text, setText] = useState('')
+  // A draft per session, kept until it's sent: switching sessions or reloading doesn't lose it.
+  const [text, setText] = useLocalState(`draft.${machine.id}.${session.id}`, '')
   const [error, setError] = useState<{ kind?: string; message: string }>()
   const input = useRef<HTMLTextAreaElement>(null)
   const disabled = machine.state !== 'connected'

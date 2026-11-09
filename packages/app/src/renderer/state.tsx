@@ -1,10 +1,12 @@
 // What the shell knows and shares: the machines, every connected machine's sessions (one subscription each, whatever
-// number of components show them), which session is selected, and the Settings dialog.
+// number of components show them), which session is selected, and the Settings dialog; those two kept in the window
+// across reloads.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { SessionInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { has, useMachineList, useSessions as useSessionsWatch } from './client.ts'
 import { useRegistry } from './extension.tsx'
+import { useLocalState } from './local-state.ts'
 
 export type Selection = { machine: string; session: string }
 
@@ -56,8 +58,9 @@ export function useShell() {
 export function ShellStateProvider({ children }: { children: ReactNode }) {
   const machines = useMachineList()
   const [sessions, setSessions] = useState<Record<string, SessionInfo[] | undefined>>({})
-  const [selection, setSelection] = useState<Selection>()
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  // Which session and whether Settings is open: as the window was left, after a reload too.
+  const [selection, setSelection] = useLocalState<Selection | undefined>('selection', undefined)
+  const [settingsOpen, setSettingsOpen] = useLocalState('settings.open', false)
   const [newSession, setNewSession] = useState<NewSessionStart>()
   const onSessions = useCallback((machine: string, list: SessionInfo[] | undefined) => setSessions((all) => all[machine] === list ? all : { ...all, [machine]: list }), [])
   const value = useMemo<ShellState>(() => ({

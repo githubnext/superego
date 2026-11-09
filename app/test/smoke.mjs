@@ -188,6 +188,15 @@ if (phase === 'first') {
   await until(`document.querySelector('.panes__tab')?.textContent.startsWith('Changes')`, 'pane menu opened Changes')
   await key('w', ['meta', 'shift'])
   await until(`!document.querySelector('.panes')`, 'menu pane closed')
+  // The window as it was left, after a reload: the same session selected, its unsent draft still there.
+  await run(`document.querySelector('.composer textarea').focus()`)
+  BrowserWindow.getAllWindows()[0].webContents.insertText('half a thought')
+  await until(`document.querySelector('.composer textarea').value === 'half a thought'`, 'draft typed')
+  BrowserWindow.getAllWindows()[0].webContents.reload()
+  await until(`document.querySelector('.session__title')?.textContent === 'panes' && document.querySelector('.composer textarea')?.value === 'half a thought'`, 'selection and draft kept across a reload')
+  await run(`document.querySelector('.composer textarea').select()`)
+  await key('Backspace', [])
+  await until(`document.querySelector('.composer textarea').value === ''`, 'draft cleared')
   // Settings: the app's own sections, then the machine's, drawn from what each registers.
   await run(`[...document.querySelectorAll('.app__footer button')].find((b) => b.textContent === 'Settings').click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Appearance') && document.querySelector('.settings').textContent.includes('Notifications')`, 'app settings')

@@ -1,6 +1,7 @@
 // Settings, drawn generically from what each endpoint registers: the app's own settings and every machine's. Sections
 // may name a custom component (`ui`) drawn below their settings; the Providers section is one.
 import { useEffect, useRef, useState, type ComponentType } from 'react'
+import { useLocalState } from './local-state.ts'
 import type { AuthEvent, AuthPrompt, Json, Notifications, ProviderAuthInfo, SectionInfo, SettingInfo, SettingsSnapshot } from '@mu/protocol'
 import { Button, Dialog, FontPicker, Select, StatusGlyph, Switch, TextField } from '@mu/ui'
 import { remoteCommand } from '@mu/protocol'
@@ -16,7 +17,9 @@ const MACHINES = '$machines'
 const ALL = '$all'
 
 export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; onClose(): void }) {
-  const [target, setTarget] = useState(APP)
+  const [kept, setTarget] = useLocalState('settings.target', APP)
+  // The section kept from last time, unless its machine has gone since.
+  const target = kept === APP || kept === MACHINES || kept === ALL || machines.some((m) => m.id === kept) ? kept : APP
   const machine = machines.find((m) => m.id === target)
   const connected = target === APP || machine?.state === 'connected'
   const supported = target === APP || has(machine, 'settings')
