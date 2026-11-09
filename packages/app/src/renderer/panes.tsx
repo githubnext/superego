@@ -1,18 +1,23 @@
-// Panes: views beside a thread. A thread keeps which are open and which is in front (pane.open, pane.focus,
-// pane.close), so they follow it to every client; the agent opens them too (open_pane). Wide, the thread sits left and
-// the panes right, as tabs, with a divider to drag; narrow (a phone), tabs switch between the thread and each pane.
+// Panes: views beside a thread. A thread keeps which are open and which has focus (pane.open, pane.focus, pane.close),
+// so they follow it to every client; the agent opens them too (open_pane). The thread and its panes are a row of
+// columns, scrolled as Dinky's (and niri's) scrolling layout is: a lone thread fills the width; with panes, each pane
+// is a column of one width (a share of the row, dragged at its edge and kept) and the thread takes what's left, never
+// less; past the edge the row scrolls, and the focused column scrolls just far enough to show whole. ⌃Tab moves the
+// focus along. On a phone each column is the screen's width, and a swipe moves between them.
 // Built in: diff, editor, preview, artifact, thread. Extensions and profiles add kinds with mu.pane(kind, …).
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Pane, ThreadInfo } from '@mu/protocol'
 import { Button } from '@mu/ui'
 import { machine as client } from './client.ts'
 import { paneKind, useRegistry, type PaneProps, type UiApi } from './extension.tsx'
+import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
 import { ThreadBody } from './ThreadView.tsx'
 import { FileEditor } from './file-editor.tsx'
 
-const WIDTH = 'mu.paneWidth'
 const narrowQuery = '(max-width: 760px)'
+/** No column narrower than this, however many: the row scrolls instead. */
+const MIN_COLUMN = 380
 
 export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['machine']; thread: ThreadInfo; main: ReactNode }) {
   const registry = useRegistry()
@@ -25,54 +30,78 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     list.addEventListener('change', change)
     return () => list.removeEventListener('change', change)
   }, [])
-  const [width, setWidth] = useState(() => Number(localStorage.getItem(WIDTH)) || 0.5)
-  const area = useRef<HTMLDivElement>(null)
-  const widthRef = useRef(width)
-  widthRef.current = width
+  // A pane column's width, as a share of the row.
+  const [share, setShare] = useLocalState('pane.width', 0.5)
+  const row = useRef<HTMLDivElement>(null)
+  const [rowWidth, setRowWidth] = useState(0)
+  useLayoutEffect(() => {
+    const el = row.current
+    if (!el) return
+    const observer = new ResizeObserver(() => setRowWidth(el.clientWidth))
+    observer.observe(el)
+    setRowWidth(el.clientWidth)
+    return () => observer.disconnect()
+  }, [panes.length > 0])
+
+  // The focused column: a pane, or (none, or one that closed) the thread.
+  const focused = panes.find((p) => p.id === thread.pane)?.id
+  const columnOf = (id: string | undefined) => row.current?.querySelector<HTMLElement>(`[data-column="${id ?? 'thread'}"]`)
+  // Brought into view as it gets the focus: just far enough to show it whole.
+  useEffect(() => {
+    columnOf(focused)?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
+  }, [focused, panes.length, rowWidth])
+
+  const settled = useRef<ReturnType<typeof setTimeout>>(undefined)
   if (!panes.length) return <>{main}</>
 
-  // In front: the thread's choice; wide, with none chosen, the newest pane still shows beside the thread.
-  const front = panes.find((p) => p.id === thread.pane) ?? (narrow ? undefined : panes.at(-1))
-  const focus = (pane?: Pane) => void dispatch('pane.focus', { id: thread.id, ...(pane ? { pane: pane.id } : {}) }, { machine: machine.id, source: 'panes' })
+  const focus = (pane?: string) => { if (pane !== focused) void dispatch('pane.focus', { id: thread.id, ...(pane ? { pane } : {}) }, { machine: machine.id, source: 'panes' }) }
   const close = (pane: Pane) => void dispatch('pane.close', { id: thread.id, pane: pane.id }, { machine: machine.id, source: 'panes' })
   const title = (pane: Pane) => {
     const named = paneKind(registry, pane.kind, thread)?.title
     return pane.title ?? (typeof named === 'function' ? named(pane) : named) ?? pane.kind
   }
 
-  const tabs = (
-    <div className="panes__tabs" role="tablist">
-      {narrow && <button role="tab" aria-selected={!front} className={`panes__tab ${!front ? 'is-active' : ''}`} onClick={() => focus()}>Thread</button>}
-      {panes.map((pane) => (
-        <span key={pane.id} role="tab" aria-selected={pane === front} className={`panes__tab ${pane === front ? 'is-active' : ''}`}>
-          <button className="panes__label" onClick={() => focus(pane)}>{title(pane)}</button>
-          <button className="panes__close" aria-label={`Close ${title(pane)}`} onClick={() => close(pane)}>×</button>
-        </span>
-      ))}
-    </div>
-  )
-  const body = front && <PaneBody key={front.id} machine={machine} thread={thread} pane={front} />
+  const width = narrow ? rowWidth : Math.min(rowWidth, Math.max(MIN_COLUMN, Math.round(share * rowWidth)))
+  const threadWidth = narrow ? rowWidth : Math.max(width, rowWidth - panes.length * width)
 
-  if (narrow) return <div className="panes panes--narrow">{tabs}<div className="panes__body">{front ? body : main}</div></div>
-
-  // Drag the divider: the pane area's share of the width, kept for next time.
+  // A pane's left edge resizes every pane column: their share of the row, kept for next time.
   const drag = (event: React.PointerEvent) => {
-    const box = area.current?.getBoundingClientRect()
-    if (!box) return
-    const move = (e: PointerEvent) => setWidth(Math.min(0.8, Math.max(0.2, (box.right - e.clientX) / box.width)))
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); localStorage.setItem(WIDTH, String(widthRef.current)) }
+    const startX = event.clientX
+    const startShare = share
+    const move = (e: PointerEvent) => setShare(Math.min(0.8, Math.max(0.2, startShare + (startX - e.clientX) / Math.max(1, rowWidth))))
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
     event.preventDefault()
+    event.stopPropagation()
   }
+  // On a phone, a swipe that settles on a column gives it the focus.
+  const onScroll = () => {
+    if (!narrow) return
+    clearTimeout(settled.current)
+    settled.current = setTimeout(() => {
+      const el = row.current
+      if (!el || !rowWidth) return
+      const index = Math.round(el.scrollLeft / rowWidth)
+      focus(index === 0 ? undefined : panes[index - 1]?.id)
+    }, 120)
+  }
+
   return (
-    <div className="panes" ref={area}>
-      <div className="panes__thread" style={{ flexBasis: `${(1 - width) * 100}%` }}>{main}</div>
-      <div className="panes__divider" onPointerDown={drag} role="separator" aria-orientation="vertical" />
-      <div className="panes__side" style={{ flexBasis: `${width * 100}%` }}>
-        {tabs}
-        <div className="panes__body">{body}</div>
-      </div>
+    <div className={`panes ${narrow ? 'panes--narrow' : ''}`} ref={row} onScroll={onScroll}>
+      <div data-column="thread" className={`panes__column panes__column--thread ${focused === undefined ? 'is-focused' : ''}`}
+        style={{ width: threadWidth }} onPointerDownCapture={() => focus(undefined)}>{main}</div>
+      {panes.map((pane) => (
+        <div key={pane.id} data-column={pane.id} className={`panes__column ${pane.id === focused ? 'is-focused' : ''}`}
+          style={{ width }} onPointerDownCapture={() => focus(pane.id)}>
+          {!narrow && <div className="panes__edge" onPointerDown={drag} role="separator" aria-orientation="vertical" aria-label="Pane width" />}
+          <div className={`panes__tab ${pane.id === focused ? 'is-active' : ''}`}>
+            <button className="panes__label" onClick={() => focus(pane.id)}>{title(pane)}</button>
+            <button className="panes__close" aria-label={`Close ${title(pane)}`} onClick={() => close(pane)}>×</button>
+          </div>
+          <div className="panes__body"><PaneBody machine={machine} thread={thread} pane={pane} /></div>
+        </div>
+      ))}
     </div>
   )
 }
