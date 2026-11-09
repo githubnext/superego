@@ -504,6 +504,15 @@ export function startApp(appConfig: AppConfig) {
     } satisfies MenuItemConstructorOptions] : [{
       label: 'File', submenu: [{ label: 'Quit', accelerator: 'CommandOrControl+Q', click: quitKey }],
     } satisfies MenuItemConstructorOptions]),
-    { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' },
+    { role: 'editMenu' }, { role: 'viewMenu' },
+    // ⌘W is the window's own (it closes the pane with the focus); closing the window is ⌘⇧W, and the app stays.
+    {
+      role: 'window',
+      submenu: [
+        { role: 'minimize' }, { role: 'zoom' }, { type: 'separator' },
+        { label: 'Close Window', accelerator: 'CommandOrControl+Shift+W', click: (_item, window) => window?.close() },
+        ...(mac ? [{ type: 'separator' as const }, { role: 'front' as const }] : []),
+      ],
+    },
   ]))
 }

@@ -52,7 +52,9 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
 | `⌃I` | Focus the prompt |
 | `⌘/` | Hide or show the sidebar |
 | `⌘⇧E` | The file tree beside the editor |
-| `⌘⇧D` `⌘⇧W` | Show changes / close the pane in front |
+| `⌘⇧D` | Show changes |
+| `⌘W` | Close the pane with the focus (the focus moves left) |
+| `⌘⇧W` | Close the window (mu keeps running) |
 | `⌘,` | Settings |
 
 Every one is an action: Settings → Keyboard changes them, `⌘K` lists them, `mu do <id>` runs a machine's from a shell.

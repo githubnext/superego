@@ -189,11 +189,13 @@ if (phase === 'first') {
     window.dispatchEvent(new PointerEvent('pointerup', { clientX: x + 60, clientY: 300 }))
   })()`)
   await until(`(() => { const w = [...document.querySelectorAll('.panes > [data-column]')].map((c) => Math.round(c.getBoundingClientRect().width)); return Math.abs(w[0] - ${threadBefore} - 60) <= 2 && Math.abs(w[1] - ${firstBefore}) <= 2 })()`, 'the gap resized the thread, not the pane')
-  // Keys typed into a frame stay in it: back to the window first, as a click there would.
-  await run(`document.querySelector('.composer textarea').focus()`)
+  // Keys typed into a frame stay in it: out of it first (not into the thread, which would take the focus from the pane).
+  await run(`document.activeElement?.blur()`)
   for (let left = 2; left >= 0; left--) {
-    await key('w', ['meta', 'shift'])
+    await key('w')
     await until("document.querySelectorAll('.panes__tab').length === " + left, 'a pane closed, ' + left + ' left')
+    // The focus moved left: closing page.html leaves notes.md, before it, with the focus.
+    if (left === 2) await until(`document.querySelector('.panes__tab.is-active')?.textContent.startsWith('notes.md') && Boolean(document.activeElement?.closest('[data-column]:not([data-column="thread"])'))`, 'focus moved to the pane on the left')
   }
   await until(`!document.querySelector('.panes__tab')`, 'panes closed')
   // The header's pane menu opens one too.
@@ -201,7 +203,7 @@ if (phase === 'first') {
   await until(`[...document.querySelectorAll('.mu-menu__item')].some((i) => i.textContent === 'Changes')`, 'pane menu offers Changes')
   await run(`[...document.querySelectorAll('.mu-menu__item')].find((i) => i.textContent === 'Changes').click()`)
   await until(`document.querySelector('.panes__tab')?.textContent.startsWith('Changes')`, 'pane menu opened Changes')
-  await key('w', ['meta', 'shift'])
+  await key('w')
   await until(`!document.querySelector('.panes__tab')`, 'menu pane closed')
   // ⌘P: a file by a few letters of its name, opened beside the thread; its tree shows it, and a click there shows
   // another file in the same editor.
@@ -244,7 +246,7 @@ if (phase === 'first') {
   renameSync(`${repo}/.long.md.tmp`, `${repo}/long.md`)
   await until(`document.querySelector('.cm-content')?.textContent.includes('edited ')`, 'the change shown')
   await until(`Math.abs(document.querySelector('.file-editor__scroll').scrollTop - 1500) <= 4`, 'still where it was')
-  await key('w', ['meta', 'shift'])
+  await key('w')
   await until(`!document.querySelector('.panes__tab')`, 'editor closed')
   // The window as it was left, after a reload: the same thread selected, its unsent draft still there.
   await run(`document.querySelector('.composer textarea').focus()`)
@@ -271,7 +273,7 @@ if (phase === 'first') {
   await new Promise((r) => setTimeout(r, 300))
   await key('Tab', ['control'])
   await until(`window.mu.call('local', 'thread.list', {}).then((l) => Boolean(l.find((t) => t.id === '${paned}').pane))`, 'ctrl+tab to the pane')
-  await key('w', ['meta', 'shift'])
+  await key('w')
   await until(`!document.querySelector('.panes__tab')`, 'diff closed')
   // Sessions: the panes repository is one, the home folder another; ⌘⇧[ and ⌘⇧] go between them.
   const { mkdirSync } = await import('node:fs')

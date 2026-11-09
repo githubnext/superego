@@ -669,8 +669,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         const index = (meta.panes ?? []).findIndex((p) => p.id === pane)
         if (index < 0) return
         meta.panes!.splice(index, 1)
-        // The one beside it comes forward; none left, the thread.
-        if (meta.pane === pane) meta.pane = meta.panes![Math.min(index, meta.panes!.length - 1)]?.id
+        // The focus moves left: to the pane before it, or (it was the first) the thread.
+        if (meta.pane === pane) meta.pane = meta.panes![index - 1]?.id
         if (!meta.pane) delete meta.pane
         if (!meta.panes!.length) delete meta.panes
       })

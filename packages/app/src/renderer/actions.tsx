@@ -113,11 +113,17 @@ export const coreActions: WindowAction[] = [
     run: async (_p, c: WindowContext) => { if (c.selection) await c.dispatch('pane.open', { id: c.selection.thread, kind: 'diff' }, { machine: c.selection.machine, source: 'panes' }) },
   }),
   defineAction({
-    id: 'panes.close', title: 'Close pane', runs: 'window', keys: 'mod+shift+w',
+    // The pane with the focus; the focus moves left, to the pane before it or the thread. The thread itself stays.
+    id: 'panes.close', title: 'Close pane', runs: 'window', keys: 'mod+w',
     run: async (_p, c: WindowContext) => {
       const thread = c.selection && c.threadOf(c.selection)
-      const front = thread?.panes?.find((p) => p.id === thread.pane) ?? thread?.panes?.at(-1)
-      if (c.selection && front) await c.dispatch('pane.close', { id: c.selection.thread, pane: front.id }, { machine: c.selection.machine, source: 'panes' })
+      const panes = thread?.panes ?? []
+      // Where keyboard focus is, when it's in a pane; else the pane the thread has in focus.
+      const here = (document.activeElement?.closest('[data-column]') as HTMLElement | null)?.dataset.column
+      const index = panes.findIndex((p) => p.id === (here && here !== 'thread' ? here : thread?.pane))
+      if (!c.selection || index < 0) return
+      await c.dispatch('pane.close', { id: c.selection.thread, pane: panes[index]!.id }, { machine: c.selection.machine, source: 'panes' })
+      focusColumn(panes[index - 1]?.id)
     },
   }),
   defineAction({
