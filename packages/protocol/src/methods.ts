@@ -89,6 +89,8 @@ export type Methods = {
   'agent.models': { params: {}; result: ModelCatalog }
   /** A file in a session's folder (not outside it), as text. */
   'file.read': { params: { id: SessionId; path: string; base64?: boolean }; result: { path: string; content: string } }
+  /** A file in a session's folder by the name a link gives it ([[Note]], Note.md, path/Note): its path, or null. */
+  'file.find': { params: { id: SessionId; name: string }; result: { path: string | null } }
   /** What changed in a session's folder, by git: the unified diff against HEAD, and files git doesn't track yet. */
   'session.diff': { params: { id: SessionId }; result: { diff: string; untracked: string[]; repo: boolean } }
   /** A profile's UI extensions: their entry modules, and a hash that changes when any of its files do. */

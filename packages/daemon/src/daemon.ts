@@ -2,7 +2,7 @@
 // live subscription. Clients (the Electron app, the CLI, a remote app over ssh) speak the protocol in @mu/protocol.
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { link, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { link, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, hostname, platform } from 'node:os'
 import { join, resolve as resolvePath } from 'node:path'
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
@@ -121,6 +121,46 @@ export function titleOf(text: string): string {
   return `${cut.slice(0, cut.lastIndexOf(' ') > 40 ? cut.lastIndexOf(' ') : 72).replace(/[,;:]$/, '')}…`
 }
 
+/** `path` in `folder`, refusing anything that resolves outside it. */
+function inFolder(folder: string, path: string) {
+  const file = resolvePath(folder, path)
+  if (file !== folder && !file.startsWith(folder.endsWith('/') ? folder : `${folder}/`)) throw new RpcError('invalid', `${path} is outside ${folder}`)
+  return file
+}
+
+/** Folders a file search never enters: tools' and dependencies' own. */
+const UNSEARCHED = new Set(['node_modules', '.git', '.obsidian', '.trash', '.mu', 'dist', 'out', 'build'])
+
+/**
+ * A file in `root` by the name a link gives it, as Obsidian resolves [[links]]: a path if it is one (with or without
+ * `.md`), else the file of that name, a note's without its `.md`, the shortest path first. Relative to `root`.
+ */
+async function findFile(root: string, name: string): Promise<string | undefined> {
+  const wanted = name.trim().replace(/^\/+/, '').toLowerCase()
+  if (!wanted) return undefined
+  const given = name.trim().replace(/^\/+/, '')
+  for (const candidate of [given, `${given}.md`]) {
+    const file = (() => { try { return inFolder(root, candidate) } catch { return undefined } })()
+    if (file && await stat(file).then((s) => s.isFile(), () => false)) return candidate
+  }
+  const base = wanted.split('/').at(-1)!
+  let best: string | undefined
+  let seen = 0
+  const walk = async (dir: string, rel: string): Promise<void> => {
+    for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      if (++seen > 50_000) return
+      if (entry.name.startsWith('.') || UNSEARCHED.has(entry.name)) continue
+      const path = rel ? `${rel}/${entry.name}` : entry.name
+      if (entry.isDirectory()) await walk(join(dir, entry.name), path)
+      else {
+        const lower = entry.name.toLowerCase()
+        if ((lower === base || lower === `${base}.md`) && (!best || path.length < best.length)) best = path
+      }
+    }
+  }
+  await walk(root, '')
+  return best
+}
 export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
   const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')))
@@ -404,12 +444,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
 
   /** `path` inside `folder` (relative to it, or absolute within it); a path that leaves it is refused. */
-  const inFolder = (folder: string, path: string) => {
-    const file = resolvePath(folder, path)
-    if (file !== folder && !file.startsWith(folder.endsWith('/') ? folder : `${folder}/`)) throw new RpcError('invalid', `${path} is outside ${folder}`)
-    return file
-  }
-
   // ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
   const session = { session: true as const }
@@ -616,6 +650,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           if (info.size > 16 * 1024 * 1024) throw new RpcError('too_large', `${path} is larger than 16 MB`)
           return { path: file, content: await readFile(file, base64 ? 'base64' : 'utf8') }
         },
+        'file.find': async ({ id, name }: { id: string; name: string }) => ({ path: await findFile((await get(id)).meta.cwd, name) ?? null }),
         'session.diff': async ({ id }: { id: string }) => {
           const cwd = (await get(id)).meta.cwd
           const git = (args: string[]) => new Promise<string>((done, fail) => execFile('git', ['-C', cwd, ...args], { maxBuffer: 16 * 1024 * 1024 }, (error, out) => error ? fail(error) : done(out)))

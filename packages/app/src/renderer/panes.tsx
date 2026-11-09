@@ -3,15 +3,13 @@
 // the panes right, as tabs, with a divider to drag; narrow (a phone), tabs switch between the thread and each pane.
 // Built in: diff, editor, preview, artifact, thread. Extensions and profiles add kinds with mu.pane(kind, …).
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { EditorView, basicSetup } from 'codemirror'
-import { markdown } from '@codemirror/lang-markdown'
-import { keymap } from '@codemirror/view'
 import type { Pane, SessionInfo } from '@mu/protocol'
 import { Button } from '@mu/ui'
 import { machine as client } from './client.ts'
 import { paneKind, useRegistry, type PaneProps, type UiApi } from './extension.tsx'
 import { useAllSessions, useMachines } from './state.tsx'
 import { ThreadView } from './SessionView.tsx'
+import { FileEditor } from './file-editor.tsx'
 
 const WIDTH = 'mu.paneWidth'
 const narrowQuery = '(max-width: 760px)'
@@ -154,43 +152,11 @@ export function parseDiff(diff: string): DiffFile[] {
 const openPane = (machine: string, id: string, kind: string, params: Record<string, unknown>) =>
   window.mu.call(machine, 'pane.open', { id, kind, params })
 
-/** A file in the session's folder, to read and edit; ⌘S saves it. */
+/** A file in the session's folder, to read and edit (see FileEditor). */
 function EditorPane({ machine, session, pane }: PaneProps) {
   const { path } = params<{ path?: string }>(pane)
-  const host = useRef<HTMLDivElement>(null)
-  const view = useRef<EditorView>(undefined)
-  const [state, setState] = useState<{ dirty: boolean; error?: string; saved?: number }>({ dirty: false })
-  const dispatch = useRegistry().router.dispatch
-  useEffect(() => {
-    if (!path || !host.current) return
-    let live = true
-    const save = () => {
-      const content = view.current?.state.doc.toString() ?? ''
-      void dispatch('file.write', { id: session.id, path, content }, { machine: machine.id, source: 'editor' })
-        .then(() => setState({ dirty: false, saved: Date.now() }), (e: Error) => setState((s) => ({ ...s, error: e.message })))
-      return true
-    }
-    client(machine.id).call('file.read', { id: session.id, path }).then(({ content }) => {
-      if (!live || !host.current) return
-      view.current = new EditorView({
-        parent: host.current,
-        doc: content,
-        extensions: [
-          keymap.of([{ key: 'Mod-s', run: save, preventDefault: true }]),
-          basicSetup, EditorView.lineWrapping, ...(/\.(md|markdown)$/i.test(path) ? [markdown()] : []),
-          EditorView.updateListener.of((update) => { if (update.docChanged) setState((s) => s.dirty ? s : { dirty: true }) }),
-        ],
-      })
-    }, (e: Error) => setState({ dirty: false, error: e.message }))
-    return () => { live = false; view.current?.destroy(); view.current = undefined }
-  }, [machine.id, session.id, path])
   if (!path) return <div className="pane-empty">No file given.</div>
-  return (
-    <div className="editor-pane">
-      <div className="pane-bar"><code>{path}</code><span className="pane-bar__note">{state.error ?? (state.dirty ? 'Edited · ⌘S saves' : state.saved ? 'Saved' : '')}</span></div>
-      <div className="editor-pane__host" ref={host} />
-    </div>
-  )
+  return <FileEditor key={path} machine={machine} session={session} path={path} />
 }
 
 /** A web page: a local dev server, docs. */

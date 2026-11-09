@@ -301,6 +301,26 @@ describe('record and replay', () => {
     expect(changes.untracked).toContain('new.md')
     await close()
   })
+
+  it('finds a file by the name a link gives it, as Obsidian resolves [[links]]', async () => {
+    const { mkdir } = await import('node:fs/promises')
+    await mkdir(join(dir, 'Work/Old'), { recursive: true })
+    await mkdir(join(dir, 'node_modules/pkg'), { recursive: true })
+    await writeFile(join(dir, 'Work/Old/Plan.md'), 'old\n')
+    await writeFile(join(dir, 'Work/Plan.md'), 'plan\n')
+    await writeFile(join(dir, 'node_modules/pkg/Readme.md'), 'no\n')
+    await writeFile(join(dir, 'Work/diagram.png'), '')
+    const { peer, close } = await open()
+    const session = await peer.call<SessionInfo>('session.create', { cwd: dir })
+    const find = async (name: string) => (await peer.call<{ path: string | null }>('file.find', { id: session.id, name })).path
+    expect(await find('Plan')).toBe('Work/Plan.md')
+    expect(await find('plan')).toBe('Work/Plan.md')
+    expect(await find('Work/Old/Plan')).toBe('Work/Old/Plan.md')
+    expect(await find('diagram.png')).toBe('Work/diagram.png')
+    expect(await find('Readme')).toBeNull()
+    expect(await find('../../etc/passwd')).toBeNull()
+    await close()
+  })
 })
 
 
