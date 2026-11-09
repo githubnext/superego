@@ -394,11 +394,11 @@ code { font-family: var(--mu-mono); font-size: .92em; }
    neighbours don't clip it; drawn above what's in it (the composer, a pane's edge). Mouse clicks on buttons don't
    draw it; typing does. */
 .app__sidebar:has(:focus-visible) { outline: 3px solid var(--mu-text); outline-offset: -3px; }
-/* A thread alone (no panes) is the main area itself; with panes, each column is a region. */
-.panes__column::before, .app__main:not(:has(.panes))::after {
+/* Each column is a region. */
+.panes__column::before {
   content: ''; position: absolute; inset: 0; z-index: 6; pointer-events: none;
   border: 3px solid var(--mu-text); border-radius: inherit; opacity: 0; transition: opacity .12s;
 }
-.panes__column:has(:focus-visible)::before, .app__main:not(:has(.panes)):has(:focus-visible)::after { opacity: 1; }
+.panes__column:has(:focus-visible)::before { opacity: 1; }
 /* With cards, the title bar above them is part of their backdrop. */
 .app__main:has(> .panes:not(.panes--narrow)) { background: var(--mu-sidebar-bg); }

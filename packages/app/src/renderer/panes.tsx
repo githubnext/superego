@@ -1,10 +1,10 @@
 // Panes: views beside a thread. A thread keeps which are open and which has focus (pane.open, pane.focus, pane.close),
 // so they follow it to every client; the agent opens them too (open_pane). The thread and its panes are a row of
-// columns, scrolled as Dinky's (and niri's) scrolling layout is: a lone thread fills the width; with panes, each pane
-// is a column of its own width (a share of the row: its kind's to start with, then dragged at its left edge and kept)
-// and the thread takes what's left, never
-// less; past the edge the row scrolls, and the focused column scrolls just far enough to show whole. ⌃Tab moves the
-// focus along. On a phone each column is the screen's width, and a swipe moves between them.
+// columns (cards, with room around and between), scrolled as Dinky's (and niri's) scrolling layout is. Each column has
+// its own width, a share of the row: the thread's half to start, a pane's its kind's; the room between two columns
+// resizes the one on its left, as macOS does, and the last column takes what's left over. Past the edge the row
+// scrolls, and the focused column scrolls just far enough to show whole. ⌃Tab moves the focus along. On a phone each
+// column is the screen's width, and a swipe moves between them.
 // Built in: diff, editor, preview, artifact, thread. Extensions and profiles add kinds with mu.pane(kind, …).
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Pane, ThreadInfo } from '@mu/protocol'
@@ -57,7 +57,6 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   }, [focused, panes.length, rowWidth])
 
   const settled = useRef<ReturnType<typeof setTimeout>>(undefined)
-  if (!panes.length) return <>{main}</>
 
   const focus = (pane?: string) => { if (pane !== focused) void dispatch('pane.focus', { id: thread.id, ...(pane ? { pane } : {}) }, { machine: machine.id, source: 'panes' }) }
   const close = (pane: Pane) => void dispatch('pane.close', { id: thread.id, pane: pane.id }, { machine: machine.id, source: 'panes' })
@@ -68,19 +67,24 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
 
   // The room the cards share: the row less the gaps around and between them.
   const room = narrow ? rowWidth : Math.max(0, rowWidth - GAP * (panes.length + 2))
-  const shareOf = (pane: Pane) => shares[pane.id] ?? paneKind(registry, pane.kind, thread)?.width ?? DEFAULT_SHARE
-  const widthOf = (pane: Pane) => narrow ? rowWidth : Math.min(room, Math.max(MIN_COLUMN, Math.round(shareOf(pane) * room)))
-  const panesWidth = panes.reduce((sum, pane) => sum + widthOf(pane), 0)
-  // The thread takes what the panes leave, and never less than a pane's default.
-  const threadWidth = narrow ? rowWidth : Math.max(Math.round(DEFAULT_SHARE * room), MIN_COLUMN, room - panesWidth)
+  // The columns, left to right: the thread, then its panes, each by the key its width is kept under.
+  const columns = [{ key: 'thread', share: shares.thread ?? DEFAULT_SHARE },
+    ...panes.map((pane) => ({ key: pane.id, share: shares[pane.id] ?? paneKind(registry, pane.kind, thread)?.width ?? DEFAULT_SHARE }))]
+  const widths = columns.map((c) => narrow ? rowWidth : Math.min(room, Math.max(MIN_COLUMN, Math.round(c.share * room))))
+  // The last column takes the room the others leave.
+  const used = widths.reduce((sum, w) => sum + w, 0)
+  if (!narrow && used < room) widths[widths.length - 1]! += room - used
+  const threadWidth = widths[0]!
+  const widthOf = (pane: Pane) => widths[panes.indexOf(pane) + 1]!
 
-  // A pane's left edge resizes that pane: its share of the row, kept for next time.
-  const drag = (pane: Pane) => (event: React.PointerEvent) => {
+  // The room between two columns resizes the one on its left (`index`): its share of the row, kept for next time.
+  const drag = (index: number) => (event: React.PointerEvent) => {
     const startX = event.clientX
-    const startShare = shareOf(pane)
+    const start = widths[index]!
+    const key = columns[index]!.key
     const move = (e: PointerEvent) => {
-      const next = Math.min(0.85, Math.max(0.15, startShare + (startX - e.clientX) / Math.max(1, room)))
-      setShares((all) => ({ ...all, [pane.id]: next }))
+      const next = Math.min(0.85, Math.max(0.15, (start + e.clientX - startX) / Math.max(1, room)))
+      setShares((all) => ({ ...all, [key]: next }))
     }
     const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
     window.addEventListener('pointermove', move)
@@ -105,10 +109,10 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
       {/* Focus moving into a column (a click, a key) makes it the focused one: the app and the keyboard agree. */}
       <div data-column="thread" tabIndex={-1} className={`panes__column panes__column--thread ${focused === undefined ? 'is-focused' : ''}`}
         style={{ width: threadWidth }} onPointerDownCapture={() => focus(undefined)} onFocusCapture={() => focus(undefined)}>{main}</div>
-      {panes.map((pane) => (
+      {panes.map((pane, index) => (
         <Fragment key={pane.id}>
-        {/* The room left of a pane is its handle: drag it to make the pane wider or narrower. */}
-        {!narrow && <div className="panes__gap" onPointerDown={drag(pane)} role="separator" aria-orientation="vertical" aria-label={`${title(pane)} width`} />}
+        {/* The room between two columns is the left one's handle: drag it to make that one wider or narrower. */}
+        {!narrow && <div className="panes__gap" onPointerDown={drag(index)} role="separator" aria-orientation="vertical" aria-label={index === 0 ? 'Thread width' : `${title(panes[index - 1]!)} width`} />}
         <div data-column={pane.id} tabIndex={-1} className={`panes__column ${pane.id === focused ? 'is-focused' : ''}`}
           style={{ width: widthOf(pane) }} onPointerDownCapture={() => focus(pane.id)} onFocusCapture={() => focus(pane.id)}>
           <div className={`panes__tab ${pane.id === focused ? 'is-active' : ''}`}>
