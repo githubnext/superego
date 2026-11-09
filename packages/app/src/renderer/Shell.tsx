@@ -2,17 +2,18 @@
 // the restart notice, Settings, and the app-wide reactions (fonts, ⌘, , threads shown from the command line or a
 // notification, marking finished threads seen).
 import { useEffect, useRef, useState } from 'react'
-import { Button, Select } from '@mu/ui'
-import { machine as client, useSettings } from './client.ts'
+import { Button, IconButton, Select } from '@mu/ui'
+import { machine as client, useAppSetting, useSettings } from './client.ts'
 import { Slot, useRegistry } from './extension.tsx'
 import { ServiceNotice } from './ServiceNotice.tsx'
 import { ThreadView } from './ThreadView.tsx'
 import { SettingsView } from './SettingsView.tsx'
 import { Palette } from './Palette.tsx'
+import { Navigator } from './Navigator.tsx'
 import { ActionLog, runsBare } from './actions.tsx'
 import { NewThreadDialog } from './NewThread.tsx'
 import { bound, KEYMAP, shortcutOf, type Keymap } from './keys.ts'
-import { useAllThreads, useMachines, useNewThreadDialog, useSelection, useSettingsDialog, useShell, type Selection } from './state.tsx'
+import { useAllThreads, useMachines, useNewThreadDialog, useSelection, useSessions, useSettingsDialog, useShell, useSidebar, type Selection } from './state.tsx'
 
 /** Dispatch an action from this window: `dispatch('threads.rail')`, `dispatch('thread.select', { machine, thread })`. */
 export function useDispatch() {
@@ -32,9 +33,16 @@ function useNarrow() {
   return narrow
 }
 
+/** App setting: whether ⌘. looks for the next unread thread everywhere, or only in the session you're in. */
+export const UNREAD = 'app.unread'
+
 export function Shell() {
   const registry = useRegistry()
   const [palette, setPalette] = useState(false)
+  const [navigator, setNavigator] = useState(false)
+  const sidebar = useSidebar()
+  const { sessions, lastThread } = useSessions()
+  const [unreadScope] = useAppSetting<'all' | 'session'>(UNREAD)
   const [log, setLog] = useState(false)
   const machines = useMachines()
   const { selection, select, machine, thread } = useSelection()
@@ -44,11 +52,19 @@ export function Shell() {
   const hasSidebar = registry.slots.sidebar.length > 0
   const allThreads = useAllThreads()
   const { newThread: openNewThread } = useShell()
+  // A phone (or a narrow window): the sidebar becomes a drawer over the thread, opened from a bar at the top.
+  const narrow = useNarrow()
+  const [drawer, setDrawer] = useState(false)
+  useEffect(() => { setDrawer(false) }, [selection?.machine, selection?.thread, narrow])
   // Actions read the shell as it is when they run.
   registry.router.setContext({
     app: registry.app, machines, selection, select, openSettings, newThread: openNewThread,
-    togglePalette: () => setPalette((open) => !open), showLog: () => setLog(true),
+    togglePalette: () => { setNavigator(false); setPalette((open) => !open) },
+    toggleNavigator: () => { setPalette(false); setNavigator((open) => !open) },
+    showLog: () => setLog(true),
     threadOf: (s) => allThreads[s.machine]?.find((x) => x.id === s.thread),
+    sessions, lastThread, unreadScope: unreadScope ?? 'all',
+    toggleSidebar: () => narrow ? setDrawer((open) => !open) : sidebar.toggle(),
   })
   useAppEffects()
 
@@ -58,16 +74,18 @@ export function Shell() {
     void registry.router.dispatch('thread.seen', { id: selection.thread }, { machine: selection.machine, source: 'auto' }).catch(() => {})
   }, [selection?.machine, selection?.thread, thread?.status.state])
 
-  // A phone (or a narrow window): the sidebar becomes a drawer over the thread, opened from a bar at the top.
-  const narrow = useNarrow()
-  const [drawer, setDrawer] = useState(false)
-  useEffect(() => { setDrawer(false) }, [selection?.machine, selection?.thread, narrow])
 
   const actions = <><ServiceNotice /><Button onClick={openSettings}>Settings</Button></>
   return (
-    <div className={`app ${hasSidebar ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''}`}>
+    <div className={`app ${hasSidebar && sidebar.open ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.mu.web ? 'is-web' : ''}`}>
       {narrow && hasSidebar && drawer && <div className="app__scrim" onClick={() => setDrawer(false)} />}
-      {hasSidebar && (!narrow || drawer) && (
+      {/* One place, open or closed: right of the window's buttons. */}
+      {hasSidebar && !narrow && (
+        <IconButton label={sidebar.open ? 'Hide sidebar' : 'Show sidebar'} className="app__sidebar-toggle" onClick={() => sidebar.toggle()}>
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M6 3v10" stroke="currentColor" strokeWidth="1.3" /></svg>
+        </IconButton>
+      )}
+      {hasSidebar && (narrow ? drawer : sidebar.open) && (
         // In the drawer, picking a thread (even the open one) closes it.
         <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.mu-list-item')) setDrawer(false) } : undefined}>
           <div className="app__drag" />
@@ -94,6 +112,7 @@ export function Shell() {
       )}
       {settings.open && <SettingsView machines={machines} onClose={settings.close} />}
       {palette && <Palette onClose={() => setPalette(false)} />}
+      {navigator && <Navigator onClose={() => setNavigator(false)} />}
       {log && <ActionLog router={registry.router.router} onClose={() => setLog(false)} />}
       {newThread.start && <NewThreadDialog start={newThread.start} onClose={newThread.close} />}
     </div>

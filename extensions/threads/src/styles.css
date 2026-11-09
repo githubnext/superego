@@ -1,10 +1,14 @@
 .threads { display: flex; flex-direction: column; }
 .threads__head { display: flex; justify-content: space-between; align-items: center; padding: 0 10px var(--mu-space-1); font-size: var(--mu-text-xs); font-weight: 600; color: var(--mu-muted); }
 .threads__actions { display: flex; align-items: center; gap: 6px; }
-.threads-group .mu-panel__header { padding-top: var(--mu-space-3); }
-.threads-machine.is-stale .mu-list-item, .mu-list-item.is-stale { color: var(--mu-muted); }
-.threads-machine__title { display: inline-flex; gap: 6px; align-items: baseline; }
-.threads-machine__title em { font-style: normal; opacity: .7; }
+.threads__empty { padding: var(--mu-space-2) 10px; font-size: var(--mu-text-sm); color: var(--mu-muted); }
+.threads-session { margin-top: var(--mu-space-3); }
+.threads-session__head { display: flex; align-items: center; gap: 4px; padding: 0 4px 2px 10px; min-height: 26px; }
+.threads-session__name { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; border: 0; background: none; padding: 0; font: inherit; font-size: var(--mu-text-sm); font-weight: 600; color: var(--mu-text); text-align: left; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.threads-session__name em { font-style: normal; font-weight: 400; color: var(--mu-muted); overflow: hidden; text-overflow: ellipsis; }
+.threads-session .threads__new { opacity: 0; transition: opacity .1s; }
+.threads-session:hover .threads__new, .threads-session .threads__new:focus-visible { opacity: 1; }
+.threads-session.is-stale .mu-list-item, .threads-session.is-stale .threads-session__name { color: var(--mu-muted); }
 
 
 .threads-rail__tipnote { opacity: .65; margin-left: 8px; }

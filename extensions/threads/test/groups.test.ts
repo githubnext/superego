@@ -1,32 +1,38 @@
-import { describe, expect, it } from 'vitest'
+import { expect, it } from 'vitest'
 import type { MachineEntry } from '@mu/app/ui'
 import type { ThreadInfo, Status } from '@mu/protocol'
-import { ago, groupThreads } from '../src/groups.ts'
+import { groupSessions } from '../../../packages/app/src/renderer/sessions.ts'
+import { ago, freeze } from '../src/groups.ts'
 
 const machine = (id: string, state: MachineEntry['state'] = 'connected'): MachineEntry => ({ id, label: id === 'local' ? 'This computer' : 'Build box', state })
-const thread = (id: string, state: Status['state'], createdAt: number, activeAt: number): ThreadInfo => ({ id, title: id, cwd: '/', createdAt, activeAt, session: { root: '/', name: '/' }, status: { state } })
+const thread = (id: string, root: string, state: Status['state'], createdAt: number, activeAt: number): ThreadInfo =>
+  ({ id, title: id, cwd: `${root}/x`, createdAt, activeAt, session: { root, name: root.split('/').at(-1)! }, status: { state } })
 const machines = [machine('local'), machine('box', 'disconnected')]
 const threads = {
-  local: [thread('old-busy', 'working', 1, 50), thread('new-done', 'done', 30, 31), thread('mid-asks', 'blocked', 20, 40)],
-  box: [thread('far', 'idle', 10, 10)],
+  local: [thread('old-busy', '/code/mu', 'working', 1, 50), thread('new-done', '/code/site', 'done', 30, 31), thread('mid-asks', '/code/mu', 'blocked', 20, 40)],
+  box: [thread('far', '/code/mu', 'idle', 10, 10)],
 }
-const ids = (groups: ReturnType<typeof groupThreads>) => groups.map((g) => [g.title, g.note, g.rows.map((r) => r.thread.id)])
+const shape = (sessions: ReturnType<typeof groupSessions>) => sessions.map((s) => [s.name, s.machine.id, s.threads.map((t) => t.id)])
 
-describe('groupThreads', () => {
-  it('newest first, by machine, noting offline machines', () => {
-    expect(ids(groupThreads(machines, threads, 'created'))).toEqual([
-      ['This computer', undefined, ['new-done', 'mid-asks', 'old-busy']],
-      ['Build box', 'offline', ['far']],
-    ])
-  })
-  it('recently active first, by machine', () => {
-    expect(ids(groupThreads(machines, threads, 'recent'))[0]).toEqual(['This computer', undefined, ['old-busy', 'mid-asks', 'new-done']])
-  })
-  it('needs you first, across machines, leaving out empty groups', () => {
-    expect(ids(groupThreads(machines, threads, 'status'))).toEqual([
-      ['Needs you', undefined, ['mid-asks']], ['Working', undefined, ['old-busy']], ['Done', undefined, ['new-done']], ['Idle', undefined, ['far']],
-    ])
-  })
+it('groups threads into sessions: a project on a machine, the machine a fact about it', () => {
+  expect(shape(groupSessions(machines, threads, 'recent'))).toEqual([
+    ['mu', 'local', ['old-busy', 'mid-asks']], ['site', 'local', ['new-done']], ['mu', 'box', ['far']],
+  ])
+  expect(shape(groupSessions(machines, threads, 'created'))).toEqual([
+    ['site', 'local', ['new-done']], ['mu', 'local', ['mid-asks', 'old-busy']], ['mu', 'box', ['far']],
+  ])
+  const byStatus = groupSessions(machines, threads, 'status')
+  expect(shape(byStatus)[0]).toEqual(['mu', 'local', ['mid-asks', 'old-busy']])
+  expect(byStatus[0]!.status.state).toBe('blocked')
+})
+
+it('holds the order still while the pointer is over it, taking in what changed', () => {
+  const before = groupSessions(machines, threads, 'recent')
+  const later = { ...threads, local: [...threads.local, thread('newest', '/code/new', 'working', 60, 60)].map((t) => t.id === 'mid-asks' ? { ...t, activeAt: 99 } : t) }
+  const held = freeze(before, groupSessions(machines, later, 'recent'))
+  expect(shape(held)).toEqual([
+    ['mu', 'local', ['old-busy', 'mid-asks']], ['site', 'local', ['new-done']], ['mu', 'box', ['far']], ['new', 'local', ['newest']],
+  ])
 })
 
 it('says how long ago briefly', () => {

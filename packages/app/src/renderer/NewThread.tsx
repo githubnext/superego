@@ -31,6 +31,8 @@ export function NewThreadDialog({ start, onClose }: { start: NewThreadStart; onC
   const [profiles, setProfiles] = useState<ProfileInfo[]>([])
   const [profile, setProfile] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /** In a repository: a worktree of its own (the default), or the checkout itself. */
+  const [inPlace, setInPlace] = useState(false)
   const promptRef = useRef<HTMLTextAreaElement>(null)
 
   // Each machine has its own models and default; what was picked on another doesn't carry over.
@@ -55,10 +57,10 @@ export function NewThreadDialog({ start, onClose }: { start: NewThreadStart; onC
   const defaultProfile = profiles.find((p) => p.name === 'default')
   const picked = profiles.find((p) => p.name === (profile ?? 'default'))
 
-  /** Folders threads on this machine worked in, most recent first. */
+  /** This machine's sessions (projects threads worked in), most recent first. */
   const recent = useMemo(() => {
     const list = (threads[machine?.id ?? ''] ?? []).slice().sort((a, b) => (b.activeAt ?? b.createdAt) - (a.activeAt ?? a.createdAt))
-    return [...new Set(list.map((s) => s.cwd))].slice(0, 6)
+    return [...new Set(list.map((t) => t.session?.root ?? t.cwd))].slice(0, 6)
   }, [threads, machine?.id])
 
   const chosen = catalog?.models.find((m) => m.value === (model ?? catalog.default.model))
@@ -75,8 +77,9 @@ export function NewThreadDialog({ start, onClose }: { start: NewThreadStart; onC
         ...(profile ? { profile } : {}),
         ...(cwd.trim() ? { cwd: cwd.trim() } : {}), ...(title.trim() ? { title: title.trim() } : {}),
         ...(model ? { model } : {}), ...(thinking && levels.length ? { thinking } : {}), ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
+        ...(inPlace ? { worktree: false } : {}),
       }, { machine: machine.id, source: 'new thread' }) as ThreadInfo
-      localStorage.setItem(LAST, JSON.stringify({ machine: machine.id, cwd: { ...last.cwd, [machine.id]: created.cwd } } satisfies Last))
+      localStorage.setItem(LAST, JSON.stringify({ machine: machine.id, cwd: { ...last.cwd, [machine.id]: created.session?.root ?? created.cwd } } satisfies Last))
       onClose()
       select({ machine: machine.id, thread: created.id })
     } catch (e) {
@@ -137,6 +140,11 @@ export function NewThreadDialog({ start, onClose }: { start: NewThreadStart; onC
               </label>
             )}
           </div>
+
+          <label className="new-thread__check">
+            <input type="checkbox" checked={inPlace} onChange={(e) => setInPlace(e.target.checked)} />
+            <span>Work in the checkout itself <em>(in a git repository, a thread gets a worktree of its own unless this is on)</em></span>
+          </label>
 
           <label className="new-thread__field">
             <span>Name</span>

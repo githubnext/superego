@@ -7,6 +7,7 @@ import type { MachineEntry } from '../shared.ts'
 import { has, useMachineList, useThreads as useThreadsWatch } from './client.ts'
 import { useRegistry } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
+import { sessionKey, useSessionList, type Session } from './sessions.ts'
 
 export type Selection = { machine: string; thread: string }
 
@@ -22,6 +23,12 @@ type ShellState = {
   openSettings(open?: boolean): void
   newThread: NewThreadStart | undefined
   openNewThread(start?: NewThreadStart | false): void
+  /** Every session, in the sidebar's order. */
+  sessions: Session[]
+  /** The thread last shown in a session, by its key. */
+  lastThread: Record<string, string>
+  sidebarOpen: boolean
+  toggleSidebar(open?: boolean): void
 }
 
 const Context = createContext<ShellState | undefined>(undefined)
@@ -45,6 +52,16 @@ export function useSelection() {
   const thread = selection && threads[selection.machine]?.find((s) => s.id === selection.thread)
   return { selection, select, machine, thread }
 }
+/** Every session, in the sidebar's order, and the thread last shown in each. */
+export function useSessions() {
+  const { sessions, lastThread } = useShellState()
+  return { sessions, lastThread }
+}
+/** Whether the sidebar is open, and a way to open or close it. */
+export function useSidebar() {
+  const { sidebarOpen, toggleSidebar } = useShellState()
+  return { open: sidebarOpen, toggle: toggleSidebar }
+}
 /** The shell's own actions. */
 export function useShell() {
   const { openSettings, openNewThread } = useShellState()
@@ -62,13 +79,23 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [selection, setSelection] = useLocalState<Selection | undefined>('selection', undefined)
   const [settingsOpen, setSettingsOpen] = useLocalState('settings.open', false)
   const [newThread, setNewThread] = useState<NewThreadStart>()
+  const [sidebarOpen, setSidebarOpen] = useLocalState('sidebar.open', true)
   const onThreads = useCallback((machine: string, list: ThreadInfo[] | undefined) => setThreads((all) => all[machine] === list ? all : { ...all, [machine]: list }), [])
+  const sessions = useSessionList(machines, threads)
+  // Each session remembers the thread last shown in it: going back to the session goes back to that thread.
+  const [lastThread, setLastThread] = useLocalState<Record<string, string>>('sessions.last', {})
+  const shown = selection && threads[selection.machine]?.find((t) => t.id === selection.thread)
+  const shownKey = shown && sessionKey(selection!.machine, shown.session?.root ?? shown.cwd)
+  useEffect(() => {
+    if (shownKey && lastThread[shownKey] !== shown!.id) setLastThread((last) => ({ ...last, [shownKey]: shown!.id }))
+  }, [shownKey, shown?.id])
   const value = useMemo<ShellState>(() => ({
-    machines, threads, selection, settingsOpen, newThread,
+    machines, threads, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen,
     select: (next) => { setSettingsOpen(false); setNewThread(undefined); setSelection(next) },
     openSettings: (open = true) => setSettingsOpen(open),
     openNewThread: (start = {}) => setNewThread(start === false ? undefined : start),
-  }), [machines, threads, selection, settingsOpen, newThread])
+    toggleSidebar: (open) => setSidebarOpen((was) => open ?? !was),
+  }), [machines, threads, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} />)}

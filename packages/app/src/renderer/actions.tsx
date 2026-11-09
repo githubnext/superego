@@ -7,6 +7,7 @@ import { Dialog } from '@mu/ui'
 import type { ThreadInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
+import { unread, type Session } from './sessions.ts'
 
 /** What a window action gets besides its parameters. */
 export type WindowContext = {
@@ -20,6 +21,13 @@ export type WindowContext = {
   showLog(): void
   /** The thread a selection points at, as the window has it. */
   threadOf(selection: Selection): ThreadInfo | undefined
+  /** Every session, in the sidebar's order, and the thread last shown in each (by session key). */
+  sessions: Session[]
+  lastThread: Record<string, string>
+  toggleSidebar(): void
+  toggleNavigator(): void
+  /** ⌘. : the next unread thread anywhere, or only in the selected thread's session. */
+  unreadScope: 'all' | 'session'
   dispatch: Dispatch
 }
 
@@ -82,7 +90,16 @@ export type WindowRouter = ReturnType<typeof createWindowRouter>
 
 /** The shell's own actions. Extensions add theirs with `mu.action`. */
 export const coreActions: WindowAction[] = [
-  defineAction({ id: 'app.palette', title: 'Command palette', runs: 'window', keys: 'mod+k', run: (_p, c: WindowContext) => c.togglePalette() }),
+  defineAction({ id: 'app.palette', title: 'Commands', runs: 'window', keys: 'mod+k', run: (_p, c: WindowContext) => c.togglePalette() }),
+  defineAction({ id: 'app.navigator', title: 'Go to a session, thread or pane', runs: 'window', keys: 'mod+l', run: (_p, c: WindowContext) => c.toggleNavigator() }),
+  defineAction({ id: 'app.sidebar', title: 'Toggle sidebar', runs: 'window', keys: 'mod+/', run: (_p, c: WindowContext) => c.toggleSidebar() }),
+  // Between sessions: the thread last shown in each.
+  defineAction({ id: 'session.next', title: 'Next session', runs: 'window', keys: 'mod+shift+]', run: (_p, c: WindowContext) => stepSession(c, 1) }),
+  defineAction({ id: 'session.previous', title: 'Previous session', runs: 'window', keys: 'mod+shift+[', run: (_p, c: WindowContext) => stepSession(c, -1) }),
+  defineAction({ id: 'thread.unread', title: 'Next unread thread', runs: 'window', keys: 'mod+.', run: (_p, c: WindowContext) => nextUnread(c) }),
+  // Within a thread: the thread itself, then each pane beside it.
+  defineAction({ id: 'pane.next', title: 'Next pane', runs: 'window', keys: 'ctrl+tab', run: (_p, c: WindowContext) => stepPane(c, 1) }),
+  defineAction({ id: 'pane.previous', title: 'Previous pane', runs: 'window', keys: 'ctrl+shift+tab', run: (_p, c: WindowContext) => stepPane(c, -1) }),
   defineAction({ id: 'app.settings', title: 'Settings', runs: 'window', keys: 'mod+,', run: (_p, c: WindowContext) => c.openSettings() }),
   defineAction({ id: 'app.log', title: 'Show action log', runs: 'window', run: (_p, c: WindowContext) => c.showLog() }),
   // Panes of the selected thread.
@@ -108,6 +125,48 @@ export const coreActions: WindowAction[] = [
     run: ({ machine, thread }, c: WindowContext) => c.select({ machine, thread }),
   }),
 ]
+
+/** The session the selected thread is in, and where it is in the order. */
+function current(c: WindowContext) {
+  const index = c.sessions.findIndex((s) => s.machine.id === c.selection?.machine && s.threads.some((t) => t.id === c.selection?.thread))
+  return { index, session: c.sessions[index] }
+}
+
+/** Show a session: the thread last shown in it, else its first. */
+export function showSession(c: Pick<WindowContext, 'select' | 'lastThread'>, session: Session) {
+  const thread = session.threads.find((t) => t.id === c.lastThread[session.key]) ?? session.threads[0]
+  if (thread) c.select({ machine: session.machine.id, thread: thread.id })
+}
+
+function stepSession(c: WindowContext, by: number) {
+  if (!c.sessions.length) return
+  const { index } = current(c)
+  const next = c.sessions[index < 0 ? (by > 0 ? 0 : c.sessions.length - 1) : (index + by + c.sessions.length) % c.sessions.length]
+  if (next) showSession(c, next)
+}
+
+/** The next thread after this one, in order, with something unread; around to the start, but never this one. */
+function nextUnread(c: WindowContext) {
+  const { session } = current(c)
+  const scope = c.unreadScope === 'session' && session ? [session] : c.sessions
+  const order = scope.flatMap((s) => s.threads.map((thread) => ({ machine: s.machine.id, thread })))
+  const at = order.findIndex((o) => o.machine === c.selection?.machine && o.thread.id === c.selection.thread)
+  for (let step = 1; step <= order.length; step++) {
+    const next = order[(at + step + order.length) % order.length]!
+    if (next.thread.id === c.selection?.thread && next.machine === c.selection.machine) continue
+    if (unread(next.thread)) return c.select({ machine: next.machine, thread: next.thread.id })
+  }
+}
+
+/** The thread, then its panes, then around: the next one brought forward. */
+async function stepPane(c: WindowContext, by: number) {
+  const thread = c.selection && c.threadOf(c.selection)
+  if (!c.selection || !thread?.panes?.length) return
+  const columns = [undefined, ...thread.panes.map((p) => p.id)]
+  const at = Math.max(0, columns.indexOf(thread.pane))
+  const next = columns[(at + by + columns.length) % columns.length]
+  await c.dispatch('pane.focus', { id: thread.id, ...(next ? { pane: next } : {}) }, { machine: c.selection.machine, source: 'keys' })
+}
 
 /** Whether an action can run with no parameters (after the selection fills in a thread's): keys and the palette. */
 export function runsBare(action: ActionInfo): boolean {

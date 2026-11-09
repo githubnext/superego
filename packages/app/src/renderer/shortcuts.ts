@@ -19,11 +19,19 @@ export function normalize(keys: string): string {
   return [...MODIFIERS.filter((m) => set.has(m)), key === ' ' ? 'space' : key].join('+')
 }
 
+/** Punctuation by the key pressed, not the character it typed: ⌘⇧] is `mod+shift+]`, not `mod+shift+}`. */
+const PUNCTUATION: Record<string, string> = {
+  BracketLeft: '[', BracketRight: ']', Comma: ',', Period: '.', Slash: '/', Backslash: '\\', Semicolon: ';', Quote: "'",
+  Minus: '-', Equal: '=', Backquote: '`',
+}
+
 /** The shortcut a key press is, or undefined for a bare modifier. */
-export function shortcutOf(event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>): string | undefined {
+export function shortcutOf(event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'> & { code?: string }): string | undefined {
   if (['meta', 'control', 'alt', 'shift', 'os', 'capslock', 'fn', 'dead'].includes(event.key.toLowerCase())) return undefined
   const parts = [event.metaKey && 'meta', event.ctrlKey && 'ctrl', event.altKey && 'alt', event.shiftKey && 'shift'].filter(Boolean)
-  return normalize([...parts, event.key].join('+'))
+  const modified = event.metaKey || event.ctrlKey || event.altKey
+  const key = (modified && event.code && PUNCTUATION[event.code]) || event.key
+  return normalize([...parts, key].join('+'))
 }
 
 /** Whether a shortcut leaves plain typing alone: it has a modifier other than shift, or is a function or navigation key. */

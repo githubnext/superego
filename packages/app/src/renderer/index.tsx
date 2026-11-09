@@ -8,7 +8,7 @@ import './app.css'
 import type { AppConfig } from '@mu/protocol'
 import { createRegistry, RegistryProvider, type UiExtension } from './extension.tsx'
 import { Providers, WebAccess } from './SettingsView.tsx'
-import { Shell } from './Shell.tsx'
+import { Shell, UNREAD } from './Shell.tsx'
 import { ShellStateProvider } from './state.tsx'
 import { coreActions } from './actions.tsx'
 import { webBridge } from './web-bridge.ts'
@@ -21,6 +21,12 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
   const registry = createRegistry(app, extensions, (core) => {
     core.settings('providers', Providers)
     core.settings('web', WebAccess)
+    core.appSettings({
+      id: 'navigation', title: 'Navigation', order: 60,
+      settings: [{ key: UNREAD, title: 'Next unread thread (⌘.)', default: 'all', type: 'choice', options: [
+        { value: 'all', label: 'In every session' }, { value: 'session', label: 'In the current session' },
+      ] }],
+    })
     registerBuiltInPanes(core)
     for (const action of coreActions) core.action(action)
   })
@@ -46,7 +52,9 @@ export type { Dispatch } from './actions.tsx'
 export { keyLabel, useActions, useKeymap, useShortcut } from './keys.ts'
 export { runsBare, type WindowAction, type WindowContext } from './actions.tsx'
 export { defineAction } from '@mu/protocol'
-export { useAllThreads, useMachines, useSelection, useThreads, useShell, type Selection } from './state.tsx'
+export { useAllThreads, useMachines, useSelection, useSessions, useSidebar, useThreads, useShell, type Selection } from './state.tsx'
+export { groupSessions, sessionKey, SORT, unread, type Session, type Sort } from './sessions.ts'
+export { showSession } from './actions.tsx'
 export { useComposerClaim, type ComposerClaim } from './ThreadView.tsx'
 export { Markdown } from './Markdown.tsx'
 export { useLocalState } from './local-state.ts'

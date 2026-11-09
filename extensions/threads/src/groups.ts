@@ -1,8 +1,6 @@
-// The sidebar's order, without React: how threads group and sort, and how times read.
-import type { MachineEntry } from '@mu/app/ui'
-import type { ThreadInfo, Status } from '@mu/protocol'
-
-export type Sort = 'created' | 'recent' | 'status'
+// The sidebar's order, without React: how times read, and how the list holds still under the pointer.
+import type { Session } from '@mu/app/ui'
+import type { ThreadInfo } from '@mu/protocol'
 
 /** When a thread last did something; a daemon from before last-activity was reported gives its creation. */
 export const activity = (thread: ThreadInfo) => thread.activeAt ?? thread.createdAt
@@ -19,27 +17,19 @@ export function ago(at: number, now = Date.now()): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-export type Row = { machine: MachineEntry; thread: ThreadInfo }
-export type Group = { id: string; title: string; note?: string; machine?: MachineEntry; rows: Row[] }
-
-const STATUS_GROUPS: { id: string; title: string; states: Status['state'][] }[] = [
-  { id: 'needs', title: 'Needs you', states: ['blocked', 'error'] },
-  { id: 'working', title: 'Working', states: ['working'] },
-  { id: 'done', title: 'Done', states: ['done'] },
-  { id: 'idle', title: 'Idle', states: ['idle'] },
-]
-
-/** The sidebar's groups for a sort: by machine (newest or most recently active first), or by status across machines. */
-export function groupThreads(machines: MachineEntry[], threads: Record<string, ThreadInfo[] | undefined>, sort: Sort): Group[] {
-  const rows = (m: MachineEntry) => (threads[m.id] ?? []).map((thread) => ({ machine: m, thread }))
-  if (sort === 'status') {
-    const all = machines.flatMap(rows).sort((a, b) => activity(b.thread) - activity(a.thread))
-    return STATUS_GROUPS.map((g) => ({ id: g.id, title: g.title, rows: all.filter((r) => g.states.includes(r.thread.status.state)) })).filter((g) => g.rows.length)
-  }
-  return machines.map((m) => ({
-    id: m.id, title: m.label, machine: m,
-    ...(m.state !== 'connected' ? { note: m.state === 'connecting' ? 'connecting' : 'offline' } : {}),
-    rows: rows(m).sort((a, b) => sort === 'recent' ? activity(b.thread) - activity(a.thread) : b.thread.createdAt - a.thread.createdAt),
-  }))
+/**
+ * The sessions in the order they had (`frozen`), with what each holds now: a thread changing state doesn't move under
+ * the pointer. Threads and sessions that appeared since go at the end; ones that went, go.
+ */
+export function freeze(frozen: Session[], live: Session[]): Session[] {
+  const now = new Map(live.map((s) => [s.key, s]))
+  const kept = frozen.flatMap((old) => {
+    const session = now.get(old.key)
+    if (!session) return []
+    now.delete(old.key)
+    const threads = new Map(session.threads.map((t) => [t.id, t]))
+    const ordered = old.threads.flatMap((t) => threads.has(t.id) ? [threads.get(t.id)!] : [])
+    return [{ ...session, threads: [...ordered, ...session.threads.filter((t) => !old.threads.some((o) => o.id === t.id))] }]
+  })
+  return [...kept, ...now.values()]
 }
-

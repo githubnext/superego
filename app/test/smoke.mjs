@@ -56,7 +56,7 @@ const shot = async (name) => {
 }
 const run = (js, gesture = false) => BrowserWindow.getAllWindows()[0].webContents.executeJavaScript(js, gesture)
 
-await until(`document.querySelector('.threads-machine') && !document.querySelector('.threads-machine.is-stale')`, 'local machine connected')
+await until(`Boolean(document.querySelector('.threads.is-ready'))`, 'local machine connected')
 
 if (phase === 'first') {
   const id = await run(`window.mu.call('local', 'thread.create', { title: '' }).then((s) => s.id)`)
@@ -96,27 +96,31 @@ if (phase === 'first') {
   await until(`[...document.querySelectorAll('.mu-menu .mu-menu__item')].some((i) => i.textContent.includes('Needs you first'))`, 'sidebar menu open')
   await shot('menu')
   await run(`[...document.querySelectorAll('.mu-menu .mu-menu__item')].find((i) => i.textContent.includes('Needs you first')).click()`)
-  await until(`[...document.querySelectorAll('.threads-group .mu-panel__title')].some((t) => t.textContent.startsWith('Done'))`, 'grouped by status')
+  await until(`window.mu.call('app', 'settings.watch', {}).then((r) => r.value.values['threads.sort'] === 'status')`, 'sorted by status')
   await key('\\')
   await until(`Boolean(document.querySelector('.threads-rail.is-compact'))`, 'rail')
   await key('\\')
-  await until(`Boolean(document.querySelector('.threads-machine')) || Boolean(document.querySelector('.threads-group'))`, 'list again')
+  await until(`Boolean(document.querySelector('.threads-session'))`, 'list again')
   await key('i')
   await until(`document.querySelector('.threads-details')?.textContent.includes('Machine')`, 'details pane')
   await key('i')
   await until(`!document.querySelector('.threads-details')`, 'details closed')
   await run(`window.mu.call('app', 'app.settings.set', { key: 'threads.sort', value: 'created' })`)
-  // ⌘K: find a thread by name and open it.
+  // ⌘K is commands only; ⌘L finds a thread by name and opens it.
   await key('k')
   await until(`Boolean(document.querySelector('.palette__input'))`, 'palette')
+  await until(`[...document.querySelectorAll('.palette__list li')].every((li) => !li.textContent.includes('hello from smoke'))`, 'no threads in the palette')
+  await key('Escape', [])
+  await key('l')
+  await until(`Boolean(document.querySelector('.navigator .palette__input'))`, 'navigator')
   await run(`(() => {
     const input = document.querySelector('.palette__input')
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'hello')
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })()`)
-  await until(`document.querySelector('.palette__list li.is-active')?.textContent.includes('hello from smoke')`, 'palette finds the thread')
+  await until(`document.querySelector('.palette__list li.is-active')?.textContent.includes('hello from smoke')`, 'navigator finds the thread')
   await key('Enter', [])
-  await until(`!document.querySelector('.palette__input') && document.querySelector('.thread__title')?.textContent === 'hello from smoke'`, 'palette opened it')
+  await until(`!document.querySelector('.palette__input') && document.querySelector('.thread__title')?.textContent === 'hello from smoke'`, 'navigator opened it')
   // Every key and palette pick went through the router; the action log shows them, with where they came from.
   await key('k')
   await until(`Boolean(document.querySelector('.palette__input'))`, 'palette for the log')
@@ -127,7 +131,7 @@ if (phase === 'first') {
   })()`)
   await key('Enter', [])
   await until(`[...document.querySelectorAll('.action-log__table tr')].some((tr) => tr.textContent.includes('threads.rail') && tr.textContent.includes('keys'))`, 'action log')
-  await until(`[...document.querySelectorAll('.action-log__table tr')].some((tr) => tr.textContent.includes('thread.select') && tr.textContent.includes('palette'))`, 'palette dispatch logged')
+  await until(`[...document.querySelectorAll('.action-log__table tr')].some((tr) => tr.textContent.includes('thread.select') && tr.textContent.includes('navigator'))`, 'navigator dispatch logged')
   await key('Escape', [])
   await until(`!document.querySelector('.action-log')`, 'log closed')
   // ⌘N: the New thread dialog refuses a folder that isn't there, then starts with the prompt on ⌘⏎.
@@ -197,6 +201,45 @@ if (phase === 'first') {
   await run(`document.querySelector('.composer textarea').select()`)
   await key('Backspace', [])
   await until(`document.querySelector('.composer textarea').value === ''`, 'draft cleared')
+  // ⌘/ hides the sidebar and shows it again; its button stays where it was.
+  const toggleAt = () => run(`JSON.stringify(document.querySelector('.app__sidebar-toggle').getBoundingClientRect())`)
+  const before = await toggleAt()
+  await key('/')
+  await until(`!document.querySelector('.app__sidebar')`, 'sidebar hidden')
+  if (await toggleAt() !== before) { await fail('the sidebar button moved'); throw new Error('failed') }
+  await key('/')
+  await until(`Boolean(document.querySelector('.app__sidebar'))`, 'sidebar shown')
+  // ⌃Tab: the thread, then each pane beside it, and around.
+  await run(`window.mu.call('local', 'pane.open', { id: '${paned}', kind: 'diff' })`)
+  await until(`Boolean(document.querySelector('.panes__tab'))`, 'pane in front')
+  await key('Tab', ['control'])
+  await until(`window.mu.call('local', 'thread.list', {}).then((l) => !l.find((t) => t.id === '${paned}').pane)`, 'ctrl+tab to the thread')
+  await new Promise((r) => setTimeout(r, 300))
+  await key('Tab', ['control'])
+  await until(`window.mu.call('local', 'thread.list', {}).then((l) => Boolean(l.find((t) => t.id === '${paned}').pane))`, 'ctrl+tab to the pane')
+  await key('w', ['meta', 'shift'])
+  await until(`!document.querySelector('.panes')`, 'diff closed')
+  // Sessions: the panes repository is one, the home folder another; ⌘⇧[ and ⌘⇧] go between them.
+  const { mkdirSync } = await import('node:fs')
+  const elsewhere = `${process.env.MU_HOME}/elsewhere`
+  mkdirSync(elsewhere, { recursive: true })
+  const other = await run(`window.mu.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'elsewhere', prompt: 'hi' }).then((t) => t.id)`)
+  await until(`[...document.querySelectorAll('.threads-session__name')].some((n) => n.textContent.startsWith('elsewhere'))`, 'a session per project')
+  // ⌘. : the next thread with something unread, here the new one once it has answered.
+  await until(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('elsewhere') && li.querySelector('.mu-status--done'))`, 'other thread done, in the window')
+  // Each press goes to the next unread one; looking at it marks it seen, so the presses reach the new one.
+  for (let press = 0; press < 6 && await run(`document.querySelector('.thread__title')?.textContent`) !== 'elsewhere'; press++) {
+    const was = await run(`document.querySelector('.thread__title')?.textContent`)
+    await key('.')
+    await until(`document.querySelector('.thread__title')?.textContent !== ${JSON.stringify(was)}`, 'cmd+. moved on')
+    await new Promise((r) => setTimeout(r, 300))
+  }
+  await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'cmd+. reached the unread thread')
+  await key(']', ['meta', 'shift'])
+  await until(`document.querySelector('.thread__title')?.textContent !== 'elsewhere'`, 'cmd+shift+] to the next session')
+  await key('[', ['meta', 'shift'])
+  await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'cmd+shift+[ back')
+  await shot('sessions')
   // Settings: the app's own sections, then the machine's, drawn from what each registers.
   await run(`[...document.querySelectorAll('.app__footer button')].find((b) => b.textContent === 'Settings').click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Appearance') && document.querySelector('.settings').textContent.includes('Notifications')`, 'app settings')
@@ -254,7 +297,7 @@ if (phase === 'first') {
   const secondId = await run(`window.mu.machines().then((list) => list.find((m) => m.label === 'Second').id)`)
   const secondModel = await run(`window.mu.call('${secondId}', 'settings.watch', {}).then((r) => r.value.values['agent.model'])`)
   if (secondModel !== 'faux/faux-1') { await fail(`second machine model is ${secondModel}`); throw new Error('failed') }
-  await until(`document.querySelectorAll('.threads-machine').length === 2`, 'both machines in the sidebar')
+  await until(`window.mu.machines().then((list) => list.filter((m) => m.state === 'connected').length === 2)`, 'both machines connected')
   await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent.includes('This computer')).click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Providers') && Boolean(document.querySelector('[data-key="agent.model"]'))`, 'machine settings')
   await shot('providers')
@@ -319,7 +362,7 @@ if (phase === 'first') {
   console.log('smoke(first): ok')
 } else {
   await until(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread after reopen')
-  await until(`document.querySelectorAll('.threads-machine:not(.is-stale)').length === 2`, 'second machine reconnected after reopen', 30_000)
+  await until(`window.mu.machines().then((list) => list.filter((m) => m.state === 'connected').length === 2)`, 'second machine reconnected after reopen', 30_000)
   await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: typed message')`, 'transcript after reopen')
   // `mu <dir> -p ...` from a terminal: a new thread there, shown in this (already running) app.

@@ -78,7 +78,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
         }}>
         <div className="thread__column">
           <div className="thread__crumb">
-            <span>{machine.label} · <span title={thread.cwd}>{folderName(thread.cwd)}</span>{thread.profile && <> · <span className="thread__profile" title={thread.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{thread.profile.name}</span></>} · {statusLabel(thread.status)}</span>
+            <span>{machine.label} · <span title={thread.cwd}>{thread.session?.name ?? folderName(thread.cwd)}</span>{thread.worktree && <> · <span className="thread__branch" title={thread.worktree.path}>{thread.worktree.branch}</span></>}{thread.profile && <> · <span className="thread__profile" title={thread.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{thread.profile.name}</span></>} · {statusLabel(thread.status)}</span>
             <span className="thread__tools">
               <Slot name="thread.header" props={{ machine, thread }} />
               <PaneMenu machine={machine} thread={thread} />

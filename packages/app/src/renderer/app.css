@@ -351,3 +351,17 @@ button.panes__tab, .panes__label { font: inherit; color: inherit; background: no
 .md a.md__file--code code { color: inherit; }
 .md a.md__file--code:hover { text-decoration: none; }
 .md a.md__file--code:hover code { text-decoration: underline; text-underline-offset: 2px; }
+
+/* The sidebar toggle: right of the window's buttons, in the same place whether the sidebar is open or not. */
+.app__sidebar-toggle { position: fixed; z-index: 22; top: 6px; left: 78px; -webkit-app-region: no-drag; color: var(--mu-muted); }
+.app.is-web .app__sidebar-toggle { left: 10px; }
+.app.is-web.has-sidebar .app__sidebar > .app__drag, .app.is-web .app__main > .app__drag { height: 38px; }
+
+/* The navigator (⌘L): the palette's list, as a tree. */
+.navigator__row--session .palette__title { font-weight: 600; }
+.navigator__row--pane .palette__title { color: var(--mu-muted); }
+.navigator__row.is-current .palette__title::after { content: ' ·'; color: var(--mu-accent); }
+.navigator__crumb { color: var(--mu-faint); font-size: var(--mu-text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.navigator__keys { padding: 8px 14px; border-top: 1px solid var(--mu-border); font-size: var(--mu-text-xs); color: var(--mu-faint); }
+.new-thread__check { display: flex; gap: 8px; align-items: baseline; font-size: var(--mu-text-sm); }
+.new-thread__check em { font-style: normal; color: var(--mu-muted); }
