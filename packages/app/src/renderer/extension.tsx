@@ -48,6 +48,8 @@ export type PaneKind = {
   menu?: boolean
   /** Files it shows, given `{ path }`: a file opened from the thread opens in the first kind that takes it. */
   opens?: (path: string) => boolean
+  /** Its width to start with, as a share of the row (0.5 when unset); dragging its edge changes it for that pane. */
+  width?: number
 }
 
 export type ToolCallProps = {

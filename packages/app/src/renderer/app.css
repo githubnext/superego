@@ -263,15 +263,16 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 
 /* Panes: the thread and its panes as a row of columns that scrolls sideways (Dinky's scrolling layout). */
 .panes { display: flex; flex: 1; min-height: 0; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; overscroll-behavior-x: contain; }
-.panes__column { flex: none; display: flex; flex-direction: column; min-height: 0; position: relative; background: var(--mu-bg); border-left: 1px solid var(--mu-border); }
+/* Wide: cards on the sidebar's colour, set in with the same room around them as between them (see GAP in panes.tsx). */
+.panes:not(.panes--narrow) { background: var(--mu-sidebar-bg); padding: 8px; scroll-padding: 8px; }
+.panes:not(.panes--narrow) > .panes__column { border-radius: 10px; border: 0; box-shadow: 0 0 0 .5px var(--mu-border), 0 1px 3px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .3)); overflow: hidden; }
+.panes__gap { flex: none; width: 8px; cursor: col-resize; position: relative; }
+.panes__gap:hover::after { content: ''; position: absolute; top: 25%; bottom: 25%; left: 3px; width: 2px; border-radius: 1px; background: var(--mu-faint); }
+.panes__column { flex: none; display: flex; flex-direction: column; min-height: 0; position: relative; background: var(--mu-bg); }
 .panes__column--thread { border-left: 0; overflow: hidden; }
 .panes__column--thread > .thread { flex: 1; min-width: 0; }
 .panes__column--thread .thread__column { max-width: calc(100% - 2 * var(--mu-space-5)); }
 .panes__column--thread .dock { max-width: calc(100% - 2 * var(--mu-space-4)); }
-.panes__column::after { content: ''; position: absolute; inset: 0 0 auto; height: 2px; background: var(--mu-text); opacity: 0; transition: opacity .15s; pointer-events: none; z-index: 4; }
-.panes__column.is-focused::after { opacity: .25; }
-.panes__edge { position: absolute; z-index: 5; top: 0; bottom: 0; left: -3px; width: 6px; cursor: col-resize; }
-.panes__edge:hover { background: linear-gradient(to right, transparent 2px, var(--mu-accent) 2px, var(--mu-accent) 4px, transparent 4px); }
 .panes__tab { display: flex; align-items: center; flex: none; min-height: 38px; padding: 0 var(--mu-space-2) 0 var(--mu-space-1); border-bottom: 1px solid var(--mu-border); background: var(--mu-sidebar-bg); font-size: var(--mu-text-ui); color: var(--mu-muted); -webkit-app-region: drag; }
 .panes__tab.is-active { color: var(--mu-text); }
 .panes__label { flex: 1; min-width: 0; text-align: left; font: inherit; color: inherit; background: none; border: 0; padding: 5px 10px; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-app-region: no-drag; }
@@ -396,6 +397,8 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 /* A thread alone (no panes) is the main area itself; with panes, each column is a region. */
 .panes__column::before, .app__main:not(:has(.panes))::after {
   content: ''; position: absolute; inset: 0; z-index: 6; pointer-events: none;
-  border: 3px solid var(--mu-text); opacity: 0; transition: opacity .12s;
+  border: 3px solid var(--mu-text); border-radius: inherit; opacity: 0; transition: opacity .12s;
 }
 .panes__column:has(:focus-visible)::before, .app__main:not(:has(.panes)):has(:focus-visible)::after { opacity: 1; }
+/* With cards, the title bar above them is part of their backdrop. */
+.app__main:has(> .panes:not(.panes--narrow)) { background: var(--mu-sidebar-bg); }

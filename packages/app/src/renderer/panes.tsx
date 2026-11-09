@@ -1,11 +1,12 @@
 // Panes: views beside a thread. A thread keeps which are open and which has focus (pane.open, pane.focus, pane.close),
 // so they follow it to every client; the agent opens them too (open_pane). The thread and its panes are a row of
 // columns, scrolled as Dinky's (and niri's) scrolling layout is: a lone thread fills the width; with panes, each pane
-// is a column of one width (a share of the row, dragged at its edge and kept) and the thread takes what's left, never
+// is a column of its own width (a share of the row: its kind's to start with, then dragged at its left edge and kept)
+// and the thread takes what's left, never
 // less; past the edge the row scrolls, and the focused column scrolls just far enough to show whole. ⌃Tab moves the
 // focus along. On a phone each column is the screen's width, and a swipe moves between them.
 // Built in: diff, editor, preview, artifact, thread. Extensions and profiles add kinds with mu.pane(kind, …).
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Pane, ThreadInfo } from '@mu/protocol'
 import { Button } from '@mu/ui'
 import { machine as client } from './client.ts'
@@ -16,6 +17,10 @@ import { ThreadBody } from './ThreadView.tsx'
 import { FileEditor } from './file-editor.tsx'
 
 const narrowQuery = '(max-width: 760px)'
+/** A pane's width (a share of the row) until it's dragged, unless its kind says otherwise. */
+const DEFAULT_SHARE = 0.5
+/** Wide, the columns are cards: this much room around them and between them (the room between is a pane's handle). */
+const GAP = 8
 /** No column narrower than this, however many: the row scrolls instead. */
 const MIN_COLUMN = 380
 
@@ -30,8 +35,8 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     list.addEventListener('change', change)
     return () => list.removeEventListener('change', change)
   }, [])
-  // A pane column's width, as a share of the row.
-  const [share, setShare] = useLocalState('pane.width', 0.5)
+  // Each pane's width, as a share of the row, by pane; kept in this window.
+  const [shares, setShares] = useLocalState<Record<string, number>>('pane.widths', {})
   const row = useRef<HTMLDivElement>(null)
   const [rowWidth, setRowWidth] = useState(0)
   useLayoutEffect(() => {
@@ -61,14 +66,22 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     return pane.title ?? (typeof named === 'function' ? named(pane) : named) ?? pane.kind
   }
 
-  const width = narrow ? rowWidth : Math.min(rowWidth, Math.max(MIN_COLUMN, Math.round(share * rowWidth)))
-  const threadWidth = narrow ? rowWidth : Math.max(width, rowWidth - panes.length * width)
+  // The room the cards share: the row less the gaps around and between them.
+  const room = narrow ? rowWidth : Math.max(0, rowWidth - GAP * (panes.length + 2))
+  const shareOf = (pane: Pane) => shares[pane.id] ?? paneKind(registry, pane.kind, thread)?.width ?? DEFAULT_SHARE
+  const widthOf = (pane: Pane) => narrow ? rowWidth : Math.min(room, Math.max(MIN_COLUMN, Math.round(shareOf(pane) * room)))
+  const panesWidth = panes.reduce((sum, pane) => sum + widthOf(pane), 0)
+  // The thread takes what the panes leave, and never less than a pane's default.
+  const threadWidth = narrow ? rowWidth : Math.max(Math.round(DEFAULT_SHARE * room), MIN_COLUMN, room - panesWidth)
 
-  // A pane's left edge resizes every pane column: their share of the row, kept for next time.
-  const drag = (event: React.PointerEvent) => {
+  // A pane's left edge resizes that pane: its share of the row, kept for next time.
+  const drag = (pane: Pane) => (event: React.PointerEvent) => {
     const startX = event.clientX
-    const startShare = share
-    const move = (e: PointerEvent) => setShare(Math.min(0.8, Math.max(0.2, startShare + (startX - e.clientX) / Math.max(1, rowWidth))))
+    const startShare = shareOf(pane)
+    const move = (e: PointerEvent) => {
+      const next = Math.min(0.85, Math.max(0.15, startShare + (startX - e.clientX) / Math.max(1, room)))
+      setShares((all) => ({ ...all, [pane.id]: next }))
+    }
     const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
@@ -93,15 +106,18 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
       <div data-column="thread" tabIndex={-1} className={`panes__column panes__column--thread ${focused === undefined ? 'is-focused' : ''}`}
         style={{ width: threadWidth }} onPointerDownCapture={() => focus(undefined)} onFocusCapture={() => focus(undefined)}>{main}</div>
       {panes.map((pane) => (
-        <div key={pane.id} data-column={pane.id} tabIndex={-1} className={`panes__column ${pane.id === focused ? 'is-focused' : ''}`}
-          style={{ width }} onPointerDownCapture={() => focus(pane.id)} onFocusCapture={() => focus(pane.id)}>
-          {!narrow && <div className="panes__edge" onPointerDown={drag} role="separator" aria-orientation="vertical" aria-label="Pane width" />}
+        <Fragment key={pane.id}>
+        {/* The room left of a pane is its handle: drag it to make the pane wider or narrower. */}
+        {!narrow && <div className="panes__gap" onPointerDown={drag(pane)} role="separator" aria-orientation="vertical" aria-label={`${title(pane)} width`} />}
+        <div data-column={pane.id} tabIndex={-1} className={`panes__column ${pane.id === focused ? 'is-focused' : ''}`}
+          style={{ width: widthOf(pane) }} onPointerDownCapture={() => focus(pane.id)} onFocusCapture={() => focus(pane.id)}>
           <div className={`panes__tab ${pane.id === focused ? 'is-active' : ''}`}>
             <button className="panes__label" onClick={() => focus(pane.id)}>{title(pane)}</button>
             <button className="panes__close" aria-label={`Close ${title(pane)}`} onClick={() => close(pane)}>×</button>
           </div>
           <div className="panes__body"><PaneBody machine={machine} thread={thread} pane={pane} /></div>
         </div>
+        </Fragment>
       ))}
     </div>
   )
@@ -121,9 +137,9 @@ function PaneBody({ machine, thread, pane }: PaneProps) {
 const fileName = (pane: Pane) => (pane.params as { path?: string } | undefined)?.path?.split('/').at(-1)
 
 export function registerBuiltInPanes(mu: UiApi) {
-  mu.pane('diff', { title: 'Changes', component: DiffPane, menu: true })
+  mu.pane('diff', { title: 'Changes', component: DiffPane, menu: true, width: 0.6 })
   mu.pane('editor', { title: (pane) => fileName(pane) ?? 'Editor', component: EditorPane, opens: () => true })
-  mu.pane('preview', { title: 'Preview', component: PreviewPane })
+  mu.pane('preview', { title: 'Preview', component: PreviewPane, width: 0.6 })
   mu.pane('artifact', { title: (pane) => fileName(pane) ?? 'Artifact', component: ArtifactPane })
   mu.pane('thread', { title: 'Thread', component: ThreadPane })
 }
