@@ -280,6 +280,9 @@ describe('record and replay', () => {
     info = (await sessions(peer)).find((s) => s.id === session.id)!
     expect(info.panes?.map((p) => p.kind)).toEqual(['diff'])
     expect(info.pane).toBe(diff.id)
+    // Params sent as a string of JSON, as models sometimes do, are kept as what they say.
+    const note = await peer.call<{ params: unknown }>('pane.open', { id: session.id, kind: 'editor', params: '{"path": "a.md"}' })
+    expect(note.params).toEqual({ path: 'a.md' })
     await close()
   })
 

@@ -178,7 +178,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       description: 'Open a pane beside this conversation for the user to look at. Built-in kinds: "diff" (the changes in the working folder; no params), ' +
         '"preview" ({ url }: a web page, such as a local dev server), "artifact" ({ path }: an HTML file in the working folder, shown as a page; write it first), ' +
         '"editor" ({ path }: a file, for the user to read and edit), "thread" ({ session }: another conversation). A profile may add kinds; its instructions name them.',
-      parameters: obj({ kind: str({ minLength: 1 }), title: opt(str()), params: opt(unknown()) }),
+      parameters: obj({ kind: str({ minLength: 1 }), title: opt(str()), params: opt(obj({}, { open: true, description: 'What the pane shows, as an object: { "path": "notes/a.md" }, not a string of JSON.' })) }),
       async execute({ kind, title, params }, api) {
         const pane = await openPane(String(api.conversationId), { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}) })
         return { output: [{ type: 'text', text: `Opened the ${kind} pane (${pane.id}).` }] }
@@ -429,6 +429,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** Open a pane beside session `id`, or bring forward the same one already open. */
   async function openPane(id: string, pane: Omit<Pane, 'id'>): Promise<Pane> {
     await get(id)
+    // Models sometimes send params as a string of JSON: take what it says.
+    if (typeof pane.params === 'string') {
+      try { pane = { ...pane, params: JSON.parse(pane.params) as Json } } catch { throw new RpcError('invalid', 'params must be an object') }
+    }
     let opened: Pane | undefined
     await updateMeta(id, (meta) => {
       const same = (meta.panes ?? []).find((p) => p.kind === pane.kind && JSON.stringify(p.params ?? null) === JSON.stringify(pane.params ?? null))
