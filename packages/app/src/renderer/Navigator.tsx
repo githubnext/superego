@@ -9,6 +9,7 @@ import { paneKind, useRegistry } from './extension.tsx'
 import { useMachines, useSelection, useSessions } from './state.tsx'
 import { showSession } from './actions.tsx'
 import type { Session } from './sessions.ts'
+import { focusColumn } from './focus.ts'
 
 type Kind = 'session' | 'thread' | 'pane'
 type Row = {
@@ -71,6 +72,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
               go: go(() => {
                 show()
                 void dispatch('pane.focus', { id: thread.id, pane: pane.id }, { machine: session.machine.id, source: 'navigator' })
+                focusColumn(pane.id)
               }),
             })),
           ]

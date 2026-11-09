@@ -107,14 +107,14 @@ body { font: var(--mu-text-ui)/var(--mu-leading-ui) var(--mu-font); background: 
   border-radius: 5px; padding: 3px 7px; min-width: 0; min-height: 24px; box-shadow: inset 0 1px 1px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .2));
 }
 .mu-field::placeholder { color: var(--mu-muted); }
-.mu-field:focus { outline: none; border-color: var(--mu-accent); box-shadow: var(--mu-focus); }
+.mu-field:focus { outline: 2px solid var(--mu-text); outline-offset: 1px; }
 /* A pop-up button, as macOS draws it: a push button with ⌃⌄ on the right. */
 .mu-select {
   appearance: none; font-weight: 500; background-color: var(--mu-control); border: 0; box-shadow: var(--mu-control-edge); padding: 3px 26px 3px 10px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='12' viewBox='0 0 8 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 4.5 4 1.5 7 4.5M1 7.5 4 10.5 7 7.5'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 9px center;
 }
-.mu-select:focus { box-shadow: var(--mu-control-edge), var(--mu-focus); }
+
 .mu-switch { width: 34px; height: 20px; border-radius: 10px; border: 0; padding: 2px; background: light-dark(#d9d9de, #48484a); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .12); display: inline-flex; transition: background .15s; }
 .mu-switch.is-on { background: var(--mu-accent); }
 .mu-switch__thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .3), 0 0 0 .5px rgb(0 0 0 / .08); transition: transform .15s; }
@@ -168,9 +168,15 @@ body { font: var(--mu-text-ui)/var(--mu-leading-ui) var(--mu-font); background: 
 .mu-tooltip { background: var(--mu-text); color: var(--mu-bg); font-size: var(--mu-text-sm); border-radius: 6px; padding: 5px 8px; white-space: nowrap; transition: opacity .1s; }
 .mu-tooltip[data-starting-style], .mu-tooltip[data-ending-style] { opacity: 0; }
 
-/* Focus rings for the keyboard only. */
+/* Focus is always apparent, and always the same: one solid outline in the text colour, whatever a component's own
+   styles say. Text being typed shows it on the box it's typed in (a field, the composer), and an editor on its column;
+   a splitter on its bar. Keyboard focus only: a click on a button doesn't ring it. */
 :focus:not(:focus-visible) { outline: none; }
-.mu-button:focus-visible, .mu-switch:focus-visible { outline: none; box-shadow: var(--mu-control-edge), var(--mu-focus); }
+:focus-visible:not(input, textarea, select, [contenteditable], [role="separator"]) {
+  outline: 2px solid var(--mu-text) !important; outline-offset: 2px;
+}
+.mu-select:focus-visible { outline: 2px solid var(--mu-text) !important; outline-offset: 2px; }
+.mu-list-item:focus-visible { outline-offset: -2px; }
 
 /* Scrollbars that stay out of the way: thin, no track, darker on hover. */
 ::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }

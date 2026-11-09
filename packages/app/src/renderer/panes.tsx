@@ -89,11 +89,12 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
 
   return (
     <div className={`panes ${narrow ? 'panes--narrow' : ''}`} ref={row} onScroll={onScroll}>
-      <div data-column="thread" className={`panes__column panes__column--thread ${focused === undefined ? 'is-focused' : ''}`}
-        style={{ width: threadWidth }} onPointerDownCapture={() => focus(undefined)}>{main}</div>
+      {/* Focus moving into a column (a click, a key) makes it the focused one: the app and the keyboard agree. */}
+      <div data-column="thread" tabIndex={-1} className={`panes__column panes__column--thread ${focused === undefined ? 'is-focused' : ''}`}
+        style={{ width: threadWidth }} onPointerDownCapture={() => focus(undefined)} onFocusCapture={() => focus(undefined)}>{main}</div>
       {panes.map((pane) => (
-        <div key={pane.id} data-column={pane.id} className={`panes__column ${pane.id === focused ? 'is-focused' : ''}`}
-          style={{ width }} onPointerDownCapture={() => focus(pane.id)}>
+        <div key={pane.id} data-column={pane.id} tabIndex={-1} className={`panes__column ${pane.id === focused ? 'is-focused' : ''}`}
+          style={{ width }} onPointerDownCapture={() => focus(pane.id)} onFocusCapture={() => focus(pane.id)}>
           {!narrow && <div className="panes__edge" onPointerDown={drag} role="separator" aria-orientation="vertical" aria-label="Pane width" />}
           <div className={`panes__tab ${pane.id === focused ? 'is-active' : ''}`}>
             <button className="panes__label" onClick={() => focus(pane.id)}>{title(pane)}</button>

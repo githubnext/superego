@@ -87,7 +87,7 @@ function Threads() {
 
   if (current.view === 'rail') return <Rail sessions={sessions} isOn={isOn} onPick={(s, t) => select({ machine: s.machine.id, thread: t.id })} ready={ready} />
   return (
-    <div className={`threads ${ready ? 'is-ready' : ''}`} onPointerEnter={() => setHovering(true)} onPointerLeave={() => setHovering(false)}>
+    <div className={`threads ${ready ? 'is-ready' : ''}`} data-focus-scope onPointerEnter={() => setHovering(true)} onPointerLeave={() => setHovering(false)}>
       <div className="threads__head">
         <span>Sessions</span>
         <span className="threads__actions">

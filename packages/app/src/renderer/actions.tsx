@@ -8,6 +8,7 @@ import type { ThreadInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
 import { unread, type Session } from './sessions.ts'
+import { focusBeside, focusColumn, focusPrompt } from './focus.ts'
 
 /** What a window action gets besides its parameters. */
 export type WindowContext = {
@@ -97,6 +98,10 @@ export const coreActions: WindowAction[] = [
   defineAction({ id: 'session.next', title: 'Next session', runs: 'window', keys: 'mod+shift+]', run: (_p, c: WindowContext) => stepSession(c, 1) }),
   defineAction({ id: 'session.previous', title: 'Previous session', runs: 'window', keys: 'mod+shift+[', run: (_p, c: WindowContext) => stepSession(c, -1) }),
   defineAction({ id: 'thread.unread', title: 'Next unread thread', runs: 'window', keys: 'mod+.', run: (_p, c: WindowContext) => nextUnread(c) }),
+  // Focus: the region beside (sidebar, thread, each pane), and the prompt.
+  defineAction({ id: 'focus.left', title: 'Focus the region to the left', runs: 'window', keys: 'mod+alt+arrowleft', run: () => focusBeside(-1) }),
+  defineAction({ id: 'focus.right', title: 'Focus the region to the right', runs: 'window', keys: 'mod+alt+arrowright', run: () => focusBeside(1) }),
+  defineAction({ id: 'focus.prompt', title: 'Focus the prompt', runs: 'window', keys: 'ctrl+i', run: () => focusPrompt() }),
   // Within a thread: the thread itself, then each pane beside it.
   defineAction({ id: 'pane.next', title: 'Next pane', runs: 'window', keys: 'ctrl+tab', run: (_p, c: WindowContext) => stepPane(c, 1) }),
   defineAction({ id: 'pane.previous', title: 'Previous pane', runs: 'window', keys: 'ctrl+shift+tab', run: (_p, c: WindowContext) => stepPane(c, -1) }),
@@ -166,6 +171,7 @@ async function stepPane(c: WindowContext, by: number) {
   const at = Math.max(0, columns.indexOf(thread.pane))
   const next = columns[(at + by + columns.length) % columns.length]
   await c.dispatch('pane.focus', { id: thread.id, ...(next ? { pane: next } : {}) }, { machine: c.selection.machine, source: 'keys' })
+  focusColumn(next)
 }
 
 /** Whether an action can run with no parameters (after the selection fills in a thread's): keys and the palette. */

@@ -158,7 +158,7 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .keymap__clash::before { content: '! '; font-weight: 600; }
 .keymap__keys { font: inherit; color: inherit; background: var(--mu-field-bg); border: 1px solid var(--mu-field-edge); border-radius: 5px; padding: 2px 8px; min-width: 96px; min-height: 24px; text-align: center; cursor: default; }
 .keymap__keys:focus-visible { outline: none; }
-.keymap__keys.is-recording { border-color: var(--mu-accent); box-shadow: var(--mu-focus); color: var(--mu-muted); font-size: var(--mu-text-sm); }
+.keymap__keys.is-recording { outline: 2px solid var(--mu-text); outline-offset: 2px; color: var(--mu-muted); font-size: var(--mu-text-sm); }
 .keymap__keys.is-clash { border-style: dashed; border-color: var(--mu-status-error); }
 .keymap__keys kbd { font: var(--mu-text-sm) var(--mu-mono); }
 .keymap__none { color: var(--mu-muted); }
@@ -202,7 +202,7 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 
 .new-thread__body { padding: var(--mu-space-4); display: flex; flex-direction: column; gap: var(--mu-space-3); }
 .new-thread__prompt { font-size: var(--mu-text-body); line-height: 1.5; border: 1px solid var(--mu-field-edge); border-radius: 8px; padding: var(--mu-space-3); min-height: 6.5em; background: var(--mu-field-bg); box-shadow: inset 0 1px 1px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .2)); }
-.new-thread__prompt:focus { border-color: var(--mu-accent); box-shadow: var(--mu-focus); }
+.new-thread__prompt:focus { outline: 2px solid var(--mu-text); outline-offset: 1px; }
 .new-thread__field { display: flex; flex-direction: column; gap: var(--mu-space-1); min-width: 0; }
 .new-thread__field > span { font-size: var(--mu-text-sm); font-weight: 500; }
 .new-thread__row { display: flex; gap: 6px; }
@@ -268,8 +268,9 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 .panes__column--thread > .thread { flex: 1; min-width: 0; }
 .panes__column--thread .thread__column { max-width: calc(100% - 2 * var(--mu-space-5)); }
 .panes__column--thread .dock { max-width: calc(100% - 2 * var(--mu-space-4)); }
-.panes__column::after { content: ''; position: absolute; inset: 0 0 auto; height: 2px; background: var(--mu-accent); opacity: 0; transition: opacity .15s; pointer-events: none; z-index: 4; }
-.panes__column.is-focused::after { opacity: .8; }
+.panes__column::after { content: ''; position: absolute; inset: 0 0 auto; height: 2px; background: var(--mu-text); opacity: 0; transition: opacity .15s; pointer-events: none; z-index: 4; }
+.panes__column.is-focused::after { opacity: .25; }
+.panes__column:focus-within::after { opacity: 1; }
 .panes__edge { position: absolute; z-index: 5; top: 0; bottom: 0; left: -3px; width: 6px; cursor: col-resize; }
 .panes__edge:hover { background: linear-gradient(to right, transparent 2px, var(--mu-accent) 2px, var(--mu-accent) 4px, transparent 4px); }
 .panes__tab { display: flex; align-items: center; flex: none; min-height: 38px; padding: 0 var(--mu-space-2) 0 var(--mu-space-1); border-bottom: 1px solid var(--mu-border); background: var(--mu-sidebar-bg); font-size: var(--mu-text-ui); color: var(--mu-muted); -webkit-app-region: drag; }
@@ -367,3 +368,10 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 .navigator__keys { padding: 8px 14px; border-top: 1px solid var(--mu-border); font-size: var(--mu-text-xs); color: var(--mu-faint); }
 .new-thread__check { display: flex; gap: 8px; align-items: baseline; font-size: var(--mu-text-sm); }
 .new-thread__check em { font-style: normal; color: var(--mu-muted); }
+
+/* Focus, as everywhere: the box text is typed in carries the ring, and the region holding focus says so. */
+.dock:has(.composer textarea:focus-visible), .dock:has(.composer textarea:focus) { outline: 2px solid var(--mu-text); outline-offset: 2px; }
+.palette__input:focus { outline: 2px solid var(--mu-text); outline-offset: -2px; }
+.panes__column:has(.cm-editor.cm-focused) .file-editor__scroll { outline: 2px solid var(--mu-text); outline-offset: -2px; }
+.panes__column:focus-within > .panes__tab .panes__label::before, .app__sidebar:focus-within .threads__head > span:first-child::before { content: '●'; font-size: 8px; margin-right: 7px; vertical-align: 2px; }
+.panes__column:focus { outline: none !important; }

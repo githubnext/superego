@@ -258,6 +258,25 @@ if (phase === 'first') {
   await until(`document.querySelector('.thread__title')?.textContent !== 'elsewhere'`, 'cmd+shift+] to the next session')
   await key('[', ['meta', 'shift'])
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'cmd+shift+[ back')
+  // Focus: ⌘⌥← from the prompt goes to the sidebar, on the selected thread; ↓ moves along it; ⌘⌥→ comes back to the
+  // thread's prompt; ⌃I goes to the prompt from anywhere. Wherever it is, it's drawn.
+  // A hidden window's page never has focus, so :focus styles never apply; emulate it (nothing reaches the screen).
+  const dbg = BrowserWindow.getAllWindows()[0].webContents.debugger
+  if (!dbg.isAttached()) dbg.attach()
+  await dbg.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true })
+  await run(`document.querySelector('.composer textarea').focus()`)
+  await key('Left', ['meta', 'alt'])
+  await until(`document.activeElement?.matches('.app__sidebar .mu-list-item.is-selected')`, 'focus to the sidebar, on the selected thread')
+  const ring = await run(`getComputedStyle(document.activeElement).outlineStyle`)
+  await key('Down', [])
+  await until(`document.activeElement?.matches('.app__sidebar .mu-list-item:not(.is-selected)')`, 'down the sidebar')
+  await shot('focus')
+  await key('Right', ['meta', 'alt'])
+  await until(`document.activeElement?.matches('.composer textarea')`, 'focus back to the prompt')
+  await key('Left', ['meta', 'alt'])
+  await key('i', ['control'])
+  await until(`document.activeElement?.matches('.composer textarea')`, 'ctrl+i to the prompt')
+  if (ring !== 'solid') { await fail(`focus not drawn: ${ring}`); throw new Error('failed') }
   await shot('sessions')
   // Settings: the app's own sections, then the machine's, drawn from what each registers.
   await run(`[...document.querySelectorAll('.app__footer button')].find((b) => b.textContent === 'Settings').click()`)
