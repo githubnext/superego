@@ -263,7 +263,7 @@ function Work({ blocks, results, running, active }: { blocks: Block[]; results: 
       <summary className="row">
         <Chevron />
         <Icon name={mainKind(blocks)} />
-        <span className="row__label">{describe(blocks).map((part, i) => i % 2 ? <code key={i} className="row__path">{part}</code> : part)}</span>
+        <span className="row__label row__summary" title={describe(blocks).join('')}>{describe(blocks).map((part, i) => i % 2 ? <code key={i} className="row__path">{part}</code> : part)}</span>
         {(stats.added > 0 || stats.removed > 0) && <span className="row__meta"><Stat {...stats} /></span>}
         {failed > 0 && <span className="row__failed">{failed} failed</span>}
       </summary>
@@ -371,7 +371,7 @@ function ToolCall({ block, result, slot }: { block: Block; result: Message | und
         <Chevron />
         {state === 'working' ? <StatusGlyph status={{ state }} /> : <Icon name={block.name ?? ''} />}
         <span className="row__label">{verbOf(block.name ?? '', state)}</span>
-        <span className="row__arg">{summaryOf(block.name ?? '', args)}</span>
+        <span className="row__arg" title={summaryOf(block.name ?? '', args)}>{summaryOf(block.name ?? '', args)}</span>
         {stat && <span className="row__meta"><Stat {...stat} /></span>}
         {written !== undefined && <span className="row__meta">{lineCount(written)} lines</span>}
       </summary>

@@ -63,6 +63,10 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .row__path { font: var(--mu-text-mono) var(--mu-mono); }
 .row__arg { font: var(--mu-text-mono) var(--mu-mono); color: var(--mu-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
 .row__label + .row__arg { margin-left: -2px; }
+/* A row is one line, never wider than the thread: a run's summary, or a step's argument, ends in … (the whole on hover). */
+.row__summary { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row { max-width: calc(100% + 33px); }
+.steps, .step, .run__steps { min-width: 0; max-width: 100%; }
 .row__meta { flex: none; font: var(--mu-text-xs) var(--mu-mono); color: var(--mu-faint); }
 .row__failed { color: var(--mu-status-error); font-size: var(--mu-text-sm); }
 .step--error > .row .row__label, .step--error > .row .row__icon { color: var(--mu-status-error); }
