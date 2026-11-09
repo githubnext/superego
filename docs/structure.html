@@ -77,7 +77,7 @@
       <rect class="box" x="40" y="62" width="190" height="130" rx="8"/>
       <text class="title" x="56" y="86">Renderer</text>
       <text class="small" x="56" y="106">shell: slots · ⌘K palette</text>
-      <text class="small" x="56" y="124">session view · floating composer</text>
+      <text class="small" x="56" y="124">thread view · floating composer</text>
       <text class="small" x="56" y="142">UI halves of extensions</text>
       <text class="small" x="56" y="160">hooks for extensions</text>
       <rect class="box" x="250" y="62" width="90" height="130" rx="8"/>
@@ -93,8 +93,8 @@
       <rect class="group" x="630" y="20" width="350" height="190" rx="12"/>
       <text class="title" x="646" y="44">Command</text><text class="small" x="722" y="44">runCli(app) · mu, mu-minimal, …</text>
       <rect class="box" x="650" y="62" width="310" height="130" rx="8"/>
-      <text x="666" y="86"><tspan class="title">&lt;id&gt;</tspan><tspan class="small">  new session here → opens app</tspan></text>
-      <text class="mono" x="666" y="110">create · send · open · sessions</text>
+      <text x="666" y="86"><tspan class="title">&lt;id&gt;</tspan><tspan class="small">  new thread here → opens app</tspan></text>
+      <text class="mono" x="666" y="110">create · send · open · threads</text>
       <text class="mono" x="666" y="128">machines · settings [--all] · auth</text>
       <text class="mono" x="666" y="146">daemon status|restart|stop</text>
       <text class="mono" x="666" y="164">connect   ·   mu only: new &lt;dir&gt;</text>
@@ -104,13 +104,13 @@
       <path class="line" d="M470 192 V238" marker-end="url(#a)"/><path class="line" d="M805 192 V220 H650 V238" marker-end="url(#a)"/>
       <rect class="hot" x="40" y="310" width="440" height="110" rx="10"/>
       <text class="title" x="58" y="336">daemon · this computer</text>
-      <text class="small" x="58" y="356">pi-durable harness on SQLite · sessions · status</text>
+      <text class="small" x="58" y="356">pi-durable harness on SQLite · threads · status</text>
       <text class="small" x="58" y="374">settings: model, thinking, providers, sign-in</text>
       <text class="small" x="58" y="392">daemon halves of extensions (tools, values, status)</text>
       <text class="mono" x="58" y="410">~/.&lt;id&gt;/&lt;id&gt;.sock · no network port</text>
       <rect class="hot" x="520" y="310" width="440" height="110" rx="10"/>
       <text class="title" x="538" y="336">daemon · other machines</text>
-      <text class="small" x="538" y="356">same app code; own sessions, models, credentials</text>
+      <text class="small" x="538" y="356">same app code; own threads, models, credentials</text>
       <text class="mono" x="538" y="380">ssh -T host &lt;id&gt; connect --start</text>
       <text class="mono" x="538" y="398">via: docker exec -i … (any stdio)</text>
       <path class="line strong" d="M380 280 V308" marker-end="url(#a)"/><text class="label" x="388" y="298">unix socket</text>
@@ -188,10 +188,10 @@
       <text class="mono" x="38" y="120">action(def)       &lt;name&gt;.&lt;id&gt;, schema'd</text>
       <text class="mono" x="38" y="142">value(key, init)  live, watched by UIs</text>
       <text class="mono" x="38" y="164">status(fn)        blocked while …</text>
-      <text class="mono" x="38" y="186">harness · sessions</text>
+      <text class="mono" x="38" y="186">harness · threads</text>
       <rect class="hot" x="560" y="20" width="420" height="210" rx="10"/>
       <text class="title" x="578" y="46">ui half · defineUiExtension</text>
-      <text class="mono" x="578" y="76">slot(sidebar | session.header | composer.above | session.aside)</text>
+      <text class="mono" x="578" y="76">slot(sidebar | thread.header | composer.above | thread.aside)</text>
       <text class="mono" x="578" y="98">tool(name, C)     draw tool calls</text>
       <text class="mono" x="578" y="120">entry(kind, C)    draw custom entries</text>
       <text class="mono" x="578" y="142">settings(ui, C)   custom sections</text>
@@ -203,8 +203,8 @@
     </svg>
   </div>
   <div class="grid g2" style="margin-top:12px">
-    <div class="card"><div class="k">threads · ui</div><p style="font-size:13px">The session sidebar. Its ··· menu and settings: sort (newest, needs you first, recently active), a list or a rail (⌘\), and a details pane in <code>session.aside</code> (⌘I). Without it, the shell shows a top-bar picker.</p></div>
-    <div class="card"><div class="k">ask-user · daemon + ui</div><p style="font-size:13px">An <code>ask_user</code> tool that waits. The session shows as needing you; the question sits in the composer, which it claims, so you answer by picking an option or typing.</p></div>
+    <div class="card"><div class="k">threads · ui</div><p style="font-size:13px">The thread sidebar. Its ··· menu and settings: sort (newest, needs you first, recently active), a list or a rail (⌘\), and a details pane in <code>thread.aside</code> (⌘I). Without it, the shell shows a top-bar picker.</p></div>
+    <div class="card"><div class="k">ask-user · daemon + ui</div><p style="font-size:13px">An <code>ask_user</code> tool that waits. The thread shows as needing you; the question sits in the composer, which it claims, so you answer by picking an option or typing.</p></div>
   </div>
 
   <h2>5 · Protocol</h2>
@@ -213,22 +213,22 @@
     <div class="card">
       <div class="k">daemon</div>
       <div class="chips">
-        <span>hello</span><span>session.list</span><span>session.create</span><span>session.rename</span><span>session.submit</span><span>session.abort</span><span>session.seen</span><span>session.watch</span><span>sessions.watch</span><span>unwatch</span><span>settings.watch</span><span>settings.set</span><span>auth.login</span><span>auth.respond</span><span>auth.cancel</span><span>auth.logout</span><span>daemon.restart</span><span class="new">value.watch</span>
+        <span>hello</span><span>thread.list</span><span>thread.create</span><span>thread.rename</span><span>thread.submit</span><span>thread.abort</span><span>thread.seen</span><span>thread.watch</span><span>threads.watch</span><span>unwatch</span><span>settings.watch</span><span>settings.set</span><span>auth.login</span><span>auth.respond</span><span>auth.cancel</span><span>auth.logout</span><span>daemon.restart</span><span class="new">value.watch</span>
       </div>
       <div class="k" style="margin-top:12px">features</div>
-      <div class="chips"><span>sessions</span><span>settings</span><span>auth</span><span>restart</span><span class="new">ext:&lt;name&gt;</span></div>
-      <div class="k" style="margin-top:12px">session facts</div>
+      <div class="chips"><span>threads</span><span>settings</span><span>auth</span><span>restart</span><span class="new">ext:&lt;name&gt;</span></div>
+      <div class="k" style="margin-top:12px">thread facts</div>
       <div class="chips"><span>title</span><span>cwd</span><span>status</span><span>createdAt</span><span class="new">activeAt</span><span class="new">model</span><span class="new">cost</span></div>
     </div>
     <div class="card">
       <div class="k">app · machine id "app"</div>
       <div class="chips"><span>settings.watch</span><span>settings.set</span><span>machines.add</span><span>machines.update</span><span>machines.remove</span><span>machines.trust</span><span>machines.reconnect</span><span>service.get</span><span>service.act</span><span>app.ready</span><span>app.desktop</span><span class="new">settings.register</span></div>
       <div class="k" style="margin-top:12px">events</div>
-      <div class="chips"><span>watch.ops</span><span>sessions.changed</span><span>settings.changed</span><span>auth.event</span><span class="new">value.changed</span><span>service.changed</span><span>$machines</span><span>app.select</span></div>
+      <div class="chips"><span>watch.ops</span><span>threads.changed</span><span>settings.changed</span><span>auth.event</span><span class="new">value.changed</span><span>service.changed</span><span>$machines</span><span>app.select</span></div>
     </div>
   </div>
 
-  <h2>6 · Session status</h2>
+  <h2>6 · Thread status</h2>
   <p>Derived from durable state in the OSC 7501 vocabulary. Extensions can add <i>blocked</i>.</p>
   <div class="card">
     <svg viewBox="0 0 1000 120" role="img" aria-label="Status">
@@ -251,7 +251,7 @@
     <div class="card">
       <div class="k">each machine · daemon</div>
       <table>
-        <tr><td>&lt;id&gt;.sqlite</td><td>sessions, transcripts, durable tasks</td></tr>
+        <tr><td>&lt;id&gt;.sqlite</td><td>threads, transcripts, durable tasks</td></tr>
         <tr><td>settings.json</td><td>model · thinking · fast</td></tr>
         <tr><td>auth.json</td><td>credentials (0600)</td></tr>
         <tr><td>machine-id</td><td>identity across routes</td></tr>
@@ -275,7 +275,7 @@
       <tr><td>daemon</td><td>protocol over a real socket · actions: list, run with coerced params, log · status · restarts · settings · sign-in · restart refusal · record/replay</td></tr>
       <tr><td>ask-user</td><td>a replayed agent asks; blocked status; live pending list; answer from a client; agent carries on</td></tr>
       <tr><td>cli · generate</td><td>real commands on two machines · settings --all · auth · <code>mu actions</code> / <code>mu do</code> · daemon restart · <code>mu new</code> for both templates</td></tr>
-      <tr><td>registry · identity · shortcuts · merge · restart · score · groups · title</td><td>validation and upsert · wrong/duplicate machine · "Mixed" · restart state machine · shortcuts and keymaps · palette ranking · sidebar grouping · session titles</td></tr>
+      <tr><td>registry · identity · shortcuts · merge · restart · score · groups · title</td><td>validation and upsert · wrong/duplicate machine · "Mixed" · restart state machine · shortcuts and keymaps · palette ranking · sidebar grouping · thread titles</td></tr>
       <tr><td>examples/full smoke</td><td>two app processes: chat · ask-user · sidebar menu, rail, details · ⌘K · action log · Settings → Keyboard (record, clash, reset) · fonts · machines · All machines · menu bar · restart ×2 · <code>mu</code> → running app</td></tr>
       <tr><td>examples/full showcase</td><td>three scripted threads with real tool calls (a failing test, edits, a missed edit) on a fixture project · screenshots top/middle/end · light/dark · expanded</td></tr>
       <tr><td>examples/minimal smoke</td><td>core alone: picker instead of sidebar · chat · command hand-off · no extension features</td></tr>
