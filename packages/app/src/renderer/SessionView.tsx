@@ -1,12 +1,12 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ConversationView, EntryRecord, LiveState } from '@earendil-works/pi-durable'
 import type { SessionInfo } from '@mu/protocol'
 import { Button, IconButton, Menu, StatusGlyph, statusLabel, TextArea } from '@mu/ui'
 import type { MachineEntry } from '../shared.ts'
 import { machine as client, useSessionView } from './client.ts'
-import { paneMenu, Slot, useRegistry, type ToolCallProps } from './extension.tsx'
+import { fileKind, paneMenu, Slot, useRegistry, type ToolCallProps } from './extension.tsx'
 import { useShell } from './state.tsx'
-import { Markdown, Scroll } from './Markdown.tsx'
+import { Markdown, OpenFile, Scroll } from './Markdown.tsx'
 import { useProfileUi } from './profile-ui.ts'
 import { SessionPanes } from './panes.tsx'
 
@@ -45,7 +45,16 @@ export function SessionView({ machine, session }: { machine: MachineEntry; sessi
 
 /** A session's thread: its transcript and composer. Also what a "thread" pane draws. */
 export function ThreadView({ machine, session }: { machine: MachineEntry; session: SessionInfo }) {
-  const dispatch = useRegistry().router.dispatch
+  const registry = useRegistry()
+  const dispatch = registry.router.dispatch
+  // A file the thread names, opened beside it: in the pane kind that takes it (a profile's, else the editor).
+  const sessionRef = useRef(session)
+  sessionRef.current = session
+  const openFile = useCallback((name: string) => {
+    void client(machine.id).call('file.find', { id: session.id, name }).then(({ path }) => {
+      if (path) return dispatch('pane.open', { id: session.id, kind: fileKind(registry, sessionRef.current, path), params: { path } }, { machine: machine.id, source: 'thread' })
+    }).catch((error) => console.error(error))
+  }, [machine.id, session.id, registry])
   const view = useSessionView(machine.id, machine.state === 'connected', session.id)
   const live = view?.docs['pi.live'] as LiveState | undefined
   const scroller = useRef<HTMLDivElement>(null)
@@ -57,6 +66,7 @@ export function ThreadView({ machine, session }: { machine: MachineEntry; sessio
   }, [view])
 
   return (
+    <OpenFile.Provider value={openFile}>
     <Here.Provider value={{ machine, session, firstUser: view?.before === undefined ? view?.entries.find((e) => (e.model?.[0] as Message | undefined)?.role === 'user')?.id : undefined }}>
     <div className="session">
       <div className="session__scroll" ref={scroller}
@@ -83,6 +93,7 @@ export function ThreadView({ machine, session }: { machine: MachineEntry; sessio
       <Composer machine={machine} session={session} busy={Boolean(live?.run)} />
     </div>
     </Here.Provider>
+    </OpenFile.Provider>
   )
 }
 

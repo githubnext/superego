@@ -344,3 +344,10 @@ button.panes__tab, .panes__label { font: inherit; color: inherit; background: no
 .cm-lp-front--first { border-top-left-radius: 6px; border-top-right-radius: 6px; }
 .frame-pane iframe { flex: 1; border: 0; width: 100%; background: #fff; }
 .thread-pane > .session { flex: 1; }
+
+/* Files a thread names, opened beside it. */
+.md a.md__file { color: var(--mu-accent); text-decoration: none; cursor: pointer; }
+.md a.md__file:hover { text-decoration: underline; text-underline-offset: 2px; }
+.md a.md__file--code code { color: inherit; }
+.md a.md__file--code:hover { text-decoration: none; }
+.md a.md__file--code:hover code { text-decoration: underline; text-underline-offset: 2px; }

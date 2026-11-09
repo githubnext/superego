@@ -34,6 +34,8 @@ export type PaneKind = {
   component: ComponentType<PaneProps>
   /** Offered in the session's pane menu: it shows something without being given params. */
   menu?: boolean
+  /** Files it shows, given `{ path }`: a file opened from the thread opens in the first kind that takes it. */
+  opens?: (path: string) => boolean
 }
 
 export type ToolCallProps = {
@@ -192,6 +194,15 @@ export function Slot<S extends SlotName>({ name, props }: { name: S; props: Slot
 export function paneKind(registry: Registry, kind: string, session: SessionInfo): PaneKind | undefined {
   const entries = registry.panes.get(kind) ?? []
   return entries.find((e) => e.profile && e.profile === session.profile?.dir) ?? entries.find((e) => !e.profile)
+}
+
+/**
+ * The pane kind a file opens in, for a session: its profile's kind that takes the file, else any other that does
+ * besides the editor, else the editor, which takes anything.
+ */
+export function fileKind(registry: Registry, session: SessionInfo, path: string): string {
+  const takers = [...registry.panes.entries()].flatMap(([kind, entries]) => entries.filter((e) => e.opens?.(path) && (!e.profile || e.profile === session.profile?.dir)).map((e) => ({ kind, profile: Boolean(e.profile) })))
+  return (takers.find((t) => t.profile) ?? takers.find((t) => t.kind !== 'editor'))?.kind ?? 'editor'
 }
 
 /** The panes a session's menu offers: the built-in ones and its profile's that open without params. */
