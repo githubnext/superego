@@ -47,7 +47,7 @@ export type ProfileSpec = {
    * registers them with mu.pane(kind, …).
    */
   panes?: Record<string, string>
-  /** Whether its threads get a git worktree of their own (the default, in a repository); false: they work in place. */
+  /** Whether its threads get a git worktree of their own (in a repository), unless a thread is started otherwise. */
   worktree?: boolean
   /** Built-in extensions this profile does without: 'coding-tools', 'ask-user', … */
   without?: string[]

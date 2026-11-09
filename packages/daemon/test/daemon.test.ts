@@ -293,7 +293,7 @@ describe('record and replay', () => {
     await writeFile(join(dir, 'notes.md'), 'one\n')
     execFileSync('git', ['-C', dir, 'add', 'notes.md']); execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'notes'])
     const { peer, close } = await open()
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir, worktree: false })
+    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
     expect((await peer.call<{ content: string }>('file.read', { id: thread.id, path: 'notes.md' })).content).toBe('one\n')
     await expect(peer.call('file.read', { id: thread.id, path: '../../etc/passwd' })).rejects.toMatchObject({ kind: 'invalid' })
     await peer.call('file.write', { id: thread.id, path: 'notes.md', content: 'two\n' })
@@ -306,7 +306,7 @@ describe('record and replay', () => {
     await close()
   })
 
-  it('gives a thread in a repository a worktree of its own, in the same session, removed when archived clean', async () => {
+  it('gives a thread in a repository a worktree of its own when asked, in the same session, removed when archived clean', async () => {
     const { execFileSync } = await import('node:child_process')
     const { mkdir, realpath } = await import('node:fs/promises')
     const git = (...args: string[]) => execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { encoding: 'utf8' }).trim()
@@ -317,13 +317,13 @@ describe('record and replay', () => {
     const root = await realpath(dir)
     const { peer, close } = await open()
     // Started in a folder below the top: the same folder, in its own worktree.
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: join(dir, 'app'), title: 'Fix the login flow' })
+    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: join(dir, 'app'), title: 'Fix the login flow', worktree: true })
     expect(thread.worktree?.branch).toMatch(/^mu\/fix-the-login-flow-[0-9a-f]{6}$/)
     expect(thread.cwd).toBe(join(thread.worktree!.path, 'app'))
     expect(thread.session).toEqual({ root, name: basename(root) })
     expect(git('branch', '--list', thread.worktree!.branch)).toContain(thread.worktree!.branch)
-    // In place, when asked: the same session.
-    const here = await peer.call<ThreadInfo>('thread.create', { cwd: dir, worktree: false })
+    // Otherwise in place: the same session.
+    const here = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
     expect(here.worktree).toBeUndefined()
     expect(here.session.root).toBe(root)
     // Archived with nothing uncommitted: the worktree goes, the branch stays; unarchived, it's back.

@@ -31,8 +31,8 @@ export function NewThreadDialog({ start, onClose }: { start: NewThreadStart; onC
   const [profiles, setProfiles] = useState<ProfileInfo[]>([])
   const [profile, setProfile] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  /** In a repository: a worktree of its own (the default), or the checkout itself. */
-  const [inPlace, setInPlace] = useState(false)
+  /** In a repository: the checkout itself, or a worktree of its own. */
+  const [worktree, setWorktree] = useState(false)
   const promptRef = useRef<HTMLTextAreaElement>(null)
 
   // Each machine has its own models and default; what was picked on another doesn't carry over.
@@ -77,7 +77,7 @@ export function NewThreadDialog({ start, onClose }: { start: NewThreadStart; onC
         ...(profile ? { profile } : {}),
         ...(cwd.trim() ? { cwd: cwd.trim() } : {}), ...(title.trim() ? { title: title.trim() } : {}),
         ...(model ? { model } : {}), ...(thinking && levels.length ? { thinking } : {}), ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
-        ...(inPlace ? { worktree: false } : {}),
+        ...(worktree ? { worktree: true } : {}),
       }, { machine: machine.id, source: 'new thread' }) as ThreadInfo
       localStorage.setItem(LAST, JSON.stringify({ machine: machine.id, cwd: { ...last.cwd, [machine.id]: created.session?.root ?? created.cwd } } satisfies Last))
       onClose()
@@ -142,8 +142,8 @@ export function NewThreadDialog({ start, onClose }: { start: NewThreadStart; onC
           </div>
 
           <label className="new-thread__check">
-            <input type="checkbox" checked={inPlace} onChange={(e) => setInPlace(e.target.checked)} />
-            <span>Work in the checkout itself <em>(in a git repository, a thread gets a worktree of its own unless this is on)</em></span>
+            <input type="checkbox" checked={worktree} onChange={(e) => setWorktree(e.target.checked)} />
+            <span>In a worktree of its own <em>(in a git repository: a new branch, apart from the checkout)</em></span>
           </label>
 
           <label className="new-thread__field">

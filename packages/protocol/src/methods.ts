@@ -73,7 +73,7 @@ export type NewThread = {
   thinking?: string
   /** A first message, sent right away. */
   prompt?: string
-  /** In a git repository: a worktree of its own (the default, unless its profile says otherwise), or false to work in place. */
+  /** In a git repository: a worktree of its own, rather than the checkout (its profile's choice when unset; else no). */
   worktree?: boolean
   /** The profile to run with; unset takes the folder's default (the project's, else the user's). */
   profile?: string

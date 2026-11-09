@@ -491,12 +491,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       // The project's profile (or the user's) of that name, else the default one there is; checked (and allowed) now.
       const ref = findProfile(dir, userProfiles, profileName?.trim() || undefined)
       const loaded = ref ? await profileOf(ref) : undefined
-      // Its session is the project; in a repository it works in a worktree of its own, unless asked (or its profile
-      // says) to work in place, or the repository can't make one yet (no commits).
+      // Its session is the project. It works in the folder given, or, asked to (or its profile says so), in a worktree
+      // of its own: in a repository that has a commit to start from.
       const checkout = await checkoutOf(dir)
       let workdir = dir
       let worktree: ThreadMeta['worktree']
-      if (checkout && (wantsWorktree ?? loaded?.spec.worktree ?? true)) {
+      if (checkout && (wantsWorktree ?? loaded?.spec.worktree ?? false)) {
         const name = `${slugOf(title?.trim() || (prompt ? titleOf(prompt) : ''))}-${randomUUID().slice(0, 6)}`
         const path = join(options.dataDir, 'worktrees', basename(checkout.root), name)
         const branch = `mu/${name}`
