@@ -1,0 +1,24 @@
+{
+  "name": "@mu/files",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./daemon": "./src/daemon.ts",
+    "./ui": "./src/ui.tsx"
+  },
+  "dependencies": {
+    "@earendil-works/pi-schema": "1.5.0",
+    "@mu/daemon": "workspace:*",
+    "@mu/protocol": "workspace:*",
+    "@mu/app": "workspace:*",
+    "@mu/ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "react": "^19"
+  }
+}

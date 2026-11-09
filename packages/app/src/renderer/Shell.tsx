@@ -113,6 +113,7 @@ export function Shell() {
       {settings.open && <SettingsView machines={machines} onClose={settings.close} />}
       {palette && <Palette onClose={() => setPalette(false)} />}
       {navigator && <Navigator onClose={() => setNavigator(false)} />}
+      <Slot name="overlay" props={{}} />
       {log && <ActionLog router={registry.router.router} onClose={() => setLog(false)} />}
       {newThread.start && <NewThreadDialog start={newThread.start} onClose={newThread.close} />}
     </div>

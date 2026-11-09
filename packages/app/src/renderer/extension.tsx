@@ -16,12 +16,24 @@ export type SlotName =
   | 'composer.above'
   /** A pane beside the thread: details, diffs, files. Hidden while everything in it renders nothing. */
   | 'thread.aside'
+  /** Beside a file being edited: a file tree, an outline. `open` shows another file there (`beside`: in a pane of its own). */
+  | 'editor.side'
+  /** In a file editor's bar: small buttons. */
+  | 'editor.bar'
+  /** Always there, over everything: an extension's own dialogs (a quick open), drawn while it wants them. */
+  | 'overlay'
+
+/** What a slot beside a file editor gets: the file, and a way to show another. */
+export type EditorSlotProps = { machine: MachineEntry; thread: ThreadInfo; path: string; open(path: string, options?: { beside?: boolean }): void }
 
 export type SlotProps = {
   'sidebar': Record<string, never>
   'thread.header': { machine: MachineEntry; thread: ThreadInfo }
   'composer.above': { machine: MachineEntry; thread: ThreadInfo }
   'thread.aside': { machine: MachineEntry; thread: ThreadInfo }
+  'editor.side': EditorSlotProps
+  'editor.bar': EditorSlotProps
+  'overlay': Record<string, never>
 }
 
 /** A tool call in the transcript. `result` is there once it finished; `live` while it runs. */
@@ -111,7 +123,7 @@ export type Registry = {
 export function createRegistry(app: AppConfig, extensions: UiExtension[], core: (mu: UiApi) => void): Registry {
   const registry: Registry = {
     app, extensions: extensions.map((e) => e.name),
-    slots: { 'sidebar': [], 'thread.header': [], 'composer.above': [], 'thread.aside': [] },
+    slots: { 'sidebar': [], 'thread.header': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
     tools: new Map(), panes: new Map(), entries: new Map(), settings: new Map(), router: createWindowRouter(), appSettings: [],
     version: 0,
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },

@@ -600,6 +600,24 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     run: ({ id, kind, title, params }) => openPane(id, { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}) }),
   }))
   router.register(defineAction({
+    id: 'pane.update', title: 'Change what a pane shows', runs: 'machine', expose: ['ui', 'cli'], ...thread,
+    params: obj({ id: str(), pane: str(), title: opt(str()), params: opt(unknown()) }),
+    async run({ id, pane, title, params }) {
+      await get(id)
+      let found = false
+      await updateMeta(id, (meta) => {
+        const target = meta.panes?.find((p) => p.id === pane)
+        if (!target) return
+        found = true
+        if (params !== undefined) target.params = (typeof params === 'string' ? JSON.parse(params) : params) as Json
+        if (title !== undefined) target.title = title || undefined
+        else delete target.title
+      })
+      if (!found) throw new RpcError('not_found', `No pane ${pane}`)
+      return null
+    },
+  }))
+  router.register(defineAction({
     id: 'pane.close', title: 'Close a pane', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str(), pane: str() }),
     async run({ id, pane }) {

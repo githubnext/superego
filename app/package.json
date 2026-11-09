@@ -12,6 +12,7 @@
     "@mu/daemon": "workspace:*",
     "@mu/protocol": "workspace:*",
     "@mu/ask-user": "workspace:*",
+    "@mu/files": "workspace:*",
     "@mu/threads": "workspace:*"
   },
   "devDependencies": { "electron": "45.2.1", "electron-vite": "6.0.0", "@types/node": "^24" }

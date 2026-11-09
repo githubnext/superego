@@ -301,7 +301,8 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 
 /* The file editor: source (monospace, line numbers) or, for Markdown, live preview (as it reads, Obsidian-like). */
 .file-editor { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.file-editor__scroll { flex: 1; min-height: 0; overflow: auto; }
+.file-editor__main { flex: 1; min-height: 0; display: flex; }
+.file-editor__scroll { flex: 1; min-width: 0; min-height: 0; overflow: auto; }
 .file-editor__host .cm-editor { font-size: 13px; }
 .file-editor__host .cm-editor.cm-focused { outline: none; }
 .file-editor__host .cm-scroller { font-family: var(--mu-mono); overflow: visible; }

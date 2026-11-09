@@ -14,7 +14,7 @@ import type { ThreadInfo } from '@mu/protocol'
 import { Button } from '@mu/ui'
 import type { MachineEntry } from '../shared.ts'
 import { machine as client } from './client.ts'
-import { useRegistry } from './extension.tsx'
+import { fileKind, Slot, useRegistry, type EditorSlotProps } from './extension.tsx'
 import { linkAt, livePreview, type MarkdownLink } from './live-markdown.ts'
 
 export type { MarkdownLink }
@@ -29,6 +29,11 @@ export type FileEditorProps = {
   actions?: ReactNode
   /** Below the text, scrolling with it: a note's backlinks, say. */
   children?: ReactNode
+  /**
+   * Showing another file (from the file tree, say): here, or `beside` in a pane of its own. Without one, both open a
+   * pane of their own (the pane kind that takes the file).
+   */
+  onOpenFile?: (path: string, options: { beside: boolean }) => void
 }
 
 const MODE = 'mu.editor.mode'
@@ -52,7 +57,7 @@ function minimalChange(current: string, next: string) {
   return { from: start, to: current.length - end, insert: next.slice(start, next.length - end) }
 }
 
-export function FileEditor({ machine, thread, path, onLink, actions, children }: FileEditorProps) {
+export function FileEditor({ machine, thread, path, onLink, actions, children, onOpenFile }: FileEditorProps) {
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path)
   const [mode, setMode] = useState<'live' | 'source'>(() => localStorage.getItem(MODE) === 'source' ? 'source' : 'live')
   const live = isMarkdown && mode === 'live'
@@ -189,12 +194,20 @@ export function FileEditor({ machine, thread, path, onLink, actions, children }:
   const keepMine = () => { disk.current = conflict; setConflict(undefined); void save() }
 
   const chooseMode = (next: 'live' | 'source') => { localStorage.setItem(MODE, next); setMode(next) }
+  const registry = useRegistry()
+  const slot: EditorSlotProps = {
+    machine, thread, path,
+    open: (file, { beside = false } = {}) => onOpenFile
+      ? onOpenFile(file, { beside })
+      : void dispatch('pane.open', { id: thread.id, kind: fileKind(registry, thread, file), params: { path: file } }, { machine: machine.id, source: 'editor' }),
+  }
   return (
     <div className={`file-editor ${live ? 'file-editor--live' : ''}`}>
       <div className="pane-bar">
         <code title={path}>{path}</code>
         <span className={`pane-bar__note ${note?.error ? 'is-error' : ''}`}>{note?.text}</span>
         {actions}
+        <Slot name="editor.bar" props={slot} />
         {isMarkdown && (
           <span className="file-editor__mode" role="group" aria-label="Show as">
             <button className={live ? 'is-on' : ''} aria-pressed={live} onClick={() => chooseMode('live')}>Live</button>
@@ -209,9 +222,12 @@ export function FileEditor({ machine, thread, path, onLink, actions, children }:
           <Button onClick={keepMine}>Keep mine</Button>
         </div>
       )}
-      <div className="file-editor__scroll">
-        <div className="file-editor__host" ref={host} />
-        {children && <div className="file-editor__after">{children}</div>}
+      <div className="file-editor__main">
+        <Slot name="editor.side" props={slot} />
+        <div className="file-editor__scroll">
+          <div className="file-editor__host" ref={host} />
+          {children && <div className="file-editor__after">{children}</div>}
+        </div>
       </div>
     </div>
   )

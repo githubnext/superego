@@ -192,6 +192,23 @@ if (phase === 'first') {
   await until(`document.querySelector('.panes__tab')?.textContent.startsWith('Changes')`, 'pane menu opened Changes')
   await key('w', ['meta', 'shift'])
   await until(`!document.querySelector('.panes')`, 'menu pane closed')
+  // ⌘P: a file by a few letters of its name, opened beside the thread; its tree shows it, and a click there shows
+  // another file in the same editor.
+  await key('p')
+  await until(`Boolean(document.querySelector('.files-open .palette__input'))`, 'quick open')
+  await run(`(() => {
+    const input = document.querySelector('.files-open .palette__input')
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'note')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })()`)
+  await until(`document.querySelector('.files-open li.is-active')?.textContent.startsWith('notes.md')`, 'quick open finds notes.md')
+  await key('Enter', [])
+  await until(`document.querySelector('.panes__tab.is-active')?.textContent.startsWith('notes.md') && Boolean(document.querySelector('.files-tree__row.is-current'))`, 'notes.md open, with its tree')
+  await run(`[...document.querySelectorAll('.files-tree__row')].find((b) => b.textContent === 'page.html').click()`)
+  await until(`document.querySelectorAll('.panes__tab').length === 1 && document.querySelector('.panes__tab')?.textContent.startsWith('page.html')`, 'the tree showed page.html in the same editor')
+  await shot('files')
+  await key('w', ['meta', 'shift'])
+  await until(`!document.querySelector('.panes')`, 'editor closed')
   // The window as it was left, after a reload: the same thread selected, its unsent draft still there.
   await run(`document.querySelector('.composer textarea').focus()`)
   BrowserWindow.getAllWindows()[0].webContents.insertText('half a thought')
