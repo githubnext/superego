@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
@@ -292,7 +293,7 @@ describe('record and replay', () => {
     await writeFile(join(dir, 'notes.md'), 'one\n')
     execFileSync('git', ['-C', dir, 'add', 'notes.md']); execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'notes'])
     const { peer, close } = await open()
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
+    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir, worktree: false })
     expect((await peer.call<{ content: string }>('file.read', { id: thread.id, path: 'notes.md' })).content).toBe('one\n')
     await expect(peer.call('file.read', { id: thread.id, path: '../../etc/passwd' })).rejects.toMatchObject({ kind: 'invalid' })
     await peer.call('file.write', { id: thread.id, path: 'notes.md', content: 'two\n' })
@@ -302,6 +303,39 @@ describe('record and replay', () => {
     expect(changes.diff).toContain('-one')
     expect(changes.diff).toContain('+two')
     expect(changes.untracked).toContain('new.md')
+    await close()
+  })
+
+  it('gives a thread in a repository a worktree of its own, in the same session, removed when archived clean', async () => {
+    const { execFileSync } = await import('node:child_process')
+    const { mkdir, realpath } = await import('node:fs/promises')
+    const git = (...args: string[]) => execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { encoding: 'utf8' }).trim()
+    execFileSync('git', ['init', '-q', dir])
+    await mkdir(join(dir, 'app'))
+    await writeFile(join(dir, 'app/readme.md'), 'hi\n')
+    git('add', '.'); git('commit', '-q', '-m', 'start')
+    const root = await realpath(dir)
+    const { peer, close } = await open()
+    // Started in a folder below the top: the same folder, in its own worktree.
+    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: join(dir, 'app'), title: 'Fix the login flow' })
+    expect(thread.worktree?.branch).toMatch(/^mu\/fix-the-login-flow-[0-9a-f]{6}$/)
+    expect(thread.cwd).toBe(join(thread.worktree!.path, 'app'))
+    expect(thread.session).toEqual({ root, name: basename(root) })
+    expect(git('branch', '--list', thread.worktree!.branch)).toContain(thread.worktree!.branch)
+    // In place, when asked: the same session.
+    const here = await peer.call<ThreadInfo>('thread.create', { cwd: dir, worktree: false })
+    expect(here.worktree).toBeUndefined()
+    expect(here.session.root).toBe(root)
+    // Archived with nothing uncommitted: the worktree goes, the branch stays; unarchived, it's back.
+    expect(await peer.call('thread.archive', { id: thread.id })).toEqual({ worktree: 'removed' })
+    expect(existsSync(thread.worktree!.path)).toBe(false)
+    expect(git('branch', '--list', thread.worktree!.branch)).toContain(thread.worktree!.branch)
+    await peer.call('thread.unarchive', { id: thread.id })
+    expect(existsSync(join(thread.worktree!.path, 'app/readme.md'))).toBe(true)
+    // With changes in it, archiving leaves it be.
+    await writeFile(join(thread.worktree!.path, 'app/wip.md'), 'wip\n')
+    expect(await peer.call('thread.archive', { id: thread.id })).toEqual({ worktree: 'kept' })
+    expect(existsSync(join(thread.worktree!.path, 'app/wip.md'))).toBe(true)
     await close()
   })
 

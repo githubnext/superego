@@ -2,9 +2,9 @@
 // live subscription. Clients (the Electron app, the CLI, a remote app over ssh) speak the protocol in @mu/protocol.
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { link, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { link, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, hostname, platform } from 'node:os'
-import { join, resolve as resolvePath } from 'node:path'
+import { basename, dirname, join, relative, resolve as resolvePath } from 'node:path'
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
 import {
   type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, defineExtension, defineTool, type Extension, Harness, hook,
@@ -42,6 +42,10 @@ type ThreadMeta = {
   /** The panes open beside it, and the one in front. */
   panes?: Pane[]
   pane?: string
+  /** Its session: the project folder it belongs to (a repository's main checkout, or where it started). */
+  root?: string
+  /** Its own git worktree: where, on which branch, and whether archiving removed it. */
+  worktree?: { path: string; branch: string; removed?: boolean }
 }
 const ThreadDoc = defineDoc<ThreadMeta>({
   kind: 'mu.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current',
@@ -75,6 +79,8 @@ type Mounted = {
   conversation: Conversation; meta: ThreadMeta; live?: LiveState; lastEntryId?: number
   /** What the thread runs with and has spent, and when anything last happened in it. */
   model?: string; cost?: number; activeAt?: number
+  /** Its session, found from its folder, for a thread from before threads kept it. */
+  root?: string
   stop(): Promise<unknown>
 }
 
@@ -119,6 +125,25 @@ export function titleOf(text: string): string {
   if (clause) return clause
   const cut = sentence.slice(0, 72)
   return `${cut.slice(0, cut.lastIndexOf(' ') > 40 ? cut.lastIndexOf(' ') : 72).replace(/[,;:]$/, '')}…`
+}
+
+/** git in `cwd`: its output, trimmed; its own message when it fails. */
+function git(cwd: string, args: string[]): Promise<string> {
+  return new Promise((done, fail) => execFile('git', ['-C', cwd, ...args], { maxBuffer: 16 * 1024 * 1024 }, (error, out, err) =>
+    error ? fail(new Error(String(err).trim() || error.message)) : done(String(out).trim())))
+}
+
+/** The repository `dir` is in: its checkout's top, and the project it belongs to (the main checkout, for a worktree). */
+async function checkoutOf(dir: string): Promise<{ top: string; root: string } | undefined> {
+  const top = await git(dir, ['rev-parse', '--show-toplevel']).catch(() => undefined)
+  if (!top) return undefined
+  const common = await git(dir, ['rev-parse', '--path-format=absolute', '--git-common-dir']).catch(() => '')
+  return { top, root: basename(common) === '.git' ? dirname(common) : top }
+}
+
+/** A branch- and folder-friendly name for a thread: "Fix the login flow" → "fix-the-login-flow". */
+export function slugOf(text: string): string {
+  return text.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '') || 'thread'
 }
 
 /** `path` in `folder`, refusing anything that resolves outside it. */
@@ -233,6 +258,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       meta: (await harness.snapshot(ThreadDoc, id, context)) ?? { title: '', cwd: defaultCwd, createdAt: 0 },
       stop: () => watch.stop(),
     }
+    if (!entry.meta.root) entry.root = (await checkoutOf(entry.meta.cwd).catch(() => undefined))?.root
     const absorb = (view: ConversationView) => {
       const wasRunning = Boolean(entry.live?.run)
       entry.live = view.docs['pi.live'] as LiveState | undefined
@@ -260,8 +286,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     ...(m.model ? { model: m.model } : {}), ...(m.cost ? { cost: m.cost } : {}), ...(m.meta.model ? { ownModel: true } : {}),
     ...(m.meta.profile ? { profile: m.meta.profile } : {}),
     ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),
+    session: { root: rootOf(m), name: basename(rootOf(m)) },
+    ...(m.meta.worktree ? { worktree: m.meta.worktree } : {}),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
+  /** A thread's session: kept since it started; for older threads, found from its folder once (else the folder). */
+  const rootOf = (m: Mounted) => m.meta.root ?? m.root ?? m.meta.cwd
   /** Only an assistant answer makes a thread "done"; the user's own message does not. */
   const lastAnswer = (m: Mounted) => m.live?.run ? undefined : m.lastEntryId
 
@@ -453,16 +483,34 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const thread = { thread: true as const }
   router.register(defineAction({
     id: 'thread.create', title: 'Start a thread (no dialog)', runs: 'machine', expose: ['ui', 'cli'],
-    params: obj({ cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), profile: opt(str()) }),
-    async run({ cwd, title, model: ownModel, thinking, prompt, profile: profileName }) {
+    params: obj({ cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), profile: opt(str()), worktree: opt(bool()) }),
+    async run({ cwd, title, model: ownModel, thinking, prompt, profile: profileName, worktree: wantsWorktree }) {
       const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
       if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${machine.hostname}`)
       if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
       // The project's profile (or the user's) of that name, else the default one there is; checked (and allowed) now.
       const ref = findProfile(dir, userProfiles, profileName?.trim() || undefined)
-      if (ref) await profileOf(ref)
+      const loaded = ref ? await profileOf(ref) : undefined
+      // Its session is the project; in a repository it works in a worktree of its own, unless asked (or its profile
+      // says) to work in place, or the repository can't make one yet (no commits).
+      const checkout = await checkoutOf(dir)
+      let workdir = dir
+      let worktree: ThreadMeta['worktree']
+      if (checkout && (wantsWorktree ?? loaded?.spec.worktree ?? true)) {
+        const name = `${slugOf(title?.trim() || (prompt ? titleOf(prompt) : ''))}-${randomUUID().slice(0, 6)}`
+        const path = join(options.dataDir, 'worktrees', basename(checkout.root), name)
+        const branch = `mu/${name}`
+        await mkdir(dirname(path), { recursive: true })
+        const made = await git(checkout.top, ['worktree', 'add', '-q', '-b', branch, path, 'HEAD']).then(() => true, () => false)
+        if (made) {
+          // git gives real paths; so must the folder be, to find where in the checkout it is.
+          const below = relative(checkout.top, await realpath(dir))
+          workdir = below ? join(path, below) : path
+          worktree = { path, branch }
+        }
+      }
       const meta: ThreadMeta = {
-        title: title?.trim() ?? '', cwd: dir, createdAt: Date.now(),
+        title: title?.trim() ?? '', cwd: workdir, createdAt: Date.now(), root: checkout?.root ?? dir, ...(worktree ? { worktree } : {}),
         ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}), ...(ref ? { profile: ref } : {}),
       }
       const { model, thinkingLevel } = await agentOf(meta)
@@ -515,12 +563,36 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   router.register(defineAction({
     id: 'thread.archive', title: 'Archive the thread', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str() }),
-    async run({ id }) { await get(id); await updateMeta(id, (meta) => { meta.archived = true }); changed(); return null },
+    async run({ id }) {
+      const { meta } = await get(id)
+      // Its worktree goes with it when nothing in it is uncommitted; its branch stays, to come back to.
+      const tree = meta.worktree
+      let removed = tree?.removed
+      if (tree && !tree.removed) {
+        const exists = await stat(tree.path).then(() => true, () => false)
+        const clean = exists && (await git(tree.path, ['status', '--porcelain']).catch(() => 'unknown')) === ''
+        if (!exists) removed = true
+        else if (clean) removed = await git(meta.root ?? tree.path, ['worktree', 'remove', tree.path]).then(() => true, () => false)
+      }
+      await updateMeta(id, (m) => { m.archived = true; if (m.worktree && removed) m.worktree.removed = true })
+      return { worktree: tree ? (removed ? 'removed' : 'kept') : null }
+    },
   }))
   router.register(defineAction({
     id: 'thread.unarchive', title: 'Unarchive the thread', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str() }),
-    async run({ id }) { await get(id); await updateMeta(id, (meta) => { delete meta.archived }); changed(); return null },
+    async run({ id }) {
+      const { meta } = await get(id)
+      // Its worktree back, on the branch it left.
+      const tree = meta.worktree
+      if (tree?.removed && meta.root) {
+        await mkdir(dirname(tree.path), { recursive: true })
+        await git(meta.root, ['worktree', 'add', '-q', tree.path, tree.branch])
+          .catch((error: Error) => { throw new RpcError('invalid', `Couldn't restore its worktree: ${error.message}`) })
+      }
+      await updateMeta(id, (m) => { delete m.archived; if (m.worktree) delete m.worktree.removed })
+      return null
+    },
   }))
   router.register(defineAction({
     id: 'pane.open', title: 'Open a pane', runs: 'machine', expose: ['ui', 'cli'], ...thread,

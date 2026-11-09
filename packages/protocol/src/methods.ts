@@ -9,7 +9,7 @@ import type { Status } from './status.ts'
  * The protocol's generation. It changes only for a break no feature flag can bridge; a daemon and client of different
  * generations refuse each other. Everything else is additive and announced in `FEATURES`.
  */
-export const PROTOCOL_VERSION = 3
+export const PROTOCOL_VERSION = 1
 
 /**
  * What a daemon of this build offers, announced in `hello`. Clients check a feature before using it, so an older
@@ -38,6 +38,10 @@ export type ThreadInfo = {
   pane?: string
   /** The profile it runs with: one of the project's, or one of the user's. Absent: plain mu. */
   profile?: ProfileRef
+  /** The session it belongs to, on its machine: a project, by the folder it lives in (a repository's main checkout). */
+  session: { root: string; name: string }
+  /** Its own git worktree, when it has one; `removed` once archiving took it away (its branch stays). */
+  worktree?: { path: string; branch: string; removed?: boolean }
   status: Status
 }
 
@@ -69,6 +73,8 @@ export type NewThread = {
   thinking?: string
   /** A first message, sent right away. */
   prompt?: string
+  /** In a git repository: a worktree of its own (the default, unless its profile says otherwise), or false to work in place. */
+  worktree?: boolean
   /** The profile to run with; unset takes the folder's default (the project's, else the user's). */
   profile?: string
 }

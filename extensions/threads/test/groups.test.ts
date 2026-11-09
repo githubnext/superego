@@ -4,7 +4,7 @@ import type { ThreadInfo, Status } from '@mu/protocol'
 import { ago, groupThreads } from '../src/groups.ts'
 
 const machine = (id: string, state: MachineEntry['state'] = 'connected'): MachineEntry => ({ id, label: id === 'local' ? 'This computer' : 'Build box', state })
-const thread = (id: string, state: Status['state'], createdAt: number, activeAt: number): ThreadInfo => ({ id, title: id, cwd: '/', createdAt, activeAt, status: { state } })
+const thread = (id: string, state: Status['state'], createdAt: number, activeAt: number): ThreadInfo => ({ id, title: id, cwd: '/', createdAt, activeAt, session: { root: '/', name: '/' }, status: { state } })
 const machines = [machine('local'), machine('box', 'disconnected')]
 const threads = {
   local: [thread('old-busy', 'working', 1, 50), thread('new-done', 'done', 30, 31), thread('mid-asks', 'blocked', 20, 40)],

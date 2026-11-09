@@ -40,6 +40,7 @@ Usage:
   ${app.id} create [dir] [-p prompt]   Start a thread without opening the app; prints its id (also: new)
   ${app.id} send <thread> <text...>   Send a message to a thread
       -P, --profile <name>        Start with this profile (default: the folder's default, the project's before yours)
+      --here                      In a git repository, work in the checkout itself instead of a worktree of its own
 
   ${app.id} profile                    List the profiles a thread here could start with
   ${app.id} profile new [name] [--user] Make a profile in this project's .mu/profiles (or yours, ~/.${app.id}/profiles)
@@ -157,18 +158,19 @@ function openInApp(machine: string, thread: string) {
 
 // ── Commands ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-async function startThread(args: { dir?: string; machine?: string; prompt?: string; profile?: string; open: boolean }) {
+async function startThread(args: { dir?: string; machine?: string; prompt?: string; profile?: string; here?: boolean; open: boolean }) {
   const machine = resolveMachine(args.machine)
   // A local directory is resolved here; on another machine it is passed as given, or left to that daemon's default.
   const cwd = machine.config ? args.dir : resolve(args.dir ?? '.')
   const thread = await on(machine, async (call) => {
     // Actions take their parameters by name; thread.create picks the folder's profile unless one is named.
-    const created = await call('action.run', { id: 'thread.create', params: { ...(cwd ? { cwd } : {}), ...(args.profile ? { profile: args.profile } : {}), ...(args.prompt ? { prompt: args.prompt } : {}) }, exposure: 'cli' }) as ThreadInfo
+    const created = await call('action.run', { id: 'thread.create', params: { ...(cwd ? { cwd } : {}), ...(args.profile ? { profile: args.profile } : {}), ...(args.prompt ? { prompt: args.prompt } : {}), ...(args.here ? { worktree: false } : {}) }, exposure: 'cli' }) as ThreadInfo
     return created
   })
   if (args.open) openInApp(machine.id, thread.id)
   print({ machine: machine.id, ...thread }, () => {
-    if (args.open) console.log(`Opened thread ${thread.id} in ${thread.cwd}${machine.config ? ` on ${machine.label}` : ''}`)
+    const where = thread.worktree ? `its worktree ${thread.cwd} (branch ${thread.worktree.branch})` : thread.cwd
+    if (args.open) console.log(`Opened thread ${thread.id} in ${where}${machine.config ? ` on ${machine.label}` : ''}`)
     else console.log(thread.id)
   })
 }
@@ -485,7 +487,7 @@ async function main() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
-      machine: { type: 'string', short: 'm' }, prompt: { type: 'string', short: 'p' }, json: { type: 'boolean' }, profile: { type: 'string', short: 'P' },
+      machine: { type: 'string', short: 'm' }, prompt: { type: 'string', short: 'p' }, json: { type: 'boolean' }, profile: { type: 'string', short: 'P' }, here: { type: 'boolean' },
       user: { type: 'boolean' }, archived: { type: 'boolean' },
       all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
       start: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
@@ -495,7 +497,7 @@ async function main() {
   const [first, ...rest] = positionals
   if (values.help || first === 'help') return console.log(help())
   // No command, or a directory: start a thread there and open it.
-  if (!first || !COMMANDS.has(first)) return startThread({ dir: first, machine: values.machine, prompt: values.prompt, profile: values.profile, open: true })
+  if (!first || !COMMANDS.has(first)) return startThread({ dir: first, machine: values.machine, prompt: values.prompt, profile: values.profile, here: values.here, open: true })
   switch (first) {
     case 'open': {
       if (!rest[0]) throw new RpcError('usage', `${app.id} open <thread>`)
@@ -506,7 +508,7 @@ async function main() {
       return openInApp(machine.id, rest[0])
     }
     case 'threads': case 'ls': return threads(values.machine, Boolean(values.archived))
-    case 'new': case 'create': return startThread({ dir: rest[0], machine: values.machine, prompt: values.prompt, profile: values.profile, open: false })
+    case 'new': case 'create': return startThread({ dir: rest[0], machine: values.machine, prompt: values.prompt, profile: values.profile, here: values.here, open: false })
     case 'profile': case 'profiles': return profileCommand(rest[0], rest.slice(1), values)
     case 'send': {
       const [id, ...text] = rest

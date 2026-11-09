@@ -44,7 +44,7 @@ async function restartOntoNewCode(change) {
   await until(`document.querySelector('.service-notice')?.textContent.includes('Restart required')`, 'restart required shown')
   await run(`[...document.querySelectorAll('.service-notice button')].find((b) => b.textContent === 'Restart now').click()`)
   await until(`!document.querySelector('.service-notice')`, 'restart done', 40_000)
-  const after = await run(`window.mu.call('local', 'hello', { client: 'smoke', version: 3 })`)
+  const after = await run(`window.mu.call('local', 'hello', { client: 'smoke', version: 1 })`)
   if (after.machine.id !== before.machine.id || !(await run(`window.mu.call('local', 'thread.list', {})`)).length) { await fail('restart lost the machine or its threads'); throw new Error('failed') }
   return after
 }
