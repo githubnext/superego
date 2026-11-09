@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ConversationView, EntryRecord, LiveState } from '@earendil-works/pi-durable'
-import type { ThreadInfo } from '@mu/protocol'
+import type { Attachment, ThreadInfo } from '@mu/protocol'
 import { Button, IconButton, Menu, StatusGlyph, statusLabel, TextArea } from '@mu/ui'
 import type { MachineEntry } from '../shared.ts'
 import { machine as client, useThreadView } from './client.ts'
@@ -8,6 +8,7 @@ import { fileKind, paneMenu, Slot, useRegistry, type ToolCallProps } from './ext
 import { useShell } from './state.tsx'
 import { Markdown, OpenFile, Scroll } from './Markdown.tsx'
 import { useLocalState } from './local-state.ts'
+import { readAttachment, splitMessage } from './attachments.ts'
 import { useProfileUi } from './profile-ui.ts'
 import { ThreadPanes } from './panes.tsx'
 
@@ -215,8 +216,18 @@ function Entry({ entry }: { entry: EntryRecord }) {
   if (custom) { const Custom = custom; return <Custom {...here} entry={{ id: entry.id, kind: entry.kind, data: entry.data }} /> }
   const message = entry.model?.[0] as Message | undefined
   if (message?.role === 'user') {
-    // The title is the first message's opening; under it, only the rest of that message.
-    const text = textOf(message)
+    // The title is the first message's opening; under it, only the rest of that message. Files sent with it below.
+    const { text, files } = splitMessage(blocks(message))
+    const sent = files.length > 0 && (
+      <div className="msg__files">
+        {files.map((file, index) => (
+          <span key={`${file.path}-${index}`} className="attachment" title={file.path}>
+            {file.image ? <img src={file.image} alt={file.name} /> : <span className="attachment__icon">▤</span>}
+            <span className="attachment__name">{file.name}</span>
+          </span>
+        ))}
+      </div>
+    )
     // A title cut short (…) says too little on its own: then the whole message shows.
     const title = here.thread.title
     // A rest that starts mid-sentence (", write nothing") reads better whole, too.
@@ -224,7 +235,8 @@ function Entry({ entry }: { entry: EntryRecord }) {
     // After a title that is the message's first clause, the rest reads as its own sentence.
     const clause = /^[:;—–]\s*/.exec(tail)
     const rest = clause ? tail.slice(clause[0].length).replace(/^./, (c) => c.toUpperCase()) : /^[,-]/.test(tail) ? text : tail
-    return rest ? <div className="msg msg--user">{rest}</div> : null
+    if (!rest && !sent) return null
+    return <div className="msg msg--user">{rest}{sent}</div>
   }
   return <div className="msg msg--note">{entry.kind}</div>
 }
@@ -453,17 +465,34 @@ function Composer({ machine, thread, busy }: { machine: MachineEntry; thread: Th
   const input = useRef<HTMLTextAreaElement>(null)
   const disabled = machine.state !== 'connected'
   useEffect(() => { input.current?.focus() }, [thread.id])
+  // Files going with the next message: picked, dropped on the composer or pasted into it.
+  const [files, setFiles] = useState<Attachment[]>([])
+  const [dragging, setDragging] = useState(false)
+  const picker = useRef<HTMLInputElement>(null)
+  useEffect(() => { setFiles([]) }, [thread.id])
+  const attach = async (list: FileList | File[]) => {
+    try {
+      const read = await Promise.all([...list].map(readAttachment))
+      setFiles((was) => [...was, ...read])
+      setError(undefined)
+    } catch (e) { setError({ message: (e as Error).message }) }
+  }
 
   const send = async () => {
     const value = text.trim()
-    if (!value) return
+    const sending = claim ? [] : files
+    if (!value && !sending.length) return
     setText('')
+    setFiles([])
     setError(undefined)
     try {
       if (claim) { await claim.submit(value); return }
-      await dispatch('thread.submit', { id: thread.id, text: value, requestId: crypto.randomUUID(), ...(busy ? { whenBusy: 'steer' as const } : {}) }, { machine: machine.id, source: 'composer' })
+      await dispatch('thread.submit', {
+        id: thread.id, text: value, ...(sending.length ? { attachments: sending } : {}), requestId: crypto.randomUUID(), ...(busy ? { whenBusy: 'steer' as const } : {}),
+      }, { machine: machine.id, source: 'composer' })
     } catch (error) {
       setText(value)
+      setFiles(sending)
       setError(error as { kind?: string; message: string })
     }
   }
@@ -474,19 +503,42 @@ function Composer({ machine, thread, busy }: { machine: MachineEntry; thread: Th
   }
   return (
     <ClaimContext.Provider value={register}>
-    <div className="dock">
+    <div className={`dock ${dragging ? 'is-dropping' : ''}`}
+      onDragOver={(e) => { if (!claim && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true) } }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false) }}
+      onDrop={(e) => { setDragging(false); if (!claim && e.dataTransfer.files.length) { e.preventDefault(); void attach(e.dataTransfer.files) } }}>
     <div className="dock__above"><Slot name="composer.above" props={{ machine, thread }} /></div>
+    {files.length > 0 && !claim && (
+      <div className="composer__files">
+        {files.map((file, index) => (
+          <span key={`${file.name}-${index}`} className="attachment">
+            {file.mimeType.startsWith('image/') ? <img src={`data:${file.mimeType};base64,${file.data}`} alt="" /> : <span className="attachment__icon">▤</span>}
+            <span className="attachment__name">{file.name}</span>
+            <button className="attachment__remove" aria-label={`Remove ${file.name}`} onClick={() => setFiles((was) => was.filter((_, i) => i !== index))}>×</button>
+          </span>
+        ))}
+      </div>
+    )}
     {error && (
       <div className="composer__error">
         {error.kind === 'no_model' ? <>No model is set up on {machine.label}. <Button onClick={onOpenSettings}>Open Settings</Button></> : error.message}
       </div>
     )}
     <div className="composer">
+      {!claim && (
+        <>
+          <IconButton label="Attach files" className="composer__attach" disabled={disabled} onClick={() => picker.current?.click()}>
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M13.5 7.5 8 13a3.5 3.5 0 0 1-5-5l5.8-5.8a2.3 2.3 0 0 1 3.3 3.3L6.4 11.2a1.2 1.2 0 0 1-1.7-1.7L10 4.2" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </IconButton>
+          <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) void attach(e.target.files); e.target.value = '' }} />
+        </>
+      )}
       <TextArea ref={input} rows={1} value={text} disabled={disabled} onChange={(e) => setText(e.target.value)} onKeyDown={onKeyDown}
+        onPaste={(e) => { if (!claim && e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files) } }}
         placeholder={disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the running agent…' : 'Ask anything'} />
       <div className="composer__actions">
         {busy && !claim && <Button className="composer__button" onClick={() => void abort()}>Stop <kbd>esc</kbd></Button>}
-        <Button className="composer__button" aria-label={claim ? 'Answer' : busy ? 'Steer' : 'Send'} disabled={disabled || !text.trim()} onClick={() => void send()}>{claim ? 'Answer' : busy ? 'Steer' : 'Send'} <kbd>⏎</kbd></Button>
+        <Button className="composer__button" aria-label={claim ? 'Answer' : busy ? 'Steer' : 'Send'} disabled={disabled || (!text.trim() && (claim ? true : !files.length))} onClick={() => void send()}>{claim ? 'Answer' : busy ? 'Steer' : 'Send'} <kbd>⏎</kbd></Button>
       </div>
     </div>
     </div>

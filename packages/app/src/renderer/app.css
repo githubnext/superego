@@ -375,3 +375,18 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 .panes__column:has(.cm-editor.cm-focused) .file-editor__scroll { outline: 2px solid var(--mu-text); outline-offset: -2px; }
 .panes__column:focus-within > .panes__tab .panes__label::before, .app__sidebar:focus-within .threads__head > span:first-child::before { content: '●'; font-size: 8px; margin-right: 7px; vertical-align: 2px; }
 .panes__column:focus { outline: none !important; }
+
+/* Attachments: chips, an image's with its thumbnail; waiting above the composer, then under the message they went with. */
+.composer__files, .msg__files { display: flex; flex-wrap: wrap; gap: 6px; }
+.composer__files { margin: 0 0 8px; }
+.msg__files { margin-top: 6px; justify-content: flex-end; }
+.msg--user:has(.msg__files) { display: flex; flex-direction: column; align-items: flex-end; }
+.attachment { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; padding: 3px 6px 3px 3px; border-radius: 7px; background: color-mix(in srgb, var(--mu-text) 6%, transparent); font-size: var(--mu-text-sm); }
+.attachment img { width: 28px; height: 28px; object-fit: cover; border-radius: 5px; }
+.msg__files .attachment img { width: auto; height: auto; max-width: 220px; max-height: 160px; }
+.attachment__icon { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; color: var(--mu-muted); }
+.attachment__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment__remove { border: 0; background: none; color: var(--mu-faint); font: inherit; padding: 0 2px; cursor: default; }
+.attachment__remove:hover { color: var(--mu-text); }
+.composer__attach { align-self: flex-end; color: var(--mu-muted); }
+.dock.is-dropping { outline: 2px dashed var(--mu-text); outline-offset: 2px; }

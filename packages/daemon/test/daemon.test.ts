@@ -339,6 +339,32 @@ describe('record and replay', () => {
     await close()
   })
 
+  it('sends files with a message: saved on the machine, named to the agent, images as images', async () => {
+    const { readFile } = await import('node:fs/promises')
+    const { peer, close } = await open()
+    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
+    const png = Buffer.from('89504e470d0a1a0a', 'hex').toString('base64')
+    await peer.call('thread.submit', { id: thread.id, text: 'look', attachments: [
+      { name: 'shot.png', mimeType: 'image/png', data: png },
+      { name: 'notes.md', mimeType: 'text/markdown', data: Buffer.from('# Hi\n').toString('base64') },
+      { name: 'notes.md', mimeType: 'text/markdown', data: Buffer.from('again\n').toString('base64') },
+    ] })
+    await until(async () => (await threads(peer)).find((t) => t.id === thread.id)!.status.state === 'done')
+    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
+    const user = value.entries.find((e) => e.kind === 'pi.user')!.model![0] as { content: { type: string; text?: string; mimeType?: string }[] }
+    expect(user.content.map((b) => b.type)).toEqual(['text', 'text', 'image', 'text', 'text'])
+    expect(user.content[0]!.text).toBe('look')
+    expect(user.content[2]!.mimeType).toBe('image/png')
+    const saved = join(dir, 'attachments', thread.id)
+    expect(user.content[3]!.text).toBe(`<attachment name="notes.md" type="text/markdown" path="${join(saved, 'notes.md')}">\n# Hi\n\n</attachment>`)
+    expect(user.content[4]!.text).toContain(`path="${join(saved, 'notes-2.md')}"`)
+    expect(await readFile(join(saved, 'shot.png'), 'base64')).toBe(png)
+    // A message can be files alone; nothing at all is refused.
+    await peer.call('thread.submit', { id: thread.id, text: '', attachments: [{ name: 'a.txt', mimeType: 'text/plain', data: '' }] })
+    await expect(peer.call('thread.submit', { id: thread.id, text: '  ' })).rejects.toMatchObject({ kind: 'invalid' })
+    await close()
+  })
+
   it('finds a file by the name a link gives it, as Obsidian resolves [[links]]', async () => {
     const { mkdir } = await import('node:fs/promises')
     await mkdir(join(dir, 'Work/Old'), { recursive: true })

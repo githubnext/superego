@@ -277,6 +277,19 @@ if (phase === 'first') {
   await key('i', ['control'])
   await until(`document.activeElement?.matches('.composer textarea')`, 'ctrl+i to the prompt')
   if (ring !== 'solid') { await fail(`focus not drawn: ${ring}`); throw new Error('failed') }
+  // Attachments: a file picked with the paperclip waits above the composer, then goes with the message and shows under it.
+  await run(`(() => {
+    const input = document.querySelector('.composer input[type=file]')
+    const files = new DataTransfer()
+    files.items.add(new File(['# plan\\n'], 'plan.md', { type: 'text/markdown' }))
+    input.files = files.files
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+  })()`)
+  await until(`document.querySelector('.composer__files .attachment__name')?.textContent === 'plan.md'`, 'file waiting to be sent')
+  await run(`document.querySelector('.composer textarea').focus()`)
+  BrowserWindow.getAllWindows()[0].webContents.insertText('read this')
+  await key('Enter', [])
+  await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('read this') && m.querySelector('.msg__files .attachment__name')?.textContent === 'plan.md') && !document.querySelector('.composer__files')`, 'file sent with the message')
   await shot('sessions')
   // Settings: the app's own sections, then the machine's, drawn from what each registers.
   await run(`[...document.querySelectorAll('.app__footer button')].find((b) => b.textContent === 'Settings').click()`)

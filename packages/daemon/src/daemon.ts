@@ -14,7 +14,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  arr, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type ThreadInfo,
+  arr, type Attachment, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type ThreadInfo,
 } from '@mu/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@mu/settings'
 import { FileSettingsStore } from '@mu/settings/file'
@@ -152,6 +152,16 @@ function inFolder(folder: string, path: string) {
   if (file !== folder && !file.startsWith(folder.endsWith('/') ? folder : `${folder}/`)) throw new RpcError('invalid', `${path} is outside ${folder}`)
   return file
 }
+
+/** Attachments: what one may weigh, and how small a text file is to be shown to the model whole. */
+const ATTACHMENT_LIMIT = 20 * 1024 * 1024
+const INLINE_LIMIT = 100 * 1024
+const ATTACHMENT = obj({ name: str({ minLength: 1 }), mimeType: str(), data: str() })
+/** Images the models take as images. */
+const IMAGE = /^image\/(png|jpeg|gif|webp)$/
+const isText = (mimeType: string, name: string) =>
+  /^text\/|json|xml|javascript|typescript|yaml|toml|csv|markdown|x-sh/.test(mimeType)
+    || /\.(md|markdown|txt|ts|tsx|js|jsx|mjs|json|css|html|py|rs|go|rb|swift|kt|java|c|h|cpp|yml|yaml|toml|csv|log|sh|sql|ini|env)$/i.test(name)
 
 /** Folders a file search never enters: tools' and dependencies' own. */
 const UNSEARCHED = new Set(['node_modules', '.git', '.obsidian', '.trash', '.mu', 'dist', 'out', 'build'])
@@ -444,14 +454,46 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
 
   /** Send `text` to a thread, with the model and thinking it chose, else what this machine's settings say now. */
-  async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp') {
+  async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp', attachments: Attachment[] = []) {
+    if (!text.trim() && !attachments.length) throw new RpcError('invalid', 'Nothing to send')
     const m = await get(id)
     const { model, thinkingLevel, ...rest } = await agentOf(m.meta)
     if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
     await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null, ...rest }, context)
-    if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text) })
-    const submission = await m.conversation.submit({ type: 'input', content: text, requestId, ...(whenBusy ? { whenBusy } : {}) }, context)
+    if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
+    const content = await contentOf(id, text, attachments)
+    const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}) }, context)
     return String(submission.id)
+  }
+
+  /**
+   * A message's content with its attachments: each file saved under attachments/<thread>/ on this machine and named to
+   * the agent by its path (a small text file inline too), images also given to the model as images.
+   */
+  async function contentOf(id: string, text: string, attachments: Attachment[]) {
+    if (!attachments.length) return text
+    const dir = join(options.dataDir, 'attachments', id)
+    await mkdir(dir, { recursive: true })
+    const blocks: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[] = []
+    if (text.trim()) blocks.push({ type: 'text', text })
+    for (const attachment of attachments) {
+      const bytes = Buffer.from(attachment.data, 'base64')
+      if (bytes.length > ATTACHMENT_LIMIT) throw new RpcError('too_large', `${attachment.name} is larger than ${ATTACHMENT_LIMIT / 1024 / 1024} MB`)
+      const name = basename(attachment.name.replace(/\\/g, '/')).replace(/^\.+/, '') || 'attachment'
+      const dot = name.lastIndexOf('.')
+      const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, '']
+      let path = join(dir, name)
+      for (let n = 2; await stat(path).then(() => true, () => false); n++) path = join(dir, `${stem}-${n}${ext}`)
+      await writeFile(path, bytes)
+      const quote = (value: string) => value.replace(/[&"<>]/g, (c) => `&#${c.charCodeAt(0)};`)
+      const tag = `<attachment name="${quote(name)}" type="${quote(attachment.mimeType)}" path="${quote(path)}"`
+      if (IMAGE.test(attachment.mimeType)) {
+        blocks.push({ type: 'text', text: `${tag} />` }, { type: 'image', data: attachment.data, mimeType: attachment.mimeType })
+      } else if (bytes.length <= INLINE_LIMIT && isText(attachment.mimeType, name)) {
+        blocks.push({ type: 'text', text: `${tag}>\n${bytes.toString('utf8')}\n</attachment>` })
+      } else blocks.push({ type: 'text', text: `${tag} />` })
+    }
+    return blocks
   }
 
   // ── Panes and files ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -483,8 +525,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const thread = { thread: true as const }
   router.register(defineAction({
     id: 'thread.create', title: 'Start a thread (no dialog)', runs: 'machine', expose: ['ui', 'cli'],
-    params: obj({ cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), profile: opt(str()), worktree: opt(bool()) }),
-    async run({ cwd, title, model: ownModel, thinking, prompt, profile: profileName, worktree: wantsWorktree }) {
+    params: obj({ cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), attachments: opt(arr(ATTACHMENT)), profile: opt(str()), worktree: opt(bool()) }),
+    async run({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree: wantsWorktree }) {
       const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
       if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${machine.hostname}`)
       if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
@@ -524,7 +566,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       }, context)
       const m = await mount(conversation.id)
       changed()
-      if (prompt?.trim()) await submit(String(conversation.id), prompt, randomUUID())
+      if (prompt?.trim() || attachments?.length) await submit(String(conversation.id), prompt ?? '', randomUUID(), undefined, attachments)
       return info(String(conversation.id), m)
     },
   }))
@@ -552,8 +594,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }))
   router.register(defineAction({
     id: 'thread.submit', title: 'Send a message', runs: 'machine', expose: ['ui', 'cli'], ...thread,
-    params: obj({ id: str(), text: str({ minLength: 1 }), requestId: opt(str()), whenBusy: opt(union([lit('steer'), lit('followUp')])) }),
-    run: async ({ id, text, requestId, whenBusy }) => ({ submission: await submit(id, text, requestId ?? randomUUID(), whenBusy) }),
+    params: obj({ id: str(), text: str(), attachments: opt(arr(ATTACHMENT)), requestId: opt(str()), whenBusy: opt(union([lit('steer'), lit('followUp')])) }),
+    run: async ({ id, text, attachments, requestId, whenBusy }) => ({ submission: await submit(id, text, requestId ?? randomUUID(), whenBusy, attachments) }),
   }))
   router.register(defineAction({
     id: 'thread.abort', title: 'Stop the agent', runs: 'machine', expose: ['ui', 'cli'], ...thread,

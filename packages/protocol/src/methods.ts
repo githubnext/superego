@@ -64,6 +64,9 @@ export type ProfileRef = { name: string; scope: 'user' | 'project'; dir: string 
 /** A profile a thread in some folder could start with (see the daemon's profiles.ts). */
 export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean }
 
+/** A file sent with a message: images go to the model as images; any file is saved on the thread's machine. */
+export type Attachment = { name: string; mimeType: string; /** Base64. */ data: string }
+
 export type NewThread = {
   cwd?: string
   title?: string
@@ -73,6 +76,8 @@ export type NewThread = {
   thinking?: string
   /** A first message, sent right away. */
   prompt?: string
+  /** Files sent with the first message. */
+  attachments?: Attachment[]
   /** In a git repository: a worktree of its own, rather than the checkout (its profile's choice when unset; else no). */
   worktree?: boolean
   /** The profile to run with; unset takes the folder's default (the project's, else the user's). */
@@ -104,7 +109,7 @@ export type Methods = {
   /** One module of a profile's UI, as JavaScript (types stripped); its own imports are left for the window to load. */
   'profile.module': { params: ProfileRef & { path: string }; result: { path: string; code: string } }
   'thread.rename': { params: { id: ThreadId; title: string }; result: null }
-  'thread.submit': { params: { id: ThreadId; text: string; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
+  'thread.submit': { params: { id: ThreadId; text: string; attachments?: Attachment[]; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
   'thread.abort': { params: { id: ThreadId }; result: null }
   /** The user looked at the thread: its done/error status clears. */
   'thread.seen': { params: { id: ThreadId }; result: null }
