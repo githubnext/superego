@@ -24,7 +24,8 @@ function store<T>(key: string | undefined, initial: T) {
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
   }
 }
-const treeShown = store('mu.files.tree', true)
+/** The tree beside the editor: closed until asked for, then as last left. */
+const treeShown = store('mu.files.tree', false)
 const quickOpen = store<boolean>(undefined, false)
 /** Folders open in the tree, by session. */
 const expanded = store<Record<string, string[]>>('mu.files.expanded', {})

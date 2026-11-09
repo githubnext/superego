@@ -21,6 +21,8 @@ import { ServiceRestart, type ServiceAction } from './restart.ts'
  * The app's `src/main.ts` calls this with its config; the build puts `daemon.js`, the preload and the renderer next to it.
  */
 export function startApp(appConfig: AppConfig) {
+  /** Headless (tests): no window, Dock icon, notification or focus; nothing that reaches the screen. */
+  const headless = Boolean(appEnv(appConfig)('HEADLESS'))
   const dataDir = defaultDataDir(appConfig)
   const socket = socketPath(appConfig, dataDir)
 
@@ -193,7 +195,7 @@ export function startApp(appConfig: AppConfig) {
       const now = thread.status.state
       lastStatus.set(key, now)
       if (!announce || before === now || !['done', 'error', 'blocked'].includes(now)) continue
-      if (BrowserWindow.getFocusedWindow() || !appSettings.get<boolean>(APP_KEYS.notifications) || !Notification.isSupported()) continue
+      if (headless || BrowserWindow.getFocusedWindow() || !appSettings.get<boolean>(APP_KEYS.notifications) || !Notification.isSupported()) continue
       const label = links.get(machine)?.label ?? machine
       const body = now === 'done' ? 'Finished' : now === 'error' ? `Failed${thread.status.msg ? `: ${thread.status.msg}` : ''}` : 'Needs you'
       const notification = new Notification({ title: thread.title, subtitle: label, body })
@@ -242,10 +244,13 @@ export function startApp(appConfig: AppConfig) {
   const pending = new Map<number, Show>()
   function show(what: Show = {}) {
     const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? createWindow()
-    if (window.isMinimized()) window.restore()
-    window.show()
-    window.focus()
-    app.focus({ steal: true })
+    // Headless (tests), the window never comes forward: nothing on the screen, no focus taken from anyone.
+    if (!headless) {
+      if (window.isMinimized()) window.restore()
+      window.show()
+      window.focus()
+      app.focus({ steal: true })
+    }
     if (!what.open && !what.settings) return
     if (!ready.has(window.webContents.id)) return pending.set(window.webContents.id, what)
     if (what.open) window.webContents.send(CHANNEL.event, { machine: APP, method: 'app.select', params: what.open })
@@ -259,7 +264,6 @@ export function startApp(appConfig: AppConfig) {
 
   // ── On the desktop: the menu bar item and the Dock icon ─────────────────────────────────────────────────────────────
 
-  const headless = Boolean(appEnv(appConfig)('HEADLESS'))
   const mac = process.platform === 'darwin'
   const menuBarOn = () => appSettings.get<boolean>(APP_KEYS.menuBar)
   const dockHidden = () => menuBarOn() && appSettings.get<boolean>(APP_KEYS.hideDock)
