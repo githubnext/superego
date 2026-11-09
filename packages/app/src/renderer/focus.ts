@@ -25,7 +25,15 @@ function target(region: HTMLElement): HTMLElement | null {
 export function focusRegion(region: HTMLElement | null | undefined): boolean {
   const el = region && target(region)
   if (!el) return false
-  el.focus({ preventScroll: false })
+  // Focus never scrolls what's read: an editor keeps its place (the browser would bring its caret into view), and
+  // the thread its own. A row in a list is scrolled to only if it's out of sight.
+  const scrollers = [...new Set([el.closest<HTMLElement>('.file-editor__scroll'), el.closest<HTMLElement>('.thread__scroll')])].filter((s): s is HTMLElement => Boolean(s))
+  const kept = scrollers.map((s) => [s, s.scrollTop] as const)
+  el.focus({ preventScroll: true })
+  if (el.matches('.mu-list-item')) el.scrollIntoView({ block: 'nearest' })
+  const restore = () => { for (const [s, top] of kept) if (s.scrollTop !== top) s.scrollTop = top }
+  restore()
+  requestAnimationFrame(restore)
   return true
 }
 

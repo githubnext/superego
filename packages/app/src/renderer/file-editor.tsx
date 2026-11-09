@@ -37,6 +37,8 @@ export type FileEditorProps = {
 }
 
 const MODE = 'mu.editor.mode'
+/** Where each file was left (scroll and cursor), for as long as the window lives: it opens there again. */
+const places = new Map<string, { top: number; anchor: number; head: number }>()
 /** A change read from disk, not typed: it doesn't need saving. */
 const fromDisk = Annotation.define<boolean>()
 
@@ -62,10 +64,14 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
   const [mode, setMode] = useState<'live' | 'source'>(() => localStorage.getItem(MODE) === 'source' ? 'source' : 'live')
   const live = isMarkdown && mode === 'live'
   const host = useRef<HTMLDivElement>(null)
+  const scroller = useRef<HTMLDivElement>(null)
+  const place = `${machine.id}/${thread.id}/${path}`
   const view = useRef<EditorView>(undefined)
   const modeSlot = useRef(new Compartment())
   /** What's on disk, as last read or written. */
   const disk = useRef<string>(undefined)
+  /** What this editor is writing now: the change on disk that's its own. */
+  const saving = useRef<string>(undefined)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [note, setNote] = useState<{ text: string; error?: boolean }>()
   /** The file changed on disk while there were edits here not yet saved: its new text. */
@@ -88,6 +94,7 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
     const content = editor.state.doc.toString()
     if (content === disk.current) return
     setNote({ text: 'Saving…' })
+    saving.current = content
     try {
       await dispatch('file.write', { id: thread.id, path, content }, { machine: machine.id, source: 'editor' })
       disk.current = content
@@ -134,6 +141,12 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
             clearTimeout(timer.current)
             timer.current = setTimeout(() => void saveRef.current(), 600)
           }),
+          // The cursor, kept with the scroll for when the file opens again.
+          EditorView.updateListener.of((update) => {
+            if (!update.selectionSet) return
+            const { anchor, head } = update.state.selection.main
+            places.set(place, { top: scroller.current?.scrollTop ?? places.get(place)?.top ?? 0, anchor, head })
+          }),
           EditorView.domEventHandlers({
             mousedown(event) {
               const hit = event.button === 0 ? linkAt(event.target) : undefined
@@ -145,9 +158,23 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
           }),
         ],
       })
+      // Back where it was left: the cursor, and the scroll once the text is laid out.
+      const was = places.get(place)
+      if (was) {
+        const length = view.current.state.doc.length
+        view.current.dispatch({ selection: { anchor: Math.min(was.anchor, length), head: Math.min(was.head, length) } })
+        const restore = () => { if (scroller.current) scroller.current.scrollTop = was.top }
+        restore()
+        requestAnimationFrame(() => { restore(); requestAnimationFrame(restore) })
+      }
     }, (error: Error) => alive && setNote({ text: error.message, error: true }))
     return () => {
       alive = false
+      // The scroll as last seen (the container is gone by now), with the cursor.
+      if (view.current) {
+        const { anchor, head } = view.current.state.selection.main
+        places.set(place, { top: places.get(place)?.top ?? 0, anchor, head })
+      }
       // Leaving with edits unsaved: save them now.
       if (view.current && view.current.state.doc.toString() !== disk.current) void saveRef.current()
       clearTimeout(timer.current)
@@ -159,14 +186,20 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
   // Live preview or source, without losing the cursor or undo.
   useEffect(() => { view.current?.dispatch({ effects: modeSlot.current.reconfigure(modeExtensions(live)) }) }, [live])
 
-  // The file on disk, again: whenever the thread moves on, often while the agent works, and on coming back here.
+  // The file on disk as it changes, whoever changes it (the agent, another editor, git), watched on its machine: shown
+  // here at once when nothing typed here is waiting to be saved, else asked about. Its own saves are recognised.
+  const connected = machine.state === 'connected'
   useEffect(() => {
-    let alive = true
-    const check = async () => {
+    if (!connected) return
+    const peer = client(machine.id)
+    let sub: string | undefined
+    let stopped = false
+    const apply = (content: string | null) => {
       const editor = view.current
       if (!editor || disk.current === undefined) return
-      const { content } = await client(machine.id).call('file.read', { id: thread.id, path }).catch(() => ({ content: undefined }))
-      if (!alive || content === undefined || content === disk.current) return
+      if (content === null) return setNote({ text: 'Not on disk any more', error: true })
+      if (content === disk.current) return
+      if (content === saving.current) { disk.current = content; return }
       const mine = editor.state.doc.toString()
       if (mine === disk.current) {
         editor.dispatch({ changes: minimalChange(mine, content), annotations: fromDisk.of(true) })
@@ -175,12 +208,14 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
       } else if (mine !== content) { clearTimeout(timer.current); setConflict(content) }
       else disk.current = content
     }
-    void check()
-    const working = thread.status.state === 'working'
-    const every = working ? setInterval(() => void check(), 1500) : undefined
-    window.addEventListener('focus', check)
-    return () => { alive = false; clearInterval(every); window.removeEventListener('focus', check) }
-  }, [machine.id, thread.id, path, thread.activeAt, thread.status.state])
+    const off = peer.on('file.changed', (params) => { if (params.sub === sub) apply(params.content) })
+    peer.call('file.watch', { id: thread.id, path }).then((result) => {
+      if (stopped) return void peer.call('unwatch', { sub: result.sub }).catch(() => {})
+      sub = result.sub
+      apply(result.content)
+    }, () => {})
+    return () => { stopped = true; off(); if (sub) void peer.call('unwatch', { sub }).catch(() => {}) }
+  }, [machine.id, connected, thread.id, path])
 
   const takeTheirs = () => {
     const editor = view.current
@@ -224,7 +259,8 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
       )}
       <div className="file-editor__main">
         <Slot name="editor.side" props={slot} />
-        <div className="file-editor__scroll">
+        <div className="file-editor__scroll" ref={scroller}
+          onScroll={(e) => { const was = places.get(place); places.set(place, { anchor: was?.anchor ?? 0, head: was?.head ?? 0, top: e.currentTarget.scrollTop }) }}>
           <div className="file-editor__host" ref={host} />
           {children && <div className="file-editor__after">{children}</div>}
         </div>

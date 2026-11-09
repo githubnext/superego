@@ -365,6 +365,25 @@ describe('record and replay', () => {
     await close()
   })
 
+  it('watches a file: every change on disk, a save by renaming over it too, and its going', async () => {
+    const { rename, unlink } = await import('node:fs/promises')
+    await writeFile(join(dir, 'note.md'), 'one\n')
+    const { peer, close } = await open()
+    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
+    const seen: (string | null)[] = []
+    peer.on('file.changed', (params: { content: string | null }) => { seen.push(params.content) })
+    const { content } = await peer.call<{ sub: string; content: string }>('file.watch', { id: thread.id, path: 'note.md' })
+    expect(content).toBe('one\n')
+    await writeFile(join(dir, 'note.md'), 'two\n')
+    await until(() => seen.at(-1) === 'two\n')
+    await writeFile(join(dir, '.note.md.tmp'), 'three\n')
+    await rename(join(dir, '.note.md.tmp'), join(dir, 'note.md'))
+    await until(() => seen.at(-1) === 'three\n')
+    await unlink(join(dir, 'note.md'))
+    await until(() => seen.at(-1) === null)
+    await close()
+  })
+
   it('finds a file by the name a link gives it, as Obsidian resolves [[links]]', async () => {
     const { mkdir } = await import('node:fs/promises')
     await mkdir(join(dir, 'Work/Old'), { recursive: true })

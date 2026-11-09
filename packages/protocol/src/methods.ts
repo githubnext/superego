@@ -100,6 +100,8 @@ export type Methods = {
   'agent.models': { params: {}; result: ModelCatalog }
   /** A file in a thread's folder (not outside it), as text. */
   'file.read': { params: { id: ThreadId; path: string; base64?: boolean }; result: { path: string; content: string } }
+  /** A file in a thread's folder, then `file.changed` whenever it changes on disk (by anyone), until unwatched. */
+  'file.watch': { params: { id: ThreadId; path: string }; result: { sub: string; content: string | null } }
   /** A file in a thread's folder by the name a link gives it ([[Note]], Note.md, path/Note): its path, or null. */
   'file.find': { params: { id: ThreadId; name: string }; result: { path: string | null } }
   /** What changed in a thread's folder, by git: the unified diff against HEAD, and files git doesn't track yet. */
@@ -151,6 +153,8 @@ export type Notifications = {
   'settings.changed': { sub: string; value: SettingsSnapshot }
   'auth.event': { flow: string; event: AuthEvent }
   'value.changed': { sub: string; key: string; value: Json }
+  /** A watched file, as it is on disk now (`content: null`: gone). */
+  'file.changed': { sub: string; content: string | null }
 }
 
 /** The methods every settings endpoint (a daemon, or the app itself) answers. */

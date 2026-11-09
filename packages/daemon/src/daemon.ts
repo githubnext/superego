@@ -1,6 +1,7 @@
 // The mu daemon: one per user per machine. It owns a pi-durable Harness on SQLite, the thread catalog, and every
 // live subscription. Clients (the Electron app, the CLI, a remote app over ssh) speak the protocol in @mu/protocol.
 import { execFile } from 'node:child_process'
+import { watch as watchFs } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { link, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, hostname, platform } from 'node:os'
@@ -831,6 +832,25 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           return { sub, value }
         },
         'settings.watch': serveSettings(settings, (params) => notify('settings.changed', params), subs)['settings.watch'],
+        async 'file.watch'({ id, path }: { id: string; path: string }) {
+          const file = inFolder((await get(id)).meta.cwd, path)
+          const read = () => stat(file).then((info) => info.isFile() && info.size <= 16 * 1024 * 1024 ? readFile(file, 'utf8') : null, () => null)
+          let last = await read()
+          const sub = randomUUID()
+          // The folder, not the file: an editor that saves by renaming a new file over it would end a watch on the file.
+          let timer: ReturnType<typeof setTimeout> | undefined
+          const watcher = watchFs(dirname(file), (_event, name) => {
+            if (name && String(name) !== basename(file)) return
+            clearTimeout(timer)
+            timer = setTimeout(async () => {
+              const now = await read()
+              if (now !== last) { last = now; notify('file.changed', { sub, content: now }) }
+            }, 60)
+          })
+          watcher.on('error', () => {})
+          subs.set(sub, () => { clearTimeout(timer); watcher.close() })
+          return { sub, content: last }
+        },
         async 'value.watch'({ key }: { key: string }) {
           const entry = values.get(key)
           if (!entry) throw new RpcError('not_found', `No value ${key}`)
