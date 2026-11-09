@@ -37,10 +37,10 @@ afterAll(async () => {
 })
 
 describe('mu', () => {
-  it('starts the daemon on demand and runs sessions', async () => {
+  it('starts the daemon on demand and runs threads', async () => {
     const created = await muJson(['create', home, '-p', 'hi from the cli'])
     expect(created).toMatchObject({ machine: 'local', cwd: home })
-    await until(async () => (await muJson(['sessions']))[0]?.status.state === 'done')
+    await until(async () => (await muJson(['threads']))[0]?.status.state === 'done')
     await mu(['send', created.id, 'again'])
     expect((await mu(['ls'])).split('\n')[0]).toContain('hi from the cli')
     expect(await muJson(['daemon', 'status'])).toMatchObject({ running: true })
@@ -61,16 +61,16 @@ describe('mu', () => {
 
   it('lists actions and runs any of them with do', async () => {
     const actions = await muJson(['actions'])
-    expect(actions.map((a: any) => a.id)).toEqual(expect.arrayContaining(['session.create', 'session.rename', 'ask-user.answer']))
-    expect(await mu(['actions'])).toMatch(/session\.rename\s+id title\s+Rename the session/)
-    const created = await muJson(['do', 'session.create', '--title', 'via do'])
-    await mu(['do', 'session.rename', '--id', created.id, '--title', 'renamed via do'])
-    expect((await muJson(['sessions'])).find((s: any) => s.id === created.id).title).toBe('renamed via do')
-    await mu(['do', 'session.rename', `--params`, JSON.stringify({ id: created.id, title: 'from json' })])
-    expect((await muJson(['sessions'])).find((s: any) => s.id === created.id).title).toBe('from json')
-    await expect(mu(['do', 'session.rename', '--id', created.id])).rejects.toThrow(/title/)
+    expect(actions.map((a: any) => a.id)).toEqual(expect.arrayContaining(['thread.create', 'thread.rename', 'ask-user.answer']))
+    expect(await mu(['actions'])).toMatch(/thread\.rename\s+id title\s+Rename the thread/)
+    const created = await muJson(['do', 'thread.create', '--title', 'via do'])
+    await mu(['do', 'thread.rename', '--id', created.id, '--title', 'renamed via do'])
+    expect((await muJson(['threads'])).find((s: any) => s.id === created.id).title).toBe('renamed via do')
+    await mu(['do', 'thread.rename', `--params`, JSON.stringify({ id: created.id, title: 'from json' })])
+    expect((await muJson(['threads'])).find((s: any) => s.id === created.id).title).toBe('from json')
+    await expect(mu(['do', 'thread.rename', '--id', created.id])).rejects.toThrow(/title/)
     await expect(mu(['do', 'nope.nope'])).rejects.toThrow(/nope\.nope/)
-    expect((await muJson(['actions', 'log'])).some((e: any) => e.id === 'session.rename' && e.source === 'cli')).toBe(true)
+    expect((await muJson(['actions', 'log'])).some((e: any) => e.id === 'thread.rename' && e.source === 'cli')).toBe(true)
   })
 
   it("makes a project's profile, loads its extensions in the real daemon, and asks again after an edit", async () => {
@@ -86,9 +86,9 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
 `)
     await expect(mu(['create', project, '-P', 'support'])).rejects.toThrow(/allow/)
     await mu(['profile', 'allow', 'support'], undefined, project)
-    const session = await muJson(['create', project, '-P', 'support', '-p', 'hello'])
-    expect(session.profile).toMatchObject({ name: 'support', scope: 'project' })
-    await until(async () => (await muJson(['sessions'])).find((s: any) => s.id === session.id)?.status.state === 'done')
+    const thread = await muJson(['create', project, '-P', 'support', '-p', 'hello'])
+    expect(thread.profile).toMatchObject({ name: 'support', scope: 'project' })
+    await until(async () => (await muJson(['threads'])).find((s: any) => s.id === thread.id)?.status.state === 'done')
   })
 
   it('manages machines and works on them with -m', async () => {
@@ -99,8 +99,8 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
 
     const remote = await muJson(['create', '-m', 'second', '-p', 'over there'])
     expect(remote.machine).not.toBe('local')
-    await until(async () => (await muJson(['sessions', '-m', 'Second']))[0]?.status.state === 'done')
-    expect((await muJson(['sessions'])).some((s: any) => s.id === remote.id && s.title === 'over there')).toBe(false)
+    await until(async () => (await muJson(['threads', '-m', 'Second']))[0]?.status.state === 'done')
+    expect((await muJson(['threads'])).some((s: any) => s.id === remote.id && s.title === 'over there')).toBe(false)
 
     await mu(['settings', 'set', 'agent.model', 'faux/faux-1', '--all'])
     expect((await muJson(['settings', '-m', 'Second'])).values['agent.model']).toBe('faux/faux-1')
@@ -110,17 +110,17 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     expect((await muJson(['machines']))[1].state).toBe('disabled')
     await mu(['machines', 'rm', 'Second'])
     expect(await muJson(['machines'])).toHaveLength(1)
-    await expect(mu(['sessions', '-m', 'Second'])).rejects.toThrow(/No machine called Second/)
+    await expect(mu(['threads', '-m', 'Second'])).rejects.toThrow(/No machine called Second/)
   })
 
-  it('restarts the daemon onto the installed code, keeping sessions', async () => {
+  it('restarts the daemon onto the installed code, keeping threads', async () => {
     const before = await muJson(['daemon', 'status'])
     expect(before).toMatchObject({ running: true, current: true })
     const restarted = await muJson(['daemon', 'restart'])
     expect(restarted).toMatchObject({ restarted: true, from: before.build, build: before.build })
     const after = await muJson(['daemon', 'status'])
     expect(after.pid).not.toBe(before.pid)
-    expect((await muJson(['sessions'])).some((s: any) => s.title === 'hi from the cli')).toBe(true)
+    expect((await muJson(['threads'])).some((s: any) => s.title === 'hi from the cli')).toBe(true)
   })
 
   it('stops the daemon', async () => {

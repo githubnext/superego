@@ -26,8 +26,8 @@ export function createAppSettings(dataDir: string, app: AppConfig) {
   settings.register({
     id: 'notifications', title: 'Notifications', order: 60,
     settings: [{
-      key: APP_KEYS.notifications, title: 'Notify when a session needs a look', default: true,
-      description: 'A system notification when a session finishes, fails or needs you while mu is not focused.',
+      key: APP_KEYS.notifications, title: 'Notify when a thread needs a look', default: true,
+      description: 'A system notification when a thread finishes, fails or needs you while mu is not focused.',
       type: { type: 'boolean' },
     }],
   })
@@ -46,7 +46,7 @@ export function createAppSettings(dataDir: string, app: AppConfig) {
     settings: [
       {
         key: APP_KEYS.menuBar, title: 'Show in menu bar', default: true,
-        description: `${app.glyph ?? app.name} in the menu bar while ${app.name} runs, with the sessions that need you. Closing the windows (or ⌘Q) leaves it there.`,
+        description: `${app.glyph ?? app.name} in the menu bar while ${app.name} runs, with the threads that need you. Closing the windows (or ⌘Q) leaves it there.`,
         type: { type: 'boolean' },
       },
       {

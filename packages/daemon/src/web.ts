@@ -39,8 +39,8 @@ export type WebServer = { url: string; close(): Promise<void> }
 /** Serve `root` (the window's build) and the protocol on host:port, each connection a peer handed to `serve`. */
 export async function serveWeb({ root, host, port, token, serve, artifact }: {
   root: string; host: string; port: number; token: string; serve(peer: RpcPeer): () => void
-  /** A file of an artifact (an HTML page in a session's folder, and what it links to), at /artifact/<session>/<path>. */
-  artifact?(session: string, path: string): Promise<Buffer>
+  /** A file of an artifact (an HTML page in a thread's folder, and what it links to), at /artifact/<thread>/<path>. */
+  artifact?(thread: string, path: string): Promise<Buffer>
 }): Promise<WebServer> {
   const expected = Buffer.from(token)
   const allowed = (given: string | null) => { const b = Buffer.from(given ?? ''); return b.length === expected.length && timingSafeEqual(b, expected) }
@@ -52,9 +52,9 @@ export async function serveWeb({ root, host, port, token, serve, artifact }: {
       const cookie = /(?:^|; )mu-artifact=([^;]+)/.exec(request.headers.cookie ?? '')?.[1]
       const given = requested.searchParams.get('token') ?? (cookie ? decodeURIComponent(cookie) : null)
       if (!allowed(given)) { response.writeHead(401).end(); return }
-      const [session, ...rest] = path.slice('/artifact/'.length).split('/')
+      const [thread, ...rest] = path.slice('/artifact/'.length).split('/')
       try {
-        const content = await artifact(session!, rest.join('/'))
+        const content = await artifact(thread!, rest.join('/'))
         response.writeHead(200, {
           'content-type': TYPES[extname(path)] ?? 'application/octet-stream',
           'content-security-policy': "sandbox allow-scripts allow-forms allow-popups; default-src 'self' data: blob: https: 'unsafe-inline' 'unsafe-eval'",

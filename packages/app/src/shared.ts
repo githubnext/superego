@@ -27,13 +27,13 @@ export type MuBridge = {
   onEvent(listener: (event: MuEvent) => void): () => void
   /** Set in a browser (the daemon's Web access), where there is no desktop: no machines to add, no folders to pick. */
   web?: boolean
-  /** Where an artifact (an HTML file in a session's folder) is served from, sandboxed, with its relative files beside it. */
-  artifactUrl?(machine: MachineId, session: string, path: string): string
+  /** Where an artifact (an HTML file in a thread's folder) is served from, sandboxed, with its relative files beside it. */
+  artifactUrl?(machine: MachineId, thread: string, path: string): string
 }
 
-/** An artifact's address on the desktop: mu-artifact://<machine>/<session>/<path>, served by the main process. */
-export const artifactUrl = (machine: MachineId, session: string, path: string) =>
-  `mu-artifact://${encodeURIComponent(machine)}/${encodeURIComponent(session)}/${path.split('/').map(encodeURIComponent).join('/')}`
+/** An artifact's address on the desktop: mu-artifact://<machine>/<thread>/<path>, served by the main process. */
+export const artifactUrl = (machine: MachineId, thread: string, path: string) =>
+  `mu-artifact://${encodeURIComponent(machine)}/${encodeURIComponent(thread)}/${path.split('/').map(encodeURIComponent).join('/')}`
 
 /** What an artifact may do: run its own scripts and forms, nothing of the app's (an opaque origin). */
 export const ARTIFACT_POLICY = "sandbox allow-scripts allow-forms allow-popups; default-src 'self' data: blob: https: 'unsafe-inline' 'unsafe-eval'"

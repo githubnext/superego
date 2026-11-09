@@ -1,9 +1,9 @@
 // The daemon half of an extension. An extension is a package with up to two halves, imported by an app at build time:
 // `<pkg>/daemon` runs here, next to the agents; `<pkg>/ui` runs in the app's window. This half can give the agents
 // tools, prompt sections and hooks (pi-durable extensions), register settings, define actions, publish live values
-// for the UI to watch, and add to a session's status.
+// for the UI to watch, and add to a thread's status.
 import type { Conversation, Extension, Harness } from '@earendil-works/pi-durable'
-import type { ActionDef, AppConfig, BlockedKind, Json, SessionInfo } from '@mu/protocol'
+import type { ActionDef, AppConfig, BlockedKind, Json, ThreadInfo } from '@mu/protocol'
 import type { DaemonContext } from './daemon.ts'
 import type { SettingsRegistry } from '@mu/settings'
 
@@ -36,15 +36,15 @@ export type DaemonApi = {
   action(action: ActionDef<any, unknown, DaemonContext>): void
   /** A live value named `<name>.<key>`, starting at `initial`. */
   value<T extends Json>(key: string, initial: T): LiveValue<T>
-  /** Say a session needs the user (it shows as blocked) while `contribute` returns something for it. */
-  status(contribute: (sessionId: string) => StatusContribution | undefined): void
+  /** Say a thread needs the user (it shows as blocked) while `contribute` returns something for it. */
+  status(contribute: (threadId: string) => StatusContribution | undefined): void
   /** Something `status` depends on changed: recompute and tell clients. */
   invalidate(): void
-  sessions: {
-    list(): Promise<SessionInfo[]>
-    /** The session's conversation, to submit, write entries, or watch. */
+  threads: {
+    list(): Promise<ThreadInfo[]>
+    /** The thread's conversation, to submit, write entries, or watch. */
     conversation(id: string): Promise<Conversation>
-    /** The session a conversation belongs to: subagent conversations map to their top session. */
+    /** The thread a conversation belongs to: subagent conversations map to their top thread. */
     of(conversationId: number): string | undefined
   }
 }

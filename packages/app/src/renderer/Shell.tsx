@@ -1,20 +1,20 @@
-// The shell every app gets: the sidebar slot (or, with nothing there, a compact session picker), the selected session,
-// the restart notice, Settings, and the app-wide reactions (fonts, ⌘, , sessions shown from the command line or a
-// notification, marking finished sessions seen).
+// The shell every app gets: the sidebar slot (or, with nothing there, a compact thread picker), the selected thread,
+// the restart notice, Settings, and the app-wide reactions (fonts, ⌘, , threads shown from the command line or a
+// notification, marking finished threads seen).
 import { useEffect, useRef, useState } from 'react'
 import { Button, Select } from '@mu/ui'
 import { machine as client, useSettings } from './client.ts'
 import { Slot, useRegistry } from './extension.tsx'
 import { ServiceNotice } from './ServiceNotice.tsx'
-import { SessionView } from './SessionView.tsx'
+import { ThreadView } from './ThreadView.tsx'
 import { SettingsView } from './SettingsView.tsx'
 import { Palette } from './Palette.tsx'
 import { ActionLog, runsBare } from './actions.tsx'
-import { NewSessionDialog } from './NewSession.tsx'
+import { NewThreadDialog } from './NewThread.tsx'
 import { bound, KEYMAP, shortcutOf, type Keymap } from './keys.ts'
-import { useAllSessions, useMachines, useNewSessionDialog, useSelection, useSettingsDialog, useShell, type Selection } from './state.tsx'
+import { useAllThreads, useMachines, useNewThreadDialog, useSelection, useSettingsDialog, useShell, type Selection } from './state.tsx'
 
-/** Dispatch an action from this window: `dispatch('threads.rail')`, `dispatch('session.select', { machine, session })`. */
+/** Dispatch an action from this window: `dispatch('threads.rail')`, `dispatch('thread.select', { machine, thread })`. */
 export function useDispatch() {
   return useRegistry().router.dispatch
 }
@@ -37,38 +37,38 @@ export function Shell() {
   const [palette, setPalette] = useState(false)
   const [log, setLog] = useState(false)
   const machines = useMachines()
-  const { selection, select, machine, session } = useSelection()
+  const { selection, select, machine, thread } = useSelection()
   const settings = useSettingsDialog()
-  const newSession = useNewSessionDialog()
+  const newThread = useNewThreadDialog()
   const { openSettings } = useShell()
   const hasSidebar = registry.slots.sidebar.length > 0
-  const allSessions = useAllSessions()
-  const { newSession: openNewSession } = useShell()
+  const allThreads = useAllThreads()
+  const { newThread: openNewThread } = useShell()
   // Actions read the shell as it is when they run.
   registry.router.setContext({
-    app: registry.app, machines, selection, select, openSettings, newSession: openNewSession,
+    app: registry.app, machines, selection, select, openSettings, newThread: openNewThread,
     togglePalette: () => setPalette((open) => !open), showLog: () => setLog(true),
-    sessionOf: (s) => allSessions[s.machine]?.find((x) => x.id === s.session),
+    threadOf: (s) => allThreads[s.machine]?.find((x) => x.id === s.thread),
   })
   useAppEffects()
 
-  // Looking at a finished or failed session marks it seen.
+  // Looking at a finished or failed thread marks it seen.
   useEffect(() => {
-    if (!selection || !session || (session.status.state !== 'done' && session.status.state !== 'error') || !document.hasFocus()) return
-    void registry.router.dispatch('session.seen', { id: selection.session }, { machine: selection.machine, source: 'auto' }).catch(() => {})
-  }, [selection?.machine, selection?.session, session?.status.state])
+    if (!selection || !thread || (thread.status.state !== 'done' && thread.status.state !== 'error') || !document.hasFocus()) return
+    void registry.router.dispatch('thread.seen', { id: selection.thread }, { machine: selection.machine, source: 'auto' }).catch(() => {})
+  }, [selection?.machine, selection?.thread, thread?.status.state])
 
-  // A phone (or a narrow window): the sidebar becomes a drawer over the session, opened from a bar at the top.
+  // A phone (or a narrow window): the sidebar becomes a drawer over the thread, opened from a bar at the top.
   const narrow = useNarrow()
   const [drawer, setDrawer] = useState(false)
-  useEffect(() => { setDrawer(false) }, [selection?.machine, selection?.session, narrow])
+  useEffect(() => { setDrawer(false) }, [selection?.machine, selection?.thread, narrow])
 
   const actions = <><ServiceNotice /><Button onClick={openSettings}>Settings</Button></>
   return (
     <div className={`app ${hasSidebar ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''}`}>
       {narrow && hasSidebar && drawer && <div className="app__scrim" onClick={() => setDrawer(false)} />}
       {hasSidebar && (!narrow || drawer) && (
-        // In the drawer, picking a session (even the open one) closes it.
+        // In the drawer, picking a thread (even the open one) closes it.
         <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.mu-list-item')) setDrawer(false) } : undefined}>
           <div className="app__drag" />
           <Slot name="sidebar" props={{}} />
@@ -79,51 +79,51 @@ export function Shell() {
         {narrow && hasSidebar
           ? (
             <div className="app__mobilebar">
-              <Button onClick={() => setDrawer(true)} aria-label="Sessions">☰</Button>
-              <span className="app__mobiletitle">{session?.title ?? registry.app.name}</span>
-              <Button onClick={() => openNewSession()} aria-label="New session">+</Button>
+              <Button onClick={() => setDrawer(true)} aria-label="Threads">☰</Button>
+              <span className="app__mobiletitle">{thread?.title ?? registry.app.name}</span>
+              <Button onClick={() => openNewThread()} aria-label="New thread">+</Button>
             </div>
           )
-          : <div className="app__drag">{!hasSidebar && <div className="app__bar"><SessionPicker />{actions}</div>}</div>}
-        {selection && session && machine
-          ? <SessionView key={`${selection.machine}/${selection.session}`} machine={machine} session={session} />
-          : <div className="app__empty">{hasSidebar ? 'Select or start a session.' : `Start a session with: ${registry.app.id}`}</div>}
+          : <div className="app__drag">{!hasSidebar && <div className="app__bar"><ThreadPicker />{actions}</div>}</div>}
+        {selection && thread && machine
+          ? <ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} />
+          : <div className="app__empty">{hasSidebar ? 'Select or start a thread.' : `Start a thread with: ${registry.app.id}`}</div>}
       </main>
-      {!narrow && selection && session && machine && registry.slots['session.aside'].length > 0 && (
-        <aside className="app__aside"><div className="app__drag" /><Slot name="session.aside" props={{ machine, session }} /></aside>
+      {!narrow && selection && thread && machine && registry.slots['thread.aside'].length > 0 && (
+        <aside className="app__aside"><div className="app__drag" /><Slot name="thread.aside" props={{ machine, thread }} /></aside>
       )}
       {settings.open && <SettingsView machines={machines} onClose={settings.close} />}
       {palette && <Palette onClose={() => setPalette(false)} />}
       {log && <ActionLog router={registry.router.router} onClose={() => setLog(false)} />}
-      {newSession.start && <NewSessionDialog start={newSession.start} onClose={newSession.close} />}
+      {newThread.start && <NewThreadDialog start={newThread.start} onClose={newThread.close} />}
     </div>
   )
 }
 
-/** Without a sidebar: every machine's sessions in one menu, and a new session on this computer. */
-function SessionPicker() {
+/** Without a sidebar: every machine's threads in one menu, and a new thread on this computer. */
+function ThreadPicker() {
   const machines = useMachines().filter((m) => m.state !== 'disabled')
   const { selection, select } = useSelection()
-  const sessions = useAllSessions()
-  const options = machines.flatMap((m) => (sessions[m.id] ?? []).map((s) => ({
+  const threads = useAllThreads()
+  const options = machines.flatMap((m) => (threads[m.id] ?? []).map((s) => ({
     value: `${m.id}/${s.id}`, label: s.title, ...(machines.length > 1 ? { group: m.label } : {}),
   })))
-  const { newSession } = useShell()
+  const { newThread } = useShell()
   return (
-    <div className="session-picker">
-      <Select aria-label="Session" options={options} value={selection ? `${selection.machine}/${selection.session}` : null}
-        nullLabel={options.length ? 'Sessions' : 'No sessions yet'}
+    <div className="thread-picker">
+      <Select aria-label="Thread" options={options} value={selection ? `${selection.machine}/${selection.thread}` : null}
+        nullLabel={options.length ? 'Threads' : 'No threads yet'}
         onChange={(value) => {
           if (!value) return
           const slash = value.indexOf('/')
-          select({ machine: value.slice(0, slash), session: value.slice(slash + 1) })
+          select({ machine: value.slice(0, slash), thread: value.slice(slash + 1) })
         }} />
-      <Button onClick={() => newSession()}>New</Button>
+      <Button onClick={() => newThread()}>New</Button>
     </div>
   )
 }
 
-/** Fonts from the app's settings; ⌘, ; sessions and Settings shown from the command line, a notification or the menu bar. */
+/** Fonts from the app's settings; ⌘, ; threads and Settings shown from the command line, a notification or the menu bar. */
 function useAppEffects() {
   const { selection } = useSelection()
   const selectionRef = useRef(selection)

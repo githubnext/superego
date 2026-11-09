@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
-import type { Client, Feature, Json, MethodName, Notifications, Params, Result, SessionInfo, SettingsSnapshot } from '@mu/protocol'
+import type { Client, Feature, Json, MethodName, Notifications, Params, Result, ThreadInfo, SettingsSnapshot } from '@mu/protocol'
 import type { MachineEntry, MachineId, MuBridge } from '../shared.ts'
 import { useRegistry } from './extension.tsx'
 
@@ -81,9 +81,9 @@ export function useWatch<T>(
   return value
 }
 
-export const useSessions = (machineId: MachineId, connected: boolean) =>
-  useWatch<SessionInfo[]>(machineId, connected, 'all', (client) => client.call('sessions.watch', {}),
-    (_value, _method, params: Notifications['sessions.changed']) => params.value, ['sessions.changed'])
+export const useThreads = (machineId: MachineId, connected: boolean) =>
+  useWatch<ThreadInfo[]>(machineId, connected, 'all', (client) => client.call('threads.watch', {}),
+    (_value, _method, params: Notifications['threads.changed']) => params.value, ['threads.changed'])
 
 /** A live value an extension's daemon half publishes (`mu.value`), on `machineId`. */
 export const useValue = <T,>(machineId: MachineId, connected: boolean, key: string) =>
@@ -93,8 +93,8 @@ export const useValue = <T,>(machineId: MachineId, connected: boolean, key: stri
 /** Call any method on a machine, including an extension's own (`<extension>.<method>`). */
 export const call = <R = unknown,>(machineId: MachineId, method: string, params: unknown = {}) => window.mu.call(machineId, method, params) as Promise<R>
 
-export const useSessionView = (machineId: MachineId, connected: boolean, id: string | undefined) =>
-  useWatch<ConversationView>(machineId, connected, id, (client) => client.call('session.watch', { id: id! }),
+export const useThreadView = (machineId: MachineId, connected: boolean, id: string | undefined) =>
+  useWatch<ConversationView>(machineId, connected, id, (client) => client.call('thread.watch', { id: id! }),
     (value, method, params: Notifications['watch.ops']) => method === 'watch.ops' ? applyImmutable(value, params.ops as Op[]) : value,
     ['watch.ops'])
 

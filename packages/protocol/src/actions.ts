@@ -1,4 +1,4 @@
-// Actions: every intent in mu (start a session, send a message, toggle the rail, add a machine) is defined once, with
+// Actions: every intent in mu (start a thread, send a message, toggle the rail, add a machine) is defined once, with
 // a schema for its parameters, and runs through a router. Keys, the palette, the command line and tests all dispatch
 // the same way, and every dispatch is logged. Streams (watches) and reads are not actions.
 import { compile, type JsonSchema, type Static } from '@earendil-works/pi-schema'
@@ -12,7 +12,7 @@ export type Exposure = 'ui' | 'cli' | 'mcp'
 
 /** An action as data: what clients list, bind and show. */
 export type ActionInfo = {
-  /** Stable, dotted: `session.create`, `threads.rail`. Extensions' start with their name. */
+  /** Stable, dotted: `thread.create`, `threads.rail`. Extensions' start with their name. */
   id: string
   title: string
   description?: string
@@ -22,8 +22,8 @@ export type ActionInfo = {
   expose: Exposure[]
   /** Its default shortcut, like `mod+shift+n`. */
   keys?: string
-  /** It acts on a session: `machine` and `id` come from the selected one when not given. */
-  session?: boolean
+  /** It acts on a thread: `machine` and `id` come from the selected one when not given. */
+  thread?: boolean
 }
 
 export type ActionDef<P = any, R = unknown, C = unknown> = ActionInfo & { run(params: P, context: C): R | Promise<R> }
@@ -57,7 +57,7 @@ export class Router<C = unknown> {
 
   register(def: ActionDef<any, unknown, C>): () => void {
     if (this.#actions.has(def.id)) throw new Error(`Action ${def.id} is already defined`)
-    if (!/^[a-z][a-z0-9-]*(\.[a-z][a-zA-Z0-9-]*)+$/.test(def.id)) throw new Error(`Action id "${def.id}" must be dotted lowercase, like session.create`)
+    if (!/^[a-z][a-z0-9-]*(\.[a-z][a-zA-Z0-9-]*)+$/.test(def.id)) throw new Error(`Action id "${def.id}" must be dotted lowercase, like thread.create`)
     this.#actions.set(def.id, { def, validator: compileParams(def.params) })
     return () => { if (this.#actions.get(def.id)?.def === def) this.#actions.delete(def.id) }
   }

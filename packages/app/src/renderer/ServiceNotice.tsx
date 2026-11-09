@@ -24,7 +24,7 @@ export function ServiceNotice() {
   const label = restarting ? 'Restarting…' : waiting ? 'Restart when idle' : state.phase === 'error' ? 'Restart failed' : 'Restart required'
   const detail = state.error ?? (waiting
     ? 'The background process restarts once no agent is working.'
-    : 'The background process runs older code than is installed. Restart it to use the new version; sessions and their history are kept.')
+    : 'The background process runs older code than is installed. Restart it to use the new version; threads and their history are kept.')
 
   if (state.deferred) {
     return <div className="service-notice is-deferred"><Button title={detail} onClick={() => act('review')}>Restart required…</Button></div>

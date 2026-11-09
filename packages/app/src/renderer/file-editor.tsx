@@ -1,4 +1,4 @@
-// A file in a session's folder, open to edit. Markdown opens in live preview (as Obsidian does: rendered, its syntax
+// A file in a thread's folder, open to edit. Markdown opens in live preview (as Obsidian does: rendered, its syntax
 // back where the cursor is), or as source; anything else as source. It saves as you type, and follows the file when
 // the agent changes it: your view updates, or, with edits of yours not yet saved, it asks which to keep.
 // The editor pane is this; a profile's own panes use it too (the obsidian profile's notes), with their own links.
@@ -10,7 +10,7 @@ import { Annotation, Compartment, type Extension } from '@codemirror/state'
 import { EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view'
 import { searchKeymap } from '@codemirror/search'
 import { tags } from '@lezer/highlight'
-import type { SessionInfo } from '@mu/protocol'
+import type { ThreadInfo } from '@mu/protocol'
 import { Button } from '@mu/ui'
 import type { MachineEntry } from '../shared.ts'
 import { machine as client } from './client.ts'
@@ -20,8 +20,8 @@ import { linkAt, livePreview, type MarkdownLink } from './live-markdown.ts'
 export type { MarkdownLink }
 export type FileEditorProps = {
   machine: MachineEntry
-  session: SessionInfo
-  /** In the session's folder. */
+  thread: ThreadInfo
+  /** In the thread's folder. */
   path: string
   /** Opening a link (a click on it, or ⌘-click while it's being edited). Without one, links open beside the thread. */
   onLink?: (link: MarkdownLink) => void
@@ -52,7 +52,7 @@ function minimalChange(current: string, next: string) {
   return { from: start, to: current.length - end, insert: next.slice(start, next.length - end) }
 }
 
-export function FileEditor({ machine, session, path, onLink, actions, children }: FileEditorProps) {
+export function FileEditor({ machine, thread, path, onLink, actions, children }: FileEditorProps) {
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path)
   const [mode, setMode] = useState<'live' | 'source'>(() => localStorage.getItem(MODE) === 'source' ? 'source' : 'live')
   const live = isMarkdown && mode === 'live'
@@ -84,7 +84,7 @@ export function FileEditor({ machine, session, path, onLink, actions, children }
     if (content === disk.current) return
     setNote({ text: 'Saving…' })
     try {
-      await dispatch('file.write', { id: session.id, path, content }, { machine: machine.id, source: 'editor' })
+      await dispatch('file.write', { id: thread.id, path, content }, { machine: machine.id, source: 'editor' })
       disk.current = content
       setNote({ text: 'Saved' })
     } catch (error) { setNote({ text: (error as Error).message, error: true }) }
@@ -98,9 +98,9 @@ export function FileEditor({ machine, session, path, onLink, actions, children }
     void (async () => {
       const base = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
       const target = link.kind === 'url' ? `${base}${decodeURI(link.target.split('#')[0]!)}` : link.target
-      const { path: found } = await client(machine.id).call('file.find', { id: session.id, name: target })
+      const { path: found } = await client(machine.id).call('file.find', { id: thread.id, name: target })
       if (!found) return setNote({ text: `No file ${link.target}`, error: true })
-      await dispatch('pane.open', { id: session.id, kind: 'editor', params: { path: found } }, { machine: machine.id, source: 'editor' })
+      await dispatch('pane.open', { id: thread.id, kind: 'editor', params: { path: found } }, { machine: machine.id, source: 'editor' })
     })()
   }
   const openRef = useRef(open)
@@ -113,7 +113,7 @@ export function FileEditor({ machine, session, path, onLink, actions, children }
     disk.current = undefined
     setNote(undefined)
     setConflict(undefined)
-    client(machine.id).call('file.read', { id: session.id, path }).then(({ content }) => {
+    client(machine.id).call('file.read', { id: thread.id, path }).then(({ content }) => {
       if (!alive || !host.current) return
       disk.current = content
       view.current = new EditorView({
@@ -149,18 +149,18 @@ export function FileEditor({ machine, session, path, onLink, actions, children }
       view.current?.destroy()
       view.current = undefined
     }
-  }, [machine.id, session.id, path])
+  }, [machine.id, thread.id, path])
 
   // Live preview or source, without losing the cursor or undo.
   useEffect(() => { view.current?.dispatch({ effects: modeSlot.current.reconfigure(modeExtensions(live)) }) }, [live])
 
-  // The file on disk, again: whenever the session moves on, often while the agent works, and on coming back here.
+  // The file on disk, again: whenever the thread moves on, often while the agent works, and on coming back here.
   useEffect(() => {
     let alive = true
     const check = async () => {
       const editor = view.current
       if (!editor || disk.current === undefined) return
-      const { content } = await client(machine.id).call('file.read', { id: session.id, path }).catch(() => ({ content: undefined }))
+      const { content } = await client(machine.id).call('file.read', { id: thread.id, path }).catch(() => ({ content: undefined }))
       if (!alive || content === undefined || content === disk.current) return
       const mine = editor.state.doc.toString()
       if (mine === disk.current) {
@@ -171,11 +171,11 @@ export function FileEditor({ machine, session, path, onLink, actions, children }
       else disk.current = content
     }
     void check()
-    const working = session.status.state === 'working'
+    const working = thread.status.state === 'working'
     const every = working ? setInterval(() => void check(), 1500) : undefined
     window.addEventListener('focus', check)
     return () => { alive = false; clearInterval(every); window.removeEventListener('focus', check) }
-  }, [machine.id, session.id, path, session.activeAt, session.status.state])
+  }, [machine.id, thread.id, path, thread.activeAt, thread.status.state])
 
   const takeTheirs = () => {
     const editor = view.current

@@ -1,7 +1,7 @@
 // Record real model turns and play them back. `<ID>_RECORD=<file>` appends every answer the models give to a JSONL file;
 // `<ID>_MODEL=replay:<file>` serves those answers again, in order, streamed at a readable pace. Development gets real
 // shapes (thinking, tool calls, long answers) without paying for turns. Replayed tool calls run for real, in the
-// session's directory, as the original ones did.
+// thread's directory, as the original ones did.
 import { appendFileSync, readFileSync } from 'node:fs'
 import type { AssistantMessage } from '@earendil-works/pi-ai'
 import { fauxAssistantMessage, fauxProvider, type FauxResponseStep } from '@earendil-works/pi-ai'

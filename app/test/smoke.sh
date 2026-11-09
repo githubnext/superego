@@ -6,19 +6,19 @@ unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export MU_HOME="$(mktemp -d)" MU_MODEL=faux MU_HEADLESS=1
 # A recorded agent that asks the user something, then uses the answer: offered as the model "replay/replay".
 export MU_REPLAY="$MU_HOME/ask.jsonl" MU_REPLAY_SPEED=0
-# A user profile: every session here starts with it, loaded by the daemon on Electron's own Node.
+# A user profile: every thread here starts with it, loaded by the daemon on Electron's own Node.
 mkdir -p "$MU_HOME/profiles/default/ui"
 cat > "$MU_HOME/profiles/default/profile.ts" <<'PROFILE'
 import { defineProfile } from 'mu'
 export default defineProfile({ description: 'smoke', prompt: 'Be brief.', ui: ['./ui/badge.ts'] })
 PROFILE
-# Its UI, loaded by the window at runtime: a badge in the header of its sessions.
+# Its UI, loaded by the window at runtime: a badge in the header of its threads.
 cat > "$MU_HOME/profiles/default/ui/badge.ts" <<'UI'
 import { defineUiExtension, h } from 'mu/ui'
 import { label } from './label.ts'
 export default defineUiExtension({
   name: 'badge',
-  setup(mu) { mu.slot('session.header', ({ session }) => h('span', { className: 'smoke-badge' }, `${label}: ${session.title}`)) },
+  setup(mu) { mu.slot('thread.header', ({ thread }) => h('span', { className: 'smoke-badge' }, `${label}: ${thread.title}`)) },
 })
 UI
 printf "export const label: string = 'profile ui'\n" > "$MU_HOME/profiles/default/ui/label.ts"

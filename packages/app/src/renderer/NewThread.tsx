@@ -1,21 +1,21 @@
-// The New session dialog: what to work on, where (machine and folder), with which profile, model and thinking. Unset
+// The New thread dialog: what to work on, where (machine and folder), with which profile, model and thinking. Unset
 // choices follow the folder's default profile and that machine's settings. ⌘⏎ starts it. A project's profile that
 // isn't allowed yet (it runs that repo's code) can be allowed here, and started.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import type { ModelCatalog, ProfileInfo, SessionInfo } from '@mu/protocol'
+import type { ModelCatalog, ProfileInfo, ThreadInfo } from '@mu/protocol'
 import { useRegistry } from './extension.tsx'
 import { Button, Dialog, Select, TextArea, TextField } from '@mu/ui'
 import { has, machine as client } from './client.ts'
-import { shortPath } from './SessionView.tsx'
-import { useAllSessions, useMachines, useSelection, type NewSessionStart } from './state.tsx'
+import { shortPath } from './ThreadView.tsx'
+import { useAllThreads, useMachines, useSelection, type NewThreadStart } from './state.tsx'
 
-const LAST = 'mu.newSession'
+const LAST = 'mu.newThread'
 type Last = { machine?: string; cwd?: Record<string, string> }
 const readLast = (): Last => { try { return JSON.parse(localStorage.getItem(LAST) ?? '{}') } catch { return {} } }
 
-export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; onClose(): void }) {
-  const machines = useMachines().filter((m) => m.state === 'connected' && has(m, 'sessions'))
-  const sessions = useAllSessions()
+export function NewThreadDialog({ start, onClose }: { start: NewThreadStart; onClose(): void }) {
+  const machines = useMachines().filter((m) => m.state === 'connected' && has(m, 'threads'))
+  const threads = useAllThreads()
   const { select } = useSelection()
   const dispatch = useRegistry().router.dispatch
   const last = useMemo(readLast, [])
@@ -42,12 +42,12 @@ export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; o
     return () => { live = false }
   }, [machine?.id])
 
-  // The profiles a session in this folder could start with, as the folder is typed (a moment after the last key).
+  // The profiles a thread in this folder could start with, as the folder is typed (a moment after the last key).
   useEffect(() => {
     if (!machine) return
     let live = true
     const timer = setTimeout(() => {
-      dispatch('profile.list', cwd.trim() ? { cwd: cwd.trim() } : {}, { machine: machine.id, source: 'new session' })
+      dispatch('profile.list', cwd.trim() ? { cwd: cwd.trim() } : {}, { machine: machine.id, source: 'new thread' })
         .then((list) => { if (live) { setProfiles(list as ProfileInfo[]); setProfile(null) } }, () => { if (live) setProfiles([]) })
     }, 250)
     return () => { live = false; clearTimeout(timer) }
@@ -55,11 +55,11 @@ export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; o
   const defaultProfile = profiles.find((p) => p.name === 'default')
   const picked = profiles.find((p) => p.name === (profile ?? 'default'))
 
-  /** Folders sessions on this machine worked in, most recent first. */
+  /** Folders threads on this machine worked in, most recent first. */
   const recent = useMemo(() => {
-    const list = (sessions[machine?.id ?? ''] ?? []).slice().sort((a, b) => (b.activeAt ?? b.createdAt) - (a.activeAt ?? a.createdAt))
+    const list = (threads[machine?.id ?? ''] ?? []).slice().sort((a, b) => (b.activeAt ?? b.createdAt) - (a.activeAt ?? a.createdAt))
     return [...new Set(list.map((s) => s.cwd))].slice(0, 6)
-  }, [sessions, machine?.id])
+  }, [threads, machine?.id])
 
   const chosen = catalog?.models.find((m) => m.value === (model ?? catalog.default.model))
   const levels = chosen?.thinking ?? []
@@ -70,15 +70,15 @@ export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; o
     setBusy(true)
     setError(undefined)
     try {
-      if (allow && picked) await dispatch('profile.allow', { ...(cwd.trim() ? { cwd: cwd.trim() } : {}), name: picked.name }, { machine: machine.id, source: 'new session' })
-      const created = await dispatch('session.create', {
+      if (allow && picked) await dispatch('profile.allow', { ...(cwd.trim() ? { cwd: cwd.trim() } : {}), name: picked.name }, { machine: machine.id, source: 'new thread' })
+      const created = await dispatch('thread.create', {
         ...(profile ? { profile } : {}),
         ...(cwd.trim() ? { cwd: cwd.trim() } : {}), ...(title.trim() ? { title: title.trim() } : {}),
         ...(model ? { model } : {}), ...(thinking && levels.length ? { thinking } : {}), ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
-      }, { machine: machine.id, source: 'new session' }) as SessionInfo
+      }, { machine: machine.id, source: 'new thread' }) as ThreadInfo
       localStorage.setItem(LAST, JSON.stringify({ machine: machine.id, cwd: { ...last.cwd, [machine.id]: created.cwd } } satisfies Last))
       onClose()
-      select({ machine: machine.id, session: created.id })
+      select({ machine: machine.id, thread: created.id })
     } catch (e) {
       setError(e as { kind?: string; message: string })
       setBusy(false)
@@ -93,68 +93,68 @@ export function NewSessionDialog({ start, onClose }: { start: NewSessionStart; o
   }
 
   return (
-    <Dialog onClose={onClose} title="New session" size="medium" className="new-session">
-      <div className="new-session__body" onKeyDown={onKeyDown}>
-        {machines.length === 0 ? <p className="new-session__note">No machine is connected.</p> : <>
-          <TextArea ref={promptRef} autoFocus rows={4} maxRows={10} className="new-session__prompt" aria-label="Prompt"
+    <Dialog onClose={onClose} title="New thread" size="medium" className="new-thread">
+      <div className="new-thread__body" onKeyDown={onKeyDown}>
+        {machines.length === 0 ? <p className="new-thread__note">No machine is connected.</p> : <>
+          <TextArea ref={promptRef} autoFocus rows={4} maxRows={10} className="new-thread__prompt" aria-label="Prompt"
             placeholder="What should it work on? (optional)" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
 
-          <label className="new-session__field">
+          <label className="new-thread__field">
             <span>Project</span>
-            <div className="new-session__row">
+            <div className="new-thread__row">
               <TextField aria-label="Project folder" placeholder="Folder (empty: home)" value={cwd} onChange={(e) => setCwd(e.target.value)} />
               {machine?.id === 'local' && !window.mu.web && <Button onClick={() => void browse()}>Browse…</Button>}
             </div>
           </label>
           {recent.length > 0 && (
-            <div className="new-session__recent">
+            <div className="new-thread__recent">
               {recent.map((dir) => <button key={dir} type="button" className={dir === cwd ? 'is-on' : ''} onClick={() => setCwd(dir)}>{shortPath(dir)}</button>)}
             </div>
           )}
 
-          <div className="new-session__grid">
+          <div className="new-thread__grid">
             {machines.length > 1 && (
-              <label className="new-session__field"><span>Machine</span>
+              <label className="new-thread__field"><span>Machine</span>
                 <Select aria-label="Machine" options={machines.map((m) => ({ value: m.id, label: m.label }))} value={machine?.id ?? null}
                   onChange={(value) => { if (value) { setMachineId(value); setCwd(last.cwd?.[value] ?? '') } }} />
               </label>
             )}
             {profiles.length > 0 && (
-              <label className="new-session__field"><span>Profile</span>
+              <label className="new-thread__field"><span>Profile</span>
                 <Select aria-label="Profile" value={profile}
                   options={profiles.filter((p) => p.name !== 'default').map((p) => ({ value: p.name, label: `${p.name}${p.scope === 'user' ? ' (yours)' : ''}` }))}
                   nullLabel={defaultProfile ? `default${defaultProfile.scope === 'user' ? ' (yours)' : ''}` : 'None'} onChange={setProfile} />
               </label>
             )}
-            <label className="new-session__field"><span>Model</span>
+            <label className="new-thread__field"><span>Model</span>
               <Select aria-label="Model" options={catalog?.models ?? []} value={model} nullLabel={catalog ? defaultLabel : 'Loading…'} disabled={!catalog}
                 onChange={(value) => { setModel(value); setThinking(null) }} />
             </label>
             {levels.length > 0 && (
-              <label className="new-session__field"><span>Thinking</span>
+              <label className="new-thread__field"><span>Thinking</span>
                 <Select aria-label="Thinking" options={levels.map((l) => ({ value: l, label: l }))} value={thinking}
                   nullLabel={catalog?.default.thinking ? `Default · ${catalog.default.thinking}` : 'Model default'} onChange={setThinking} />
               </label>
             )}
           </div>
 
-          <label className="new-session__field">
+          <label className="new-thread__field">
             <span>Name</span>
             <TextField aria-label="Name" placeholder="From the prompt (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
           </label>
         </>}
         {picked && !picked.allowed && !error && (
-          <p className="new-session__note">The {picked.name} profile runs this project's own code. Starting will ask to allow it.</p>
+          <p className="new-thread__note">The {picked.name} profile runs this project's own code. Starting will ask to allow it.</p>
         )}
         {error && (
-          <div className="new-session__error">
+          <div className="new-thread__error">
             <p>{error.message}</p>
             {error.kind === 'untrusted_profile' && <Button onClick={() => void create({ allow: true })}>Allow and start</Button>}
           </div>
         )}
       </div>
-      <footer className="new-session__foot">
-        <span className="new-session__hint">{machine ? `${machine.label}${cwd ? ` · ${shortPath(cwd)}` : ''}` : ''}</span>
+      <footer className="new-thread__foot">
+        <span className="new-thread__hint">{machine ? `${machine.label}${cwd ? ` · ${shortPath(cwd)}` : ''}` : ''}</span>
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="primary" disabled={!machine || busy} onClick={() => void create()}>Start <kbd>⌘⏎</kbd></Button>
       </footer>

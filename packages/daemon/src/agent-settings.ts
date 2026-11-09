@@ -102,13 +102,13 @@ type Flow = { abort: AbortController; prompts: Map<string, { resolve(value: stri
 
 export type AgentSettings = {
   models: Models
-  /** What a session runs with now; `model` is absent when no provider is signed in. */
+  /** What a thread runs with now; `model` is absent when no provider is signed in. */
   /**
-   * What a turn runs with: the session's own choices (`override`) where it made them, else this machine's settings.
+   * What a turn runs with: the thread's own choices (`override`) where it made them, else this machine's settings.
    * `thinking: 'off'` turns thinking off; a level the model lacks is moved to the nearest it has.
    */
   resolve(override?: { model?: string; thinking?: string }): { model?: ModelRef; thinkingLevel?: ModelThinkingLevel }
-  /** The models a session can choose from here, with their thinking levels, and what a session gets by default. */
+  /** The models a thread can choose from here, with their thinking levels, and what a thread gets by default. */
   catalog(): ModelCatalog
   login(provider: string, type: 'api_key' | 'oauth', key: string | undefined, emit: (event: AuthEvent) => void): string
   respond(flow: string, prompt: string, value: string): void
@@ -165,7 +165,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
 
   settings.register({
     id: 'model', title: 'Model', order: 10,
-    description: 'What new turns in every session on this machine run with.',
+    description: 'What new turns in every thread on this machine run with.',
     settings: [
       {
         key: KEYS.model, title: 'Model', default: null,

@@ -21,7 +21,7 @@ export function Scroll({ node: _node, ...props }: ComponentProps<'pre'> & { node
   return <pre ref={ref} {...props} />
 }
 
-/** Opens a file by the name the text gives it. Provided where there's a folder to look in: a session's thread. */
+/** Opens a file by the name the text gives it. Provided where there's a folder to look in: a thread. */
 export const OpenFile = createContext<((name: string) => void) | undefined>(undefined)
 
 const FILE = 'mu-file:'

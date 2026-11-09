@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { defineApp, PROTOCOL_VERSION, type ProfileInfo, type RpcPeer, type SessionInfo } from '@mu/protocol'
+import { defineApp, PROTOCOL_VERSION, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@mu/protocol'
 import { connectSocket, listen, openDaemon } from '../src/index.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
@@ -30,9 +30,9 @@ const write = (root: string, files: Record<string, string>) => {
   }
 }
 
-/** The extensions and instructions a session's agent has, once a turn configured it. */
+/** The extensions and instructions a thread's agent has, once a turn configured it. */
 async function agentOf(peer: RpcPeer, id: string) {
-  const { value } = await peer.call<{ value: { docs: Record<string, unknown> } }>('session.watch', { id })
+  const { value } = await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { id })
   const agent = value.docs['pi.agent'] as { extensions?: string[]; instructions?: string } | undefined
   return { extensions: agent?.extensions ?? [], instructions: agent?.instructions }
 }
@@ -41,7 +41,7 @@ const until = async (check: () => Promise<boolean>) => {
   for (let i = 0; i < 100; i++) { if (await check()) return; await new Promise((r) => setTimeout(r, 30)) }
   throw new Error('timed out')
 }
-const done = (peer: RpcPeer, id: string) => until(async () => (await peer.call<SessionInfo[]>('session.list', {})).find((s) => s.id === id)?.status.state === 'done')
+const done = (peer: RpcPeer, id: string) => until(async () => (await peer.call<ThreadInfo[]>('thread.list', {})).find((s) => s.id === id)?.status.state === 'done')
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'mu-profiles-'))
@@ -53,8 +53,8 @@ afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 it('runs plain mu where there are no profiles', async () => {
   const { peer, close } = await open()
-  const session = await peer.call<SessionInfo>('session.create', { cwd: project })
-  expect(session.profile).toBeUndefined()
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project })
+  expect(thread.profile).toBeUndefined()
   expect(await peer.call<ProfileInfo[]>('profile.list', { cwd: project })).toEqual([])
   await close()
 })
@@ -64,10 +64,10 @@ it("takes the user's default profile: its prompt and model", async () => {
     'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ description: 'Mine', prompt: 'Answer in haiku.' })\n`,
   })
   const { peer, close } = await open()
-  const session = await peer.call<SessionInfo>('session.create', { cwd: project, prompt: 'hello' })
-  expect(session.profile).toMatchObject({ name: 'default', scope: 'user' })
-  await done(peer, session.id)
-  const agent = await agentOf(peer, session.id)
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hello' })
+  expect(thread.profile).toMatchObject({ name: 'default', scope: 'user' })
+  await done(peer, thread.id)
+  const agent = await agentOf(peer, thread.id)
   expect(agent.instructions).toBe('Answer in haiku.')
   await close()
 })
@@ -90,13 +90,13 @@ export default defineExtension({
   const { peer, close } = await open()
   const listed = await peer.call<ProfileInfo[]>('profile.list', { cwd: join(project, 'src') })
   expect(listed).toMatchObject([{ name: 'support', scope: 'project', allowed: false }])
-  await expect(peer.call('session.create', { cwd: project, profile: 'support' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await expect(peer.call('thread.create', { cwd: project, profile: 'support' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
 
   await peer.call('profile.allow', { cwd: project, name: 'support' })
-  const session = await peer.call<SessionInfo>('session.create', { cwd: join(project, 'src'), profile: 'support', prompt: 'where is 42?' })
-  expect(session.profile).toMatchObject({ name: 'support', scope: 'project' })
-  await done(peer, session.id)
-  const agent = await agentOf(peer, session.id)
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: join(project, 'src'), profile: 'support', prompt: 'where is 42?' })
+  expect(thread.profile).toMatchObject({ name: 'support', scope: 'project' })
+  await done(peer, thread.id)
+  const agent = await agentOf(peer, thread.id)
   expect(agent.extensions).toContain('project:support/orders')
   expect(agent.extensions).toContain('coding-tools')
   expect(agent.extensions).not.toContain('ask-user')
@@ -104,7 +104,7 @@ export default defineExtension({
 
   // An edit is new code: the next turn waits for it to be allowed.
   write(profile, { 'orders.ts': `export default { name: 'orders' }\n` })
-  await expect(peer.call('session.submit', { id: session.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await expect(peer.call('thread.submit', { id: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
   await close()
 })
 
@@ -118,10 +118,10 @@ it("lets a project's profile replace the user's, or extend it", async () => {
   const { peer, close } = await open()
   expect((await peer.call<ProfileInfo[]>('profile.list', { cwd: project })).map((p) => `${p.scope}:${p.name}`)).toEqual(['project:default'])
   await peer.call('profile.allow', { cwd: project })
-  const session = await peer.call<SessionInfo>('session.create', { cwd: project, prompt: 'hi' })
-  expect(session.profile).toMatchObject({ name: 'default', scope: 'project' })
-  await done(peer, session.id)
-  expect((await agentOf(peer, session.id)).instructions).toBe('Be kind.\n\nKnow the Acme codebase.')
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  expect(thread.profile).toMatchObject({ name: 'default', scope: 'project' })
+  await done(peer, thread.id)
+  expect((await agentOf(peer, thread.id)).instructions).toBe('Be kind.\n\nKnow the Acme codebase.')
   await close()
 })
 
@@ -135,7 +135,7 @@ it("serves a profile's UI modules, types stripped, only from inside it and only 
   const profile = join(project, '.mu', 'profiles', 'default')
   write(profile, {
     'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ ui: ['./ui/badge.ts'] })\n`,
-    'ui/badge.ts': `import { defineUiExtension, h } from 'mu/ui'\nimport { label } from './label.ts'\nconst n: number = 1\nexport default defineUiExtension({ name: 'badge', setup(mu) { mu.slot('session.header', () => h('span', null, label)) } })\n`,
+    'ui/badge.ts': `import { defineUiExtension, h } from 'mu/ui'\nimport { label } from './label.ts'\nconst n: number = 1\nexport default defineUiExtension({ name: 'badge', setup(mu) { mu.slot('thread.header', () => h('span', null, label)) } })\n`,
     'ui/label.ts': `export const label: string = 'Acme'\n`,
   })
   const { peer, close } = await open()
@@ -155,7 +155,7 @@ it("serves a profile's UI modules, types stripped, only from inside it and only 
 it("compiles a profile's UI written in TSX to calls into the window's React", async () => {
   write(join(home, 'profiles', 'default'), {
     'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ ui: ['./ui/badge.tsx'] })\n`,
-    'ui/badge.tsx': `import { defineUiExtension } from 'mu/ui'\nconst label: string = 'Acme'\nexport default defineUiExtension({ name: 'badge', setup(mu) { mu.slot('session.header', () => <span className="badge">{label}</span>) } })\n`,
+    'ui/badge.tsx': `import { defineUiExtension } from 'mu/ui'\nconst label: string = 'Acme'\nexport default defineUiExtension({ name: 'badge', setup(mu) { mu.slot('thread.header', () => <span className="badge">{label}</span>) } })\n`,
   })
   const { peer, close } = await open()
   const ref = { scope: 'user', name: 'default', dir: join(home, 'profiles', 'default') }
@@ -175,9 +175,9 @@ export default defineDaemonExtension({
   setup(mu) {
     const count = mu.value('vault.count', 0)
     mu.action(defineAction({ id: 'vault.answer', title: 'Answer', params: obj({ id: str() }), async run({ id }) {
-      const session = (await mu.sessions.list()).find((s) => s.id === id)
+      const thread = (await mu.threads.list()).find((s) => s.id === id)
       count.update((n) => n + 1)
-      return { answer: '${answer}', cwd: session.cwd }
+      return { answer: '${answer}', cwd: thread.cwd }
     } }))
     mu.agent(defineExtension({ name: 'notes', tools: [defineTool({ name: 'note', description: 'A note.', parameters: obj({}), async execute() { return { output: [{ type: 'text', text: 'hi' }] } } })] }))
   },
@@ -185,15 +185,15 @@ export default defineDaemonExtension({
 `
   write(profile, { 'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': extension('one') })
   const { peer, close } = await open()
-  const session = await peer.call<SessionInfo>('session.create', { cwd: project, prompt: 'hi' })
-  await done(peer, session.id)
-  expect(await peer.call('action.run', { id: 'vault.answer', params: { id: session.id } })).toEqual({ answer: 'one', cwd: project })
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  await done(peer, thread.id)
+  expect(await peer.call('action.run', { id: 'vault.answer', params: { id: thread.id } })).toEqual({ answer: 'one', cwd: project })
   expect((await peer.call<{ value: number }>('value.watch', { key: 'vault.count' })).value).toBe(1)
-  expect((await agentOf(peer, session.id)).extensions).toContain('user:default/notes')
+  expect((await agentOf(peer, thread.id)).extensions).toContain('user:default/notes')
   // Changed: the old action goes, the new one answers.
   write(profile, { 'vault.ts': extension('two') })
-  await peer.call('session.submit', { id: session.id, text: 'again' })
-  expect(await peer.call('action.run', { id: 'vault.answer', params: { id: session.id } })).toMatchObject({ answer: 'two' })
+  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  expect(await peer.call('action.run', { id: 'vault.answer', params: { id: thread.id } })).toMatchObject({ answer: 'two' })
   await close()
 })
 
@@ -211,9 +211,9 @@ export default defineDaemonExtension({
 `
   write(profile, { 'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': extension('Not A Key') })
   const { peer, close } = await open()
-  await expect(peer.call('session.create', { cwd: project })).rejects.toThrow(/Section key/)
+  await expect(peer.call('thread.create', { cwd: project })).rejects.toThrow(/Section key/)
   write(profile, { 'vault.ts': extension('notes') })
-  await peer.call<SessionInfo>('session.create', { cwd: project })
+  await peer.call<ThreadInfo>('thread.create', { cwd: project })
   expect(await peer.call('action.run', { id: 'vault.ping', params: {} })).toBe('pong')
   await close()
 })

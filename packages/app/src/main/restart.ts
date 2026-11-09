@@ -1,6 +1,6 @@
 // Restarting this computer's daemon onto newer code, after tremolo's: the app notices the code on disk differs from the
 // running daemon's, and offers a restart. One intention for every window: restart now, when idle, or later. A restart
-// never cuts off work unasked: the daemon refuses while sessions work, unless interrupting was confirmed.
+// never cuts off work unasked: the daemon refuses while threads work, unless interrupting was confirmed.
 
 export type ServicePhase = 'current' | 'required' | 'waiting' | 'restarting' | 'error'
 export type ServiceState = {

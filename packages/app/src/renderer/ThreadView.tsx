@@ -1,28 +1,28 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ConversationView, EntryRecord, LiveState } from '@earendil-works/pi-durable'
-import type { SessionInfo } from '@mu/protocol'
+import type { ThreadInfo } from '@mu/protocol'
 import { Button, IconButton, Menu, StatusGlyph, statusLabel, TextArea } from '@mu/ui'
 import type { MachineEntry } from '../shared.ts'
-import { machine as client, useSessionView } from './client.ts'
+import { machine as client, useThreadView } from './client.ts'
 import { fileKind, paneMenu, Slot, useRegistry, type ToolCallProps } from './extension.tsx'
 import { useShell } from './state.tsx'
 import { Markdown, OpenFile, Scroll } from './Markdown.tsx'
 import { useLocalState } from './local-state.ts'
 import { useProfileUi } from './profile-ui.ts'
-import { SessionPanes } from './panes.tsx'
+import { ThreadPanes } from './panes.tsx'
 
 type Block = { type: string; text?: string; thinking?: string; id?: string; name?: string; arguments?: unknown }
 type Message = { role: string; content: string | Block[]; toolCallId?: string; isError?: boolean; details?: unknown }
 
-/** The session a transcript belongs to, for extension renderers. */
-const Here = createContext<{ machine: MachineEntry; session: SessionInfo; firstUser?: number }>(undefined as never)
+/** The thread a transcript belongs to, for extension renderers. */
+const Here = createContext<{ machine: MachineEntry; thread: ThreadInfo; firstUser?: number }>(undefined as never)
 const firstUser = (here: { firstUser?: number }) => here.firstUser
 
 /** Something above the composer that wants what is typed: an answer to a question, say. The newest claim wins. */
 export type ComposerClaim = { placeholder: string; submit(text: string): Promise<unknown> }
 const ClaimContext = createContext<(claim: ComposerClaim) => () => void>(() => () => {})
 
-/** While mounted (and given a claim), the composer's text goes to `claim.submit` instead of the session. */
+/** While mounted (and given a claim), the composer's text goes to `claim.submit` instead of the thread. */
 export function useComposerClaim(claim: ComposerClaim | undefined) {
   const register = useContext(ClaimContext)
   const latest = useRef(claim)
@@ -37,26 +37,26 @@ const blocks = (message: Message | undefined): Block[] =>
   !message ? [] : typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content
 const textOf = (message: Message | undefined) => blocks(message).map((b) => b.text ?? '').join('')
 
-/** A session: its thread, and the panes open beside it. */
-export function SessionView({ machine, session }: { machine: MachineEntry; session: SessionInfo }) {
-  // The session's profile may bring UI of its own (header, aside, composer, tool renderers, panes).
-  useProfileUi(machine.id, session)
-  return <SessionPanes machine={machine} session={session} thread={<ThreadView machine={machine} session={session} />} />
+/** A thread: its transcript and composer, and the panes open beside it. */
+export function ThreadView({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
+  // The thread's profile may bring UI of its own (header, aside, composer, tool renderers, panes).
+  useProfileUi(machine.id, thread)
+  return <ThreadPanes machine={machine} thread={thread} main={<ThreadBody machine={machine} thread={thread} />} />
 }
 
-/** A session's thread: its transcript and composer. Also what a "thread" pane draws. */
-export function ThreadView({ machine, session }: { machine: MachineEntry; session: SessionInfo }) {
+/** A thread's transcript and composer. Also what a "thread" pane draws. */
+export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
   // A file the thread names, opened beside it: in the pane kind that takes it (a profile's, else the editor).
-  const sessionRef = useRef(session)
-  sessionRef.current = session
+  const threadRef = useRef(thread)
+  threadRef.current = thread
   const openFile = useCallback((name: string) => {
-    void client(machine.id).call('file.find', { id: session.id, name }).then(({ path }) => {
-      if (path) return dispatch('pane.open', { id: session.id, kind: fileKind(registry, sessionRef.current, path), params: { path } }, { machine: machine.id, source: 'thread' })
+    void client(machine.id).call('file.find', { id: thread.id, name }).then(({ path }) => {
+      if (path) return dispatch('pane.open', { id: thread.id, kind: fileKind(registry, threadRef.current, path), params: { path } }, { machine: machine.id, source: 'thread' })
     }).catch((error) => console.error(error))
-  }, [machine.id, session.id, registry])
-  const view = useSessionView(machine.id, machine.state === 'connected', session.id)
+  }, [machine.id, thread.id, registry])
+  const view = useThreadView(machine.id, machine.state === 'connected', thread.id)
   const live = view?.docs['pi.live'] as LiveState | undefined
   const scroller = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
@@ -68,30 +68,30 @@ export function ThreadView({ machine, session }: { machine: MachineEntry; sessio
 
   return (
     <OpenFile.Provider value={openFile}>
-    <Here.Provider value={{ machine, session, firstUser: view?.before === undefined ? view?.entries.find((e) => (e.model?.[0] as Message | undefined)?.role === 'user')?.id : undefined }}>
-    <div className="session">
-      <div className="session__scroll" ref={scroller}
+    <Here.Provider value={{ machine, thread, firstUser: view?.before === undefined ? view?.entries.find((e) => (e.model?.[0] as Message | undefined)?.role === 'user')?.id : undefined }}>
+    <div className="thread">
+      <div className="thread__scroll" ref={scroller}
         onScroll={(e) => {
           const el = e.currentTarget
           pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
           el.parentElement?.classList.toggle('is-scrolled', el.scrollTop > 8)
         }}>
-        <div className="session__column">
-          <div className="session__crumb">
-            <span>{machine.label} · <span title={session.cwd}>{folderName(session.cwd)}</span>{session.profile && <> · <span className="session__profile" title={session.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{session.profile.name}</span></>} · {statusLabel(session.status)}</span>
-            <span className="session__tools">
-              <Slot name="session.header" props={{ machine, session }} />
-              <PaneMenu machine={machine} session={session} />
-              <IconButton label="Archive" className="session__archive" onClick={() => void dispatch('session.archive', { id: session.id }, { machine: machine.id, source: 'header' })}>
+        <div className="thread__column">
+          <div className="thread__crumb">
+            <span>{machine.label} · <span title={thread.cwd}>{folderName(thread.cwd)}</span>{thread.profile && <> · <span className="thread__profile" title={thread.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{thread.profile.name}</span></>} · {statusLabel(thread.status)}</span>
+            <span className="thread__tools">
+              <Slot name="thread.header" props={{ machine, thread }} />
+              <PaneMenu machine={machine} thread={thread} />
+              <IconButton label="Archive" className="thread__archive" onClick={() => void dispatch('thread.archive', { id: thread.id }, { machine: machine.id, source: 'header' })}>
                 <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 3.5h12v3H2zM3 6.5v6h10v-6M6.5 9h3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round" /></svg>
               </IconButton>
             </span>
           </div>
-          <h1 className="session__title">{session.title.replace(/\.$/, '')}</h1>
+          <h1 className="thread__title">{thread.title.replace(/\.$/, '')}</h1>
           {view ? <Transcript view={view} live={live} /> : <div className="transcript__more">Loading…</div>}
         </div>
       </div>
-      <Composer machine={machine} session={session} busy={Boolean(live?.run)} />
+      <Composer machine={machine} thread={thread} busy={Boolean(live?.run)} />
     </div>
     </Here.Provider>
     </OpenFile.Provider>
@@ -133,7 +133,7 @@ function Transcript({ view, live }: { view: ConversationView; live: LiveState | 
           case 'end': return <TurnEnd key={item.key} blocks={item.blocks} results={results} />
         }
       })}
-      {live?.run && !partial && here.session.status.state === 'working' && <div className="transcript__thinking">working…</div>}
+      {live?.run && !partial && here.thread.status.state === 'working' && <div className="transcript__thinking">working…</div>}
       {live?.runFailure && !live.run && live.runFailure.reason !== 'aborted' && (
         <div className="transcript__error">Run failed: {live.runFailure.reason}{live.runFailure.detail ? ` — ${live.runFailure.detail}` : ''}</div>
       )}
@@ -218,7 +218,7 @@ function Entry({ entry }: { entry: EntryRecord }) {
     // The title is the first message's opening; under it, only the rest of that message.
     const text = textOf(message)
     // A title cut short (…) says too little on its own: then the whole message shows.
-    const title = here.session.title
+    const title = here.thread.title
     // A rest that starts mid-sentence (", write nothing") reads better whole, too.
     const tail = entry.id === firstUser(here) && !title.endsWith('…') && text.replace(/\s+/g, ' ').trim().startsWith(title) ? text.trim().slice(title.length).trim() : text
     // After a title that is the message's first clause, the rest reads as its own sentence.
@@ -438,7 +438,7 @@ function Diff({ diff }: { diff: string }) {
   )
 }
 
-function Composer({ machine, session, busy }: { machine: MachineEntry; session: SessionInfo; busy: boolean }) {
+function Composer({ machine, thread, busy }: { machine: MachineEntry; thread: ThreadInfo; busy: boolean }) {
   const { openSettings: onOpenSettings } = useShell()
   const dispatch = useRegistry().router.dispatch
   const [claims, setClaims] = useState<ComposerClaim[]>([])
@@ -447,12 +447,12 @@ function Composer({ machine, session, busy }: { machine: MachineEntry; session: 
     return () => setClaims((list) => list.filter((c) => c !== claim))
   }, [])
   const claim = claims.at(-1)
-  // A draft per session, kept until it's sent: switching sessions or reloading doesn't lose it.
-  const [text, setText] = useLocalState(`draft.${machine.id}.${session.id}`, '')
+  // A draft per thread, kept until it's sent: switching threads or reloading doesn't lose it.
+  const [text, setText] = useLocalState(`draft.${machine.id}.${thread.id}`, '')
   const [error, setError] = useState<{ kind?: string; message: string }>()
   const input = useRef<HTMLTextAreaElement>(null)
   const disabled = machine.state !== 'connected'
-  useEffect(() => { input.current?.focus() }, [session.id])
+  useEffect(() => { input.current?.focus() }, [thread.id])
 
   const send = async () => {
     const value = text.trim()
@@ -461,13 +461,13 @@ function Composer({ machine, session, busy }: { machine: MachineEntry; session: 
     setError(undefined)
     try {
       if (claim) { await claim.submit(value); return }
-      await dispatch('session.submit', { id: session.id, text: value, requestId: crypto.randomUUID(), ...(busy ? { whenBusy: 'steer' as const } : {}) }, { machine: machine.id, source: 'composer' })
+      await dispatch('thread.submit', { id: thread.id, text: value, requestId: crypto.randomUUID(), ...(busy ? { whenBusy: 'steer' as const } : {}) }, { machine: machine.id, source: 'composer' })
     } catch (error) {
       setText(value)
       setError(error as { kind?: string; message: string })
     }
   }
-  const abort = () => dispatch('session.abort', { id: session.id }, { machine: machine.id, source: 'composer' })
+  const abort = () => dispatch('thread.abort', { id: thread.id }, { machine: machine.id, source: 'composer' })
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send() }
     if (event.key === 'Escape' && busy) { event.preventDefault(); void abort() }
@@ -475,7 +475,7 @@ function Composer({ machine, session, busy }: { machine: MachineEntry; session: 
   return (
     <ClaimContext.Provider value={register}>
     <div className="dock">
-    <div className="dock__above"><Slot name="composer.above" props={{ machine, session }} /></div>
+    <div className="dock__above"><Slot name="composer.above" props={{ machine, thread }} /></div>
     {error && (
       <div className="composer__error">
         {error.kind === 'no_model' ? <>No model is set up on {machine.label}. <Button onClick={onOpenSettings}>Open Settings</Button></> : error.message}
@@ -495,14 +495,14 @@ function Composer({ machine, session, busy }: { machine: MachineEntry; session: 
 }
 
 /** Open a pane beside the thread: the kinds that show something without being told what (Changes, a profile's own). */
-function PaneMenu({ machine, session }: { machine: MachineEntry; session: SessionInfo }) {
+function PaneMenu({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const registry = useRegistry()
-  const kinds = paneMenu(registry, session)
+  const kinds = paneMenu(registry, thread)
   if (!kinds.length) return null
-  const open = (kind: string) => void registry.router.dispatch('pane.open', { id: session.id, kind }, { machine: machine.id, source: 'header' })
+  const open = (kind: string) => void registry.router.dispatch('pane.open', { id: thread.id, kind }, { machine: machine.id, source: 'header' })
   return (
     <Menu.Root>
-      <Menu.Trigger render={<IconButton label="Open a pane" className="session__panes" />}>
+      <Menu.Trigger render={<IconButton label="Open a pane" className="thread__panes" />}>
         <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M9 3v10" stroke="currentColor" strokeWidth="1.3" /></svg>
       </Menu.Trigger>
       <Menu.Popup align="end">

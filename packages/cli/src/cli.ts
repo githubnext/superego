@@ -1,5 +1,5 @@
-// The command line of an app built on mu (`mu` for mu itself). With no command it starts a session in the current
-// directory and opens it in the app. Everything else (sessions, machines, settings, sign-in, the daemon itself) works on
+// The command line of an app built on mu (`mu` for mu itself). With no command it starts a thread in the current
+// directory and opens it in the app. Everything else (threads, machines, settings, sign-in, the daemon itself) works on
 // this computer or, with `-m <machine>`, on any machine the app knows. `<id> connect` is what `ssh <host> <id> connect`
 // runs on the far side. An app's bin calls `runCli(app, { appDir, bin })`.
 import { spawn } from 'node:child_process'
@@ -14,7 +14,7 @@ import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, type Mach
 import { appEnv, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@mu/daemon'
 import {
   FEATURES, PROTOCOL_VERSION, RpcError, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
-  type ProfileInfo, type SessionInfo, type SettingsSnapshot,
+  type ProfileInfo, type ThreadInfo, type SettingsSnapshot,
 } from '@mu/protocol'
 
 export type CliOptions = {
@@ -34,14 +34,14 @@ let machines: MachineStore
 const help = () => `${app.id}: ${app.name}
 
 Usage:
-  ${app.id} [dir] [-p prompt]          Start a session in dir (default: here) and open it in the app
-  ${app.id} open <session>             Open a session in the app
-  ${app.id} sessions [--archived]      List sessions, or the archived ones (also: mu ls)
-  ${app.id} create [dir] [-p prompt]   Start a session without opening the app; prints its id (also: new)
-  ${app.id} send <session> <text...>   Send a message to a session
+  ${app.id} [dir] [-p prompt]          Start a thread in dir (default: here) and open it in the app
+  ${app.id} open <thread>             Open a thread in the app
+  ${app.id} threads [--archived]      List threads, or the archived ones (also: mu ls)
+  ${app.id} create [dir] [-p prompt]   Start a thread without opening the app; prints its id (also: new)
+  ${app.id} send <thread> <text...>   Send a message to a thread
       -P, --profile <name>        Start with this profile (default: the folder's default, the project's before yours)
 
-  ${app.id} profile                    List the profiles a session here could start with
+  ${app.id} profile                    List the profiles a thread here could start with
   ${app.id} profile new [name] [--user] Make a profile in this project's .mu/profiles (or yours, ~/.${app.id}/profiles)
   ${app.id} profile allow [name]       Let this project's profile run (again, after it changed)
 
@@ -144,41 +144,41 @@ async function on<T>(machine: Machine, work: (call: <M extends MethodName>(metho
 // ── The app ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Show a session in the app, starting the app if it isn't running. The app is single-instance: a second launch hands
+ * Show a thread in the app, starting the app if it isn't running. The app is single-instance: a second launch hands
  * its arguments to the running one and exits. `<ID>_APP` overrides where the app is.
  */
-function openInApp(machine: string, session: string) {
+function openInApp(machine: string, thread: string) {
   const dir = appDir()
   if (!existsSync(resolve(dir, 'out/main/main.js'))) {
     throw new RpcError('no_app', `The app isn't built in ${dir}`, { hint: 'Build it: pnpm build in the app.' })
   }
-  spawn(devApp(dir, app), [dir, `--mu-open=${machine}/${session}`], { detached: true, stdio: 'ignore' }).unref()
+  spawn(devApp(dir, app), [dir, `--mu-open=${machine}/${thread}`], { detached: true, stdio: 'ignore' }).unref()
 }
 
 // ── Commands ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-async function startSession(args: { dir?: string; machine?: string; prompt?: string; profile?: string; open: boolean }) {
+async function startThread(args: { dir?: string; machine?: string; prompt?: string; profile?: string; open: boolean }) {
   const machine = resolveMachine(args.machine)
   // A local directory is resolved here; on another machine it is passed as given, or left to that daemon's default.
   const cwd = machine.config ? args.dir : resolve(args.dir ?? '.')
-  const session = await on(machine, async (call) => {
-    // Actions take their parameters by name; session.create picks the folder's profile unless one is named.
-    const created = await call('action.run', { id: 'session.create', params: { ...(cwd ? { cwd } : {}), ...(args.profile ? { profile: args.profile } : {}), ...(args.prompt ? { prompt: args.prompt } : {}) }, exposure: 'cli' }) as SessionInfo
+  const thread = await on(machine, async (call) => {
+    // Actions take their parameters by name; thread.create picks the folder's profile unless one is named.
+    const created = await call('action.run', { id: 'thread.create', params: { ...(cwd ? { cwd } : {}), ...(args.profile ? { profile: args.profile } : {}), ...(args.prompt ? { prompt: args.prompt } : {}) }, exposure: 'cli' }) as ThreadInfo
     return created
   })
-  if (args.open) openInApp(machine.id, session.id)
-  print({ machine: machine.id, ...session }, () => {
-    if (args.open) console.log(`Opened session ${session.id} in ${session.cwd}${machine.config ? ` on ${machine.label}` : ''}`)
-    else console.log(session.id)
+  if (args.open) openInApp(machine.id, thread.id)
+  print({ machine: machine.id, ...thread }, () => {
+    if (args.open) console.log(`Opened thread ${thread.id} in ${thread.cwd}${machine.config ? ` on ${machine.label}` : ''}`)
+    else console.log(thread.id)
   })
 }
 
-async function sessions(machineName?: string, archived = false) {
+async function threads(machineName?: string, archived = false) {
   const machine = resolveMachine(machineName)
-  const list = await on(machine, (call) => call('session.list', archived ? { archived: true } : {}))
+  const list = await on(machine, (call) => call('thread.list', archived ? { archived: true } : {}))
   print(list, () => {
-    if (!list.length) return console.log(`No sessions on ${machine.label}. Start one with: ${app.id}`)
-    table(list.map((s: SessionInfo) => [s.id, `${GLYPH[s.status.state]} ${s.status.state}`, s.title, s.cwd]))
+    if (!list.length) return console.log(`No threads on ${machine.label}. Start one with: ${app.id}`)
+    table(list.map((s: ThreadInfo) => [s.id, `${GLYPH[s.status.state]} ${s.status.state}`, s.title, s.cwd]))
   })
 }
 
@@ -372,7 +372,7 @@ async function bridge(start: boolean) {
 
 // ── Profiles ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const PROFILE_TEMPLATE = (name: string) => `// The ${name} profile: what an agent started with it is. Sessions in this folder (and below) can start with it;
+const PROFILE_TEMPLATE = (name: string) => `// The ${name} profile: what an agent started with it is. Threads in this folder (and below) can start with it;
 // "default" is the one they get unless they ask for another. Edits apply from the next turn.
 import { defineProfile } from 'mu'
 
@@ -474,7 +474,7 @@ async function doCommand(argv: string[]) {
 
 // ── Dispatch ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const COMMANDS = new Set(['open', 'sessions', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles'])
+const COMMANDS = new Set(['open', 'threads', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles'])
 
 async function main() {
   // `do` takes the action's own --params, which parseArgs would refuse.
@@ -494,24 +494,24 @@ async function main() {
   json = Boolean(values.json)
   const [first, ...rest] = positionals
   if (values.help || first === 'help') return console.log(help())
-  // No command, or a directory: start a session there and open it.
-  if (!first || !COMMANDS.has(first)) return startSession({ dir: first, machine: values.machine, prompt: values.prompt, profile: values.profile, open: true })
+  // No command, or a directory: start a thread there and open it.
+  if (!first || !COMMANDS.has(first)) return startThread({ dir: first, machine: values.machine, prompt: values.prompt, profile: values.profile, open: true })
   switch (first) {
     case 'open': {
-      if (!rest[0]) throw new RpcError('usage', `${app.id} open <session>`)
+      if (!rest[0]) throw new RpcError('usage', `${app.id} open <thread>`)
       const machine = resolveMachine(values.machine)
-      await on(machine, (call) => call('session.list', {})).then((list) => {
-        if (!list.some((s) => s.id === rest[0])) throw new RpcError('not_found', `No session ${rest[0]} on ${machine.label}`)
+      await on(machine, (call) => call('thread.list', {})).then((list) => {
+        if (!list.some((s) => s.id === rest[0])) throw new RpcError('not_found', `No thread ${rest[0]} on ${machine.label}`)
       })
       return openInApp(machine.id, rest[0])
     }
-    case 'sessions': case 'ls': return sessions(values.machine, Boolean(values.archived))
-    case 'new': case 'create': return startSession({ dir: rest[0], machine: values.machine, prompt: values.prompt, profile: values.profile, open: false })
+    case 'threads': case 'ls': return threads(values.machine, Boolean(values.archived))
+    case 'new': case 'create': return startThread({ dir: rest[0], machine: values.machine, prompt: values.prompt, profile: values.profile, open: false })
     case 'profile': case 'profiles': return profileCommand(rest[0], rest.slice(1), values)
     case 'send': {
       const [id, ...text] = rest
-      if (!id || !text.length) throw new RpcError('usage', `${app.id} send <session> <text...>`)
-      await on(resolveMachine(values.machine), (call) => call('session.submit', { id, text: text.join(' ') }))
+      if (!id || !text.length) throw new RpcError('usage', `${app.id} send <thread> <text...>`)
+      await on(resolveMachine(values.machine), (call) => call('thread.submit', { id, text: text.join(' ') }))
       return print({ ok: true }, () => {})
     }
     case 'machines': return machinesCommand(rest[0], rest.slice(1), values)

@@ -1,11 +1,11 @@
-// The sidebar's order, without React: how sessions group and sort, and how times read.
+// The sidebar's order, without React: how threads group and sort, and how times read.
 import type { MachineEntry } from '@mu/app/ui'
-import type { SessionInfo, Status } from '@mu/protocol'
+import type { ThreadInfo, Status } from '@mu/protocol'
 
 export type Sort = 'created' | 'recent' | 'status'
 
-/** When a session last did something; a daemon from before last-activity was reported gives its creation. */
-export const activity = (session: SessionInfo) => session.activeAt ?? session.createdAt
+/** When a thread last did something; a daemon from before last-activity was reported gives its creation. */
+export const activity = (thread: ThreadInfo) => thread.activeAt ?? thread.createdAt
 
 /** How long ago, briefly: now, 5m, 2h, then the weekday, then the date. */
 export function ago(at: number, now = Date.now()): string {
@@ -19,7 +19,7 @@ export function ago(at: number, now = Date.now()): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-export type Row = { machine: MachineEntry; session: SessionInfo }
+export type Row = { machine: MachineEntry; thread: ThreadInfo }
 export type Group = { id: string; title: string; note?: string; machine?: MachineEntry; rows: Row[] }
 
 const STATUS_GROUPS: { id: string; title: string; states: Status['state'][] }[] = [
@@ -30,16 +30,16 @@ const STATUS_GROUPS: { id: string; title: string; states: Status['state'][] }[] 
 ]
 
 /** The sidebar's groups for a sort: by machine (newest or most recently active first), or by status across machines. */
-export function groupSessions(machines: MachineEntry[], sessions: Record<string, SessionInfo[] | undefined>, sort: Sort): Group[] {
-  const rows = (m: MachineEntry) => (sessions[m.id] ?? []).map((session) => ({ machine: m, session }))
+export function groupThreads(machines: MachineEntry[], threads: Record<string, ThreadInfo[] | undefined>, sort: Sort): Group[] {
+  const rows = (m: MachineEntry) => (threads[m.id] ?? []).map((thread) => ({ machine: m, thread }))
   if (sort === 'status') {
-    const all = machines.flatMap(rows).sort((a, b) => activity(b.session) - activity(a.session))
-    return STATUS_GROUPS.map((g) => ({ id: g.id, title: g.title, rows: all.filter((r) => g.states.includes(r.session.status.state)) })).filter((g) => g.rows.length)
+    const all = machines.flatMap(rows).sort((a, b) => activity(b.thread) - activity(a.thread))
+    return STATUS_GROUPS.map((g) => ({ id: g.id, title: g.title, rows: all.filter((r) => g.states.includes(r.thread.status.state)) })).filter((g) => g.rows.length)
   }
   return machines.map((m) => ({
     id: m.id, title: m.label, machine: m,
     ...(m.state !== 'connected' ? { note: m.state === 'connecting' ? 'connecting' : 'offline' } : {}),
-    rows: rows(m).sort((a, b) => sort === 'recent' ? activity(b.session) - activity(a.session) : b.session.createdAt - a.session.createdAt),
+    rows: rows(m).sort((a, b) => sort === 'recent' ? activity(b.thread) - activity(a.thread) : b.thread.createdAt - a.thread.createdAt),
   }))
 }
 

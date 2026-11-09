@@ -1,27 +1,27 @@
-// What the shell knows and shares: the machines, every connected machine's sessions (one subscription each, whatever
-// number of components show them), which session is selected, and the Settings dialog; those two kept in the window
+// What the shell knows and shares: the machines, every connected machine's threads (one subscription each, whatever
+// number of components show them), which thread is selected, and the Settings dialog; those two kept in the window
 // across reloads.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { SessionInfo } from '@mu/protocol'
+import type { ThreadInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
-import { has, useMachineList, useSessions as useSessionsWatch } from './client.ts'
+import { has, useMachineList, useThreads as useThreadsWatch } from './client.ts'
 import { useRegistry } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
 
-export type Selection = { machine: string; session: string }
+export type Selection = { machine: string; thread: string }
 
-/** Where the New session dialog starts: a machine, a folder. */
-export type NewSessionStart = { machine?: string; cwd?: string }
+/** Where the New thread dialog starts: a machine, a folder. */
+export type NewThreadStart = { machine?: string; cwd?: string }
 
 type ShellState = {
   machines: MachineEntry[]
-  sessions: Record<string, SessionInfo[] | undefined>
+  threads: Record<string, ThreadInfo[] | undefined>
   selection: Selection | undefined
   select(selection: Selection | undefined): void
   settingsOpen: boolean
   openSettings(open?: boolean): void
-  newSession: NewSessionStart | undefined
-  openNewSession(start?: NewSessionStart | false): void
+  newThread: NewThreadStart | undefined
+  openNewThread(start?: NewThreadStart | false): void
 }
 
 const Context = createContext<ShellState | undefined>(undefined)
@@ -34,63 +34,63 @@ function useShellState(): ShellState {
 
 /** Every machine: this computer and the configured ones, with their connection state. */
 export const useMachines = () => useShellState().machines
-/** A machine's sessions, newest first; undefined until known (or while it is unreachable and never was). */
-export const useSessions = (machine: string) => useShellState().sessions[machine]
-/** Every machine's sessions, by machine id. */
-export const useAllSessions = () => useShellState().sessions
-/** The selected session, and a way to select another (or none). */
+/** A machine's threads, newest first; undefined until known (or while it is unreachable and never was). */
+export const useThreads = (machine: string) => useShellState().threads[machine]
+/** Every machine's threads, by machine id. */
+export const useAllThreads = () => useShellState().threads
+/** The selected thread, and a way to select another (or none). */
 export function useSelection() {
-  const { selection, select, machines, sessions } = useShellState()
+  const { selection, select, machines, threads } = useShellState()
   const machine = machines.find((m) => m.id === selection?.machine)
-  const session = selection && sessions[selection.machine]?.find((s) => s.id === selection.session)
-  return { selection, select, machine, session }
+  const thread = selection && threads[selection.machine]?.find((s) => s.id === selection.thread)
+  return { selection, select, machine, thread }
 }
 /** The shell's own actions. */
 export function useShell() {
-  const { openSettings, openNewSession } = useShellState()
+  const { openSettings, openNewThread } = useShellState()
   return {
     openSettings: () => openSettings(true),
-    /** The New session dialog, optionally starting on a machine or folder. */
-    newSession: (start: NewSessionStart = {}) => openNewSession(start),
+    /** The New thread dialog, optionally starting on a machine or folder. */
+    newThread: (start: NewThreadStart = {}) => openNewThread(start),
   }
 }
 
 export function ShellStateProvider({ children }: { children: ReactNode }) {
   const machines = useMachineList()
-  const [sessions, setSessions] = useState<Record<string, SessionInfo[] | undefined>>({})
-  // Which session and whether Settings is open: as the window was left, after a reload too.
+  const [threads, setThreads] = useState<Record<string, ThreadInfo[] | undefined>>({})
+  // Which thread and whether Settings is open: as the window was left, after a reload too.
   const [selection, setSelection] = useLocalState<Selection | undefined>('selection', undefined)
   const [settingsOpen, setSettingsOpen] = useLocalState('settings.open', false)
-  const [newSession, setNewSession] = useState<NewSessionStart>()
-  const onSessions = useCallback((machine: string, list: SessionInfo[] | undefined) => setSessions((all) => all[machine] === list ? all : { ...all, [machine]: list }), [])
+  const [newThread, setNewThread] = useState<NewThreadStart>()
+  const onThreads = useCallback((machine: string, list: ThreadInfo[] | undefined) => setThreads((all) => all[machine] === list ? all : { ...all, [machine]: list }), [])
   const value = useMemo<ShellState>(() => ({
-    machines, sessions, selection, settingsOpen, newSession,
-    select: (next) => { setSettingsOpen(false); setNewSession(undefined); setSelection(next) },
+    machines, threads, selection, settingsOpen, newThread,
+    select: (next) => { setSettingsOpen(false); setNewThread(undefined); setSelection(next) },
     openSettings: (open = true) => setSettingsOpen(open),
-    openNewSession: (start = {}) => setNewSession(start === false ? undefined : start),
-  }), [machines, sessions, selection, settingsOpen, newSession])
+    openNewThread: (start = {}) => setNewThread(start === false ? undefined : start),
+  }), [machines, threads, selection, settingsOpen, newThread])
   return (
     <Context.Provider value={value}>
-      {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineSessions key={m.id} machine={m} onSessions={onSessions} />)}
+      {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} />)}
       {children}
     </Context.Provider>
   )
 }
 
-/** One sessions subscription per machine, kept while it is connected; the last list stays while it isn't. */
-function MachineSessions({ machine, onSessions }: { machine: MachineEntry; onSessions(machine: string, list: SessionInfo[] | undefined): void }) {
-  const sessions = useSessionsWatch(machine.id, machine.state === 'connected' && has(machine, 'sessions'))
-  // What the machine offers, for the palette and for routing session actions.
+/** One threads subscription per machine, kept while it is connected; the last list stays while it isn't. */
+function MachineThreads({ machine, onThreads }: { machine: MachineEntry; onThreads(machine: string, list: ThreadInfo[] | undefined): void }) {
+  const threads = useThreadsWatch(machine.id, machine.state === 'connected' && has(machine, 'threads'))
+  // What the machine offers, for the palette and for routing thread actions.
   const { router } = useRegistry()
   useEffect(() => { if (machine.state === 'connected' && has(machine, 'actions')) void router.load(machine.id) }, [machine.state, machine.machine?.id])
-  useEffect(() => { if (sessions) onSessions(machine.id, sessions) }, [sessions])
+  useEffect(() => { if (threads) onThreads(machine.id, threads) }, [threads])
   return null
 }
 
-/** For the shell: whether the New session dialog is open, where it starts, and closing it. */
-export function useNewSessionDialog() {
-  const { newSession, openNewSession } = useShellState()
-  return { start: newSession, close: () => openNewSession(false) }
+/** For the shell: whether the New thread dialog is open, where it starts, and closing it. */
+export function useNewThreadDialog() {
+  const { newThread, openNewThread } = useShellState()
+  return { start: newThread, close: () => openNewThread(false) }
 }
 
 /** For the shell: whether the Settings dialog is open, and closing it. */

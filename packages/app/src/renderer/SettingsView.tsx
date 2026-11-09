@@ -246,7 +246,7 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
     <section className="settings-section">
       <h2>Machines</h2>
       <p className="settings__note">
-        Every machine runs its own {appConfig.name} daemon with its own sessions, models and credentials. Other machines are reached with
+        Every machine runs its own {appConfig.name} daemon with its own threads, models and credentials. Other machines are reached with
         {' '}<code>ssh &lt;target&gt; {DEFAULT_REMOTE_COMMAND}</code> (they need {appConfig.name} installed and key-based ssh access), or with
         any command that pipes stdio to a daemon, such as <code>docker exec -i</code>.
       </p>

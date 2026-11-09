@@ -1,17 +1,17 @@
-// The menu bar item: the app's icon (and a count when sessions want a look) while the "Show in menu bar" setting is on.
+// The menu bar item: the app's icon (and a count when threads want a look) while the "Show in menu bar" setting is on.
 // Its menu shows what the agents are doing on every machine and is the way back to the app when no window is open.
 // The icon is the app's `resources/trayTemplate.png` (with an @2x beside it): black on transparent, which macOS tints
 // for the menu bar it sits in. Without one, the app's glyph is drawn as text.
 import { existsSync } from 'node:fs'
 import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
-import type { AppConfig, SessionInfo } from '@mu/protocol'
+import type { AppConfig, ThreadInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
 
 export type TrayModel = {
   machines(): MachineEntry[]
-  sessions(machine: string): SessionInfo[]
+  threads(machine: string): ThreadInfo[]
   open(): void
-  openSession(machine: string, session: string): void
+  openThread(machine: string, thread: string): void
   openSettings(): void
   quit(): void
   quitAndStop(): void
@@ -44,7 +44,7 @@ export class MenuBar {
   /** Whether the item is up (or, headless, would be). */
   get shown() { return Boolean(this.#tray) || this.#headlessShown }
 
-  /** Show or hide the item, and redraw it from the current machines and sessions. */
+  /** Show or hide the item, and redraw it from the current machines and threads. */
   update(visible: boolean) {
     if (!visible) {
       this.#tray?.destroy()
@@ -64,17 +64,17 @@ export class MenuBar {
       this.#tray.setToolTip(this.#app.name)
     }
     const machines = this.#model.machines().filter((m) => m.state !== 'disabled')
-    const all = machines.flatMap((m) => this.#model.sessions(m.id).map((session) => ({ machine: m, session })))
-    const wanting = all.filter(({ session }) => WANTS_A_LOOK.has(session.status.state))
-    const working = all.filter(({ session }) => session.status.state === 'working')
+    const all = machines.flatMap((m) => this.#model.threads(m.id).map((thread) => ({ machine: m, thread })))
+    const wanting = all.filter(({ thread }) => WANTS_A_LOOK.has(thread.status.state))
+    const working = all.filter(({ thread }) => thread.status.state === 'working')
     const glyph = this.#app.glyph ?? this.#app.name
     const count = wanting.length ? String(wanting.length) : ''
     const title = this.#icon ? count : count ? `${glyph} ${count}` : glyph
     const tooltip = working.length ? `${this.#app.name}: ${working.length} working` : this.#app.name
 
-    const item = ({ machine, session }: (typeof all)[number]): MenuItemConstructorOptions => ({
-      label: `${GLYPH[session.status.state] ?? '○'}  ${session.title}${machines.length > 1 ? `  — ${machine.label}` : ''}`,
-      click: () => this.#model.openSession(machine.id, session.id),
+    const item = ({ machine, thread }: (typeof all)[number]): MenuItemConstructorOptions => ({
+      label: `${GLYPH[thread.status.state] ?? '○'}  ${thread.title}${machines.length > 1 ? `  — ${machine.label}` : ''}`,
+      click: () => this.#model.openThread(machine.id, thread.id),
     })
     const listed = [...wanting, ...working].slice(0, 12)
     const service = this.#model.service()

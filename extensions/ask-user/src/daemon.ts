@@ -1,5 +1,5 @@
 // ask-user, daemon half: an `ask_user` tool that puts a question to the user and waits for the answer. While it waits,
-// the session shows as blocked (needs you), the question is listed live for every client, and any of them can answer.
+// the thread shows as blocked (needs you), the question is listed live for every client, and any of them can answer.
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { arr, obj, opt, str } from '@earendil-works/pi-schema'
 import { defineDaemonExtension } from '@mu/daemon'
@@ -28,7 +28,7 @@ export default defineDaemonExtension({
         replay: 'safe',
         async execute(args, api, context) {
           const question: Question = {
-            id: api.callId, session: String(api.conversationId), question: args.question, options: args.options ?? [], at: api.now(),
+            id: api.callId, thread: String(api.conversationId), question: args.question, options: args.options ?? [], at: api.now(),
           }
           const details: AskDetails = { id: question.id, question: question.question, options: question.options }
           await api.details(details, context)
@@ -48,8 +48,8 @@ export default defineDaemonExtension({
       })],
     }))
 
-    mu.status((session) => {
-      const question = pending.get().find((q) => q.session === session)
+    mu.status((thread) => {
+      const question = pending.get().find((q) => q.thread === thread)
       return question && { kind: 'question', msg: question.question }
     })
 

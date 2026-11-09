@@ -4,9 +4,9 @@
 import { useEffect, useState } from 'react'
 import { defineAction, obj, Router, str, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig } from '@mu/protocol'
 import { Dialog } from '@mu/ui'
-import type { SessionInfo } from '@mu/protocol'
+import type { ThreadInfo } from '@mu/protocol'
 import type { MachineEntry } from '../shared.ts'
-import type { NewSessionStart, Selection } from './state.tsx'
+import type { NewThreadStart, Selection } from './state.tsx'
 
 /** What a window action gets besides its parameters. */
 export type WindowContext = {
@@ -15,18 +15,18 @@ export type WindowContext = {
   selection: Selection | undefined
   select(selection: Selection | undefined): void
   openSettings(): void
-  newSession(start?: NewSessionStart): void
+  newThread(start?: NewThreadStart): void
   togglePalette(): void
   showLog(): void
-  /** The session a selection points at, as the window has it. */
-  sessionOf(selection: Selection): SessionInfo | undefined
+  /** The thread a selection points at, as the window has it. */
+  threadOf(selection: Selection): ThreadInfo | undefined
   dispatch: Dispatch
 }
 
 /**
  * Run an action by id, wherever it runs: a window action here; an app action in the main process; a machine action on
- * `options.machine`, else the selected session's machine, else this computer. A session action takes the selected
- * session when its `id` isn't given.
+ * `options.machine`, else the selected thread's machine, else this computer. A thread action takes the selected
+ * thread when its `id` isn't given.
  */
 export type Dispatch = (id: string, params?: Record<string, unknown>, options?: { source?: string; machine?: string }) => Promise<unknown>
 
@@ -52,7 +52,7 @@ export function createWindowRouter() {
     const target = machine ?? (typeof params.machine === 'string' ? params.machine : undefined) ?? context?.selection?.machine ?? 'local'
     const action = remote.get(target)?.find((a) => a.id === id)
     const { machine: _machine, ...rest } = params
-    const filled = action?.session && rest.id === undefined && context?.selection?.machine === target ? { ...rest, id: context.selection.session } : rest
+    const filled = action?.thread && rest.id === undefined && context?.selection?.machine === target ? { ...rest, id: context.selection.thread } : rest
     // Through action.run: it finds actions registered after this window connected (a profile's, as it loads).
     return router.track(id, filled, `${source} → ${target}`, () => window.mu.call(target, 'action.run', { id, params: filled }))
   }
@@ -85,34 +85,34 @@ export const coreActions: WindowAction[] = [
   defineAction({ id: 'app.palette', title: 'Command palette', runs: 'window', keys: 'mod+k', run: (_p, c: WindowContext) => c.togglePalette() }),
   defineAction({ id: 'app.settings', title: 'Settings', runs: 'window', keys: 'mod+,', run: (_p, c: WindowContext) => c.openSettings() }),
   defineAction({ id: 'app.log', title: 'Show action log', runs: 'window', run: (_p, c: WindowContext) => c.showLog() }),
-  // Panes of the selected session.
+  // Panes of the selected thread.
   defineAction({
     id: 'panes.changes', title: 'Show changes', runs: 'window', keys: 'mod+shift+d',
-    run: async (_p, c: WindowContext) => { if (c.selection) await c.dispatch('pane.open', { id: c.selection.session, kind: 'diff' }, { machine: c.selection.machine, source: 'panes' }) },
+    run: async (_p, c: WindowContext) => { if (c.selection) await c.dispatch('pane.open', { id: c.selection.thread, kind: 'diff' }, { machine: c.selection.machine, source: 'panes' }) },
   }),
   defineAction({
     id: 'panes.close', title: 'Close pane', runs: 'window', keys: 'mod+shift+w',
     run: async (_p, c: WindowContext) => {
-      const session = c.selection && c.sessionOf(c.selection)
-      const front = session?.panes?.find((p) => p.id === session.pane) ?? session?.panes?.at(-1)
-      if (c.selection && front) await c.dispatch('pane.close', { id: c.selection.session, pane: front.id }, { machine: c.selection.machine, source: 'panes' })
+      const thread = c.selection && c.threadOf(c.selection)
+      const front = thread?.panes?.find((p) => p.id === thread.pane) ?? thread?.panes?.at(-1)
+      if (c.selection && front) await c.dispatch('pane.close', { id: c.selection.thread, pane: front.id }, { machine: c.selection.machine, source: 'panes' })
     },
   }),
   defineAction({
-    id: 'session.new', title: 'New session…', runs: 'window', keys: 'mod+n',
-    params: obj({}), run: (_p, c: WindowContext) => c.newSession(),
+    id: 'thread.new', title: 'New thread…', runs: 'window', keys: 'mod+n',
+    params: obj({}), run: (_p, c: WindowContext) => c.newThread(),
   }),
   defineAction({
-    id: 'session.select', title: 'Show a session', runs: 'window',
-    params: obj({ machine: str(), session: str() }),
-    run: ({ machine, session }, c: WindowContext) => c.select({ machine, session }),
+    id: 'thread.select', title: 'Show a thread', runs: 'window',
+    params: obj({ machine: str(), thread: str() }),
+    run: ({ machine, thread }, c: WindowContext) => c.select({ machine, thread }),
   }),
 ]
 
-/** Whether an action can run with no parameters (after the selection fills in a session's): keys and the palette. */
+/** Whether an action can run with no parameters (after the selection fills in a thread's): keys and the palette. */
 export function runsBare(action: ActionInfo): boolean {
   const required = ((action.params as { required?: string[] } | undefined)?.required ?? [])
-    .filter((name) => !(action.session && (name === 'id' || name === 'machine')))
+    .filter((name) => !(action.thread && (name === 'id' || name === 'machine')))
   return required.length === 0
 }
 

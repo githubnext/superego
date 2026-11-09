@@ -5,7 +5,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, p
 import { appEnv, defaultDataDir, readBuild, socketPath } from '@mu/daemon/client'
 import {
   bool, defineAction, lit, obj, opt, Router, RpcError, str, union, unknown,
-  type AppConfig, type DeclaredSection, type Json, type Notifications, type SessionInfo, type SettingType,
+  type AppConfig, type DeclaredSection, type Json, type Notifications, type ThreadInfo, type SettingType,
 } from '@mu/protocol'
 import { serveSettings } from '@mu/settings'
 import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type MuEvent } from '../shared.ts'
@@ -63,7 +63,7 @@ export function startApp(appConfig: AppConfig) {
     /** How mu sits on the desktop now. */
       async 'service.get'() { return service.state },
       async 'app.desktop'() { return { menuBar: menuBar.shown, dockHidden: mac && dockHidden() } },
-      /** The page is listening for app events: answer with a session it was asked to show before it was. */
+      /** The page is listening for app events: answer with a thread it was asked to show before it was. */
       async 'app.ready'() {
         ready.add(contents.id)
         contents.once('destroyed', () => ready.delete(contents.id))
@@ -158,10 +158,10 @@ export function startApp(appConfig: AppConfig) {
   machineStore.watch()
 
   /**
-   * Notify when a session out of sight starts wanting a look: it finished, failed or needs the user. The app keeps its
-   * own subscription to each machine's sessions for this, whatever the windows show.
+   * Notify when a thread out of sight starts wanting a look: it finished, failed or needs the user. The app keeps its
+   * own subscription to each machine's threads for this, whatever the windows show.
    */
-  const lastStatus = new Map<string, SessionInfo['status']['state']>()
+  const lastStatus = new Map<string, ThreadInfo['status']['state']>()
   const watchSubs = new Map<string, string>()
   function onMachineEvent(machine: string, method: string, params: unknown) {
     if (!links.has(machine)) return
@@ -170,34 +170,34 @@ export function startApp(appConfig: AppConfig) {
       refreshDesktop()
       if ((params as { state: string }).state === 'connected') {
         if (machine === 'local') setTimeout(pollService)
-        void (links.get(machine)!.call('sessions.watch', {}) as Promise<{ sub: string; value: SessionInfo[] }>).then(({ sub, value }) => {
+        void (links.get(machine)!.call('threads.watch', {}) as Promise<{ sub: string; value: ThreadInfo[] }>).then(({ sub, value }) => {
           watchSubs.set(machine, sub)
           track(machine, value, false)
         }).catch(() => {})
       }
       return
     }
-    if (method === 'sessions.changed') {
-      const { sub, value } = params as Notifications['sessions.changed']
+    if (method === 'threads.changed') {
+      const { sub, value } = params as Notifications['threads.changed']
       if (watchSubs.get(machine) === sub) track(machine, value, true)
     }
     broadcast({ machine, method, params })
   }
-  const sessionsOf = new Map<string, SessionInfo[]>()
-  function track(machine: string, sessions: SessionInfo[], announce: boolean) {
-    sessionsOf.set(machine, sessions)
+  const threadsOf = new Map<string, ThreadInfo[]>()
+  function track(machine: string, threads: ThreadInfo[], announce: boolean) {
+    threadsOf.set(machine, threads)
     refreshDesktop()
-    for (const session of sessions) {
-      const key = `${machine}/${session.id}`
+    for (const thread of threads) {
+      const key = `${machine}/${thread.id}`
       const before = lastStatus.get(key)
-      const now = session.status.state
+      const now = thread.status.state
       lastStatus.set(key, now)
       if (!announce || before === now || !['done', 'error', 'blocked'].includes(now)) continue
       if (BrowserWindow.getFocusedWindow() || !appSettings.get<boolean>(APP_KEYS.notifications) || !Notification.isSupported()) continue
       const label = links.get(machine)?.label ?? machine
-      const body = now === 'done' ? 'Finished' : now === 'error' ? `Failed${session.status.msg ? `: ${session.status.msg}` : ''}` : 'Needs you'
-      const notification = new Notification({ title: session.title, subtitle: label, body })
-      notification.on('click', () => show({ open: { machine, session: session.id } }))
+      const body = now === 'done' ? 'Finished' : now === 'error' ? `Failed${thread.status.msg ? `: ${thread.status.msg}` : ''}` : 'Needs you'
+      const notification = new Notification({ title: thread.title, subtitle: label, body })
+      notification.on('click', () => show({ open: { machine, thread: thread.id } }))
       notification.show()
     }
   }
@@ -227,15 +227,15 @@ export function startApp(appConfig: AppConfig) {
   const primary = app.requestSingleInstanceLock()
   if (!primary) app.quit()
 
-  type Open = { machine: string; session: string }
-  /** `--mu-open=<machine>/<session>`, as `mu` passes it. */
+  type Open = { machine: string; thread: string }
+  /** `--mu-open=<machine>/<thread>`, as `mu` passes it. */
   function openArgument(argv: string[]): Open | undefined {
     const value = argv.find((arg) => arg.startsWith('--mu-open='))?.slice('--mu-open='.length)
     const slash = value?.lastIndexOf('/') ?? -1
-    return value && slash > 0 ? { machine: value.slice(0, slash), session: value.slice(slash + 1) } : undefined
+    return value && slash > 0 ? { machine: value.slice(0, slash), thread: value.slice(slash + 1) } : undefined
   }
 
-  /** What a window should show: a session, or Settings. */
+  /** What a window should show: a thread, or Settings. */
   type Show = { open?: Open; settings?: boolean }
   /** Windows whose page is listening for app events; until then, what to show waits in `pending`. */
   const ready = new Set<number>()
@@ -284,9 +284,9 @@ export function startApp(appConfig: AppConfig) {
   }
   const menuBar = new MenuBar(appConfig, {
     machines: () => machineEntries(),
-    sessions: (machine) => sessionsOf.get(machine) ?? [],
+    threads: (machine) => threadsOf.get(machine) ?? [],
     open: () => show(),
-    openSession: (machine, session) => show({ open: { machine, session } }),
+    openThread: (machine, thread) => show({ open: { machine, thread } }),
     openSettings: () => show({ settings: true }),
     quit: () => app.quit(),
     quitAndStop: () => void quitAndStop(),
@@ -371,7 +371,7 @@ export function startApp(appConfig: AppConfig) {
         installedBuild: readBuild(import.meta.dirname),
         runningBuild: link.hello.machine.build,
         canRestartWhenIdle: link.has('restart'),
-        busy: (sessionsOf.get('local') ?? []).some((s) => s.status.state === 'working'),
+        busy: (threadsOf.get('local') ?? []).some((s) => s.status.state === 'working'),
       }
     },
     async restart(snapshot, interrupt) {
@@ -391,7 +391,7 @@ export function startApp(appConfig: AppConfig) {
       const { response } = await dialog.showMessageBox({
         type: 'warning', buttons: ['Restart Now', 'Cancel'], defaultId: 1, cancelId: 1,
         message: snapshot.canRestartWhenIdle ? 'Interrupt working agents?' : 'Restart the background process?',
-        detail: 'Agents stop mid-turn and pick up again after the restart. Sessions and their history are kept.',
+        detail: 'Agents stop mid-turn and pick up again after the restart. Threads and their history are kept.',
       })
       return response === 0
     },
@@ -405,7 +405,7 @@ export function startApp(appConfig: AppConfig) {
 
   /** Quit, and stop this computer's daemon and its agents too, asking first while any are working. */
   async function quitAndStop() {
-    const working = (sessionsOf.get('local') ?? []).filter((s) => s.status.state === 'working')
+    const working = (threadsOf.get('local') ?? []).filter((s) => s.status.state === 'working')
     if (working.length && !headless) {
       const { response } = await dialog.showMessageBox({
         type: 'warning', buttons: ['Stop Agents and Quit', 'Cancel'], defaultId: 0, cancelId: 1,
@@ -441,17 +441,17 @@ export function startApp(appConfig: AppConfig) {
     return window
   }
 
-  // Artifacts: HTML the agent wrote, served from the session's machine on a scheme of their own, sandboxed.
+  // Artifacts: HTML the agent wrote, served from the thread's machine on a scheme of their own, sandboxed.
   protocol.registerSchemesAsPrivileged([{ scheme: 'mu-artifact', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
   app.whenReady().then(() => {
     protocol.handle('mu-artifact', async (request) => {
       const url = new URL(request.url)
-      const [session, ...rest] = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
+      const [thread, ...rest] = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
       const link = links.get(decodeURIComponent(url.hostname))
-      if (!link || !session || !rest.length) return new Response('Not found', { status: 404 })
+      if (!link || !thread || !rest.length) return new Response('Not found', { status: 404 })
       try {
         const path = rest.join('/')
-        const { content } = await link.call('file.read', { id: session, path, base64: true }) as { content: string }
+        const { content } = await link.call('file.read', { id: thread, path, base64: true }) as { content: string }
         return new Response(Buffer.from(content, 'base64'), { headers: {
           'content-type': ARTIFACT_TYPES[path.split('.').at(-1)?.toLowerCase() ?? ''] ?? 'application/octet-stream',
           'content-security-policy': ARTIFACT_POLICY,

@@ -1,10 +1,10 @@
-// Agent status uses the OSC 7501 Program Status vocabulary, so mu sessions, Claude Code, Codex and pi all read alike.
+// Agent status uses the OSC 7501 Program Status vocabulary, so mu threads, Claude Code, Codex and pi all read alike.
 
 export type StatusState = 'idle' | 'working' | 'done' | 'blocked' | 'error'
 export type BlockedKind = 'permission' | 'question' | 'auth'
 export type Status = { state: StatusState; kind?: BlockedKind; msg?: string }
 
-/** Most pressing first: a rollup over many sessions shows the highest. */
+/** Most pressing first: a rollup over many threads shows the highest. */
 const PRIORITY: Record<StatusState, number> = { blocked: 4, error: 3, done: 2, working: 1, idle: 0 }
 
 export function rollup(statuses: Iterable<Status>): Status {
@@ -20,7 +20,7 @@ export type LiveLike = {
 }
 
 /**
- * A session's status from durable state: working while a run is going; error for a run that failed and was not
+ * A thread's status from durable state: working while a run is going; error for a run that failed and was not
  * looked at since; done when there is an answer newer than what was seen; otherwise idle.
  */
 export function deriveStatus(input: {

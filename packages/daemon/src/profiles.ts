@@ -1,6 +1,6 @@
 // Profiles: what an agent is, as files. A profile is a folder with a `profile.ts`, in the user's `~/.mu/profiles/<name>`
 // or in a project's own `.mu/profiles/<name>`, so a repo can carry the harness it needs (a customer-service agent in the
-// support repo, say). A session takes its profile when it starts and keeps it.
+// support repo, say). A thread takes its profile when it starts and keeps it.
 //
 //   import { defineProfile } from 'mu'
 //   export default defineProfile({
@@ -26,7 +26,7 @@ import { RpcError } from '@mu/protocol'
 
 export type ProfileSpec = {
   description?: string
-  /** `provider/model` for its sessions, unless a session picks its own. */
+  /** `provider/model` for its threads, unless a thread picks its own. */
   model?: string
   thinking?: string
   /** Instructions for the agent, after the extensions' prompt sections. */
@@ -39,7 +39,7 @@ export type ProfileSpec = {
   extensions?: string[]
   /**
    * UI extensions, as paths from the profile's folder: modules whose default export is defineUiExtension({ … }), drawn
-   * for this profile's sessions. They import from 'mu/ui' (hooks, components, `h` for elements) and 'react'.
+   * for this profile's threads. They import from 'mu/ui' (hooks, components, `h` for elements) and 'react'.
    */
   ui?: string[]
   /**
@@ -82,7 +82,7 @@ export function projectProfiles(cwd: string): string | undefined {
 const names = (root: string | undefined) => !root || !existsSync(root) ? [] :
   readdirSync(root).filter((name) => existsSync(join(root, name, 'profile.ts'))).sort()
 
-/** Every profile a session in `cwd` could start with: the project's, then the user's it doesn't replace. */
+/** Every profile a thread in `cwd` could start with: the project's, then the user's it doesn't replace. */
 export function listProfiles(cwd: string, userRoot: string): ProfileRef[] {
   const project = projectProfiles(cwd)
   const own = names(project).map((name): ProfileRef => ({ scope: 'project', name, dir: join(project!, name) }))
@@ -91,7 +91,7 @@ export function listProfiles(cwd: string, userRoot: string): ProfileRef[] {
   return [...own, ...user]
 }
 
-/** The profile a session in `cwd` starts with: `name` if given, else the default; the project's before the user's. */
+/** The profile a thread in `cwd` starts with: `name` if given, else the default; the project's before the user's. */
 export function findProfile(cwd: string, userRoot: string, name?: string): ProfileRef | undefined {
   const wanted = name ?? DEFAULT_PROFILE
   const found = listProfiles(cwd, userRoot).find((p) => p.name === wanted)

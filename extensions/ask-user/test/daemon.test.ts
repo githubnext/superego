@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { connectSocket, listen, openDaemon } from '@mu/daemon'
-import { defineApp, PROTOCOL_VERSION, type Json, type Notifications, type SessionInfo } from '@mu/protocol'
+import { defineApp, PROTOCOL_VERSION, type Json, type Notifications, type ThreadInfo } from '@mu/protocol'
 import askUser from '../src/daemon.ts'
 import { ANSWER, PENDING, type Question } from '../src/shared.ts'
 
@@ -18,7 +18,7 @@ const until = async (check: () => boolean | Promise<boolean>) => {
 }
 const turn = (content: Json[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
 
-it('asks, blocks the session, takes an answer from any client, and carries on', async () => {
+it('asks, blocks the thread, takes an answer from any client, and carries on', async () => {
   dir = await mkdtemp(join(tmpdir(), 'mu-ask-'))
   // The model asks once, then answers with what it was told.
   await writeFile(join(dir, 'turns.jsonl'), [
@@ -37,18 +37,18 @@ it('asks, blocks the session, takes an answer from any client, and carries on', 
   let questions = watched.value
   peer.on('value.changed', ({ sub, value }: Notifications['value.changed']) => { if (sub === watched.sub) questions = value as Question[] })
 
-  const session = await peer.call<SessionInfo>('session.create', {})
-  await peer.call('session.submit', { id: session.id, text: 'pick a colour' })
+  const thread = await peer.call<ThreadInfo>('thread.create', {})
+  await peer.call('thread.submit', { id: thread.id, text: 'pick a colour' })
   await until(() => questions.length === 1)
-  expect(questions[0]).toMatchObject({ session: session.id, question: 'Which colour?', options: ['red', 'blue'] })
-  const blocked = (await peer.call<SessionInfo[]>('session.list', {}))[0]!
+  expect(questions[0]).toMatchObject({ thread: thread.id, question: 'Which colour?', options: ['red', 'blue'] })
+  const blocked = (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!
   expect(blocked.status).toEqual({ state: 'blocked', kind: 'question', msg: 'Which colour?' })
 
   await expect(peer.call(ANSWER, { id: 'nope', answer: 'x' })).rejects.toMatchObject({ kind: 'not_found' })
   await peer.call(ANSWER, { id: questions[0]!.id, answer: 'blue' })
-  await until(async () => (await peer.call<SessionInfo[]>('session.list', {}))[0]!.status.state === 'done')
+  await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
   expect(questions).toEqual([])
-  const { value } = await peer.call<{ value: ConversationView }>('session.watch', { id: session.id })
+  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
   const text = JSON.stringify(value.entries)
   expect(text).toContain('The user answered: blue')
   expect(text).toContain('Blue it is.')

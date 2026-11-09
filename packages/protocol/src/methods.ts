@@ -9,19 +9,19 @@ import type { Status } from './status.ts'
  * The protocol's generation. It changes only for a break no feature flag can bridge; a daemon and client of different
  * generations refuse each other. Everything else is additive and announced in `FEATURES`.
  */
-export const PROTOCOL_VERSION = 2
+export const PROTOCOL_VERSION = 3
 
 /**
  * What a daemon of this build offers, announced in `hello`. Clients check a feature before using it, so an older
  * daemon on another machine keeps working with a newer app (and the other way round) for whatever both know.
  */
-export const FEATURES = ['sessions', 'settings', 'auth', 'restart', 'actions'] as const
+export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'actions'] as const
 export type Feature = (typeof FEATURES)[number]
 
-export type SessionId = string
+export type ThreadId = string
 
-export type SessionInfo = {
-  id: SessionId
+export type ThreadInfo = {
+  id: ThreadId
   title: string
   cwd: string
   createdAt: number
@@ -42,28 +42,28 @@ export type SessionInfo = {
 }
 
 /** `id` is the machine's identity: stable across restarts and routes, so a client can tell it is the same machine. */
-/** The models a machine can run, and the default a new session gets there. */
+/** The models a machine can run, and the default a new thread gets there. */
 export type ModelCatalog = {
   models: { value: string; label: string; group: string; thinking: string[] }[]
   default: { model?: string; thinking: string | null }
 }
 
-/** What a new session starts with. Unset: this machine's defaults. */
+/** What a new thread starts with. Unset: this machine's defaults. */
 /**
  * A pane: a view beside a thread (a diff, an editor, a preview, a profile's graph, another thread). `kind` names what
- * draws it; `params` are its own. Kept with the session, so it follows the session to every client.
+ * draws it; `params` are its own. Kept with the thread, so it follows the thread to every client.
  */
 export type Pane = { id: string; kind: string; title?: string; params?: Json }
 
 /** A profile: the user's (`~/.mu/profiles/<name>`) or a project's (`.mu/profiles/<name>`), and its folder. */
 export type ProfileRef = { name: string; scope: 'user' | 'project'; dir: string }
-/** A profile a session in some folder could start with (see the daemon's profiles.ts). */
+/** A profile a thread in some folder could start with (see the daemon's profiles.ts). */
 export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean }
 
-export type NewSession = {
+export type NewThread = {
   cwd?: string
   title?: string
-  /** `provider/model`, for this session's turns from now on. */
+  /** `provider/model`, for this thread's turns from now on. */
   model?: string
   /** A thinking level, or `off`. */
   thinking?: string
@@ -83,29 +83,29 @@ export type Hello = { version: number; features: string[]; machine: MachineInfo;
 
 export type Methods = {
   hello: { params: { client: string; version: number; features?: string[] }; result: Hello }
-  /** The sessions, newest first; `archived` lists the ones put away instead. */
-  'session.list': { params: { archived?: boolean }; result: SessionInfo[] }
-  'session.create': { params: NewSession; result: SessionInfo }
+  /** The threads, newest first; `archived` lists the ones put away instead. */
+  'thread.list': { params: { archived?: boolean }; result: ThreadInfo[] }
+  'thread.create': { params: NewThread; result: ThreadInfo }
   'agent.models': { params: {}; result: ModelCatalog }
-  /** A file in a session's folder (not outside it), as text. */
-  'file.read': { params: { id: SessionId; path: string; base64?: boolean }; result: { path: string; content: string } }
-  /** A file in a session's folder by the name a link gives it ([[Note]], Note.md, path/Note): its path, or null. */
-  'file.find': { params: { id: SessionId; name: string }; result: { path: string | null } }
-  /** What changed in a session's folder, by git: the unified diff against HEAD, and files git doesn't track yet. */
-  'session.diff': { params: { id: SessionId }; result: { diff: string; untracked: string[]; repo: boolean } }
+  /** A file in a thread's folder (not outside it), as text. */
+  'file.read': { params: { id: ThreadId; path: string; base64?: boolean }; result: { path: string; content: string } }
+  /** A file in a thread's folder by the name a link gives it ([[Note]], Note.md, path/Note): its path, or null. */
+  'file.find': { params: { id: ThreadId; name: string }; result: { path: string | null } }
+  /** What changed in a thread's folder, by git: the unified diff against HEAD, and files git doesn't track yet. */
+  'thread.diff': { params: { id: ThreadId }; result: { diff: string; untracked: string[]; repo: boolean } }
   /** A profile's UI extensions: their entry modules, and a hash that changes when any of its files do. */
   'profile.ui': { params: ProfileRef; result: { hash: string; entries: string[] } }
   /** One module of a profile's UI, as JavaScript (types stripped); its own imports are left for the window to load. */
   'profile.module': { params: ProfileRef & { path: string }; result: { path: string; code: string } }
-  'session.rename': { params: { id: SessionId; title: string }; result: null }
-  'session.submit': { params: { id: SessionId; text: string; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
-  'session.abort': { params: { id: SessionId }; result: null }
-  /** The user looked at the session: its done/error status clears. */
-  'session.seen': { params: { id: SessionId }; result: null }
+  'thread.rename': { params: { id: ThreadId; title: string }; result: null }
+  'thread.submit': { params: { id: ThreadId; text: string; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
+  'thread.abort': { params: { id: ThreadId }; result: null }
+  /** The user looked at the thread: its done/error status clears. */
+  'thread.seen': { params: { id: ThreadId }; result: null }
   /** Snapshot of the conversation view, then `watch.ops` notifications with Chord delta ops against it. */
-  'session.watch': { params: { id: SessionId }; result: { sub: string; value: ConversationView } }
-  /** Snapshot of the session list, then `sessions.changed` notifications with the whole list. */
-  'sessions.watch': { params: {}; result: { sub: string; value: SessionInfo[] } }
+  'thread.watch': { params: { id: ThreadId }; result: { sub: string; value: ConversationView } }
+  /** Snapshot of the thread list, then `threads.changed` notifications with the whole list. */
+  'threads.watch': { params: {}; result: { sub: string; value: ThreadInfo[] } }
   unwatch: { params: { sub: string }; result: null }
 
   /** Snapshot of every section and value, then `settings.changed` with the whole snapshot. */
@@ -119,7 +119,7 @@ export type Methods = {
 
   /**
    * Restart onto newer code: the daemon exits and the client starts the new one. Refused (`restarted: false`) while a
-   * session is working, unless `interrupt`; interrupted runs resume after the restart. `build` must be the running
+   * thread is working, unless `interrupt`; interrupted runs resume after the restart. `build` must be the running
    * build, so a client never restarts a daemon it didn't inspect.
    */
   /** Snapshot of an extension's live value, then `value.changed` with each new one. */
@@ -136,7 +136,7 @@ export type Methods = {
 export type Notifications = {
   'watch.ops': { sub: string; ops: unknown[] }
   'watch.end': { sub: string; reason: string }
-  'sessions.changed': { sub: string; value: SessionInfo[] }
+  'threads.changed': { sub: string; value: ThreadInfo[] }
   'settings.changed': { sub: string; value: SettingsSnapshot }
   'auth.event': { flow: string; event: AuthEvent }
   'value.changed': { sub: string; key: string; value: Json }

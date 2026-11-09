@@ -54,9 +54,9 @@ describe('upsert', () => {
     const settings = new SettingsRegistry(new MemorySettingsStore({ 'threads.sort': 'status' }))
     const section = { id: 'threads', title: 'Sidebar', settings: [{ key: 'threads.sort', title: 'Sort', default: 'created', type: { type: 'choice' as const, options: [{ value: 'created', label: 'Newest' }, { value: 'status', label: 'Needs you' }] } }] }
     settings.upsert(section)
-    settings.upsert({ ...section, title: 'Sessions' })
+    settings.upsert({ ...section, title: 'Threads' })
     const snapshot = await settings.snapshot()
-    expect(snapshot.sections.map((s) => s.title)).toEqual(['Sessions'])
+    expect(snapshot.sections.map((s) => s.title)).toEqual(['Threads'])
     expect(snapshot.values['threads.sort']).toBe('status')
   })
 

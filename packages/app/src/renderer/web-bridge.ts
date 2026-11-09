@@ -110,7 +110,7 @@ export function webBridge(): MuBridge {
       return (peer ?? await ready).call(method, params)
     },
     machines: async () => [entry],
-    artifactUrl: (_machine, session, path) => `/artifact/${encodeURIComponent(session)}/${path.split('/').map(encodeURIComponent).join('/')}?token=${encodeURIComponent(token ?? '')}`,
+    artifactUrl: (_machine, thread, path) => `/artifact/${encodeURIComponent(thread)}/${path.split('/').map(encodeURIComponent).join('/')}?token=${encodeURIComponent(token ?? '')}`,
     onEvent(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
     web: true,
   }

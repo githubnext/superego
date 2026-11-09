@@ -2,9 +2,9 @@
 // profile is allowed); here each one's imports are rewritten and it is loaded from a blob URL:
 //   'react', 'react/jsx-runtime', 'mu/ui'  → this window's own copies, so a profile's components share its React
 //   './other.ts'                          → that module of the profile, loaded the same way
-// Their default exports are UI extensions, installed for that profile's sessions only (see Registry.installProfile).
+// Their default exports are UI extensions, installed for that profile's threads only (see Registry.installProfile).
 import { useEffect, useSyncExternalStore } from 'react'
-import type { ProfileRef, SessionInfo } from '@mu/protocol'
+import type { ProfileRef, ThreadInfo } from '@mu/protocol'
 import { machine as client } from './client.ts'
 import { useRegistry, type Registry, type UiExtension } from './extension.tsx'
 
@@ -72,11 +72,11 @@ async function ensureProfileUi(registry: Registry, machine: string, profile: Pro
   registry.installProfile(profile.dir, entries.length ? await loadProfileUi(machine, profile, entries) : [])
 }
 
-/** Load the UI of `session`'s profile into the registry (once per version of its files), and redraw when it lands. */
-export function useProfileUi(machine: string, session: SessionInfo) {
+/** Load the UI of `thread`'s profile into the registry (once per version of its files), and redraw when it lands. */
+export function useProfileUi(machine: string, thread: ThreadInfo) {
   const registry = useRegistry()
   useSyncExternalStore(registry.subscribe, () => registry.version)
-  const profile = session.profile
+  const profile = thread.profile
   useEffect(() => {
     if (!profile) return
     const key = `${machine}:${profile.dir}`
@@ -84,5 +84,5 @@ export function useProfileUi(machine: string, session: SessionInfo) {
     const done = ensureProfileUi(registry, machine, profile).catch((error) => console.error(`The ${profile.name} profile's UI didn't load`, error))
       .finally(() => loading.delete(key))
     loading.set(key, done)
-  }, [machine, profile?.dir, session.activeAt])
+  }, [machine, profile?.dir, thread.activeAt])
 }

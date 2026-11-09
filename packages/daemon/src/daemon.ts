@@ -1,4 +1,4 @@
-// The mu daemon: one per user per machine. It owns a pi-durable Harness on SQLite, the session catalog, and every
+// The mu daemon: one per user per machine. It owns a pi-durable Harness on SQLite, the thread catalog, and every
 // live subscription. Clients (the Electron app, the CLI, a remote app over ssh) speak the protocol in @mu/protocol.
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -14,7 +14,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  arr, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type SessionInfo,
+  arr, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type ThreadInfo,
 } from '@mu/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@mu/settings'
 import { FileSettingsStore } from '@mu/settings/file'
@@ -25,25 +25,25 @@ import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, lo
 
 const context = BACKGROUND_CONTEXT
 
-/** Which conversations are sessions, newest last. Child conversations (subagents) are not listed here. */
+/** Which conversations are threads, newest last. Child conversations (subagents) are not listed here. */
 const Catalog = defineDoc<{ ids: number[] }>({
   kind: 'mu.catalog', version: 1, scope: 'session', initial: () => ({ ids: [] }), checkpointWhen: () => true,
 })
 
-/** A session's own metadata, next to its transcript. */
-type SessionMeta = {
+/** A thread's own metadata, next to its transcript. */
+type ThreadMeta = {
   title: string; cwd: string; createdAt: number; seen?: { entryId?: number; failureTaskId?: number }
-  /** The session's own model and thinking; unset follows its profile, else this machine's settings. */
+  /** The thread's own model and thinking; unset follows its profile, else this machine's settings. */
   model?: string; thinking?: string
   /** The profile it started with (see profiles.ts); unset runs plain mu. */
   profile?: ProfileRef
-  /** Put away: left out of the session list (and the sidebar) until unarchived. */
+  /** Put away: left out of the thread list (and the sidebar) until unarchived. */
   archived?: boolean
   /** The panes open beside it, and the one in front. */
   panes?: Pane[]
   pane?: string
 }
-const SessionDoc = defineDoc<SessionMeta>({
+const ThreadDoc = defineDoc<ThreadMeta>({
   kind: 'mu.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current',
   initial: () => ({ title: '', cwd: '', createdAt: 0 }), checkpointWhen: () => true,
 })
@@ -60,7 +60,7 @@ export type DaemonOptions = {
   storage?: Storage
   /** The app's extensions (their daemon halves), set up in order. */
   extensions?: DaemonExtension[]
-  /** Where sessions work when created without a cwd. */
+  /** Where threads work when created without a cwd. */
   defaultCwd?: string
   /** The build of the code running, reported in `hello`. */
   build?: string
@@ -70,16 +70,16 @@ export type DaemonOptions = {
   webRoot?: string
 }
 
-/** One mounted session: its conversation and a small watch that keeps its status current. */
+/** One mounted thread: its conversation and a small watch that keeps its status current. */
 type Mounted = {
-  conversation: Conversation; meta: SessionMeta; live?: LiveState; lastEntryId?: number
-  /** What the session runs with and has spent, and when anything last happened in it. */
+  conversation: Conversation; meta: ThreadMeta; live?: LiveState; lastEntryId?: number
+  /** What the thread runs with and has spent, and when anything last happened in it. */
   model?: string; cost?: number; activeAt?: number
   stop(): Promise<unknown>
 }
 
 type Usage = { cost?: { total?: number } }
-/** Everything a session spent: every model's answers and every tool's own usage. */
+/** Everything a thread spent: every model's answers and every tool's own usage. */
 const costOf = (usage: { models?: Record<string, Usage>; tools?: Record<string, Usage> } | undefined) =>
   usage && [...Object.values(usage.models ?? {}), ...Object.values(usage.tools ?? {})].reduce((sum, u) => sum + (u.cost?.total ?? 0), 0)
 
@@ -107,7 +107,7 @@ async function machineId(dataDir: string) {
 }
 
 /**
- * A session's title from its first message: the first sentence, up to 72 characters, cut at a word with an ellipsis
+ * A thread's title from its first message: the first sentence, up to 72 characters, cut at a word with an ellipsis
  * when longer. The rest of the message stays in the transcript.
  */
 export function titleOf(text: string): string {
@@ -166,7 +166,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')))
   const agent = await createAgentSettings(settings, options.dataDir, options.app)
   const registry = createRegistry()
-  /** What every session has unless its profile does without: coding tools and the bundled extensions' agent parts. */
+  /** What every thread has unless its profile does without: coding tools and the bundled extensions' agent parts. */
   const builtins: Extension[] = []
   const installBuiltin = (extension: Extension) => { registry.install(extension); builtins.push(extension) }
   installBuiltin(createCodingTools())
@@ -177,7 +177,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       name: 'open_pane',
       description: 'Open a pane beside this conversation for the user to look at. Built-in kinds: "diff" (the changes in the working folder; no params), ' +
         '"preview" ({ url }: a web page, such as a local dev server), "artifact" ({ path }: an HTML file in the working folder, shown as a page; write it first), ' +
-        '"editor" ({ path }: a file, for the user to read and edit), "thread" ({ session }: another conversation). A profile may add kinds; its instructions name them.',
+        '"editor" ({ path }: a file, for the user to read and edit), "thread" ({ thread }: another conversation). A profile may add kinds; its instructions name them.',
       parameters: obj({ kind: str({ minLength: 1 }), title: opt(str()), params: opt(obj({}, { open: true, description: 'What the pane shows, as an object: { "path": "notes/a.md" }, not a string of JSON.' })) }),
       async execute({ kind, title, params }, api) {
         const pane = await openPane(String(api.conversationId), { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}) })
@@ -201,7 +201,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     // Attribution names the app to providers that show it; without a url there is nothing to show.
     identity: { attribution: options.app.url ? { name: options.app.name, url: options.app.url } : null },
     env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? defaultCwd }),
-    // A session without a profile selects the built-ins only: profiles' extensions are installed too, but are theirs.
+    // A thread without a profile selects the built-ins only: profiles' extensions are installed too, but are theirs.
     settings: () => ({ extensions: builtins }),
   }, context)
 
@@ -225,19 +225,19 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const existing = mounted.get(key)
     if (existing) return existing
     const conversation = await harness.conversation(id, context)
-    if (!conversation) throw new RpcError('not_found', `No session ${key}`)
+    if (!conversation) throw new RpcError('not_found', `No thread ${key}`)
     // A one-entry window is enough to know the newest entry and the live run.
     const watch = await conversation.watch(context, { min: 1, max: 2 })
     const entry: Mounted = {
       conversation,
-      meta: (await harness.snapshot(SessionDoc, id, context)) ?? { title: '', cwd: defaultCwd, createdAt: 0 },
+      meta: (await harness.snapshot(ThreadDoc, id, context)) ?? { title: '', cwd: defaultCwd, createdAt: 0 },
       stop: () => watch.stop(),
     }
     const absorb = (view: ConversationView) => {
       const wasRunning = Boolean(entry.live?.run)
       entry.live = view.docs['pi.live'] as LiveState | undefined
       const last = view.entries.at(-1)
-      // Activity is a new entry or a run starting, not every streamed chunk (which would churn the session list).
+      // Activity is a new entry or a run starting, not every streamed chunk (which would churn the thread list).
       // A message's own timestamp survives restarts.
       if (last?.id !== entry.lastEntryId) {
         entry.activeAt = (last?.model?.at(-1) as { timestamp?: number } | undefined)?.timestamp ?? Date.now()
@@ -254,21 +254,21 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return entry
   }
 
-  const info = (id: string, m: Mounted): SessionInfo => ({
-    id, title: m.meta.title || 'New session', cwd: m.meta.cwd, createdAt: m.meta.createdAt,
+  const info = (id: string, m: Mounted): ThreadInfo => ({
+    id, title: m.meta.title || 'New thread', cwd: m.meta.cwd, createdAt: m.meta.createdAt,
     activeAt: Math.max(m.activeAt ?? 0, m.meta.createdAt),
     ...(m.model ? { model: m.model } : {}), ...(m.cost ? { cost: m.cost } : {}), ...(m.meta.model ? { ownModel: true } : {}),
     ...(m.meta.profile ? { profile: m.meta.profile } : {}),
     ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
-  /** Only an assistant answer makes a session "done"; the user's own message does not. */
+  /** Only an assistant answer makes a thread "done"; the user's own message does not. */
   const lastAnswer = (m: Mounted) => m.live?.run ? undefined : m.lastEntryId
 
-  /** The sessions, newest first: the ones in use, or (`archived`) the ones put away. */
-  async function list({ archived = false } = {}): Promise<SessionInfo[]> {
+  /** The threads, newest first: the ones in use, or (`archived`) the ones put away. */
+  async function list({ archived = false } = {}): Promise<ThreadInfo[]> {
     const catalog = await harness.snapshot(Catalog, context)
-    const items: SessionInfo[] = []
+    const items: ThreadInfo[] = []
     for (const id of [...(catalog?.ids ?? [])].reverse()) {
       const m = await mount(id as ConversationId)
       if (Boolean(m.meta.archived) === archived) items.push(info(String(id), m))
@@ -279,16 +279,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   async function get(id: string) {
     const conversationId = Number(id) as ConversationId
     const catalog = await harness.snapshot(Catalog, context)
-    if (!catalog?.ids.includes(conversationId)) throw new RpcError('not_found', `No session ${id}`)
+    if (!catalog?.ids.includes(conversationId)) throw new RpcError('not_found', `No thread ${id}`)
     return mount(conversationId)
   }
 
-  async function updateMeta(id: string, edit: (meta: SessionMeta) => void) {
+  async function updateMeta(id: string, edit: (meta: ThreadMeta) => void) {
     const m = await get(id)
     m.meta = await m.conversation.commit(async (tx) => {
-      const meta = await tx.doc(SessionDoc, m.conversation.id)
+      const meta = await tx.doc(ThreadDoc, m.conversation.id)
       edit(meta)
-      return JSON.parse(JSON.stringify(meta)) as SessionMeta
+      return JSON.parse(JSON.stringify(meta)) as ThreadMeta
     }, context)
     changed()
   }
@@ -299,7 +299,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** Every intent this daemon answers, its own and its extensions'. Reads and watches are plain methods. */
   const router = new Router<DaemonContext>()
   const values = new Map<string, { value: Json; listeners: Set<(value: Json) => void> }>()
-  const contributors: ((sessionId: string) => StatusContribution | undefined)[] = []
+  const contributors: ((threadId: string) => StatusContribution | undefined)[] = []
   const cleanups: (() => void)[] = []
   const blockedOf = (id: string) => {
     for (const contribute of contributors) {
@@ -339,7 +339,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       },
       status: (contribute) => { contributors.push(contribute); undo.push(() => { contributors.splice(contributors.indexOf(contribute), 1) }) },
       invalidate: changed,
-      sessions: {
+      threads: {
         list: () => list(),
         conversation: async (id) => (await get(id)).conversation,
         of: (conversationId) => mounted.has(String(conversationId)) ? String(conversationId) : undefined,
@@ -398,8 +398,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return pending
   }
 
-  /** What a turn runs with: the session's own choices, else its profile's, else this machine's settings. */
-  async function agentOf(meta: SessionMeta) {
+  /** What a turn runs with: the thread's own choices, else its profile's, else this machine's settings. */
+  async function agentOf(meta: ThreadMeta) {
     const profile = meta.profile ? await profileOf(meta.profile) : undefined
     const { model, thinkingLevel } = agent.resolve({ model: meta.model ?? profile?.spec.model, thinking: meta.thinking ?? profile?.spec.thinking })
     if (!profile) return { model, thinkingLevel }
@@ -413,7 +413,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
   }
 
-  /** Send `text` to a session, with the model and thinking it chose, else what this machine's settings say now. */
+  /** Send `text` to a thread, with the model and thinking it chose, else what this machine's settings say now. */
   async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp') {
     const m = await get(id)
     const { model, thinkingLevel, ...rest } = await agentOf(m.meta)
@@ -426,7 +426,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   // ── Panes and files ─────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** Open a pane beside session `id`, or bring forward the same one already open. */
+  /** Open a pane beside thread `id`, or bring forward the same one already open. */
   async function openPane(id: string, pane: Omit<Pane, 'id'>): Promise<Pane> {
     await get(id)
     // Models sometimes send params as a string of JSON: take what it says.
@@ -450,9 +450,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** `path` inside `folder` (relative to it, or absolute within it); a path that leaves it is refused. */
   // ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  const session = { session: true as const }
+  const thread = { thread: true as const }
   router.register(defineAction({
-    id: 'session.create', title: 'Start a session (no dialog)', runs: 'machine', expose: ['ui', 'cli'],
+    id: 'thread.create', title: 'Start a thread (no dialog)', runs: 'machine', expose: ['ui', 'cli'],
     params: obj({ cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), profile: opt(str()) }),
     async run({ cwd, title, model: ownModel, thinking, prompt, profile: profileName }) {
       const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
@@ -461,7 +461,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       // The project's profile (or the user's) of that name, else the default one there is; checked (and allowed) now.
       const ref = findProfile(dir, userProfiles, profileName?.trim() || undefined)
       if (ref) await profileOf(ref)
-      const meta: SessionMeta = {
+      const meta: ThreadMeta = {
         title: title?.trim() ?? '', cwd: dir, createdAt: Date.now(),
         ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}), ...(ref ? { profile: ref } : {}),
       }
@@ -470,7 +470,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         ownership: { kind: 'ownerless' },
         agent: { ...(model ? { model } : {}), ...(thinkingLevel ? { thinkingLevel } : {}), cwd: meta.cwd },
         init: async (tx, created) => {
-          Object.assign(await tx.doc(SessionDoc, created), meta)
+          Object.assign(await tx.doc(ThreadDoc, created), meta)
           ;(await tx.doc(Catalog)).ids.push(created)
         },
       }, context)
@@ -503,32 +503,32 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   }))
   router.register(defineAction({
-    id: 'session.submit', title: 'Send a message', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    id: 'thread.submit', title: 'Send a message', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str(), text: str({ minLength: 1 }), requestId: opt(str()), whenBusy: opt(union([lit('steer'), lit('followUp')])) }),
     run: async ({ id, text, requestId, whenBusy }) => ({ submission: await submit(id, text, requestId ?? randomUUID(), whenBusy) }),
   }))
   router.register(defineAction({
-    id: 'session.abort', title: 'Stop the agent', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    id: 'thread.abort', title: 'Stop the agent', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str() }),
     async run({ id }) { await (await get(id)).conversation.abort(context); return null },
   }))
   router.register(defineAction({
-    id: 'session.archive', title: 'Archive the session', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    id: 'thread.archive', title: 'Archive the thread', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str() }),
     async run({ id }) { await get(id); await updateMeta(id, (meta) => { meta.archived = true }); changed(); return null },
   }))
   router.register(defineAction({
-    id: 'session.unarchive', title: 'Unarchive the session', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    id: 'thread.unarchive', title: 'Unarchive the thread', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str() }),
     async run({ id }) { await get(id); await updateMeta(id, (meta) => { delete meta.archived }); changed(); return null },
   }))
   router.register(defineAction({
-    id: 'pane.open', title: 'Open a pane', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    id: 'pane.open', title: 'Open a pane', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str(), kind: str({ minLength: 1 }), title: opt(str()), params: opt(unknown()) }),
     run: ({ id, kind, title, params }) => openPane(id, { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}) }),
   }))
   router.register(defineAction({
-    id: 'pane.close', title: 'Close a pane', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    id: 'pane.close', title: 'Close a pane', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str(), pane: str() }),
     async run({ id, pane }) {
       await get(id)
@@ -546,7 +546,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   }))
   router.register(defineAction({
-    id: 'pane.focus', title: 'Bring a pane to the front', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    id: 'pane.focus', title: 'Bring a pane to the front', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str(), pane: opt(str()) }),
     async run({ id, pane }) {
       await get(id)
@@ -556,7 +556,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   }))
   router.register(defineAction({
-    id: 'file.write', title: 'Save a file', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    id: 'file.write', title: 'Save a file', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str(), path: str({ minLength: 1 }), content: str() }),
     async run({ id, path, content }) {
       const file = inFolder((await get(id)).meta.cwd, path)
@@ -565,16 +565,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   }))
   router.register(defineAction({
-    id: 'session.rename', title: 'Rename the session', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    id: 'thread.rename', title: 'Rename the thread', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str(), title: str({ minLength: 1 }) }),
     async run({ id, title }) { await updateMeta(id, (meta) => { meta.title = title }); return null },
   }))
   router.register(defineAction({
-    id: 'session.seen', title: 'Mark as seen', runs: 'machine', expose: ['ui', 'cli'], ...session,
+    id: 'thread.seen', title: 'Mark as seen', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str() }),
     async run({ id }) {
       const m = await get(id)
-      const seen: NonNullable<SessionMeta['seen']> = {}
+      const seen: NonNullable<ThreadMeta['seen']> = {}
       if (m.lastEntryId !== undefined) seen.entryId = m.lastEntryId
       if (m.live?.runFailure) seen.failureTaskId = m.live.runFailure.taskId
       await updateMeta(id, (meta) => { meta.seen = seen })
@@ -615,7 +615,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     run({ build, interrupt }) {
       if (build !== machine.build) throw new RpcError('changed', 'The running daemon changed. Check again.')
       if (restarting) throw new RpcError('restarting', 'Already restarting')
-      // Decided synchronously from the mounted sessions, so no run can start between the check and the flag.
+      // Decided synchronously from the mounted threads, so no run can start between the check and the flag.
       const busy = [...mounted.values()].some((m) => m.live?.run)
       if (busy && !interrupt) return { restarted: false, busy }
       restarting = true
@@ -645,7 +645,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           if (typeof name === 'string') client = name
           return { version: PROTOCOL_VERSION, features, machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id)] }
         },
-        'session.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
+        'thread.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),
         'file.read': async ({ id, path, base64 }: { id: string; path: string; base64?: boolean }) => {
           const file = inFolder((await get(id)).meta.cwd, path)
@@ -655,7 +655,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           return { path: file, content: await readFile(file, base64 ? 'base64' : 'utf8') }
         },
         'file.find': async ({ id, name }: { id: string; name: string }) => ({ path: await findFile((await get(id)).meta.cwd, name) ?? null }),
-        'session.diff': async ({ id }: { id: string }) => {
+        'thread.diff': async ({ id }: { id: string }) => {
           const cwd = (await get(id)).meta.cwd
           const git = (args: string[]) => new Promise<string>((done, fail) => execFile('git', ['-C', cwd, ...args], { maxBuffer: 16 * 1024 * 1024 }, (error, out) => error ? fail(error) : done(out)))
           const repo = await git(['rev-parse', '--is-inside-work-tree']).then(() => true, () => false)
@@ -675,7 +675,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           await profileOf({ scope: ref.scope, name: ref.name, dir: ref.dir })
           return profileModule(ref.dir, path)
         },
-        async 'session.watch'({ id }: { id: string }) {
+        async 'thread.watch'({ id }: { id: string }) {
           const m = await get(id)
           const watch = await m.conversation.watch(context)
           const sub = randomUUID()
@@ -684,13 +684,13 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           void watch.closed.then((end) => { if (subs.delete(sub)) notify('watch.end', { sub, reason: end.kind }) })
           return { sub, value: watch.value }
         },
-        async 'sessions.watch'() {
+        async 'threads.watch'() {
           const sub = randomUUID()
           let last = ''
           const push = async () => {
             const value = await list()
             const json = JSON.stringify(value)
-            if (json !== last) { last = json; notify('sessions.changed', { sub, value }) }
+            if (json !== last) { last = json; notify('threads.changed', { sub, value }) }
           }
           listListeners.add(push)
           subs.set(sub, () => { listListeners.delete(push) })
@@ -766,7 +766,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (key) {
       try {
         web = await serveWeb({ root: options.webRoot!, host: access === 'network' ? '0.0.0.0' : '127.0.0.1', port, token: await webToken(options.dataDir), serve: daemon.serve,
-          artifact: async (session, path) => readFile(inFolder((await get(session)).meta.cwd, path)) })
+          artifact: async (thread, path) => readFile(inFolder((await get(thread)).meta.cwd, path)) })
       } catch (error) {
         webError = (error as Error).message
       }
@@ -775,7 +775,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
   settings.register({
     id: 'web', title: 'Web access', order: 80, ui: 'web',
-    description: 'Use this machine from a browser or a phone: it serves the app and its sessions.',
+    description: 'Use this machine from a browser or a phone: it serves the app and its threads.',
     settings: [
       { key: 'web.access', title: 'Serve the app', default: 'off', type: { type: 'choice', options: [
         { value: 'off', label: 'Off' }, { value: 'local', label: 'To this computer' }, { value: 'network', label: 'To the local network' },
