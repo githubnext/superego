@@ -8,7 +8,7 @@ import { homedir, hostname, platform } from 'node:os'
 import { basename, dirname, join, relative, resolve as resolvePath } from 'node:path'
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
 import {
-  type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, defineExtension, defineTool, type Extension, Harness, hook,
+  type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, defineExtension, defineTool, type EntryId, type Extension, Harness, hook,
   type LiveState, section, type Storage, wrapSection, wrapTool,
 } from '@earendil-works/pi-durable'
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
@@ -807,6 +807,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           if (!isProfileDir(ref, userProfiles)) throw new RpcError('not_found', `No profile at ${ref.dir}`)
           await profileOf({ scope: ref.scope, name: ref.name, dir: ref.dir })
           return profileModule(ref.dir, path)
+        },
+        /** Older entries than a watch's window holds: the page before `before`, oldest first, and whether there are more. */
+        async 'thread.history'({ id, before, limit = 50 }: { id: string; before: number; limit?: number }) {
+          const m = await get(id)
+          const page = await m.conversation.entries({ maxEntryId: (before - 1) as EntryId, order: 'descending' }, Math.min(Math.max(1, limit), 200), undefined, context)
+          return { entries: [...page.items].reverse(), more: page.next !== undefined }
         },
         async 'thread.watch'({ id }: { id: string }) {
           const m = await get(id)

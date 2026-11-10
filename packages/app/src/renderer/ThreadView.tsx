@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ConversationView, EntryRecord, LiveState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@mu/protocol'
 import { Button, IconButton, Menu, StatusGlyph, statusLabel, TextArea } from '@mu/ui'
@@ -57,15 +57,48 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
       if (path) return dispatch('pane.open', { id: thread.id, kind: fileKind(registry, threadRef.current, path), params: { path } }, { machine: machine.id, source: 'thread' })
     }).catch((error) => console.error(error))
   }, [machine.id, thread.id, registry])
-  const view = useThreadView(machine.id, machine.state === 'connected', thread.id)
-  const live = view?.docs['pi.live'] as LiveState | undefined
+  const watched = useThreadView(machine.id, machine.state === 'connected', thread.id)
+  const live = watched?.docs['pi.live'] as LiveState | undefined
   const scroller = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
+
+  // Scrolling back: the watch holds the newest entries; older ones come a page at a time as the top comes near. Every
+  // entry seen is kept (the watch's window slides on as the thread grows), so the transcript only ever grows backwards.
+  const seen = useRef(new Map<number, EntryRecord>())
+  const [older, setOlder] = useState<{ more: boolean; loading: boolean }>({ more: true, loading: false })
+  for (const entry of watched?.entries ?? []) seen.current.set(entry.id as number, entry)
+  const entries = useMemo(() => [...seen.current.values()].sort((a, b) => (a.id as number) - (b.id as number)), [watched, older])
+  const atStart = watched !== undefined && (watched.before === undefined || (entries[0] !== undefined && !older.more && !older.loading))
+  const view = useMemo(() => watched && { ...watched, entries, before: atStart ? undefined : entries[0]?.id }, [watched, entries, atStart])
+  const keep = useRef<{ height: number; top: number }>(undefined)
+  const loadOlder = useCallback(() => {
+    const el = scroller.current
+    const first = entries[0]
+    if (!el || !first || atStart || older.loading) return
+    setOlder((o) => ({ ...o, loading: true }))
+    void client(machine.id).call('thread.history', { id: thread.id, before: first.id as number, limit: 50 }).then(({ entries: page, more }) => {
+      keep.current = { height: el.scrollHeight, top: el.scrollTop }
+      for (const entry of page as EntryRecord[]) seen.current.set(entry.id as number, entry)
+      setOlder({ more: more && page.length > 0, loading: false })
+    }, () => setOlder((o) => ({ ...o, loading: false })))
+  }, [machine.id, thread.id, entries, atStart, older.loading])
+  // A page arrived above: what was in view stays where it was.
+  useLayoutEffect(() => {
+    const el = scroller.current
+    if (!el || !keep.current) return
+    el.scrollTop = keep.current.top + (el.scrollHeight - keep.current.height)
+    keep.current = undefined
+  }, [older])
+  // Too short to scroll yet, with more before it: keep fetching until it fills the view or starts.
+  useEffect(() => {
+    const el = scroller.current
+    if (el && view && !atStart && !older.loading && el.scrollHeight <= el.clientHeight + 200) loadOlder()
+  }, [view, atStart, older.loading])
 
   useEffect(() => {
     const el = scroller.current
     if (el && pinned.current) el.scrollTop = el.scrollHeight
-  }, [view])
+  }, [watched])
 
   return (
     <OpenFile.Provider value={openFile}>
@@ -76,6 +109,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
           const el = e.currentTarget
           pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
           el.parentElement?.classList.toggle('is-scrolled', el.scrollTop > 8)
+          if (el.scrollTop < el.clientHeight) loadOlder()
         }}>
         <div className="thread__column">
           <div className="thread__crumb">
@@ -122,7 +156,7 @@ function Transcript({ view, live }: { view: ConversationView; live: LiveState | 
 
   return (
     <div className="transcript">
-      {view.before !== undefined && <div className="transcript__more">Earlier messages not loaded</div>}
+      {view.before !== undefined && <div className="transcript__more">Loading earlier messages…</div>}
       {items.map((item, index) => {
         const last = index === items.length - 1
         switch (item.type) {
@@ -162,9 +196,11 @@ function flatten(entries: readonly EntryRecord[], partial: Message | undefined):
     const narration = list.some((b) => b.type === 'toolCall')
     list.forEach((block, index) => {
       const last = items.at(-1)
-      if (block.type === 'text') {
+      if (block.type === 'text' && !narration) {
+        // An answer: what the agent says, outside the work.
         if (block.text?.trim()) items.push({ type: 'text', key: `${key}:${index}`, text: block.text, narration, streaming })
-      } else if (block.type === 'toolCall' || (block.type === 'thinking' && block.thinking)) {
+      } else if (block.type === 'toolCall' || (block.type === 'thinking' && block.thinking) || (block.type === 'text' && block.text?.trim())) {
+        // Work, and what the agent says along the way (text beside tool calls): one fold from a message to the answer.
         if (last?.type === 'work') last.blocks.push(block)
         else items.push({ type: 'work', key: `${key}:${index}`, blocks: [block] })
       }
@@ -252,17 +288,20 @@ function Work({ blocks, results, running, active }: { blocks: Block[]; results: 
   const [open, setOpen] = useState<boolean>()
   const rows = blocks.map((block, index) => block.type === 'thinking'
     ? <Thinking key={index} text={block.thinking ?? ''} />
-    : <ToolCall key={block.id ?? index} block={block} result={results.get(block.id!)} slot={running.get(block.id!)} />)
-  if (blocks.length === 1) return <div className="steps">{rows}</div>
+    : block.type === 'text'
+      ? <div key={index} className="step__note"><Markdown text={block.text ?? ''} /></div>
+      : <ToolCall key={block.id ?? index} block={block} result={results.get(block.id!)} slot={running.get(block.id!)} />)
+  if (blocks.length === 1 && blocks[0]!.type !== 'text') return <div className="steps">{rows}</div>
   const calls = blocks.filter((b) => b.type === 'toolCall')
   const failed = calls.filter((b) => results.get(b.id!)?.isError).length
   const stats = sumStats(calls, results)
-  const shown = open ?? active
+  // Folded, while it works too; opened only by hand.
+  const shown = open ?? false
   return (
     <details className="steps steps--run" open={shown} onToggle={(e) => { const next = e.currentTarget.open; if (next !== shown) setOpen(next) }}>
       <summary className="row">
         <Chevron />
-        <Icon name={mainKind(blocks)} />
+        {active ? <StatusGlyph status={{ state: 'working' }} /> : <Icon name={mainKind(blocks)} />}
         <span className="row__label row__summary" title={describe(blocks).join('')}>{describe(blocks).map((part, i) => i % 2 ? <code key={i} className="row__path">{part}</code> : part)}</span>
         {(stats.added > 0 || stats.removed > 0) && <span className="row__meta"><Stat {...stats} /></span>}
         {failed > 0 && <span className="row__failed">{failed} failed</span>}
@@ -284,7 +323,7 @@ function describe(blocks: Block[]): string[] {
   const count = new Map<string, number>()
   // Thinking between steps is part of the work; it's named only when that's all there is.
   const tools = blocks.filter((b) => b.type === 'toolCall')
-  for (const b of tools.length ? tools : blocks) { const kind = b.type === 'thinking' ? 'thinking' : b.name ?? 'tool'; count.set(kind, (count.get(kind) ?? 0) + 1) }
+  for (const b of tools.length ? tools : blocks.filter((b) => b.type === 'thinking')) { const kind = b.type === 'thinking' ? 'thinking' : b.name ?? 'tool'; count.set(kind, (count.get(kind) ?? 0) + 1) }
   const n = (k: number, one: string, many: string) => k === 1 ? one : `${k} ${many}`
   // The weightiest kind leads, naming its file when there's one.
   const main = mainKind(blocks)

@@ -406,3 +406,8 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 .panes__column:has(:focus-visible)::before { opacity: 1; }
 /* With cards, the title bar above them is part of their backdrop. */
 .app__main:has(> .panes:not(.panes--narrow)) { background: var(--mu-sidebar-bg); }
+
+/* What the agent said along the way, inside the fold with its work. */
+.step__note { font-size: var(--mu-text-ui); color: var(--mu-muted); margin: 2px 0 var(--mu-space-2); }
+.step__note .md > :first-child { margin-top: 0; }
+.step__note .md > :last-child { margin-bottom: 0; }

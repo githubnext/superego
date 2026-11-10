@@ -340,6 +340,21 @@ if (phase === 'first') {
   await key('Enter', [])
   await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('read this') && m.querySelector('.msg__files .attachment__name')?.textContent === 'plan.md') && !document.querySelector('.composer__files')`, 'file sent with the message')
   await shot('sessions')
+  // Scrolling back: a thread longer than its watch holds pages in its earlier messages as the top comes near.
+  const long = await run(`window.mu.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'long' }).then((t) => t.id)`)
+  for (let i = 0; i < 30; i++) {
+    await run(`window.mu.call('local', 'thread.submit', { id: '${long}', text: 'message ${i}' })`)
+    await until(`window.mu.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${long}').status.state === 'done')`, `long thread turn ${i}`)
+  }
+  await run(`window.mu.call('local', 'thread.seen', { id: '${long}' }).then(() => null)`)
+  await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('long')).click()`)
+  await until(`document.querySelector('.thread__title')?.textContent === 'long' && document.querySelector('.transcript')?.textContent.includes('message 29')`, 'the long thread, at its end')
+  if (await run(`document.querySelector('.transcript').textContent.includes('echo: message 0')`)) { await fail('the whole long thread came at once'); throw new Error('failed') }
+  for (let i = 0; i < 20 && !(await run(`document.querySelector('.transcript').textContent.includes('echo: message 0')`)); i++) {
+    await run(`(() => { const el = document.querySelector('[data-column="thread"] .thread__scroll'); el.scrollTop = 0; el.dispatchEvent(new Event('scroll')) })()`)
+    await new Promise((r) => setTimeout(r, 250))
+  }
+  await until(`document.querySelector('.transcript').textContent.includes('echo: message 0') && !document.querySelector('.transcript__more')`, 'scrolled back to the first message')
   // Settings: the app's own sections, then the machine's, drawn from what each registers.
   await run(`[...document.querySelectorAll('.app__footer button')].find((b) => b.textContent === 'Settings').click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Appearance') && document.querySelector('.settings').textContent.includes('Notifications')`, 'app settings')

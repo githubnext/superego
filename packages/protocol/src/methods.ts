@@ -116,6 +116,8 @@ export type Methods = {
   /** The user looked at the thread: its done/error status clears. */
   'thread.seen': { params: { id: ThreadId }; result: null }
   /** Snapshot of the conversation view, then `watch.ops` notifications with Chord delta ops against it. */
+  /** Entries older than `before` (an entry id), oldest first: scrolling back past a watch's window. */
+  'thread.history': { params: { id: ThreadId; before: number; limit?: number }; result: { entries: unknown[]; more: boolean } }
   'thread.watch': { params: { id: ThreadId }; result: { sub: string; value: ConversationView } }
   /** Snapshot of the thread list, then `threads.changed` notifications with the whole list. */
   'threads.watch': { params: {}; result: { sub: string; value: ThreadInfo[] } }

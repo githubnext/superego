@@ -384,6 +384,26 @@ describe('record and replay', () => {
     await close()
   })
 
+  it('pages back through a thread older than its watch holds', async () => {
+    const { peer, close } = await open()
+    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
+    for (const text of ['one', 'two', 'three']) {
+      await peer.call('thread.submit', { id: thread.id, text })
+      await until(async () => (await threads(peer)).find((t) => t.id === thread.id)!.status.state === 'done')
+    }
+    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
+    const last = value.entries.at(-1)!.id as number
+    const page = await peer.call<{ entries: { id: number; kind: string }[]; more: boolean }>('thread.history', { id: thread.id, before: last, limit: 2 })
+    expect(page.entries).toHaveLength(2)
+    expect(page.entries[0]!.id).toBeLessThan(page.entries[1]!.id)
+    expect(page.entries[1]!.id).toBeLessThan(last)
+    expect(page.more).toBe(true)
+    const all = await peer.call<{ entries: { id: number }[]; more: boolean }>('thread.history', { id: thread.id, before: last, limit: 200 })
+    expect(all.more).toBe(false)
+    expect(all.entries.length).toBe(value.entries.filter((e) => (e.id as number) < last).length)
+    await close()
+  })
+
   it('finds a file by the name a link gives it, as Obsidian resolves [[links]]', async () => {
     const { mkdir } = await import('node:fs/promises')
     await mkdir(join(dir, 'Work/Old'), { recursive: true })
