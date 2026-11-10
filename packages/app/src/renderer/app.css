@@ -376,7 +376,6 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 /* Focus, as everywhere: the box text is typed in carries the ring, and the region holding focus says so. */
 .dock:has(.composer textarea:focus-visible), .dock:has(.composer textarea:focus) { outline: 2px solid var(--mu-text); outline-offset: 2px; }
 .palette__input:focus { outline: 2px solid var(--mu-text); outline-offset: -2px; }
-.panes__column:focus-within > .panes__tab .panes__label::before, .app__sidebar:focus-within .threads__head > span:first-child::before { content: '●'; font-size: 8px; margin-right: 7px; vertical-align: 2px; }
 .panes__column:focus { outline: none !important; }
 
 /* Attachments: chips, an image's with its thumbnail; waiting above the composer, then under the message they went with. */
