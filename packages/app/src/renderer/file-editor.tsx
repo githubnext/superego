@@ -16,6 +16,7 @@ import type { MachineEntry } from '../shared.ts'
 import { machine as client } from './client.ts'
 import { fileKind, Slot, useRegistry, type EditorSlotProps } from './extension.tsx'
 import { linkAt, livePreview, type MarkdownLink } from './live-markdown.ts'
+import { arrivals } from './arrivals.ts'
 
 export type { MarkdownLink }
 export type FileEditorProps = {
@@ -148,6 +149,8 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
           highlightSpecialChars(), history(), drawSelection(), syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           EditorView.lineWrapping,
           modeSlot.current.of(modeExtensions(live)),
+          // What the agent (or anyone) changes on disk flashes as it arrives.
+          arrivals(fromDisk),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged || update.transactions.every((t) => t.annotation(fromDisk))) return
             setNote({ text: 'Edited' })

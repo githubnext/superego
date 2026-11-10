@@ -410,3 +410,12 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 .step__note { font-size: var(--mu-text-ui); color: var(--mu-muted); margin: 2px 0 var(--mu-space-2); }
 .step__note .md > :first-child { margin-top: 0; }
 .step__note .md > :last-child { margin-bottom: 0; }
+
+/* Text arriving from elsewhere (the agent's edits): it flashes and fades; a deletion leaves a bar that fades. */
+@keyframes mu-arrive { from { background: color-mix(in srgb, var(--mu-accent) 32%, transparent); } to { background: transparent; } }
+@keyframes mu-arrive-line { from { background: color-mix(in srgb, var(--mu-accent) 9%, transparent); } to { background: transparent; } }
+@keyframes mu-arrive-cut { from { opacity: 1; } to { opacity: 0; } }
+.cm-arrived { animation: mu-arrive 1.4s ease-out forwards; border-radius: 2px; }
+.cm-arrived-line { animation: mu-arrive-line 1.4s ease-out forwards; }
+.cm-arrived-cut { display: inline-block; width: 2px; height: 1.1em; margin: 0 -1px; vertical-align: text-bottom; background: var(--mu-accent); animation: mu-arrive-cut 1.4s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) { .cm-arrived, .cm-arrived-line, .cm-arrived-cut { animation-duration: .01s; } }

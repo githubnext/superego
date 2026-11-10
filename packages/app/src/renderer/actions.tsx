@@ -63,7 +63,10 @@ export function createWindowRouter() {
     const { machine: _machine, ...rest } = params
     const filled = action?.thread && rest.id === undefined && context?.selection?.machine === target ? { ...rest, id: context.selection.thread } : rest
     // Through action.run: it finds actions registered after this window connected (a profile's, as it loads).
-    return router.track(id, filled, `${source} → ${target}`, () => window.mu.call(target, 'action.run', { id, params: filled }))
+    const ran = router.track(id, filled, `${source} → ${target}`, () => window.mu.call(target, 'action.run', { id, params: filled }))
+    // A pane opened from this window was asked for here: the focus goes into it. (The agent's open beside, unfocused.)
+    if (id === 'pane.open') void ran.then((pane) => { const opened = (pane as { id?: string } | null)?.id; if (opened) focusColumn(opened) }, () => {})
+    return ran
   }
 
   return {
@@ -118,9 +121,7 @@ export const coreActions: WindowAction[] = [
     run: async (_p, c: WindowContext) => {
       const thread = c.selection && c.threadOf(c.selection)
       const panes = thread?.panes ?? []
-      // Where keyboard focus is, when it's in a pane; else the pane the thread has in focus.
-      const here = (document.activeElement?.closest('[data-column]') as HTMLElement | null)?.dataset.column
-      const index = panes.findIndex((p) => p.id === (here && here !== 'thread' ? here : thread?.pane))
+      const index = panes.findIndex((p) => p.id === focusedColumn(thread))
       if (!c.selection || index < 0) return
       await c.dispatch('pane.close', { id: c.selection.thread, pane: panes[index]!.id }, { machine: c.selection.machine, source: 'panes' })
       focusColumn(panes[index - 1]?.id)
@@ -169,12 +170,22 @@ function nextUnread(c: WindowContext) {
   }
 }
 
+/**
+ * The column with the focus: where keyboard focus is, when it's in one (the thread's: undefined); else the pane the
+ * thread has in focus. Keyboard focus is current; what the thread reports may still be on its way.
+ */
+function focusedColumn(thread: ThreadInfo | undefined): string | undefined {
+  const column = (document.activeElement?.closest('.app__main [data-column]') as HTMLElement | null)?.dataset.column
+  if (column) return column === 'thread' ? undefined : column
+  return thread?.pane
+}
+
 /** The thread, then its panes, then around: the next one brought forward. */
 async function stepPane(c: WindowContext, by: number) {
   const thread = c.selection && c.threadOf(c.selection)
   if (!c.selection || !thread?.panes?.length) return
   const columns = [undefined, ...thread.panes.map((p) => p.id)]
-  const at = Math.max(0, columns.indexOf(thread.pane))
+  const at = Math.max(0, columns.indexOf(focusedColumn(thread)))
   const next = columns[(at + by + columns.length) % columns.length]
   await c.dispatch('pane.focus', { id: thread.id, ...(next ? { pane: next } : {}) }, { machine: c.selection.machine, source: 'keys' })
   focusColumn(next)

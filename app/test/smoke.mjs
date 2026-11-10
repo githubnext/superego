@@ -257,7 +257,12 @@ if (phase === 'first') {
   writeOutside(`${repo}/.long.md.tmp`, Array.from({ length: 300 }, (_, i) => 'edited ' + i).join('\n'))
   renameSync(`${repo}/.long.md.tmp`, `${repo}/long.md`)
   await until(`document.querySelector('.cm-content')?.textContent.includes('edited ')`, 'the change shown')
+  await until(`Boolean(document.querySelector('.cm-content .cm-arrived'))`, 'the change flashes as it arrives')
+  if (process.env.MU_SMOKE_SHOTS) writeFileSync(`${process.env.MU_SMOKE_SHOTS}/arrival.png`, (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG())
+  await until(`!document.querySelector('.cm-content .cm-arrived')`, 'and fades')
   await until(`Math.abs(document.querySelector('.file-editor__scroll').scrollTop - 1500) <= 4`, 'still where it was')
+  // ⌘W closes the pane with the focus: the editor's, here (switching back put it in the prompt).
+  await run(`document.querySelector('[data-column]:not([data-column="thread"]) .cm-content').focus()`)
   await key('w')
   await until(`!document.querySelector('.panes__tab')`, 'editor closed')
   // The window as it was left, after a reload: the same thread selected, its unsent draft still there.
@@ -277,14 +282,17 @@ if (phase === 'first') {
   if (await toggleAt() !== before) { await fail('the sidebar button moved'); throw new Error('failed') }
   await key('/')
   await until(`Boolean(document.querySelector('.app__sidebar'))`, 'sidebar shown')
-  // ⌃Tab: the thread, then each pane beside it, and around.
+  // ⌃Tab: from where keyboard focus is (the prompt, in the thread), to each pane beside it, and around; ⌘W closes the
+  // one it's in.
   await run(`window.mu.call('local', 'pane.open', { id: '${paned}', kind: 'diff' })`)
-  await until(`Boolean(document.querySelector('.panes__tab'))`, 'pane in front')
+  await until(`Boolean(document.querySelector('.panes__tab'))`, 'a pane beside')
+  await run(`document.querySelector('.composer textarea').focus()`)
   await key('Tab', ['control'])
-  await until(`window.mu.call('local', 'thread.list', {}).then((l) => !l.find((t) => t.id === '${paned}').pane)`, 'ctrl+tab to the thread')
-  await new Promise((r) => setTimeout(r, 300))
+  await until(`Boolean(document.activeElement?.closest('[data-column]:not([data-column="thread"])'))`, 'ctrl+tab to the pane')
   await key('Tab', ['control'])
-  await until(`window.mu.call('local', 'thread.list', {}).then((l) => Boolean(l.find((t) => t.id === '${paned}').pane))`, 'ctrl+tab to the pane')
+  await until(`Boolean(document.activeElement?.closest('[data-column="thread"]'))`, 'ctrl+tab around to the thread')
+  await key('Tab', ['control'])
+  await until(`Boolean(document.activeElement?.closest('[data-column]:not([data-column="thread"])'))`, 'and to the pane again')
   await key('w')
   await until(`!document.querySelector('.panes__tab')`, 'diff closed')
   // Sessions: the panes repository is one, the home folder another; ⌘⇧[ and ⌘⇧] go between them.
