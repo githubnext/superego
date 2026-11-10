@@ -235,6 +235,18 @@ if (phase === 'first') {
   await new Promise((r) => setTimeout(r, 200))
   const kept = await run(`document.querySelector('.file-editor__scroll').scrollTop`)
   if (Math.abs(kept - 1500) > 4) { await fail(`the editor scrolled to ${kept} on focus`); throw new Error('failed') }
+  // The app's keys work from inside the editor: it doesn't keep ⌘/ (comment) or ⌘L (select line) for itself.
+  const docBefore = await run(`document.querySelector('.cm-content').textContent`)
+  await key('/')
+  await until(`!document.querySelector('.app__sidebar')`, 'cmd+/ from the editor hides the sidebar')
+  await key('/')
+  await until(`Boolean(document.querySelector('.app__sidebar'))`, 'and shows it')
+  await run(`document.querySelector('.cm-content').focus()`)
+  await key('l')
+  await until(`Boolean(document.querySelector('.navigator'))`, 'cmd+L from the editor opens the navigator')
+  await key('Escape', [])
+  await until(`!document.querySelector('.navigator')`, 'navigator closed')
+  if (await run(`document.querySelector('.cm-content').textContent`) !== docBefore) { await fail('the editor changed its text on app keys'); throw new Error('failed') }
   await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => !li.classList.contains('is-selected')).click()`)
   await until(`document.querySelector('.thread__title')?.textContent !== 'panes'`, 'another thread')
   await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('panes')).click()`)

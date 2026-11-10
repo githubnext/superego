@@ -3,12 +3,12 @@
 // the agent changes it: your view updates, or, with edits of yours not yet saved, it asks which to keep.
 // The editor pane is this; a profile's own panes use it too (the obsidian profile's notes), with their own links.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { minimalSetup } from 'codemirror'
+import { history, historyKeymap, standardKeymap } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { defaultHighlightStyle, foldGutter, HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { Annotation, Compartment, type Extension } from '@codemirror/state'
-import { EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view'
-import { searchKeymap } from '@codemirror/search'
+import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, keymap, lineNumbers } from '@codemirror/view'
+import { closeSearchPanel, findNext, findPrevious, openSearchPanel } from '@codemirror/search'
 import { tags } from '@lezer/highlight'
 import type { ThreadInfo } from '@mu/protocol'
 import { Button } from '@mu/ui'
@@ -39,6 +39,18 @@ export type FileEditorProps = {
 const MODE = 'mu.editor.mode'
 /** Where each file was left (scroll and cursor), for as long as the window lives: it opens there again. */
 const places = new Map<string, { top: number; anchor: number; head: number }>()
+/**
+ * The editor's keys: typing's own (moving, selecting, deleting, Enter, select all, macOS's Ctrl ones), undo and redo,
+ * and find. Not CodeMirror's other defaults (⌘/ comment, ⌘L select line, ⌘I, ⌘[ ⌘], ⌥↑ ⌥↓, …): those keys are the
+ * app's, and an editor with the focus would otherwise keep them from it.
+ */
+const EDITING_KEYS = [
+  ...standardKeymap, ...historyKeymap,
+  { key: 'Mod-f', run: openSearchPanel, scope: 'editor search-panel' },
+  { key: 'Mod-g', run: findNext, shift: findPrevious, scope: 'editor search-panel', preventDefault: true },
+  { key: 'Escape', run: closeSearchPanel, scope: 'editor search-panel' },
+]
+
 /** A change read from disk, not typed: it doesn't need saving. */
 const fromDisk = Annotation.define<boolean>()
 
@@ -132,8 +144,9 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
         parent: host.current,
         doc: content,
         extensions: [
-          keymap.of([{ key: 'Mod-s', run: () => { void saveRef.current(); return true }, preventDefault: true }, ...searchKeymap]),
-          minimalSetup, EditorView.lineWrapping,
+          keymap.of([{ key: 'Mod-s', run: () => { void saveRef.current(); return true }, preventDefault: true }, ...EDITING_KEYS]),
+          highlightSpecialChars(), history(), drawSelection(), syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+          EditorView.lineWrapping,
           modeSlot.current.of(modeExtensions(live)),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged || update.transactions.every((t) => t.annotation(fromDisk))) return
