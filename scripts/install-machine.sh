@@ -14,13 +14,15 @@ bin=${MU_BIN:-$HOME/.local/bin}
 registry=${MU_REGISTRY:-https://packagefeedproxy.microsoft.io/npm/}
 cd "$dir"
 
-if command -v mise > /dev/null; then
+# Where mise is now, for the wrapper below: ssh's PATH may not have it (~/.local/bin, say).
+mise=$(command -v mise || true)
+if [[ -n $mise ]]; then
   mise trust --quiet "$dir/mise.toml"
   mise install --quiet
   eval "$(mise env -s bash -C "$dir")"
 fi
 
-git pull --ff-only --quiet || echo "install-machine: not updated from git; installing what's checked out" >&2
+git pull --ff-only --quiet 2> /dev/null || echo "install-machine: not updated from git; installing what's checked out" >&2
 # The lockfile is resolved through this feed; pnpm refuses tarballs from anywhere else.
 ELECTRON_SKIP_BINARY_DOWNLOAD=1 CI=1 pnpm install --frozen-lockfile --registry="$registry"
 
@@ -34,7 +36,7 @@ mkdir -p "$bin"
 cat > "$bin/mu" << EOF
 #!/bin/sh
 # Written by $dir/scripts/install-machine.sh
-if command -v mise > /dev/null; then exec mise exec -C "$dir" -- node "$dir/app/bin/mu.ts" "\$@"; fi
+if [ -x "$mise" ]; then exec "$mise" exec -C "$dir" -- node "$dir/app/bin/mu.ts" "\$@"; fi
 exec node "$dir/app/bin/mu.ts" "\$@"
 EOF
 chmod +x "$bin/mu"
