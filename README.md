@@ -51,7 +51,7 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
 | `⌘P` | Open a file in the thread's folder |
 | `⌘N` | New thread |
 | `⌘.` | Next unread thread (everywhere, or in this session: Settings → Navigation) |
-| `⌘⇧[` `⌘⇧]` | Previous / next session, at its last thread |
+| `⌘⇧[` `⌘⇧]` | Previous / next thread, through every session in the sidebar's order |
 | `⌃Tab` `⌃⇧Tab` | The thread and its panes, in turn |
 | `⌘⌥←` `⌘⌥→` | Focus the region beside: the sidebar, the thread, each pane |
 | `⌃I` | Focus the prompt |
@@ -102,7 +102,14 @@ status) and a UI half (`defineUiExtension`: slots, pane kinds, tool and entry re
 `mu` starts a thread in the current directory and opens it in the app. `mu <dir> -p "fix the tests"` starts one
 elsewhere with a first message; `-P <profile>` picks a profile; `-w` gives it a worktree of its own. `mu threads` lists
 them. Every command takes `-m <machine>` and `--json`; `mu help` lists them. A remote machine needs `mu` on its PATH for
-`ssh <host> mu connect --start`.
+`ssh <host> mu connect --start`:
+
+```sh
+gh repo clone mikker/mu ~/dev/mu && ~/dev/mu/scripts/install-machine.sh   # again to update
+```
+
+It installs `~/.local/bin/mu`, which a non-interactive ssh shell may not have on its PATH; then add the machine with
+that command: `mu machines add <host> --command '~/.local/bin/mu connect --start'`.
 
 ## Profiles
 
