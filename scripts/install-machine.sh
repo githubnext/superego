@@ -7,6 +7,8 @@
 # Node comes from mise when it's there (see mise.toml), else from PATH: it needs to run TypeScript (22.18+).
 set -euo pipefail
 
+# In braces, so bash reads it all before `git pull` below changes it.
+{
 dir=$(cd "$(dirname "$0")/.." && pwd)
 bin=${MU_BIN:-$HOME/.local/bin}
 registry=${MU_REGISTRY:-https://packagefeedproxy.microsoft.io/npm/}
@@ -39,3 +41,5 @@ chmod +x "$bin/mu"
 
 "$bin/mu" daemon status | grep -q '^Running' && "$bin/mu" daemon restart
 echo "Installed $bin/mu ($(git rev-parse --short HEAD))"
+exit
+}
