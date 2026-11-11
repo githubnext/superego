@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, openSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { createConnection } from 'node:net'
 import { join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { devApp } from './dev-app.ts'
 import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, type MachineConfig, type Transport } from '@mu/client'
@@ -22,6 +22,11 @@ export type CliOptions = {
   appDir: string
   /** The bin file itself, run with Node to start a daemon from source when the app isn't built. */
   bin: string
+  /**
+   * The app's daemon entry (its `src/daemon.ts`), run with Node when the app isn't built: the daemon with the app's
+   * extensions and its web build. Without it, `<id> daemon` is the bare core.
+   */
+  daemon?: string
 }
 
 // One CLI run serves one app; `runCli` sets these before anything else runs.
@@ -99,7 +104,8 @@ function installedDaemon(): { dir: string; command: string[]; env: NodeJS.Proces
     // The app's own (development) bundle, so the daemon is "mu" in Activity Monitor, not "Electron".
     return { dir: resolve(appDir(), 'out/main'), command: [devApp(appDir(), app), bundled], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }
   }
-  return { dir: fileURLToPath(new URL('../../daemon/src/', import.meta.url)), command: [process.execPath, options.bin, 'daemon'], env: process.env }
+  const command = options.daemon ? [process.execPath, options.daemon] : [process.execPath, options.bin, 'daemon']
+  return { dir: fileURLToPath(new URL('../../daemon/src/', import.meta.url)), command, env: process.env }
 }
 
 /** Start this computer's daemon in the background, logging next to its data. */
@@ -313,7 +319,7 @@ async function authCommand(sub: string | undefined, rest: string[], machineName?
 }
 
 async function daemonCommand(sub: string | undefined, now: boolean) {
-  if (!sub) return serveDaemon({ app, dataDir, socket })
+  if (!sub) return options.daemon ? void await import(pathToFileURL(options.daemon).href) : serveDaemon({ app, dataDir, socket })
   const local: Machine = { id: 'local', label: 'This computer' }
   const running = await isListening(socket)
   if (sub === 'status') {

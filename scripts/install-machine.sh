@@ -22,6 +22,11 @@ git pull --ff-only --quiet || echo "install-machine: not updated from git; insta
 # The lockfile is resolved through this feed; pnpm refuses tarballs from anywhere else.
 ELECTRON_SKIP_BINARY_DOWNLOAD=1 CI=1 pnpm install --frozen-lockfile --registry="$registry"
 
+# The window's build, for Web access. Only that: with a built main, `mu` would run the daemon on Electron, which
+# isn't here; without, it runs app/src/daemon.ts on Node.
+(cd app && pnpm exec electron-vite build --logLevel error)
+rm -rf app/out/main app/out/preload
+
 # A wrapper, not a symlink: ssh runs `mu connect --start` in a non-login shell, where mise hasn't set up PATH.
 mkdir -p "$bin"
 cat > "$bin/mu" << EOF
