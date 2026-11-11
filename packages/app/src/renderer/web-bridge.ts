@@ -4,6 +4,7 @@
 import { FEATURES, PROTOCOL_VERSION, RpcError, RpcPeer, type Hello } from '@mu/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@mu/settings'
 import type { MachineEntry, MuBridge, MuEvent } from '../shared.ts'
+import { askToken } from './token-gate.ts'
 
 const TOKEN = 'mu.webToken'
 const SETTINGS = 'mu.appSettings'
@@ -28,7 +29,7 @@ const store: SettingsStore = {
 export function webBridge(): MuBridge {
   const listeners = new Set<(event: MuEvent) => void>()
   const emit = (event: MuEvent) => { for (const listener of listeners) listener(event) }
-  const token = takeToken()
+  let token = takeToken()
   let entry: MachineEntry = { id: 'local', label: location.hostname, state: 'connecting' }
   const setEntry = (next: Partial<MachineEntry>) => { entry = { ...entry, ...next }; emit({ machine: '$machines', method: '$machines', params: [entry] }) }
 
@@ -36,17 +37,36 @@ export function webBridge(): MuBridge {
   let peer: RpcPeer | undefined
   let ready: Promise<RpcPeer>
   let retry = 500
+  // Without a token, or with one the daemon refuses, the page asks for it (see token-gate.ts).
+  const accepted = async (given: string) => (await fetch(`/rpc?token=${encodeURIComponent(given)}`)).status !== 401
+  let asking = false
+  const ask = (rejected: boolean) => {
+    if (asking) return
+    asking = true
+    localStorage.removeItem(TOKEN)
+    void askToken(accepted, rejected).then((given) => {
+      asking = false
+      token = given
+      localStorage.setItem(TOKEN, given)
+      retry = 500
+      connect()
+    })
+  }
   const connect = () => {
     ready = new Promise((resolve, reject) => {
       if (!token) {
-        setEntry({ state: 'disconnected', error: 'Open the address shown in Settings → Web access on the machine (it carries a token).' })
+        setEntry({ state: 'disconnected' })
+        ask(false)
         return reject(new RpcError('unauthorized', 'No token'))
       }
+      const given = token
+      let opened = false
       const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/rpc?token=${encodeURIComponent(token)}`)
       const next = new RpcPeer((line) => { if (ws.readyState === WebSocket.OPEN) ws.send(line.trimEnd()) })
       ws.onmessage = (message) => next.receive(String(message.data))
       next.onAny((method, params) => emit({ machine: 'local', method, params }))
       ws.onopen = async () => {
+        opened = true
         try {
           const hello = await next.call<Hello>('hello', { client: 'web', version: PROTOCOL_VERSION, features: [...FEATURES] })
           peer = next
@@ -55,13 +75,15 @@ export function webBridge(): MuBridge {
           resolve(next)
         } catch (error) { reject(error) }
       }
-      ws.onclose = (event) => {
+      ws.onclose = () => {
         next.close()
         peer = undefined
-        setEntry({ state: 'disconnected', ...(event.code === 1006 && !entry.machine ? { error: 'Not allowed: open the address with its token again.' } : {}) })
+        setEntry({ state: 'disconnected' })
         reject(new RpcError('disconnected', 'Not connected'))
-        setTimeout(connect, retry)
-        retry = Math.min(retry * 2, 10_000)
+        const again = () => { setTimeout(connect, retry); retry = Math.min(retry * 2, 10_000) }
+        // Refused at the door: the token, or only the network? The socket doesn't say; the daemon does.
+        if (opened) return again()
+        void accepted(given).then((ok) => ok ? again() : ask(true), again)
       }
     })
     ready.catch(() => {})

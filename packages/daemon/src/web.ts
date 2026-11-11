@@ -67,6 +67,8 @@ export async function serveWeb({ root, host, port, token, serve, artifact }: {
       }
       return
     }
+    // Whether a token is right, for a page asking for one: the protocol itself only says so by closing.
+    if (path === '/rpc') { response.writeHead(allowed(requested.searchParams.get('token')) ? 204 : 401).end(); return }
     const file = normalize(join(root, path === '/' ? 'index.html' : path))
     if (!file.startsWith(root + sep) && file !== root) { response.writeHead(403).end(); return }
     // Unknown paths are the app's own (it has no routes yet), so they get the page.

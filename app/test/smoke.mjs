@@ -542,6 +542,18 @@ if (phase === 'first') {
   await inBrowser(`!document.querySelector('.app__sidebar')`, 'drawer closes on picking a thread')
   const wrongToken = await browser.webContents.executeJavaScript(`new Promise((resolve) => { const ws = new WebSocket('ws://' + location.host + '/rpc?token=wrong'); ws.onopen = () => resolve('open'); ws.onerror = () => resolve('refused') })`)
   if (wrongToken !== 'refused') { await fail(`a wrong token got in: ${wrongToken}`); throw new Error('failed') }
+  // Without the token (a page on the home screen keeps its own storage): it asks, refuses a wrong one, takes the address.
+  await browser.webContents.executeJavaScript(`localStorage.clear()`)
+  browser.setContentSize(1100, 760)
+  await browser.loadURL(url.replace(/#.*/, ''))
+  await inBrowser(`document.activeElement?.classList.contains('token-gate__input')`, 'the token form, focused')
+  const submitToken = (value) => browser.webContents.executeJavaScript(`(() => { document.querySelector('.token-gate__input').value = ${JSON.stringify(value)}; document.querySelector('.token-gate').requestSubmit() })()`)
+  await submitToken('wrong')
+  await inBrowser(`document.querySelector('.token-gate__error')?.textContent.includes('isn’t this machine’s')`, 'a wrong token refused')
+  await submitToken(url)
+  await inBrowser(`!document.querySelector('.token-gate')`, 'the token form gone')
+  await inBrowser(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'threads after typing the token')
+  await inBrowser(`localStorage.getItem('mu.webToken') === ${JSON.stringify(new URL(url).hash.slice('#token='.length))}`, 'the token kept')
   browser.destroy()
   await run(`window.mu.call('local', 'settings.set', { key: 'web.access', value: 'off' })`)
   console.log('smoke(first): ok')
