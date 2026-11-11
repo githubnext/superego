@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, openSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, protocol, session, shell, type MenuItemConstructorOptions } from 'electron'
-import { appEnv, defaultDataDir, readBuild, socketPath } from '@mu/daemon/client'
+import { appEnv, daemonStarting, defaultDataDir, readBuild, socketPath } from '@mu/daemon/client'
 import {
   bool, defineAction, lit, obj, opt, Router, RpcError, str, union, unknown,
   type AppConfig, type DeclaredSection, type Json, type Notifications, type ThreadInfo, type SettingType,
@@ -29,6 +29,7 @@ export function startApp(appConfig: AppConfig) {
 
   /** Start the local daemon, detached: quitting the app leaves agents running. */
   function startDaemon() {
+    if (daemonStarting(dataDir)) return
     mkdirSync(dataDir, { recursive: true })
     const log = openSync(join(dataDir, 'daemon.log'), 'a')
     spawn(process.execPath, [join(import.meta.dirname, 'daemon.js')], {

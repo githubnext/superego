@@ -1,6 +1,6 @@
 export { openDaemon, type Daemon, type DaemonOptions } from './daemon.ts'
 export { listen, connectSocket } from './server.ts'
-export { appEnv, defaultDataDir, socketPath } from './paths.ts'
+export { appEnv, daemonStarting, defaultDataDir, socketPath } from './paths.ts'
 export { serveDaemon } from './serve.ts'
 export { isListening } from './server.ts'
 export { readBuild } from './build.ts'

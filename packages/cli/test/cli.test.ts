@@ -12,9 +12,9 @@ let home: string
 const env = () => ({ ...process.env, MU_HOME: home, MU_HEADLESS: '1', MU_MODEL: 'faux', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '' })
 
 /** Run `mu` with `args`; resolves with stdout, rejects with stderr. */
-function mu(args: string[], input?: string, cwd?: string): Promise<string> {
+function mu(args: string[], input?: string, cwd?: string, extraEnv: Record<string, string> = {}): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = execFile(process.execPath, [CLI, ...args], { env: env(), timeout: 30_000, ...(cwd ? { cwd } : {}) }, (error, stdout, stderr) => {
+    const child = execFile(process.execPath, [CLI, ...args], { env: { ...env(), ...extraEnv }, timeout: 30_000, ...(cwd ? { cwd } : {}) }, (error, stdout, stderr) => {
       if (error) reject(new Error(stderr || error.message))
       else resolve(stdout)
     })
@@ -113,7 +113,10 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     await expect(mu(['threads', '-m', 'Second'])).rejects.toThrow(/No machine called Second/)
   })
 
-  it('restarts the daemon onto the installed code, keeping threads', async () => {
+  it('restarts the daemon onto the installed code, keeping threads and its environment', async () => {
+    // Started with a key in its environment (as by `box run mu daemon restart`); restarted from a client without one.
+    await mu(['daemon', 'stop'])
+    await mu(['daemon', 'restart'], undefined, undefined, { ANTHROPIC_API_KEY: 'sk-ant-env' })
     const before = await muJson(['daemon', 'status'])
     expect(before).toMatchObject({ running: true, current: true })
     const restarted = await muJson(['daemon', 'restart'])
@@ -121,6 +124,7 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     const after = await muJson(['daemon', 'status'])
     expect(after.pid).not.toBe(before.pid)
     expect((await muJson(['threads'])).some((s: any) => s.title === 'hi from the cli')).toBe(true)
+    expect((await muJson(['auth'])).find((p: any) => p.id === 'anthropic')).toMatchObject({ auth: { source: 'ANTHROPIC_API_KEY' } })
   })
 
   it('stops the daemon', async () => {

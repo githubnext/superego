@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { devApp } from './dev-app.ts'
 import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, type MachineConfig, type Transport } from '@mu/client'
-import { appEnv, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@mu/daemon'
+import { appEnv, daemonStarting, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@mu/daemon'
 import {
   FEATURES, PROTOCOL_VERSION, RpcError, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ThreadInfo, type SettingsSnapshot,
@@ -104,6 +104,7 @@ function installedDaemon(): { dir: string; command: string[]; env: NodeJS.Proces
 
 /** Start this computer's daemon in the background, logging next to its data. */
 function startDaemon() {
+  if (daemonStarting(dataDir)) return
   mkdirSync(dataDir, { recursive: true, mode: 0o700 })
   const log = openSync(`${dataDir}/daemon.log`, 'a')
   const { command: [program, ...args], env } = installedDaemon()
@@ -334,7 +335,7 @@ async function daemonCommand(sub: string | undefined, now: boolean) {
   }
   if (sub === 'restart') {
     if (!running) {
-      startDaemon()
+      // Connecting starts it.
       const hello = await on(local, async (_call, hello) => hello)
       return print({ restarted: true, build: hello.machine.build }, () => console.log(`Started daemon ${hello.machine.pid}, build ${hello.machine.build}.`))
     }

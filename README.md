@@ -111,6 +111,11 @@ gh repo clone mikker/mu ~/dev/mu && ~/dev/mu/scripts/install-machine.sh   # agai
 It installs `~/.local/bin/mu`, which a non-interactive ssh shell may not have on its PATH; then add the machine with
 that command: `mu machines add <host> --command '~/.local/bin/mu connect --start'`.
 
+The daemon takes model keys from the providers' own variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) when none is
+stored in Settings, and a restart keeps the environment it was started with. Where those keys are sealed, as on a
+[workbox](https://github.com/githubnext/workboxes), start it from a terminal on the box, once after each boot:
+`mu daemon stop; box run mu daemon restart`. (The app's ssh has no terminal for `box run` to ask for a password.)
+
 ## Profiles
 
 ```sh

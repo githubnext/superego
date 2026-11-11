@@ -1,9 +1,9 @@
+import { spawn } from 'node:child_process'
 import { rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { readBuild } from './build.ts'
 import { openDaemon } from './daemon.ts'
 import { listen } from './server.ts'
-import { appEnv, defaultDataDir, socketPath } from './paths.ts'
+import { appEnv, defaultDataDir, pidPath, socketPath } from './paths.ts'
 import type { AppConfig } from '@mu/protocol'
 import type { DaemonExtension } from './extension.ts'
 
@@ -14,17 +14,31 @@ export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket =
   webRoot?: string
 }) {
   const build = readBuild(import.meta.dirname)
-  let stop = async () => {}
+  let restart = async () => {}
   const agentsDir = appEnv(app)('AGENTS')
-  const daemon = await openDaemon({ app, dataDir, defaultCwd: appEnv(app)('CWD') ?? defaultCwd ?? process.cwd(), build, extensions, ...(webRoot ? { webRoot } : {}), ...(agentsDir ? { agentsDir } : {}), onRestart: () => void stop() })
+  const daemon = await openDaemon({ app, dataDir, defaultCwd: appEnv(app)('CWD') ?? defaultCwd ?? process.cwd(), build, extensions, ...(webRoot ? { webRoot } : {}), ...(agentsDir ? { agentsDir } : {}), onRestart: () => void restart() })
   const server = await listen(daemon, socket)
-  const pidFile = join(dataDir, 'daemon.pid')
+  const pidFile = pidPath(dataDir)
   await writeFile(pidFile, String(process.pid))
   console.error(`${app.id} daemon ${process.pid} on ${socket}, build ${build}`)
-  stop = async () => {
+  const close = async () => {
     server.close()
     await daemon.close()
+  }
+  const stop = async () => {
+    await close()
     await rm(pidFile, { force: true })
+    process.exit(0)
+  }
+  // The successor is this same command with this same environment, so whatever the daemon was started with (API keys
+  // from `box run`, say) outlives restarts; the code it runs is whatever is installed now. Clients wait meanwhile
+  // (see daemonStarting).
+  restart = async () => {
+    await writeFile(pidFile, String(process.pid))
+    await close()
+    const successor = spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], { detached: true, stdio: ['ignore', 'inherit', 'inherit'], env: process.env })
+    successor.unref()
+    await writeFile(pidFile, String(successor.pid))
     process.exit(0)
   }
   process.on('SIGINT', stop)
