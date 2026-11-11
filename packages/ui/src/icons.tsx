@@ -1,0 +1,31 @@
+/// <reference path="./phosphor.d.ts" />
+// Icons: Phosphor (phosphoricons.com), regular weight unless asked, in the text's colour. The ones the app and its
+// extensions use, by Phosphor's own names (ArchiveIcon); add one here, and to phosphor.d.ts, to use it.
+export {
+  ArchiveIcon,
+  ArrowDownIcon,
+  ArrowElbowRightIcon,
+  ArrowRightIcon,
+  BellIcon,
+  CaretRightIcon,
+  CommandIcon,
+  DotsThreeIcon,
+  FileIcon,
+  FilePlusIcon,
+  FileTextIcon,
+  FolderSimpleIcon,
+  GearSixIcon,
+  ListIcon,
+  MagnifyingGlassIcon,
+  NotePencilIcon,
+  PaperclipIcon,
+  PencilSimpleIcon,
+  PlusIcon,
+  SidebarSimpleIcon,
+  SparkleIcon,
+  SquareSplitHorizontalIcon,
+  StopIcon,
+  TerminalIcon,
+  WrenchIcon,
+  type Icon, type IconProps, type IconWeight,
+} from '@phosphor-icons/react'

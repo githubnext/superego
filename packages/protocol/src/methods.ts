@@ -104,6 +104,8 @@ export type Methods = {
   'file.watch': { params: { id: ThreadId; path: string }; result: { sub: string; content: string | null } }
   /** A file in a thread's folder by the name a link gives it ([[Note]], Note.md, path/Note): its path, or null. */
   'file.find': { params: { id: ThreadId; name: string }; result: { path: string | null } }
+  /** The skills on this machine (`~/.agents/skills`), which a message names as `$name` or `/skill:name`. */
+  'skill.list': { params: {}; result: { name: string; description: string }[] }
   /** What changed in a thread's folder, by git: the unified diff against HEAD, and files git doesn't track yet. */
   'thread.diff': { params: { id: ThreadId }; result: { diff: string; untracked: string[]; repo: boolean } }
   /** A profile's UI extensions: their entry modules, and a hash that changes when any of its files do. */

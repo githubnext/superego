@@ -1,0 +1,39 @@
+// Phosphor's own types don't load under nodenext (its .d.ts files import each other without extensions, in an ES
+// module package), so these stand in for the icons icons.tsx re-exports. Same shapes as its lib/types.d.ts.
+declare module '@phosphor-icons/react' {
+  import type { ComponentPropsWithoutRef, ForwardRefExoticComponent, RefAttributes } from 'react'
+  export type IconWeight = 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone'
+  export interface IconProps extends ComponentPropsWithoutRef<'svg'>, RefAttributes<SVGSVGElement> {
+    alt?: string
+    color?: string
+    size?: string | number
+    weight?: IconWeight
+    mirrored?: boolean
+  }
+  export type Icon = ForwardRefExoticComponent<IconProps>
+  export const ArchiveIcon: Icon
+  export const ArrowDownIcon: Icon
+  export const ArrowElbowRightIcon: Icon
+  export const ArrowRightIcon: Icon
+  export const BellIcon: Icon
+  export const CaretRightIcon: Icon
+  export const CommandIcon: Icon
+  export const DotsThreeIcon: Icon
+  export const FileIcon: Icon
+  export const FilePlusIcon: Icon
+  export const FileTextIcon: Icon
+  export const FolderSimpleIcon: Icon
+  export const GearSixIcon: Icon
+  export const ListIcon: Icon
+  export const MagnifyingGlassIcon: Icon
+  export const NotePencilIcon: Icon
+  export const PaperclipIcon: Icon
+  export const PencilSimpleIcon: Icon
+  export const PlusIcon: Icon
+  export const SidebarSimpleIcon: Icon
+  export const SparkleIcon: Icon
+  export const SquareSplitHorizontalIcon: Icon
+  export const StopIcon: Icon
+  export const TerminalIcon: Icon
+  export const WrenchIcon: Icon
+}

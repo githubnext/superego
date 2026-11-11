@@ -27,12 +27,18 @@ export type Sent = { name: string; type: string; path: string; image?: string }
 const TAG = /^<attachment name="([^"]*)" type="([^"]*)" path="([^"]*)"/
 const unquote = (value: string) => value.replace(/&#(\d+);/g, (_m, code: string) => String.fromCharCode(Number(code)))
 
-/** A sent message's own text, and the files that went with it (an image's as a data URL). */
-export function splitMessage(blocks: Block[]): { text: string; files: Sent[] } {
+/** A skill the message named, sent with it whole by the daemon. */
+const SKILL = /^<skill name="([^"]*)" location="([^"]*)">/
+
+/** A sent message's own text, the files that went with it (an image's as a data URL), and the skills it named. */
+export function splitMessage(blocks: Block[]): { text: string; files: Sent[]; skills: { name: string; path: string }[] } {
   const text: string[] = []
   const files: Sent[] = []
+  const skills: { name: string; path: string }[] = []
   blocks.forEach((block, index) => {
     if (block.type !== 'text') return
+    const skill = SKILL.exec(block.text ?? '')
+    if (skill) return void skills.push({ name: unquote(skill[1]!), path: unquote(skill[2]!) })
     const tag = TAG.exec(block.text ?? '')
     if (!tag) return void text.push(block.text ?? '')
     const next = blocks[index + 1]
@@ -41,5 +47,5 @@ export function splitMessage(blocks: Block[]): { text: string; files: Sent[] } {
       ...(next?.type === 'image' && next.data ? { image: `data:${next.mimeType};base64,${next.data}` } : {}),
     })
   })
-  return { text: text.join(''), files }
+  return { text: text.join(''), files, skills }
 }

@@ -22,6 +22,7 @@ import { FileSettingsStore } from '@mu/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
 import { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveValue, type StatusContribution } from './extension.ts'
 import { serveWeb, webToken, type WebServer } from './web.ts'
+import { agentsInstructions, listSkills, mentionedSkills, skillBlock, skillsPrompt } from './skills.ts'
 import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileRef } from './profiles.ts'
 
 const context = BACKGROUND_CONTEXT
@@ -73,6 +74,8 @@ export type DaemonOptions = {
   onRestart?: () => void
   /** The app's window build (index.html and assets), served to browsers when Web access is on. */
   webRoot?: string
+  /** The folder agents share: skills in `skills/`, standing instructions in `AGENTS.md`. Defaults to `~/.agents`. */
+  agentsDir?: string
 }
 
 /** One mounted thread: its conversation and a small watch that keeps its status current. */
@@ -221,6 +224,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       },
     })],
   }))
+  // Skills and standing instructions from the folder agents share (see skills.ts). Each is its own extension, so a
+  // profile can do without either.
+  const agentsDir = options.agentsDir ?? join(homedir(), '.agents')
+  const skillsDir = join(agentsDir, 'skills')
+  installBuiltin(defineExtension({ name: 'skills', sections: [section('skills', async () => skillsPrompt(await listSkills(skillsDir)))] }))
+  installBuiltin(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] }))
   // Profiles and their extensions import from 'mu'; this is what they get.
   provideSdk({
     defineProfile, defineExtension, defineTool, section, hook, wrapTool, wrapSection, defineDaemonExtension, defineAction, RpcError,
@@ -462,9 +471,24 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
     await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null, ...rest }, context)
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
-    const content = await contentOf(id, text, attachments)
+    const content = await withSkills(m.meta, text, await contentOf(id, text, attachments))
     const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}) }, context)
     return String(submission.id)
+  }
+
+  /**
+   * A message that names skills (`$commit`, `/skill:commit`) carries their instructions after its own content, when the
+   * thread's profile hasn't done without skills.
+   */
+  async function withSkills(meta: ThreadMeta, text: string, content: Awaited<ReturnType<typeof contentOf>>) {
+    if (!/[$/]/.test(text)) return content
+    const profile = meta.profile ? await profileOf(meta.profile) : undefined
+    if (profile?.spec.without?.includes('skills')) return content
+    const named = mentionedSkills(text, await listSkills(skillsDir))
+    if (!named.length) return content
+    const blocks = typeof content === 'string' ? (content ? [{ type: 'text' as const, text: content }] : []) : content
+    for (const skill of named) blocks.push({ type: 'text', text: await skillBlock(skill) })
+    return blocks
   }
 
   /**
@@ -787,6 +811,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           if (info.size > 16 * 1024 * 1024) throw new RpcError('too_large', `${path} is larger than 16 MB`)
           return { path: file, content: await readFile(file, base64 ? 'base64' : 'utf8') }
         },
+        /** The skills a message can name, for completing `$name` as it's typed. */
+        'skill.list': async () => (await listSkills(skillsDir)).map(({ name, description }) => ({ name, description })),
         'file.find': async ({ id, name }: { id: string; name: string }) => ({ path: await findFile((await get(id)).meta.cwd, name) ?? null }),
         'thread.diff': async ({ id }: { id: string }) => {
           const cwd = (await get(id)).meta.cwd

@@ -5,7 +5,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { history, historyKeymap, standardKeymap } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
-import { defaultHighlightStyle, foldGutter, HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { foldGutter, HighlightStyle, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
+import { languages } from '@codemirror/language-data'
 import { Annotation, Compartment, type Extension } from '@codemirror/state'
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, keymap, lineNumbers } from '@codemirror/view'
 import { closeSearchPanel, findNext, findPrevious, openSearchPanel } from '@codemirror/search'
@@ -63,6 +64,29 @@ const liveHighlight = HighlightStyle.define([
   { tag: tags.meta, color: 'var(--mu-muted)' },
 ])
 
+/**
+ * Code, coloured: quiet, a few hues on the page's own colours, in light and dark. What it doesn't name stays the text's
+ * colour. Headings and emphasis are left to the markdown styles.
+ */
+const c = (light: string, dark: string) => `light-dark(${light}, ${dark})`
+const codeHighlight = HighlightStyle.define([
+  { tag: [tags.keyword, tags.operatorKeyword, tags.modifier, tags.controlKeyword, tags.definitionKeyword, tags.moduleKeyword], color: c('#a626a4', '#c792ea') },
+  { tag: [tags.string, tags.special(tags.string), tags.regexp, tags.character], color: c('#50a14f', '#a5d68a') },
+  { tag: [tags.number, tags.bool, tags.null, tags.atom, tags.unit], color: c('#b76b01', '#f2b46d') },
+  { tag: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment], color: 'var(--mu-faint)', fontStyle: 'italic' },
+  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName), tags.function(tags.definition(tags.variableName))], color: c('#2f6fdb', '#82aaff') },
+  { tag: [tags.typeName, tags.className, tags.namespace, tags.standard(tags.typeName)], color: c('#c18401', '#ffcb6b') },
+  { tag: [tags.tagName, tags.angleBracket], color: c('#e45649', '#f07178') },
+  { tag: [tags.attributeName, tags.propertyName, tags.labelName], color: c('#986801', '#e0c08a') },
+  { tag: [tags.definition(tags.variableName), tags.definition(tags.propertyName)], color: c('#0f6e8a', '#89ddff') },
+  { tag: [tags.meta, tags.processingInstruction, tags.documentMeta, tags.annotation], color: 'var(--mu-muted)' },
+  { tag: [tags.invalid], color: 'var(--mu-status-error)' },
+  { tag: tags.link, textDecoration: 'underline' },
+])
+
+/** The file's language by its name (or none): loaded on demand, as most files need only one. */
+const languageOf = (path: string) => LanguageDescription.matchFilename(languages, path.split('/').at(-1) ?? path)
+
 /** The text as it is on disk, after `next` changed it there: only the part that differs, so the cursor stays put. */
 function minimalChange(current: string, next: string) {
   let start = 0
@@ -96,8 +120,10 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
   linkRef.current = onLink
 
   const modeExtensions = (liveMode: boolean): Extension => liveMode
-    ? [markdown({ base: markdownLanguage }), livePreview(), syntaxHighlighting(liveHighlight), EditorView.editorAttributes.of({ class: 'is-live' })]
-    : [lineNumbers(), highlightActiveLineGutter(), foldGutter(), highlightActiveLine(), syntaxHighlighting(defaultHighlightStyle), ...(isMarkdown ? [markdown({ base: markdownLanguage })] : [])]
+    ? [markdown({ base: markdownLanguage, codeLanguages: languages }), livePreview(), syntaxHighlighting(liveHighlight), syntaxHighlighting(codeHighlight), EditorView.editorAttributes.of({ class: 'is-live' })]
+    : [lineNumbers(), highlightActiveLineGutter(), foldGutter(), highlightActiveLine(), syntaxHighlighting(codeHighlight), ...(isMarkdown ? [markdown({ base: markdownLanguage, codeLanguages: languages })] : [])]
+  // Any other file's language, once loaded.
+  const languageSlot = useRef(new Compartment())
 
   const save = async () => {
     clearTimeout(timer.current)
@@ -146,9 +172,10 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
         doc: content,
         extensions: [
           keymap.of([{ key: 'Mod-s', run: () => { void saveRef.current(); return true }, preventDefault: true }, ...EDITING_KEYS]),
-          highlightSpecialChars(), history(), drawSelection(), syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+          highlightSpecialChars(), history(), drawSelection(), syntaxHighlighting(codeHighlight, { fallback: true }),
           EditorView.lineWrapping,
           modeSlot.current.of(modeExtensions(live)),
+          languageSlot.current.of([]),
           // What the agent (or anyone) changes on disk flashes as it arrives.
           arrivals(fromDisk),
           EditorView.updateListener.of((update) => {
@@ -174,6 +201,10 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
           }),
         ],
       })
+      const language = isMarkdown ? undefined : languageOf(path)
+      if (language) void language.load().then((support) => {
+        if (alive && view.current) view.current.dispatch({ effects: languageSlot.current.reconfigure(support) })
+      }, () => {})
       // Back where it was left: the cursor, and the scroll once the text is laid out.
       const was = places.get(place)
       if (was) {

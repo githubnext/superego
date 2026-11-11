@@ -11,7 +11,7 @@ import {
   type MachineEntry, type Session, type Sort,
 } from '@mu/app/ui'
 import type { ThreadInfo } from '@mu/protocol'
-import { IconButton, List, ListItem, Menu, StatusGlyph, Tooltip, TooltipProvider } from '@mu/ui'
+import { CaretRightIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@mu/ui'
 import './styles.css'
 import { activity, ago, freeze } from './groups.ts'
 
@@ -124,7 +124,7 @@ function NewThreadButton({ label, machine, cwd }: { label: string; machine?: Mac
   const { newThread } = useShell()
   return (
     <IconButton label={label} className="threads__new" disabled={machine && machine.state !== 'connected'}
-      onClick={() => newThread({ ...(machine ? { machine: machine.id } : {}), ...(cwd ? { cwd } : {}) })}>+</IconButton>
+      onClick={() => newThread({ ...(machine ? { machine: machine.id } : {}), ...(cwd ? { cwd } : {}) })}><PlusIcon size={14} aria-hidden /></IconButton>
   )
 }
 
@@ -136,7 +136,7 @@ function Options() {
   const detailsKeys = useShortcut('threads.details')
   return (
     <Menu.Root>
-      <Menu.Trigger render={<IconButton label="Sidebar options" className="threads-menu-trigger" />}>···</Menu.Trigger>
+      <Menu.Trigger render={<IconButton label="Sidebar options" className="threads-menu-trigger" />}><DotsThreeIcon size={16} weight="bold" aria-hidden /></Menu.Trigger>
       <Menu.Popup className="threads-menu">
         <Menu.Group>
           <Menu.GroupLabel>Sort</Menu.GroupLabel>
@@ -165,7 +165,7 @@ function Rail({ sessions, isOn, onPick, ready }: { sessions: Session[]; isOn(s: 
     <TooltipProvider>
       <nav className={`threads-rail is-compact ${ready ? 'is-ready' : ''}`} aria-label="Threads">
         <Tooltip content="Show the list (⌘\)">
-          <IconButton label="Show the list" className="threads-rail__expand" onClick={() => void set(VIEW, 'list')}>›</IconButton>
+          <IconButton label="Show the list" className="threads-rail__expand" onClick={() => void set(VIEW, 'list')}><CaretRightIcon size={14} aria-hidden /></IconButton>
         </Tooltip>
         {sessions.map((session, index) => (
           <div key={session.key} className="threads-rail__group">

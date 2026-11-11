@@ -16,7 +16,8 @@ let dir: string
 const open = async ({ faux = true } = {}) => {
   if (faux) process.env.MU_MODEL = 'faux'
   else delete process.env.MU_MODEL
-  const daemon = await openDaemon({ app: MU, dataDir: dir, defaultCwd: dir })
+  // Skills and AGENTS.md from the test's own folder, never the machine's.
+  const daemon = await openDaemon({ app: MU, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents') })
   const server = await listen(daemon, join(dir, 'mu.sock'))
   const { peer, socket } = await connectSocket(join(dir, 'mu.sock'))
   await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
@@ -362,6 +363,39 @@ describe('record and replay', () => {
     // A message can be files alone; nothing at all is refused.
     await peer.call('thread.submit', { id: thread.id, text: '', attachments: [{ name: 'a.txt', mimeType: 'text/plain', data: '' }] })
     await expect(peer.call('thread.submit', { id: thread.id, text: '  ' })).rejects.toMatchObject({ kind: 'invalid' })
+    await close()
+  })
+
+  it('offers ~/.agents skills to the agent, sends one a message names, and reads AGENTS.md', async () => {
+    const { mkdir } = await import('node:fs/promises')
+    const skill = async (name: string, front: string, body: string) => {
+      await mkdir(join(dir, 'agents', 'skills', name), { recursive: true })
+      await writeFile(join(dir, 'agents', 'skills', name, 'SKILL.md'), `---\n${front}\n---\n\n${body}\n`)
+    }
+    await skill('commit', 'name: commit\ndescription: >-\n  Write commit\n  messages.', '# Commits\nImperative subjects.')
+    await skill('secret', 'name: secret\ndescription: Only by name.\ndisable-model-invocation: true', 'Hush.')
+    await writeFile(join(dir, 'agents', 'AGENTS.md'), 'Always be kind.')
+    await writeFile(join(dir, 'AGENTS.md'), 'This project uses pnpm.')
+    const { peer, close } = await open()
+    expect(await peer.call('skill.list', {})).toEqual([
+      { name: 'commit', description: 'Write commit messages.' }, { name: 'secret', description: 'Only by name.' },
+    ])
+    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
+    await peer.call('thread.submit', { id: thread.id, text: 'do $commit and /skill:secret, not $HOME' })
+    await until(async () => (await threads(peer)).find((t) => t.id === thread.id)!.status.state === 'done')
+    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
+    const all = JSON.stringify(value.entries)
+    // The agent is told what each skill is for and where it is, but not about one kept to being named.
+    expect(all).toContain(`<skill name=\\"commit\\" location=\\"${join(dir, 'agents', 'skills', 'commit', 'SKILL.md')}\\">Write commit messages.</skill>`)
+    expect(all).not.toContain('Only by name.')
+    expect(all).toContain('Always be kind.')
+    expect(all).toContain('This project uses pnpm.')
+    const user = value.entries.find((e) => e.kind === 'pi.user')!.model![0] as { content: { type: string; text?: string }[] }
+    expect(user.content[0]!.text).toBe('do $commit and /skill:secret, not $HOME')
+    expect(user.content).toHaveLength(3)
+    expect(user.content[1]!.text).toMatch(/^<skill name="commit" [^]*Imperative subjects\.\n<\/skill>$/)
+    expect(user.content[1]!.text).not.toContain('description:')
+    expect(user.content[2]!.text).toContain('Hush.')
     await close()
   })
 

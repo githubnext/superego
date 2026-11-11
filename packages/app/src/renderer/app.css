@@ -1,28 +1,59 @@
-.app { display: flex; height: 100%; }
+.app { display: flex; height: 100%; background: var(--mu-chrome); }
 .app__drag { height: 38px; -webkit-app-region: drag; flex: none; }
 .app__drag > * { -webkit-app-region: no-drag; }
-.app__sidebar { width: var(--mu-sidebar); flex: none; background: var(--mu-sidebar-bg); border-right: 1px solid var(--mu-border); overflow: auto; padding: 6px var(--mu-space-3) var(--mu-space-3); display: flex; flex-direction: column; }
+/* The window, wide: a title bar across the top, a rail down the left, then cards (the sidebar, the thread, its panes)
+   on the window's own colour, 8px apart (see GAP in panes.tsx). The window's buttons and the sidebar toggle sit at
+   the title bar's start, over the rail. */
+.app__rail { flex: none; width: 48px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 42px 0 12px; -webkit-app-region: drag; }
+.app__rail-group { display: flex; flex-direction: column; align-items: center; gap: 6px; -webkit-app-region: no-drag; }
+.app__rail .unread-button { padding: 3px 5px; }
+.app__side { flex: none; display: flex; flex-direction: column; min-height: 0; }
+/* Past the window's buttons and the toggle, the tools sit at the sidebar's end. */
+.app__side-top { display: flex; align-items: center; justify-content: flex-end; padding: 0 0 0 62px; }
+.app__tools { display: flex; align-items: center; gap: 2px; }
+.app__tools .mu-icon-button { color: var(--mu-muted); }
+.app__tools .mu-icon-button:hover { color: var(--mu-text); }
+.app__sidebar { width: var(--mu-sidebar); flex: 1; min-height: 0; margin: 4px 0 8px; background: var(--mu-bg); border-radius: 10px; box-shadow: var(--mu-card-edge); overflow: auto; padding: 8px var(--mu-space-3) var(--mu-space-3); display: flex; flex-direction: column; }
 /* A sidebar extension in a compact mode (a rail) marks itself .is-compact; the sidebar shrinks around it. */
-.app__sidebar:has(.is-compact) { width: auto; padding: 6px var(--mu-space-2) var(--mu-space-3); }
-.app__sidebar:has(.is-compact) .app__footer .mu-button { width: 32px; padding: 0; font-size: 0; }
-.app__sidebar:has(.is-compact) .app__footer .mu-button::after { content: '⚙'; font-size: 14px; }
+.app__sidebar:has(.is-compact) { width: auto; padding: 8px var(--mu-space-2) var(--mu-space-3); }
 .app__sidebar:has(.is-compact) .service-notice { display: none; }
 .app__main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
-.app__aside { width: 280px; flex: none; border-left: 1px solid var(--mu-border); background: var(--mu-sidebar-bg); overflow: auto; }
-.app__aside:not(:has(.app__drag + *)) { display: none; }
+/* The thread's title, then what it says about itself at the right. */
+.app__titlebar { display: flex; align-items: center; gap: var(--mu-space-3); min-width: 0; padding: 0 var(--mu-space-3) 0 var(--mu-space-4); }
+.app:not(.has-sidebar) .app__titlebar { padding-left: 62px; }
+.titlebar__title { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 600; }
+.titlebar__title .thread__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app__titlebar-end { margin-left: auto; display: flex; align-items: center; gap: var(--mu-space-2); min-width: 0; }
+.thread__crumb { display: flex; align-items: center; min-width: 0; overflow: hidden; font-size: var(--mu-text-sm); color: var(--mu-muted); white-space: nowrap; }
+.titlebar__chip { overflow: hidden; text-overflow: ellipsis; }
+.titlebar__chip + .titlebar__chip::before { content: '·'; margin: 0 6px; }
+.app__aside { width: 280px; flex: none; display: flex; flex-direction: column; min-height: 0; padding-right: 8px; }
+.app__aside-card { flex: 1; min-height: 0; overflow: auto; margin: 4px 0 8px; background: var(--mu-bg); border-radius: 10px; box-shadow: var(--mu-card-edge); }
+.app__aside:not(:has(.app__aside-card > *)) { display: none; }
 .app__empty { margin: auto; color: var(--mu-muted); padding: var(--mu-space-5); }
 .thread-picker { display: flex; gap: var(--mu-space-2); align-items: center; }
-.app__bar { display: flex; justify-content: flex-end; align-items: center; gap: var(--mu-space-2); padding: 6px var(--mu-space-3) 0 80px; }
 .app__footer { position: sticky; bottom: 0; margin-top: auto; padding: var(--mu-space-2) 0 0; background: inherit; }
-.app__footer { padding-left: 10px; }
+.app__footer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-left: 4px; }
+.app__footer:empty { display: none; }
+.app__footer > .service-notice { flex: 1 0 100%; }
+.app__settings { color: var(--mu-muted); }
+/* Unread results beside Settings: a bell and a count, in the most pressing one's colour. */
+.unread-button { padding: 3px 8px 3px 7px; gap: 4px; font-variant-numeric: tabular-nums; }
+.unread-button--done { color: var(--mu-accent); }
+.unread-button--blocked { color: var(--mu-status-blocked); }
+.unread-button--error { color: var(--mu-status-error); }
+.unread-menu { max-width: 360px; }
+.unread-menu .mu-menu__item > span:first-child { min-width: 0; }
+.unread-menu__row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.unread-menu__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mu-menu__item[data-highlighted] .unread-menu__row .mu-status { color: inherit; }
+.app__sidebar:has(.is-compact) .app__footer { flex-direction: column; align-items: flex-start; }
+.app__settings:hover { color: var(--mu-text); }
 
 /* The thread: a crumb, a title and a reading column; the composer floats at the bottom. */
 .thread { display: flex; flex-direction: column; flex: 1; min-height: 0; position: relative; }
 .thread__scroll { flex: 1; overflow: auto; scrollbar-gutter: stable; }
 .thread__column { width: var(--mu-column); max-width: calc(100% - 2 * var(--mu-space-6)); margin: 0 auto; padding: var(--mu-space-4) 0 170px; }
-.thread__crumb { display: flex; justify-content: space-between; align-items: center; gap: var(--mu-space-3); font-size: var(--mu-text-sm); line-height: 1.4; color: var(--mu-muted); margin-bottom: var(--mu-space-2); }
-.thread__crumb > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.thread__title { font-size: 20px; line-height: 1.3; font-weight: 650; letter-spacing: -0.015em; margin: 0 0 var(--mu-space-6); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 /* Text scrolls away under soft edges: at the top, and behind the floating composer. */
 .thread::before, .thread::after { content: ''; position: absolute; left: 0; right: 12px; pointer-events: none; z-index: 1; }
 .thread::before { top: 0; height: 16px; background: linear-gradient(var(--mu-bg), transparent); opacity: 0; transition: opacity .15s; }
@@ -54,7 +85,7 @@
 .row { position: relative; display: flex; gap: var(--mu-space-2); align-items: center; height: 26px; min-width: 0; cursor: default; list-style: none; border-radius: 6px; padding: 0 6px 0 27px; margin: 0 -6px 0 -27px; font-size: var(--mu-text-ui); color: var(--mu-muted); }
 .row::-webkit-details-marker { display: none; }
 .row:hover { background: var(--mu-hover); }
-.row__chevron { position: absolute; left: 8px; width: 13px; text-align: center; font-size: 15px; line-height: 1; color: var(--mu-faint); opacity: 0; transition: transform .12s, opacity .12s; }
+.row__chevron { position: absolute; left: 8px; width: 12px; height: 12px; color: var(--mu-faint); opacity: 0; transition: transform .12s, opacity .12s; }
 .row:hover > .row__chevron, .row:focus-visible > .row__chevron, details[open] > .row > .row__chevron { opacity: 1; }
 details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .row__icon, .row > .mu-status { flex: none; width: 13px; text-align: center; color: var(--mu-faint); }
@@ -128,13 +159,18 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .md th { font-size: var(--mu-text-sm); font-weight: 600; color: var(--mu-muted); border-bottom-color: var(--mu-border); }
 .md tr:last-child td { border-bottom: 0; }
 
-.dock { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); width: calc(var(--mu-column) + 2 * var(--mu-space-4)); max-width: calc(100% - 2 * var(--mu-space-5)); background: var(--mu-raised); border: 0; border-radius: var(--mu-radius-lg); box-shadow: var(--mu-shadow-float); padding: 12px var(--mu-space-3) 12px var(--mu-space-4); }
+.dock { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); width: calc(var(--mu-column) + 2 * var(--mu-space-4)); max-width: calc(100% - 2 * var(--mu-space-5)); background: var(--mu-raised); border: 0; border-radius: var(--mu-radius); box-shadow: var(--mu-shadow-float); padding: 12px var(--mu-space-3) 12px var(--mu-space-4); }
 .dock__above:not(:empty) { margin-bottom: var(--mu-space-3); padding-bottom: var(--mu-space-3); border-bottom: 1px solid var(--mu-border); }
 .composer { display: flex; gap: var(--mu-space-2); align-items: flex-end; font-size: var(--mu-text-body); }
 .composer .mu-textarea { line-height: 22px; padding: 2px 0; min-height: 26px; }
 /* One line of text and the buttons share a 26px line, so they centre together; with more lines the buttons stay on the last. */
 .composer__actions { display: flex; gap: 6px; align-items: center; }
 .composer__button { height: 26px; }
+/* Send and Steer: an arrow, in a round button that fills in once there's something to send. */
+.composer__send { width: 28px; height: 28px; min-height: 28px; border-radius: 999px; box-shadow: none; background: var(--mu-accent); color: var(--mu-accent-text); }
+.composer__send:active:not(:disabled) { background: color-mix(in srgb, var(--mu-accent) 85%, #000); }
+.composer__send:disabled { opacity: 1; background: var(--mu-hover); color: var(--mu-faint); }
+
 .composer__button kbd { font: var(--mu-text-xs) var(--mu-mono); color: var(--mu-muted); }
 .composer__error { color: var(--mu-status-error); display: flex; gap: var(--mu-space-2); align-items: center; font-size: var(--mu-text-ui); margin-bottom: var(--mu-space-2); }
 
@@ -162,7 +198,7 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .keymap__clash::before { content: '! '; font-weight: 600; }
 .keymap__keys { font: inherit; color: inherit; background: var(--mu-field-bg); border: 1px solid var(--mu-field-edge); border-radius: 5px; padding: 2px 8px; min-width: 96px; min-height: 24px; text-align: center; cursor: default; }
 .keymap__keys:focus-visible { outline: none; }
-.keymap__keys.is-recording { outline: 2px solid var(--mu-text); outline-offset: 2px; color: var(--mu-muted); font-size: var(--mu-text-sm); }
+.keymap__keys.is-recording { outline: 2px solid var(--mu-ring); outline-offset: 2px; color: var(--mu-muted); font-size: var(--mu-text-sm); }
 .keymap__keys.is-clash { border-style: dashed; border-color: var(--mu-status-error); }
 .keymap__keys kbd { font: var(--mu-text-sm) var(--mu-mono); }
 .keymap__none { color: var(--mu-muted); }
@@ -206,7 +242,7 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 
 .new-thread__body { padding: var(--mu-space-4); display: flex; flex-direction: column; gap: var(--mu-space-3); }
 .new-thread__prompt { font-size: var(--mu-text-body); line-height: 1.5; border: 1px solid var(--mu-field-edge); border-radius: 8px; padding: var(--mu-space-3); min-height: 6.5em; background: var(--mu-field-bg); box-shadow: inset 0 1px 1px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .2)); }
-.new-thread__prompt:focus { outline: 2px solid var(--mu-text); outline-offset: 1px; }
+.new-thread__prompt:focus { outline: 2px solid var(--mu-ring); outline-offset: 1px; }
 .new-thread__field { display: flex; flex-direction: column; gap: var(--mu-space-1); min-width: 0; }
 .new-thread__field > span { font-size: var(--mu-text-sm); font-weight: 500; }
 .new-thread__row { display: flex; gap: 6px; }
@@ -242,11 +278,10 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 .app__mobiletitle { flex: 1; min-width: 0; text-align: center; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app__mobilebar .mu-button { min-width: 36px; min-height: 32px; }
 .app__scrim { position: fixed; inset: 0; z-index: 20; background: rgb(0 0 0 / .3); }
-.app.is-narrow .app__sidebar { position: fixed; z-index: 21; top: 0; bottom: 0; left: 0; width: min(85vw, 320px); box-shadow: var(--mu-shadow-float); padding-top: env(safe-area-inset-top); }
+.app.is-narrow { background: var(--mu-bg); }
+.app.is-narrow .app__sidebar { position: fixed; z-index: 21; top: 0; bottom: 0; left: 0; width: min(85vw, 320px); margin: 0; border-radius: 0; background: var(--mu-sidebar-bg); box-shadow: var(--mu-shadow-float); padding-top: env(safe-area-inset-top); }
 .app.is-narrow .app__sidebar .app__drag { height: 12px; }
 .app.is-narrow .thread__column { width: auto; max-width: none; padding: var(--mu-space-4) var(--mu-space-4) 150px; }
-.app.is-narrow .thread__crumb { display: none; }
-.app.is-narrow .thread__title { display: none; }
 .app.is-narrow .dock { left: var(--mu-space-2); right: var(--mu-space-2); bottom: calc(env(safe-area-inset-bottom) + var(--mu-space-2)); width: auto; max-width: none; transform: none; }
 /* 16px keeps iOS from zooming into the field. */
 .app.is-narrow .composer, .app.is-narrow .mu-field, .app.is-narrow .new-thread__prompt { font-size: 16px; }
@@ -267,9 +302,13 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 
 /* Panes: the thread and its panes as a row of columns that scrolls sideways (Dinky's scrolling layout). */
 .panes { display: flex; flex: 1; min-height: 0; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; overscroll-behavior-x: contain; }
-/* Wide: cards on the sidebar's colour, set in with the same room around them as between them (see GAP in panes.tsx). */
-.panes:not(.panes--narrow) { background: var(--mu-sidebar-bg); padding: 8px; scroll-padding: 8px; }
-.panes:not(.panes--narrow) > .panes__column { border-radius: 10px; border: 0; box-shadow: 0 0 0 .5px var(--mu-border), 0 1px 3px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .3)); overflow: hidden; }
+/* Wide: cards on the window's colour, with the same room beside them as between them (see GAP in panes.tsx); just
+   under the title bar at the top, with room for a focus ring. */
+.panes:not(.panes--narrow) { padding: 4px 8px 8px; scroll-padding: 8px; }
+/* Up at the window's top edge, the room around the cards moves the window; the cards and dividers don't. */
+.panes { -webkit-app-region: drag; }
+.panes > * { -webkit-app-region: no-drag; }
+.panes:not(.panes--narrow) > .panes__column { border-radius: 10px; border: 0; box-shadow: var(--mu-card-edge); overflow: hidden; }
 .panes__gap { flex: none; width: 8px; cursor: col-resize; position: relative; }
 .panes__gap:hover::after { content: ''; position: absolute; top: 25%; bottom: 25%; left: 3px; width: 2px; border-radius: 1px; background: var(--mu-faint); }
 .panes__column { flex: none; display: flex; flex-direction: column; min-height: 0; position: relative; background: var(--mu-bg); }
@@ -356,13 +395,21 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 .md a.md__file { color: var(--mu-accent); text-decoration: none; cursor: pointer; }
 .md a.md__file:hover { text-decoration: underline; text-underline-offset: 2px; }
 .md a.md__file--code code { color: inherit; }
+/* Beside a web link: open it in a pane. Faint until the link or it is hovered. */
+.md__pane-link { display: inline-flex; margin-left: 3px; padding: 2px; vertical-align: baseline; border: 0; border-radius: 4px; background: none; color: var(--mu-faint); opacity: .6; cursor: default; }
+/* The icon is the button's only item and has no baseline of its own, so its bottom edge sits on the text's baseline;
+   cap height tall, like the letters beside it. */
+.md__pane-link svg { display: block; height: .95em; width: auto; margin-bottom: -.1em; }
+.md a:hover + .md__pane-link, .md__pane-link:hover, .md__pane-link:focus-visible { opacity: 1; color: var(--mu-text); }
+.md__pane-link:hover { background: var(--mu-hover); }
 .md a.md__file--code:hover { text-decoration: none; }
 .md a.md__file--code:hover code { text-decoration: underline; text-underline-offset: 2px; }
 
 /* The sidebar toggle: right of the window's buttons, in the same place whether the sidebar is open or not. */
 .app__sidebar-toggle { position: fixed; z-index: 22; top: 6px; left: 78px; -webkit-app-region: no-drag; color: var(--mu-muted); }
 .app.is-web .app__sidebar-toggle { left: 10px; }
-.app.is-web.has-sidebar .app__sidebar > .app__drag, .app.is-web .app__main > .app__drag { height: 38px; }
+.app.is-web .app__side-top { padding-left: 8px; }
+.app.is-web:not(.has-sidebar) .app__titlebar { padding-left: var(--mu-space-4); }
 
 /* The navigator (⌘L): the palette's list, as a tree. */
 .navigator__row--session .palette__title { font-weight: 600; }
@@ -374,37 +421,62 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 .new-thread__check em { font-style: normal; color: var(--mu-muted); }
 
 /* Focus, as everywhere: the box text is typed in carries the ring, and the region holding focus says so. */
-.dock:has(.composer textarea:focus-visible), .dock:has(.composer textarea:focus) { outline: 2px solid var(--mu-text); outline-offset: 2px; }
-.palette__input:focus { outline: 2px solid var(--mu-text); outline-offset: -2px; }
-.panes__column:focus { outline: none !important; }
+.dock:has(.composer textarea:focus-visible), .dock:has(.composer textarea:focus) { outline: 2px solid var(--mu-ring); outline-offset: 2px; }
+.palette__input:focus { outline: 2px solid var(--mu-ring); outline-offset: -2px; }
+.panes__column:focus:not(:has(:focus-visible)) { outline: none !important; }
 
 /* Attachments: chips, an image's with its thumbnail; waiting above the composer, then under the message they went with. */
 .composer__files, .msg__files { display: flex; flex-wrap: wrap; gap: 6px; }
 .composer__files { margin: 0 0 8px; }
 .msg__files { margin-top: 6px; justify-content: flex-end; }
 .msg--user:has(.msg__files) { display: flex; flex-direction: column; align-items: flex-end; }
+/* Sent while the agent works, not yet in: faint and dashed, with when it goes in under it. */
+.queued { display: flex; flex-direction: column; gap: var(--mu-space-2); margin-top: 18px; }
+.msg--queued { display: flex; flex-direction: column; align-items: flex-end; margin-top: 0 !important; background: transparent; border: 1px dashed var(--mu-border); color: var(--mu-muted); }
+.msg__queued { margin-top: 4px; font-size: var(--mu-text-xs); color: var(--mu-faint); white-space: nowrap; }
 .attachment { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; padding: 3px 6px 3px 3px; border-radius: 7px; background: color-mix(in srgb, var(--mu-text) 6%, transparent); font-size: var(--mu-text-sm); }
 .attachment img { width: 28px; height: 28px; object-fit: cover; border-radius: 5px; }
 .msg__files .attachment img { width: auto; height: auto; max-width: 220px; max-height: 160px; }
+.attachment--image { padding: 3px; max-width: none; }
 .attachment__icon { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; color: var(--mu-muted); }
 .attachment__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment__remove { border: 0; background: none; color: var(--mu-faint); font: inherit; padding: 0 2px; cursor: default; }
 .attachment__remove:hover { color: var(--mu-text); }
-.composer__attach { align-self: flex-end; color: var(--mu-muted); }
-.dock.is-dropping { outline: 2px dashed var(--mu-text); outline-offset: 2px; }
+/* A skill a message named: a chip like a file's. */
+.attachment--skill { padding-left: 8px; }
+.attachment--skill .attachment__icon { width: auto; height: auto; color: var(--mu-accent); }
+/* Skills offered while one is being named, floating above the composer. */
+.skill-menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); max-height: 50vh; overflow: auto; padding: 4px; background: var(--mu-raised); border-radius: var(--mu-radius-lg); box-shadow: var(--mu-shadow-float); font-size: var(--mu-text-ui); }
+.dock:not(:focus-within) .skill-menu { display: none; }
+.skill-menu__item { display: flex; align-items: baseline; gap: var(--mu-space-3); padding: 6px 10px; border-radius: var(--mu-radius); cursor: default; }
+.skill-menu__item.is-active { background: var(--mu-selected); }
+.skill-menu__name { flex: none; font-weight: 500; }
+.skill-menu__description { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mu-muted); }
+/* Over the box: attach at the left, Jump to bottom in the middle, Stop at the right, each floating on its own. */
+.dock__bar { position: absolute; left: 0; right: 0; bottom: calc(100% + 14px); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; pointer-events: none; }
+.dock__bar > * { pointer-events: auto; }
+.dock:has(.skill-menu) .dock__bar { display: none; }
+.dock__pill { height: 26px; padding: 0 10px 0 8px; gap: 5px; font-weight: 400; color: var(--mu-muted); background: var(--mu-raised); box-shadow: var(--mu-shadow-float); border-radius: 999px; }
+.dock__pill:hover { color: var(--mu-text); }
+.dock__pill kbd { font: var(--mu-text-xs) var(--mu-mono); color: var(--mu-faint); }
+.dock__attach { grid-column: 1; justify-self: start; width: 26px; padding: 0; }
+.dock__jump { grid-column: 2; }
+.dock__end { grid-column: 3; justify-self: end; display: flex; gap: 6px; }
+.dock.is-dropping { outline: 2px dashed var(--mu-ring); outline-offset: 2px; }
 
-/* A region with keyboard focus in it (the sidebar, the thread, a pane) wears a fat ring, inside its edge so its
-   neighbours don't clip it; drawn above what's in it (the composer, a pane's edge). Mouse clicks on buttons don't
-   draw it; typing does. */
-.app__sidebar:has(:focus-visible) { outline: 3px solid var(--mu-text); outline-offset: -3px; }
-/* Each column is a region. */
-.panes__column::before {
+/* A region with keyboard focus in it (the sidebar, the thread, a pane) wears a ring. Mouse clicks on buttons don't
+   draw it; typing does. Around a card, it sits in the room around it; the phone's drawer has none, so it goes inside. */
+.app__sidebar:has(:focus-visible) { outline: 2px solid var(--mu-ring); outline-offset: 2px; }
+.app.is-narrow .app__sidebar:has(:focus-visible) { outline: 3px solid var(--mu-ring); outline-offset: -3px; }
+/* Each column is a region. As cards, the ring goes outside the card, in the room around and between them (8px, so
+   offset plus width stays under that); an outline isn't clipped by the card's own overflow and follows its corners. */
+.panes:not(.panes--narrow) > .panes__column:has(:focus-visible) { outline: 2px solid var(--mu-ring); outline-offset: 2px; }
+/* Narrow, a column fills the screen with nothing around it: the ring sits inside its edge. */
+.panes--narrow > .panes__column::before {
   content: ''; position: absolute; inset: 0; z-index: 6; pointer-events: none;
-  border: 3px solid var(--mu-text); border-radius: inherit; opacity: 0; transition: opacity .12s;
+  border: 3px solid var(--mu-ring); opacity: 0; transition: opacity .12s;
 }
-.panes__column:has(:focus-visible)::before { opacity: 1; }
-/* With cards, the title bar above them is part of their backdrop. */
-.app__main:has(> .panes:not(.panes--narrow)) { background: var(--mu-sidebar-bg); }
+.panes--narrow > .panes__column:has(:focus-visible)::before { opacity: 1; }
 
 /* What the agent said along the way, inside the fold with its work. */
 .step__note { font-size: var(--mu-text-ui); color: var(--mu-muted); margin: 2px 0 var(--mu-space-2); }
@@ -419,3 +491,10 @@ code { font-family: var(--mu-mono); font-size: .92em; }
 .cm-arrived-line { animation: mu-arrive-line 1.4s ease-out forwards; }
 .cm-arrived-cut { display: inline-block; width: 2px; height: 1.1em; margin: 0 -1px; vertical-align: text-bottom; background: var(--mu-accent); animation: mu-arrive-cut 1.4s ease-out forwards; }
 @media (prefers-reduced-motion: reduce) { .cm-arrived, .cm-arrived-line, .cm-arrived-cut { animation-duration: .01s; } }
+
+/* Settings: a colour, as a swatch to pick from and the CSS it is. */
+.color-field { display: inline-flex; align-items: center; gap: 6px; }
+.color-field .mu-field { width: 220px; font-family: var(--mu-mono); font-size: var(--mu-text-sm); }
+.color-field__swatch { position: relative; width: 24px; height: 24px; flex: none; border-radius: 6px; box-shadow: var(--mu-control-edge); overflow: hidden; }
+.color-field__swatch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: default; }
+.color-field__swatch:has(input:focus-visible) { outline: 2px solid var(--mu-ring); outline-offset: 2px; }

@@ -60,6 +60,15 @@ describe('upsert', () => {
     expect(snapshot.values['threads.sort']).toBe('status')
   })
 
+  it('takes a colour as the CSS it is', async () => {
+    const settings = new SettingsRegistry()
+    settings.register({ id: 'a', title: 'A', settings: [{ key: 'accent', title: 'Accent', default: '#2f5bd3', type: { type: 'color' } }] })
+    await settings.set('accent', 'color(display-p3 0.155 0.319 0.654)')
+    expect(settings.get('accent')).toBe('color(display-p3 0.155 0.319 0.654)')
+    await expect(settings.set('accent', ' ')).rejects.toMatchObject({ kind: 'invalid_setting' })
+    await expect(settings.set('accent', 3)).rejects.toMatchObject({ kind: 'invalid_setting' })
+  })
+
   it('takes keymaps of shortcuts by action id', async () => {
     const settings = new SettingsRegistry()
     settings.register({ id: 'k', title: 'K', settings: [{ key: 'keys', title: 'Shortcuts', default: {}, type: { type: 'keymap' } }] })

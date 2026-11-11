@@ -89,6 +89,7 @@ function Setting({ setting, value, apply, mixed, note }: {
       disabled={disabled} onBlur={(e) => set(Number(e.target.value))} />; break
     case 'font': control = <FontPicker label={setting.title} value={typeof value === 'string' ? value : null} monospace={setting.monospace}
       nullLabel={setting.nullLabel} loadFonts={loadFonts} onChange={set} />; break
+    case 'color': control = <ColorField label={setting.title} value={typeof value === 'string' ? value : String(setting.default ?? '')} fallback={String(setting.default ?? '')} disabled={disabled} onChange={set} onInvalid={setError} />; break
     case 'keymap': return <Keymap setting={setting} value={value} apply={apply} />
     case 'string': control = <TextField type={setting.secret ? 'password' : 'text'} aria-label={setting.title} defaultValue={typeof value === 'string' ? value : ''}
       placeholder={setting.placeholder} disabled={disabled} onBlur={(e) => set(e.target.value)} />; break
@@ -103,6 +104,43 @@ function Setting({ setting, value, apply, mixed, note }: {
       </div>
       <div className="setting__control">{control}</div>
     </div>
+  )
+}
+
+/** A colour as sRGB hex, for the system picker (which knows no other): drawn and read back, so any CSS colour works. */
+function hexOf(color: string) {
+  const context = document.createElement('canvas').getContext('2d')
+  if (!context || !CSS.supports('color', color)) return '#000000'
+  context.fillStyle = color
+  context.fillRect(0, 0, 1, 1)
+  const [r, g, b] = context.getImageData(0, 0, 1, 1).data
+  return `#${[r, g, b].map((n) => (n ?? 0).toString(16).padStart(2, '0')).join('')}`
+}
+
+/**
+ * A colour: its swatch (click it for the system picker) and the CSS it is, to type any colour the browser reads
+ * (display-p3, oklch, a name); back to the default when it isn't that.
+ */
+function ColorField({ label, value, fallback, disabled, onChange, onInvalid }: {
+  label: string; value: string; fallback: string; disabled?: boolean; onChange(value: string): void; onInvalid(message: string): void
+}) {
+  const [text, setText] = useState(value)
+  useEffect(() => { setText(value) }, [value])
+  const commit = (next: string) => {
+    const trimmed = next.trim()
+    if (trimmed === value) return
+    if (!CSS.supports('color', trimmed)) { onInvalid(`“${trimmed}” isn't a colour`); setText(value); return }
+    onChange(trimmed)
+  }
+  return (
+    <span className="color-field">
+      <label className="color-field__swatch" style={{ background: value }} title="Pick a colour">
+        <input type="color" aria-label={`${label}: pick`} value={hexOf(value)} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
+      </label>
+      <TextField aria-label={label} value={text} disabled={disabled} spellCheck={false} onChange={(e) => setText(e.target.value)}
+        onBlur={(e) => commit(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') commit(e.currentTarget.value) }} />
+      {value !== fallback && <Button onClick={() => onChange(fallback)} disabled={disabled}>Reset</Button>}
+    </span>
   )
 }
 

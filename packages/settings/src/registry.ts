@@ -52,6 +52,9 @@ function check(spec: SettingSpec, value: Json): void {
     case 'font':
       if (value !== null && (typeof value !== 'string' || !value.trim())) throw bad('expected a font family')
       return
+    case 'color':
+      if (typeof value !== 'string' || !value.trim()) throw bad('expected a colour')
+      return
     case 'keymap':
       if (!value || typeof value !== 'object' || Array.isArray(value)) throw bad('expected shortcuts by action id')
       for (const [id, keys] of Object.entries(value)) {

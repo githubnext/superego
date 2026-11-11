@@ -8,7 +8,7 @@ import {
   type Dispatch, type EditorSlotProps, type MachineEntry,
 } from '@mu/app/ui'
 import type { ThreadInfo } from '@mu/protocol'
-import { Dialog, IconButton } from '@mu/ui'
+import { Dialog, FolderSimpleIcon, IconButton } from '@mu/ui'
 import './styles.css'
 import { LIST, type FileList } from './shared.ts'
 
@@ -80,7 +80,7 @@ function TreeButton() {
   const shown = use(treeShown)
   return (
     <IconButton label={shown ? 'Hide file tree' : 'Show file tree'} className={`files-toggle ${shown ? 'is-on' : ''}`} onClick={() => treeShown.set(!shown)}>
-      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 4.5V12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H8L6.5 3.5H3a1 1 0 0 0-1 1z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" /></svg>
+      <FolderSimpleIcon size={15} aria-hidden />
     </IconButton>
   )
 }

@@ -14,6 +14,8 @@ export type SettingType =
   | { type: 'choice'; options: SettingOption[]; nullable?: boolean; nullLabel?: string }
   /** A font family installed where the client runs, or `null` for the default. The client lists the fonts. */
   | { type: 'font'; monospace?: boolean; nullLabel?: string }
+  /** A CSS colour (`#2f5bd3`, `color(display-p3 …)`, `oklch(…)`): checked where it's shown, as the browser reads it. */
+  | { type: 'color' }
   /** Shortcuts by action id, like `mod+shift+k`, or `null` for none: only what differs from the actions' own. */
   | { type: 'keymap' }
 

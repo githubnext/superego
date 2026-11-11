@@ -325,6 +325,9 @@ importers:
       '@codemirror/language':
         specifier: 6.13.1
         version: 6.13.1
+      '@codemirror/language-data':
+        specifier: ^6.5.2
+        version: 6.5.2
       '@codemirror/search':
         specifier: 6.7.2
         version: 6.7.2
@@ -467,6 +470,9 @@ importers:
       '@mu/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@phosphor-icons/react':
+        specifier: ^2.1.10
+        version: 2.1.10(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
     devDependencies:
       '@types/react':
         specifier: ^19
@@ -679,20 +685,77 @@ packages:
   '@codemirror/commands@6.11.1':
     resolution: {integrity: sha512-O/4hG3SC1YwcmQ0d2UVNDs+AsaNWd1iHVxbTeEBuqH+6bExAiPK3iS/BvpY6rZGURALv4ZD3sIgcCmRvw3ehBg==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/commands/-/commands-6.11.1.tgz}
 
+  '@codemirror/lang-angular@0.1.4':
+    resolution: {integrity: sha1-W56UB4a6IBqaQuq225UB+j/iKSo=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-angular/-/lang-angular-0.1.4.tgz}
+
+  '@codemirror/lang-cpp@6.0.3':
+    resolution: {integrity: sha1-sXW1n83o3W5WO3/u6LvtgZY6lJE=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-cpp/-/lang-cpp-6.0.3.tgz}
+
   '@codemirror/lang-css@6.3.1':
     resolution: {integrity: sha1-djykGu6BuyQxvlXjz8x8yOkUIaM=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-css/-/lang-css-6.3.1.tgz}
+
+  '@codemirror/lang-go@6.0.1':
+    resolution: {integrity: sha1-WYIiyQ9W6uKNEQacYSymTQMGsFc=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-go/-/lang-go-6.0.1.tgz}
 
   '@codemirror/lang-html@6.4.12':
     resolution: {integrity: sha1-yl3A90HB6BkYK86dA7BzVSFysbc=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-html/-/lang-html-6.4.12.tgz}
 
+  '@codemirror/lang-java@6.0.2':
+    resolution: {integrity: sha1-YB1bPXdKSpl9EWR8y2wFcCxUvVs=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-java/-/lang-java-6.0.2.tgz}
+
   '@codemirror/lang-javascript@6.2.5':
     resolution: {integrity: sha1-ueprLwOD7WiV+ueIjAMiVBU48Qo=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-javascript/-/lang-javascript-6.2.5.tgz}
+
+  '@codemirror/lang-jinja@6.0.1':
+    resolution: {integrity: sha1-AdEop+B1aycUzUU60Wwd/7IBiPA=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-jinja/-/lang-jinja-6.0.1.tgz}
+
+  '@codemirror/lang-json@6.0.2':
+    resolution: {integrity: sha1-BUsWBnEwZmfiXYA4UoYEmEGDYXk=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-json/-/lang-json-6.0.2.tgz}
+
+  '@codemirror/lang-less@6.0.2':
+    resolution: {integrity: sha1-Lj2Co924cQ5kCWic1KKMZlWNDLg=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-less/-/lang-less-6.0.2.tgz}
+
+  '@codemirror/lang-liquid@6.3.3':
+    resolution: {integrity: sha512-U9EnyzWuAx1TX3MZSKDXydKH734n1Aogk/ijKdW+jdIwmbf9zSPQYOIKggC/b2PTRjQb7ddvMktmxnfTLuv/SQ==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-liquid/-/lang-liquid-6.3.3.tgz}
 
   '@codemirror/lang-markdown@6.5.2':
     resolution: {integrity: sha1-UwuRRCwDXKXU6lE1wEmbLBXDmHI=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-markdown/-/lang-markdown-6.5.2.tgz}
 
+  '@codemirror/lang-php@6.0.2':
+    resolution: {integrity: sha1-vcQ50ZXI5zUTvFuXGpmle1yZ7lU=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-php/-/lang-php-6.0.2.tgz}
+
+  '@codemirror/lang-python@6.2.1':
+    resolution: {integrity: sha1-N8mTBxYRAVaGWpXFSKoO71VShjo=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-python/-/lang-python-6.2.1.tgz}
+
+  '@codemirror/lang-rust@6.0.2':
+    resolution: {integrity: sha1-aRRuaz6Plh7xSQWa7Lnge/17870=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-rust/-/lang-rust-6.0.2.tgz}
+
+  '@codemirror/lang-sass@6.0.2':
+    resolution: {integrity: sha1-OMGwoTJsyfXLJ0HSzVHPvNerwLI=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-sass/-/lang-sass-6.0.2.tgz}
+
+  '@codemirror/lang-sql@6.10.0':
+    resolution: {integrity: sha1-Sb+/bPMVFqmeZ02po5n0QmEBqVo=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-sql/-/lang-sql-6.10.0.tgz}
+
+  '@codemirror/lang-vue@0.1.3':
+    resolution: {integrity: sha1-v3m5FSzBi0kD1kwfZ+GGrgRcipc=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-vue/-/lang-vue-0.1.3.tgz}
+
+  '@codemirror/lang-wast@6.0.2':
+    resolution: {integrity: sha1-0rFBdeXoDXh4y7sp4g7JDcEtOis=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-wast/-/lang-wast-6.0.2.tgz}
+
+  '@codemirror/lang-xml@6.1.0':
+    resolution: {integrity: sha1-4+eG4aif3JUg7+dcHW094cQOuRw=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-xml/-/lang-xml-6.1.0.tgz}
+
+  '@codemirror/lang-yaml@6.1.3':
+    resolution: {integrity: sha1-TUEn6DOZhGOXFdHj+O3KHqW/q/s=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lang-yaml/-/lang-yaml-6.1.3.tgz}
+
+  '@codemirror/language-data@6.5.2':
+    resolution: {integrity: sha1-QE3D1QqA0PdryPgfk8wdguMiQXw=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/language-data/-/language-data-6.5.2.tgz}
+
   '@codemirror/language@6.13.1':
     resolution: {integrity: sha512-zfvU2r3TyylQLMj/te+5CnQ0rSqZi8B1oTCBbQkagcLW4Xc6imab6qN+pEJhsuNOLaJqiRyBXp9UhWA1DhVvDw==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/language/-/language-6.13.1.tgz}
+
+  '@codemirror/legacy-modes@6.5.5':
+    resolution: {integrity: sha512-9ltT214oMb3Y1w5eAZMSigzrjzZnMI2Wa3Feq73rU/i4C56MkwrpfswfQYOr28C5pXr6dWwspNTMyeHXlzWMxg==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/legacy-modes/-/legacy-modes-6.5.5.tgz}
 
   '@codemirror/lint@6.9.7':
     resolution: {integrity: sha1-hB/HM2dDidkf5JocNAJ607q98QU=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@codemirror/lint/-/lint-6.9.7.tgz}
@@ -799,8 +862,14 @@ packages:
   '@lezer/common@1.5.4':
     resolution: {integrity: sha512-xt3Q4z64xM+xhg4M7NXqw1N//1O74bUFo5kz6fwMeC4qwxSuRdwkYSmjcqCEEKYkNw5e67f2hcNqBoNERAEU0w==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/common/-/common-1.5.4.tgz}
 
+  '@lezer/cpp@1.1.6':
+    resolution: {integrity: sha1-RAjGbwzk+0d1mjuD2/3XgKSTFao=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/cpp/-/cpp-1.1.6.tgz}
+
   '@lezer/css@1.3.9':
     resolution: {integrity: sha512-ZmzgvTOBdJWGIsY/ItAfN7UW8DV802oZG+jeG6E508SwEzz5YhuAajptpWPICvIyqYAD2+VjMdOS40GgGkyEOQ==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/css/-/css-1.3.9.tgz}
+
+  '@lezer/go@1.0.1':
+    resolution: {integrity: sha1-MAS1T15Mlxnty6mGU/OAuvjA0aI=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/go/-/go-1.0.1.tgz}
 
   '@lezer/highlight@1.2.5':
     resolution: {integrity: sha512-O1GMVKgtf5YspFaRzpmqkVgMtIk2HG9uMAbH6wdAIdNh3TVzCsch/+cRi+6l2//UGDKe6NB9BW3cvuR5ezMQ0w==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/highlight/-/highlight-1.2.5.tgz}
@@ -808,8 +877,14 @@ packages:
   '@lezer/html@1.3.13':
     resolution: {integrity: sha1-ahMFrjvSycAfh3+KjcHhXsZS0Bw=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/html/-/html-1.3.13.tgz}
 
+  '@lezer/java@1.1.5':
+    resolution: {integrity: sha512-JppTd1iKHpeNlLYw/Zl8JX7zSY5HqAzK4zZ05lpn8l8Sk7Fo5KAKiDiMiezKoT5lfeC2xZf8HeKp1tSctj4G6Q==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/java/-/java-1.1.5.tgz}
+
   '@lezer/javascript@1.5.6':
     resolution: {integrity: sha512-sEvOqpl4vJQca0NugSQK02vQPbc5KrvoojnYGoqqFgFO0MtcYhwGiHKVEB+LuXYJnfyXo4QPA8ztbrEa4Fw5NA==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/javascript/-/javascript-1.5.6.tgz}
+
+  '@lezer/json@1.0.3':
+    resolution: {integrity: sha1-53OgEq0AiPvwfOSc+6h1zJ5bwF8=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/json/-/json-1.0.3.tgz}
 
   '@lezer/lr@1.4.11':
     resolution: {integrity: sha512-UwgZcl1R66H2hDzBrA7kWyYmX6s8p5TQ+e/t7CuvgCtBEPxbEPaHYHu+pJBvTvDotEJpuQkJjbXuHiw5Cixxgw==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/lr/-/lr-1.4.11.tgz}
@@ -817,11 +892,36 @@ packages:
   '@lezer/markdown@1.8.1':
     resolution: {integrity: sha512-M5YmEcKWO4mJ45Y1hECwqyu8cLv25EiXOK554PVOvDOWOP0olwelHHQUWr9sjF+d1bENVhy0nfJ8E57XZUTiXg==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/markdown/-/markdown-1.8.1.tgz}
 
+  '@lezer/php@1.0.6':
+    resolution: {integrity: sha1-mltB90Becr7sfLPlEepKuRlt+yA=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/php/-/php-1.0.6.tgz}
+
+  '@lezer/python@1.1.19':
+    resolution: {integrity: sha1-eEPUT/J8mAQ5qC6HwYsoFy6FxHg=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/python/-/python-1.1.19.tgz}
+
+  '@lezer/rust@1.0.3':
+    resolution: {integrity: sha512-XxErOjZzQ7yJt1agUT4fu9qQvESZ3acgoxpPaPTPOiUx+duCjaVAtZGFIgphkHxlN05djdVAIOy/wItShMEjqQ==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/rust/-/rust-1.0.3.tgz}
+
+  '@lezer/sass@1.1.0':
+    resolution: {integrity: sha1-yC5mCqWzkwPR3nY5I675ef7x06Q=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/sass/-/sass-1.1.0.tgz}
+
+  '@lezer/xml@1.0.6':
+    resolution: {integrity: sha1-kIwgOSMoj4VOuOL02bBsQ36GELk=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/xml/-/xml-1.0.6.tgz}
+
+  '@lezer/yaml@1.0.4':
+    resolution: {integrity: sha1-ZqYiGI8ZhKcdNFBnWbWAdpkENYk=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/yaml/-/yaml-1.0.4.tgz}
+
   '@marijn/find-cluster-break@1.0.4':
     resolution: {integrity: sha1-QsKuphzaMHzbE0dER5JFLXtdv7Q=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@marijn/find-cluster-break/-/find-cluster-break-1.0.4.tgz}
 
   '@oxc-project/types@0.156.0':
     resolution: {integrity: sha512-1Duyg48TdJNdyhEB8Xn1L36bT9Pv6GUtlKjHxOys8xkaF/rQq3XJE+bAurSK/AgIz5mGFsb77cn9Pb20+WCScw==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@oxc-project/types/-/types-0.156.0.tgz}
+
+  '@phosphor-icons/react@2.1.10':
+    resolution: {integrity: sha1-OpfsW3pLjVOv6ykSW8F+dO0tr5I=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@phosphor-icons/react/-/react-2.1.10.tgz}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: '>= 16.8'
+      react-dom: '>= 16.8'
 
   '@protobufjs/aspromise@1.1.2':
     resolution: {integrity: sha1-m4sMxmPWaafY9vXQiToU00jzD78=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@protobufjs/aspromise/-/aspromise-1.1.2.tgz}
@@ -2276,6 +2376,20 @@ snapshots:
       '@codemirror/view': 6.43.15
       '@lezer/common': 1.5.4
 
+  '@codemirror/lang-angular@0.1.4':
+    dependencies:
+      '@codemirror/lang-html': 6.4.12
+      '@codemirror/lang-javascript': 6.2.5
+      '@codemirror/language': 6.13.1
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
+  '@codemirror/lang-cpp@6.0.3':
+    dependencies:
+      '@codemirror/language': 6.13.1
+      '@lezer/cpp': 1.1.6
+
   '@codemirror/lang-css@6.3.1':
     dependencies:
       '@codemirror/autocomplete': 6.20.4
@@ -2283,6 +2397,14 @@ snapshots:
       '@codemirror/state': 6.7.6
       '@lezer/common': 1.5.4
       '@lezer/css': 1.3.9
+
+  '@codemirror/lang-go@6.0.1':
+    dependencies:
+      '@codemirror/autocomplete': 6.20.4
+      '@codemirror/language': 6.13.1
+      '@codemirror/state': 6.7.6
+      '@lezer/common': 1.5.4
+      '@lezer/go': 1.0.1
 
   '@codemirror/lang-html@6.4.12':
     dependencies:
@@ -2296,6 +2418,11 @@ snapshots:
       '@lezer/css': 1.3.9
       '@lezer/html': 1.3.13
 
+  '@codemirror/lang-java@6.0.2':
+    dependencies:
+      '@codemirror/language': 6.13.1
+      '@lezer/java': 1.1.5
+
   '@codemirror/lang-javascript@6.2.5':
     dependencies:
       '@codemirror/autocomplete': 6.20.4
@@ -2305,6 +2432,41 @@ snapshots:
       '@codemirror/view': 6.43.15
       '@lezer/common': 1.5.4
       '@lezer/javascript': 1.5.6
+
+  '@codemirror/lang-jinja@6.0.1':
+    dependencies:
+      '@codemirror/autocomplete': 6.20.4
+      '@codemirror/lang-html': 6.4.12
+      '@codemirror/language': 6.13.1
+      '@codemirror/state': 6.7.6
+      '@codemirror/view': 6.43.15
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
+  '@codemirror/lang-json@6.0.2':
+    dependencies:
+      '@codemirror/language': 6.13.1
+      '@lezer/json': 1.0.3
+
+  '@codemirror/lang-less@6.0.2':
+    dependencies:
+      '@codemirror/lang-css': 6.3.1
+      '@codemirror/language': 6.13.1
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
+  '@codemirror/lang-liquid@6.3.3':
+    dependencies:
+      '@codemirror/autocomplete': 6.20.4
+      '@codemirror/lang-html': 6.4.12
+      '@codemirror/language': 6.13.1
+      '@codemirror/state': 6.7.6
+      '@codemirror/view': 6.43.15
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
 
   '@codemirror/lang-markdown@6.5.2':
     dependencies:
@@ -2316,6 +2478,105 @@ snapshots:
       '@lezer/common': 1.5.4
       '@lezer/markdown': 1.8.1
 
+  '@codemirror/lang-php@6.0.2':
+    dependencies:
+      '@codemirror/lang-html': 6.4.12
+      '@codemirror/language': 6.13.1
+      '@codemirror/state': 6.7.6
+      '@lezer/common': 1.5.4
+      '@lezer/php': 1.0.6
+
+  '@codemirror/lang-python@6.2.1':
+    dependencies:
+      '@codemirror/autocomplete': 6.20.4
+      '@codemirror/language': 6.13.1
+      '@codemirror/state': 6.7.6
+      '@lezer/common': 1.5.4
+      '@lezer/python': 1.1.19
+
+  '@codemirror/lang-rust@6.0.2':
+    dependencies:
+      '@codemirror/language': 6.13.1
+      '@lezer/rust': 1.0.3
+
+  '@codemirror/lang-sass@6.0.2':
+    dependencies:
+      '@codemirror/lang-css': 6.3.1
+      '@codemirror/language': 6.13.1
+      '@codemirror/state': 6.7.6
+      '@lezer/common': 1.5.4
+      '@lezer/sass': 1.1.0
+
+  '@codemirror/lang-sql@6.10.0':
+    dependencies:
+      '@codemirror/autocomplete': 6.20.4
+      '@codemirror/language': 6.13.1
+      '@codemirror/state': 6.7.6
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
+  '@codemirror/lang-vue@0.1.3':
+    dependencies:
+      '@codemirror/lang-html': 6.4.12
+      '@codemirror/lang-javascript': 6.2.5
+      '@codemirror/language': 6.13.1
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
+  '@codemirror/lang-wast@6.0.2':
+    dependencies:
+      '@codemirror/language': 6.13.1
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
+  '@codemirror/lang-xml@6.1.0':
+    dependencies:
+      '@codemirror/autocomplete': 6.20.4
+      '@codemirror/language': 6.13.1
+      '@codemirror/state': 6.7.6
+      '@codemirror/view': 6.43.15
+      '@lezer/common': 1.5.4
+      '@lezer/xml': 1.0.6
+
+  '@codemirror/lang-yaml@6.1.3':
+    dependencies:
+      '@codemirror/autocomplete': 6.20.4
+      '@codemirror/language': 6.13.1
+      '@codemirror/state': 6.7.6
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+      '@lezer/yaml': 1.0.4
+
+  '@codemirror/language-data@6.5.2':
+    dependencies:
+      '@codemirror/lang-angular': 0.1.4
+      '@codemirror/lang-cpp': 6.0.3
+      '@codemirror/lang-css': 6.3.1
+      '@codemirror/lang-go': 6.0.1
+      '@codemirror/lang-html': 6.4.12
+      '@codemirror/lang-java': 6.0.2
+      '@codemirror/lang-javascript': 6.2.5
+      '@codemirror/lang-jinja': 6.0.1
+      '@codemirror/lang-json': 6.0.2
+      '@codemirror/lang-less': 6.0.2
+      '@codemirror/lang-liquid': 6.3.3
+      '@codemirror/lang-markdown': 6.5.2
+      '@codemirror/lang-php': 6.0.2
+      '@codemirror/lang-python': 6.2.1
+      '@codemirror/lang-rust': 6.0.2
+      '@codemirror/lang-sass': 6.0.2
+      '@codemirror/lang-sql': 6.10.0
+      '@codemirror/lang-vue': 0.1.3
+      '@codemirror/lang-wast': 6.0.2
+      '@codemirror/lang-xml': 6.1.0
+      '@codemirror/lang-yaml': 6.1.3
+      '@codemirror/language': 6.13.1
+      '@codemirror/legacy-modes': 6.5.5
+
   '@codemirror/language@6.13.1':
     dependencies:
       '@codemirror/state': 6.7.6
@@ -2325,6 +2586,10 @@ snapshots:
       '@lezer/highlight': 1.2.5
       '@lezer/lr': 1.4.11
       style-mod: 4.1.4
+
+  '@codemirror/legacy-modes@6.5.5':
+    dependencies:
+      '@codemirror/streamparser': 6.0.0
 
   '@codemirror/lint@6.9.7':
     dependencies:
@@ -2478,7 +2743,19 @@ snapshots:
 
   '@lezer/common@1.5.4': {}
 
+  '@lezer/cpp@1.1.6':
+    dependencies:
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
   '@lezer/css@1.3.9':
+    dependencies:
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
+  '@lezer/go@1.0.1':
     dependencies:
       '@lezer/common': 1.5.4
       '@lezer/highlight': 1.2.5
@@ -2494,7 +2771,19 @@ snapshots:
       '@lezer/highlight': 1.2.5
       '@lezer/lr': 1.4.11
 
+  '@lezer/java@1.1.5':
+    dependencies:
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
   '@lezer/javascript@1.5.6':
+    dependencies:
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
+  '@lezer/json@1.0.3':
     dependencies:
       '@lezer/common': 1.5.4
       '@lezer/highlight': 1.2.5
@@ -2509,9 +2798,50 @@ snapshots:
       '@lezer/common': 1.5.4
       '@lezer/highlight': 1.2.5
 
+  '@lezer/php@1.0.6':
+    dependencies:
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
+  '@lezer/python@1.1.19':
+    dependencies:
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
+  '@lezer/rust@1.0.3':
+    dependencies:
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
+  '@lezer/sass@1.1.0':
+    dependencies:
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
+  '@lezer/xml@1.0.6':
+    dependencies:
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
+  '@lezer/yaml@1.0.4':
+    dependencies:
+      '@lezer/common': 1.5.4
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.11
+
   '@marijn/find-cluster-break@1.0.4': {}
 
   '@oxc-project/types@0.156.0': {}
+
+  '@phosphor-icons/react@2.1.10(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+    dependencies:
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
 
   '@protobufjs/aspromise@1.1.2': {}
 

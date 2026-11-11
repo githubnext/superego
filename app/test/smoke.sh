@@ -6,6 +6,10 @@ unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export MU_HOME="$(mktemp -d)" MU_MODEL=faux MU_HEADLESS=1
 # A recorded agent that asks the user something, then uses the answer: offered as the model "replay/replay".
 export MU_REPLAY="$MU_HOME/ask.jsonl" MU_REPLAY_SPEED=0
+# Skills from a folder of the test's own, not this machine's ~/.agents.
+export MU_AGENTS="$MU_HOME/agents"
+mkdir -p "$MU_AGENTS/skills/smoke-skill"
+printf -- '---\nname: smoke-skill\ndescription: Checks the smoke.\n---\n\nSay smoke.\n' > "$MU_AGENTS/skills/smoke-skill/SKILL.md"
 # A user profile: every thread here starts with it, loaded by the daemon on Electron's own Node.
 mkdir -p "$MU_HOME/profiles/default/ui"
 cat > "$MU_HOME/profiles/default/profile.ts" <<'PROFILE'
@@ -26,6 +30,7 @@ printf "export const label: string = 'profile ui'\n" > "$MU_HOME/profiles/defaul
 cat > "$MU_REPLAY" <<'TURNS'
 {"at":0,"provider":"x","model":"x","message":{"role":"assistant","content":[{"type":"toolCall","id":"ask-1","name":"ask_user","arguments":{"question":"Which colour?","options":["red","blue"]}}],"stopReason":"toolUse"}}
 {"at":0,"provider":"x","model":"x","message":{"role":"assistant","content":[{"type":"text","text":"Blue it is."}],"stopReason":"stop"}}
+{"at":0,"provider":"x","model":"x","message":{"role":"assistant","content":[{"type":"text","text":"Noted for later."}],"stopReason":"stop"}}
 TURNS
 cleanup() {
   # The daemons by their pid files, and anything still holding their sockets.

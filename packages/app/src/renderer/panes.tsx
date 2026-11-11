@@ -15,6 +15,7 @@ import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
 import { ThreadBody } from './ThreadView.tsx'
 import { FileEditor } from './file-editor.tsx'
+import { focusRegion } from './focus.ts'
 
 const narrowQuery = '(max-width: 760px)'
 /** A pane's width (a share of the row) until it's dragged, unless its kind says otherwise. */
@@ -59,6 +60,25 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   const settled = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const focus = (pane?: string) => { if (pane !== focused) void dispatch('pane.focus', { id: thread.id, ...(pane ? { pane } : {}) }, { machine: machine.id, source: 'panes' }) }
+  // A click inside a page (Preview, an artifact) stays in its frame: the window only learns that it lost the focus,
+  // to the frame. That frame's column becomes the focused one, as a click anywhere else in a column makes it.
+  const focusRef = useRef(focus)
+  focusRef.current = focus
+  useEffect(() => {
+    const onBlur = () => setTimeout(() => {
+      const frame = document.activeElement
+      if (frame?.tagName !== 'IFRAME' || !row.current?.contains(frame)) return
+      const column = frame.closest<HTMLElement>('[data-column]')?.dataset.column
+      if (column) focusRef.current(column === 'thread' ? undefined : column)
+    })
+    window.addEventListener('blur', onBlur)
+    return () => window.removeEventListener('blur', onBlur)
+  }, [])
+  // A click on a column's own parts (its title, its bars) that leaves the focus outside it: the focus goes to what's
+  // used there, the editor's text or the page, as the keyboard takes it there.
+  const takeFocus = (event: React.MouseEvent<HTMLElement>) => {
+    if (!event.currentTarget.contains(document.activeElement)) focusRegion(event.currentTarget)
+  }
   const close = (pane: Pane) => void dispatch('pane.close', { id: thread.id, pane: pane.id }, { machine: machine.id, source: 'panes' })
   const title = (pane: Pane) => {
     const named = paneKind(registry, pane.kind, thread)?.title
@@ -114,7 +134,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
         {/* The room between two columns is the left one's handle: drag it to make that one wider or narrower. */}
         {!narrow && <div className="panes__gap" onPointerDown={drag(index)} role="separator" aria-orientation="vertical" aria-label={index === 0 ? 'Thread width' : `${title(panes[index - 1]!)} width`} />}
         <div data-column={pane.id} tabIndex={-1} className={`panes__column ${pane.id === focused ? 'is-focused' : ''}`}
-          style={{ width: widthOf(pane) }} onPointerDownCapture={() => focus(pane.id)} onFocusCapture={() => focus(pane.id)}>
+          style={{ width: widthOf(pane) }} onPointerDownCapture={() => focus(pane.id)} onFocusCapture={() => focus(pane.id)} onClick={takeFocus}>
           <div className={`panes__tab ${pane.id === focused ? 'is-active' : ''}`}>
             <button className="panes__label" onClick={() => focus(pane.id)}>{title(pane)}</button>
             <button className="panes__close" aria-label={`Close ${title(pane)}`} onClick={() => close(pane)}>×</button>

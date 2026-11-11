@@ -15,7 +15,8 @@ export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket =
 }) {
   const build = readBuild(import.meta.dirname)
   let stop = async () => {}
-  const daemon = await openDaemon({ app, dataDir, defaultCwd: appEnv(app)('CWD') ?? defaultCwd ?? process.cwd(), build, extensions, ...(webRoot ? { webRoot } : {}), onRestart: () => void stop() })
+  const agentsDir = appEnv(app)('AGENTS')
+  const daemon = await openDaemon({ app, dataDir, defaultCwd: appEnv(app)('CWD') ?? defaultCwd ?? process.cwd(), build, extensions, ...(webRoot ? { webRoot } : {}), ...(agentsDir ? { agentsDir } : {}), onRestart: () => void stop() })
   const server = await listen(daemon, socket)
   const pidFile = join(dataDir, 'daemon.pid')
   await writeFile(pidFile, String(process.pid))

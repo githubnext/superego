@@ -36,6 +36,11 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
   adds a tree beside the editor and quick open.
 - **Messages** take files: attach, drop or paste them into the composer. Images go to the model as images; every file
   is saved on the thread's machine and named to the agent by its path.
+- **Skills** are the ones in `~/.agents/skills` on the thread's machine (a folder each, with a `SKILL.md`). The agent is
+  told each one's name and description and reads one when it fits; `$name` or `/skill:name` in a message (completed
+  as you type) sends that skill's instructions with it. `disable-model-invocation: true` keeps a skill to being named.
+  `~/.agents/AGENTS.md`, and any `AGENTS.md` from the root down to the thread's folder, are standing instructions.
+  A profile can do without either (`without: ['skills', 'agents-md']`).
 
 ## Keys
 
@@ -89,6 +94,7 @@ status) and a UI half (`defineUiExtension`: slots, pane kinds, tool and entry re
 | `MU_RECORD` | Append every real model answer to this JSONL file, for replaying later |
 | `MU_REPLAY_SPEED` | Replay pace in tokens per second (default 120; 0 is instant) |
 | `MU_CWD` | Default working directory for new threads |
+| `MU_AGENTS` | The folder agents share, for skills and `AGENTS.md` (default `~/.agents`) |
 | `MU_HEADLESS` | The app shows nothing: no window, Dock icon, notification or focus (tests) |
 
 ## The command

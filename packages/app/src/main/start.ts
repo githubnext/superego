@@ -14,6 +14,7 @@ import { checkIdentity, MachineStore, openLocal as openLocalSocket, openMachine,
 import { Link } from './link.ts'
 import { MenuBar } from './tray.ts'
 import { ServiceRestart, type ServiceAction } from './restart.ts'
+import { shortcutOf } from '../renderer/shortcuts.ts'
 
 /**
  * Run an app's main process: its window, the links to every machine (starting this computer's daemon, which outlives
@@ -44,6 +45,8 @@ export function startApp(appConfig: AppConfig) {
 
   /** The app's own endpoint: its settings, per window so a closed window's subscriptions go with it. */
   const appSubs = new Map<number, Map<string, () => unknown>>()
+  /** Each window's bound shortcuts, as it last said (see `app.keys`). */
+  const boundKeys = new Map<number, Set<string>>()
   function appEndpoint(contents: Electron.WebContents) {
     let subs = appSubs.get(contents.id)
     if (!subs) {
@@ -64,6 +67,15 @@ export function startApp(appConfig: AppConfig) {
     },
     /** How mu sits on the desktop now. */
       async 'service.get'() { return service.state },
+      /**
+       * The shortcuts that run actions in this window now. While a page in one of its panes has the keyboard, the
+       * page gets key presses and the window never sees them: these are taken first (see createWindow) and sent on.
+       */
+      async 'app.keys'({ keys }: { keys: string[] }) {
+        if (!boundKeys.has(contents.id)) contents.once('destroyed', () => boundKeys.delete(contents.id))
+        boundKeys.set(contents.id, new Set(keys))
+        return null
+      },
       async 'app.desktop'() { return { menuBar: menuBar.shown, dockHidden: mac && dockHidden() } },
       /** The page is listening for app events: answer with a thread it was asked to show before it was. */
       async 'app.ready'() {
@@ -438,6 +450,19 @@ export function startApp(appConfig: AppConfig) {
       if (/^https?:/.test(url)) void shell.openExternal(url)
       return { action: 'deny' }
     })
+    // App-wide shortcuts work wherever the keyboard is. A page in a pane (Preview, an artifact) is a frame of its own,
+    // and its key presses never reach the window's page; so while one has the keyboard, a press that's one of the
+    // window's shortcuts is taken here, before any frame, and sent to the window to run.
+    const contents = window.webContents
+    contents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown' || !(input.meta || input.control || input.alt)) return
+      const frame = contents.focusedFrame
+      if (!frame || frame === contents.mainFrame) return
+      const keys = shortcutOf({ key: input.key, code: input.code, metaKey: input.meta, ctrlKey: input.control, altKey: input.alt, shiftKey: input.shift })
+      if (!keys || !boundKeys.get(contents.id)?.has(keys)) return
+      event.preventDefault()
+      contents.send(CHANNEL.event, { machine: APP, method: 'app.key', params: { keys } })
+    })
     window.on('closed', () => refreshDesktop())
     if (process.env.ELECTRON_RENDERER_URL) void window.loadURL(process.env.ELECTRON_RENDERER_URL)
     else void window.loadFile(join(import.meta.dirname, '../renderer/index.html'))
@@ -473,6 +498,24 @@ export function startApp(appConfig: AppConfig) {
     // Font pickers list the installed fonts (the Local Font Access API); nothing else is granted.
     session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(permission === 'local-fonts'))
     session.defaultSession.setPermissionCheckHandler((_contents, permission) => permission === 'local-fonts')
+    // A page in a Preview pane is a frame in the window, and most sites refuse to be framed (X-Frame-Options, CSP
+    // frame-ancestors), there to stop other sites wrapping them. Here the frame is the user's own pane, so for frames
+    // only, those refusals are dropped; the frame stays sandboxed (no top navigation), and top-level loads are untouched.
+    session.defaultSession.webRequest.onHeadersReceived({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+      if (details.resourceType !== 'subFrame' || !details.responseHeaders) return callback({})
+      const headers: Record<string, string[]> = {}
+      for (const [name, values] of Object.entries(details.responseHeaders)) {
+        const key = name.toLowerCase()
+        if (key === 'x-frame-options') continue
+        if (key === 'content-security-policy') {
+          const kept = values.map((policy) => policy.split(';').filter((d) => !/^\s*frame-ancestors\b/i.test(d)).join(';')).filter((p) => p.trim())
+          if (kept.length) headers[name] = kept
+          continue
+        }
+        headers[name] = values
+      }
+      callback({ responseHeaders: headers })
+    })
     restartLocal()
     syncLinks()
     const window = createWindow()

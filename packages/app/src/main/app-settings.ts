@@ -8,7 +8,7 @@ import type { AppConfig } from '@mu/protocol'
 
 export const APP = 'app'
 export const APP_KEYS = {
-  keymap: 'app.keys', interfaceFont: 'app.font.interface', monoFont: 'app.font.mono', notifications: 'app.notifications', menuBar: 'app.menuBar', hideDock: 'app.hideDock',
+  keymap: 'app.keys', interfaceFont: 'app.font.interface', monoFont: 'app.font.mono', accent: 'app.accent', notifications: 'app.notifications', menuBar: 'app.menuBar', hideDock: 'app.hideDock',
 } as const
 
 export function createAppSettings(dataDir: string, app: AppConfig) {
@@ -20,6 +20,10 @@ export function createAppSettings(dataDir: string, app: AppConfig) {
       {
         key: APP_KEYS.monoFont, title: 'Monospace font', default: null, description: 'Code, tool output and paths.',
         type: { type: 'font', monospace: true, nullLabel: 'System monospace' },
+      },
+      {
+        key: APP_KEYS.accent, title: 'Accent colour', default: 'color(display-p3 0.155 0.319 0.654)',
+        description: 'Focus rings, primary buttons, links and selection. Any CSS colour.', type: { type: 'color' },
       },
     ],
   })

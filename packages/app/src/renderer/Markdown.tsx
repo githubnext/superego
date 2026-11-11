@@ -1,9 +1,10 @@
 // An assistant's text, as the markdown it is: GitHub-flavoured (tables, task lists, strikethrough). No raw HTML.
-// Web links open in the browser, not in the window. Where a file can be opened (a thread: OpenFile), the files it
+// Web links open in the browser, not in the window; in a thread (OpenUrl) a button beside each opens it in a pane. Where a file can be opened (a thread: OpenFile), the files it
 // names open beside it: [[wikilinks]], relative links, and code that reads as a path (`notes/plan.md`).
 import { createContext, memo, useContext, useLayoutEffect, useRef, type ComponentProps } from 'react'
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { SquareSplitHorizontalIcon } from '@mu/ui'
 
 /** Code scrolls sideways, never wraps; it fades at the right edge only while a line runs past it. */
 export function Scroll({ node: _node, ...props }: ComponentProps<'pre'> & { node?: unknown }) {
@@ -24,6 +25,9 @@ export function Scroll({ node: _node, ...props }: ComponentProps<'pre'> & { node
 /** Opens a file by the name the text gives it. Provided where there's a folder to look in: a thread. */
 export const OpenFile = createContext<((name: string) => void) | undefined>(undefined)
 
+/** Opens a web page in a pane beside the thread. Provided where there's a thread to open it beside. */
+export const OpenUrl = createContext<((url: string) => void) | undefined>(undefined)
+
 const FILE = 'mu-file:'
 /** A path, by its look: no spaces at its ends, a slash or a file extension, and no scheme. */
 const PATHLIKE = /^(?![a-z][\w+.-]*:)(?:[\w.@~-][^\n`]*\/[^\n`]*[^\s/]|[\w@~-][^\n`/]*\.[A-Za-z][\w]{0,7})$/
@@ -39,12 +43,24 @@ function FileLink({ name, children, className }: { name: string; children: React
   return <a href="#" className={className ? `md__file ${className}` : 'md__file'} title={name} onClick={(e) => { e.preventDefault(); open(name) }}>{children}</a>
 }
 
+/** Beside a web link: open it in a pane instead of the browser. */
+function PaneLinkButton({ url }: { url: string }) {
+  const open = useContext(OpenUrl)
+  if (!open) return null
+  return (
+    <button type="button" className="md__pane-link" aria-label="Open in a pane" title="Open in a pane" onClick={() => open(url)}>
+      <SquareSplitHorizontalIcon aria-hidden />
+    </button>
+  )
+}
+
 const components: Components = {
   a: ({ node: _node, href = '', ...props }) => {
     const open = useContext(OpenFile)
     if (open && href.startsWith(FILE)) return <FileLink name={decodeURIComponent(href.slice(FILE.length))}>{props.children}</FileLink>
     if (open && href && !/^([a-z][\w+.-]*:|#|\/\/)/i.test(href)) return <FileLink name={decodeURI(href.split('#')[0]!)}>{props.children}</FileLink>
-    return <a {...props} href={href} target="_blank" rel="noreferrer" />
+    const web = <a {...props} href={href} target="_blank" rel="noreferrer" />
+    return /^https?:\/\//i.test(href) ? <>{web}<PaneLinkButton url={href} /></> : web
   },
   code: ({ node: _node, className, children, ...props }) => {
     const open = useContext(OpenFile)

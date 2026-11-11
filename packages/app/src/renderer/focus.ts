@@ -1,7 +1,7 @@
 // Focus, after Tremolo: always visible (one ring, see @mu/ui's styles), and in one place the app and the keyboard
 // agree on. The window is a row of regions, left to right: the sidebar, the thread, each pane beside it. ⌘⌥← and ⌘⌥→
 // move between them, ⌃I goes to the prompt; going to a region focuses what's used there (the selected thread in the
-// sidebar, the prompt, an editor's text, else the first control). Focus moving into a pane makes it the thread's
+// sidebar, the prompt, an editor's text, a page, else the first control). Focus moving into a pane makes it the thread's
 // focused pane; a pane brought forward from the keyboard (⌃Tab, the navigator) takes the focus with it.
 
 /** The regions, left to right, as the window shows them now. */
@@ -18,6 +18,7 @@ function target(region: HTMLElement): HTMLElement | null {
     ?? region.querySelector<HTMLElement>('.composer textarea:not(:disabled)')
     ?? region.querySelector<HTMLElement>('.cm-content')
     ?? region.querySelector<HTMLElement>('.mu-list-item[tabindex]')
+    ?? region.querySelector<HTMLElement>('.panes__body iframe')
     ?? region.querySelector<HTMLElement>('.panes__body button, .panes__body input, .panes__body textarea, .panes__body select, .panes__body [tabindex]:not([tabindex="-1"]), .panes__body iframe')
     ?? (region.tabIndex >= 0 || region.hasAttribute('tabindex') ? region : null)
 }

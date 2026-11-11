@@ -8,8 +8,9 @@
     "./styles.css": "./src/styles.css"
   },
   "dependencies": {
+    "@base-ui/react": "^1.9.0",
     "@mu/protocol": "workspace:*",
-    "@base-ui/react": "^1.9.0"
+    "@phosphor-icons/react": "^2.1.10"
   },
   "peerDependencies": {
     "react": "^19"

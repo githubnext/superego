@@ -1,14 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import type { ConversationView, EntryRecord, LiveState } from '@earendil-works/pi-durable'
+import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@mu/protocol'
-import { Button, IconButton, Menu, StatusGlyph, statusLabel, TextArea } from '@mu/ui'
+import { ArchiveIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, Button, CaretRightIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, PaperclipIcon, PencilSimpleIcon, SparkleIcon, SquareSplitHorizontalIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon } from '@mu/ui'
 import type { MachineEntry } from '../shared.ts'
-import { machine as client, useThreadView } from './client.ts'
+import { call, machine as client, useThreadView } from './client.ts'
 import { fileKind, paneMenu, Slot, useRegistry, type ToolCallProps } from './extension.tsx'
 import { useShell } from './state.tsx'
-import { Markdown, OpenFile, Scroll } from './Markdown.tsx'
+import { Markdown, OpenFile, OpenUrl, Scroll } from './Markdown.tsx'
 import { useLocalState } from './local-state.ts'
 import { readAttachment, splitMessage } from './attachments.ts'
+import { matchSkills, skillAt, type SkillInfo } from './skill-names.ts'
 import { useProfileUi } from './profile-ui.ts'
 import { ThreadPanes } from './panes.tsx'
 
@@ -16,8 +17,7 @@ type Block = { type: string; text?: string; thinking?: string; id?: string; name
 type Message = { role: string; content: string | Block[]; toolCallId?: string; isError?: boolean; details?: unknown }
 
 /** The thread a transcript belongs to, for extension renderers. */
-const Here = createContext<{ machine: MachineEntry; thread: ThreadInfo; firstUser?: number }>(undefined as never)
-const firstUser = (here: { firstUser?: number }) => here.firstUser
+const Here = createContext<{ machine: MachineEntry; thread: ThreadInfo }>(undefined as never)
 
 /** Something above the composer that wants what is typed: an answer to a question, say. The newest claim wins. */
 export type ComposerClaim = { placeholder: string; submit(text: string): Promise<unknown> }
@@ -45,6 +45,39 @@ export function ThreadView({ machine, thread }: { machine: MachineEntry; thread:
   return <ThreadPanes machine={machine} thread={thread} main={<ThreadBody machine={machine} thread={thread} />} />
 }
 
+/** The thread's title, in the window's title bar: its status, then its name. */
+export function ThreadTitle({ thread }: { thread: ThreadInfo }) {
+  return (
+    <span className="titlebar__title">
+      <StatusGlyph status={thread.status} />
+      <span className="thread__title" title={thread.title}>{thread.title.replace(/\.$/, '')}</span>
+    </span>
+  )
+}
+
+/**
+ * What the title bar says about the thread, at its right: where it runs (the machine when it isn't this one, the
+ * project, its worktree's branch, its profile), its profile's own header, panes to open, and archiving it.
+ */
+export function ThreadTools({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
+  const dispatch = useRegistry().router.dispatch
+  return (
+    <span className="thread__tools">
+      <span className="thread__crumb">
+        {machine.id !== 'local' && <span className="titlebar__chip">{machine.label}</span>}
+        <span className="titlebar__chip" title={thread.cwd}>{thread.session?.name ?? folderName(thread.cwd)}</span>
+        {thread.worktree && <span className="titlebar__chip thread__branch" title={thread.worktree.path}>{thread.worktree.branch}</span>}
+        {thread.profile && <span className="titlebar__chip thread__profile" title={thread.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{thread.profile.name}</span>}
+      </span>
+      <Slot name="thread.header" props={{ machine, thread }} />
+      <PaneMenu machine={machine} thread={thread} />
+      <IconButton label="Archive" className="thread__archive" onClick={() => void dispatch('thread.archive', { id: thread.id }, { machine: machine.id, source: 'header' })}>
+        <ArchiveIcon size={15} aria-hidden />
+      </IconButton>
+    </span>
+  )
+}
+
 /** A thread's transcript and composer. Also what a "thread" pane draws. */
 export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const registry = useRegistry()
@@ -57,10 +90,24 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
       if (path) return dispatch('pane.open', { id: thread.id, kind: fileKind(registry, threadRef.current, path), params: { path } }, { machine: machine.id, source: 'thread' })
     }).catch((error) => console.error(error))
   }, [machine.id, thread.id, registry])
+  // A web page the thread links to, opened beside it.
+  const openUrl = useCallback((url: string) => {
+    const host = URL.parse(url)?.host
+    void dispatch('pane.open', { id: thread.id, kind: 'preview', ...(host ? { title: host } : {}), params: { url } }, { machine: machine.id, source: 'thread' })
+      .catch((error) => console.error(error))
+  }, [machine.id, thread.id])
   const watched = useThreadView(machine.id, machine.state === 'connected', thread.id)
   const live = watched?.docs['pi.live'] as LiveState | undefined
   const scroller = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
+  // Scrolled up from the end: the composer offers a way back down.
+  const [away, setAway] = useState(false)
+  const jumpToEnd = useCallback(() => {
+    const el = scroller.current
+    if (!el) return
+    pinned.current = true
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+  }, [])
 
   // Scrolling back: the watch holds the newest entries; older ones come a page at a time as the top comes near. Every
   // entry seen is kept (the watch's window slides on as the thread grows), so the transcript only ever grows backwards.
@@ -102,33 +149,26 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
 
   return (
     <OpenFile.Provider value={openFile}>
-    <Here.Provider value={{ machine, thread, firstUser: view?.before === undefined ? view?.entries.find((e) => (e.model?.[0] as Message | undefined)?.role === 'user')?.id : undefined }}>
+    <OpenUrl.Provider value={openUrl}>
+    <Here.Provider value={{ machine, thread }}>
     <div className="thread">
       <div className="thread__scroll" ref={scroller}
         onScroll={(e) => {
           const el = e.currentTarget
           pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+          setAway(el.scrollHeight - el.scrollTop - el.clientHeight > 200)
           el.parentElement?.classList.toggle('is-scrolled', el.scrollTop > 8)
           if (el.scrollTop < el.clientHeight) loadOlder()
         }}>
         <div className="thread__column">
-          <div className="thread__crumb">
-            <span>{machine.label} · <span title={thread.cwd}>{thread.session?.name ?? folderName(thread.cwd)}</span>{thread.worktree && <> · <span className="thread__branch" title={thread.worktree.path}>{thread.worktree.branch}</span></>}{thread.profile && <> · <span className="thread__profile" title={thread.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{thread.profile.name}</span></>} · {statusLabel(thread.status)}</span>
-            <span className="thread__tools">
-              <Slot name="thread.header" props={{ machine, thread }} />
-              <PaneMenu machine={machine} thread={thread} />
-              <IconButton label="Archive" className="thread__archive" onClick={() => void dispatch('thread.archive', { id: thread.id }, { machine: machine.id, source: 'header' })}>
-                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 3.5h12v3H2zM3 6.5v6h10v-6M6.5 9h3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round" /></svg>
-              </IconButton>
-            </span>
-          </div>
-          <h1 className="thread__title">{thread.title.replace(/\.$/, '')}</h1>
           {view ? <Transcript view={view} live={live} /> : <div className="transcript__more">Loading…</div>}
+          {view && <Queued inbox={watched?.docs['pi.inbox'] as InboxState | undefined} />}
         </div>
       </div>
-      <Composer machine={machine} thread={thread} busy={Boolean(live?.run)} />
+      <Composer machine={machine} thread={thread} busy={Boolean(live?.run)} onJump={away ? jumpToEnd : undefined} />
     </div>
     </Here.Provider>
+    </OpenUrl.Provider>
     </OpenFile.Provider>
   )
 }
@@ -172,6 +212,54 @@ function Transcript({ view, live }: { view: ConversationView; live: LiveState | 
       {live?.runFailure && !live.run && live.runFailure.reason !== 'aborted' && (
         <div className="transcript__error">Run failed: {live.runFailure.reason}{live.runFailure.detail ? ` — ${live.runFailure.detail}` : ''}</div>
       )}
+    </div>
+  )
+}
+
+/**
+ * What you sent while the agent was busy, waiting its turn: shown as soon as it's sent, faint, and saying when it goes
+ * in (a steer after the current step, a follow-up when the agent is done). Placed, it becomes an entry like any other.
+ */
+function Queued({ inbox }: { inbox: InboxState | undefined }) {
+  const items = (inbox?.items ?? []).filter((item) => item.mode !== 'write')
+  if (!items.length) return null
+  return (
+    <div className="queued">
+      {items.map((item) => {
+        const content = item.content as Message['content']
+        const { text, ...sent } = splitMessage(typeof content === 'string' ? [{ type: 'text', text: content }] : content)
+        return (
+          <div key={String(item.id)} className="msg msg--user msg--queued">
+            {text}
+            <SentWith {...sent} />
+            <span className="msg__queued">{item.mode === 'steer' ? 'Waiting · steers after this step' : 'Queued · sent when the agent is done'}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/** What went with a message: its files, and the skills it named (their instructions went along whole). */
+function SentWith({ files, skills }: Pick<ReturnType<typeof splitMessage>, 'files' | 'skills'>) {
+  if (!files.length && !skills.length) return null
+  return (
+    <div className="msg__files">
+      {skills.map((skill) => (
+        <span key={`skill:${skill.name}`} className="attachment attachment--skill" title={skill.path}>
+          <span className="attachment__icon"><SparkleIcon size={13} weight="fill" aria-hidden /></span>
+          <span className="attachment__name">{skill.name}</span>
+        </span>
+      ))}
+      {/* An image shows as itself, its name on hover; other files as a chip with their name. */}
+      {files.map((file, index) => file.image
+        ? <span key={`${file.path}-${index}`} className="attachment attachment--image" title={file.name}><img src={file.image} alt={file.name} /></span>
+        : (
+          <span key={`${file.path}-${index}`} className="attachment" title={file.path}>
+            <span className="attachment__icon"><FileIcon size={14} aria-hidden /></span>
+            <span className="attachment__name">{file.name}</span>
+          </span>
+        ))}
     </div>
   )
 }
@@ -252,27 +340,11 @@ function Entry({ entry }: { entry: EntryRecord }) {
   if (custom) { const Custom = custom; return <Custom {...here} entry={{ id: entry.id, kind: entry.kind, data: entry.data }} /> }
   const message = entry.model?.[0] as Message | undefined
   if (message?.role === 'user') {
-    // The title is the first message's opening; under it, only the rest of that message. Files sent with it below.
-    const { text, files } = splitMessage(blocks(message))
-    const sent = files.length > 0 && (
-      <div className="msg__files">
-        {files.map((file, index) => (
-          <span key={`${file.path}-${index}`} className="attachment" title={file.path}>
-            {file.image ? <img src={file.image} alt={file.name} /> : <span className="attachment__icon">▤</span>}
-            <span className="attachment__name">{file.name}</span>
-          </span>
-        ))}
-      </div>
-    )
-    // A title cut short (…) says too little on its own: then the whole message shows.
-    const title = here.thread.title
-    // A rest that starts mid-sentence (", write nothing") reads better whole, too.
-    const tail = entry.id === firstUser(here) && !title.endsWith('…') && text.replace(/\s+/g, ' ').trim().startsWith(title) ? text.trim().slice(title.length).trim() : text
-    // After a title that is the message's first clause, the rest reads as its own sentence.
-    const clause = /^[:;—–]\s*/.exec(tail)
-    const rest = clause ? tail.slice(clause[0].length).replace(/^./, (c) => c.toUpperCase()) : /^[,-]/.test(tail) ? text : tail
-    if (!rest && !sent) return null
-    return <div className="msg msg--user">{rest}{sent}</div>
+    // Your words, whole; files and skills sent with them below.
+    const { text, files, skills } = splitMessage(blocks(message))
+    const sent = (files.length > 0 || skills.length > 0) && <SentWith files={files} skills={skills} />
+    if (!text && !sent) return null
+    return <div className="msg msg--user">{text}{sent}</div>
   }
   return <div className="msg msg--note">{entry.kind}</div>
 }
@@ -345,7 +417,7 @@ function describe(blocks: Block[]): string[] {
   return (text.charAt(0).toUpperCase() + text.slice(1)).split('\u0000')
 }
 
-const Chevron = () => <span className="row__chevron" aria-hidden="true">›</span>
+const Chevron = () => <CaretRightIcon className="row__chevron" size={12} aria-hidden />
 
 function Thinking({ text }: { text: string }) {
   return (
@@ -439,20 +511,11 @@ function diffStat(diff: string) {
   return { added: lines.filter((l) => l.startsWith('+')).length, removed: lines.filter((l) => l.startsWith('-')).length }
 }
 
-/** A small, static glyph per kind of row: a page to read, a prompt to run, a pencil, a new page, a bubble for thinking. */
+/** A small, static glyph per kind of row: thinking, a page to read, a prompt to run, a pencil, a new page. */
+const ROW_ICONS: Record<string, PhosphorIcon> = { thinking: SparkleIcon, read: FileTextIcon, bash: TerminalIcon, edit: PencilSimpleIcon, write: FilePlusIcon }
 function Icon({ name }: { name: string }) {
-  const paths: Record<string, string> = {
-    thinking: 'M8 2.5l1.3 3.2 3.2 1.3-3.2 1.3L8 11.5 6.7 8.3 3.5 7l3.2-1.3zM12.5 11l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z',
-    read: 'M4 1.5h5l3 3v10H4zM9 1.5v3h3M6 8h4M6 10.5h4',
-    bash: 'M1.5 3h13v10h-13zM4 6.5l2 1.5-2 1.5M7.5 10h3.5',
-    edit: 'M10.5 2.5l3 3-7.5 7.5H3v-3zM9 4l3 3',
-    write: 'M4 1.5h5l3 3v10H4zM9 1.5v3h3M8 7.5v4M6 9.5h4',
-  }
-  return (
-    <svg className="row__icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-      <path d={paths[name] ?? 'M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zM8 6v4'} fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
-  )
+  const Glyph = ROW_ICONS[name] ?? WrenchIcon
+  return <Glyph className="row__icon" size={14} aria-hidden />
 }
 
 /** An edit's diff, as the edit tool reports it: `+12 added`, `-12 removed`, ` 12 context`, and `...` between hunks. */
@@ -489,7 +552,7 @@ function Diff({ diff }: { diff: string }) {
   )
 }
 
-function Composer({ machine, thread, busy }: { machine: MachineEntry; thread: ThreadInfo; busy: boolean }) {
+function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; thread: ThreadInfo; busy: boolean; onJump?: () => void }) {
   const { openSettings: onOpenSettings } = useShell()
   const dispatch = useRegistry().router.dispatch
   const [claims, setClaims] = useState<ComposerClaim[]>([])
@@ -517,7 +580,34 @@ function Composer({ machine, thread, busy }: { machine: MachineEntry; thread: Th
     } catch (e) { setError({ message: (e as Error).message }) }
   }
 
-  const send = async () => {
+  // While the agent works, ⏎ steers it (the message joins the running work after its current step) and ⌃⏎ queues
+  // the message for when it's done.
+  // Naming a skill: `$` (or `/skill:`, or `/` opening the message) offers this machine's skills as you type; ↑↓ pick,
+  // ⇥ or ⏎ takes one, esc leaves the word as typed.
+  const [skills, setSkills] = useState<SkillInfo[]>([])
+  const [caret, setCaret] = useState(0)
+  const [pick, setPick] = useState(0)
+  const [dismissed, setDismissed] = useState<number>()
+  const naming = claim ? undefined : skillAt(text, caret)
+  const offered = naming ? matchSkills(skills, naming.query) : []
+  const menu = naming && offered.length > 0 && dismissed !== naming.start ? offered : undefined
+  const wanting = naming !== undefined
+  useEffect(() => {
+    if (wanting) void call<SkillInfo[]>(machine.id, 'skill.list').then(setSkills, () => setSkills([]))
+  }, [wanting, machine.id])
+  useEffect(() => { setPick(0) }, [naming?.query, naming?.start])
+  useEffect(() => { if (!naming) setDismissed(undefined) }, [naming === undefined])
+  const takeSkill = (skill: SkillInfo) => {
+    if (!naming) return
+    const word = `${naming.trigger === '$' ? '$' : '/skill:'}${skill.name} `
+    const after = text.slice(caret).replace(/^ /, '')
+    const at = naming.start + word.length
+    setText(text.slice(0, naming.start) + word + after)
+    setCaret(at)
+    requestAnimationFrame(() => { input.current?.setSelectionRange(at, at); input.current?.focus() })
+  }
+
+  const send = async (whenBusy: 'steer' | 'followUp' = 'steer') => {
     const value = text.trim()
     const sending = claim ? [] : files
     if (!value && !sending.length) return
@@ -527,7 +617,7 @@ function Composer({ machine, thread, busy }: { machine: MachineEntry; thread: Th
     try {
       if (claim) { await claim.submit(value); return }
       await dispatch('thread.submit', {
-        id: thread.id, text: value, ...(sending.length ? { attachments: sending } : {}), requestId: crypto.randomUUID(), ...(busy ? { whenBusy: 'steer' as const } : {}),
+        id: thread.id, text: value, ...(sending.length ? { attachments: sending } : {}), requestId: crypto.randomUUID(), ...(busy ? { whenBusy } : {}),
       }, { machine: machine.id, source: 'composer' })
     } catch (error) {
       setText(value)
@@ -536,8 +626,18 @@ function Composer({ machine, thread, busy }: { machine: MachineEntry; thread: Th
     }
   }
   const abort = () => dispatch('thread.abort', { id: thread.id }, { machine: machine.id, source: 'composer' })
+  const sendable = Boolean(text.trim()) || (!claim && files.length > 0)
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send() }
+    if (menu && naming && !event.metaKey && !event.altKey && !event.ctrlKey) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        setPick((pick + (event.key === 'ArrowDown' ? 1 : -1) + menu.length) % menu.length)
+        return
+      }
+      if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) { event.preventDefault(); takeSkill(menu[pick] ?? menu[0]!); return }
+      if (event.key === 'Escape') { event.preventDefault(); setDismissed(naming.start); return }
+    }
+    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(event.ctrlKey ? 'followUp' : 'steer') }
     if (event.key === 'Escape' && busy) { event.preventDefault(); void abort() }
   }
   return (
@@ -546,12 +646,38 @@ function Composer({ machine, thread, busy }: { machine: MachineEntry; thread: Th
       onDragOver={(e) => { if (!claim && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true) } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false) }}
       onDrop={(e) => { setDragging(false); if (!claim && e.dataTransfer.files.length) { e.preventDefault(); void attach(e.dataTransfer.files) } }}>
+    {/* Over the box, outside it: attaching files at the left, back to the end in the middle, Stop at the right. */}
+    <div className="dock__bar">
+      {!claim && (
+        <>
+          <IconButton label="Attach files" className="dock__pill dock__attach" disabled={disabled} onClick={() => picker.current?.click()}>
+            <PaperclipIcon size={15} aria-hidden />
+          </IconButton>
+          <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) void attach(e.target.files); e.target.value = '' }} />
+        </>
+      )}
+      {onJump && (
+        <Button className="dock__pill dock__jump" onClick={onJump}>
+          <ArrowDownIcon size={13} aria-hidden />
+          Jump to bottom
+        </Button>
+      )}
+      {busy && !claim && (
+        <span className="dock__end">
+          {sendable && <Button className="dock__pill" disabled={disabled} onClick={() => void send('followUp')}>Queue <kbd>⌃⏎</kbd></Button>}
+          <Button className="dock__pill dock__stop" onClick={() => void abort()}>
+            <StopIcon size={11} weight="fill" aria-hidden />
+            Stop <kbd>esc</kbd>
+          </Button>
+        </span>
+      )}
+    </div>
     <div className="dock__above"><Slot name="composer.above" props={{ machine, thread }} /></div>
     {files.length > 0 && !claim && (
       <div className="composer__files">
         {files.map((file, index) => (
           <span key={`${file.name}-${index}`} className="attachment">
-            {file.mimeType.startsWith('image/') ? <img src={`data:${file.mimeType};base64,${file.data}`} alt="" /> : <span className="attachment__icon">▤</span>}
+            {file.mimeType.startsWith('image/') ? <img src={`data:${file.mimeType};base64,${file.data}`} alt="" /> : <span className="attachment__icon"><FileIcon size={14} aria-hidden /></span>}
             <span className="attachment__name">{file.name}</span>
             <button className="attachment__remove" aria-label={`Remove ${file.name}`} onClick={() => setFiles((was) => was.filter((_, i) => i !== index))}>×</button>
           </span>
@@ -563,21 +689,28 @@ function Composer({ machine, thread, busy }: { machine: MachineEntry; thread: Th
         {error.kind === 'no_model' ? <>No model is set up on {machine.label}. <Button onClick={onOpenSettings}>Open Settings</Button></> : error.message}
       </div>
     )}
+    {menu && (
+      <div className="skill-menu" role="listbox" aria-label="Skills">
+        {menu.map((skill, index) => (
+          <div key={skill.name} role="option" aria-selected={index === pick} className={`skill-menu__item ${index === pick ? 'is-active' : ''}`}
+            onMouseEnter={() => setPick(index)} onMouseDown={(e) => { e.preventDefault(); takeSkill(skill) }}>
+            <span className="skill-menu__name">{naming!.trigger === '$' ? '$' : '/skill:'}{skill.name}</span>
+            <span className="skill-menu__description">{skill.description}</span>
+          </div>
+        ))}
+      </div>
+    )}
     <div className="composer">
-      {!claim && (
-        <>
-          <IconButton label="Attach files" className="composer__attach" disabled={disabled} onClick={() => picker.current?.click()}>
-            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M13.5 7.5 8 13a3.5 3.5 0 0 1-5-5l5.8-5.8a2.3 2.3 0 0 1 3.3 3.3L6.4 11.2a1.2 1.2 0 0 1-1.7-1.7L10 4.2" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </IconButton>
-          <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) void attach(e.target.files); e.target.value = '' }} />
-        </>
-      )}
-      <TextArea ref={input} rows={1} value={text} disabled={disabled} onChange={(e) => setText(e.target.value)} onKeyDown={onKeyDown}
+      <TextArea ref={input} rows={1} value={text} disabled={disabled} onChange={(e) => { setText(e.target.value); setCaret(e.target.selectionStart) }} onKeyDown={onKeyDown}
+        onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
         onPaste={(e) => { if (!claim && e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files) } }}
-        placeholder={disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the running agent…' : 'Ask anything'} />
+        placeholder={disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : 'Ask anything'} />
       <div className="composer__actions">
-        {busy && !claim && <Button className="composer__button" onClick={() => void abort()}>Stop <kbd>esc</kbd></Button>}
-        <Button className="composer__button" aria-label={claim ? 'Answer' : busy ? 'Steer' : 'Send'} disabled={disabled || (!text.trim() && (claim ? true : !files.length))} onClick={() => void send()}>{claim ? 'Answer' : busy ? 'Steer' : 'Send'} <kbd>⏎</kbd></Button>
+        {/* The box holds the text and its one action; the others (attach, Queue, Stop) float over it. */}
+        {/* Send (an arrow on), Steer (an arrow turning into the work), Answer: one key, ⏎. */}
+        <IconButton label={`${claim ? 'Answer' : busy ? 'Steer' : 'Send'} (⏎)`} aria-label={claim ? 'Answer' : busy ? 'Steer' : 'Send'} className="composer__send" disabled={disabled || !sendable} onClick={() => void send()}>
+          {busy && !claim ? <ArrowElbowRightIcon size={16} weight="bold" aria-hidden /> : <ArrowRightIcon size={16} weight="bold" aria-hidden />}
+        </IconButton>
       </div>
     </div>
     </div>
@@ -594,7 +727,7 @@ function PaneMenu({ machine, thread }: { machine: MachineEntry; thread: ThreadIn
   return (
     <Menu.Root>
       <Menu.Trigger render={<IconButton label="Open a pane" className="thread__panes" />}>
-        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M9 3v10" stroke="currentColor" strokeWidth="1.3" /></svg>
+        <SquareSplitHorizontalIcon size={15} aria-hidden />
       </Menu.Trigger>
       <Menu.Popup align="end">
         {kinds.map(({ kind, title }) => <Menu.Item key={kind} onClick={() => open(kind)}>{title}</Menu.Item>)}

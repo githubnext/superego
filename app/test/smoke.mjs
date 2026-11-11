@@ -75,6 +75,39 @@ if (phase === 'first') {
     ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
   })()`)
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: typed message')`, 'typed answer rendered')
+  // Naming a skill: $ offers this machine's skills as you type; ⇥ takes one, and the message carries it.
+  await run(`(() => {
+    const ta = document.querySelector('.composer textarea')
+    ta.focus()
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(ta, 'try $smo')
+    ta.setSelectionRange(8, 8)
+    ta.dispatchEvent(new Event('input', { bubbles: true }))
+  })()`)
+  await until(`document.querySelector('.skill-menu')?.textContent.includes('$smoke-skill') && document.querySelector('.skill-menu').textContent.includes('Checks the smoke.')`, 'skills offered')
+  await run(`document.querySelector('.composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))`)
+  await until(`document.querySelector('.composer textarea').value === 'try $smoke-skill ' && !document.querySelector('.skill-menu')`, 'skill taken')
+  await run(`document.querySelector('.composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`)
+  await until(`[...document.querySelectorAll('.attachment--skill')].some((chip) => chip.textContent.includes('smoke-skill'))`, 'skill sent with the message')
+  // A web link in the thread: the button beside it opens the page in a pane, not the browser, even a page that refuses
+  // to be framed (as most sites do).
+  const { createServer } = await import('node:http')
+  const site = createServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'text/html', 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'; default-src 'self'" })
+    res.end('<title>framed page</title><p>hello')
+  })
+  await new Promise((resolve) => site.listen(0, '127.0.0.1', resolve))
+  const page = `http://127.0.0.1:${site.address().port}/page`
+  await run(`window.mu.call('local', 'thread.submit', { id: '${id}', text: 'see ${page}' })`)
+  await until(`Boolean(document.querySelector('.md a[href="${page}"] + .md__pane-link'))`, 'pane button beside a web link')
+  await run(`document.querySelector('.md a[href="${page}"] + .md__pane-link').click()`)
+  await until(`Boolean(document.querySelector('.frame-pane iframe[src="${page}"]'))`, 'link opened in a preview pane')
+  const framed = async () => {
+    const frame = BrowserWindow.getAllWindows()[0].webContents.mainFrame.framesInSubtree.find((f) => f.url === page)
+    return frame ? frame.executeJavaScript('document.title').catch(() => '') : ''
+  }
+  for (let i = 0; i < 100 && await framed() !== 'framed page'; i++) await new Promise((resolve) => setTimeout(resolve, 100))
+  if (await framed() !== 'framed page') await fail('a page that refuses framing loads in its pane')
+  site.close()
   // ask-user: a replayed agent asks; the question shows above the composer and the thread as needing you; an answer
   // from the card reaches it, and it carries on.
   await run(`window.mu.call('local', 'settings.set', { key: 'agent.model', value: 'replay/replay' })`)
@@ -82,10 +115,22 @@ if (phase === 'first') {
   await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('pick a colour'))?.click()`)
   await until(`document.querySelector('.ask-user')?.textContent.includes('Which colour?')`, 'question card above the composer')
   await until(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('pick a colour') && li.querySelector('.mu-status--blocked'))`, 'thread marked as needing you')
+  // Sent while it's busy, a follow-up shows at once as waiting, and goes in when the agent is done.
+  await run(`window.mu.call('local', 'thread.submit', { id: '${asking}', text: 'then paint it', whenBusy: 'followUp' })`)
+  await until(`document.querySelector('.msg--queued')?.textContent.includes('then paint it') && document.querySelector('.msg--queued').textContent.includes('Queued')`, 'follow-up shown as queued')
   await run(`[...document.querySelectorAll('.ask-user button')].find((b) => b.textContent === 'blue').click()`)
   await until(`!document.querySelector('.ask-user') && document.querySelector('.ask-user-asked')?.textContent.includes('blue') && document.querySelector('.transcript').textContent.includes('Blue it is.')`, 'answered, agent carried on')
+  await until(`!document.querySelector('.msg--queued') && document.querySelector('.transcript').textContent.includes('then paint it') && document.querySelector('.transcript').textContent.includes('Noted for later.')`, 'queued follow-up went in')
   await run(`window.mu.call('local', 'settings.set', { key: 'agent.model', value: 'faux/faux-1' })`)
   void asking
+  // Unread results elsewhere: a count beside Settings, which lists them and goes to the one picked.
+  await run(`window.mu.call('local', 'thread.create', { title: 'unread elsewhere', prompt: 'finish elsewhere' })`)
+  await until(`Number(document.querySelector('.unread-button')?.textContent) >= 1`, 'unread count beside settings')
+  await run(`document.querySelector('.unread-button').click()`)
+  await until(`[...document.querySelectorAll('.unread-menu .mu-menu__item')].some((i) => i.textContent.includes('unread elsewhere'))`, 'unread threads listed')
+  await run(`[...document.querySelectorAll('.unread-menu .mu-menu__item')].find((i) => i.textContent.includes('unread elsewhere')).click()`)
+  await until(`document.querySelector('.thread__title')?.textContent === 'unread elsewhere'`, 'went to the unread thread')
+  await until(`!document.querySelector('.unread-menu')`, 'unread menu closed')
   // The sidebar's modes: the ··· menu (portalled, so a scrolling sidebar can't cut it off), ⌘\\ rail, ⌘I details.
   const key = async (keyCode, modifiers = ['meta']) => {
     const contents = BrowserWindow.getAllWindows()[0].webContents
@@ -221,6 +266,12 @@ if (phase === 'first') {
   await until(`Boolean(document.querySelector('.files-tree__row.is-current'))`, 'tree shown, at notes.md')
   await run(`[...document.querySelectorAll('.files-tree__row')].find((b) => b.textContent === 'page.html').click()`)
   await until(`document.querySelectorAll('.panes__tab').length === 1 && document.querySelector('.panes__tab')?.textContent.startsWith('page.html')`, 'the tree showed page.html in the same editor')
+  // Clicking a pane's title takes the focus into it: the editor's text.
+  await run(`document.querySelector('.composer textarea').focus()`)
+  await run(`document.querySelector('.panes__label').click()`)
+  await until(`document.activeElement?.matches('.cm-content')`, "a pane's title click focuses its editor")
+  // Code is coloured by its language, loaded for the file's name.
+  await until(`(() => { const base = getComputedStyle(document.querySelector('.cm-content')).color; return [...document.querySelectorAll('.cm-content .cm-line span')].some((s) => s.textContent === 'body' && getComputedStyle(s).color !== base) })()`, 'html in the editor is highlighted')
   await shot('files')
   // The editor keeps its place: when focus comes back to it from the keyboard, and when its thread is shown again.
   await run(`window.mu.call('local', 'file.write', { id: '${paned}', path: 'long.md', content: Array.from({ length: 300 }, (_, i) => 'line ' + i).join('\\n') })`)
@@ -334,9 +385,9 @@ if (phase === 'first') {
   await key('i', ['control'])
   await until(`document.activeElement?.matches('.composer textarea')`, 'ctrl+i to the prompt')
   if (ring !== 'solid') { await fail(`focus not drawn: ${ring}`); throw new Error('failed') }
-  // Attachments: a file picked with the paperclip waits above the composer, then goes with the message and shows under it.
+  // Attachments: a file picked with the paperclip (over the box) waits above the composer, then goes with the message and shows under it.
   await run(`(() => {
-    const input = document.querySelector('.composer input[type=file]')
+    const input = document.querySelector('.dock__bar input[type=file]')
     const files = new DataTransfer()
     files.items.add(new File(['# plan\\n'], 'plan.md', { type: 'text/markdown' }))
     input.files = files.files
@@ -363,8 +414,12 @@ if (phase === 'first') {
     await new Promise((r) => setTimeout(r, 250))
   }
   await until(`document.querySelector('.transcript').textContent.includes('echo: message 0') && !document.querySelector('.transcript__more')`, 'scrolled back to the first message')
+  // Scrolled up, the composer offers the way back down; taking it hides it again.
+  await until(`Boolean(document.querySelector('[data-column="thread"] .dock__jump'))`, 'jump to bottom offered')
+  await run(`document.querySelector('[data-column="thread"] .dock__jump').click()`)
+  await until(`(() => { const el = document.querySelector('[data-column="thread"] .thread__scroll'); return el.scrollHeight - el.scrollTop - el.clientHeight < 40 && !document.querySelector('.dock__jump') })()`, 'jumped to the bottom')
   // Settings: the app's own sections, then the machine's, drawn from what each registers.
-  await run(`[...document.querySelectorAll('.app__footer button')].find((b) => b.textContent === 'Settings').click()`)
+  await run(`document.querySelector('.app__settings').click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Appearance') && document.querySelector('.settings').textContent.includes('Notifications')`, 'app settings')
   await shot('settings')
   // Fonts: the picker lists installed families (needs a user gesture), and a choice sets the CSS variable.
@@ -374,6 +429,13 @@ if (phase === 'first') {
   await until(`/Helvetica|Arial/.test(document.documentElement.style.getPropertyValue('--mu-font'))`, 'interface font applied')
   await run(`window.mu.call('app', 'app.settings.set', { key: 'app.font.mono', value: 'Menlo' })`)
   await until(`document.documentElement.style.getPropertyValue('--mu-mono').includes('Menlo')`, 'mono font applied')
+  // The accent: shown as a swatch and its CSS, and applied as the colour everything accented takes.
+  await until(`document.querySelector('[data-key="app.accent"] .color-field input:not([type=color])')?.value === 'color(display-p3 0.155 0.319 0.654)'`, 'accent colour shown')
+  await setValue('[data-key="app.accent"] .color-field input:not([type=color])', 'oklch(0.6 0.2 30)')
+  await run(`document.querySelector('[data-key="app.accent"] .color-field input:not([type=color])').dispatchEvent(new FocusEvent('focusout', { bubbles: true }))`)
+  await until(`document.documentElement.style.getPropertyValue('--mu-accent-base') === 'oklch(0.6 0.2 30)'`, 'accent colour applied')
+  await run(`[...document.querySelectorAll('[data-key="app.accent"] button')].find((b) => b.textContent === 'Reset').click()`)
+  await until(`document.documentElement.style.getPropertyValue('--mu-accent-base').startsWith('color(display-p3')`, 'accent colour reset')
   // Keyboard: record a new shortcut for an action; the old one stops working, the new one runs it; a clash shows.
   const keysOf = (id) => `document.querySelector('[data-action="${id}"] .keymap__keys')`
   await until(`${keysOf('threads.rail')}?.textContent === '${process.platform === 'darwin' ? '⌘\\\\' : 'Ctrl+\\\\'}'`, 'keyboard settings list the rail shortcut')

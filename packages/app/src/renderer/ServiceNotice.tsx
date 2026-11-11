@@ -13,9 +13,9 @@ export function ServiceNotice() {
     void (window.mu.call('app', 'service.get', {}) as Promise<ServiceState>).then((next) => { if (live) setState((current) => current ?? next) })
     return () => { live = false; off() }
   }, [])
+  const dispatch = useRegistry().router.dispatch
   if (!state || state.phase === 'current') return null
 
-  const dispatch = useRegistry().router.dispatch
   const act = (action: ServiceAction) => void dispatch('service.act', { action }, { machine: 'app', source: 'notice' }).catch((error: Error) => {
     setState((current) => current && { ...current, phase: 'error', deferred: false, error: error.message })
   })

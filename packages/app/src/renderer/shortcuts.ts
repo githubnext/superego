@@ -6,7 +6,8 @@ import type { ActionInfo } from '@mu/protocol'
 export const KEYMAP = 'app.keys'
 export type Keymap = Record<string, string | null>
 
-const mac = () => typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac')
+// The window asks its navigator; the main process (which reads key presses on the window's behalf) its process.
+const mac = () => typeof navigator !== 'undefined' && navigator.platform ? navigator.platform.startsWith('Mac') : typeof process !== 'undefined' && process.platform === 'darwin'
 const MODIFIERS = ['mod', 'ctrl', 'meta', 'alt', 'shift'] as const
 
 /** One spelling per shortcut: modifiers in a fixed order, `mod` for the platform's command key. */
