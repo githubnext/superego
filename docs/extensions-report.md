@@ -3,8 +3,9 @@
 A report on the extension API as it stands, what of the core could move out into extensions, what the API would need
 for that, and in what order. It's an investigation only: nothing here has been changed.
 
-As read at `5218cf3` ("Number the suggestions over the composer"). References are `path:line` from the repository root.
-"The core" means `packages/{protocol,settings,daemon,client,cli,ui,app}` and `app/`.
+As read at `5218cf3` ("Number the suggestions over the composer"). References are `path:line` from the repository root,
+at that commit. Ego was reworked right after it (`b142933`..`dd3a908`: one hidden thread that only reads), so the Ego
+rows below describe it as it was; the extension points they ask for still apply. "The core" means `packages/{protocol,settings,daemon,client,cli,ui,app}` and `app/`.
 
 ---
 
@@ -20,8 +21,11 @@ As read at `5218cf3` ("Number the suggestions over the composer"). References ar
 - About **20 new extension points** are needed (§3). Ten of them are small (an export, a field, scoping something), and
   **six are structural**: thread lifecycle hooks, per-thread extension state, read and watch methods, a tool-row
   descriptor, composer providers, and link handlers.
+- On top of those, **declared UI with configured placement** (§3b). Extensions declare views and the places
+  each fits; the shell knows no extension; a layout setting decides what goes where, as `app.keys` does for shortcuts.
+  About 2–3 weeks, with the user-facing core of it in one.
 
-**Top three recommendations**
+**Top recommendations**
 
 1. **Fix the API's leaks first (Phase 0, ~1–2 days).** A profile's tool renderers, entry renderers and settings
    components aren't scoped to that profile and are never removed (`packages/app/src/renderer/extension.tsx:183-189`,
@@ -36,8 +40,16 @@ As read at `5218cf3` ("Number the suggestions over the composer"). References ar
 3. **Next, give the daemon half thread lifecycle hooks and per-thread state.** These are what let worktrees, Ego and
    thread tools leave `daemon.ts`. Today they're woven through `startThread`, `archive`, `agentOf` and `ThreadMeta`
    (`daemon.ts:39-61`, `:517-536`, `:633-662`, `:727-758`).
+4. **Make placement configuration, not code (§3b).** Extensions declare views (a title, an icon, the context needed,
+   the places they fit: space, aside, pane, header). The shell has places and no extension names. An `app.layout`
+   setting puts views in places. That covers a new space in the rail, adding a view to the pane menu, and moving thread
+   details between the aside and a pane, and it replaces the hand-rolled toggles in `threads` and `files`.
 
 **The biggest API gaps**
+
+- **Placement is hard-coded on both sides.** Extensions name the slot they go in (`threads/src/ui.tsx:41-44`). The
+  shell names the features it knows: Ego's button and the Unread fallback in the rail (`Shell.tsx:116-123`). There's
+  one sidebar and no spaces (`extension.tsx:13`), and the pane menu is a boolean (`extension.tsx:50`).
 
 - **No thread lifecycle hooks or per-thread state on the daemon side.** An extension can't take part in creating,
   submitting, archiving or describing a thread, and can't add facts to `ThreadInfo`.
@@ -558,6 +570,213 @@ main process would keep only "is any window focused?" through an app method.
 - Allow `action` and `appSettings` from profiles under `<profile>.<name>` ids (`extension.tsx:196`, `:201`), so a
   profile can bind keys.
 
+## 3b. Declared UI, placed by configuration
+
+So far the UI half says where it goes: `superego.slot('sidebar', Threads)`, and the shell decides which places exist.
+This section turns that round. **An extension declares what UI it has and what kind of place each piece fits. The
+shell has places, and knows no extension. Configuration decides what goes where.** It's the same split Superego
+already uses for shortcuts. An action declares default `keys`, the app setting `app.keys` holds only the user's
+changes, and Settings → Keyboard edits them (`shortcuts.ts:1-3`, `bound` at `:57-61`). Placement would work the same
+way: the extension declares a default, `app.layout` holds the changes, and Settings → Layout edits them.
+
+### Where placement is decided today
+
+- **In each extension's code, at setup.** `threads` puts itself in `sidebar`, `rail`, `thread.aside` and
+  `thread.header` (`extensions/threads/src/ui.tsx:41-44`). Nothing can move it without changing the extension.
+- **In the shell, for the features it knows by name.** The rail hard-codes Ego's button and Settings, and falls back to
+  Unread when no extension fills `rail` (`Shell.tsx:116-123`). With no sidebar it shows its own thread picker
+  (`Shell.tsx:88-95`, `:106`).
+- **By hand-rolled settings, one per extension.** Whether thread details show is the `threads.details` app setting,
+  checked inside the component (`threads/src/ui.tsx:38`, `:310-314`). The file tree is a `localStorage` flag
+  (`files/src/ui.tsx:29`). Each is a placement decision with its own menu item, key and storage.
+- **By a boolean, for the pane menu.** `menu: true` on a pane kind (`extension.tsx:50`, `:279-285`). The user can't
+  remove an item or change the order.
+- **"Spaces" exist only in a comment.** `rail` is documented as "a space's button" (`extension.tsx:13`), but there's one
+  sidebar. Two extensions in `sidebar` would be drawn stacked, with no way to switch between them (`Shell.tsx:130`).
+  Profiles can't fill `sidebar` or `rail` at all (`extension.tsx:178`).
+
+### The model
+
+Three parts:
+
+1. **Views**, which extensions declare. A view has an id (`<extension>.<view>`, like actions), a title, an icon, the
+   context it needs (nothing, a thread, or a file), and the kinds of place it can be shown in. It also says where it
+   goes by default, or that it's only offered.
+2. **Places**, which the shell has. Each one gives a view its context and a size.
+3. **A layout**, which is configuration: built-in defaults, then the user's changes (`app.layout`), then a profile's
+   suggestions for its own threads, and a narrow variant for phones.
+
+| Place | What it is | Context it gives | Size | Today |
+|---|---|---|---|---|
+| `space` | a button in the rail, and the sidebar while it's chosen | window (the selection through hooks) | column, ~250px; optional compact form for the rail | `rail` + `sidebar`, one occupant in practice |
+| `aside` | a column beside the thread | thread | column | `thread.aside` |
+| `pane` | a pane kind, opened from the pane menu, ⌘K, or by the agent | thread (+ params) | flexible | `pane(kind, { menu })` |
+| `header` | a button or badge in the title bar | thread | button | `thread.header` |
+| `crumb` | a chip after the title | thread | chip | (new, U4) |
+| `drawer` (narrow only) | a tab in the phone's drawer | window | full width | nothing |
+
+Some places stay plain slots. `composer.above`, `overlay`, `editor.side` and `editor.bar`, and the transcript renderers
+(`tool`, `entry`, `work`), are behaviour, not places. A question card has to sit on the composer it claims
+(`ask-user/src/ui.tsx:48-58`), so letting the user move it would only break it. They keep `superego.slot` as it is.
+
+Which space is open is window state, like `sidebar.open` (`state.tsx:85`), not part of the layout.
+
+A view that fits several places is written once. Thread details are a `thread` view, so they can sit in the aside, open
+as a pane, or (given the selected thread) be a space. The shell adapts: in a pane the thread is the pane's, in a space
+it's the selection.
+
+### Sketch: declaring views
+
+```ts
+type Place = 'space' | 'aside' | 'pane' | 'header' | 'crumb' | 'drawer'
+type ViewContext = 'window' | 'thread' | 'file'
+
+type View<C extends ViewContext = ViewContext> = {
+  title: string
+  icon?: ComponentType<{ size?: number }>
+  context: C
+  /** The places it can be shown in, best first. */
+  fits: Place[]
+  /** Where it goes unless the layout says otherwise; `false`: offered, not placed (the user or a profile places it). */
+  default?: Place | false
+  component: ComponentType<ViewProps<C>>
+  /** For `space`: what the rail button shows when the space isn't open (a count, a dot in a status colour). */
+  badge?: ComponentType
+  /** For `space`: a compact form drawn in the rail itself (the sidebar's "rail" mode, status dots). */
+  compact?: ComponentType
+  /** Agent-facing description, when it can be a pane (D6). */
+  about?: string
+}
+type ViewProps<C> = C extends 'thread' ? { machine: MachineEntry; thread: ThreadInfo; place: Place; params?: Json }
+  : C extends 'file' ? EditorSlotProps & { place: Place }
+  : { place: Place }
+
+interface UiApi {
+  view<C extends ViewContext>(id: string, view: View<C>): void   // `<extension>.<id>`, checked like actions
+}
+```
+
+`defineUiExtension` would also take the same declarations as data (`contributes: { views: { … } }`), without the
+components, so the window knows what an extension offers before it runs any of its code. That matters for profiles and
+machines (below).
+
+The bundled extensions, rewritten:
+
+```ts
+// threads
+superego.view('threads.list',    { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space', 'drawer'], default: 'space',
+                                   component: Threads, compact: ThreadDots, badge: UnreadDot })
+superego.view('threads.details', { title: 'Thread details', context: 'thread', fits: ['aside', 'pane'], default: false, component: Details })
+superego.view('threads.model',   { title: 'Model', context: 'thread', fits: ['header'], default: 'header', component: ModelButton })
+// files
+superego.view('files.tree',      { title: 'Files', icon: FolderSimpleIcon, context: 'thread', fits: ['space', 'aside', 'pane'], default: false, component: FolderPane })
+// git
+superego.view('git.changes',     { title: 'Changes', icon: ArrowsLeftRightIcon, context: 'thread', fits: ['pane', 'aside'], default: 'pane',
+                                   component: DiffPane, about: 'the changes in the working folder; no params' })
+// ego (Phase 2)
+superego.view('ego.chat',        { title: 'Ego', icon: LifebuoyIcon, context: 'window', fits: ['space'], default: 'space', component: EgoThread })
+```
+
+Placing a `thread` view in `pane` registers a pane kind of the same id, which takes no params and is listed in the pane
+menu. That's what "adding themselves to the pane button" means here. The menu lists everything the layout puts in
+`pane`, in the layout's order. `superego.pane(kind, …)` stays for kinds that do need params (`editor`, `preview`,
+`folder`).
+
+### Sketch: the layout
+
+```ts
+/** App setting `app.layout`: only what differs from the defaults, by view id. Unknown ids are ignored (like app.keys). */
+type Layout = {
+  /** Rail order of spaces; ids not listed fall in after, in registration order. */
+  spaces?: string[]
+  /** Where each view goes; `null` hides it. */
+  place?: Record<string, Place | null>
+  /** Order within a place, where order shows (header, crumb, pane menu, aside). */
+  order?: Partial<Record<Place, string[]>>
+  /** Overrides under 760px: spaces become drawer tabs, asides become panes, by default. */
+  narrow?: Omit<Layout, 'narrow'>
+}
+```
+
+- **Resolution:** the view's `default`, then the profile's `layout` for that profile's threads (only for `thread` views,
+  and only within its threads), then `app.layout` (the user wins), then `narrow` when narrow. A place a view doesn't
+  `fit` is ignored, with a warning in Settings.
+- **Editing:** Settings → Layout lists each place with its views (drag to order, a menu to move, a switch to hide), and
+  views that are offered but not placed. Moves can also be made where the view is: the rail button's context menu ("Move
+  to aside", "Hide"), a pane tab's ("Keep beside every thread" moves it to `aside`), and generated ⌘K actions
+  (`layout.place` with `{ view, place }`).
+- **Toggles become placement.** ⌘I ("Toggle thread details") is placing `threads.details` in `aside` or `null`;
+  ⌘⇧T is the same for `files.tree`. The hand-rolled `threads.details` setting and the `superego.files.tree` flag go
+  away, and so does `threads`' `current` global (gap 13), which existed partly to make that toggle work.
+- **The shell knows no extension.** Its rail is: the spaces in layout order, then Settings. It draws Ego's button only
+  because `ego.chat` is a space placed there. The Unread fallback and the thread picker become built-in views
+  (`core.unread`, `core.picker`), shown when nothing else is placed in a space. `hasSidebar` (`Shell.tsx:55`) becomes
+  "is a space open". Core registers its built-ins through `superego.view` like anyone else, as it already does panes
+  (`renderer/index.tsx:21-33`).
+
+### Data-only views, declared by the daemon
+
+The request also asks for views declared "in their schema". A daemon extension, or a profile with no UI code, could
+declare a view rendered by the core from data:
+
+```ts
+// daemon half
+superego.view('orders.recent', {
+  title: 'Recent orders', context: 'window', fits: ['space', 'aside'], default: false,
+  render: { kind: 'list', value: 'orders.recent',          // a live value (or a D3 method)
+            item: { title: '{number} · {customer}', detail: '{status}', action: 'orders.open' } },
+})
+```
+
+There would be a small, fixed set of kinds: `list`, `table`, `markdown` (a value holding Markdown), `facts`
+(label/value pairs, like thread details), and `actions` (buttons that dispatch). The daemon announces them in `hello`
+(or a `view.list` method), and the window draws them with kit components. That gives three things:
+
+- **UI without UI code.** Many profile UIs are a list fed by an action (the `support` example in
+  `packages/cli/skill/ui.md`). This covers them with no TSX, compiler or blob URLs.
+- **A safe tier for project profiles.** Data views run no code in the window, which answers most of the security
+  concern in §5 for profiles that need only lists and buttons. Code views from project profiles could then require a
+  second, explicit allow.
+- **Phones and the web for free**, because the kit components already have narrow layouts.
+
+### Profiles and machines
+
+- A profile's views are offered; they're never placed in shared places without consent. A profile may *suggest*
+  placement for its own threads (`profile.ts`: `layout: { place: { 'support.order': 'aside' } }`), and that applies
+  only while one of its threads is shown. A profile `space` (today refused, `extension.tsx:178`) shows as "offered" in
+  Settings → Layout until the user places it. This answers open question 2: profiles can add a sidebar, by being placed.
+- Views are keyed by machine and profile as well as id, so the same profile on two machines doesn't collide (gap 2).
+  `contributes` arriving with `profile.ui` (`daemon.ts:924-928`) lets the window list a profile's views, and ask about
+  them, before loading its code.
+- Layout is the window's (an app setting, per user; in a browser, in that browser's storage, `web-bridge.ts`), not the
+  machine's. It's like keys: how you like your window, wherever the threads are.
+
+### What it costs
+
+| Piece | Size |
+|---|---|
+| `superego.view`, the `View` type, resolution (defaults → profile → user → narrow) | M (2–3 days) |
+| Shell places: the rail from spaces, the sidebar as the open space, the aside from the layout, the pane menu from the layout | M (2–3 days) |
+| Built-ins as views (picker, unread, Ego button), and `threads` and `files` converted (removes `threads.details`, the file-tree flag, the `current` global) | M (2 days) |
+| Settings → Layout, context-menu moves, `layout.place` action | M (2–3 days) |
+| Data-only views from the daemon (`list`, `table`, `markdown`, `facts`, `actions`) and their announcement | M–L (3–5 days) |
+| Narrow layout: drawer tabs, asides as panes | S–M (1–2 days) |
+
+That's about **2–3 weeks** in all, of which the first three rows (about a week) give the user-facing win: extensions
+declare, config places.
+
+### Risks
+
+- **Too much freedom.** Not every view works everywhere. `fits` is the guard: the shell offers only the places a view
+  declared, and a view must render well at the smallest size of each.
+- **Context is lost when a view moves.** A `thread` view in a space shows the selection, and may show nothing without
+  one. Views should handle "no thread" when they fit `space`.
+- **More watches.** Placing a view in several places at once (aside and pane) mounts it twice. This depends on Phase 0's
+  shared subscriptions.
+- **Keyboard focus regions** (⌘⌥←/→, `focus.ts`) assume today's fixed regions. Each placed space, aside and pane
+  becomes a region in layout order. That's a contained change, but it needs the smoke test's focus checks
+  (`app/test/smoke.mjs`).
+
 ---
 
 ## 4. Migration plan
@@ -614,6 +833,17 @@ Each of these proves one extension point by moving a real feature through it.
    and the rail button (into `rail` with an order before `threads`).
 9. **Notifications and Unread** (2 days). U9, then `notifications` and `unread` extensions. Notifications start working
    in the browser and PWA as a bonus.
+
+### Phase 2b: declared views and the layout (§3b, 2–3 weeks, medium risk)
+
+This can start once Phase 0's shared subscriptions are in, and runs alongside Phase 2.
+
+9a. **`superego.view` and the places** (1 week): spaces in the rail, the open space in the sidebar, the aside and pane
+    menu from the layout. Convert `threads` (list as a space, details as a view, model as a header item) and `files`
+    (tree as a view). Core's picker, Unread and Ego's button become views. The shell then names no extension. Done
+    when `Shell.tsx` has no `UnreadButton`, `LifebuoyIcon` or `hasSidebar`, and ⌘I is a placement.
+9b. **Settings → Layout** and the moves from context menus (2–3 days).
+9c. **Data-only views from the daemon** (3–5 days), then the narrow layout (1–2 days).
 
 ### Phase 3: optional (as needed)
 
@@ -721,7 +951,9 @@ them puts layout into an extension; they take layout-specific features out of th
 1. Should `threads` stay one extension (sidebar, details, thread tools, `thread:` links, the thread pane), or split into
    `sidebar` and `subthreads`? One is simpler for `without`; two is clearer in Settings.
 2. Should profiles be able to *replace* bundled UI (the sidebar, `rail`), or only add to it (`extension.tsx:178`)? A
-   "support desk" profile would want its own sidebar.
+   "support desk" profile would want its own sidebar. §3b proposes an answer: a profile offers a space, and the user
+   places it, so it's added by consent rather than replaced. Still open: should a profile's suggested layout apply
+   automatically within its own threads, or need a confirmation the first time?
 3. Is per-thread extension state (D4) stored in `ThreadDoc` (forks and archives with the thread), or in a doc per
    extension (separate migrations)? I'd suggest a namespaced field in `ThreadDoc` for simplicity.
 4. Runtime-installed extensions (PLAN §9: "then runtime-installed extensions"): would they load like profiles (served
@@ -729,3 +961,8 @@ them puts layout into an extension; they take layout-specific features out of th
    carries the security issue above.
 5. Should the MCP server (PLAN §3a) expose extension actions by default? With D3, reads stop being actions, which makes
    "expose every `cli` action" a safer default.
+6. Is layout one per window or one per user? `app.layout` as proposed is per user (every window the same). A second
+   window for a different job (one wide window with Changes as an aside) argues for per-window overrides, kept the way
+   `selection` is (`state.tsx:82`).
+7. How far should data-only views go before they become a UI framework? Five kinds (`list`, `table`, `markdown`,
+   `facts`, `actions`) cover the profiles seen so far. Anything richer should be a code view.
