@@ -68,6 +68,11 @@
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body { font: var(--superego-text-ui)/var(--superego-leading-ui) var(--superego-font); background: var(--superego-bg); color: var(--superego-text); -webkit-font-smoothing: antialiased; }
+/* The interface's own words (labels, titles, buttons) aren't text to select, as in a native app; what's written to be
+   read or copied (messages, code, output, fields) opts back in. */
+body { -webkit-user-select: none; user-select: none; }
+input, textarea, [contenteditable]:not([contenteditable="false"]) { -webkit-user-select: text; user-select: text; }
+button, summary { -webkit-user-select: none; user-select: none; }
 
 .superego-button {
   font: inherit; font-weight: 500; color: var(--superego-text); background: var(--superego-control); border: 0; box-shadow: var(--superego-control-edge);

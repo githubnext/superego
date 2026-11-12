@@ -1,7 +1,7 @@
 /* Inside the floating composer: no frame of its own, the question first. */
 .ask-user { display: flex; flex-direction: column; gap: var(--superego-space-2); }
 .ask-user__label { font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-muted); }
-.ask-user__question { font-size: 15px; font-weight: 600; line-height: 1.4; white-space: pre-wrap; }
+.ask-user__question { -webkit-user-select: text; user-select: text; font-size: 15px; font-weight: 600; line-height: 1.4; white-space: pre-wrap; }
 .ask-user__options { display: flex; gap: 6px; flex-wrap: wrap; }
 .ask-user__options .superego-button { padding: 6px 12px; border-radius: 8px; }
 .ask-user__free { display: flex; gap: 6px; }

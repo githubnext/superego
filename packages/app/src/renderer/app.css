@@ -1,6 +1,6 @@
 .app { display: flex; height: 100%; background: var(--superego-chrome); }
 .app__drag { height: 38px; -webkit-app-region: drag; flex: none; }
-.app__drag > * { -webkit-app-region: no-drag; }
+.app__drag :is(button, a, input, select, textarea, summary, [role="button"], [contenteditable]) { -webkit-app-region: no-drag; }
 /* The window, wide: a title bar across the top, a rail down the left, then cards (the sidebar, the thread, its panes)
    on the window's own colour, 8px apart (see GAP in panes.tsx). The window's buttons and the sidebar toggle sit at
    the title bar's start, over the rail. */
@@ -70,6 +70,8 @@
 .transcript__more, .transcript__thinking { color: var(--superego-muted); font-size: var(--superego-text-sm); }
 .transcript__error { color: var(--superego-status-error); font-size: var(--superego-text-ui); border-left: 2px solid currentColor; padding-left: var(--superego-space-3); }
 .msg { overflow-wrap: anywhere; }
+/* What's read and copied: messages, the agent's thinking and output, diffs, files, errors. */
+:is(.msg, .step__note, .step__thinking, .step__output, .transcript__error, .composer__error, .diff-file__body, .file-editor .cm-editor, .service-notice__detail) { -webkit-user-select: text; user-select: text; }
 /* Your turns: a bubble on the right, with clear air above; the agent's work reads down the column. */
 .msg--user { white-space: pre-wrap; align-self: flex-end; max-width: 75%; background: var(--superego-bubble); border-radius: var(--superego-radius-lg); padding: 9px 14px; line-height: 1.5; }
 /* A turn starts well clear of the last one (56px against 12px inside a turn). */
