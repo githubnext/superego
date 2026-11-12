@@ -42,8 +42,8 @@
 .thread__unarchive { height: 26px; gap: 5px; }
 /* Back and forward: past the window's buttons, quiet. */
 .app__history { flex: none; display: flex; align-items: center; gap: 2px; margin-right: -4px; }
-/* With the sidebar open, the title starts over the sheet; back and forward stay by the window's buttons, over the list. */
-.app.has-sidebar:has(.app__sidebar > :not(.app__footer):first-child) .app__history { position: absolute; left: 80px; top: 0; bottom: 0; }
+/* With the sidebar open, the title starts over the sheet; back and forward stay over the list, at its right edge. */
+.app.has-sidebar:has(.app__sidebar > :not(.app__footer):first-child) .app__history { position: absolute; top: 0; bottom: 0; margin: 0; right: calc(100% - var(--superego-rail) - var(--superego-sidebar) + 10px); }
 .app__history .superego-icon-button { width: 26px; height: 26px; min-height: 26px; border-radius: 6px; box-shadow: none; background: none; color: var(--superego-muted); }
 .app__history .superego-icon-button:hover:not(:disabled) { background: var(--superego-hover); color: var(--superego-text); }
 .app__titlebar-end { margin-left: auto; display: flex; align-items: center; gap: var(--superego-space-2); min-width: 0; }

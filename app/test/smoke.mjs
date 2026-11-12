@@ -405,8 +405,8 @@ if (phase === 'first') {
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'cmd+shift+[ back')
   // ⌘[ and ⌘] : back and forward through the threads shown, as a browser goes; the buttons say where you can go.
   await until(`!document.querySelector('.app__back').disabled && document.querySelector('.app__forward').disabled`, 'back, not forward')
-  // With the sidebar open they sit past the window's buttons, over the list, not by the title.
-  await until(`(() => { const back = document.querySelector('.app__back').getBoundingClientRect(), forward = document.querySelector('.app__forward').getBoundingClientRect(), list = document.querySelector('.app__sidebar').getBoundingClientRect(); return back.left >= 76 && forward.right <= list.right })()`, 'back and forward by the window buttons')
+  // With the sidebar open they sit over the list, at its right edge, clear of the window's buttons.
+  await until(`(() => { const back = document.querySelector('.app__back').getBoundingClientRect(), forward = document.querySelector('.app__forward').getBoundingClientRect(), list = document.querySelector('.app__sidebar').getBoundingClientRect(); return back.left >= 76 && Math.abs(list.right - 10 - forward.right) < 1 })()`, 'back and forward at the list\'s right edge')
   await key('[')
   await until(`document.querySelector('.thread__title')?.textContent === ${JSON.stringify(nextTitle)} && !document.querySelector('.app__forward').disabled`, 'cmd+[ back to the thread before')
   await key(']')
