@@ -16,7 +16,7 @@ export const PROTOCOL_VERSION = 1
  * What a daemon of this build offers, announced in `hello`. Clients check a feature before using it, so an older
  * daemon on another machine keeps working with a newer app (and the other way round) for whatever both know.
  */
-export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'heartbeat', 'channels', 'uploads', 'keeps-running'] as const
+export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'heartbeat', 'channels', 'uploads', 'keeps-running', 'clients', 'web-devices'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -110,10 +110,27 @@ export type MachineInfo = {
   build: string
 }
 
-export type Hello = { version: number; features: string[]; machine: MachineInfo; methods: string[] }
+/** `client` is the id this connection has in the daemon's client list (see `clients.watch`). */
+export type Hello = { version: number; features: string[]; machine: MachineInfo; methods: string[]; client?: string }
+
+/**
+ * A connection to a daemon, as its client list shows it. `kind` is what the client said it is in `hello` (`superego-app`,
+ * `web`, `superego-cli`); `label` names it for people: the computer it runs on, a browser's device name, a Tailscale login.
+ */
+export type ClientInfo = {
+  id: string; kind: string; label: string; connectedAt: number; activeAt: number
+  /** How it came in: the unix socket (or ssh to it), a paired browser, or Tailscale. */
+  via: 'socket' | 'web' | 'tailscale'
+  /** The paired browser it is, for `web`. */
+  device?: string
+}
+
+/** A browser paired with this machine for Web access. Its credential is a cookie; the daemon keeps only a hash. */
+export type WebDevice = { id: string; name: string; created: number; seen: number }
 
 export type Methods = {
-  hello: { params: { client: string; version: number; features?: string[] }; result: Hello }
+  /** `label` names this client in others' client lists: the app and CLI send their computer's hostname. */
+  hello: { params: { client: string; version: number; features?: string[]; label?: string }; result: Hello }
   /** Nothing, answered at once: a client pinging every few seconds notices a dead link in seconds (`heartbeat`). */
   ping: { params: {}; result: null }
   /** Open a channel (see channels.ts). The daemon accepts `upload` {name, mimeType, size}; its id names the upload. */
@@ -177,6 +194,16 @@ export type Methods = {
   'action.log': { params: {}; result: ActionLogEntry[] }
   /** `env` is laid over the daemon's own environment for its successor: `box run superego daemon restart` adds its keys. */
   'daemon.restart': { params: { build: string; interrupt?: boolean; env?: Record<string, string> }; result: { restarted: boolean; busy: boolean } }
+
+  /** Who is connected to this machine, then `clients.changed` with the whole list. */
+  'clients.watch': { params: {}; result: { sub: string; value: ClientInfo[] } }
+  /** Ask another client (by id) to run one of its window actions: it gets `client.perform` and dispatches it itself. */
+  'client.perform': { params: { client: string; action: string; params?: Json }; result: null }
+  /** A one-time code a browser pairs with, for a few minutes; `url` carries it in its fragment, never sent to the server. */
+  'web.pair': { params: {}; result: { code: string; expires: number; url: string | null } }
+  'web.device.rename': { params: { id: string; name: string }; result: null }
+  /** Forget a paired browser: its cookie stops working and its connections close at once. */
+  'web.device.revoke': { params: { id: string }; result: null }
 }
 
 export type Notifications = {
@@ -193,11 +220,14 @@ export type Notifications = {
   'ch.ack': { ch: string; bytes: number }
   'ch.end': { ch: string }
   'ch.abort': { ch: string; message: string }
+  'clients.changed': { sub: string; value: ClientInfo[] }
+  /** Another client asks this one to run a window action. A client that has no such action ignores it. */
+  'client.perform': { from: ClientInfo; action: string; params?: Json }
 }
 
 const NOTIFICATION_NAMES: Record<keyof Notifications, true> = {
   'watch.ops': true, 'watch.end': true, 'threads.changed': true, 'settings.changed': true, 'auth.event': true, 'value.changed': true,
-  'file.changed': true, 'ch.data': true, 'ch.ack': true, 'ch.end': true, 'ch.abort': true,
+  'file.changed': true, 'ch.data': true, 'ch.ack': true, 'ch.end': true, 'ch.abort': true, 'clients.changed': true, 'client.perform': true,
 }
 /** Every notification a daemon sends, at runtime (the contract test checks them). */
 export const NOTIFICATIONS = Object.keys(NOTIFICATION_NAMES) as (keyof Notifications)[]

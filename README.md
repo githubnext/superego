@@ -167,6 +167,8 @@ notes as a graph and as notes edited in place, with search and backlink tools fo
 
 ## In a browser or on a phone
 
-Settings → a machine → Web access: serve the app to this computer or the local network. Open the address it shows (it
-carries a token); on a phone, add it to the home screen. Each pane is a screen wide there, and a swipe moves between
+Settings → a machine → Web access: serve the app to this computer, through Tailscale (HTTPS on your tailnet; run the
+`tailscale serve` command it shows), or to the local network over plain HTTP. Off Tailscale, pair each browser: *Pair a
+browser* shows a one-time code and an address carrying it; Settings lists paired browsers to rename or revoke. On a
+phone, add it to the home screen. Each pane is a screen wide there, and a swipe moves between
 the thread and its panes.

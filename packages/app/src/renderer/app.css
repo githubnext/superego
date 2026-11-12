@@ -302,8 +302,11 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .action-log__error { font-size: var(--superego-text-xs); }
 .action-log__none { color: var(--superego-muted); }
 
-.web-access { display: flex; align-items: center; gap: var(--superego-space-3); padding: var(--superego-space-2) 0; }
+.web-access { display: grid; gap: var(--superego-space-2); padding: var(--superego-space-2) 0; }
+.web-access__row, .web-access__pair { display: flex; align-items: center; gap: var(--superego-space-3); }
 .web-access__url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--superego-muted); }
+.web-access__code { font-size: 20px; letter-spacing: 0.08em; user-select: all; }
+.web-access__pair .settings__note { flex: 1; }
 
 /* Phones and narrow windows: one column, the sidebar a drawer, nothing hovering where a thumb goes. */
 .app__mobilebar { display: flex; align-items: center; gap: var(--superego-space-2); padding: calc(env(safe-area-inset-top) + 8px) var(--superego-space-3) 8px; border-bottom: 1px solid var(--superego-border); background: var(--superego-sidebar-bg); flex: none; }

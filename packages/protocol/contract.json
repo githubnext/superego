@@ -11,6 +11,8 @@
     "auth.logout",
     "auth.respond",
     "ch.open",
+    "client.perform",
+    "clients.watch",
     "daemon.restart",
     "file.find",
     "file.read",
@@ -43,7 +45,10 @@
     "thread.watch",
     "threads.watch",
     "unwatch",
-    "value.watch"
+    "value.watch",
+    "web.device.rename",
+    "web.device.revoke",
+    "web.pair"
   ],
   "notifications": [
     "auth.event",
@@ -51,6 +56,8 @@
     "ch.ack",
     "ch.data",
     "ch.end",
+    "client.perform",
+    "clients.changed",
     "file.changed",
     "settings.changed",
     "threads.changed",
@@ -62,12 +69,14 @@
     "actions",
     "auth",
     "channels",
+    "clients",
     "heartbeat",
     "keeps-running",
     "restart",
     "restart-env",
     "settings",
     "threads",
-    "uploads"
+    "uploads",
+    "web-devices"
   ]
 }
