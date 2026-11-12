@@ -11,7 +11,7 @@ import { serveSettings } from '@superego/settings'
 import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type SuperegoEvent } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
 import { UiTrust } from './ui-trust.ts'
-import { checkIdentity, Link, MachineStore, openLocal as openLocalSocket, openMachine, routeOf } from '@superego/client'
+import { checkIdentity, installedCommand, installMachine, Link, loginInTerminal, MachineStore, openLocal as openLocalSocket, openMachine, routeOf, sshRun } from '@superego/client'
 import { MenuBar } from './tray.ts'
 import { ServiceRestart, type ServiceAction } from './restart.ts'
 import { shortcutOf } from '../renderer/shortcuts.ts'
@@ -127,7 +127,7 @@ export function startApp(appConfig: AppConfig) {
     return [
       ...(local ? [local.entry()] : []),
       ...machineStore.list().map((config): MachineEntry => {
-        const remote = { route: routeOf(config, appConfig), enabled: config.enabled }
+        const remote = { route: routeOf(config, appConfig), enabled: config.enabled, ssh: !config.via }
         const link = links.get(config.id)
         return link ? { ...link.entry(), label: config.label, remote } : { id: config.id, label: config.label, state: 'disabled', remote }
       }),
@@ -140,7 +140,7 @@ export function startApp(appConfig: AppConfig) {
   function sshLink(config: MachineConfig) {
     return new Link({
       id: config.id, label: config.label,
-      open: () => openMachine(config, appConfig),
+      open: () => openMachine(config, appConfig, dataDir),
       onEvent: (method, params) => onMachineEvent(config.id, method, params),
       verify(hello) {
         const current = machineStore.get(config.id)
@@ -369,6 +369,31 @@ export function startApp(appConfig: AppConfig) {
     id: 'machines.reconnect', title: 'Reconnect a machine', runs: 'app', expose: ['ui', 'cli'],
     params: obj({ id: str() }),
     run({ id }) { if (id === 'local') restartLocal(); else restartLink(id); return null },
+  }))
+  appRouter.register(defineAction({
+    id: 'machines.login', title: 'Log in to a machine', runs: 'app', expose: ['ui', 'cli'],
+    params: obj({ id: str() }),
+    /** Opens a terminal where ssh may ask for what it needs, and reconnects once it has left a login behind. Headless: no terminal. */
+    run({ id }) {
+      const config = machineStore.get(id)
+      if (!config) throw new RpcError('not_found', `No machine ${id}`)
+      if (headless) throw new RpcError('headless', 'No terminal is opened in headless mode')
+      void loginInTerminal(config, { dataDir }).done.then((up) => { if (up) restartLink(id) })
+      return null
+    },
+  }))
+  appRouter.register(defineAction({
+    id: 'machines.install', title: 'Install or update Superego on a machine', runs: 'app', expose: ['ui', 'cli'],
+    params: obj({ id: str(), service: opt(bool()) }),
+    async run({ id, service }) {
+      const config = machineStore.get(id)
+      if (!config) throw new RpcError('not_found', `No machine ${id}`)
+      const bundle = appEnv(appConfig)('REMOTE_BUNDLE') ?? join(import.meta.dirname, '../remote', `${appConfig.id}-remote.tgz`)
+      const installed = await installMachine(sshRun(config, dataDir), { app: appConfig, label: config.label, bundle, ...(service ? { service } : {}) })
+      await machineStore.update(id, { command: installedCommand(appConfig) })
+      restartLink(id)
+      return installed as unknown as Json
+    },
   }))
   appRouter.register(defineAction({
     id: 'service.act', title: 'Restart the background process', runs: 'app', expose: ['ui'],

@@ -9,7 +9,10 @@ import { carriesFiles, uploadAttachments } from './uploads.ts'
 export type Transport = { peer: RpcPeer; closed: Promise<void>; close(): void }
 
 /** Errors that another attempt can't fix: the link waits for the user (or a restart) instead of retrying. */
-const FINAL = new Set(['version_mismatch', 'wrong_machine', 'duplicate_machine'])
+const FINAL = new Set(['version_mismatch', 'wrong_machine', 'duplicate_machine', 'needs_login', 'host_key_changed', 'host_key_unknown'])
+
+/** Errors that are a state of their own, not a failure. */
+const stateOf = (kind: string): ConnectionState => kind === 'needs_login' ? 'needs-login' : kind.startsWith('host_key') ? 'host-key' : 'disconnected'
 
 export type LinkOptions = {
   id: MachineId
@@ -47,6 +50,7 @@ export class Link {
       id: this.id, label: this.label, state: this.state,
       ...(this.error ? { error: this.error.message, errorKind: this.error.kind } : {}),
       ...(this.hello ? { machine: { id: this.hello.machine.id, hostname: this.hello.machine.hostname }, features: this.hello.features } : {}),
+      ...(this.hello?.machine.keepsRunning ? { keepsRunning: this.hello.machine.keepsRunning } : {}),
     }
   }
 
@@ -123,7 +127,7 @@ export class Link {
         final = FINAL.has(kind)
         const message = error instanceof Error ? error.message : String(error)
         const hint = error instanceof RpcError && error.hint ? ` ${error.hint}` : ''
-        this.#set('disconnected', { kind, message: message + hint })
+        this.#set(stateOf(kind), { kind, message: message + hint })
       }
       if (this.#stopped || final) return
       await new Promise((resolve) => setTimeout(resolve, this.#delay))

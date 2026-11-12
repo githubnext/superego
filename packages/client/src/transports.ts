@@ -6,6 +6,7 @@ import { connectSocket, isListening } from '@superego/daemon/client'
 import { lineSplitter, RpcError, RpcPeer } from '@superego/protocol'
 import type { Transport } from './link.ts'
 import { remoteCommand, type AppConfig } from '@superego/protocol'
+import { classifySsh, controlPath, linkArgs } from './ssh.ts'
 import type { MachineConfig } from './shared.ts'
 
 export type { Transport } from './link.ts'
@@ -23,13 +24,15 @@ export async function openLocal(socket: string, start?: () => void): Promise<Tra
   return { peer, closed: new Promise((resolve) => conn.once('close', () => resolve())), close: () => conn.destroy() }
 }
 
-/** A configured machine, by its route. */
-export const openMachine = (config: MachineConfig, app: AppConfig) =>
-  config.via ? openVia(config.via) : openSsh(config.target, config.command ?? remoteCommand(app))
+/** A configured machine, by its route. With `dataDir`, ssh rides the shared master there when a login made one. */
+export const openMachine = (config: MachineConfig, app: AppConfig, dataDir?: string) =>
+  config.via ? openVia(config.via) : openSsh(config.target, config.command ?? remoteCommand(app), dataDir && controlPath(dataDir, config.target))
 
-export function openSsh(target: string, command: string): Promise<Transport> {
-  // BatchMode: never prompt (there is no terminal); keys or an agent must do. Keepalives notice a dead network.
-  return openStdio('ssh', ['-T', '-o', 'BatchMode=yes', '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3', target, command])
+/** The arguments of `ssh` for a link to `target` running `command`. */
+export const sshLinkArgs = (target: string, command: string, control?: string) => ['-T', ...linkArgs(control), '--', target, command]
+
+export function openSsh(target: string, command: string, control?: string): Promise<Transport> {
+  return openStdio('ssh', sshLinkArgs(target, command, control))
 }
 
 /** A machine behind any shell command that pipes stdin and stdout to a daemon. */
@@ -52,7 +55,10 @@ function openStdio(program: string, args: string[]): Promise<Transport> {
     child.stdin.on('error', () => {})
     const closed = new Promise<void>((done) => child.once('close', (code) => {
       const why = stderr.trim().split('\n').filter(Boolean).at(-1)
-      peer.close(new RpcError(name, why ? (why.startsWith(`${name}:`) ? why : `${name}: ${why}`) : `${name} exited with ${code}`))
+      // ssh's own words for a failed login or host key become kinds a link can act on.
+      const known = name === 'ssh' ? classifySsh(stderr) : undefined
+      if (known) peer.close(new RpcError(known.kind, known.message))
+      else peer.close(new RpcError(name, why ? (why.startsWith(`${name}:`) ? why : `${name}: ${why}`) : `${name} exited with ${code}`))
       done()
     }))
     child.once('error', (error) => reject(new RpcError(name, `Could not run ${program}: ${error.message}`)))

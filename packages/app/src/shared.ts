@@ -1,5 +1,4 @@
 // The contract between the main process and the renderer, exposed as `window.superego` by the preload.
-
 import type { ConnectionState, MachineConfig, MachineEntry, MachineId } from '@superego/client/shared'
 
 export type { ConnectionState, MachineConfig, MachineEntry, MachineId }

@@ -84,13 +84,17 @@ superego profile allow [name]       # let this project's profile run (again, aft
 
 ```sh
 superego machines                              # each, and whether it answers
-superego machines add <ssh-target> [--name N] [--command C]
+superego machines add <ssh-target> [--name N] [--command C] [--install [--service]]
+superego machines install <machine> [--service]   # copy Superego there over ssh (Node 22.18+), or update it
+superego machines login <machine>     # ssh in this terminal: a password or code; links then ride that connection
 superego machines add --via '<command>' [--name N]   # any command piping stdio to the far side
 superego machines rm|enable|disable|trust <machine>
 ```
 
-A remote machine needs `superego` installed there (`scripts/install-machine.sh` in the Superego repo); the app reaches it
-with `ssh <target> superego connect --start`.
+A remote machine needs `superego` installed there: `machines install` (or `add --install`) copies the bundle from the app's
+build and makes `~/.superego/bin/superego connect --start` the machine's command. `superego daemon install` on a machine runs
+its daemon as a service (systemd user unit, launchd agent) so it outlives logouts and reboots. A host that needs a password
+or code shows as "needs login" until `machines login`.
 
 ## Settings and sign-in
 

@@ -6,3 +6,12 @@ export { openLocal, openMachine, openSsh, openVia } from './transports.ts'
 export { Link, type LinkOptions, type Transport } from './link.ts'
 export { carriesFiles, upload, uploadAttachments } from './uploads.ts'
 export { checkIdentity } from './identity.ts'
+export {
+  classifySsh, controlPath, linkArgs, loginArgs, loginScript, masterAlive, shellQuote, terminalLaunch, type SshFailure,
+} from './ssh.ts'
+export {
+  installedCommand, installMachine, MIN_NODE, nodeIsNewEnough, remoteBinDir, sshRun,
+  type Installed, type InstallOptions, type RemoteResult, type RemoteRun,
+} from './install.ts'
+export { sshLinkArgs } from './transports.ts'
+export { loginInTerminal, type LoginOptions } from './login.ts'

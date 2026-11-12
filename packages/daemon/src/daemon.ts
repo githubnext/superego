@@ -28,6 +28,7 @@ import { serveConnection, versionMismatch } from './connection.ts'
 import { agentsInstructions, listSkills, mentionedSkills, skillBlock, skillsPrompt } from './skills.ts'
 import { metaExtension, metaPrompt, type MachineDirectory } from './meta.ts'
 import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileRef } from './profiles.ts'
+import { keepsRunning } from './service.ts'
 
 const context = BACKGROUND_CONTEXT
 
@@ -897,7 +898,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         async hello({ version, client: name }: Methods['hello']['params']) {
           if (version !== PROTOCOL_VERSION) throw versionMismatch(options.app, machine.hostname, version)
           if (typeof name === 'string') client = name
-          return { version: PROTOCOL_VERSION, features, machine, methods: peer.methods }
+          return { version: PROTOCOL_VERSION, features, machine: { ...machine, keepsRunning: keepsRunning(options.app) }, methods: peer.methods }
         },
         'thread.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),

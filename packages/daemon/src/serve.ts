@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { rm, writeFile } from 'node:fs/promises'
 import { readBuild } from './build.ts'
 import { openDaemon } from './daemon.ts'
+import { serviceInstalled, startService } from './service.ts'
 import { listen } from './server.ts'
 import { appEnv, defaultDataDir, pidPath, socketPath } from './paths.ts'
 import type { AppConfig } from '@superego/protocol'
@@ -40,6 +41,12 @@ export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket =
   restart = async (env) => {
     await writeFile(pidFile, String(process.pid))
     await close()
+    // With a service installed it is the one to bring the daemon back (or, already the one running it, to restart us).
+    if (serviceInstalled({ app })) {
+      await rm(pidFile, { force: true })
+      startService({ app })
+      process.exit(0)
+    }
     const successor = spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], { detached: true, stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, ...env } })
     successor.unref()
     await writeFile(pidFile, String(successor.pid))

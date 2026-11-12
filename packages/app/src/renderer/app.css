@@ -555,3 +555,4 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .ui-notice__actions { display: flex; gap: 4px; margin-top: 6px; }
 .ui-notice__sources { margin-top: 6px; }
 .ui-notice__sources pre { max-height: 240px; overflow: auto; margin: 2px 0 8px; font-size: calc(11px * var(--superego-text-scale)); -webkit-user-select: text; user-select: text; }
+.machine-row__warning { color: var(--superego-warning, #b45309); }

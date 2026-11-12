@@ -116,15 +116,23 @@ elsewhere with a first message; `-P <profile>` picks a profile; `-w` gives it a 
 them. Every command takes `-m <machine>` and `--json`; `superego help` lists them. `superego --skill` prints a skill for
 agents on using and extending Superego (`superego --skill > ~/.agents/skills/superego/SKILL.md` installs it); it ends with
 an index of topics, each printed by `superego --skill <topic>`: `cli`, `profiles`, `tools`, `daemon`, `ui`, `bundled`,
-`debugging`. They live in `packages/cli/skill/`. A remote machine needs `superego` on its PATH for
-`ssh <host> superego connect --start`:
+`debugging`. They live in `packages/cli/skill/`.
+
+A remote machine needs only Node 22.18+ and ssh. `pnpm build` (in `app/`) packs the daemon, CLI and the window's web build into
+`app/out/remote/superego-remote.tgz`; one command copies it over ssh, unpacks it to `~/.superego/bin` with a `superego` shim that
+names its Node, and points the machine at the shim, so nothing on its PATH changes. Run it again to update:
 
 ```sh
-gh repo clone mikker/superego ~/dev/superego && ~/dev/superego/scripts/install-machine.sh   # again to update
+superego machines add <host> --install --service    # --service: keep its daemon running across logouts and reboots
+superego machines install <machine> [--service]     # update, or install on a machine already added
+superego daemon install                             # on a machine: a systemd user unit (with lingering) or a launchd agent
 ```
 
-It installs `~/.local/bin/superego`, which a non-interactive ssh shell may not have on its PATH; then add the machine with
-that command: `superego machines add <host> --command '~/.local/bin/superego connect --start'`.
+ssh runs without a terminal (`BatchMode`) and rides one shared ControlMaster connection per target under the data dir. A host
+that wants a password, a code or a hardware key shows as "needs login": `superego machines login <machine>` (or Log in in
+Settings → Machines, which opens Terminal) logs in once and leaves a master that links ride for four hours. A changed or
+unknown host key is its own state, with ssh's message. `hello` reports `keepsRunning` and `superego machines` and Settings warn
+when a remote daemon will end at logout or reboot.
 
 The daemon takes model keys from the providers' own variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) when none is
 stored in Settings. A restart keeps the environment it was started with and adds that of the shell asking for it. Where

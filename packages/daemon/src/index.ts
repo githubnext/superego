@@ -5,3 +5,7 @@ export { serveDaemon } from './serve.ts'
 export { isListening } from './server.ts'
 export { readBuild } from './build.ts'
 export { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveValue, type StatusContribution } from './extension.ts'
+export {
+  installService, keepsRunning, launchdLabel, realRun, serviceInstalled, serviceKind, servicePath, startService, uninstallService, unitName,
+  type Run, type ServiceContext, type ServiceInstall,
+} from './service.ts'
