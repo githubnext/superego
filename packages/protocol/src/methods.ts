@@ -15,7 +15,7 @@ export const PROTOCOL_VERSION = 1
  * What a daemon of this build offers, announced in `hello`. Clients check a feature before using it, so an older
  * daemon on another machine keeps working with a newer app (and the other way round) for whatever both know.
  */
-export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'actions'] as const
+export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -151,7 +151,8 @@ export type Methods = {
   'action.run': { params: { id: string; params?: unknown; exposure?: Exposure }; result: unknown }
   /** This machine's newest dispatches. */
   'action.log': { params: {}; result: ActionLogEntry[] }
-  'daemon.restart': { params: { build: string; interrupt?: boolean }; result: { restarted: boolean; busy: boolean } }
+  /** `env` is laid over the daemon's own environment for its successor: `box run superego daemon restart` adds its keys. */
+  'daemon.restart': { params: { build: string; interrupt?: boolean; env?: Record<string, string> }; result: { restarted: boolean; busy: boolean } }
 }
 
 export type Notifications = {

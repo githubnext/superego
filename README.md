@@ -117,9 +117,9 @@ It installs `~/.local/bin/superego`, which a non-interactive ssh shell may not h
 that command: `superego machines add <host> --command '~/.local/bin/superego connect --start'`.
 
 The daemon takes model keys from the providers' own variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) when none is
-stored in Settings, and a restart keeps the environment it was started with. Where those keys are sealed, as on a
-[workbox](https://github.com/githubnext/workboxes), start it from a terminal on the box, once after each boot:
-`superego daemon stop; box run superego daemon restart`. (The app's ssh has no terminal for `box run` to ask for a password.)
+stored in Settings. A restart keeps the environment it was started with and adds that of the shell asking for it. Where
+those keys are sealed, as on a [workbox](https://github.com/githubnext/workboxes), restart it from a terminal on the box,
+once after each boot: `box run superego daemon restart`. (The app's ssh has no terminal for `box run` to ask for a password.)
 
 ## Profiles
 

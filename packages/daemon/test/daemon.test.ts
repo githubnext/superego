@@ -178,7 +178,8 @@ describe('restart', () => {
     process.env.SUPEREGO_MODEL = 'replay:' + recording
     process.env.SUPEREGO_REPLAY_SPEED = '20'
     let restarts = 0
-    const daemon = await openDaemon({ app: SUPEREGO, dataDir: dir, defaultCwd: dir, build: 'b1', onRestart: () => restarts++ })
+    let successorEnv: Record<string, string> | undefined
+    const daemon = await openDaemon({ app: SUPEREGO, dataDir: dir, defaultCwd: dir, build: 'b1', onRestart: (env) => { restarts++; successorEnv = env } })
     delete process.env.SUPEREGO_REPLAY_SPEED
     const server = await listen(daemon, join(dir, 'superego.sock'))
     const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
@@ -192,8 +193,9 @@ describe('restart', () => {
     expect(await peer.call('daemon.restart', { build: 'b1' })).toEqual({ restarted: false, busy: true })
     expect(restarts).toBe(0)
 
-    expect(await peer.call('daemon.restart', { build: 'b1', interrupt: true })).toEqual({ restarted: true, busy: true })
+    expect(await peer.call('daemon.restart', { build: 'b1', interrupt: true, env: { ANTHROPIC_API_KEY: 'k', BAD: 1 } })).toEqual({ restarted: true, busy: true })
     await until(() => restarts === 1)
+    expect(successorEnv).toEqual({ ANTHROPIC_API_KEY: 'k' })
     await expect(peer.call('thread.list', {})).rejects.toMatchObject({ kind: 'restarting' })
     socket.destroy(); server.close(); await daemon.close()
   })

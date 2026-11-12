@@ -17,9 +17,9 @@ export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket =
   machines?: (dataDir: string) => MachineDirectory
 }) {
   const build = readBuild(import.meta.dirname)
-  let restart = async () => {}
+  let restart = async (_env: Record<string, string>) => {}
   const agentsDir = appEnv(app)('AGENTS')
-  const daemon = await openDaemon({ app, dataDir, defaultCwd: appEnv(app)('CWD') ?? defaultCwd ?? process.cwd(), build, extensions, ...(webRoot ? { webRoot } : {}), ...(agentsDir ? { agentsDir } : {}), ...(machines ? { machines: () => machines(dataDir) } : {}), onRestart: () => void restart() })
+  const daemon = await openDaemon({ app, dataDir, defaultCwd: appEnv(app)('CWD') ?? defaultCwd ?? process.cwd(), build, extensions, ...(webRoot ? { webRoot } : {}), ...(agentsDir ? { agentsDir } : {}), ...(machines ? { machines: () => machines(dataDir) } : {}), onRestart: (env) => void restart(env) })
   const server = await listen(daemon, socket)
   const pidFile = pidPath(dataDir)
   await writeFile(pidFile, String(process.pid))
@@ -34,12 +34,13 @@ export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket =
     process.exit(0)
   }
   // The successor is this same command with this same environment, so whatever the daemon was started with (API keys
-  // from `box run`, say) outlives restarts; the code it runs is whatever is installed now. Clients wait meanwhile
-  // (see daemonStarting).
-  restart = async () => {
+  // from `box run`, say) outlives restarts, plus what the restart brought: `box run superego daemon restart` adds keys
+  // to a daemon started without them, and a restart from a plain shell takes none away. The code it runs is whatever
+  // is installed now. Clients wait meanwhile (see daemonStarting).
+  restart = async (env) => {
     await writeFile(pidFile, String(process.pid))
     await close()
-    const successor = spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], { detached: true, stdio: ['ignore', 'inherit', 'inherit'], env: process.env })
+    const successor = spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], { detached: true, stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, ...env } })
     successor.unref()
     await writeFile(pidFile, String(successor.pid))
     process.exit(0)

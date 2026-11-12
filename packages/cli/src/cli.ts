@@ -350,7 +350,10 @@ async function daemonCommand(sub: string | undefined, now: boolean) {
         process.kill(hello.machine.pid, 'SIGTERM')
         return hello
       }
-      const result = await call('daemon.restart', { build: hello.machine.build, interrupt: now })
+      // This shell's environment goes along, as it would to a daemon this started: keys from `box run`, say. Only what is
+      // set, so a restart adds and never takes away.
+      const env = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => Boolean(e[1])))
+      const result = await call('daemon.restart', { build: hello.machine.build, interrupt: now, ...(hello.features.includes('restart-env') ? { env } : {}) })
       if (!result.restarted) {
         throw new RpcError('busy', 'Agents are working, so the daemon was not restarted.', { hint: `Wait for them, or: ${app.id} daemon restart --now (they resume after the restart).` })
       }

@@ -125,6 +125,12 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     expect(after.pid).not.toBe(before.pid)
     expect((await superegoJson(['threads'])).some((s: any) => s.title === 'hi from the cli')).toBe(true)
     expect((await superegoJson(['auth'])).find((p: any) => p.id === 'anthropic')).toMatchObject({ auth: { source: 'ANTHROPIC_API_KEY' } })
+
+    // Restarted from a shell with another key (`box run superego daemon restart` on a daemon the app started): both.
+    await superego(['daemon', 'restart'], undefined, undefined, { OPENAI_API_KEY: 'sk-env' })
+    const auth = await superegoJson(['auth'])
+    expect(auth.find((p: any) => p.id === 'anthropic')).toMatchObject({ auth: { source: 'ANTHROPIC_API_KEY' } })
+    expect(auth.find((p: any) => p.id === 'openai')).toMatchObject({ auth: { source: 'OPENAI_API_KEY' } })
   })
 
   it('stops the daemon', async () => {

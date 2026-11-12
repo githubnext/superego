@@ -73,8 +73,8 @@ export type DaemonOptions = {
   defaultCwd?: string
   /** The build of the code running, reported in `hello`. */
   build?: string
-  /** Called once a restart was accepted and answered; the host closes the daemon and exits. */
-  onRestart?: () => void
+  /** Called once a restart was accepted and answered, with what to add to the successor's environment; the host closes the daemon and exits. */
+  onRestart?: (env: Record<string, string>) => void
   /** The app's window build (index.html and assets), served to browsers when Web access is on. */
   webRoot?: string
   /** The folder agents share: skills in `skills/`, standing instructions in `AGENTS.md`. Defaults to `~/.agents`. */
@@ -803,15 +803,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }))
   router.register(defineAction({
     id: 'daemon.restart', title: 'Restart the background process', runs: 'machine', expose: ['ui', 'cli'],
-    params: obj({ build: str(), interrupt: opt(bool()) }),
-    run({ build, interrupt }) {
+    params: obj({ build: str(), interrupt: opt(bool()), env: opt(unknown()) }),
+    run({ build, interrupt, env }) {
       if (build !== machine.build) throw new RpcError('changed', 'The running daemon changed. Check again.')
       if (restarting) throw new RpcError('restarting', 'Already restarting')
       // Decided synchronously from the mounted threads, so no run can start between the check and the flag.
       const busy = [...mounted.values()].some((m) => m.live?.run)
       if (busy && !interrupt) return { restarted: false, busy }
       restarting = true
-      setImmediate(() => options.onRestart?.())
+      const vars = Object.fromEntries(Object.entries(env && typeof env === 'object' ? env : {}).filter((e): e is [string, string] => typeof e[1] === 'string'))
+      setImmediate(() => options.onRestart?.(vars))
       return { restarted: true, busy }
     },
   }))
