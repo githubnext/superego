@@ -1,20 +1,8 @@
 // The contract between the main process and the renderer, exposed as `window.superego` by the preload.
 
-export type MachineId = string
-export type ConnectionState = 'connecting' | 'connected' | 'disconnected'
-import type { MachineConfig } from '@superego/client/shared'
+import type { ConnectionState, MachineConfig, MachineEntry, MachineId } from '@superego/client/shared'
 
-export type { MachineConfig }
-
-export type MachineEntry = {
-  id: MachineId; label: string; state: ConnectionState | 'disabled'; error?: string; errorKind?: string
-  /** Who answered, from the last hello: the daemon's identity and hostname, and what it offers. */
-  machine?: { id: string; hostname: string }
-  features?: string[]
-  /** Absent for this computer, which can't be removed. */
-  remote?: { route: string; enabled: boolean }
-}
-
+export type { ConnectionState, MachineConfig, MachineEntry, MachineId }
 
 /** A notification from a machine's daemon, `$connection` when a link's state changes, or `$machines` with the whole list. */
 export type SuperegoEvent = { machine: MachineId; method: string; params: unknown }

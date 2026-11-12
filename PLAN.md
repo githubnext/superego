@@ -76,7 +76,8 @@ The niche is real. We should borrow herdr-core's protocol hygiene wholesale, and
 - owns one pi-durable `Harness` on node SQLite (one storage per daemon; durable allows a single writer)
 - owns the thread catalog, the extension host and the doc store
 - exposes JSON-RPC 2.0 over NDJSON on a mode-0600 unix socket; `superego connect` bridges stdio to it
-- streaming uses notifications on subscription ids for v0; herdr-style framed channels later, if terminals need them
+- streaming uses notifications on subscription ids; bulk bytes (uploads now, terminals later) go on channels: still JSON-RPC lines, base64 chunks within credit the receiver grants, and the peer's writer sends them only behind every control message (`packages/protocol/src/channels.ts`)
+- a client that pings (`heartbeat`) notices a dead link in seconds on any transport, and the daemon hangs up on one that stops
 
 **Electron main:** thin. Window management, machine catalog (`~/.superego/machines.json`: `{id,label,target,enabled}`), spawning ssh links, and relaying one generic `call/on` (no hand-maintained channel lists; that was a tremolo regret). Each machine link reconnects with backoff, and a disconnected machine stays visible but stale (fut).
 
@@ -92,6 +93,8 @@ threads.watch                             → snapshot + threads.changed (status
 file.read / file.find / file.watch {id, path} → file.changed      thread.diff {id}
 profile.ui / profile.module               settings.watch          value.watch {key} → value.changed
 action.list / action.run {id, params, exposure} / action.log            unwatch {sub}
+ping                                      ch.open {ch, kind, params, window} → ch.data / ch.ack / ch.end / ch.abort
+                                          (kind `upload`: an attachment named by its id, `{name, mimeType, upload}`)
 
 actions, each also served under its id:
 thread.create {cwd, prompt, attachments, profile, worktree} / submit {text, attachments} / abort / rename / seen
@@ -100,7 +103,7 @@ pane.open / update / focus / close        file.write              profile.list /
 settings.set   auth.login / respond / cancel / logout   daemon.restart   <extension>.<name>
 ```
 
-Reads and streams (`*.list`, `*.watch`) stay plain methods. Everything that changes something is an action (§3a). The protocol version stays 1 until a release; after it, peers negotiate by `features`, not by version.
+Reads and streams (`*.list`, `*.watch`) stay plain methods. Everything that changes something is an action (§3a). The protocol version is a generation and stays 1; peers negotiate by `features`, not by version. The method table only grows: `packages/protocol/contract.json` freezes what a bare daemon serves, and a test fails when anything in it disappears.
 
 ### Entities
 

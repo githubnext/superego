@@ -26,8 +26,9 @@ export async function listen(daemon: Daemon, path: string): Promise<Server> {
 
 function attach(daemon: Daemon, socket: Socket) {
   socket.setEncoding('utf8')
-  const peer = new RpcPeer((line) => { if (!socket.destroyed) socket.write(line) })
-  const cleanup = daemon.serve(peer)
+  const peer = new RpcPeer((line) => socket.destroyed || socket.write(line))
+  const cleanup = daemon.serve(peer, () => socket.destroy())
+  socket.on('drain', () => peer.drain())
   socket.on('data', lineSplitter((line) => peer.receive(line)))
   socket.on('error', () => {})
   socket.on('close', () => { peer.close(); cleanup() })
@@ -41,7 +42,8 @@ export function connectSocket(path: string): Promise<{ peer: RpcPeer; socket: So
     socket.once('connect', () => {
       socket.off('error', reject)
       socket.setEncoding('utf8')
-      const peer = new RpcPeer((line) => { if (!socket.destroyed) socket.write(line) })
+      const peer = new RpcPeer((line) => socket.destroyed || socket.write(line))
+      socket.on('drain', () => peer.drain())
       socket.on('data', lineSplitter((line) => peer.receive(line)))
       socket.on('error', () => {})
       socket.on('close', () => peer.close())

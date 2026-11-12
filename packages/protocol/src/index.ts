@@ -1,4 +1,6 @@
 export * from './rpc.ts'
+export * from './channels.ts'
+export * from './uploads.ts'
 export * from './methods.ts'
 export * from './status.ts'
 export * from './settings.ts'

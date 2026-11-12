@@ -4,10 +4,11 @@
 import { spawn } from 'node:child_process'
 import { connectSocket, isListening } from '@superego/daemon/client'
 import { lineSplitter, RpcError, RpcPeer } from '@superego/protocol'
+import type { Transport } from './link.ts'
 import { remoteCommand, type AppConfig } from '@superego/protocol'
 import type { MachineConfig } from './shared.ts'
 
-export type Transport = { peer: RpcPeer; closed: Promise<void>; close(): void }
+export type { Transport } from './link.ts'
 
 /**
  * The daemon on this computer, at `socket`. `start` launches one when nothing answers; how depends on the client (the
@@ -41,7 +42,8 @@ function openStdio(program: string, args: string[]): Promise<Transport> {
   return new Promise((resolve, reject) => {
     const child = spawn(program, args, { stdio: ['pipe', 'pipe', 'pipe'] })
     let stderr = ''
-    const peer = new RpcPeer((line) => { if (child.stdin.writable) child.stdin.write(line) })
+    const peer = new RpcPeer((line) => !child.stdin.writable || child.stdin.write(line))
+    child.stdin.on('drain', () => peer.drain())
     child.stdout.setEncoding('utf8')
     // Login banners and other noise are not JSON-RPC; the peer skips lines it can't parse.
     child.stdout.on('data', lineSplitter((line) => peer.receive(line)))
