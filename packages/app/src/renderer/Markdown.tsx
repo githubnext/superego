@@ -1,10 +1,10 @@
 // An assistant's text, as the markdown it is: GitHub-flavoured (tables, task lists, strikethrough). No raw HTML.
 // Web links open in the browser, not in the window; in a thread (OpenUrl) a button beside each opens it in a pane. Where a file can be opened (a thread: OpenFile), the files it
 // names open beside it: [[wikilinks]], relative links, and code that reads as a path (`notes/plan.md`).
-import { createContext, memo, useContext, useLayoutEffect, useRef, type ComponentProps } from 'react'
+import { createContext, memo, useContext, useEffect, useLayoutEffect, useRef, useState, type ComponentProps } from 'react'
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { SquareSplitHorizontalIcon } from '@superego/ui'
+import { CheckIcon, CopyIcon, SquareSplitHorizontalIcon } from '@superego/ui'
 
 /** Code scrolls sideways, never wraps; it fades at the right edge only while a line runs past it. */
 export function Scroll({ node: _node, ...props }: ComponentProps<'pre'> & { node?: unknown }) {
@@ -20,6 +20,43 @@ export function Scroll({ node: _node, ...props }: ComponentProps<'pre'> & { node
     return () => { observer.disconnect(); el.removeEventListener('scroll', check) }
   }, [])
   return <pre ref={ref} {...props} />
+}
+
+function copyBySelection(text: string) {
+  const area = document.createElement('textarea')
+  area.value = text
+  area.setAttribute('readonly', '')
+  area.style.cssText = 'position:fixed;opacity:0'
+  document.body.append(area)
+  area.select()
+  const ok = document.execCommand('copy')
+  area.remove()
+  if (!ok) throw new Error('Copy failed')
+}
+
+/** A code block in a message, with a button in its corner that copies all of it. */
+function CodeBlock(props: ComponentProps<'pre'> & { node?: unknown }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(false), 1500)
+    return () => clearTimeout(timer)
+  }, [copied])
+  const copy = () => {
+    const text = ref.current?.querySelector('pre')?.textContent?.replace(/\n$/, '') ?? ''
+    // Web access over plain http has no clipboard API; a selection and the copy command still work there.
+    const written = navigator.clipboard ? navigator.clipboard.writeText(text) : new Promise<void>((resolve) => resolve(copyBySelection(text)))
+    void written.then(() => setCopied(true), (error) => console.error(error))
+  }
+  return (
+    <div ref={ref} className="md__code">
+      <Scroll {...props} />
+      <button type="button" className={`md__copy ${copied ? 'is-copied' : ''}`} aria-label={copied ? 'Copied' : 'Copy all'} title={copied ? 'Copied' : 'Copy all'} onClick={copy}>
+        {copied ? <CheckIcon aria-hidden /> : <CopyIcon aria-hidden />}
+      </button>
+    </div>
+  )
 }
 
 /** Opens a file by the name the text gives it. Provided where there's a folder to look in: a thread. */
@@ -70,7 +107,7 @@ const components: Components = {
   },
   // Tables scroll sideways inside the column instead of widening it.
   table: ({ node: _node, ...props }) => <div className="md__table"><table {...props} /></div>,
-  pre: Scroll,
+  pre: CodeBlock,
 }
 
 const urlTransform = (url: string) => url.startsWith(FILE) ? url : defaultUrlTransform(url)
