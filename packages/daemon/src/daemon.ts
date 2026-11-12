@@ -20,6 +20,7 @@ import {
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
+import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveValue, type StatusContribution } from './extension.ts'
 import { serveWeb, webToken, type WebServer } from './web.ts'
 import { agentsInstructions, listSkills, mentionedSkills, skillBlock, skillsPrompt } from './skills.ts'
@@ -210,9 +211,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')))
   const agent = await createAgentSettings(settings, options.dataDir, options.app)
   const registry = createRegistry()
-  /** What every thread has unless its profile does without: coding tools and the bundled extensions' agent parts. */
+  /**
+   * What every thread has unless this machine's settings turn it off or its profile does without: coding tools and the
+   * bundled extensions' agent parts, each by who gave it (`owners`: a bundled extension may give several).
+   */
   const builtins: Extension[] = []
-  const installBuiltin = (extension: Extension) => { registry.install(extension); builtins.push(extension) }
+  const owners = new Map<Extension, string>()
+  const installBuiltin = (extension: Extension, owner = extension.name) => { registry.install(extension); builtins.push(extension); owners.set(extension, owner) }
+  const ownerOf = (extension: Extension) => owners.get(extension)!
+  /** The built-ins this machine's settings leave on (see the Extensions section). */
+  const enabled = () => builtins.filter((e) => settings.get(`extensions.${ownerOf(e)}`) !== false)
   installBuiltin(createCodingTools())
   // Panes: the agent opens them beside its thread (a diff, a preview, an artifact it wrote, a profile's own).
   installBuiltin(defineExtension({
@@ -252,7 +260,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     identity: { attribution: options.app.url ? { name: options.app.name, url: options.app.url } : null },
     env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? defaultCwd }),
     // A thread without a profile selects the built-ins only: profiles' extensions are installed too, but are theirs.
-    settings: () => ({ extensions: builtins }),
+    settings: () => ({ extensions: enabled() }),
   }, context)
 
   const machine: MachineInfo = {
@@ -414,7 +422,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     return () => { for (const step of undo.reverse()) step() }
   }
-  for (const extension of options.extensions ?? []) cleanups.push(await setUp(extension, installBuiltin))
+  for (const extension of options.extensions ?? []) cleanups.push(await setUp(extension, (agentExtension) => installBuiltin(agentExtension, extension.name)))
+  registerExtensionSettings(settings, [...new Set(builtins.map(ownerOf))].map((name) => {
+    const bundled = options.extensions?.find((e) => e.name === name)
+    return { name, title: bundled?.title, description: bundled?.description }
+  }))
   const features = [...FEATURES, ...(options.extensions ?? []).map((extension) => `ext:${extension.name}`)]
 
   // ── Profiles ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -469,11 +481,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         instructions: metaPrompt({ name: options.app.name, agent: options.app.agent, id: options.app.id, dataDir: options.dataDir, agentsDir, hostname: machine.hostname }),
       }
     }
-    if (!profile) return { model, thinkingLevel }
+    if (!profile) return { model, thinkingLevel, extensions: enabled() }
     const without = new Set(profile.spec.without ?? [])
     return {
       model, thinkingLevel,
-      extensions: [...builtins.filter((e) => !without.has(e.name)), ...profile.extensions],
+      extensions: [...enabled().filter((e) => !without.has(e.name) && !without.has(ownerOf(e))), ...profile.extensions],
       instructions: [profile.spec.prompt, profile.spec.panes && Object.keys(profile.spec.panes).length
         ? `Panes this profile adds, for open_pane:\n${Object.entries(profile.spec.panes).map(([kind, about]) => `- "${kind}": ${about}`).join('\n')}`
         : undefined].filter(Boolean).join('\n\n') || null,
@@ -993,6 +1005,18 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     settings.invalidate()
   }
+  // The profiles threads here can start with: the user's, and those of the projects that have threads.
+  settings.register({
+    id: 'profiles', title: 'Profiles', order: 75, ui: 'profiles', settings: [],
+    description: 'Your own, and those of the projects you have threads in.',
+    data: async () => {
+      const found = new Map<string, ProfileRef>()
+      for (const folder of new Set([defaultCwd, ...(await list()).map((t) => t.session.root)])) {
+        for (const ref of listProfiles(folder, userProfiles)) found.set(ref.dir, ref)
+      }
+      return Promise.all([...found.values()].map((ref) => describeProfile(ref, userProfiles, trust)))
+    },
+  })
   settings.register({
     id: 'web', title: 'Web access', order: 80, ui: 'web',
     description: 'Use this machine from a browser or a phone: it serves the app and its threads.',

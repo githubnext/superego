@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
-import { defineApp, PROTOCOL_VERSION, type Json, type ThreadInfo } from '@superego/protocol'
+import { defineApp, PROTOCOL_VERSION, type Json, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 import tasks from '../src/daemon.ts'
 
 const app = defineApp({ name: 'test', id: 'taskstest' })
@@ -40,6 +40,37 @@ it('gives the agent the tools, and task_start a task_id that is its own call', a
     .filter((message) => message?.role === 'toolResult')
   expect(results.map((message) => message!.isError)).toEqual([false, false])
   expect(JSON.parse(results[0]!.content![0]!.text!)).toEqual({ task_id: 'call-1', title: 'Looking around' })
+
+  socket.destroy(); server.close(); await daemon.close()
+  delete process.env.TASKSTEST_MODEL
+})
+
+it('is listed in Settings → Extensions, and switched off there the agent goes without it', async () => {
+  dir = await mkdtemp(join(tmpdir(), 'superego-tasks-'))
+  await writeFile(join(dir, 'turns.jsonl'), [
+    turn([{ type: 'toolCall', id: 'call-1', name: 'task_start', arguments: { title: 'Looking around' } }], 'toolUse'),
+    turn([{ type: 'text', text: 'Done.' }], 'stop'),
+  ].join('\n') + '\n')
+  process.env.TASKSTEST_MODEL = `replay:${join(dir, 'turns.jsonl')}`
+  process.env.TASKSTEST_REPLAY_SPEED = '0'
+  const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, extensions: [tasks] })
+  const server = await listen(daemon, join(dir, 's.sock'))
+  const { peer, socket } = await connectSocket(join(dir, 's.sock'))
+  await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
+
+  const { value: settings } = await peer.call<{ value: SettingsSnapshot }>('settings.watch', {})
+  const section = settings.sections.find((s) => s.id === 'extensions')!
+  expect(section.settings.map((s) => s.key)).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.skills', 'extensions.agents-md', 'extensions.tasks'])
+  expect(section.settings.at(-1)).toMatchObject({ title: 'Task reporting', default: true })
+  expect(settings.sections.find((s) => s.id === 'profiles')?.data).toEqual([])
+
+  await peer.call('settings.set', { key: 'extensions.tasks', value: false })
+  const thread = await peer.call<ThreadInfo>('thread.create', {})
+  await peer.call('thread.submit', { id: thread.id, text: 'look around' })
+  await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
+  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
+  const result = value.entries.map((entry) => entry.model?.[0] as { role?: string; isError?: boolean } | undefined).find((m) => m?.role === 'toolResult')
+  expect(result?.isError).toBe(true)
 
   socket.destroy(); server.close(); await daemon.close()
   delete process.env.TASKSTEST_MODEL

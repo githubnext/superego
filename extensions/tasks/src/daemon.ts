@@ -16,6 +16,8 @@ The task's outcome IS the completion recap. Do not repeat it in your final messa
 
 export default defineDaemonExtension({
   name: 'tasks',
+  title: 'Task reporting',
+  description: 'Report work as a few titled tasks, each with how it went.',
   setup(superego) {
     superego.agent(defineExtension({
       name: 'tasks',

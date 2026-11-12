@@ -8,6 +8,8 @@ import { ANSWER, PENDING, TOOL, type AskDetails, type Question } from './shared.
 
 export default defineDaemonExtension({
   name: 'ask-user',
+  title: 'Ask the user',
+  description: 'Put a question to you and wait for the answer.',
   setup(superego) {
     const pending = superego.value<Question[]>(PENDING, [])
     const answers = new Map<string, (answer: string) => void>()

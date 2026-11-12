@@ -205,8 +205,9 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .settings__content { overflow: auto; padding: 8px 28px 40px; }
 .settings__note { color: var(--superego-muted); font-size: 12px; margin: 2px 0; }
 .settings-section h2 { font-size: 13px; font-weight: 600; margin: 24px 0 4px; }
-.setting, .provider { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--superego-border); }
+.setting, .provider, .profile-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--superego-border); }
 .setting__label { min-width: 0; }
+.profile-row__scope { margin-left: 4px; padding: 1px 6px; border-radius: 4px; background: var(--superego-hover); color: var(--superego-muted); font-size: var(--superego-text-xs); }
 .setting__control { flex: none; }
 .setting__control .superego-select { max-width: 280px; }
 .setting__error { color: var(--superego-status-error); font-size: 12px; }
@@ -315,7 +316,7 @@ code { font-family: var(--superego-mono); font-size: .92em; }
   .settings__nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--superego-border); padding: 8px; }
   .settings__nav button { white-space: nowrap; }
   .settings__content { padding: 8px 16px 40px; }
-  .setting, .provider, .machine-row { flex-wrap: wrap; }
+  .setting, .provider, .profile-row, .machine-row { flex-wrap: wrap; }
 }
 
 .thread__tools { display: inline-flex; align-items: center; gap: var(--superego-space-2); flex: none; }

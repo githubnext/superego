@@ -10,6 +10,9 @@ import type { SettingsRegistry } from '@superego/settings'
 export type DaemonExtension = {
   /** Lowercase, unique in the app: `ask-user`, `git`. Its methods and values are named `<name>.<something>`. */
   name: string
+  /** How Settings names it, and what it gives the agents there; the name, and nothing, when unset. */
+  title?: string
+  description?: string
   /** Called once when the daemon starts, before interrupted work resumes. May return a cleanup. */
   setup(superego: DaemonApi): void | (() => void) | Promise<void | (() => void)>
 }
