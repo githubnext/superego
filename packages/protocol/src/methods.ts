@@ -15,7 +15,7 @@ export const PROTOCOL_VERSION = 1
  * What a daemon of this build offers, announced in `hello`. Clients check a feature before using it, so an older
  * daemon on another machine keeps working with a newer app (and the other way round) for whatever both know.
  */
-export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions'] as const
+export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'ego'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -48,7 +48,7 @@ export type ThreadInfo = {
   worktree?: { path: string; branch: string; removed?: boolean }
   /** Put away: listed only with `archived`, readable, and taking no messages until unarchived. */
   archived?: boolean
-  /** The machine's own agent, about Superego itself: setting up machines, projects, profiles, skills (see `thread.meta`). */
+  /** Ego, the machine's own agent, about Superego itself (see `thread.meta`): one thread, in no list, never archived. */
   meta?: boolean
   status: Status
 }
@@ -137,6 +137,8 @@ export type Methods = {
   'thread.watch': { params: { id: ThreadId }; result: { sub: string; value: ConversationView } }
   /** Snapshot of the thread list, then `threads.changed` notifications with the whole list. */
   'threads.watch': { params: {}; result: { sub: string; value: ThreadInfo[] } }
+  /** Ego's thread, which no list has (null until it's first opened), then `meta.changed` notifications with it. */
+  'meta.watch': { params: {}; result: { sub: string; value: ThreadInfo | null } }
   unwatch: { params: { sub: string }; result: null }
 
   /** Snapshot of every section and value, then `settings.changed` with the whole snapshot. */
@@ -169,6 +171,7 @@ export type Notifications = {
   'watch.ops': { sub: string; ops: unknown[] }
   'watch.end': { sub: string; reason: string }
   'threads.changed': { sub: string; value: ThreadInfo[] }
+  'meta.changed': { sub: string; value: ThreadInfo | null }
   'settings.changed': { sub: string; value: SettingsSnapshot }
   'auth.event': { flow: string; event: AuthEvent }
   'value.changed': { sub: string; key: string; value: Json }

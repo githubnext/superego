@@ -22,9 +22,40 @@ const text = (value: string) => ({ output: [{ type: 'text' as const, text: value
 const LIMIT = 6_000
 const clip = (value: string) => value.length > LIMIT ? `${value.slice(0, LIMIT)}\n… (${value.length - LIMIT} more characters)` : value
 
+/** Where a thread stands, in a line: its link, its status, and where it works. */
+export const lineOf = (thread: ThreadInfo) => `${linkTo(thread)}: ${thread.status.state}${thread.status.msg ? ` (${thread.status.msg})` : ''}, in ${thread.cwd}`
+
+/** `thread_read`: where a thread stands, who started it, its threads and its last answer, waiting for it if asked. */
+export function readTool(host: Pick<ThreadsHost, 'info' | 'list' | 'answer'>) {
+  return defineTool({
+    name: 'thread_read',
+    description: 'Read another thread: where it stands, its parent and children, and its last answer. wait: true waits until it is ' +
+      'no longer working first.',
+    parameters: obj({ id: str(), wait: opt(bool()) }),
+    async execute({ id, wait }, api, context) {
+      if (wait && id === String(api.conversationId)) throw new Error('A thread can\'t wait on itself')
+      let thread = await host.info(id)
+      if (!thread) throw new Error(`No thread ${id}`)
+      while (wait && thread.status.state === 'working') {
+        if (context.abortSignal?.aborted) throw new Error('Stopped waiting')
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        thread = (await host.info(id))!
+      }
+      const all = await host.list()
+      const parent = thread.parent ? all.find((t) => t.id === thread!.parent) : undefined
+      const children = all.filter((t) => t.parent === id)
+      const answer = await host.answer(id)
+      return text([
+        lineOf(thread),
+        parent && `Started by ${linkTo(parent)}.`,
+        children.length && `Its threads:\n${children.map((c) => `- ${lineOf(c)}`).join('\n')}`,
+        answer ? `Its last answer:\n${clip(answer)}` : 'No answer yet.',
+      ].filter(Boolean).join('\n\n'))
+    },
+  })
+}
+
 export function threadTools(host: ThreadsHost) {
-  /** Where a thread stands, in a line: its link, its status, and where it works. */
-  const line = (thread: ThreadInfo) => `${linkTo(thread)}: ${thread.status.state}${thread.status.msg ? ` (${thread.status.msg})` : ''}, in ${thread.cwd}`
   const here = async (conversationId: number) => {
     const thread = await host.info(String(conversationId))
     if (!thread) throw new Error('Only a thread can do this')
@@ -49,32 +80,7 @@ export function threadTools(host: ThreadsHost) {
           return { ...text(`Started ${linkTo(child)} (id ${child.id}).`), details: { id: child.id, title: child.title } }
         },
       }),
-      defineTool({
-        name: 'thread_read',
-        description: 'Read another thread: where it stands, its parent and children, and its last answer. wait: true waits until it is ' +
-          'no longer working first.',
-        parameters: obj({ id: str(), wait: opt(bool()) }),
-        async execute({ id, wait }, api, context) {
-          if (wait && id === String(api.conversationId)) throw new Error('A thread can\'t wait on itself')
-          let thread = await host.info(id)
-          if (!thread) throw new Error(`No thread ${id}`)
-          while (wait && thread.status.state === 'working') {
-            if (context.abortSignal?.aborted) throw new Error('Stopped waiting')
-            await new Promise((resolve) => setTimeout(resolve, 500))
-            thread = (await host.info(id))!
-          }
-          const all = await host.list()
-          const parent = thread.parent ? all.find((t) => t.id === thread!.parent) : undefined
-          const children = all.filter((t) => t.parent === id)
-          const answer = await host.answer(id)
-          return text([
-            line(thread),
-            parent && `Started by ${linkTo(parent)}.`,
-            children.length && `Its threads:\n${children.map((c) => `- ${line(c)}`).join('\n')}`,
-            answer ? `Its last answer:\n${clip(answer)}` : 'No answer yet.',
-          ].filter(Boolean).join('\n\n'))
-        },
-      }),
+      readTool(host),
       defineTool({
         name: 'thread_send',
         description: 'Send another thread a message, from this one: it goes in when that thread is next free.',
@@ -96,7 +102,7 @@ export function threadTools(host: ThreadsHost) {
           const all = await host.list()
           const others = all.filter((t) => t.session.root === self.session.root && t.id !== self.id)
           const parentOf = (t: ThreadInfo) => all.find((p) => p.id === t.parent)
-          return text(others.length ? others.map((t) => `- ${line(t)}${parentOf(t) ? `, started by ${linkTo(parentOf(t)!)}` : ''}`).join('\n') : 'No other threads here.')
+          return text(others.length ? others.map((t) => `- ${lineOf(t)}${parentOf(t) ? `, started by ${linkTo(parentOf(t)!)}` : ''}`).join('\n') : 'No other threads here.')
         },
       }),
     ],

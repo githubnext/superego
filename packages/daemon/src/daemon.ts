@@ -30,10 +30,16 @@ import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, lo
 
 const context = BACKGROUND_CONTEXT
 
-/** Which conversations are threads, newest last. Child conversations (subagents) are not listed here. */
-const Catalog = defineDoc<{ ids: number[] }>({
+/**
+ * Which conversations are threads, newest last, and which one is Ego (see meta.ts): kept apart from the listed ones, so
+ * no list shows it. Child conversations (subagents) are neither.
+ */
+const Catalog = defineDoc<{ ids: number[]; ego?: number }>({
   kind: 'superego.catalog', version: 1, scope: 'session', initial: () => ({ ids: [] }), checkpointWhen: () => true,
 })
+
+/** What Ego goes without, of what every thread has: it changes nothing itself, and starts threads its own way (see meta.ts). */
+const EGO_WITHOUT = new Set(['coding-tools', 'threads'])
 
 /** A thread's own metadata, next to its transcript. */
 type ThreadMeta = {
@@ -53,6 +59,8 @@ type ThreadMeta = {
   worktree?: { path: string; branch: string; removed?: boolean }
   /** The machine's own agent, about Superego itself (see meta.ts). */
   meta?: boolean
+  /** Where its transcript starts now: the entry after the reset that last cleared it (Ego's only). */
+  cleared?: number
   /** The thread that started it (by thread_start, or thread.create's `parent`). */
   parent?: string
 }
@@ -268,22 +276,25 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   installBuiltin(defineExtension({ name: 'skills', sections: [section('skills', async () => skillsPrompt(await listSkills(skillsDir)))] }))
   installBuiltin(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] }))
   // Threads starting, reading and messaging threads (see thread-tools.ts).
+  const threadInfo = async (id: string) => { const m = await get(id).catch(() => undefined); return m && info(id, m) }
   installBuiltin(threadTools({
-    info: async (id) => { const m = await get(id).catch(() => undefined); return m && info(id, m) },
+    info: threadInfo,
     list: () => list(),
     start: (parent, params) => startThread({ ...params, parent }),
     send: async (id, text) => { await submit(id, text, randomUUID(), 'followUp') },
-    async answer(id) {
-      const page = await (await get(id)).conversation.entries({ order: 'descending' }, 50, undefined, context)
-      for (const entry of page.items) {
-        const message = entry.model?.[0] as { role?: string; content?: unknown } | undefined
-        if (message?.role !== 'assistant' || !Array.isArray(message.content)) continue
-        const said = (message.content as { type: string; text?: string }[]).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim()
-        if (said) return said
-      }
-      return undefined
-    },
+    answer: (id) => answerOf(id),
   }))
+  /** A thread's last answer, as text. */
+  async function answerOf(id: string) {
+    const page = await (await get(id)).conversation.entries({ order: 'descending' }, 50, undefined, context)
+    for (const entry of page.items) {
+      const message = entry.model?.[0] as { role?: string; content?: unknown } | undefined
+      if (message?.role !== 'assistant' || !Array.isArray(message.content)) continue
+      const said = (message.content as { type: string; text?: string }[]).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim()
+      if (said) return said
+    }
+    return undefined
+  }
   // Profiles and their extensions import from 'superego'; this is what they get.
   provideSdk({
     defineProfile, defineExtension, defineTool, section, hook, wrapTool, wrapSection, defineDaemonExtension, defineAction, RpcError,
@@ -311,6 +322,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** Set once a restart is accepted: no new work starts, so nothing is cut off that wasn't agreed to. */
   let restarting = false
   const mounted = new Map<string, Mounted>()
+  /** Ego's thread, once there is one (the catalog's `ego`). */
+  let egoId: string | undefined
+  /** The transcript watches open on each thread, to end when Ego is cleared (clients then watch again). */
+  const transcriptWatches = new Map<string, Set<() => unknown>>()
   const listListeners = new Set<() => void>()
   let listQueued = false
   const changed = () => {
@@ -361,10 +376,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     ...(m.meta.model || m.meta.thinking ? { chosen: { ...(m.meta.model ? { model: m.meta.model } : {}), ...(m.meta.thinking ? { thinking: m.meta.thinking } : {}) } } : {}),
     ...(m.meta.profile ? { profile: m.meta.profile } : {}),
     ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),
-    session: { root: rootOf(m), name: m.meta.meta ? options.app.name : basename(rootOf(m)) },
+    session: { root: rootOf(m), name: id === egoId ? options.app.name : basename(rootOf(m)) },
     ...(m.meta.worktree ? { worktree: m.meta.worktree } : {}),
     ...(m.meta.archived ? { archived: true } : {}),
-    ...(m.meta.meta ? { meta: true } : {}),
+    ...(id === egoId ? { meta: true } : {}),
     ...(m.meta.parent ? { parent: m.meta.parent } : {}),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
@@ -384,10 +399,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return items
   }
 
+  /** A thread by id: a listed one, or Ego. */
   async function get(id: string) {
     const conversationId = Number(id) as ConversationId
     const catalog = await harness.snapshot(Catalog, context)
-    if (!catalog?.ids.includes(conversationId)) throw new RpcError('not_found', `No thread ${id}`)
+    if (id !== egoId && !catalog?.ids.includes(conversationId)) throw new RpcError('not_found', `No thread ${id}`)
     return mount(conversationId)
   }
 
@@ -406,8 +422,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const connections = new Set<RpcPeer>()
   /** Every intent this daemon answers, its own and its extensions'. Reads and watches are plain methods. */
   const router = new Router<DaemonContext>()
-  // The meta agent's tools: selected for its thread only (see agentOf), so installed but not a built-in.
-  const metaAgent = metaExtension({ router, snapshot: () => settings.snapshot(), ...(options.machines ? { machines: options.machines } : {}) })
+  // Ego's tools: selected for its thread only (see agentOf), so installed but not a built-in. The threads it starts are
+  // top-level, not its children (startThread).
+  const metaAgent = metaExtension({
+    dir: options.dataDir, router, snapshot: () => settings.snapshot(), ...(options.machines ? { machines: options.machines } : {}),
+    threads: { info: threadInfo, list: () => list(), answer: (id) => answerOf(id), start: (params) => startThread(params) },
+  })
   registry.install(metaAgent)
   const values = new Map<string, { value: Json; listeners: Set<(value: Json) => void> }>()
   const contributors: ((threadId: string) => StatusContribution | undefined)[] = []
@@ -517,10 +537,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   async function agentOf(meta: ThreadMeta) {
     const profile = meta.profile ? await profileOf(meta.profile) : undefined
     const { model, thinkingLevel } = agent.resolve({ model: meta.model ?? profile?.spec.model, thinking: meta.thinking ?? profile?.spec.thinking })
-    // The meta agent: every built-in, its own tools, and what Superego is.
+    // Ego: what Superego is, and its own tools, which only read and start threads, instead of the coding tools and
+    // the threads' own.
     if (meta.meta) {
       return {
-        model, thinkingLevel, extensions: [...builtins, metaAgent],
+        model, thinkingLevel, extensions: [...enabled().filter((e) => !EGO_WITHOUT.has(ownerOf(e))), metaAgent],
         instructions: metaPrompt({ name: options.app.name, agent: options.app.agent, id: options.app.id, dataDir: options.dataDir, agentsDir, hostname: machine.hostname }),
       }
     }
@@ -635,6 +656,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
     if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${machine.hostname}`)
     if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
+    // Ego hands work to threads of their own: top-level in their project, not hidden under it.
+    if (parent === egoId) parent = undefined
     if (parent) await get(parent)
     // The project's profile (or the user's) of that name, else the default one there is; checked (and allowed) now.
     const ref = findProfile(dir, userProfiles, profileName?.trim() || undefined)
@@ -670,25 +693,84 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       agent: { ...(model ? { model } : {}), ...(thinkingLevel ? { thinkingLevel } : {}), cwd: meta.cwd },
       init: async (tx, created) => {
         Object.assign(await tx.doc(ThreadDoc, created), meta)
-        ;(await tx.doc(Catalog)).ids.push(created)
+        const catalog = await tx.doc(Catalog)
+        if (meta.meta) catalog.ego = created
+        else catalog.ids.push(created)
       },
     }, context)
+    if (meta.meta) egoId = String(conversation.id)
     const m = await mount(conversation.id)
     changed()
     if (prompt?.trim() || attachments?.length) await submit(String(conversation.id), prompt ?? '', randomUUID(), undefined, attachments)
     return info(String(conversation.id), m)
   }
+  /** Ego's thread: the one the catalog names, else a new one in the app's data folder (made once, however many ask). */
+  let egoStarting: Promise<string> | undefined
+  function ego(): Promise<string> {
+    if (egoId) return Promise.resolve(egoId)
+    egoStarting ??= createThread({ title: agentName(options.app), cwd: options.dataDir, root: options.dataDir, createdAt: Date.now(), meta: true })
+      .then((thread) => thread.id).finally(() => { egoStarting = undefined })
+    return egoStarting
+  }
+  /**
+   * Ego from before it was kept apart: the meta threads among the listed ones. One becomes Ego (the newest in use,
+   * else the newest) unless there is one already; all leave the list, so there is only ever the one.
+   */
+  async function adoptEgo() {
+    const catalog = await harness.snapshot(Catalog, context)
+    if (catalog?.ego !== undefined) egoId = String(catalog.ego)
+    const old: { id: number; m: Mounted }[] = []
+    for (const id of catalog?.ids ?? []) {
+      const m = await mount(id as ConversationId)
+      if (m.meta.meta) old.push({ id, m })
+    }
+    if (!old.length) return
+    const adopted = egoId ? undefined : (old.filter(({ m }) => !m.meta.archived).at(-1) ?? old.at(-1))
+    await harness.commit(async (tx) => {
+      const doc = await tx.doc(Catalog)
+      doc.ids = doc.ids.filter((id) => !old.some((o) => o.id === id))
+      if (adopted) doc.ego = adopted.id
+    }, context)
+    for (const { id, m } of old) {
+      if (id === adopted?.id) continue
+      await m.stop()
+      mounted.delete(String(id))
+    }
+    if (!adopted) return
+    egoId = String(adopted.id)
+    await updateMeta(egoId, (meta) => { delete meta.archived; meta.title = agentName(options.app) })
+  }
   router.register(defineAction({
-    // One per machine, kept: the newest that isn't archived, else a new one in the app's data folder.
-    id: 'thread.meta', title: `Ask ${agentName(options.app)} (set up machines, projects, profiles, skills)`, runs: 'machine', expose: ['ui', 'cli'],
+    // One per machine, for good: never listed, never archived, cleared rather than replaced.
+    id: 'thread.meta', title: `Ask ${agentName(options.app)} about ${options.app.name} and how it's set up`, runs: 'machine', expose: ['ui', 'cli'],
     params: obj({ prompt: opt(str()) }),
     async run({ prompt }) {
-      for (const thread of await list()) {
-        if (!thread.meta) continue
-        if (prompt?.trim()) await submit(thread.id, prompt, randomUUID(), 'followUp')
-        return thread
-      }
-      return createThread({ title: `Set up ${options.app.name}`, cwd: options.dataDir, root: options.dataDir, createdAt: Date.now(), meta: true }, prompt)
+      const id = await ego()
+      if (prompt?.trim()) await submit(id, prompt, randomUUID(), 'followUp')
+      return info(id, await get(id))
+    },
+  }))
+  router.register(defineAction({
+    id: 'thread.meta.clear', title: `Clear ${agentName(options.app)}'s conversation`, runs: 'machine', expose: ['ui', 'cli'],
+    params: obj({}),
+    async run() {
+      const id = await ego()
+      const m = await get(id)
+      // Stopped, then a new context: the model sees nothing before it, and the transcript starts after it.
+      await m.conversation.abort(context)
+      await m.conversation.reset(undefined, context)
+      await m.conversation.waitForIdle(context)
+      const last = (await m.conversation.entries({ order: 'descending' }, 1, undefined, context)).items[0]?.id
+      await updateMeta(id, (meta) => {
+        meta.cleared = Number(last ?? 0) + 1
+        meta.seen = last === undefined ? {} : { entryId: Number(last) }
+        meta.title = agentName(options.app)
+        delete meta.panes
+        delete meta.pane
+      })
+      // Windows showing it watch again, from the start it has now.
+      for (const stop of transcriptWatches.get(id) ?? []) void stop()
+      return info(id, m)
     },
   }))
   router.register(defineAction({
@@ -727,6 +809,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     id: 'thread.archive', title: 'Archive the thread', runs: 'machine', expose: ['ui', 'cli'], keys: 'mod+shift+e', ...thread,
     params: obj({ id: str() }),
     async run({ id }) {
+      if (id === egoId) throw new RpcError('invalid', `${agentName(options.app)} isn't archived`, { hint: 'Clear it instead.' })
       const { meta } = await get(id)
       // Its worktree goes with it when nothing in it is uncommitted; its branch stays, to come back to.
       const tree = meta.worktree
@@ -878,8 +961,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   }))
 
+  await adoptEgo()
   // Mount everything once so statuses (and anything a previous process left running) are live from the start.
   await list()
+  if (egoId) await get(egoId)
   harness.resume()
 
 
@@ -935,16 +1020,28 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         async 'thread.history'({ id, before, limit = 50 }: { id: string; before: number; limit?: number }) {
           const m = await get(id)
           const page = await m.conversation.entries({ maxEntryId: (before - 1) as EntryId, order: 'descending' }, Math.min(Math.max(1, limit), 200), undefined, context)
-          return { entries: [...page.items].reverse(), more: page.next !== undefined }
+          // A cleared thread's history starts where it was cleared.
+          const start = m.meta.cleared ?? 0
+          const entries = [...page.items].reverse().filter((e) => Number(e.id) >= start)
+          return { entries, more: page.next !== undefined && entries.length === page.items.length }
         },
         async 'thread.watch'({ id }: { id: string }) {
           const m = await get(id)
-          const watch = await m.conversation.watch(context)
+          const from = m.meta.cleared
+          const watch = await m.conversation.watch(context, from !== undefined ? { from: from as EntryId } : undefined)
           const sub = randomUUID()
-          subs.set(sub, () => watch.stop())
+          const stop = () => watch.stop()
+          const watches = transcriptWatches.get(id) ?? new Set()
+          transcriptWatches.set(id, watches.add(stop))
+          subs.set(sub, stop)
           watch.start(async (call) => { if (call.kind === 'value') notify('watch.ops', { sub, ops: call.ops as unknown[] }) })
-          void watch.closed.then((end) => { if (subs.delete(sub)) notify('watch.end', { sub, reason: end.kind }) })
-          return { sub, value: watch.value }
+          void watch.closed.then((end) => {
+            watches.delete(stop)
+            if (subs.delete(sub)) notify('watch.end', { sub, reason: end.kind })
+          })
+          // Nothing before where it was cleared: no earlier entries to page back to.
+          const { before, ...rest } = watch.value
+          return { sub, value: from !== undefined && Number(before ?? from) < from ? rest : watch.value }
         },
         async 'threads.watch'() {
           const sub = randomUUID()
@@ -957,6 +1054,22 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           listListeners.add(push)
           subs.set(sub, () => { listListeners.delete(push) })
           const value = await list()
+          last = JSON.stringify(value)
+          return { sub, value }
+        },
+        /** Ego's thread (null until it's first opened), then `meta.changed` with it whenever it changes. */
+        async 'meta.watch'() {
+          const sub = randomUUID()
+          const current = async () => egoId ? info(egoId, await get(egoId)) : null
+          let last = ''
+          const push = async () => {
+            const value = await current()
+            const json = JSON.stringify(value)
+            if (json !== last) { last = json; notify('meta.changed', { sub, value }) }
+          }
+          listListeners.add(push)
+          subs.set(sub, () => { listListeners.delete(push) })
+          const value = await current()
           last = JSON.stringify(value)
           return { sub, value }
         },

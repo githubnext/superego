@@ -377,23 +377,97 @@ describe('record and replay', () => {
     await close()
   })
 
-  it("starts superego's own agent once per machine, in its data folder, knowing superego and with tools for it", async () => {
-    const { peer, close } = await open()
-    const meta = await peer.call<ThreadInfo>('thread.meta', { prompt: 'help me add a machine' })
-    expect(meta).toMatchObject({ meta: true, cwd: dir, session: { name: 'superego' } })
-    await until(async () => (await threads(peer)).find((t) => t.id === meta.id)!.status.state === 'done')
-    // The same thread again, not another.
-    expect((await peer.call<ThreadInfo>('thread.meta', {})).id).toBe(meta.id)
-    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: meta.id })
+  it("keeps superego's own agent as one hidden thread per machine, in its data folder, knowing superego and only reading", async () => {
+    const first = await open()
+    const meta = await first.peer.call<ThreadInfo>('thread.meta', { prompt: 'help me add a machine' })
+    expect(meta).toMatchObject({ meta: true, cwd: dir, title: 'superego', session: { name: 'superego' } })
+    const ego = async (peer: RpcPeer) => (await peer.call<{ value: ThreadInfo | null }>('meta.watch', {})).value
+    await until(async () => (await ego(first.peer))!.status.state === 'done')
+    // The same thread again, not another; and in no list.
+    expect((await first.peer.call<ThreadInfo>('thread.meta', {})).id).toBe(meta.id)
+    expect(await threads(first.peer)).toEqual([])
+    expect(await first.peer.call('thread.list', { archived: true })).toEqual([])
+    expect((await first.peer.call<{ value: ThreadInfo[] }>('threads.watch', {})).value).toEqual([])
+    // Never archived.
+    await expect(first.peer.call('thread.archive', { id: meta.id })).rejects.toMatchObject({ kind: 'invalid' })
+    const { value } = await first.peer.call<{ value: ConversationView }>('thread.watch', { id: meta.id })
     const all = JSON.stringify(value.entries)
     expect(all).toContain("You are superego's own agent")
-    for (const tool of ['superego_settings', 'superego_actions', 'superego_run']) expect(all).toContain(tool)
-    // Other threads don't get them.
-    const plain = await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'hi' })
-    await until(async () => (await threads(peer)).find((t) => t.id === plain.id)!.status.state === 'done')
-    const other = JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { id: plain.id })).value.entries)
-    expect(other).not.toContain('superego_run')
+    expect(all).toContain('you do no work yourself')
+    // Tools that read, and thread_start; none that change things.
+    const tools = (value.entries.find((e) => e.kind === 'pi.system')!.model![0] as { toolsAdded: { name: string }[] }).toolsAdded.map((t) => t.name)
+    expect(tools.sort()).toEqual(['ls', 'open_pane', 'read', 'superego_actions', 'superego_profiles', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
+    // Other threads don't get its tools or prompt, and don't see it.
+    const plain = await first.peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'hi' })
+    await until(async () => (await threads(first.peer)).find((t) => t.id === plain.id)!.status.state === 'done')
+    expect((await threads(first.peer)).map((t) => t.id)).toEqual([plain.id])
+    const other = JSON.stringify((await first.peer.call<{ value: ConversationView }>('thread.watch', { id: plain.id })).value.entries)
+    expect(other).not.toContain('superego_settings')
     expect(other).not.toContain("You are superego's own agent")
+    // A thread started with it as its parent (as from the command line) is top-level all the same.
+    const started = await first.peer.call<ThreadInfo>('thread.create', { cwd: dir, parent: meta.id })
+    expect(started.parent).toBeUndefined()
+    await first.close()
+    // Kept across restarts.
+    const second = await open()
+    expect((await second.peer.call<ThreadInfo>('thread.meta', {})).id).toBe(meta.id)
+    expect((await ego(second.peer))!.id).toBe(meta.id)
+    await second.close()
+  })
+
+  it('makes one Ego of the meta threads from before it was kept apart, and lists none of them', async () => {
+    // A database as an older daemon left it: meta threads among the listed ones, the newest in use, one archived.
+    const { Harness, createRegistry, defineDoc } = await import('@earendil-works/pi-durable')
+    const { openNodeSqliteStorage } = await import('@earendil-works/pi-durable/storage/sqlite/node')
+    const { createModels } = await import('@earendil-works/pi-ai/models')
+    const Catalog = defineDoc<{ ids: number[] }>({ kind: 'superego.catalog', version: 1, scope: 'session', initial: () => ({ ids: [] }), checkpointWhen: () => true })
+    const ThreadDoc = defineDoc<{ title: string; cwd: string; createdAt: number; meta?: boolean; archived?: boolean }>({
+      kind: 'superego.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current', initial: () => ({ title: '', cwd: '', createdAt: 0 }), checkpointWhen: () => true,
+    })
+    const { BACKGROUND_CONTEXT: context } = await import('@earendil-works/chord/context')
+    const harness = await Harness.open(await openNodeSqliteStorage(join(dir, 'superego.sqlite')), { models: createModels(), registry: createRegistry() }, context)
+    const ids: number[] = []
+    for (const meta of [{ title: 'Set up superego', meta: true }, { title: 'Plain' }, { title: 'Set up superego', meta: true }, { title: 'Set up superego', meta: true, archived: true }]) {
+      const conversation = await harness.createConversation({
+        ownership: { kind: 'ownerless' }, agent: { cwd: dir },
+        init: async (tx, created) => { Object.assign(await tx.doc(ThreadDoc, created), { cwd: dir, createdAt: 1, ...meta }); (await tx.doc(Catalog)).ids.push(created) },
+      }, context)
+      ids.push(Number(conversation.id))
+    }
+    await harness.close(context)
+    const { peer, close } = await open()
+    expect((await threads(peer)).map((t) => t.title)).toEqual(['Plain'])
+    expect(await peer.call('thread.list', { archived: true })).toEqual([])
+    expect(await peer.call<ThreadInfo>('thread.meta', {})).toMatchObject({ id: String(ids[2]), meta: true, title: 'superego' })
+    await expect(peer.call('thread.watch', { id: String(ids[0]) })).rejects.toMatchObject({ kind: 'not_found' })
+    await close()
+  })
+
+  it("clears superego's own agent: the same thread, starting empty again", async () => {
+    const { peer, close } = await open()
+    expect((await peer.call<{ value: ThreadInfo | null }>('meta.watch', {})).value).toBeNull()
+    const meta = await peer.call<ThreadInfo>('thread.meta', { prompt: 'what is a profile?' })
+    const state = async () => (await peer.call<{ value: ThreadInfo }>('meta.watch', {})).value.status.state
+    await until(async () => await state() === 'done')
+    const ended: string[] = []
+    peer.on('watch.end', (params: { sub: string }) => { ended.push(params.sub) })
+    const open1 = await peer.call<{ sub: string; value: ConversationView }>('thread.watch', { id: meta.id })
+    expect(open1.value.entries.length).toBeGreaterThan(0)
+    const cleared = await peer.call<ThreadInfo>('thread.meta.clear', {})
+    expect(cleared.id).toBe(meta.id)
+    // Windows watching it are told to watch again; then it's empty, with nothing earlier to page back to.
+    await until(() => ended.includes(open1.sub))
+    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: meta.id })
+    expect(value.entries).toEqual([])
+    expect(value.before).toBeUndefined()
+    expect(await peer.call('thread.history', { id: meta.id, before: open1.value.entries.at(-1)!.id as number + 1000 })).toEqual({ entries: [], more: false })
+    expect((await peer.call<ThreadInfo>('thread.meta', {})).id).toBe(meta.id)
+    // It goes on from there.
+    await peer.call('thread.submit', { id: meta.id, text: 'again' })
+    await until(async () => await state() === 'done')
+    const after = (await peer.call<{ value: ConversationView }>('thread.watch', { id: meta.id })).value.entries
+    expect(JSON.stringify(after)).toContain('again')
+    expect(JSON.stringify(after)).not.toContain('what is a profile?')
     await close()
   })
 

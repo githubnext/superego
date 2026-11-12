@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -45,6 +45,33 @@ it('lets an agent start a thread of its own: a child, listed with its parent', a
   // A thread can be started as another's child directly, too; not of one that isn't there.
   expect(await peer.call<ThreadInfo>('thread.create', { parent: child.id })).toMatchObject({ parent: child.id })
   await expect(peer.call('thread.create', { parent: '999' })).rejects.toMatchObject({ kind: 'not_found' })
+
+  socket.destroy(); server.close(); await daemon.close()
+})
+
+it('lets Ego hand work to a thread of its own: top-level in its project, listed, not under Ego', async () => {
+  const project = join(dir, 'project')
+  await mkdir(project)
+  await writeFile(join(dir, 'turns.jsonl'), [
+    turn([{ type: 'toolCall', id: 'c1', name: 'thread_start', arguments: { prompt: 'Turn on web access', title: 'Web', cwd: project } }], 'toolUse'),
+    turn([{ type: 'text', text: 'Started it.' }], 'stop'),
+    turn([{ type: 'text', text: 'Done.' }], 'stop'),
+  ].join('\n') + '\n')
+  process.env.THREADSTEST_MODEL = `replay:${join(dir, 'turns.jsonl')}`
+  process.env.THREADSTEST_REPLAY_SPEED = '0'
+  const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents') })
+  const server = await listen(daemon, join(dir, 's.sock'))
+  const { peer, socket } = await connectSocket(join(dir, 's.sock'))
+  await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
+
+  const ego = await peer.call<ThreadInfo>('thread.meta', { prompt: 'turn on web access' })
+  await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {})).length === 1)
+  const [started] = await peer.call<ThreadInfo[]>('thread.list', {})
+  expect(started).toMatchObject({ title: 'Web', cwd: project, session: { root: project } })
+  expect(started!.parent).toBeUndefined()
+  await until(async () => (await peer.call<{ value: ThreadInfo }>('meta.watch', {})).value.status.state === 'done')
+  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: ego.id })
+  expect(JSON.stringify(value.entries)).toContain(`Started [Web](thread:${started!.id})`)
 
   socket.destroy(); server.close(); await daemon.close()
 })
