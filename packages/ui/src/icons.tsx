@@ -18,6 +18,7 @@ export {
   BellIcon,
   BroomIcon,
   CaretDownIcon,
+  CaretUpDownIcon,
   CaretRightIcon,
   ChatCircleIcon,
   ChatsCircleIcon,

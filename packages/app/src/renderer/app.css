@@ -36,6 +36,9 @@
 /* Rename: beside the title, shown while the title bar is pointed at or it has the keyboard. */
 .titlebar__rename { flex: none; width: 22px; height: 22px; min-height: 22px; margin-left: -2px; color: var(--superego-muted); opacity: 0; transition: opacity .12s; }
 .app__titlebar:hover .titlebar__rename, .titlebar__rename:focus-visible { opacity: 1; }
+/* Go elsewhere (the navigator, as ⌘L): a quiet chevron after the title. */
+.titlebar__switch { flex: none; width: 20px; height: 22px; min-height: 22px; margin-left: -4px; box-shadow: none; background: none; color: var(--superego-faint); }
+.titlebar__switch:hover { color: var(--superego-text); background: var(--superego-hover); }
 .titlebar__field { font: inherit; font-weight: 500; color: inherit; min-width: 0; width: min(480px, 50vw); padding: 2px 6px; margin-left: -7px; border: 1px solid var(--superego-field-edge); border-radius: 5px; background: var(--superego-field-bg); outline: none; }
 .titlebar__field:focus { box-shadow: var(--superego-focus); }
 .titlebar__archived { flex: none; padding: 1px 6px; border-radius: 4px; background: var(--superego-hover); color: var(--superego-muted); font-size: var(--superego-text-xs); font-weight: 500; }
