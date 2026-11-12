@@ -3,6 +3,11 @@
 // Node it was installed with. The machine then runs `~/.superego/bin/superego connect --start`, so nothing on its PATH
 // changes. Running it again updates. Everything on the far side goes through a `RemoteRun`, which tests point at a
 // temp HOME on this computer.
+//
+// Each build unpacks into a directory of its own, `bin/versions/<build>`, and `bin/app` is a link to the current one,
+// switched by a rename (atomic). A daemon runs from the real path behind the link, so one still running (busy, not
+// restarted yet) keeps its files while the next build goes in; what it starts next (its successor, the service) goes
+// through the link. Builds that neither the link nor the running daemon uses are removed.
 import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { RpcError, type AppConfig } from '@superego/protocol'
@@ -91,19 +96,36 @@ export async function installMachine(run: RemoteRun, options: InstallOptions): P
 
   step(`Copying Superego to ${label} (${Math.round(tarball.length / 1024 / 1024 * 10) / 10} MB)`)
   const unpack = await run([
-    `D="${bin}"`, 'mkdir -p "$D" && rm -rf "$D/app.new" && mkdir "$D/app.new" && tar -xzf - -C "$D/app.new"',
-    'rm -rf "$D/app.old"', '{ [ ! -d "$D/app" ] || mv "$D/app" "$D/app.old"; }', 'mv "$D/app.new" "$D/app"', 'rm -rf "$D/app.old"',
-  ].join(' && '), tarball)
-  if (unpack.code !== 0) throw fail(`Unpacking on ${label} failed: ${unpack.stderr.trim() || `exit ${unpack.code}`}`, 'It needs tar and a writable home directory.')
+    `D="${bin}"`, 'T="$D/versions/.new-$$"', 'mkdir -p "$D/versions" && rm -rf "$T" && mkdir "$T" && tar -xzf - -C "$T" && echo "$T"',
+  ].join('; '), tarball)
+  const fresh = unpack.stdout.trim().split('\n').at(-1)
+  if (unpack.code !== 0 || !fresh) throw fail(`Unpacking on ${label} failed: ${unpack.stderr.trim() || `exit ${unpack.code}`}`, 'It needs tar and a writable home directory.')
 
-  // The shim names this Node outright: ssh's PATH may not have it (mise, nvm), and a service has less still.
-  const written = await run(`D="${bin}"; N=${shellQuote(node)}; printf '#!/bin/sh\\nexec "%s" "%s/app/main/cli.js" "$@"\\n' "$N" "$D" > "$D/${app.id}" && chmod +x "$D/${app.id}"`)
-  if (written.code !== 0) throw fail(`Could not write ${shim} on ${label}: ${written.stderr.trim()}`)
-
+  // The new copy, run where it was unpacked: that it runs, which build it is, and what the running daemon runs.
   step('Checking it runs')
-  const status = await run(`"${shim}" daemon status --json`)
-  if (status.code !== 0) throw fail(`The copy on ${label} does not run: ${status.stderr.trim().split('\n').at(-1) || `exit ${status.code}`}`)
-  const state = parseJson<{ running?: boolean; current?: boolean }>(status.stdout) ?? {}
+  const status = await run(`${shellQuote(node)} ${shellQuote(`${fresh}/main/cli.js`)} daemon status --json`)
+  if (status.code !== 0) {
+    await run(`rm -rf ${shellQuote(fresh)}`)
+    throw fail(`The copy on ${label} does not run: ${status.stderr.trim().split('\n').at(-1) || `exit ${status.code}`}`)
+  }
+  const state = parseJson<{ running?: boolean; current?: boolean; build?: string; installed?: string }>(status.stdout) ?? {}
+  const word = (value: unknown) => typeof value === 'string' && /^[\w.-]+$/.test(value) && !value.startsWith('.') ? value : undefined
+  const version = word(state.installed) ?? `v${Date.now()}`
+  const running = state.running ? word(state.build) : undefined
+
+  // Into place, the link switched, the shim (which names this Node outright: ssh's PATH may not have it, and a service
+  // has less still) written beside it and renamed over; then away with what nothing runs. An `app` left a directory by
+  // an install before versions is the running daemon's.
+  const placed = await run([
+    `D="${bin}"`, `T=${shellQuote(fresh)}`, `V=${shellQuote(version)}`, `R=${shellQuote(running ?? '')}`, `N=${shellQuote(node)}`,
+    'if [ -d "$D/versions/$V" ]; then rm -rf "$T"; else mv "$T" "$D/versions/$V"; fi',
+    'if [ -d "$D/app" ] && [ ! -L "$D/app" ]; then mv "$D/app" "$D/versions/${R:-old-$$}"; fi',
+    'rm -f "$D/app.next" && ln -s "versions/$V" "$D/app.next"',
+    `"$N" -e 'require("fs").renameSync(process.argv[1], process.argv[2])' "$D/app.next" "$D/app"`,
+    `printf '#!/bin/sh\\nexec "%s" "%s/app/main/cli.js" "$@"\\n' "$N" "$D" > "$D/${app.id}.next" && chmod +x "$D/${app.id}.next" && mv -f "$D/${app.id}.next" "$D/${app.id}"`,
+    'for v in "$D"/versions/*; do n="${v##*/}"; [ "$n" = "$V" ] || [ "$n" = "$R" ] || rm -rf "$v"; done',
+  ].join(' && '))
+  if (placed.code !== 0) throw fail(`Could not put the copy in place on ${label}: ${placed.stderr.trim() || `exit ${placed.code}`}`)
 
   const result: Installed = { command: installedCommand(app), node, nodeVersion }
   if (options.service) {

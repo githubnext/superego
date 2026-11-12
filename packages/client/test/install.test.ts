@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -10,14 +10,22 @@ const app = defineApp({ name: 'Superego', id: 'superego' })
 let root: string
 let bundle: string
 
-/** A tarball like the real one in shape: main/cli.js answers `daemon status --json`. */
+/**
+ * A tarball like the real one in shape: main/cli.js answers `daemon status --json`, with `installed` the build it is
+ * and `build` what the "running daemon" runs (FAKE_BUILD).
+ */
+function makeBundle(build: string) {
+  const stage = join(root, `stage-${build}`)
+  mkdirSync(join(stage, 'main'), { recursive: true })
+  writeFileSync(join(stage, 'main/cli.js'), `console.log(JSON.stringify({ running: process.env.FAKE_RUNNING === "1", current: process.env.FAKE_CURRENT === "1", build: process.env.FAKE_BUILD, installed: ${JSON.stringify(build)}, args: process.argv.slice(2) }))\n`)
+  writeFileSync(join(stage, 'package.json'), '{"type":"module"}\n')
+  const tarball = join(root, `bundle-${build}.tgz`)
+  execFileSync('tar', ['-czf', tarball, '-C', stage, '.'])
+  return tarball
+}
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), 'superego-install-'))
-  mkdirSync(join(root, 'stage/main'), { recursive: true })
-  writeFileSync(join(root, 'stage/main/cli.js'), 'console.log(JSON.stringify({ running: process.env.FAKE_RUNNING === "1", current: process.env.FAKE_CURRENT === "1", args: process.argv.slice(2) }))\n')
-  writeFileSync(join(root, 'stage/package.json'), '{"type":"module"}\n')
-  bundle = join(root, 'bundle.tgz')
-  execFileSync('tar', ['-czf', bundle, '-C', join(root, 'stage'), '.'])
+  bundle = makeBundle('b1')
 })
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
@@ -60,15 +68,34 @@ describe('installing over ssh', () => {
     expect(JSON.parse(out).args).toEqual(['daemon', 'status'])
   })
 
-  it('updates by doing it again, replacing what was there', async () => {
+  it('puts each build in a directory of its own and switches a link, keeping what a running daemon runs', async () => {
     const h = home()
+    const bin = join(h, '.superego/bin')
     await installMachine(remote(h), { app, label: 'Box', bundle })
-    writeFileSync(join(h, '.superego/bin/app/stale.js'), 'old')
-    await installMachine(remote(h), { app, label: 'Box', bundle })
-    expect(existsSync(join(h, '.superego/bin/app/stale.js'))).toBe(false)
-    expect(existsSync(join(h, '.superego/bin/app/main/cli.js'))).toBe(true)
-    expect(existsSync(join(h, '.superego/bin/app.old'))).toBe(false)
-    expect(existsSync(join(h, '.superego/bin/app.new'))).toBe(false)
+    expect(lstatSync(join(bin, 'app')).isSymbolicLink()).toBe(true)
+    expect(readlinkSync(join(bin, 'app'))).toBe('versions/b1')
+    // A newer build, nothing running: the old one goes.
+    await installMachine(remote(h), { app, label: 'Box', bundle: makeBundle('b2') })
+    expect(readlinkSync(join(bin, 'app'))).toBe('versions/b2')
+    expect(readdirSync(join(bin, 'versions'))).toEqual(['b2'])
+    // A daemon still running b2 (busy) keeps its files while b3 goes in; once it runs b3, b2 goes too.
+    await installMachine(remote(h, { FAKE_RUNNING: '1', FAKE_BUILD: 'b2' }), { app, label: 'Box', bundle: makeBundle('b3') })
+    expect(readlinkSync(join(bin, 'app'))).toBe('versions/b3')
+    expect(readdirSync(join(bin, 'versions')).sort()).toEqual(['b2', 'b3'])
+    await installMachine(remote(h, { FAKE_RUNNING: '1', FAKE_CURRENT: '1', FAKE_BUILD: 'b3' }), { app, label: 'Box', bundle: makeBundle('b3') })
+    expect(readdirSync(join(bin, 'versions'))).toEqual(['b3'])
+    expect(existsSync(join(bin, 'app.next'))).toBe(false)
+    expect(existsSync(join(bin, 'superego.next'))).toBe(false)
+  })
+
+  it('moves a copy from before versions aside under the build its daemon runs', async () => {
+    const h = home()
+    const bin = join(h, '.superego/bin')
+    mkdirSync(join(bin, 'app/main'), { recursive: true })
+    writeFileSync(join(bin, 'app/main/daemon.js'), 'old')
+    await installMachine(remote(h, { FAKE_RUNNING: '1', FAKE_BUILD: 'old1' }), { app, label: 'Box', bundle })
+    expect(readlinkSync(join(bin, 'app'))).toBe('versions/b1')
+    expect(readFileSync(join(bin, 'versions/old1/main/daemon.js'), 'utf8')).toBe('old')
   })
 
   it('restarts a running daemon that is behind, and leaves a current one', async () => {
