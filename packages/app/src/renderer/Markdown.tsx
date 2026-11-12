@@ -22,38 +22,57 @@ export function Scroll({ node: _node, ...props }: ComponentProps<'pre'> & { node
   return <pre ref={ref} {...props} />
 }
 
+/**
+ * Puts `text` on the clipboard by selecting it and copying, as a keypress would: at once, with no permission to ask
+ * for, and over Web access's plain http too. Focus and the selection go back to where they were.
+ */
 function copyBySelection(text: string) {
+  const focused = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
+  const selection = document.getSelection()
+  const ranges = selection ? Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i)) : []
   const area = document.createElement('textarea')
   area.value = text
   area.setAttribute('readonly', '')
-  area.style.cssText = 'position:fixed;opacity:0'
+  area.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none;user-select:text'
   document.body.append(area)
   area.select()
-  const ok = document.execCommand('copy')
-  area.remove()
-  if (!ok) throw new Error('Copy failed')
+  let ok = false
+  try { ok = document.execCommand('copy') } finally {
+    area.remove()
+    focused?.focus({ preventScroll: true })
+    if (selection) { selection.removeAllRanges(); for (const range of ranges) selection.addRange(range) }
+  }
+  return ok
 }
 
-/** A code block in a message, with a button in its corner that copies all of it. */
+async function copyText(text: string) {
+  if (copyBySelection(text)) return
+  if (!navigator.clipboard) throw new Error('No way to copy here')
+  await navigator.clipboard.writeText(text)
+}
+
+/** A code block in a message, with a button in its corner that copies all of it: blue with a check once it has. */
 function CodeBlock(props: ComponentProps<'pre'> & { node?: unknown }) {
   const ref = useRef<HTMLDivElement>(null)
-  const [copied, setCopied] = useState(false)
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  // Each click keeps the feedback up for its full time, even mid-way through the last one's.
+  const [click, setClick] = useState(0)
   useEffect(() => {
-    if (!copied) return
-    const timer = setTimeout(() => setCopied(false), 1500)
+    if (state === 'idle') return
+    const timer = setTimeout(() => setState('idle'), state === 'copied' ? 1600 : 2400)
     return () => clearTimeout(timer)
-  }, [copied])
+  }, [state, click])
   const copy = () => {
     const text = ref.current?.querySelector('pre')?.textContent?.replace(/\n$/, '') ?? ''
-    // Web access over plain http has no clipboard API; a selection and the copy command still work there.
-    const written = navigator.clipboard ? navigator.clipboard.writeText(text) : new Promise<void>((resolve) => resolve(copyBySelection(text)))
-    void written.then(() => setCopied(true), (error) => console.error(error))
+    setClick((n) => n + 1)
+    copyText(text).then(() => setState('copied'), (error) => { console.error(error); setState('failed') })
   }
+  const label = state === 'copied' ? 'Copied' : state === 'failed' ? 'Couldn’t copy' : 'Copy all'
   return (
     <div ref={ref} className="md__code">
       <Scroll {...props} />
-      <button type="button" className={`md__copy ${copied ? 'is-copied' : ''}`} aria-label={copied ? 'Copied' : 'Copy all'} title={copied ? 'Copied' : 'Copy all'} onClick={copy}>
-        {copied ? <CheckIcon aria-hidden /> : <CopyIcon aria-hidden />}
+      <button type="button" className={`md__copy ${state !== 'idle' ? `is-${state}` : ''}`} aria-label={label} title={label} onClick={copy}>
+        {state === 'copied' ? <CheckIcon weight="bold" aria-hidden /> : <CopyIcon aria-hidden />}
       </button>
     </div>
   )

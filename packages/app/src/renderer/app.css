@@ -408,13 +408,15 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .md__pane-link svg { display: block; height: .95em; width: auto; margin-bottom: -.1em; }
 .md a:hover + .md__pane-link, .md__pane-link:hover, .md__pane-link:focus-visible { opacity: 1; color: var(--superego-text); }
 .md__pane-link:hover { background: var(--superego-hover); }
-/* Copy all: in a code block's corner, over the code; shown while the pointer is on the block, or it has focus. */
+/* Copy all: in a code block's corner, over the code; shown while the pointer is on the block, or it has focus.
+   Copied, it turns blue with a check for a moment; if it couldn't, its icon goes red. */
 .md__code { position: relative; }
-.md__copy { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: var(--superego-surface); box-shadow: var(--superego-control-edge); color: var(--superego-muted); opacity: 0; transition: opacity .12s; cursor: default; }
+.md__copy { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: var(--superego-raised); box-shadow: var(--superego-control-edge); color: var(--superego-muted); opacity: 0; transition: opacity .12s, color .12s, background .12s; cursor: default; }
 .md__copy svg { width: 14px; height: 14px; }
-.md__code:hover .md__copy, .md__copy:focus-visible, .md__copy.is-copied { opacity: 1; }
+.md__code:hover .md__copy, .md__copy:focus-visible, .md__copy:is(.is-copied, .is-failed) { opacity: 1; }
 .md__copy:hover { color: var(--superego-text); background: var(--superego-control-active); }
-.md__copy.is-copied { color: var(--superego-accent); }
+.md__copy.is-copied { color: var(--superego-accent-text); background: var(--superego-accent); }
+.md__copy.is-failed { color: var(--superego-status-error); }
 @media (hover: none) { .md__copy { opacity: 1; } }
 .md a.md__file--code:hover { text-decoration: none; }
 .md a.md__file--code:hover code { text-decoration: underline; text-underline-offset: 2px; }
