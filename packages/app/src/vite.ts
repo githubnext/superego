@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'electron-vite'
+import { newPackages } from './dev-packages.ts'
 
 export function superegoConfig(root: string) {
   return defineConfig({
@@ -23,7 +24,8 @@ export function superegoConfig(root: string) {
     renderer: {
       root: resolve(root, 'src/renderer'),
       build: { rolldownOptions: { input: resolve(root, 'src/renderer/index.html') } },
-      plugins: [react()],
+      // In dev, packages linked after the server started resolve without restarting by hand (see dev-packages.ts).
+      plugins: [react(), newPackages(root)],
     },
   })
 }

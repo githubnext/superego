@@ -92,6 +92,9 @@ export function createWindowRouter() {
 }
 export type WindowRouter = ReturnType<typeof createWindowRouter>
 
+/** The dev server's restart endpoint, defined only when the window is served by it (see dev-packages.ts). */
+declare const __SUPEREGO_DEV_SERVER__: string | undefined
+
 /** The shell's own actions. Extensions add theirs with `superego.action`. */
 export const coreActions = (app: AppConfig): WindowAction[] => [
   defineAction({ id: 'app.palette', title: 'Commands', runs: 'window', keys: 'mod+k', run: (_p, c: WindowContext) => c.togglePalette() }),
@@ -123,6 +126,14 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
     id: 'app.newWindow', title: 'New window', runs: 'window', keys: 'mod+shift+n',
     run: async () => { if (window.superego.web) window.open(location.href, '_blank'); else await window.superego.call('app', 'app.newWindow', {}) },
   }),
+  // In dev only: restart the window's dev server so packages linked since it started resolve (see dev-packages.ts).
+  ...(typeof __SUPEREGO_DEV_SERVER__ === 'string' ? [defineAction({
+    id: 'app.reloadPackages', title: 'Reload, picking up new packages', runs: 'window',
+    run: async () => {
+      const answer = await fetch(__SUPEREGO_DEV_SERVER__, { method: 'POST' })
+      if (!answer.ok) throw new Error(`The dev server didn't restart (${answer.status})`)
+    },
+  })] : []),
   defineAction({ id: 'app.settings', title: 'Settings', runs: 'window', keys: 'mod+,', run: (_p, c: WindowContext) => c.openSettings() }),
   defineAction({ id: 'app.log', title: 'Show action log', runs: 'window', run: (_p, c: WindowContext) => c.showLog() }),
   // Panes of the selected thread.
