@@ -16,7 +16,7 @@ export const PROTOCOL_VERSION = 1
  * What a daemon of this build offers, announced in `hello`. Clients check a feature before using it, so an older
  * daemon on another machine keeps working with a newer app (and the other way round) for whatever both know.
  */
-export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'heartbeat', 'channels', 'uploads', 'keeps-running', 'clients', 'web-devices'] as const
+export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'heartbeat', 'channels', 'uploads', 'keeps-running', 'clients', 'web-devices', 'relay'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -125,6 +125,25 @@ export type ClientInfo = {
   device?: string
 }
 
+/**
+ * How a client's connection to a machine stands. `needs-login`: ssh wants a password, a code or a key it doesn't have,
+ * so the link waits for a login instead of retrying. `host-key`: the host key is unknown or changed (the error says
+ * which), and it waits for that to be put right.
+ */
+export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'needs-login' | 'host-key'
+
+/** A machine as a client shows it: its link's state, and what the last hello said. */
+export type MachineEntry = {
+  id: string; label: string; state: ConnectionState | 'disabled'; error?: string; errorKind?: string
+  /** Who answered, from the last hello: the daemon's identity and hostname, and what it offers. */
+  machine?: { id: string; hostname: string }
+  /** Whether its daemon will outlive a logout and a reboot, from the last hello. */
+  keepsRunning?: KeepsRunning
+  features?: string[]
+  /** Absent for this computer, which can't be removed. */
+  remote?: { route: string; enabled: boolean; /** Reached with ssh, so it can log in and have Superego installed. */ ssh: boolean }
+}
+
 /** A browser paired with this machine for Web access. Its credential is a cookie; the daemon keeps only a hash. */
 export type WebDevice = { id: string; name: string; created: number; seen: number }
 
@@ -204,6 +223,19 @@ export type Methods = {
   'web.device.rename': { params: { id: string; name: string }; result: null }
   /** Forget a paired browser: its cookie stops working and its connections close at once. */
   'web.device.revoke': { params: { id: string }; result: null }
+
+  /**
+   * The machines this daemon reaches (`relay`): itself as `local`, then those in `machines.json` on its computer, with
+   * their links' states; then `machines.changed` with the whole list.
+   */
+  'machines.watch': { params: {}; result: { sub: string; value: MachineEntry[] } }
+  /**
+   * Call a method on a machine this daemon reaches, through its link there. Its notifications come back to this
+   * connection as `relay.event`, and watches it opened there end when this connection does.
+   */
+  'relay.call': { params: { machine: string; method: string; params?: unknown }; result: unknown }
+  /** Drop a link and connect again, as after a login or a reinstall there. */
+  'machines.reconnect': { params: { id: string }; result: null }
 }
 
 export type Notifications = {
@@ -223,11 +255,15 @@ export type Notifications = {
   'clients.changed': { sub: string; value: ClientInfo[] }
   /** Another client asks this one to run a window action. A client that has no such action ignores it. */
   'client.perform': { from: ClientInfo; action: string; params?: Json }
+  'machines.changed': { sub: string; value: MachineEntry[] }
+  /** A notification from a machine reached through this daemon, for a connection that has called it. */
+  'relay.event': { machine: string; method: string; params: unknown }
 }
 
 const NOTIFICATION_NAMES: Record<keyof Notifications, true> = {
   'watch.ops': true, 'watch.end': true, 'threads.changed': true, 'settings.changed': true, 'auth.event': true, 'value.changed': true,
   'file.changed': true, 'ch.data': true, 'ch.ack': true, 'ch.end': true, 'ch.abort': true, 'clients.changed': true, 'client.perform': true,
+  'machines.changed': true, 'relay.event': true,
 }
 /** Every notification a daemon sends, at runtime (the contract test checks them). */
 export const NOTIFICATIONS = Object.keys(NOTIFICATION_NAMES) as (keyof Notifications)[]

@@ -20,7 +20,7 @@ import {
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
-import { threadTools } from './thread-tools.ts'
+import { lastAnswer as answerIn, threadTools } from './thread-tools.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveValue, type StatusContribution } from './extension.ts'
 import { serveWeb, type WebServer } from './web.ts'
@@ -32,6 +32,7 @@ import { agentsInstructions, listSkills, mentionedSkills, skillBlock, skillsProm
 import { metaExtension, metaPrompt, type MachineDirectory } from './meta.ts'
 import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileRef } from './profiles.ts'
 import { keepsRunning } from './service.ts'
+import { createRelay, type MachineReach } from './relay.ts'
 
 const context = BACKGROUND_CONTEXT
 
@@ -90,6 +91,11 @@ export type DaemonOptions = {
   agentsDir?: string
   /** The machines this computer reaches, as the app keeps them: for the meta agent to set them up. */
   machines?: () => MachineDirectory
+  /**
+   * The other machines this daemon reaches (see relay.ts), given its own identity so it never links to itself. The host
+   * builds it from @superego/client (the app's daemon: `machineHub`); without it, this daemon reaches only itself.
+   */
+  reach?: (self: MachineInfo) => MachineReach
   /** This tailnet node, for Web access through Tailscale; defaults to asking `tailscale status`. Tests give their own. */
   tailscale?: () => Promise<TailscaleNode | undefined>
 }
@@ -282,16 +288,13 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     info: async (id) => { const m = await get(id).catch(() => undefined); return m && info(id, m) },
     list: () => list(),
     start: (parent, params) => startThread({ ...params, parent }),
+    hostname: () => machine.hostname,
+    machines: () => relay.entries().slice(1),
+    remote: (id, method, params) => relay.call(id, method, params),
     send: async (id, text) => { await submit(id, text, randomUUID(), 'followUp') },
     async answer(id) {
       const page = await (await get(id)).conversation.entries({ order: 'descending' }, 50, undefined, context)
-      for (const entry of page.items) {
-        const message = entry.model?.[0] as { role?: string; content?: unknown } | undefined
-        if (message?.role !== 'assistant' || !Array.isArray(message.content)) continue
-        const said = (message.content as { type: string; text?: string }[]).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim()
-        if (said) return said
-      }
-      return undefined
+      return answerIn([...page.items].reverse() as { model?: unknown[] }[])
     },
   }))
   // Profiles and their extensions import from 'superego'; this is what they get.
@@ -482,6 +485,19 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return { name, title: bundled?.title, description: bundled?.description }
   }))
   const features = [...FEATURES, ...(options.extensions ?? []).map((extension) => `ext:${extension.name}`)]
+
+  // The other machines, reached through links this daemon keeps (see relay.ts); this one first, as 'local'.
+  const relay = createRelay(options.reach?.(machine), () => ({
+    id: 'local', label: machine.hostname, state: 'connected', machine: { id: machine.id, hostname: machine.hostname }, features,
+    keepsRunning: keepsRunning(options.app),
+  }))
+  cleanups.push(() => relay.close())
+  router.register(defineAction({
+    id: 'machines.reconnect', title: 'Reconnect a machine', runs: 'machine', expose: ['ui', 'cli'],
+    description: 'Drop the link to a machine this one reaches and connect again, as after logging in there.',
+    params: obj({ id: str() }),
+    run({ id }) { relay.reconnect(id); return null },
+  }))
 
   // ── Profiles ────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -903,6 +919,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       const self = clients.add(peer, via)
       /** Who dispatched, for the action log. */
       const by = () => { const info = clients.get(self); return info && { id: info.id, kind: info.kind, label: info.label } }
+      const relayed = relay.connect((machine, method, params) => notify('relay.event', { machine, method, params }))
       // Reads and watches; every intent is an action, served below under its id.
       const handlers: Record<string, (params: any) => unknown> = {
         async hello({ version, client: name, label }: Methods['hello']['params']) {
@@ -920,6 +937,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           clients.perform(self, target, action, params)
           return null
         },
+        async 'machines.watch'() {
+          const sub = randomUUID()
+          subs.set(sub, relay.watch((value) => notify('machines.changed', { sub, value })))
+          return { sub, value: relay.entries() }
+        },
+        'relay.call': ({ machine: target, method, params }: Methods['relay.call']['params']) => relayed.call(target, method, params),
         'thread.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),
         'file.read': async ({ id, path, base64 }: { id: string; path: string; base64?: boolean }) => {
@@ -1041,6 +1064,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         connections.delete(peer)
         connection.close()
         clients.remove(self)
+        relayed.close()
         for (const stop of subs.values()) void stop()
         subs.clear()
       }
@@ -1095,7 +1119,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           at: access === 'tailscale' ? { socket: webSocket } : { host: access === 'network-unencrypted' ? '0.0.0.0' : '127.0.0.1', port },
           auth: access === 'tailscale' ? { kind: 'tailscale', admits } : { kind: 'pairing', devices, codes },
           serve: daemon.serve,
-          artifact: async (thread, path) => readFile(inFolder((await get(thread)).meta.cwd, path)),
+          artifact: async (thread, path, elsewhere) => elsewhere
+            ? Buffer.from((await relay.call(elsewhere, 'file.read', { id: thread, path, base64: true }) as { content: string }).content, 'base64')
+            : readFile(inFolder((await get(thread)).meta.cwd, path)),
         })
         if (access === 'tailscale') node = undefined
       } catch (error) {

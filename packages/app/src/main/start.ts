@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, openSync } from 'node:fs'
+import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, protocol, session, shell, type MenuItemConstructorOptions } from 'electron'
 import { appEnv, daemonStarting, defaultDataDir, readBuild, socketPath } from '@superego/daemon/client'
@@ -11,7 +12,7 @@ import { serveSettings } from '@superego/settings'
 import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type SuperegoEvent } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
 import { UiTrust } from './ui-trust.ts'
-import { checkIdentity, installedCommand, installMachine, Link, loginInTerminal, MachineStore, openLocal as openLocalSocket, openMachine, routeOf, sshRun } from '@superego/client'
+import { installedCommand, installMachine, Link, loginInTerminal, MachineLinks, MachineStore, openLocal as openLocalSocket, sshRun } from '@superego/client'
 import { MenuBar } from './tray.ts'
 import { ServiceRestart, type ServiceAction } from './restart.ts'
 import { shortcutOf } from '../renderer/shortcuts.ts'
@@ -113,75 +114,40 @@ export function startApp(appConfig: AppConfig) {
     return handlers
   }
 
-  const links = new Map<string, Link>()
-  function addLink(link: Link) {
-    links.set(link.id, link)
-    link.start()
-  }
+  /** This computer's daemon, and a link to every enabled machine in `machines.json` (see @superego/client's links.ts). */
+  let local: Link | undefined
+  const machineStore = new MachineStore(dataDir)
+  const remotes = new MachineLinks({
+    app: appConfig, dataDir, store: machineStore, client: `${appConfig.id}-app`, clientLabel: hostname(),
+    onEvent: (machine, method, params) => onMachineEvent(machine, method, params),
+    // The local daemon is a machine connected already: a configured one that turns out to be it is refused.
+    others: () => local?.state === 'connected' && local.hello ? [{ label: local.label, id: local.hello.machine.id }] : [],
+    onChange() {
+      broadcast({ machine: APP, method: '$machines', params: machineEntries() })
+      refreshDesktop()
+    },
+  })
+  const linkOf = (id: string) => id === 'local' ? local : remotes.get(id)
+  const allLinks = () => [...(local ? [local] : []), ...remotes.list()]
 
   /** This computer, then every configured machine; disabled ones have no link. */
-  const machineStore = new MachineStore(dataDir)
-  const linkConfig = new Map<string, string>()
   function machineEntries(): MachineEntry[] {
-    const local = links.get('local')
-    return [
-      ...(local ? [local.entry()] : []),
-      ...machineStore.list().map((config): MachineEntry => {
-        const remote = { route: routeOf(config, appConfig), enabled: config.enabled, ssh: !config.via }
-        const link = links.get(config.id)
-        return link ? { ...link.entry(), label: config.label, remote } : { id: config.id, label: config.label, state: 'disabled', remote }
-      }),
-    ]
-  }
-  /**
-   * A link to a configured machine. Identity is not the route: the first daemon to answer at the target is remembered,
-   * and later a different one there is refused until the user trusts it. One machine reached two ways is refused too.
-   */
-  function sshLink(config: MachineConfig) {
-    return new Link({
-      id: config.id, label: config.label,
-      open: () => openMachine(config, appConfig, dataDir),
-      onEvent: (method, params) => onMachineEvent(config.id, method, params),
-      verify(hello) {
-        const current = machineStore.get(config.id)
-        const connected = [...links.values()].filter((other) => other.id !== config.id && other.state === 'connected' && other.hello)
-          .map((other) => ({ label: other.label, id: other.hello!.machine.id }))
-        checkIdentity(hello, { target: config.via ? 'that command' : config.target, ...(current?.daemonId ? { expected: current.daemonId } : {}) }, connected)
-        if (!current?.daemonId) void machineStore.update(config.id, { daemonId: hello.machine.id })
-      },
-    })
+    return [...(local ? [local.entry()] : []), ...remotes.entries()]
   }
   function restartLocal() {
-    links.get('local')?.stop()
-    addLink(new Link({ id: 'local', label: 'This computer', open: openLocal, onEvent: (method, params) => onMachineEvent('local', method, params) }))
+    local?.stop()
+    const link: Link = new Link({
+      id: 'local', label: 'This computer', client: `${appConfig.id}-app`, clientLabel: hostname(), open: openLocal,
+      onEvent: (method, params) => { if (local === link) onMachineEvent('local', method, params) },
+    })
+    local = link
+    link.start()
   }
+  /** Reconnect a machine here, and the local daemon's own link there (it reaches the machines too), when it has one. */
   function restartLink(id: string) {
-    links.get(id)?.stop()
-    links.delete(id)
-    linkConfig.delete(id)
-    syncLinks()
+    remotes.restart(id)
+    if (local?.state === 'connected' && local.has('relay')) void local.call('machines.reconnect', { id }).catch(() => {})
   }
-
-  /** Start, restart or stop links to match the configured machines. */
-  function syncLinks() {
-    const configs = machineStore.list()
-    for (const [id, link] of links) {
-      if (id === 'local') continue
-      const config = configs.find((c) => c.id === id)
-      const key = config && routeOf(config, appConfig)
-      if (!config?.enabled || key !== linkConfig.get(id)) { link.stop(); links.delete(id); linkConfig.delete(id) }
-    }
-    for (const config of configs) {
-      if (!config.enabled || links.has(config.id)) continue
-      linkConfig.set(config.id, routeOf(config, appConfig))
-      addLink(sshLink(config))
-    }
-    broadcast({ machine: APP, method: '$machines', params: machineEntries() })
-    refreshDesktop()
-  }
-  machineStore.onChange(syncLinks)
-  // The CLI edits the same list; pick up its changes.
-  machineStore.watch()
 
   /**
    * Notify when a thread out of sight starts wanting a look: it finished, failed or needs the user. The app keeps its
@@ -190,13 +156,12 @@ export function startApp(appConfig: AppConfig) {
   const lastStatus = new Map<string, ThreadInfo['status']['state']>()
   const watchSubs = new Map<string, string>()
   function onMachineEvent(machine: string, method: string, params: unknown) {
-    if (!links.has(machine)) return
     if (method === '$connection') {
       broadcast({ machine: APP, method: '$machines', params: machineEntries() })
       refreshDesktop()
       if ((params as { state: string }).state === 'connected') {
         if (machine === 'local') setTimeout(pollService)
-        void (links.get(machine)!.call('threads.watch', {}) as Promise<{ sub: string; value: ThreadInfo[] }>).then(({ sub, value }) => {
+        void (linkOf(machine)!.call('threads.watch', {}) as Promise<{ sub: string; value: ThreadInfo[] }>).then(({ sub, value }) => {
           watchSubs.set(machine, sub)
           track(machine, value, false)
         }).catch(() => {})
@@ -220,7 +185,7 @@ export function startApp(appConfig: AppConfig) {
       lastStatus.set(key, now)
       if (!announce || before === now || !['done', 'error', 'blocked'].includes(now)) continue
       if (headless || BrowserWindow.getFocusedWindow() || !appSettings.get<boolean>(APP_KEYS.notifications) || !Notification.isSupported()) continue
-      const label = links.get(machine)?.label ?? machine
+      const label = linkOf(machine)?.label ?? machine
       const body = now === 'done' ? 'Finished' : now === 'error' ? `Failed${thread.status.msg ? `: ${thread.status.msg}` : ''}` : 'Needs you'
       const notification = new Notification({ title: thread.title, subtitle: label, body })
       notification.on('click', () => show({ open: { machine, thread: thread.id } }))
@@ -236,7 +201,7 @@ export function startApp(appConfig: AppConfig) {
         if (!handler) throw new RpcError('unknown_method', `Unknown method ${method}`)
         return { ok: true, result: await handler(params ?? {}) }
       }
-      const link = links.get(machine)
+      const link = linkOf(machine)
       if (!link) throw new RpcError('unknown_machine', `No machine ${machine}`)
       return { ok: true, result: await link.call(method, params) }
     } catch (error) {
@@ -408,7 +373,7 @@ export function startApp(appConfig: AppConfig) {
   async function reconnected(pid: number | undefined) {
     const deadline = Date.now() + 30_000
     for (;;) {
-      const link = links.get('local')
+      const link = local
       if (link?.state === 'connected' && link.hello && link.hello.machine.pid !== pid) return link.hello
       if (Date.now() > deadline) throw new Error('The background process did not come back. See daemon.log in the data dir.')
       await new Promise((resolve) => setTimeout(resolve, 200))
@@ -417,7 +382,7 @@ export function startApp(appConfig: AppConfig) {
 
   const service = new ServiceRestart({
     async inspect() {
-      const link = links.get('local')
+      const link = local
       if (!link?.hello || link.state !== 'connected') throw new Error('The background process is not connected.')
       return {
         // The daemon the app would start now is the code next to it on disk.
@@ -428,7 +393,7 @@ export function startApp(appConfig: AppConfig) {
       }
     },
     async restart(snapshot, interrupt) {
-      const link = links.get('local')!
+      const link = local!
       const pid = link.hello?.machine.pid
       if (link.has('restart')) {
         const result = await link.call('daemon.restart', { build: snapshot.runningBuild, interrupt }) as { restarted: boolean }
@@ -453,7 +418,7 @@ export function startApp(appConfig: AppConfig) {
       refreshDesktop()
     },
   })
-  const pollService = () => { if (links.get('local')?.state === 'connected') void service.poll() }
+  const pollService = () => { if (local?.state === 'connected') void service.poll() }
   setInterval(pollService, 3000).unref()
 
   /** Quit, and stop this computer's daemon and its agents too, asking first while any are working. */
@@ -467,8 +432,8 @@ export function startApp(appConfig: AppConfig) {
       })
       if (response !== 0) return
     }
-    const pid = links.get('local')?.hello?.machine.pid
-    for (const link of links.values()) link.stop()
+    const pid = local?.hello?.machine.pid
+    for (const link of allLinks()) link.stop()
     if (pid) try { process.kill(pid, 'SIGTERM') } catch {}
     app.quit()
   }
@@ -516,7 +481,7 @@ export function startApp(appConfig: AppConfig) {
     protocol.handle('superego-artifact', async (request) => {
       const url = new URL(request.url)
       const [thread, ...rest] = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
-      const link = links.get(decodeURIComponent(url.hostname))
+      const link = linkOf(decodeURIComponent(url.hostname))
       if (!link || !thread || !rest.length) return new Response('Not found', { status: 404 })
       try {
         const path = rest.join('/')
@@ -557,7 +522,7 @@ export function startApp(appConfig: AppConfig) {
       callback({ responseHeaders: headers })
     })
     restartLocal()
-    syncLinks()
+    remotes.follow()
     const window = createWindow()
     const open = openArgument(process.argv)
     if (open) pending.set(window.webContents.id, { open })
@@ -571,7 +536,7 @@ export function startApp(appConfig: AppConfig) {
   })
   // Every quit quits: the menu bar's Quit, SIGTERM (Electron turns it into app.quit), logout. Only the ⌘Q menu item
   // is softer: with the menu bar on, it closes the windows and leaves the app there.
-  app.on('before-quit', () => { for (const link of links.values()) link.stop() })
+  app.on('before-quit', () => { for (const link of allLinks()) link.stop() })
   const quitKey = () => {
     if (menuBarOn() && !headless) for (const window of BrowserWindow.getAllWindows()) window.close()
     else app.quit()

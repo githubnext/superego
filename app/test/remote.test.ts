@@ -18,6 +18,8 @@ const CLI = join(appDir, 'bin/superego.ts')
 let root: string
 const homes: string[] = []
 const newHome = () => { const dir = mkdtempSync(join(root, 'home-')); homes.push(dir); return dir }
+/** This computer's data dirs, whose daemons (started by the CLI) go too. */
+const locals: string[] = []
 
 /** A remote: this computer with another HOME, a bare PATH of its own, and no model keys. */
 const remoteEnv = (home: string): NodeJS.ProcessEnv => ({
@@ -42,8 +44,8 @@ beforeAll(() => {
 }, 240_000)
 
 afterAll(() => {
-  for (const home of homes) {
-    const pid = Number(readFileSync(join(home, '.superego/daemon.pid'), { flag: 'a+', encoding: 'utf8' }) || '0')
+  for (const file of [...homes.map((home) => join(home, '.superego/daemon.pid')), ...locals.map((local) => join(local, 'daemon.pid'))]) {
+    const pid = Number(readFileSync(file, { flag: 'a+', encoding: 'utf8' }) || '0')
     if (pid) try { process.kill(pid) } catch {}
   }
   rmSync(root, { recursive: true, force: true })
@@ -110,6 +112,7 @@ describe('machines add --install, through a stand-in ssh', () => {
   it('installs, points the machine at the shim, and lists it with the stop-at-logout warning; then sets up a service into the temp home', async () => {
     const remoteHome = newHome()
     const local = mkdtempSync(join(root, 'local-'))
+    locals.push(local)
     // The stand-in ssh: drops options and target, sets the remote HOME, runs the command as a remote shell would.
     mkdirSync(join(root, 'bin'), { recursive: true })
     writeFileSync(join(root, 'bin/ssh'), '#!/bin/sh\necho "$@" >> "$FAKE_SSH_LOG"\nwhile [ "$1" != "--" ]; do shift; done; shift; shift\nunset SUPEREGO_HOME SUPEREGO_SOCKET SUPEREGO_REMOTE_BUNDLE\nexport HOME="$FAKE_REMOTE_HOME"\nexec /bin/sh -c "$1"\n')
@@ -138,7 +141,9 @@ describe('machines add --install, through a stand-in ssh', () => {
     expect(list).toMatch(/Fake .*answers \(.*\) - stops at logout or reboot: run superego daemon install there/)
 
     // `daemon install` on that machine, as `--service` runs it: into its temp home, the system's commands recorded.
-    // The daemon the listing started goes away first, so the recorded service manager has no one to hand over from.
+    // The daemon the listing started goes away first, so the recorded service manager has no one to hand over from. So
+    // does this computer's daemon, which the listing started too: it links to Fake, and its link would start one again.
+    run(['daemon', 'stop'])
     const pid = Number(readFileSync(join(remoteHome, '.superego/daemon.pid'), 'utf8'))
     process.kill(pid)
     for (let i = 0; i < 50 && existsSync(join(remoteHome, '.superego/superego.sock')); i++) await new Promise((r) => setTimeout(r, 100))

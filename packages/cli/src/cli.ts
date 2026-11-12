@@ -6,12 +6,13 @@ import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, openSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { createConnection } from 'node:net'
+import { hostname } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { devApp } from './dev-app.ts'
 import {
-  checkIdentity, controlPath, installedCommand, installMachine, loginArgs, MachineStore, masterAlive, openLocal, openMachine, routeOf, sshRun, type MachineConfig, type Transport,
+  checkIdentity, controlPath, installedCommand, installMachine, loginArgs, machineHub, MachineStore, masterAlive, openLocal, openMachine, routeOf, sshRun, type MachineConfig, type Transport,
 } from '@superego/client'
 import { appEnv, daemonStarting, defaultDataDir, installService, isListening, readBuild, serveDaemon, socketPath, startService, uninstallService } from '@superego/daemon'
 import {
@@ -144,7 +145,7 @@ function resolveMachine(name: string | undefined): Machine {
 async function connect(machine: Machine): Promise<{ transport: Transport; hello: Hello }> {
   const transport = machine.config ? await openMachine(machine.config, app, dataDir) : await openLocal(socket, startDaemon)
   try {
-    const hello = await transport.peer.call<Hello>('hello', { client: `${app.id}-cli`, version: PROTOCOL_VERSION, features: [...FEATURES] })
+    const hello = await transport.peer.call<Hello>('hello', { client: `${app.id}-cli`, version: PROTOCOL_VERSION, features: [...FEATURES], label: hostname() })
     if (machine.config) checkIdentity(hello, { target: routeOf(machine.config, app), ...(machine.config.daemonId ? { expected: machine.config.daemonId } : {}) }, [])
     return { transport, hello }
   } catch (error) {
@@ -401,7 +402,7 @@ async function authCommand(sub: string | undefined, rest: string[], machineName?
 }
 
 async function daemonCommand(sub: string | undefined, now: boolean) {
-  if (!sub) return options.daemon ? void await import(pathToFileURL(options.daemon).href) : serveDaemon({ app, dataDir, socket })
+  if (!sub) return options.daemon ? void await import(pathToFileURL(options.daemon).href) : serveDaemon({ app, dataDir, socket, reach: (dir, self) => machineHub({ app, dataDir: dir, self }) })
   const local: Machine = { id: 'local', label: 'This computer' }
   const running = await isListening(socket)
   if (sub === 'status') {

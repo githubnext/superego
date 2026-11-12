@@ -4,6 +4,8 @@ export * from './shared.ts'
 export { MachineStore } from './machines.ts'
 export { openLocal, openMachine, openSsh, openVia } from './transports.ts'
 export { Link, type LinkOptions, type Transport } from './link.ts'
+export { MachineLinks, type MachineLinksOptions } from './links.ts'
+export { machineHub } from './hub.ts'
 export { carriesFiles, upload, uploadAttachments } from './uploads.ts'
 export { checkIdentity } from './identity.ts'
 export {

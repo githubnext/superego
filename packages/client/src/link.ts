@@ -21,8 +21,9 @@ export type LinkOptions = {
   onEvent(method: string, params: unknown): void
   /** Check who answered before the link counts as connected; throw to refuse it. */
   verify?(hello: Hello): void
-  /** What the link calls itself in hello. */
+  /** What the link calls itself in hello: its kind, and a name for people (the computer it runs on). */
   client?: string
+  clientLabel?: string
   /** How often to ping, and how long a silence closes the transport (which reconnects), in ms. */
   heartbeat?: { every: number; timeout: number }
 }
@@ -106,7 +107,10 @@ export class Link {
         this.#transport = transport
         // Channels are this connection's own business, not news for the windows.
         transport.peer.onAny((method, params) => { if (!method.startsWith('ch.')) this.#options.onEvent(method, params) })
-        const hello = await transport.peer.call<Hello>('hello', { client: this.#options.client ?? 'superego-app', version: PROTOCOL_VERSION, features: [...FEATURES] })
+        const hello = await transport.peer.call<Hello>('hello', {
+          client: this.#options.client ?? 'superego-app', version: PROTOCOL_VERSION, features: [...FEATURES],
+          ...(this.#options.clientLabel ? { label: this.#options.clientLabel } : {}),
+        })
         if (hello.version !== PROTOCOL_VERSION) {
           throw new RpcError('version_mismatch', `${hello.machine.hostname} speaks protocol generation ${hello.version}, this client ${PROTOCOL_VERSION}`, { hint: 'Update the side that is older.' })
         }

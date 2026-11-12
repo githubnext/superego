@@ -54,8 +54,11 @@ type Identity = { ok: true; via: Via } | { ok: false; status: 401 | 403; why: st
 /** Serve `root` (the window's build) and the protocol, on host:port or a unix socket; each connection a peer handed to `serve`. */
 export async function serveWeb({ root, at, auth, serve, artifact }: {
   root: string; at: { host: string; port: number } | { socket: string }; auth: WebAuth; serve(peer: RpcPeer, transport: { via: Via; hangUp(): void }): () => void
-  /** A file of an artifact (an HTML page in a thread's folder, and what it links to), at /artifact/<thread>/<path>. */
-  artifact?(thread: string, path: string): Promise<Buffer>
+  /**
+   * A file of an artifact (an HTML page in a thread's folder, and what it links to), at /artifact/<thread>/<path>; on
+   * another machine this daemon reaches, at /artifact/~<machine>/<thread>/<path>.
+   */
+  artifact?(thread: string, path: string, machine?: string): Promise<Buffer>
 }): Promise<WebServer> {
   const identify = async (request: IncomingMessage): Promise<Identity> => {
     if (auth.kind === 'tailscale') {
@@ -103,9 +106,11 @@ export async function serveWeb({ root, at, auth, serve, artifact }: {
     if (path.startsWith('/artifact/') && artifact) {
       const who = await identify(request)
       if (!who.ok) { response.writeHead(who.status, { 'content-type': 'text/plain' }).end(who.why); return }
-      const [thread, ...rest] = path.slice('/artifact/'.length).split('/')
+      const parts = path.slice('/artifact/'.length).split('/')
+      const machine = parts[0]?.startsWith('~') ? decodeURIComponent(parts.shift()!.slice(1)) : undefined
+      const [thread, ...rest] = parts
       try {
-        const content = await artifact(thread!, rest.join('/'))
+        const content = await artifact(thread!, rest.join('/'), machine)
         response.writeHead(200, {
           'content-type': TYPES[extname(path)] ?? 'application/octet-stream',
           'content-security-policy': "sandbox allow-scripts allow-forms allow-popups; default-src 'self' data: blob: https: 'unsafe-inline' 'unsafe-eval'",
