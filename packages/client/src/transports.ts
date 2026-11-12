@@ -56,7 +56,7 @@ function openStdio(program: string, args: string[]): Promise<Transport> {
     const closed = new Promise<void>((done) => child.once('close', (code) => {
       const why = stderr.trim().split('\n').filter(Boolean).at(-1)
       // ssh's own words for a failed login or host key become kinds a link can act on.
-      const known = name === 'ssh' ? classifySsh(stderr) : undefined
+      const known = name === 'ssh' ? classifySsh(stderr, code) : undefined
       if (known) peer.close(new RpcError(known.kind, known.message))
       else peer.close(new RpcError(name, why ? (why.startsWith(`${name}:`) ? why : `${name}: ${why}`) : `${name} exited with ${code}`))
       done()

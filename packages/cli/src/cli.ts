@@ -258,7 +258,7 @@ async function loginCommand(machine: Machine) {
   const config = machine.config!
   if (config.via) throw new RpcError('invalid', `${machine.label} is reached with a command, not ssh: there is no login`)
   const control = controlPath(dataDir, config.target)
-  if (!masterAlive(control, config.target)) {
+  if (!(await masterAlive(control, config.target))) {
     mkdirSync(dirname(control), { recursive: true, mode: 0o700 })
     const result = spawnSync('ssh', [...loginArgs(control), '--', config.target], { stdio: 'inherit' })
     if (result.status !== 0) throw new RpcError('login_failed', `ssh did not log in to ${config.target}`)

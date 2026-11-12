@@ -13,7 +13,7 @@ export type LoginOptions = {
   /** Open the terminal; the real one detaches `open` or the emulator. Tests record instead of showing anything. */
   launch?(program: string, args: string[]): void
   hasProgram?(name: string): boolean
-  alive?(control: string, target: string): boolean
+  alive?(control: string, target: string): boolean | Promise<boolean>
   /** How often to look for the master, and how long to wait for it. */
   pollMs?: number
   timeoutMs?: number
@@ -39,14 +39,15 @@ export function loginInTerminal(config: MachineConfig, options: LoginOptions): {
   const alive = options.alive ?? masterAlive
   const poll = options.pollMs ?? 1000
   const deadline = Date.now() + (options.timeoutMs ?? 5 * 60_000)
+  // One check at a time, `poll` apart: each asks ssh, which may take a moment.
   const done = new Promise<boolean>((resolve) => {
-    const timer = setInterval(() => {
-      const up = alive(control, config.target)
-      if (!up && Date.now() < deadline) return
-      clearInterval(timer)
+    const check = async () => {
+      const up = await Promise.resolve(alive(control, config.target)).catch(() => false)
+      if (!up && Date.now() < deadline) { setTimeout(check, poll); return }
       rmSync(script, { force: true })
       resolve(up)
-    }, poll)
+    }
+    setTimeout(check, poll)
   })
   return { script, done }
 }

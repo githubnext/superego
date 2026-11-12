@@ -35,7 +35,7 @@ export function sshRun(config: MachineConfig, dataDir?: string): RemoteRun {
     child.once('error', (error) => reject(new RpcError('ssh', `Could not run ssh: ${error.message}`)))
     child.once('close', (code) => {
       // 255 is ssh itself failing; any other code is the script's.
-      const failure = code === 255 ? classifySsh(stderr) : undefined
+      const failure = code === 255 ? classifySsh(stderr, code) : undefined
       if (failure) reject(new RpcError(failure.kind, failure.message))
       else resolve({ code: code ?? 1, stdout, stderr })
     })
