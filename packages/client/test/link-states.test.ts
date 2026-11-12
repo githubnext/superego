@@ -55,3 +55,22 @@ describe('a link whose ssh needs a login', () => {
     expect(link.entry()).toMatchObject({ state: 'connected', keepsRunning: { service: null, afterLogout: false } })
   })
 })
+
+describe('a link whose transport opens but never answers', () => {
+  it('gives up on hello after a while, closes the transport and tries again', async () => {
+    let opens = 0
+    let closes = 0
+    const seen: { state: string; errorKind?: string }[] = []
+    const link = new Link({
+      id: 'box', label: 'Box', helloTimeout: 100,
+      open: async () => { opens++; return { peer: new RpcPeer(() => true), closed: new Promise(() => {}), close: () => { closes++ } } },
+      onEvent: (method, params) => { if (method === '$connection') seen.push(params as { state: string; errorKind?: string }) },
+    })
+    link.start()
+    await new Promise((resolve) => setTimeout(resolve, 900))
+    link.stop()
+    expect(opens).toBeGreaterThan(1)
+    expect(closes).toBeGreaterThanOrEqual(opens - 1)
+    expect(seen[1]).toMatchObject({ state: 'disconnected', errorKind: 'timeout' })
+  })
+})

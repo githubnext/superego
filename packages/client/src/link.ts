@@ -26,6 +26,8 @@ export type LinkOptions = {
   clientLabel?: string
   /** How often to ping, and how long a silence closes the transport (which reconnects), in ms. */
   heartbeat?: { every: number; timeout: number }
+  /** How long hello may take once the transport is open, in ms; past it the transport is closed and tried again. */
+  helloTimeout?: number
 }
 
 export class Link {
@@ -107,10 +109,12 @@ export class Link {
         this.#transport = transport
         // Channels are this connection's own business, not news for the windows.
         transport.peer.onAny((method, params) => { if (!method.startsWith('ch.')) this.#options.onEvent(method, params) })
-        const hello = await transport.peer.call<Hello>('hello', {
+        // A transport that opened but never answers (a via command that hangs, a daemon wedged) would otherwise stay
+        // connecting for good. Long enough for `connect --start` to start a daemon on the far side first.
+        const hello = await within(transport.peer.call<Hello>('hello', {
           client: this.#options.client ?? 'superego-app', version: PROTOCOL_VERSION, features: [...FEATURES],
           ...(this.#options.clientLabel ? { label: this.#options.clientLabel } : {}),
-        })
+        }), this.#options.helloTimeout ?? 30_000, () => new RpcError('timeout', `${this.label} did not answer`))
         if (hello.version !== PROTOCOL_VERSION) {
           throw new RpcError('version_mismatch', `${hello.machine.hostname} speaks protocol generation ${hello.version}, this client ${PROTOCOL_VERSION}`, { hint: 'Update the side that is older.' })
         }
@@ -138,4 +142,11 @@ export class Link {
       this.#delay = Math.min(this.#delay * 2, 30_000)
     }
   }
+}
+
+/** `promise`, or `error()` after `ms`. */
+function within<T>(promise: Promise<T>, ms: number, error: () => Error): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(error()), ms) })
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer))
 }
