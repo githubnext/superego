@@ -254,14 +254,20 @@ describe('record and replay', () => {
     await close()
   })
 
-  it('archives a thread out of the list, and back', async () => {
+  it('archives a thread out of the list, readable but taking nothing, and back', async () => {
     const { peer, close } = await open()
     const kept = await peer.call<ThreadInfo>('thread.create', { title: 'kept' })
     const old = await peer.call<ThreadInfo>('thread.create', { title: 'old' })
     await peer.call('thread.archive', { id: old.id })
     expect((await threads(peer)).map((s) => s.id)).toEqual([kept.id])
-    expect((await peer.call<ThreadInfo[]>('thread.list', { archived: true })).map((s) => s.id)).toEqual([old.id])
+    const archived = await peer.call<ThreadInfo[]>('thread.list', { archived: true })
+    expect(archived.map((s) => s.id)).toEqual([old.id])
+    expect(archived[0]!.archived).toBe(true)
+    // Put away, it can still be read, but not sent to.
+    await expect(peer.call('thread.watch', { id: old.id })).resolves.toMatchObject({ sub: expect.any(String) })
+    await expect(peer.call('thread.submit', { id: old.id, text: 'hi' })).rejects.toMatchObject({ kind: 'archived' })
     await peer.call('thread.unarchive', { id: old.id })
+    expect((await threads(peer)).find((s) => s.id === old.id)?.archived).toBeUndefined()
     expect((await threads(peer)).map((s) => s.id).sort()).toEqual([kept.id, old.id].sort())
     await close()
   })

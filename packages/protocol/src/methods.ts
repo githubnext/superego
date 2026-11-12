@@ -42,6 +42,8 @@ export type ThreadInfo = {
   session: { root: string; name: string }
   /** Its own git worktree, when it has one; `removed` once archiving took it away (its branch stays). */
   worktree?: { path: string; branch: string; removed?: boolean }
+  /** Put away: listed only with `archived`, readable, and taking no messages until unarchived. */
+  archived?: boolean
   /** The machine's own agent, about Superego itself: setting up machines, projects, profiles, skills (see `thread.meta`). */
   meta?: boolean
   status: Status

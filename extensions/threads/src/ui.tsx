@@ -5,9 +5,9 @@
 // - show as: a list, or a rail of status glyphs
 // - details: a pane beside the thread with what it runs with, spent and touched
 // UI only: it uses the core's thread methods and facts.
-import { Fragment, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  defineAction, type Dispatch, defineUiExtension, showSession, SORT, useAppSetting, useMachines, useSelection, useSessions, useThreadView, useShell, useShortcut,
+  call, defineAction, type Dispatch, defineUiExtension, showSession, SORT, useAppSetting, useLocalState, useMachines, useSelection, useSessions, useThreadView, useShell, useShortcut,
   type MachineEntry, type Session, type Sort,
 } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
@@ -115,7 +115,53 @@ function Threads() {
           </List>
         </section>
       ))}
+      <Archived machines={machines} live={live} />
     </div>
+  )
+}
+
+/**
+ * Threads put away, from every machine and project in one list, newest activity first; folded until opened. Picking one
+ * shows it, read only; its Unarchive button brings it back.
+ */
+function Archived({ machines, live }: { machines: MachineEntry[]; live: Session[] }) {
+  const [open, setOpen] = useLocalState('threads.archived.open', false)
+  const { selection, select } = useSelection()
+  const [threads, setThreads] = useState<{ machine: MachineEntry; thread: ThreadInfo }[]>()
+  const connected = machines.filter((m) => m.state === 'connected')
+  // Asked again whenever the threads in use change: archiving one moves it here, unarchiving moves it back.
+  const inUse = live.flatMap((s) => s.threads.map((t) => `${s.machine.id}/${t.id}`)).sort().join(' ')
+  const asked = connected.map((m) => m.id).join(' ')
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    void Promise.all(connected.map((machine) => call<ThreadInfo[]>(machine.id, 'thread.list', { archived: true })
+      .then((list) => list.map((thread) => ({ machine, thread })), () => [])))
+      .then((lists) => { if (alive) setThreads(lists.flat().sort((a, b) => activity(b.thread) - activity(a.thread))) })
+    return () => { alive = false }
+  }, [open, inUse, asked])
+  return (
+    <section className={`threads-archived ${open ? 'is-open' : ''}`}>
+      <button className="threads-archived__head" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <CaretRightIcon className="threads-archived__caret" size={11} weight="bold" aria-hidden />
+        Archived
+        {open && threads && <em>{threads.length}</em>}
+      </button>
+      {open && (threads?.length === 0
+        ? <div className="threads__empty">Nothing archived.</div>
+        : (
+          <List>
+            {(threads ?? []).map(({ machine, thread }) => (
+              <ListItem key={`${machine.id}/${thread.id}`} trailing={ago(activity(thread))}
+                selected={selection?.machine === machine.id && selection.thread === thread.id}
+                onClick={() => select({ machine: machine.id, thread: thread.id })}>
+                {thread.title}
+                <em className="threads-archived__where">{thread.session?.name ?? thread.cwd.split('/').filter(Boolean).at(-1)}{machine.id !== 'local' ? ` · ${machine.label}` : ''}</em>
+              </ListItem>
+            ))}
+          </List>
+        ))}
+    </section>
   )
 }
 

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, Button, CaretRightIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, PaperclipIcon, PencilSimpleIcon, SparkleIcon, SquareSplitHorizontalIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon } from '@superego/ui'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, Button, CaretRightIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, PaperclipIcon, PencilSimpleIcon, SparkleIcon, SquareSplitHorizontalIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
 import { fileKind, paneMenu, Slot, useRegistry, type ToolCallProps } from './extension.tsx'
@@ -51,6 +51,7 @@ export function ThreadTitle({ thread }: { thread: ThreadInfo }) {
     <span className="titlebar__title">
       <StatusGlyph status={thread.status} />
       <span className="thread__title" title={thread.title}>{thread.title.replace(/\.$/, '')}</span>
+      {thread.archived && <span className="titlebar__archived">Archived</span>}
     </span>
   )
 }
@@ -71,10 +72,24 @@ export function ThreadTools({ machine, thread }: { machine: MachineEntry; thread
       </span>
       <Slot name="thread.header" props={{ machine, thread }} />
       <PaneMenu machine={machine} thread={thread} />
-      <IconButton label="Archive" className="thread__archive" onClick={() => void dispatch('thread.archive', { id: thread.id }, { machine: machine.id, source: 'header' })}>
-        <ArchiveIcon size={15} aria-hidden />
-      </IconButton>
+      {thread.archived
+        ? <UnarchiveButton machine={machine} thread={thread} />
+        : (
+          <IconButton label="Archive" className="thread__archive" onClick={() => void dispatch('thread.archive', { id: thread.id }, { machine: machine.id, source: 'header' })}>
+            <ArchiveIcon size={15} aria-hidden />
+          </IconButton>
+        )}
     </span>
+  )
+}
+
+/** Brings an archived thread back: into its session, with its worktree, taking messages again. */
+function UnarchiveButton({ machine, thread, className = '' }: { machine: MachineEntry; thread: ThreadInfo; className?: string }) {
+  const dispatch = useRegistry().router.dispatch
+  return (
+    <Button className={`thread__unarchive ${className}`} onClick={() => void dispatch('thread.unarchive', { id: thread.id }, { machine: machine.id, source: 'header' }).catch((error) => console.error(error))}>
+      <ArrowCounterClockwiseIcon size={14} aria-hidden /> Unarchive
+    </Button>
   )
 }
 
@@ -565,7 +580,9 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
   const [text, setText] = useLocalState(`draft.${machine.id}.${thread.id}`, '')
   const [error, setError] = useState<{ kind?: string; message: string }>()
   const input = useRef<HTMLTextAreaElement>(null)
-  const disabled = machine.state !== 'connected'
+  // Archived, it can be read, not written to, until it's brought back (the Unarchive button where Send would be).
+  const archived = Boolean(thread.archived)
+  const disabled = machine.state !== 'connected' || archived
   useEffect(() => { input.current?.focus() }, [thread.id])
   // Files going with the next message: picked, dropped on the composer or pasted into it.
   const [files, setFiles] = useState<Attachment[]>([])
@@ -648,7 +665,7 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
       onDrop={(e) => { setDragging(false); if (!claim && e.dataTransfer.files.length) { e.preventDefault(); void attach(e.dataTransfer.files) } }}>
     {/* Over the box, outside it: attaching files at the left, back to the end in the middle, Stop at the right. */}
     <div className="dock__bar">
-      {!claim && (
+      {!claim && !archived && (
         <>
           <IconButton label="Attach files" className="dock__pill dock__attach" disabled={disabled} onClick={() => picker.current?.click()}>
             <PaperclipIcon size={15} aria-hidden />
@@ -704,13 +721,17 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
       <TextArea ref={input} rows={1} value={text} disabled={disabled} onChange={(e) => { setText(e.target.value); setCaret(e.target.selectionStart) }} onKeyDown={onKeyDown}
         onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
         onPaste={(e) => { if (!claim && e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files) } }}
-        placeholder={disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : 'Ask anything'} />
+        placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : 'Ask anything'} />
       <div className="composer__actions">
         {/* The box holds the text and its one action; the others (attach, Queue, Stop) float over it. */}
         {/* Send (an arrow on), Steer (an arrow turning into the work), Answer: one key, ⏎. */}
-        <IconButton label={`${claim ? 'Answer' : busy ? 'Steer' : 'Send'} (⏎)`} aria-label={claim ? 'Answer' : busy ? 'Steer' : 'Send'} className="composer__send" disabled={disabled || !sendable} onClick={() => void send()}>
-          {busy && !claim ? <ArrowElbowRightIcon size={16} weight="bold" aria-hidden /> : <ArrowRightIcon size={16} weight="bold" aria-hidden />}
-        </IconButton>
+        {archived
+          ? <UnarchiveButton machine={machine} thread={thread} className="composer__unarchive" />
+          : (
+            <IconButton label={`${claim ? 'Answer' : busy ? 'Steer' : 'Send'} (⏎)`} aria-label={claim ? 'Answer' : busy ? 'Steer' : 'Send'} className="composer__send" disabled={disabled || !sendable} onClick={() => void send()}>
+              {busy && !claim ? <ArrowElbowRightIcon size={16} weight="bold" aria-hidden /> : <ArrowRightIcon size={16} weight="bold" aria-hidden />}
+            </IconButton>
+          )}
       </div>
     </div>
     </div>

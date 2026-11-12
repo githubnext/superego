@@ -28,6 +28,7 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
   command), and a session on one works like a local one.
 - **A thread** starts in the folder you give it. Ask for a worktree (the New thread checkbox, `superego -w`) and it works in
   `~/.superego/worktrees/<repo>/<slug>` on branch `superego/<slug>`; archiving removes a clean worktree and keeps its branch.
+  Archived threads stay readable from the sidebar's Archived list, taking no messages until you unarchive them.
 - **Panes** sit beside the thread as a row of columns that scrolls sideways (Dinky's scrolling layout); the thread
   and its panes are kept with the thread, so every client sees the same. The agent opens them too (`open_pane`).
   Built in: Changes (git diff), the file editor (Markdown in live preview, as Obsidian shows it), Preview (a web page),

@@ -366,6 +366,20 @@ if (phase === 'first') {
   await until(`document.querySelector('.thread__title')?.textContent !== 'elsewhere'`, 'cmd+shift+] to the next session')
   await key('[', ['meta', 'shift'])
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'cmd+shift+[ back')
+  // Archived: folded at the sidebar's end; opened, one list across projects.
+  await run(`window.superego.call('local', 'thread.archive', { id: '${other}' })`)
+  await until(`![...document.querySelectorAll('.threads-session .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere'))`, 'archived out of its session')
+  await until(`document.querySelector('.threads-archived__head')?.getAttribute('aria-expanded') === 'false'`, 'archived folded')
+  await run(`document.querySelector('.threads-archived__head').click()`)
+  await until(`[...document.querySelectorAll('.threads-archived .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere'))`, 'archived listed')
+  // Picked there, it shows read only: the prompt is off, and Unarchive is where Send would be; that brings it back.
+  const isElsewhere = "(li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere')"
+  await run(`[...document.querySelectorAll('.threads-archived .superego-list-item')].find(${isElsewhere}).click()`)
+  await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere' && Boolean(document.querySelector('.titlebar__archived')) && document.querySelector('.composer textarea').disabled && Boolean(document.querySelector('.composer__unarchive'))`, 'archived thread shown read only')
+  await until(`[...document.querySelectorAll('.threads-archived .superego-list-item')].some(${isElsewhere})`, 'and still archived')
+  await run(`document.querySelector('.composer__unarchive').click()`)
+  await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere' && !document.querySelector('.titlebar__archived') && !document.querySelector('.composer textarea').disabled && [...document.querySelectorAll('.threads-session .superego-list-item')].some(${isElsewhere}) && ![...document.querySelectorAll('.threads-archived .superego-list-item')].some(${isElsewhere})`, 'unarchived and shown')
+  await run(`document.querySelector('.threads-archived__head').click()`)
   // Superego's own agent: from the rail, one thread in Superego's data folder (its own session), the same one each time.
   await run(`document.querySelector('.app__meta').click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'Set up Superego' && document.querySelector('.app__meta').classList.contains('is-on')`, 'Ego opened')

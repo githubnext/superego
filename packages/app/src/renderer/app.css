@@ -26,6 +26,8 @@
 .app:not(.has-sidebar) .app__titlebar { padding-left: 62px; }
 .titlebar__title { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 600; }
 .titlebar__title .thread__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.titlebar__archived { flex: none; padding: 1px 6px; border-radius: 4px; background: var(--superego-hover); color: var(--superego-muted); font-size: var(--superego-text-xs); font-weight: 500; }
+.thread__unarchive { height: 26px; gap: 5px; }
 .app__titlebar-end { margin-left: auto; display: flex; align-items: center; gap: var(--superego-space-2); min-width: 0; }
 .thread__crumb { display: flex; align-items: center; min-width: 0; overflow: hidden; font-size: var(--superego-text-sm); color: var(--superego-muted); white-space: nowrap; }
 .titlebar__chip { overflow: hidden; text-overflow: ellipsis; }

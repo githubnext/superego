@@ -313,6 +313,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),
     session: { root: rootOf(m), name: m.meta.meta ? options.app.name : basename(rootOf(m)) },
     ...(m.meta.worktree ? { worktree: m.meta.worktree } : {}),
+    ...(m.meta.archived ? { archived: true } : {}),
     ...(m.meta.meta ? { meta: true } : {}),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
@@ -483,6 +484,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp', attachments: Attachment[] = []) {
     if (!text.trim() && !attachments.length) throw new RpcError('invalid', 'Nothing to send')
     const m = await get(id)
+    // Put away: it can be read, not written to, until it's brought back.
+    if (m.meta.archived) throw new RpcError('archived', 'This thread is archived', { hint: 'Unarchive it to send to it.' })
     const { model, thinkingLevel, ...rest } = await agentOf(m.meta)
     if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
     await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null, ...rest }, context)

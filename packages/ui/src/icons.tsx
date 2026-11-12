@@ -3,6 +3,7 @@
 // extensions use, by Phosphor's own names (ArchiveIcon); add one here, and to phosphor.d.ts, to use it.
 export {
   ArchiveIcon,
+  ArrowCounterClockwiseIcon,
   ArrowDownIcon,
   ArrowElbowRightIcon,
   ArrowRightIcon,

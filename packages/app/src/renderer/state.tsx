@@ -29,6 +29,8 @@ type ShellState = {
   lastThread: Record<string, string>
   sidebarOpen: boolean
   toggleSidebar(open?: boolean): void
+  /** The selected thread when it's archived (the machine's list leaves those out): fetched once it's selected. */
+  archived: ThreadInfo | undefined
 }
 
 const Context = createContext<ShellState | undefined>(undefined)
@@ -47,9 +49,10 @@ export const useThreads = (machine: string) => useShellState().threads[machine]
 export const useAllThreads = () => useShellState().threads
 /** The selected thread, and a way to select another (or none). */
 export function useSelection() {
-  const { selection, select, machines, threads } = useShellState()
+  const { selection, select, machines, threads, archived } = useShellState()
   const machine = machines.find((m) => m.id === selection?.machine)
-  const thread = selection && threads[selection.machine]?.find((s) => s.id === selection.thread)
+  const thread = selection && (threads[selection.machine]?.find((s) => s.id === selection.thread)
+    ?? (archived?.id === selection.thread ? archived : undefined))
   return { selection, select, machine, thread }
 }
 /** Every session, in the sidebar's order, and the thread last shown in each. */
@@ -89,13 +92,25 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (shownKey && lastThread[shownKey] !== shown!.id) setLastThread((last) => ({ ...last, [shownKey]: shown!.id }))
   }, [shownKey, shown?.id])
+  // A selected thread that isn't in its machine's list may be archived: shown from the archived list, read only.
+  // Asked again when the list changes (archiving or unarchiving moves threads between the two).
+  const [archived, setArchived] = useState<ThreadInfo>()
+  const list = selection ? threads[selection.machine] : undefined
+  const selectedMachine = machines.find((m) => m.id === selection?.machine)
+  useEffect(() => {
+    if (!selection || !list || shown || selectedMachine?.state !== 'connected') return setArchived(undefined)
+    let alive = true
+    void (window.superego.call(selection.machine, 'thread.list', { archived: true }) as Promise<ThreadInfo[]>)
+      .then((all) => { if (alive) setArchived(all.find((t) => t.id === selection.thread)) }, () => {})
+    return () => { alive = false }
+  }, [selection?.machine, selection?.thread, list, Boolean(shown), selectedMachine?.state])
   const value = useMemo<ShellState>(() => ({
-    machines, threads, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen,
+    machines, threads, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived,
     select: (next) => { setSettingsOpen(false); setNewThread(undefined); setSelection(next) },
     openSettings: (open = true) => setSettingsOpen(open),
     openNewThread: (start = {}) => setNewThread(start === false ? undefined : start),
     toggleSidebar: (open) => setSidebarOpen((was) => open ?? !was),
-  }), [machines, threads, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen])
+  }), [machines, threads, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} />)}
