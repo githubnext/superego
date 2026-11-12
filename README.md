@@ -67,7 +67,8 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
 | `⌃D` `⌃U` | Scroll what has the focus (the thread, from its prompt) half a page down / up |
 | `⌃O` | The links in the thread, to follow from the keyboard |
 | `⌘/` | Hide or show the sidebar |
-| `⌘⇧E` | The file tree beside the editor |
+| `⌘⇧E` | Archive the thread shown |
+| `⌘⇧T` | The file tree beside the editor |
 | `⌘⇧D` | Show changes |
 | `⌘W` | Close the pane with the focus (the focus moves left) |
 | `⌘⇧W` | Close the window (Superego keeps running) |

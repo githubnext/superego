@@ -1,5 +1,5 @@
 /// <reference path="./env.d.ts" />
-// files, UI half: a file tree beside every file editor (its bar's button, or ⌘⇧E, shows and hides it), and quick open
+// files, UI half: a file tree beside every file editor (its bar's button, or ⌘⇧T, shows and hides it), and quick open
 // (⌘P): any file in the selected thread's folder by a few letters of its name, opened beside the thread in the pane
 // kind that takes it. Clicking a file in the tree shows it in that editor; ⌘-click opens it beside. A folder a thread
 // names opens in a pane of its own (`folder`), as a tree to open files from.
@@ -54,7 +54,7 @@ export default defineUiExtension({
     superego.slot('editor.bar', TreeButton)
     superego.slot('overlay', QuickOpen)
     superego.pane('folder', { title: (pane) => folderTitle((pane.params as { path?: string } | undefined)?.path), component: FolderPane, folders: true })
-    superego.action(defineAction({ id: 'files.tree', title: 'Toggle file tree', runs: 'window', keys: 'mod+shift+e', run: () => treeShown.set(!treeShown.get()) }))
+    superego.action(defineAction({ id: 'files.tree', title: 'Toggle file tree', runs: 'window', keys: 'mod+shift+t', run: () => treeShown.set(!treeShown.get()) }))
     superego.action(defineAction({ id: 'files.open', title: 'Open a file…', runs: 'window', keys: 'mod+p', run: () => quickOpen.set(true) }))
   },
 })

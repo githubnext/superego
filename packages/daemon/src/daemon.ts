@@ -721,7 +721,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     async run({ id }) { await (await get(id)).conversation.abort(context); return null },
   }))
   router.register(defineAction({
-    id: 'thread.archive', title: 'Archive the thread', runs: 'machine', expose: ['ui', 'cli'], ...thread,
+    id: 'thread.archive', title: 'Archive the thread', runs: 'machine', expose: ['ui', 'cli'], keys: 'mod+shift+e', ...thread,
     params: obj({ id: str() }),
     async run({ id }) {
       const { meta } = await get(id)
