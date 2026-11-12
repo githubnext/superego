@@ -10,6 +10,7 @@ import {
 import { serveSettings } from '@superego/settings'
 import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type SuperegoEvent } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
+import { UiTrust } from './ui-trust.ts'
 import { checkIdentity, MachineStore, openLocal as openLocalSocket, openMachine, routeOf } from '@superego/client'
 import { Link } from './link.ts'
 import { MenuBar } from './tray.ts'
@@ -43,6 +44,7 @@ export function startApp(appConfig: AppConfig) {
   }
 
   const appSettings = createAppSettings(dataDir, appConfig)
+  const uiTrust = new UiTrust(dataDir)
 
   /** The app's own endpoint: its settings, per window so a closed window's subscriptions go with it. */
   const appSubs = new Map<number, Map<string, () => unknown>>()
@@ -100,6 +102,10 @@ export function startApp(appConfig: AppConfig) {
       })) })
       return null
     },
+      // Which remote profile UIs may run in this window (see ../ui-trust.ts).
+      'ui.trust.list': async () => uiTrust.list(),
+      'ui.trust.allow': async (params) => { await uiTrust.allow(params); return null },
+      'ui.trust.forget': async (params) => { await uiTrust.forget(params); return null },
       'action.list': async () => appRouter.list(),
       'action.log': async () => appRouter.log(),
     }

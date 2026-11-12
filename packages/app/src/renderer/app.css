@@ -542,3 +542,8 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .color-field__swatch { position: relative; width: 24px; height: 24px; flex: none; border-radius: 6px; box-shadow: var(--superego-control-edge); overflow: hidden; }
 .color-field__swatch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: default; }
 .color-field__swatch:has(input:focus-visible) { outline: 2px solid var(--superego-ring); outline-offset: 2px; }
+
+.ui-notice { margin: 8px 12px; padding: 8px 10px; border-radius: 8px; background: var(--superego-raised); box-shadow: var(--superego-control-edge); font-size: calc(12px * var(--superego-text-scale)); }
+.ui-notice__actions { display: flex; gap: 4px; margin-top: 6px; }
+.ui-notice__sources { margin-top: 6px; }
+.ui-notice__sources pre { max-height: 240px; overflow: auto; margin: 2px 0 8px; font-size: calc(11px * var(--superego-text-scale)); -webkit-user-select: text; user-select: text; }
