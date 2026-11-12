@@ -203,7 +203,7 @@ if (phase === 'first') {
   await until(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].some((i) => i.textContent.includes('Needs you first'))`, 'sidebar menu open')
   await shot('menu')
   await run(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].find((i) => i.textContent.includes('Needs you first')).click()`)
-  await until(`window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['threads.sort'] === 'status')`, 'sorted by status')
+  await until(`window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['app.sort'] === 'status')`, 'sorted by status')
   await key('\\')
   await until(`Boolean(document.querySelector('.threads-rail'))`, 'rail')
   await key('\\')
@@ -226,7 +226,7 @@ if (phase === 'first') {
   await until(`!document.querySelector('.threads-details') && !document.querySelector('.threads-model').classList.contains('is-on')`, 'and off')
   await key('/')
   await until(`Boolean(document.querySelector('.app__sidebar'))`, 'sidebar back')
-  await run(`window.superego.call('app', 'app.settings.set', { key: 'threads.sort', value: 'created' })`)
+  await run(`window.superego.call('app', 'app.settings.set', { key: 'app.sort', value: 'created' })`)
   // ⌘K is commands only; ⌘L finds a thread by name and opens it.
   await key('k')
   await until(`Boolean(document.querySelector('.palette__input'))`, 'palette')

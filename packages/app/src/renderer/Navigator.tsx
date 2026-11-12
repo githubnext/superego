@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Dialog, StatusGlyph } from '@superego/ui'
 import type { Pane, Status, ThreadInfo } from '@superego/protocol'
 import { score } from './score.ts'
-import { paneKind, useRegistry } from './extension.tsx'
+import { paneTitle, useRegistry } from './extension.tsx'
 import { useMachines, useSelection, useSessions } from './state.tsx'
 import { showSession } from './actions.tsx'
 import type { Session } from './sessions.ts'
@@ -40,10 +40,6 @@ export function Navigator({ onClose }: { onClose(): void }) {
 
   const rows = useMemo<Row[]>(() => {
     const several = machines.filter((m) => m.state !== 'disabled').length > 1
-    const paneTitle = (thread: ThreadInfo, pane: Pane) => {
-      const named = paneKind(registry, pane.kind, thread)?.title
-      return pane.title ?? (typeof named === 'function' ? named(pane) : named) ?? pane.kind
-    }
     const go = (fn: () => void) => () => { onClose(); fn() }
     return sessions.flatMap((session: Session): Row[] => {
       const here = session.machine.id === selection?.machine && session.threads.some((t) => t.id === selection.thread)
@@ -67,8 +63,8 @@ export function Navigator({ onClose }: { onClose(): void }) {
               }),
             },
             ...(thread.panes ?? []).map((pane): Row => ({
-              key: `${session.key}/${thread.id}/${pane.id}`, kind: 'pane', depth: 2, title: paneTitle(thread, pane),
-              path: `${session.name} ${thread.title} ${paneTitle(thread, pane)}`, current: isOn && thread.pane === pane.id,
+              key: `${session.key}/${thread.id}/${pane.id}`, kind: 'pane', depth: 2, title: paneTitle(registry, pane, { machine: session.machine.id, thread }),
+              path: `${session.name} ${thread.title} ${paneTitle(registry, pane, { machine: session.machine.id, thread })}`, current: isOn && thread.pane === pane.id,
               go: go(() => {
                 show()
                 void dispatch('pane.focus', { id: thread.id, pane: pane.id }, { machine: session.machine.id, source: 'navigator' })

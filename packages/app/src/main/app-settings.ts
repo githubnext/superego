@@ -2,7 +2,7 @@
 // how it sits on the desktop.
 // They are served under the reserved machine id "app" with the same settings methods a daemon answers.
 import { join } from 'node:path'
-import { SettingsRegistry } from '@superego/settings'
+import { SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import type { AppConfig } from '@superego/protocol'
 import { TEXT_SIZES } from '../shared.ts'
@@ -12,8 +12,28 @@ export const APP_KEYS = {
   keymap: 'app.keys', interfaceFont: 'app.font.interface', textSize: 'app.font.size', monoFont: 'app.font.mono', accent: 'app.accent', notifications: 'app.notifications', menuBar: 'app.menuBar', hideDock: 'app.hideDock',
 } as const
 
+/** Settings kept under another key now: a value stored under the old one is read as the new one's (and saved so). */
+const MOVED: Record<string, string> = {
+  // The order sessions and threads go in is the window's own (the navigator and ⌘⇧[ ] walk it), not the sidebar's.
+  'threads.sort': 'app.sort',
+}
+
+function movedSettings(store: SettingsStore): SettingsStore {
+  return {
+    load() {
+      const values = store.load()
+      for (const [old, now] of Object.entries(MOVED)) {
+        if (old in values && !(now in values)) values[now] = values[old]!
+        delete values[old]
+      }
+      return values
+    },
+    save: (values) => store.save(values),
+  }
+}
+
 export function createAppSettings(dataDir: string, app: AppConfig) {
-  const settings = new SettingsRegistry(new FileSettingsStore(join(dataDir, 'app-settings.json')))
+  const settings = new SettingsRegistry(movedSettings(new FileSettingsStore(join(dataDir, 'app-settings.json'))))
   settings.register({
     id: 'appearance', title: 'Appearance', order: 50,
     settings: [

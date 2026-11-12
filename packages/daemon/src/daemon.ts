@@ -254,7 +254,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    */
   const builtins: Extension[] = []
   const owners = new Map<Extension, string>()
-  const installBuiltin = (extension: Extension, owner = extension.name) => { registry.install(extension); builtins.push(extension); owners.set(extension, owner) }
+  const installBuiltin = (extension: Extension, owner = extension.name) => {
+    registry.install(extension)
+    builtins.push(extension)
+    owners.set(extension, owner)
+    return () => {
+      registry.uninstall(extension)
+      builtins.splice(builtins.indexOf(extension), 1)
+      owners.delete(extension)
+    }
+  }
   const ownerOf = (extension: Extension) => owners.get(extension)!
   /** The built-ins this machine's settings leave on (see the Extensions section). */
   const enabled = () => builtins.filter((e) => settings.get(`extensions.${ownerOf(e)}`) !== false)
@@ -439,7 +448,21 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     threads: { info: threadInfo, list: () => list(), answer: (id) => answerOf(id), start: (params) => startThread(params) },
   })
   registry.install(metaAgent)
-  const values = new Map<string, { value: Json; listeners: Set<(value: Json) => void> }>()
+  /**
+   * Live values by name. A name is watched, not a value: a watch on one no extension has set up yet (a profile's, before
+   * the profile loads) waits on null, and takes the value when it comes. `owned` while an extension publishes it.
+   */
+  const values = new Map<string, { value: Json; owned: boolean; listeners: Set<(value: Json) => void> }>()
+  const valueOf = (name: string) => {
+    let entry = values.get(name)
+    if (!entry) values.set(name, entry = { value: null, owned: false, listeners: new Set() })
+    return entry
+  }
+  /** Forget a value nobody publishes or watches. */
+  const prune = (name: string) => {
+    const entry = values.get(name)
+    if (entry && !entry.owned && !entry.listeners.size) values.delete(name)
+  }
   const contributors: ((threadId: string) => StatusContribution | undefined)[] = []
   const cleanups: (() => void)[] = []
   const blockedOf = (id: string) => {
@@ -453,29 +476,53 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (!name.startsWith(`${extension}.`)) throw new Error(`Extension ${extension} must name things "${extension}.<name>", not "${name}"`)
     return name
   }
+  /**
+   * The names in use: an extension's name is the prefix of everything it registers, so it's claimed while the extension
+   * is set up, and a second extension of that name (bundled or a profile's) is refused rather than mixed in.
+   */
+  const claimed = new Set<string>()
+  /** Names announced as `ext:<name>`: the extensions set up now, bundled and profiles' alike. */
+  const announced = new Set<string>()
 
   /**
    * Set up a daemon extension: a bundled one (for the daemon's life), or a profile's (`agent` then adds to that
-   * profile's selection, and the returned teardown removes its actions, values and status when the profile reloads).
+   * profile's selection). Everything it registers is its own, and the returned teardown undoes all of it: its agent
+   * parts, actions, values, status, settings and its name.
    */
-  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension) => void): Promise<() => void> {
+  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension) => () => void): Promise<() => void> {
     if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
-    const undo: (() => void)[] = []
+    if (claimed.has(extension.name)) throw new Error(`An extension named ${extension.name} is already set up`)
+    claimed.add(extension.name)
+    announced.add(extension.name)
+    const undo: (() => void)[] = [() => { claimed.delete(extension.name); announced.delete(extension.name) }]
+    const ownKey = (key: string) => {
+      if (key !== extension.name && !key.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its settings "${extension.name}.<key>", not "${key}"`)
+    }
     const api: DaemonApi = {
       app: options.app,
       harness,
-      agent: agentExtension,
-      settings,
+      agent: (agentPart) => { undo.push(agentExtension(agentPart)) },
+      settings: {
+        register(section) {
+          ownKey(section.id)
+          for (const setting of section.settings) ownKey(setting.key)
+          undo.push(settings.register(section))
+        },
+        get: (key) => settings.get(key),
+        onChange: (listener) => { undo.push(settings.onChange(listener)) },
+      },
       action: (action) => { undo.push(router.register({ ...action, id: named(extension.name, action.id), runs: 'machine' })) },
       value<T extends Json>(key: string, initial: T): LiveValue<T> {
         const name = named(extension.name, key)
-        const entry = { value: initial as Json, listeners: new Set<(value: Json) => void>() }
-        values.set(name, entry)
-        undo.push(() => { if (values.get(name) === entry) values.delete(name) })
+        const entry = valueOf(name)
+        if (entry.owned) throw new Error(`Value ${name} is already published`)
+        entry.owned = true
+        undo.push(() => { entry.owned = false; prune(name) })
         const set = (next: T) => {
           entry.value = next
           for (const listener of entry.listeners) listener(next)
         }
+        set(initial)
         return { get: () => entry.value as T, set, update: (edit) => set(edit(entry.value as T)) }
       },
       status: (contribute) => { contributors.push(contribute); undo.push(() => { contributors.splice(contributors.indexOf(contribute), 1) }) },
@@ -487,21 +534,25 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         attachments: attachmentsOf,
       },
     }
+    const teardown = () => { for (const step of undo.splice(0).reverse()) step() }
     try {
       const cleanup = await extension.setup(api)
       if (cleanup) undo.push(cleanup)
     } catch (error) {
-      for (const step of undo.reverse()) step()
+      teardown()
       throw new Error(`Extension ${extension.name} failed to start: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
     }
-    return () => { for (const step of undo.reverse()) step() }
+    return teardown
   }
+  // The core's own agent parts are named too: Settings and profiles' `without` know them by those names.
+  for (const extension of builtins) claimed.add(ownerOf(extension))
   for (const extension of options.extensions ?? []) cleanups.push(await setUp(extension, (agentExtension) => installBuiltin(agentExtension, extension.name)))
   registerExtensionSettings(settings, [...new Set(builtins.map(ownerOf))].map((name) => {
     const bundled = options.extensions?.find((e) => e.name === name)
     return { name, title: bundled?.title, description: bundled?.description }
   }))
-  const features = [...FEATURES, ...(options.extensions ?? []).map((extension) => `ext:${extension.name}`)]
+  /** What this daemon offers, as `hello` says: the protocol's features, and every extension set up now. */
+  const features = () => [...FEATURES, ...[...announced].map((name) => `ext:${name}`)]
 
   // ── Profiles ────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -526,6 +577,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           undo.push(await setUp(extension, (agentExtension) => {
             const scoped = { ...agentExtension, name: `${ref.scope}:${ref.name}/${agentExtension.name}` }
             loaded.extensions.push(scoped)
+            return () => { loaded.extensions.splice(loaded.extensions.indexOf(scoped), 1) }
           }))
         }
         for (const extension of loaded.extensions) {
@@ -1019,6 +1071,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   // Mount everything once so statuses (and anything a previous process left running) are live from the start.
   await list()
   if (egoId) await get(egoId)
+  // A run cut off by the last stop resumes where it was, maybe inside a profile's tool: its profile is loaded first, so
+  // the tool is there to carry on with (a profile that no longer loads leaves the run to end as interrupted).
+  for (const m of mounted.values()) {
+    if (m.live?.run && m.meta.profile) await profileOf(m.meta.profile).catch((error: Error) => console.error(`Profile ${m.meta.profile!.name}: ${error.message}`))
+  }
   harness.resume()
   void sweepRemoved()
 
@@ -1037,7 +1094,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
             throw new RpcError('version_mismatch', `This machine's superego speaks protocol ${PROTOCOL_VERSION}, the client ${version}`, { hint: 'Update superego on the older side.' })
           }
           if (typeof name === 'string') client = name
-          return { version: PROTOCOL_VERSION, features, machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id)] }
+          return { version: PROTOCOL_VERSION, features: features(), machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id)] }
         },
         'thread.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),
@@ -1152,12 +1209,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           return { sub, content: last }
         },
         async 'value.watch'({ key }: { key: string }) {
-          const entry = values.get(key)
-          if (!entry) throw new RpcError('not_found', `No value ${key}`)
+          const entry = valueOf(key)
           const sub = randomUUID()
           const listener = (value: Json) => notify('value.changed', { sub, key, value })
           entry.listeners.add(listener)
-          subs.set(sub, () => { entry.listeners.delete(listener) })
+          subs.set(sub, () => { entry.listeners.delete(listener); prune(key) })
           return { sub, value: entry.value }
         },
         async unwatch({ sub }: { sub: string }) {

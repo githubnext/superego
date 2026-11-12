@@ -1,8 +1,13 @@
 // The UI half of an extension: `<pkg>/ui`, listed in the app's renderer entry. It fills named slots in the shell, draws
-// tool calls and entries in the transcript, adds custom settings components and actions (with keys). Components reach
-// everything else (machines, threads, selection, live values, calls) through the hooks this package exports.
+// tool calls and entries in the transcript, adds pane kinds, custom settings components and actions (with keys).
+// Components reach everything else (machines, threads, selection, live values, calls) through the hooks this package
+// exports.
+//
+// Everything an extension registers is owned by it: the registry keeps who added each thing, and an extension's
+// teardown removes all of it at once. A profile's UI is owned by that profile on its machine too, and draws only in
+// that profile's threads there.
 import { createContext, useContext, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
-import type { AppConfig, DeclaredSection, Pane, SectionInfo, ThreadInfo } from '@superego/protocol'
+import type { AppConfig, DeclaredSection, Pane, ProfileRef, SectionInfo, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowRouter } from './actions.tsx'
 
@@ -39,14 +44,17 @@ export type SlotProps = {
   'overlay': Record<string, never>
 }
 
-/** A tool call in the transcript. `result` is there once it finished; `live` while it runs. */
 /** What a pane is drawn with: where it is, and its own params. */
 export type PaneProps = { machine: MachineEntry; thread: ThreadInfo; pane: Pane }
-/** A kind of pane: its default tab title and what draws it. */
+
 /** A kind of pane. `title` names its tab when the pane wasn't given one: fixed, or from the pane (its params, say). */
 export type PaneKind = {
   title: string | ((pane: Pane) => string | undefined)
   component: ComponentType<PaneProps>
+  /** Its glyph on the pane's tab in the strip. */
+  icon?: ComponentType<{ size?: number; 'aria-hidden'?: boolean }>
+  /** Its title is a file's name: the strip shows it as one (cut from the start, in the mono face). */
+  file?: boolean
   /** Offered in the thread's pane menu: it shows something without being given params. */
   menu?: boolean
   /** Files it shows, given `{ path }`: a file opened from the thread opens in the first kind that takes it. */
@@ -57,6 +65,7 @@ export type PaneKind = {
   width?: number
 }
 
+/** A tool call in the transcript. `result` is there once it finished; `live` while it runs. */
 export type ToolCallProps = {
   machine: MachineEntry
   thread: ThreadInfo
@@ -87,7 +96,6 @@ export type WorkStatus = 'running' | 'success' | 'failure' | 'inconclusive' | 'i
  * how it went and its outcome, its blocks folded under it. Blocks left out of every part don't show.
  */
 export type WorkPart = { blocks: WorkBlock[]; title?: string; status?: WorkStatus; outcome?: string }
-
 
 export type UiApi = {
   app: AppConfig
@@ -133,92 +141,119 @@ export type UiExtension = {
 /** Identity for type inference: `export default defineUiExtension({ name, setup(superego) { … } })`. */
 export const defineUiExtension = (extension: UiExtension) => extension
 
-/** Everything the app's extensions registered, in the order they were listed. */
+/** Who registered something: an extension, and for a profile's UI, that profile on its machine (`profileScope`). */
+type Owner = { extension: string; profile?: string }
+type Owned<T> = T & { owner: Owner }
+
+/** A thread as lookups see it: on a machine, maybe with a profile. */
+export type Where = { machine: string; thread: ThreadInfo }
+
+/** A profile's UI, as the registry tells profiles apart: by machine and folder (the same path on two machines is two). */
+export const profileScope = (machine: string, profile: ProfileRef) => `${machine}\u0000${profile.dir}`
+const scopeOf = (where: Where | undefined) => where?.thread.profile ? profileScope(where.machine, where.thread.profile) : undefined
+
+/** Everything the app's extensions registered, in the order they were listed, each with its owner. */
 export type Registry = {
   app: AppConfig
   extensions: string[]
-  /** `profile`: the folder of the profile whose UI added it; it draws only for that profile's threads. */
-  slots: { [S in SlotName]: { component: ComponentType<SlotProps[S]>; order: number; extension: string; profile?: string }[] }
-  tools: Map<string, ComponentType<ToolCallProps>>
-  /** Tools whose calls show outside the fold of their run of work (`tool(name, component, { fold: false })`). */
-  unfolded: Set<string>
-  /** Pane kinds; `profile`: the folder of the profile that added it. */
-  panes: Map<string, (PaneKind & { profile?: string })[]>
-  entries: Map<string, ComponentType<EntryProps>>
-  work: ((run: WorkRun) => WorkPart[] | undefined)[]
-  settings: Map<string, ComponentType<SettingsComponentProps>>
+  slots: { [S in SlotName]: Owned<{ component: ComponentType<SlotProps[S]>; order: number }>[] }
+  /** `fold: false`: its calls show outside the fold of their run of work. */
+  tools: Owned<{ name: string; component: ComponentType<ToolCallProps>; fold: boolean }>[]
+  entries: Owned<{ kind: string; component: ComponentType<EntryProps> }>[]
+  panes: Owned<PaneKind & { kind: string }>[]
+  work: Owned<{ divide: (run: WorkRun) => WorkPart[] | undefined }>[]
+  settings: Owned<{ ui: string; component: ComponentType<SettingsComponentProps> }>[]
   router: WindowRouter
-  appSettings: DeclaredSection[]
-  /** Add a profile's UI extensions at runtime (replacing what that profile added before). */
-  installProfile(profile: string, extensions: UiExtension[]): void
-  /** Changes whenever extensions are added at runtime; `subscribe` to hear it. */
+  appSettings: Owned<DeclaredSection>[]
+  /** Set up a profile's UI extensions on `machine`, after tearing down what that profile set up before. */
+  installProfile(machine: string, profile: ProfileRef, extensions: UiExtension[]): void
+  /** Changes whenever extensions are added or removed at runtime; `subscribe` to hear it. */
   version: number
   subscribe(listener: () => void): () => void
 }
 
 export function createRegistry(app: AppConfig, extensions: UiExtension[], core: (superego: UiApi) => void): Registry {
+  const listeners = new Set<() => void>()
+  /** The teardown of each extension set up, by owner (`<profile scope>/<name>`). */
+  const teardowns = new Map<string, () => void>()
+  const ownerKey = (owner: Owner) => `${owner.profile ?? ''}/${owner.extension}`
   const registry: Registry = {
     app, extensions: extensions.map((e) => e.name),
     slots: { 'sidebar': [], 'rail': [], 'thread.header': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
-    tools: new Map(), unfolded: new Set(), panes: new Map(), entries: new Map(), work: [], settings: new Map(), router: createWindowRouter(), appSettings: [],
+    tools: [], entries: [], panes: [], work: [], settings: [], router: createWindowRouter(), appSettings: [],
     version: 0,
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
-    installProfile(profile, list) {
-      for (const slot of Object.keys(registry.slots) as SlotName[]) {
-        ;(registry.slots[slot] as { profile?: string }[]).splice(0, Infinity, ...(registry.slots[slot] as { profile?: string }[]).filter((e) => e.profile !== profile))
-      }
-      for (const [kind, entries] of registry.panes) registry.panes.set(kind, entries.filter((e) => e.profile !== profile))
+    installProfile(machine, profile, list) {
+      const scope = profileScope(machine, profile)
+      for (const [key, teardown] of [...teardowns]) if (key.startsWith(`${scope}/`)) teardown()
       for (const extension of list) {
-        try { extension.setup(api(extension.name, profile)) } catch (error) { console.error(`Profile extension ${extension.name} failed to start`, error) }
+        try { setUp(extension, scope) } catch (error) { console.error(`Profile extension ${extension.name} failed to start`, error) }
       }
       registry.version++
       for (const listener of listeners) listener()
     },
   }
-  const listeners = new Set<() => void>()
-  const api = (extension: string, profile?: string): UiApi => ({
-    app,
-    slot(slot, component, options) {
-      // A profile's UI draws in its threads' slots; the sidebar is the app's.
-      if (profile && (slot === 'sidebar' || slot === 'rail')) return console.warn(`Profile extension ${extension} can't fill the ${slot}`)
-      const list = registry.slots[slot] as Registry['slots'][typeof slot]
-      list.push({ component: component as never, order: options?.order ?? 100, extension, ...(profile ? { profile } : {}) })
-      list.sort((a, b) => a.order - b.order)
-    },
-    tool: (name, component, options) => {
-      registry.tools.set(name, component)
-      if (options?.fold === false) registry.unfolded.add(name)
-      else registry.unfolded.delete(name)
-    },
-    entry: (kind, component) => { registry.entries.set(kind, component) },
-    work(divide) {
-      if (profile) return console.warn(`Profile extension ${extension}: dividing work from a profile's UI isn't supported yet`)
-      registry.work.push(divide)
-    },
-    settings: (ui, component) => { registry.settings.set(ui, component) },
-    pane(kind, pane) {
-      const list = (registry.panes.get(kind) ?? []).filter((entry) => entry.profile !== profile)
-      registry.panes.set(kind, [...list, { ...pane, ...(profile ? { profile } : {}) }])
-    },
-    dispatch: (id, params, options) => registry.router.dispatch(id, params, { source: extension, ...options }),
-    action(action) {
-      if (profile) return console.warn(`Profile extension ${extension}: actions from a profile's UI aren't supported yet`)
-      if (extension !== 'core' && !action.id.startsWith(`${extension}.`)) throw new Error(`Extension ${extension} must name its actions "${extension}.<name>", not "${action.id}"`)
-      registry.router.router.register({ ...action, runs: 'window' })
-    },
-    appSettings(section) {
-      if (profile) return console.warn(`Profile extension ${extension}: app settings from a profile's UI aren't supported yet`)
-      for (const setting of section.settings) {
-        if (extension !== 'core' && !setting.key.startsWith(`${extension}.`)) throw new Error(`Extension ${extension} must name its settings "${extension}.<key>", not "${setting.key}"`)
-      }
-      registry.appSettings.push(section)
-    },
-  })
-  core(api('core'))
-  for (const extension of extensions) {
+
+  /** Set up one extension: everything it adds is owned by it, and its teardown takes all of it away again. */
+  function setUp(extension: UiExtension, profile?: string) {
     if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
-    extension.setup(api(extension.name))
+    const owner: Owner = { extension: extension.name, ...(profile ? { profile } : {}) }
+    // A name is the extension's prefix: one of each among the app's, and a profile's can't take one of theirs.
+    if (teardowns.has(ownerKey(owner)) || (profile && teardowns.has(`/${extension.name}`))) throw new Error(`An extension named ${extension.name} is already set up`)
+    const undo: (() => void)[] = []
+    const add = <T,>(list: Owned<T>[], item: T) => {
+      const entry = { ...item, owner } as Owned<T>
+      list.push(entry)
+      undo.push(() => { const at = list.indexOf(entry); if (at >= 0) list.splice(at, 1) })
+      return entry
+    }
+    /** One of a kind per scope: a second registration of the same name is refused (the first stays), with a warning. */
+    const unique = <T extends Record<K, string>, K extends keyof T>(list: Owned<T>[], key: K, item: T, what: string) => {
+      const taken = list.find((e) => e[key] === item[key] && e.owner.profile === profile)
+      if (taken) return console.warn(`Extension ${extension.name}: ${what} ${item[key]} is already drawn by ${taken.owner.extension}; keeping that one`)
+      add(list, item)
+    }
+    const api: UiApi = {
+      app,
+      slot(slot, component, options) {
+        // A profile's UI draws in its threads' slots; the sidebar and rail are the app's.
+        if (profile && (slot === 'sidebar' || slot === 'rail')) return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
+        const list = registry.slots[slot] as Owned<{ component: ComponentType<SlotProps[typeof slot]>; order: number }>[]
+        add(list, { component: component as never, order: options?.order ?? 100 })
+        list.sort((a, b) => a.order - b.order)
+      },
+      tool: (name, component, options) => unique(registry.tools, 'name', { name, component, fold: options?.fold !== false }, 'tool'),
+      entry: (kind, component) => unique(registry.entries, 'kind', { kind, component }, 'entry kind'),
+      work(divide) {
+        if (profile) return console.warn(`Profile extension ${extension.name}: dividing work from a profile's UI isn't supported yet`)
+        add(registry.work, { divide })
+      },
+      settings: (ui, component) => unique(registry.settings, 'ui', { ui, component }, 'settings section'),
+      pane: (kind, pane) => unique(registry.panes, 'kind', { ...pane, kind }, 'pane kind'),
+      dispatch: (id, params, options) => registry.router.dispatch(id, params, { source: extension.name, ...options }),
+      action(action) {
+        if (profile) return console.warn(`Profile extension ${extension.name}: actions from a profile's UI aren't supported yet`)
+        if (extension.name !== 'core' && !action.id.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its actions "${extension.name}.<name>", not "${action.id}"`)
+        undo.push(registry.router.router.register({ ...action, runs: 'window' }))
+      },
+      appSettings(section) {
+        if (profile) return console.warn(`Profile extension ${extension.name}: app settings from a profile's UI aren't supported yet`)
+        for (const setting of section.settings) {
+          if (extension.name !== 'core' && !setting.key.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its settings "${extension.name}.<key>", not "${setting.key}"`)
+        }
+        add(registry.appSettings, section)
+      },
+    }
+    const teardown = () => {
+      for (const step of undo.splice(0).reverse()) step()
+      teardowns.delete(ownerKey(owner))
+    }
+    teardowns.set(ownerKey(owner), teardown)
+    try { extension.setup(api) } catch (error) { teardown(); throw error }
   }
+
+  setUp({ name: 'core', setup: core })
+  for (const extension of extensions) setUp(extension)
   return registry
 }
 
@@ -235,20 +270,43 @@ export function useRegistry(): Registry {
 /** The app this UI belongs to. */
 export const useApp = () => useRegistry().app
 
+/** What `where` sees of `list`: the app's, and its own profile's (only that profile's, on that machine). */
+const seen = <T,>(list: Owned<T>[], where: Where | undefined) => {
+  const scope = scopeOf(where)
+  return list.filter((entry) => !entry.owner.profile || entry.owner.profile === scope)
+}
+
+/** The one of `list` that `where` sees by `match`: its profile's own first, else the app's. */
+function lookUp<T>(list: Owned<T>[], where: Where | undefined, match: (entry: T) => boolean): Owned<T> | undefined {
+  const found = seen(list, where).filter(match)
+  return found.find((entry) => entry.owner.profile) ?? found[0]
+}
+
 /** Draw every component in `slot`, with `props`. */
 export function Slot<S extends SlotName>({ name, props }: { name: S; props: SlotProps[S] }) {
   const registry = useRegistry()
   useSyncExternalStore(registry.subscribe, () => registry.version)
-  // A profile's extensions draw only for that profile's threads.
-  const profile = (props as { thread?: ThreadInfo }).thread?.profile?.dir
-  const entries = (registry.slots[name] as { component: ComponentType<SlotProps[S]>; extension: string; profile?: string }[])
-    .filter((entry) => !entry.profile || entry.profile === profile)
-  return <>{entries.map(({ component: Component, extension, profile }, index) => <Component key={`${profile ?? ''}${extension}-${index}`} {...props} />)}</>
+  const { machine, thread } = props as { machine?: MachineEntry; thread?: ThreadInfo }
+  const entries = seen(registry.slots[name] as Owned<{ component: ComponentType<SlotProps[S]>; order: number }>[], machine && thread ? { machine: machine.id, thread } : undefined)
+  return <>{entries.map(({ component: Component, owner }, index) => <Component key={`${owner.profile ?? ''}/${owner.extension}-${index}`} {...props} />)}</>
 }
+
+/** How calls to the tool `name` are drawn for `where`, if an extension draws them. */
+export const toolView = (registry: Registry, name: string, where: Where) => lookUp(registry.tools, where, (t) => t.name === name)?.component
+
+/** Whether calls to the tool `name` show outside the fold of their run, for `where` (an extension said `fold: false`). */
+export const unfoldedTool = (registry: Registry, name: string, where: Where) => lookUp(registry.tools, where, (t) => t.name === name)?.fold === false
+
+/** How entries of `kind` are drawn for `where`, if an extension draws them. */
+export const entryView = (registry: Registry, kind: string, where: Where) => lookUp(registry.entries, where, (e) => e.kind === kind)?.component
+
+/** The component under the settings section that names `ui`, on `target` (a machine, or 'app'). */
+export const settingsView = (registry: Registry, ui: string, target: string) =>
+  registry.settings.find((s) => s.ui === ui && (!s.owner.profile || s.owner.profile.startsWith(`${target}\u0000`)))?.component
 
 /** A run of work in parts, as the first extension that divides it says; else whole. */
 export function divideWork(registry: Registry, run: WorkRun): WorkPart[] {
-  for (const divide of registry.work) {
+  for (const { divide } of registry.work) {
     try {
       const parts = divide(run)
       if (parts) return parts
@@ -257,37 +315,35 @@ export function divideWork(registry: Registry, run: WorkRun): WorkPart[] {
   return [{ blocks: run.blocks }]
 }
 
-/** The pane kind `kind` as `thread` sees it: its profile's own first, else the app's. */
-export function paneKind(registry: Registry, kind: string, thread: ThreadInfo): PaneKind | undefined {
-  const entries = registry.panes.get(kind) ?? []
-  return entries.find((e) => e.profile && e.profile === thread.profile?.dir) ?? entries.find((e) => !e.profile)
-}
+/** The pane kind `kind` as `where` sees it: its profile's own first, else the app's. */
+export const paneKind = (registry: Registry, kind: string, where: Where): PaneKind | undefined => lookUp(registry.panes, where, (p) => p.kind === kind)
 
-/** The pane kinds `thread` can open that `take` something: the app's, and its profile's (marked). */
-function takers(registry: Registry, thread: ThreadInfo, take: (kind: PaneKind) => boolean) {
-  return [...registry.panes.entries()].flatMap(([kind, entries]) => entries
-    .filter((e) => take(e) && (!e.profile || e.profile === thread.profile?.dir)).map((e) => ({ kind, profile: Boolean(e.profile) })))
+/** A pane's title: its own, else its kind's. */
+export function paneTitle(registry: Registry, pane: Pane, where: Where): string {
+  const named = paneKind(registry, pane.kind, where)?.title
+  return pane.title ?? (typeof named === 'function' ? named(pane) : named) ?? pane.kind
 }
 
 /**
  * The pane kind a file opens in, for a thread: its profile's kind that takes the file, else any other that does
  * besides the editor, else the editor, which takes anything.
  */
-export function fileKind(registry: Registry, thread: ThreadInfo, path: string): string {
-  const found = takers(registry, thread, (e) => Boolean(e.opens?.(path)))
-  return (found.find((t) => t.profile) ?? found.find((t) => t.kind !== 'editor'))?.kind ?? 'editor'
+export function fileKind(registry: Registry, where: Where, path: string): string {
+  const found = seen(registry.panes, where).filter((p) => p.opens?.(path))
+  return (found.find((p) => p.owner.profile) ?? found.find((p) => p.kind !== 'editor'))?.kind ?? 'editor'
 }
 
 /** The pane kind a folder opens in, for a thread: its profile's that shows folders, else any other; none, if none does. */
-export function folderKind(registry: Registry, thread: ThreadInfo): string | undefined {
-  const found = takers(registry, thread, (e) => Boolean(e.folders))
-  return (found.find((t) => t.profile) ?? found[0])?.kind
+export function folderKind(registry: Registry, where: Where): string | undefined {
+  const found = seen(registry.panes, where).filter((p) => p.folders)
+  return (found.find((p) => p.owner.profile) ?? found[0])?.kind
 }
 
-/** The panes a thread's menu offers: the built-in ones and its profile's that open without params. */
-export function paneMenu(registry: Registry, thread: ThreadInfo): { kind: string; title: string }[] {
-  return [...registry.panes.keys()].flatMap((kind) => {
-    const found = paneKind(registry, kind, thread)
+/** The panes a thread's menu offers: the app's and its profile's that open without params. */
+export function paneMenu(registry: Registry, where: Where): { kind: string; title: string }[] {
+  const kinds = [...new Set(seen(registry.panes, where).map((p) => p.kind))]
+  return kinds.flatMap((kind) => {
+    const found = paneKind(registry, kind, where)
     if (!found?.menu) return []
     return [{ kind, title: (typeof found.title === 'function' ? found.title({ id: '', kind }) : found.title) ?? kind }]
   })

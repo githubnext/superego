@@ -4,7 +4,7 @@ import type { Attachment, ThreadInfo } from '@superego/protocol'
 import { ArchiveIcon, ArrowCounterClockwiseIcon, BroomIcon, ArrowDownIcon, ArrowElbowDownRightIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CaretRightIcon, CaretUpDownIcon, ChatCircleIcon, ChatsCircleIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
-import { divideWork, fileKind, folderKind, paneMenu, Slot, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
+import { divideWork, entryView, fileKind, folderKind, paneMenu, Slot, toolView, unfoldedTool, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useShell } from './state.tsx'
 import { useShortcut } from './keys.ts'
 import { ctrlDigit } from './shortcuts.ts'
@@ -197,7 +197,8 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
       const folder = shortPath(threadRef.current.cwd)
       if (found.outside) return `outside ${folder}, where this thread works`
       if (found.path === null) return `not in ${folder}`
-      const kind = found.folder ? folderKind(registry, threadRef.current) : fileKind(registry, threadRef.current, found.path)
+      const where = { machine: machine.id, thread: threadRef.current }
+      const kind = found.folder ? folderKind(registry, where) : fileKind(registry, where, found.path)
       if (!kind) return 'a folder, and nothing here shows folders'
       await dispatch('pane.open', { id: thread.id, kind, params: { path: found.path, ...(found.line ? { line: found.line } : {}) } }, { machine: machine.id, source: 'thread' })
       return undefined
@@ -482,8 +483,8 @@ function sumStats(calls: Block[], results: Map<string, Message>) {
 }
 
 function Entry({ entry }: { entry: EntryRecord }) {
-  const custom = useRegistry().entries.get(entry.kind)
   const here = useContext(Here)
+  const custom = entryView(useRegistry(), entry.kind, { machine: here.machine.id, thread: here.thread })
   if (custom) { const Custom = custom; return <Custom {...here} entry={{ id: entry.id, kind: entry.kind, data: entry.data }} /> }
   const message = entry.model?.[0] as Message | undefined
   if (message?.role === 'user') {
@@ -544,8 +545,10 @@ function Work({ blocks: all, results, running, active }: { blocks: Block[]; resu
  * agent showed, say), and those calls drawn on their own, to go under the fold.
  */
 function useUnfolded(all: Block[], results: Map<string, Message>, running: Slots) {
-  const { unfolded } = useRegistry()
-  const out = all.filter((b) => b.type === 'toolCall' && unfolded.has(b.name ?? ''))
+  const registry = useRegistry()
+  const here = useContext(Here)
+  const where = { machine: here.machine.id, thread: here.thread }
+  const out = all.filter((b) => b.type === 'toolCall' && unfoldedTool(registry, b.name ?? '', where))
   if (!out.length) return { blocks: all, shown: null }
   return { blocks: all.filter((b) => !out.includes(b)), shown: <div className="steps steps--unfolded">{steps(out, results, running)}</div> }
 }
@@ -675,8 +678,8 @@ function verbOf(name: string, state: string): string {
 }
 
 function ToolCall({ block, result, slot }: { block: Block; result: Message | undefined; slot: ReturnType<Slots['get']> }) {
-  const custom = useRegistry().tools.get(block.name ?? '')
   const here = useContext(Here)
+  const custom = toolView(useRegistry(), block.name ?? '', { machine: here.machine.id, thread: here.thread })
   if (custom) {
     const Custom = custom
     const props: ToolCallProps = {
@@ -1003,7 +1006,7 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
 /** Open a pane beside the thread: the kinds that show something without being told what (Changes, a profile's own). */
 export function PaneMenu({ machine, thread, add = false }: { machine: MachineEntry; thread: ThreadInfo; add?: boolean }) {
   const registry = useRegistry()
-  const kinds = paneMenu(registry, thread)
+  const kinds = paneMenu(registry, { machine: machine.id, thread })
   if (!kinds.length) return null
   const open = (kind: string) => void registry.router.dispatch('pane.open', { id: thread.id, kind }, { machine: machine.id, source: 'header' })
   return (

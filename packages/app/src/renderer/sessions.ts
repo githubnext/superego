@@ -1,14 +1,16 @@
 // Sessions: what holds threads. A session is a project on a machine (a repository's main checkout, or a folder), and
 // holds the threads started there, worktrees and all. The machine is a fact about the session, not a level above it.
 // One order for every place that walks them (the sidebar, its rail, the navigator, ⌘⇧[ and ⌘⇧]): the rows the sidebar
-// shows, top to bottom, whether it's open or not. The sort sets it; a thread another started sits right under it.
+// shows, top to bottom, whether it's open or not. The sort (the window's own setting, `app.sort`, which the sidebar's
+// menu changes) sets it; a thread another started sits right under it.
 import { useMemo } from 'react'
 import { rollup, type Status, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { useAppSetting } from './client.ts'
 
 export type Sort = 'recent' | 'created' | 'status'
-export const SORT = 'threads.sort'
+/** App setting: the order of sessions, and of the threads in each. */
+export const SORT = 'app.sort'
 
 export type Session = {
   /** Unique across machines: the machine and the project's folder. */

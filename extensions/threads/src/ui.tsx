@@ -31,9 +31,6 @@ export default defineUiExtension({
     superego.appSettings({
       id: 'threads', title: 'Sidebar', order: 55,
       settings: [
-        { key: SORT, title: 'Sort sessions and threads', default: 'recent', type: 'choice', options: [
-          { value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' },
-        ] },
         { key: VIEW, title: 'Show as', default: 'list', type: 'choice', options: [{ value: 'list', label: 'List' }, { value: 'rail', label: 'Rail' }] },
         { key: DETAILS, title: 'Thread details', description: 'A pane beside the thread: machine, model, cost, tools, files.', default: false, type: 'boolean' },
       ],

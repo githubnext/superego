@@ -9,9 +9,9 @@
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
-import { ArrowRightIcon, ArrowsLeftRightIcon, CaretDownIcon, ChatTextIcon, FileTextIcon, GlobeIcon, type Icon as PhosphorIcon, XIcon } from '@superego/ui'
+import { ArrowRightIcon, ArrowsLeftRightIcon, CaretDownIcon, ChatTextIcon, FileTextIcon, GlobeIcon, XIcon } from '@superego/ui'
 import { machine as client } from './client.ts'
-import { paneKind, useRegistry, type PaneProps, type UiApi } from './extension.tsx'
+import { paneKind, paneTitle, useRegistry, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
 import { PaneMenu, ThreadBody } from './ThreadView.tsx'
@@ -73,16 +73,14 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     if (!event.currentTarget.contains(at) || at?.matches('.panes__label')) focusRegion(event.currentTarget, { visible: event.detail === 0 })
   }
   const close = (pane: Pane) => void dispatch('pane.close', { id: thread.id, pane: pane.id }, { machine: machine.id, source: 'panes' })
-  const title = (pane: Pane) => {
-    const named = paneKind(registry, pane.kind, thread)?.title
-    return pane.title ?? (typeof named === 'function' ? named(pane) : named) ?? pane.kind
-  }
+  const where = { machine: machine.id, thread }
+  const title = (pane: Pane) => paneTitle(registry, pane, where)
 
   // The room the columns share: the row less the hairlines between them.
   const room = narrow ? rowWidth : Math.max(0, rowWidth - DIVIDER * panes.length)
   // The columns, left to right: the thread, then its panes, each by the key its width is kept under.
   const columns = [{ key: 'thread', share: shares.thread ?? DEFAULT_SHARE },
-    ...panes.map((pane) => ({ key: pane.id, share: shares[pane.id] ?? paneKind(registry, pane.kind, thread)?.width ?? DEFAULT_SHARE }))]
+    ...panes.map((pane) => ({ key: pane.id, share: shares[pane.id] ?? paneKind(registry, pane.kind, where)?.width ?? DEFAULT_SHARE }))]
   const widths = columns.map((c) => narrow ? rowWidth : Math.min(room, Math.max(MIN_COLUMN, Math.round(c.share * room))))
   // The last column takes the room the others leave.
   const used = widths.reduce((sum, w) => sum + w, 0)
@@ -136,7 +134,11 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     if (!set) noteFor.current.set(id, set = (note) => setNotes((all) => ({ ...all, [id]: note })))
     return set
   }
-  const tabs = [{ id: undefined, label: 'Thread', kind: 'thread', pane: undefined }, ...panes.map((pane) => ({ id: pane.id, label: title(pane), kind: pane.kind, pane }))]
+  // The thread's own tab, then each pane's, drawn as its kind says (its glyph, and whether its title is a file's name).
+  const tabs: { id: string | undefined; label: string; kind: Pick<PaneKind, 'icon' | 'file'> | undefined; pane: Pane | undefined }[] = [
+    { id: undefined, label: 'Thread', kind: { icon: ChatTextIcon }, pane: undefined },
+    ...panes.map((pane) => ({ id: pane.id, label: title(pane), kind: paneKind(registry, pane.kind, where), pane })),
+  ]
   const total = widths.reduce((sum, w) => sum + w, 0) || 1
   const stripSlot = useContext(StripSlot)
 
@@ -144,7 +146,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     <div className={`strip ${narrow ? 'strip--narrow' : ''}`} role="tablist" aria-label="The thread and its panes">
       <div className="strip__tabs">
         {tabs.map((tab, i) => {
-          const Icon = KIND_ICONS[tab.kind]
+          const Icon = tab.kind?.icon
           const away = side(i)
           // The whole of what the tab may cut short: a file's path, a page's address, or its title.
           const { path, url } = (tab.pane?.params ?? {}) as { path?: string; url?: string }
@@ -155,7 +157,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
               title={full}
               onClick={() => show(tab.pane)}>
               {Icon && <Icon size={14} aria-hidden />}
-              <span className={`strip__label ${tab.kind === 'editor' || tab.kind === 'artifact' ? 'strip__label--file' : ''}`}>{tab.label}</span>
+              <span className={`strip__label ${tab.kind?.file ? 'strip__label--file' : ''}`}>{tab.label}</span>
               {tab.id && notes[tab.id]}
               {away === 'right' && <ArrowRightIcon className="strip__away" size={11} aria-hidden />}
             </button>
@@ -195,11 +197,6 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   )
 }
 
-/** The icon a pane kind shows in the strip. */
-const KIND_ICONS: Record<string, PhosphorIcon | undefined> = {
-  thread: ChatTextIcon, diff: ArrowsLeftRightIcon, editor: FileTextIcon, artifact: FileTextIcon, preview: GlobeIcon,
-}
-
 /** What a pane says on its tab in the strip (Changes: +3 −1), by pane. */
 const TabNote = createContext<((note: ReactNode) => void) | null>(null)
 
@@ -237,7 +234,7 @@ function PaneColumn({ pane, title, focused, width, onFocus, onClick, onClose, ch
 
 function PaneBody({ machine, thread, pane }: PaneProps) {
   const registry = useRegistry()
-  const kind = paneKind(registry, pane.kind, thread)
+  const kind = paneKind(registry, pane.kind, { machine: machine.id, thread })
   if (!kind) return <div className="pane-empty">No pane of kind “{pane.kind}” here{thread.profile ? '' : ' (a profile may add it)'}.</div>
   const Component = kind.component
   return <Component machine={machine} thread={thread} pane={pane} />
@@ -249,11 +246,11 @@ function PaneBody({ machine, thread, pane }: PaneProps) {
 const fileName = (pane: Pane) => (pane.params as { path?: string } | undefined)?.path?.split('/').at(-1)
 
 export function registerBuiltInPanes(superego: UiApi) {
-  superego.pane('diff', { title: 'Changes', component: DiffPane, menu: true, width: 0.45 })
-  superego.pane('editor', { title: (pane) => fileName(pane) ?? 'Editor', component: EditorPane, opens: () => true })
-  superego.pane('preview', { title: 'Preview', component: PreviewPane, width: 0.6 })
-  superego.pane('artifact', { title: (pane) => fileName(pane) ?? 'Artifact', component: ArtifactPane })
-  superego.pane('thread', { title: 'Thread', component: ThreadPane })
+  superego.pane('diff', { title: 'Changes', icon: ArrowsLeftRightIcon, component: DiffPane, menu: true, width: 0.45 })
+  superego.pane('editor', { title: (pane) => fileName(pane) ?? 'Editor', icon: FileTextIcon, file: true, component: EditorPane, opens: () => true })
+  superego.pane('preview', { title: 'Preview', icon: GlobeIcon, component: PreviewPane, width: 0.6 })
+  superego.pane('artifact', { title: (pane) => fileName(pane) ?? 'Artifact', icon: FileTextIcon, file: true, component: ArtifactPane })
+  superego.pane('thread', { title: 'Thread', icon: ChatTextIcon, component: ThreadPane })
 }
 
 const params = <T,>(pane: Pane) => (pane.params ?? {}) as T

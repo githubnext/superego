@@ -9,6 +9,7 @@ import type { AppConfig } from '@superego/protocol'
 import { createRegistry, RegistryProvider, type UiExtension } from './extension.tsx'
 import { Profiles, Providers, WebAccess } from './SettingsView.tsx'
 import { Shell, UNREAD } from './Shell.tsx'
+import { SORT } from './sessions.ts'
 import { ShellStateProvider } from './state.tsx'
 import { coreActions } from './actions.tsx'
 import { webBridge } from './web-bridge.ts'
@@ -24,16 +25,21 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
     core.settings('profiles', Profiles)
     core.appSettings({
       id: 'navigation', title: 'Navigation', order: 60,
-      settings: [{ key: UNREAD, title: 'Next unread thread (⌘.)', default: 'all', type: 'choice', options: [
-        { value: 'all', label: 'In every session' }, { value: 'session', label: 'In the current session' },
-      ] }],
+      settings: [
+        { key: SORT, title: 'Sort sessions and threads', default: 'recent', type: 'choice', options: [
+          { value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' },
+        ] },
+        { key: UNREAD, title: 'Next unread thread (⌘.)', default: 'all', type: 'choice', options: [
+          { value: 'all', label: 'In every session' }, { value: 'session', label: 'In the current session' },
+        ] },
+      ],
     })
     registerBuiltInPanes(core)
     for (const action of coreActions(app)) core.action(action)
   })
   void registry.router.load('app')
   // Declared before anything renders, so a component reading or setting them finds them registered.
-  for (const section of registry.appSettings) void window.superego.call('app', 'settings.register', { section }).catch((error) => console.error(error))
+  for (const { owner: _owner, ...section } of registry.appSettings) void window.superego.call('app', 'settings.register', { section }).catch((error) => console.error(error))
   createRoot(root).render(
     <StrictMode>
       <RegistryProvider registry={registry}>
@@ -61,6 +67,7 @@ export { useComposer, useComposerClaim, type Composer, type ComposerClaim } from
 export { Markdown } from './Markdown.tsx'
 export { useLocalState } from './local-state.ts'
 export { score } from './score.ts'
+export { PaneHeader, useTabNote } from './panes.tsx'
 export { FileEditor, type FileEditorProps, type MarkdownLink } from './file-editor.tsx'
 export { livePreview } from './live-markdown.ts'
 export { call, has, loadFonts, machine, useThreadView, useSettings, useValue, useWatch } from './client.ts'

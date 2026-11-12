@@ -363,7 +363,7 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
       const found = beside && (beside.path === near || beside.path === `${near}.md`) ? beside : await peer.call('file.find', { id: thread.id, name })
       if (found.outside) return "outside this thread's folder"
       if (found.path === null) return "not in this thread's folder"
-      const kind = found.folder ? folderKind(registry, thread) : fileKind(registry, thread, found.path)
+      const kind = found.folder ? folderKind(registry, { machine: machine.id, thread }) : fileKind(registry, { machine: machine.id, thread }, found.path)
       if (!kind) return 'a folder, and nothing here shows folders'
       await dispatch('pane.open', { id: thread.id, kind, params: { path: found.path, ...(found.line ? { line: found.line } : {}) } }, { machine: machine.id, source: 'editor' })
       return undefined
@@ -383,7 +383,7 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
     machine, thread, path,
     open: (file, { beside = false } = {}) => onOpenFile
       ? onOpenFile(file, { beside })
-      : void dispatch('pane.open', { id: thread.id, kind: fileKind(registry, thread, file), params: { path: file } }, { machine: machine.id, source: 'editor' }),
+      : void dispatch('pane.open', { id: thread.id, kind: fileKind(registry, { machine: machine.id, thread }, file), params: { path: file } }, { machine: machine.id, source: 'editor' }),
   }
   return (
     <div className={`file-editor ${rendered ? 'file-editor--rendered' : live ? 'file-editor--live' : ''}`}>

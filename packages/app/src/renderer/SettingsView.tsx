@@ -10,7 +10,7 @@ import type { MachineEntry } from '../shared.ts'
 import { machine as client, has, loadFonts, useSettings } from './client.ts'
 import { mergeSettings, type MergedSetting } from './merge-settings.ts'
 import { Keymap } from './Keymap.tsx'
-import { useApp, useRegistry } from './extension.tsx'
+import { settingsView, useApp, useRegistry } from './extension.tsx'
 
 const APP = 'app'
 const MACHINES = '$machines'
@@ -54,8 +54,8 @@ export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; 
 
 function Section({ target, section, values }: { target: string; section: SectionInfo; values: SettingsSnapshot['values'] }) {
   const dispatch = useRegistry().router.dispatch
-  const custom = useRegistry().settings
-  const Custom = section.ui ? custom.get(section.ui) : undefined
+  const registry = useRegistry()
+  const Custom = section.ui ? settingsView(registry, section.ui, target) : undefined
   return (
     <section className="settings-section">
       <h2>{section.title}</h2>

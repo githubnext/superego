@@ -155,7 +155,7 @@ function FolderPane({ machine, thread, pane }: PaneProps) {
   const [open, setOpen] = useState<Set<string>>(() => new Set())
   const toggle = (child: string) => setOpen((was) => { const next = new Set(was); if (!next.delete(child)) next.add(child); return next })
   const show = (file: string) =>
-    void dispatch('pane.open', { id: thread.id, kind: fileKind(registry, thread, file), params: { path: file } }, { machine: machine.id, source: 'folder' })
+    void dispatch('pane.open', { id: thread.id, kind: fileKind(registry, { machine: machine.id, thread }, file), params: { path: file } }, { machine: machine.id, source: 'folder' })
   return (
     <div className="files-folder" aria-label={path || 'Files'}>
       {!list ? <div className="files-tree__note">Reading…</div>
@@ -193,7 +193,7 @@ function QuickOpenDialog({ machineId, threadId, onClose }: { machineId: string; 
   const go = (file: string | undefined) => {
     if (!file || !thread || !machine) return
     onClose()
-    void dispatch('pane.open', { id: thread.id, kind: fileKind(registry, thread, file), params: { path: file } }, { machine: machine.id, source: 'quick open' })
+    void dispatch('pane.open', { id: thread.id, kind: fileKind(registry, { machine: machine.id, thread }, file), params: { path: file } }, { machine: machine.id, source: 'quick open' })
   }
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'ArrowDown') { event.preventDefault(); setActive((i) => Math.min(i + 1, matches.length - 1)) }

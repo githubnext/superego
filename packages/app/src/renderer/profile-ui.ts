@@ -69,7 +69,7 @@ async function ensureProfileUi(registry: Registry, machine: string, profile: Pro
   const { hash, entries } = await client(machine).call('profile.ui', profile)
   if (installed.get(key) === hash) return
   installed.set(key, hash)
-  registry.installProfile(profile.dir, entries.length ? await loadProfileUi(machine, profile, entries) : [])
+  registry.installProfile(machine, profile, entries.length ? await loadProfileUi(machine, profile, entries) : [])
 }
 
 /** Load the UI of `thread`'s profile into the registry (once per version of its files), and redraw when it lands. */

@@ -5,7 +5,7 @@
 import type { Conversation, Extension, Harness } from '@earendil-works/pi-durable'
 import type { ActionDef, AppConfig, BlockedKind, Json, ThreadInfo } from '@superego/protocol'
 import type { DaemonContext } from './daemon.ts'
-import type { SettingsRegistry } from '@superego/settings'
+import type { SectionSpec } from '@superego/settings'
 
 export type DaemonExtension = {
   /** Lowercase, unique in the app: `ask-user`, `git`. Its methods and values are named `<name>.<something>`. */
@@ -31,7 +31,16 @@ export type DaemonApi = {
   harness: Harness
   /** Give the agents tools, system prompt sections, hooks or tasks. */
   agent(extension: Extension): void
-  settings: SettingsRegistry
+  /**
+   * This machine's settings, as an extension sees them: it reads any, and registers sections of its own. A section's
+   * id is the extension's name (or `<name>.<more>`) and its keys are `<name>.<key>`; it goes when the extension does.
+   */
+  settings: {
+    register(section: SectionSpec): void
+    get<T extends Json>(key: string): T
+    /** Something in the settings changed; the listener goes when the extension does. */
+    onChange(listener: () => void): void
+  }
   /**
    * An action of this extension, named `<name>.<action>`: clients dispatch it by id, the command line and (later) MCP
    * by its exposure. Define it with `defineAction` and a params schema. Throw an `RpcError` for a clean error.

@@ -1,6 +1,6 @@
 // The renderer's view of the daemons: typed calls per machine, and hooks that subscribe to live state and resubscribe
 // whenever a machine reconnects.
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import type { Client, Feature, Json, MethodName, Notifications, Params, Result, ThreadInfo, SettingsSnapshot } from '@superego/protocol'
@@ -44,71 +44,145 @@ export function loadFonts(): Promise<string[]> {
 }
 
 /**
- * Subscribe to a watch method: take its snapshot, then fold its notifications in. Notifications that arrive before
- * the snapshot's response are buffered by subscription id. Stale data stays when the machine disconnects.
+ * A watch shared by everyone who wants it: one subscription per (machine, method, params), however many components
+ * show it, held while any of them is mounted. It takes the snapshot, then folds notifications in; notifications that
+ * arrive before the snapshot's response are folded in after it. Stale data stays while the machine is disconnected, and
+ * it watches again when the machine is back, or when the daemon stopped the watch itself (it cleared the thread).
  */
-export function useWatch<T>(
-  machineId: MachineId, connected: boolean, key: string | undefined,
-  start: (client: Client) => Promise<{ sub: string; value: T }>,
-  fold: (value: T, method: string, params: any) => T,
-  events: (keyof Notifications)[],
-): T | undefined {
-  const [value, setValue] = useState<T>()
-  // Bumped when the daemon stops the watch itself (it cleared the thread): watched again, from what it is now.
-  const [round, setRound] = useState(0)
-  useEffect(() => { setValue(undefined) }, [machineId, key])
-  useEffect(() => {
-    if (!connected || key === undefined) return
-    const client = machine(machineId)
+class SharedWatch<T> {
+  value: T | undefined
+  readonly listeners = new Set<() => void>()
+  #connected = false
+  #stop: (() => void) | undefined
+  #release: ReturnType<typeof setTimeout> | undefined
+  readonly id: string
+  readonly machineId: MachineId
+  readonly method: string
+  readonly params: unknown
+  readonly fold: (value: T, method: string, params: any) => T
+  readonly events: (keyof Notifications)[]
+  constructor(id: string, machineId: MachineId, method: string, params: unknown, fold: (value: T, method: string, params: any) => T, events: (keyof Notifications)[]) {
+    this.id = id; this.machineId = machineId; this.method = method; this.params = params; this.fold = fold; this.events = events
+    // Made while rendering: a render that never commits never subscribes, and leaves nothing behind.
+    this.#release = setTimeout(() => { if (!this.listeners.size) this.#end() }, 1000)
+  }
+
+  subscribe = (listener: () => void) => {
+    clearTimeout(this.#release)
+    this.listeners.add(listener)
+    this.#run()
+    return () => {
+      this.listeners.delete(listener)
+      // Let go a moment later: a component remounting (a key change, StrictMode) keeps the same subscription.
+      if (!this.listeners.size) this.#release = setTimeout(() => { if (!this.listeners.size) this.#end() }, 1000)
+    }
+  }
+
+  connect(connected: boolean) {
+    if (connected === this.#connected) return
+    this.#connected = connected
+    if (connected) this.#run()
+    else { this.#stop?.(); this.#stop = undefined }
+  }
+
+  #set(value: T | undefined) {
+    this.value = value
+    for (const listener of this.listeners) listener()
+  }
+
+  #run() {
+    if (this.#stop || !this.#connected || !this.listeners.size) return
+    const client = machine(this.machineId)
     let sub: string | undefined
     let stopped = false
     const early: { method: string; params: any }[] = []
-    const offs = events.map((event) => client.on(event, (params: any) => {
+    const offs = this.events.map((event) => client.on(event, (params: any) => {
       if (sub === undefined) early.push({ method: event, params })
-      else if (params.sub === sub) setValue((current) => current === undefined ? current : fold(current, event, params))
+      else if (params.sub === sub && this.value !== undefined) this.#set(this.fold(this.value, event, params))
     }))
-    offs.push(client.on('watch.end', (params) => { if (sub !== undefined && params.sub === sub && params.reason === 'stopped' && !stopped) { sub = undefined; setRound((r) => r + 1) } }))
-    start(client).then((result) => {
-      if (stopped) { void client.call('unwatch', { sub: result.sub }).catch(() => {}); return }
-      sub = result.sub
-      let next = result.value
-      for (const { method, params } of early) if (params.sub === sub) next = fold(next, method, params)
-      setValue(next)
-    }).catch((error) => console.error('watch failed', error))
-    return () => {
+    offs.push(client.on('watch.end', (params) => {
+      if (sub === undefined || params.sub !== sub || params.reason !== 'stopped' || stopped) return
+      stop()
+      this.#run()
+    }))
+    const stop = () => {
       stopped = true
+      this.#stop = undefined
       for (const off of offs) off()
       if (sub) void client.call('unwatch', { sub }).catch(() => {})
     }
-  }, [machineId, connected, key, round])
-  return value
+    this.#stop = stop
+    ;(client.call as (method: string, params: unknown) => Promise<{ sub: string; value: T }>)(this.method, this.params).then((result) => {
+      if (stopped) { void client.call('unwatch', { sub: result.sub }).catch(() => {}); return }
+      sub = result.sub
+      let next = result.value
+      for (const { method, params } of early) if (params.sub === sub) next = this.fold(next, method, params)
+      this.#set(next)
+    }).catch((error) => console.error(`${this.method} failed`, error))
+  }
+
+  #end() {
+    this.#stop?.()
+    this.#stop = undefined
+    watches.delete(this.id)
+  }
 }
 
+const watches = new Map<string, SharedWatch<any>>()
+
+function sharedWatch<T>(machineId: MachineId, method: string, params: unknown, fold: (value: T, method: string, params: any) => T, events: (keyof Notifications)[]): SharedWatch<T> {
+  const id = `${machineId}\u0000${method}\u0000${JSON.stringify(params)}`
+  let watch = watches.get(id) as SharedWatch<T> | undefined
+  if (!watch) watches.set(id, watch = new SharedWatch(id, machineId, method, params, fold, events))
+  return watch
+}
+
+/**
+ * Watch `method` with `params` on a machine while `connected` (undefined params: nothing to watch), folding in its
+ * notifications (`events`) with `fold`. Every component watching the same thing shares one subscription.
+ */
+export function useWatch<T>(
+  machineId: MachineId, connected: boolean, method: string, params: object | undefined,
+  fold: (value: T, method: string, params: any) => T,
+  events: (keyof Notifications)[],
+): T | undefined {
+  const watch = params === undefined ? undefined : sharedWatch(machineId, method, params, fold, events)
+  useEffect(() => { watch?.connect(connected) }, [watch, connected])
+  return useSyncExternalStore(watch?.subscribe ?? noSubscription, () => watch?.value)
+}
+const noSubscription = () => () => {}
+
+/** What a watch shows now, outside React, if anything is watching it (else undefined). */
+export function watched<T>(machineId: MachineId, method: string, params: object): T | undefined {
+  return watches.get(`${machineId}\u0000${method}\u0000${JSON.stringify(params)}`)?.value as T | undefined
+}
+
+const replace = <T,>(_value: T, _method: string, params: { value: T }) => params.value
+
 export const useThreads = (machineId: MachineId, connected: boolean) =>
-  useWatch<ThreadInfo[]>(machineId, connected, 'all', (client) => client.call('threads.watch', {}),
-    (_value, _method, params: Notifications['threads.changed']) => params.value, ['threads.changed'])
+  useWatch<ThreadInfo[]>(machineId, connected, 'threads.watch', {}, replace, ['threads.changed'])
 
 /** Ego's thread on `machineId`, which no list has: null until it's first opened. */
 export const useEgo = (machineId: MachineId, connected: boolean) =>
-  useWatch<ThreadInfo | null>(machineId, connected, 'ego', (client) => client.call('meta.watch', {}),
-    (_value, _method, params: Notifications['meta.changed']) => params.value, ['meta.changed'])
+  useWatch<ThreadInfo | null>(machineId, connected, 'meta.watch', {}, replace, ['meta.changed'])
 
-/** A live value an extension's daemon half publishes (`superego.value`), on `machineId`. */
+/**
+ * A live value an extension's daemon half publishes (`superego.value`), on `machineId`: null until the extension that
+ * publishes it is set up there (a profile's, before the profile loads).
+ */
 export const useValue = <T,>(machineId: MachineId, connected: boolean, key: string) =>
-  useWatch<T>(machineId, connected, key, (client) => client.call('value.watch', { key }) as Promise<{ sub: string; value: T }>,
-    (_value, _method, params: Notifications['value.changed']) => params.value as T, ['value.changed'])
+  useWatch<T>(machineId, connected, 'value.watch', { key }, (value, _method, params: Notifications['value.changed']) => params.key === key ? params.value as T : value, ['value.changed'])
 
 /** Call any method on a machine, including an extension's own (`<extension>.<method>`). */
 export const call = <R = unknown,>(machineId: MachineId, method: string, params: unknown = {}) => window.superego.call(machineId, method, params) as Promise<R>
 
 export const useThreadView = (machineId: MachineId, connected: boolean, id: string | undefined) =>
-  useWatch<ConversationView>(machineId, connected, id, (client) => client.call('thread.watch', { id: id! }),
+  useWatch<ConversationView>(machineId, connected, 'thread.watch', id === undefined ? undefined : { id },
     (value, method, params: Notifications['watch.ops']) => method === 'watch.ops' ? applyImmutable(value, params.ops as Op[]) : value,
     ['watch.ops'])
 
 export const useSettings = (machineId: MachineId, connected: boolean) =>
-  useWatch<SettingsSnapshot>(machineId, connected, 'settings', (client) => client.call('settings.watch', {}),
-    (_value, _method, params: Notifications['settings.changed']) => params.value, ['settings.changed'])
+  useWatch<SettingsSnapshot>(machineId, connected, 'settings.watch', {}, replace, ['settings.changed'])
 
 /**
  * One of the app's settings (those UI halves declare with `superego.appSettings`, or the core's), and a way to change it.
