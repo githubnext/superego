@@ -99,7 +99,7 @@ export async function serveWeb({ root, host, port, token, serve, artifact }: {
   await new Promise<void>((resolve, reject) => server.once('error', reject).listen(port, host, resolve))
   const shown = host === '0.0.0.0' ? lanAddress() ?? '127.0.0.1' : host
   return {
-    url: `http://${shown}:${port}/#token=${token}`,
+    url: `http://${shown}:${(server.address() as import('node:net').AddressInfo).port}/#token=${token}`,
     close: () => new Promise<void>((resolve) => { for (const client of sockets.clients) client.terminate(); sockets.close(); server.close(() => resolve()); server.closeAllConnections() }),
   }
 }

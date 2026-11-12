@@ -18,7 +18,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { registerHooks } from 'node:module'
+import * as nodeModule from 'node:module'
 import { transform } from 'sucrase'
 import type { Extension } from '@earendil-works/pi-durable'
 import type { DaemonExtension } from './extension.ts'
@@ -135,6 +135,14 @@ export class Trust {
 /** What `import … from 'superego'` gives a profile and its extensions. */
 export type ProfileSdk = Record<string, unknown>
 
+// Only the runtime virtual-module API we use; Node builds need no Bun type dependency.
+type BunModuleLoader = {
+  plugin(plugin: {
+    name: string
+    setup(build: { module(name: string, load: () => { exports: ProfileSdk; loader: 'object' }): void }): void
+  }): void
+}
+
 /**
  * Node's own `import()`, out of reach of bundlers and test runners that would rewrite it: profiles must load through
  * Node's loader, where the hook for 'superego' and TypeScript's type stripping are.
@@ -160,8 +168,16 @@ export function provideSdk(sdk: ProfileSdk) {
   ;(globalThis as { __superegoSdk?: ProfileSdk }).__superegoSdk = sdk
   if (hooked) return
   hooked = true
+  // Bun's runtime virtual modules (not its bundler-only onResolve hooks).
+  const bun = (globalThis as typeof globalThis & { Bun?: BunModuleLoader }).Bun
+  if (bun) {
+    bun.plugin({ name: 'superego-profile-sdk', setup(build) {
+      build.module('superego', () => ({ exports: sdk, loader: 'object' }))
+    } })
+    return
+  }
   const source = `const sdk = globalThis.__superegoSdk;\n${SDK_EXPORTS.map((key) => `export const ${key} = sdk.${key};`).join('\n')}\nexport default sdk;\n`
-  registerHooks({
+  nodeModule.registerHooks({
     resolve(specifier, context, next) {
       if (specifier === 'superego') return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true }
       return next(specifier, context)
