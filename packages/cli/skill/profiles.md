@@ -50,7 +50,7 @@ Every field is optional.
 - **`ui`** are modules for the window (`superego --skill ui`). They draw only in this profile's threads.
 - **`panes`** describes each pane kind the UI registers, so the agent knows it can open one and with which params.
 - **`without`** takes the names of built-ins: `coding-tools` (read, write, edit, bash), `panes` (open_pane),
-  `skills`, `agents-md`, `threads` (thread_start, thread_read, thread_send, thread_list), and the bundled extensions `ask-user`, `files`, `tasks`, `suggestions`.
+  `skills`, `agents-md`, `threads` (thread_start, thread_read, thread_send, thread_list, thread_archive), and the bundled extensions `ask-user`, `files`, `tasks`, `suggestions`.
 
 Profile files are TypeScript (types are stripped; no type checking) or JavaScript. They may import each other and
 Node's built-ins (`node:fs/promises`, …). `'superego'` is the only package they get; there is no `npm install`.

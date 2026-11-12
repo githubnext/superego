@@ -50,6 +50,8 @@ type ThreadMeta = {
   profile?: ProfileRef
   /** Put away: left out of the thread list (and the sidebar) until unarchived. */
   archived?: boolean
+  /** To be archived once its run ends: asked by the thread itself (thread_archive), mid-turn. */
+  archiveWhenDone?: boolean
   /** The panes open beside it, and the one in front. */
   panes?: Pane[]
   pane?: string
@@ -275,7 +277,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const skillsDir = join(agentsDir, 'skills')
   installBuiltin(defineExtension({ name: 'skills', sections: [section('skills', async () => skillsPrompt(await listSkills(skillsDir)))] }))
   installBuiltin(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] }))
-  // Threads starting, reading and messaging threads (see thread-tools.ts).
+  // Threads starting, reading, messaging and archiving threads (see thread-tools.ts).
   const threadInfo = async (id: string) => { const m = await get(id).catch(() => undefined); return m && info(id, m) }
   installBuiltin(threadTools({
     info: threadInfo,
@@ -283,6 +285,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     start: (parent, params) => startThread({ ...params, parent }),
     send: async (id, text) => { await submit(id, text, randomUUID(), 'followUp') },
     answer: (id) => answerOf(id),
+    archive,
+    archiveWhenDone,
   }))
   /** A thread's last answer, as text. */
   async function answerOf(id: string) {
@@ -322,6 +326,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** Set once a restart is accepted: no new work starts, so nothing is cut off that wasn't agreed to. */
   let restarting = false
   const mounted = new Map<string, Mounted>()
+  /** The threads being archived now that their run ended (see archiveWhenDone). */
+  const archiving = new Set<string>()
   /** Ego's thread, once there is one (the catalog's `ego`). */
   let egoId: string | undefined
   /** The transcript watches open on each thread, to end when Ego is cleared (clients then watch again). */
@@ -364,8 +370,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       changed()
     }
     absorb(watch.value)
-    watch.start(async (call) => { if (call.kind === 'value') absorb(call.value) })
+    watch.start(async (call) => { if (call.kind === 'value') { absorb(call.value); archiveIfDone(key, entry) } })
     mounted.set(key, entry)
+    archiveIfDone(key, entry)
     return entry
   }
 
@@ -808,22 +815,40 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   router.register(defineAction({
     id: 'thread.archive', title: 'Archive the thread', runs: 'machine', expose: ['ui', 'cli'], keys: 'mod+shift+e', ...thread,
     params: obj({ id: str() }),
-    async run({ id }) {
-      if (id === egoId) throw new RpcError('invalid', `${agentName(options.app)} isn't archived`, { hint: 'Clear it instead.' })
-      const { meta } = await get(id)
-      // Its worktree goes with it when nothing in it is uncommitted; its branch stays, to come back to.
-      const tree = meta.worktree
-      let removed = tree?.removed
-      if (tree && !tree.removed) {
-        const exists = await stat(tree.path).then(() => true, () => false)
-        const clean = exists && (await git(tree.path, ['status', '--porcelain']).catch(() => 'unknown')) === ''
-        if (!exists) removed = true
-        else if (clean) removed = await git(meta.root ?? tree.path, ['worktree', 'remove', tree.path]).then(() => true, () => false)
-      }
-      await updateMeta(id, (m) => { m.archived = true; if (m.worktree && removed) m.worktree.removed = true })
-      return { worktree: tree ? (removed ? 'removed' : 'kept') : null }
-    },
+    run: ({ id }) => archive(id),
   }))
+  const notEgo = (id: string) => {
+    if (id === egoId) throw new RpcError('invalid', `${agentName(options.app)} isn't archived`, { hint: 'Clear it instead.' })
+  }
+  /** Put a thread away. Its worktree goes with it when nothing in it is uncommitted; its branch stays, to come back to. */
+  async function archive(id: string) {
+    notEgo(id)
+    const { meta } = await get(id)
+    const tree = meta.worktree
+    let removed = tree?.removed
+    if (tree && !tree.removed) {
+      const exists = await stat(tree.path).then(() => true, () => false)
+      const clean = exists && (await git(tree.path, ['status', '--porcelain']).catch(() => 'unknown')) === ''
+      if (!exists) removed = true
+      else if (clean) removed = await git(meta.root ?? tree.path, ['worktree', 'remove', tree.path]).then(() => true, () => false)
+    }
+    await updateMeta(id, (m) => { m.archived = true; delete m.archiveWhenDone; if (m.worktree && removed) m.worktree.removed = true })
+    return { worktree: tree ? (removed ? 'removed' as const : 'kept' as const) : null }
+  }
+  /**
+   * Archive a thread once its run ends: how a thread archives itself, mid-turn, without its worktree going from under
+   * the turn or the turn being cut short. Kept in its metadata, so a restart in between still archives it.
+   */
+  async function archiveWhenDone(id: string) {
+    notEgo(id)
+    await updateMeta(id, (m) => { m.archiveWhenDone = true })
+    archiveIfDone(id, await get(id))
+  }
+  function archiveIfDone(id: string, m: Mounted) {
+    if (!m.meta.archiveWhenDone || m.meta.archived || m.live?.run || archiving.has(id)) return
+    archiving.add(id)
+    void archive(id).catch((error) => console.error(`Couldn't archive thread ${id}:`, error)).finally(() => archiving.delete(id))
+  }
   router.register(defineAction({
     id: 'thread.unarchive', title: 'Unarchive the thread', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str() }),
@@ -836,7 +861,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         await git(meta.root, ['worktree', 'add', '-q', tree.path, tree.branch])
           .catch((error: Error) => { throw new RpcError('invalid', `Couldn't restore its worktree: ${error.message}`) })
       }
-      await updateMeta(id, (m) => { delete m.archived; if (m.worktree) delete m.worktree.removed })
+      await updateMeta(id, (m) => { delete m.archived; delete m.archiveWhenDone; if (m.worktree) delete m.worktree.removed })
       return null
     },
   }))

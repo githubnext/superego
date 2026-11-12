@@ -1,5 +1,5 @@
 // Threads, for the agents in them: start one of their own (a child, nested under its parent in the sidebar), read
-// another (waiting for it, if asked), send one a message, and list the threads around. A thread is named in a message
+// another (waiting for it, if asked), send one a message, list the threads around, and archive one (or their own). A thread is named in a message
 // as a link, [its title](thread:<id>), which the window shows as one.
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { bool, obj, opt, str, type ThreadInfo } from '@superego/protocol'
@@ -13,6 +13,10 @@ export type ThreadsHost = {
   send(id: string, text: string): Promise<void>
   /** Its last answer, as text, if it has one. */
   answer(id: string): Promise<string | undefined>
+  /** Put it away now, and say what became of its worktree (removed when clean, its branch kept). */
+  archive(id: string): Promise<{ worktree: 'removed' | 'kept' | null }>
+  /** Put it away once its run ends: how a thread archives itself, mid-turn. */
+  archiveWhenDone(id: string): Promise<void>
 }
 
 /** A thread as a link in a message: what the window shows as one, and what the agent is told to write. */
@@ -105,6 +109,29 @@ export function threadTools(host: ThreadsHost) {
           return text(others.length ? others.map((t) => `- ${lineOf(t)}${parentOf(t) ? `, started by ${linkTo(parentOf(t)!)}` : ''}`).join('\n') : 'No other threads here.')
         },
       }),
+      defineTool({
+        name: 'thread_archive',
+        description: 'Archive a thread: out of the thread list, taking no messages until it\'s unarchived. Its worktree is removed ' +
+          'if nothing in it is uncommitted; its branch stays. Without an id, this thread, once this turn ends.',
+        parameters: obj({ id: opt(str({ description: 'The thread to archive; this one if left out.' })) }),
+        async execute({ id }, api) {
+          const self = await here(api.conversationId)
+          const thread = id === undefined || id === self.id ? self : await host.info(id)
+          if (!thread) throw new Error(`No thread ${id}`)
+          if (thread.archived) throw new Error(`${linkTo(thread)} is already archived`)
+          // This turn is still going: the thread is archived as it ends, not under it.
+          if (thread === self) {
+            await host.archiveWhenDone(self.id)
+            return text('This thread will be archived when this turn ends.')
+          }
+          // Another's turn isn't cut short, nor its worktree taken from under it.
+          if (thread.status.state === 'working' || thread.status.state === 'blocked') {
+            throw new Error(`${linkTo(thread)} is working: wait for it with thread_read (wait: true), then archive it`)
+          }
+          const { worktree } = await host.archive(thread.id)
+          return text(`Archived ${linkTo(thread)}${worktree === 'removed' ? '; its worktree is removed, its branch kept' : worktree === 'kept' ? '; its worktree has uncommitted changes, so it stays' : ''}.`)
+        },
+      }),
     ],
     sections: [section('threads', async ({ conversationId }) => {
       const self = await host.info(String(conversationId))
@@ -115,6 +142,8 @@ export function threadTools(host: ThreadsHost) {
         'Name a thread in a message as a link, [its title](thread:<id>): it shows as one, to open.',
         'For separate work that can go on alongside this (another part of a change, a question to look into), start a thread ' +
           'of its own with thread_start, and give it everything it needs; thread_read with wait: true gets its answer.',
+        'thread_archive puts a thread away once it\'s finished with, such as a child of this one whose work is done, or this ' +
+          'thread itself when the user asks.',
       ].join('\n')
     })],
   })
