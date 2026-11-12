@@ -216,7 +216,10 @@ export type Methods = {
 
   /** Who is connected to this machine, then `clients.changed` with the whole list. */
   'clients.watch': { params: {}; result: { sub: string; value: ClientInfo[] } }
-  /** Ask another client (by id) to run one of its window actions: it gets `client.perform` and dispatches it itself. */
+  /**
+   * Ask another client (by id) to run one of its window actions: it gets `client.perform` and dispatches it itself.
+   * Only the navigation in PERFORMABLE; anything else is refused here and ignored there.
+   */
   'client.perform': { params: { client: string; action: string; params?: Json }; result: null }
   /** A one-time code a browser pairs with, for a few minutes; `url` carries it in its fragment, never sent to the server. */
   'web.pair': { params: {}; result: { code: string; expires: number; url: string | null } }
@@ -280,3 +283,12 @@ export type Client = {
   call<M extends MethodName>(method: M, params: Params<M>): Promise<Result<M>>
   on<N extends keyof Notifications>(event: N, listener: (params: Notifications[N]) => void): () => void
 }
+
+/**
+ * The window actions another client may ask a window to run (`client.perform`): moving around, nothing that changes,
+ * sends, opens or shows anything beyond the threads and panes already there. A window takes them only from its own
+ * machine's daemon (see the app's perform.ts).
+ */
+export const PERFORMABLE: ReadonlySet<string> = new Set([
+  'thread.select', 'thread.next', 'thread.previous', 'thread.unread', 'session.next', 'session.previous', 'pane.next', 'pane.previous',
+])

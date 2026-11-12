@@ -1,8 +1,9 @@
 // Who is connected to this daemon: every connection, what it said it is in `hello`, and a name for people. Clients
 // watch the list (`clients.watch`), the action log names who dispatched, and one client can ask another to run a
-// window action (`client.perform`): the daemon only passes the request on; the target decides and dispatches it.
+// window action (`client.perform`): the daemon passes on only the navigation in PERFORMABLE; the target checks again
+// and dispatches it.
 import { randomBytes } from 'node:crypto'
-import { RpcError, type ClientInfo, type Json, type RpcPeer } from '@superego/protocol'
+import { PERFORMABLE, RpcError, type ClientInfo, type Json, type RpcPeer } from '@superego/protocol'
 
 /** What the transport knows about a connection before it says hello: a browser's device, a Tailscale login. */
 export type Via = { via: ClientInfo['via']; label?: string; device?: string }
@@ -63,6 +64,7 @@ export class Clients {
 
   /** Pass a window action to another client. It runs there, if that client has it; this only says it was sent. */
   perform(from: string, target: string, action: string, params?: Json) {
+    if (!PERFORMABLE.has(action)) throw new RpcError('not_exposed', `${action} isn't one another client may ask a window to run`)
     const source = this.#entries.get(from)
     const entry = this.#entries.get(target)
     if (!source || !entry) throw new RpcError('not_found', `No client ${target} here`)

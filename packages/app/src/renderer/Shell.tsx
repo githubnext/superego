@@ -2,7 +2,7 @@
 // the restart notice, Settings, and the app-wide reactions (fonts, ⌘, , threads shown from the command line or a
 // notification, marking finished threads seen).
 import { useEffect, useRef, useState } from 'react'
-import { agentName, type Notifications } from '@superego/protocol'
+import { agentName } from '@superego/protocol'
 import { Button, CommandIcon, LifebuoyIcon, GearSixIcon, IconButton, ListIcon, MagnifyingGlassIcon, NotePencilIcon, PlusIcon, Select, SidebarSimpleIcon } from '@superego/ui'
 import { textScale } from '../shared.ts'
 import { UnreadButton } from './Unread.tsx'
@@ -14,6 +14,7 @@ import { SettingsView } from './SettingsView.tsx'
 import { Palette } from './Palette.tsx'
 import { Navigator } from './Navigator.tsx'
 import { ActionLog, runsBare } from './actions.tsx'
+import { performed } from './perform.ts'
 import { NewThreadDialog } from './NewThread.tsx'
 import { bound, KEYMAP, shortcutOf, useActions, type Keymap } from './keys.ts'
 import { useAllThreads, useMachines, useNewThreadDialog, useSelection, useSessions, useSettingsDialog, useShell, useSidebar, type Selection } from './state.tsx'
@@ -257,11 +258,11 @@ function useAppEffects() {
       if (settings) openSettings()
     }
     const off = window.superego.onEvent((event) => {
-      // Another client asks for one of this window's own actions (see client.perform). Every window of the app hears it;
+      // Another client asks for one of this window's own actions (see perform.ts). Every window of the app hears it;
       // the ones on screen run it.
-      if (event.method === 'client.perform' && document.visibilityState === 'visible') {
-        const { from, action, params } = event.params as Notifications['client.perform']
-        if (registry.router.router.has(action)) void registry.router.dispatch(action, (params ?? {}) as Record<string, unknown>, { source: `${from.label} (${from.kind})` }).catch((error) => console.error(error))
+      if (event.method === 'client.perform') {
+        const asked = document.visibilityState === 'visible' ? performed(event) : undefined
+        if (asked && registry.router.router.has(asked.action)) void registry.router.dispatch(asked.action, asked.params, { source: asked.source }).catch((error) => console.error(error))
         return
       }
       if (event.machine !== 'app') return

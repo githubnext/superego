@@ -235,9 +235,11 @@ describe('web access', () => {
     expect(log.find((e) => e.id === 'thread.create')?.client).toMatchObject({ kind: 'superego-cli', label: 'desk' })
 
     const asked = new Promise<Notifications['client.perform']>((resolve) => peer.on('client.perform', resolve))
-    await second.peer.call('client.perform', { client: hello.client, action: 'threads.rail', params: { open: true } })
-    expect(await asked).toMatchObject({ action: 'threads.rail', params: { open: true }, from: { label: 'desk' } })
-    await expect(second.peer.call('client.perform', { client: 'nobody', action: 'x.y' })).rejects.toMatchObject({ kind: 'not_found' })
+    // Only navigation passes: nothing that makes, sends or opens.
+    await expect(second.peer.call('client.perform', { client: hello.client, action: 'app.newWindow' })).rejects.toMatchObject({ kind: 'not_exposed' })
+    await second.peer.call('client.perform', { client: hello.client, action: 'thread.select', params: { machine: 'local', thread: 't1' } })
+    expect(await asked).toMatchObject({ action: 'thread.select', params: { machine: 'local', thread: 't1' }, from: { label: 'desk' } })
+    await expect(second.peer.call('client.perform', { client: 'nobody', action: 'thread.next' })).rejects.toMatchObject({ kind: 'not_found' })
 
     const changed = new Promise<ClientInfo[]>((resolve) => peer.on('clients.changed', ({ value }: Notifications['clients.changed']) => { if (value.length === 1) resolve(value) }))
     second.socket.destroy()
