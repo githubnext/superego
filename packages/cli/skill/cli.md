@@ -55,11 +55,12 @@ Useful ones:
 | `thread.create` `cwd? title? prompt? profile? model? worktree?` | start a thread |
 | `thread.submit` `id text whenBusy?=steer\|followUp` | send a message |
 | `thread.abort` `id` | stop the agent |
-| `thread.rename` `id title`, `thread.archive` `id`, `thread.unarchive` `id` | |
+| `thread.rename` `id title`, `thread.archive` `id`, `thread.unarchive` `id` | (Ego is never archived) |
 | `pane.open` `id kind title? params?` | open a pane beside a thread (`diff`, `editor`, `preview`, `artifact`, `thread`, a profile's own) |
 | `pane.close` `id pane`, `pane.focus` `id pane?` | |
 | `profile.list` `cwd?`, `profile.allow` `cwd? name?` | |
-| `thread.meta` `prompt?` | ask Ego, Superego's own agent, to set something up |
+| `thread.meta` `prompt?` | ask Ego, Superego's own agent (one hidden thread per machine): it answers, and starts threads for any work |
+| `thread.meta.clear` | clear Ego's conversation: the same thread, empty again |
 
 `pane.open` takes nested `params`, so give it JSON:
 

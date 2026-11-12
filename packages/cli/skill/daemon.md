@@ -1,7 +1,7 @@
 # Daemon extensions
 
 A daemon extension runs in the machine's daemon, next to the agents. Beyond tools, it can define **actions** (what the
-UI, the command line and Ego run), publish **live values** (state clients watch), mark threads **blocked** (needing
+UI and the command line run, and Ego lists), publish **live values** (state clients watch), mark threads **blocked** (needing
 the user), and reach **threads**. A profile lists it in `extensions` like an agent extension; Superego tells them apart
 by the `setup` function.
 
@@ -14,7 +14,7 @@ export default defineDaemonExtension({
     // Tools for the agent, with access to everything in this closure.
     superego.agent(defineExtension({ name: 'orders', tools: [/* defineTool(…) */] }))
 
-    // An action: run from the UI (dispatch), the command line (superego do orders.find --number 12) or Ego.
+    // An action: run from the UI (dispatch) or the command line (superego do orders.find --number 12).
     superego.action(defineAction({
       id: 'orders.find', title: 'Find an order', expose: ['ui', 'cli'],
       params: obj({ number: str() }),
@@ -42,7 +42,7 @@ the previous setup's cleanup run first. Everything it registered is removed on r
 | | |
 |---|---|
 | `superego.agent(extension)` | give this profile's agents an agent extension (`superego --skill tools`) |
-| `superego.action(defineAction({ id, title, params?, expose?, run }))` | an action named `<name>.<action>`. `expose: ['ui']` (default) is for the window; add `'cli'` for the command line and Ego. `run(params, context)` returns JSON or throws `RpcError(code, message, { hint })` |
+| `superego.action(defineAction({ id, title, params?, expose?, run }))` | an action named `<name>.<action>`. `expose: ['ui']` (default) is for the window; add `'cli'` for the command line (Ego lists these, to explain them). `run(params, context)` returns JSON or throws `RpcError(code, message, { hint })` |
 | `superego.value(key, initial)` | a live value named `<name>.<key>`: `get()`, `set(next)`, `update(fn)`. In memory only; a UI reads it with `useValue` |
 | `superego.status((threadId) => …)` | return `{ kind: 'question' \| 'permission' \| 'auth', msg? }` while a thread needs the user; it shows as blocked. Call `superego.invalidate()` when what it depends on changes |
 | `superego.threads.list()` | every thread: `{ id, title, cwd, status, profile, … }` |
