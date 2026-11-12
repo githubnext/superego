@@ -137,6 +137,9 @@ function UnarchiveButton({ machine, thread, className = '' }: { machine: Machine
   )
 }
 
+/** How far from its end a transcript still counts as at its end, and follows what comes in. */
+const PINNED = 80
+
 /** A thread's transcript and composer. Also what a "thread" pane draws. */
 export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const registry = useRegistry()
@@ -209,10 +212,22 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
     if (el && view && !atStart && !older.loading && el.scrollHeight <= el.clientHeight + 200) loadOlder()
   }, [view, atStart, older.loading])
 
-  useEffect(() => {
+  // At the end, the transcript stays at its end as anything changes size: a reply streaming in, a step opening, code
+  // laid out, the composer floating over the end growing (suggestions, a question, files; the transcript keeps room for
+  // it below its end, --dock). Scrolled up past the dead zone (PINNED), it stays where it was put.
+  useLayoutEffect(() => {
     const el = scroller.current
-    if (el && pinned.current) el.scrollTop = el.scrollHeight
-  }, [watched])
+    const column = el?.querySelector<HTMLElement>('.thread__column')
+    const dock = el?.parentElement?.querySelector<HTMLElement>(':scope > .dock')
+    if (!el || !column || !dock) return
+    const observer = new ResizeObserver(() => {
+      el.parentElement!.style.setProperty('--dock', `${dock.offsetHeight}px`)
+      if (pinned.current) el.scrollTop = el.scrollHeight
+    })
+    observer.observe(column)
+    observer.observe(dock)
+    return () => observer.disconnect()
+  }, [])
 
   return (
     <OpenFile.Provider value={openFile}>
@@ -223,7 +238,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
       <div className="thread__scroll" ref={scroller}
         onScroll={(e) => {
           const el = e.currentTarget
-          pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+          pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < PINNED
           setAway(el.scrollHeight - el.scrollTop - el.clientHeight > 200)
           el.parentElement?.classList.toggle('is-scrolled', el.scrollTop > 8)
           if (el.scrollTop < el.clientHeight) loadOlder()
