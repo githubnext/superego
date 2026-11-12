@@ -10,8 +10,9 @@
 .app__meta { position: relative; width: 34px; height: 34px; min-height: 34px; border-radius: 8px; color: var(--superego-muted); box-shadow: none; background: none; }
 .app__meta:hover { color: var(--superego-text); background: var(--superego-hover); }
 .app__meta.is-on { color: var(--superego-text); background: var(--superego-selected); }
-/* The sidebar: on the chrome beside the rail, no card of its own. Hidden while what's in it shows nothing. */
-.app__sidebar { position: relative; width: var(--superego-sidebar); flex: none; min-height: 0; overflow: auto; padding: 4px 10px 12px 2px; display: flex; flex-direction: column; }
+/* The sidebar: on the chrome beside the rail, no card of its own. Hidden while what's in it shows nothing. What's in it
+   scrolls inside a clear border, where its focus ring goes. */
+.app__sidebar { position: relative; width: var(--superego-sidebar); flex: none; min-height: 0; overflow: auto; border: 5px solid transparent; padding: 0 5px 7px 0; display: flex; flex-direction: column; }
 .app__sidebar:has(> .app__footer:first-child:empty) { display: none; }
 .app__tools { display: flex; align-items: center; gap: 2px; }
 .app__tools .superego-icon-button { color: var(--superego-muted); }
@@ -78,7 +79,7 @@
 /* Room below the end for the composer floating over it (--dock: its height, kept by ThreadBody), its bar above it, and air. */
 .thread__column { width: var(--superego-column); max-width: calc(100% - 2 * var(--superego-space-6)); margin: 0 auto; padding: var(--superego-space-4) 0 calc(var(--dock, 70px) + 100px); }
 /* Text scrolls away under soft edges: at the top, and behind the floating composer. */
-.thread::before, .thread::after { bottom: 0; height: 120px; background: linear-gradient(transparent, var(--superego-bg) 60%); }
+.thread::before, .thread::after { content: ''; position: absolute; left: 0; right: 12px; pointer-events: none; z-index: 1; }
 .thread::before { top: 0; height: 48px; background: linear-gradient(var(--superego-bg), transparent); opacity: 0; transition: opacity .15s; }
 .thread.is-scrolled::before { opacity: 1; }
 .thread::after { bottom: 0; height: 140px; background: linear-gradient(transparent, var(--superego-bg) 62%); }
@@ -577,8 +578,9 @@ a.pane-header__url:hover { color: var(--superego-accent); }
    draw it; typing does. What has the focus inside a page is out of the window's sight (its frame never matches
    :focus-visible, and only sometimes :focus), so a frame holding the focus shows it, as a text field always does. */
 :is(.app__sidebar, .panes > .panes__column):focus-within:not(:focus:not(:focus-visible), :has(:focus:not(:focus-visible, iframe))) {
-  /* No room around a column or the sidebar: the ring sits just inside its edge. The sidebar scrolls, so it takes an
-     outline (which stays put); a column draws its ring over what's in it. */
+  /* No room around a column or the sidebar: the ring sits just inside its edge, and what's inside it shows only inside
+     the ring. The sidebar scrolls, so it takes an outline (which stays put) on the clear border its content scrolls
+     within; a column draws its ring over what's in it, and covers what lies outside it with its own colour. */
   outline: 2px solid var(--superego-ring) !important; outline-offset: -5px;
   .panes > & { outline: none !important; }
   &::before { opacity: 1; }
@@ -586,7 +588,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .app__sidebar { border-radius: 10px; }
 .panes > .panes__column::before {
   content: ''; position: absolute; inset: 3px; z-index: 6; pointer-events: none; border-radius: 7px;
-  box-shadow: inset 0 0 0 2px var(--superego-ring); opacity: 0; transition: opacity .12s;
+  box-shadow: inset 0 0 0 2px var(--superego-ring), 0 0 0 8px var(--superego-bg); clip-path: inset(-3px); opacity: 0; transition: opacity .12s;
 }
 /* The thread alone: its composer (or what has the focus in it) shows the focus; no ring around the whole sheet. */
 .sheet:not(.has-panes) > .panes > .panes__column::before { display: none; }
