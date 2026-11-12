@@ -437,6 +437,53 @@ if (phase === 'first') {
   await key('i', ['control'])
   await until(`document.activeElement?.matches('.composer textarea')`, 'ctrl+i back to the prompt')
   if (ring !== 'solid') { await fail(`focus not drawn: ${ring}`); throw new Error('failed') }
+  // Every column draws the focus it holds, the same way: a page's (whose own focus the window can't see), from the
+  // keyboard and from a click into it, and a pane with nothing in it to focus but itself.
+  const another = createServer((_q, r) => { r.setHeader('content-type', 'text/html'); r.end('<body style="height:100vh">A page</body>') }).listen(0, '127.0.0.1')
+  await new Promise((resolve) => another.once('listening', resolve))
+  const ego = await run(`window.superego.call('local', 'thread.list', {}).then((all) => all.find((t) => t.title === 'Set up Superego').id)`)
+  // The column wearing the ring, and the one brought forward (its title lit): focus moving into a column brings it.
+  const ringed = (label) => until(`(() => {
+    const ringed = [...document.querySelectorAll('.panes > [data-column]')].filter((c) => getComputedStyle(c).outlineStyle === 'solid')
+    return ringed.length === 1 && (ringed[0].querySelector('.panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}
+  })()`, `only ${label} ringed`)
+  const front = (label) => until(`(document.querySelector('.panes__tab.is-active .panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}`, `${label} brought forward`)
+  await run(`window.superego.call('local', 'pane.open', { id: '${ego}', kind: 'preview', params: { url: 'http://127.0.0.1:${another.address().port}/' } })`)
+  await until(`Boolean(document.querySelector('.frame-pane iframe'))`, 'a page beside the thread')
+  await run(`document.querySelector('.composer textarea').focus()`)
+  await ringed('thread')
+  await key('Right', ['meta', 'alt'])
+  await until(`document.activeElement?.matches('.frame-pane iframe')`, 'cmd+alt+right into the page')
+  await ringed('Preview')
+  await front('Preview')
+  // Out of it again: the page has the keyboard, so the window takes the key before it.
+  await key('Left', ['meta', 'alt'])
+  await until(`document.activeElement?.matches('.thread__scroll')`, 'cmd+alt+left out of the page')
+  await ringed('thread')
+  await front('thread')
+  const click = async (selector) => {
+    const box = JSON.parse(await run(`JSON.stringify(document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect())`))
+    for (const type of ['mouseDown', 'mouseUp']) BrowserWindow.getAllWindows()[0].webContents.sendInputEvent({ type, x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2), button: 'left', clickCount: 1 })
+  }
+  await click('.frame-pane iframe')
+  await until(`document.activeElement?.matches('.frame-pane iframe')`, 'a click into the page')
+  await ringed('Preview')
+  await front('Preview')
+  await run(`window.superego.call('local', 'pane.close', { id: '${ego}', pane: document.querySelector('[data-column]:not([data-column="thread"])').dataset.column })`)
+  another.close()
+  await run(`window.superego.call('local', 'pane.open', { id: '${ego}', kind: 'diff' })`)
+  await until(`Boolean(document.querySelector('.panes__tab'))`, 'changes beside the thread')
+  await run(`document.querySelector('.composer textarea').focus()`)
+  await key('Right', ['meta', 'alt'])
+  await until(`document.activeElement?.matches('[data-column]:not([data-column="thread"])')`, 'cmd+alt+right to the pane itself')
+  await ringed('Changes')
+  await run(`document.querySelector('.composer textarea').focus()`)
+  await ringed('thread')
+  // A click on its title, as on the rest of its own parts, takes the focus into it.
+  await click('.panes__label')
+  await until(`document.activeElement?.matches('[data-column]:not([data-column="thread"])')`, 'a click on the title, into the pane')
+  await run(`window.superego.call('local', 'pane.close', { id: '${ego}', pane: document.activeElement.dataset.column })`)
+  await until(`!document.querySelector('.panes__tab')`, 'changes closed')
   // Attachments: a file picked with the paperclip (over the box) waits above the composer, then goes with the message and shows under it.
   await run(`(() => {
     const input = document.querySelector('.dock__bar input[type=file]')

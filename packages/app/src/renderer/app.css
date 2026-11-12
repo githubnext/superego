@@ -478,7 +478,6 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 /* Focus, as everywhere: the box text is typed in carries the ring, and the region holding focus says so. */
 .dock:has(.composer textarea:focus-visible), .dock:has(.composer textarea:focus) { outline: 2px solid var(--superego-ring); outline-offset: 2px; }
 .palette__input:focus { outline: 2px solid var(--superego-ring); outline-offset: -2px; }
-.panes__column:focus:not(:has(:focus-visible)) { outline: none !important; }
 
 /* Attachments: chips, an image's with its thumbnail; waiting above the composer, then under the message they went with. */
 .composer__files, .msg__files { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -519,19 +518,24 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .dock__end { grid-column: 3; justify-self: end; display: flex; gap: 6px; }
 .dock.is-dropping { outline: 2px dashed var(--superego-ring); outline-offset: 2px; }
 
-/* A region with keyboard focus in it (the sidebar, the thread, a pane) wears a ring. Mouse clicks on buttons don't
-   draw it; typing does. Around a card, it sits in the room around it; the phone's drawer has none, so it goes inside. */
-.app__sidebar:has(:focus-visible) { outline: 2px solid var(--superego-ring); outline-offset: 2px; }
-.app.is-narrow .app__sidebar:has(:focus-visible) { outline: 3px solid var(--superego-ring); outline-offset: -3px; }
-/* Each column is a region. As cards, the ring goes outside the card, in the room around and between them (8px, so
-   offset plus width stays under that); an outline isn't clipped by the card's own overflow and follows its corners. */
-.panes:not(.panes--narrow) > .panes__column:has(:focus-visible) { outline: 2px solid var(--superego-ring); outline-offset: 2px; }
-/* Narrow, a column fills the screen with nothing around it: the ring sits inside its edge. */
+/* A region (the sidebar, the thread, a pane) wears a ring while it holds the focus and the focus shows: on what was
+   reached from the keyboard, or on what takes typing (a text field, an editor, a page). Mouse clicks on buttons don't
+   draw it; typing does. What has the focus inside a page is out of the window's sight (its frame never matches
+   :focus-visible, and only sometimes :focus), so a frame holding the focus shows it, as a text field always does. */
+:is(.app__sidebar, .panes > .panes__column):focus-within:not(:focus:not(:focus-visible), :has(:focus:not(:focus-visible, iframe))) {
+  /* Around a card, in the room around and between them (8px, so offset plus width stays under that); an outline
+     isn't clipped by the card's own overflow and follows its corners. */
+  outline: 2px solid var(--superego-ring) !important; outline-offset: 2px;
+  /* The phone's drawer has no room around it: the ring goes inside. */
+  .app.is-narrow &.app__sidebar { outline-width: 3px !important; outline-offset: -3px; }
+  /* Narrow, a column fills the screen with nothing around it: the ring sits inside its edge, over what's in it. */
+  .panes--narrow > & { outline: none !important; }
+  .panes--narrow > &::before { opacity: 1; }
+}
 .panes--narrow > .panes__column::before {
   content: ''; position: absolute; inset: 0; z-index: 6; pointer-events: none;
   border: 3px solid var(--superego-ring); opacity: 0; transition: opacity .12s;
 }
-.panes--narrow > .panes__column:has(:focus-visible)::before { opacity: 1; }
 
 /* What the agent said along the way, inside the fold with its work. */
 .step__note { font-size: var(--superego-text-ui); color: var(--superego-muted); margin: 2px 0 var(--superego-space-2); }

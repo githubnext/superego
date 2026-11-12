@@ -26,14 +26,19 @@ function target(region: HTMLElement): HTMLElement | null {
     ?? (region.tabIndex >= 0 || region.hasAttribute('tabindex') ? region : null)
 }
 
-export function focusRegion(region: HTMLElement | null | undefined): boolean {
+/**
+ * Focus what's used in a region. Moved there by a command (a key, the navigator), the focus shows, wherever the key was
+ * pressed: the browser's own guess goes by the last input the window saw, and a key pressed in a page, or a click
+ * before it, leaves that wrong. Moved there by a click (`visible: false`), it shows as a click's would.
+ */
+export function focusRegion(region: HTMLElement | null | undefined, { visible = true }: { visible?: boolean } = {}): boolean {
   const el = region && target(region)
   if (!el) return false
   // Focus never scrolls what's read: an editor keeps its place (the browser would bring its caret into view), and
   // the thread its own. A row in a list is scrolled to only if it's out of sight.
   const scrollers = [...new Set([el.closest<HTMLElement>('.file-editor__scroll'), el.closest<HTMLElement>('.thread__scroll')])].filter((s): s is HTMLElement => Boolean(s))
   const kept = scrollers.map((s) => [s, s.scrollTop] as const)
-  el.focus({ preventScroll: true })
+  el.focus({ preventScroll: true, focusVisible: visible })
   if (el.matches('.superego-list-item')) el.scrollIntoView({ block: 'nearest' })
   const restore = () => { for (const [s, top] of kept) if (s.scrollTop !== top) s.scrollTop = top }
   restore()

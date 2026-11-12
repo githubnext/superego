@@ -832,7 +832,7 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(event.ctrlKey ? 'followUp' : 'steer') }
     if (event.key === 'Escape' && busy) { event.preventDefault(); void abort() }
     // Esc otherwise leaves the prompt for the thread above it: to read, and scroll from the keyboard.
-    else if (event.key === 'Escape') { event.preventDefault(); transcriptOf(event.currentTarget)?.focus({ preventScroll: true }) }
+    else if (event.key === 'Escape') { event.preventDefault(); transcriptOf(event.currentTarget)?.focus({ preventScroll: true, focusVisible: true }) }
   }
   return (
     <ClaimContext.Provider value={register}>
