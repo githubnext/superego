@@ -598,6 +598,7 @@ function describe(blocks: Block[]): string[] {
       case 'thread_read': return `read ${n(k, 'a thread', 'threads')}`
       case 'thread_send': return `messaged ${n(k, 'a thread', 'threads')}`
       case 'thread_list': return 'listed threads'
+      case 'thread_archive': return `archived ${n(k, 'a thread', 'threads')}`
       default: return `used ${kind}${k > 1 ? ` ${k}×` : ''}`
     }
   })
@@ -641,6 +642,7 @@ function verbOf(name: string, state: string): string {
     edit: ['Edited', 'Editing', 'Edit failed'], write: ['Wrote', 'Writing', 'Write failed'],
     thread_start: ['Started', 'Starting', 'Couldn’t start a thread'], thread_read: ['Read', 'Waiting on', 'Couldn’t read'],
     thread_send: ['Messaged', 'Messaging', 'Couldn’t message'], thread_list: ['Listed threads', 'Listing threads', 'Couldn’t list threads'],
+    thread_archive: ['Archived', 'Archiving', 'Couldn’t archive'],
   }
   const verb = verbs[name]
   if (!verb) return state === 'error' ? `${name} failed` : name
@@ -676,6 +678,7 @@ function ToolCall({ block, result, slot }: { block: Block; result: Message | und
         <span className="row__label">{verbOf(block.name ?? '', state)}</span>
         {other ? <ThreadRef machine={here.machine.id} id={other} className="row__thread" />
           : block.name === 'thread_start' ? <span className="row__arg">{String(args.title ?? 'a thread')}</span>
+          : block.name === 'thread_archive' ? <span className="row__arg">this thread</span>
           : block.name !== 'thread_list' && <span className="row__arg" title={summaryOf(block.name ?? '', args)}>{summaryOf(block.name ?? '', args)}</span>}
         {stat && <span className="row__meta"><Stat {...stat} /></span>}
         {written !== undefined && <span className="row__meta">{lineCount(written)} lines</span>}
@@ -711,6 +714,7 @@ function diffStat(diff: string) {
 const ROW_ICONS: Record<string, PhosphorIcon> = {
   thinking: SparkleIcon, read: FileTextIcon, bash: TerminalIcon, edit: PencilSimpleIcon, write: FilePlusIcon,
   thread_start: ArrowElbowDownRightIcon, thread_read: ChatCircleIcon, thread_send: ChatCircleIcon, thread_list: ChatsCircleIcon,
+  thread_archive: ArchiveIcon,
 }
 function Icon({ name }: { name: string }) {
   const Glyph = ROW_ICONS[name] ?? WrenchIcon
