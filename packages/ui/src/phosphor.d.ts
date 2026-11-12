@@ -18,8 +18,15 @@ declare module '@phosphor-icons/react' {
   export const ArrowElbowRightIcon: Icon
   export const ArrowRightIcon: Icon
   export const BellIcon: Icon
+  export const CaretDownIcon: Icon
   export const CaretRightIcon: Icon
   export const ChatCircleIcon: Icon
+  export const ArrowsLeftRightIcon: Icon
+  export const ArrowUpIcon: Icon
+  export const ChatsIcon: Icon
+  export const ColumnsIcon: Icon
+  export const GlobeIcon: Icon
+  export const ChatTextIcon: Icon
   export const ChatsCircleIcon: Icon
   export const CheckIcon: Icon
   export const CommandIcon: Icon

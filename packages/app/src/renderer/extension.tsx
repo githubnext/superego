@@ -10,6 +10,8 @@ import { createWindowRouter, type Dispatch, type WindowAction, type WindowRouter
 export type SlotName =
   /** The column left of the thread: thread lists, machine trees. With nothing here, the shell shows a compact picker. */
   | 'sidebar'
+  /** The rail down the window's left edge: a space's button (and, folded, its list as dots). Without one, the rail shows what's unread. */
+  | 'rail'
   /** Right of a thread's title: badges, small actions. */
   | 'thread.header'
   /** Above the composer: things waiting on the user, suggestions. */
@@ -28,6 +30,7 @@ export type EditorSlotProps = { machine: MachineEntry; thread: ThreadInfo; path:
 
 export type SlotProps = {
   'sidebar': Record<string, never>
+  'rail': Record<string, never>
   'thread.header': { machine: MachineEntry; thread: ThreadInfo }
   'composer.above': { machine: MachineEntry; thread: ThreadInfo }
   'thread.aside': { machine: MachineEntry; thread: ThreadInfo }
@@ -151,7 +154,7 @@ export type Registry = {
 export function createRegistry(app: AppConfig, extensions: UiExtension[], core: (superego: UiApi) => void): Registry {
   const registry: Registry = {
     app, extensions: extensions.map((e) => e.name),
-    slots: { 'sidebar': [], 'thread.header': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
+    slots: { 'sidebar': [], 'rail': [], 'thread.header': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
     tools: new Map(), panes: new Map(), entries: new Map(), work: [], settings: new Map(), router: createWindowRouter(), appSettings: [],
     version: 0,
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
@@ -172,7 +175,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     app,
     slot(slot, component, options) {
       // A profile's UI draws in its threads' slots; the sidebar is the app's.
-      if (profile && slot === 'sidebar') return console.warn(`Profile extension ${extension} can't fill the sidebar`)
+      if (profile && (slot === 'sidebar' || slot === 'rail')) return console.warn(`Profile extension ${extension} can't fill the ${slot}`)
       const list = registry.slots[slot] as Registry['slots'][typeof slot]
       list.push({ component: component as never, order: options?.order ?? 100, extension, ...(profile ? { profile } : {}) })
       list.sort((a, b) => a.order - b.order)

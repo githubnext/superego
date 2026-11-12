@@ -6,26 +6,28 @@
   --superego-font: var(--superego-font-fallback);
   --superego-mono: var(--superego-mono-fallback);
   /* macOS's own: system grays, real controls; the accent is the app's (Settings → Appearance → Accent colour). */
-  --superego-bg: light-dark(#ffffff, #1e1e1e);          /* content */
-  --superego-sidebar-bg: light-dark(#e9e9ec, #2c2c2e);  /* sidebars and side panes */
-  --superego-chrome: light-dark(#f3f3f5, #161618);      /* the window around its cards: title bar, rail, the room between */
+  --superego-bg: light-dark(#ffffff, #1d1d1f);          /* the sheet: the thread, its panes, dialogs */
+  --superego-sidebar-bg: light-dark(#f2f2f4, #262628);  /* headers and side lists inside dialogs */
+  --superego-chrome: light-dark(#ececee, #262628);      /* the window around the sheet: title bar, rail, sidebar */
+  --superego-line: light-dark(rgb(0 0 0 / .09), rgb(255 255 255 / .07));   /* hairlines between columns and parts */
+  --superego-fill: light-dark(rgb(0 0 0 / .05), rgb(255 255 255 / .06));   /* quiet fills: file heads, small buttons */
   --superego-card-edge: 0 0 0 .5px var(--superego-border), 0 1px 3px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .3));
-  --superego-surface: light-dark(#f3f3f6, #2e2e31);     /* wells: code, tool output */
-  --superego-bubble: light-dark(color-mix(in oklab, var(--superego-accent) 11%, #fff), color-mix(in oklab, var(--superego-accent) 16%, #2a2a2c));      /* your messages */
+  --superego-surface: light-dark(#f3f3f6, #262629);     /* wells: code, tool output */
+  --superego-bubble: light-dark(color-mix(in oklab, var(--superego-accent) 9%, #fff), color-mix(in oklab, var(--superego-accent) 14%, #2a2a2e));      /* your messages */
   --superego-code-chip: light-dark(rgb(0 0 0 / .055), rgb(255 255 255 / .08));
   --superego-raised: light-dark(#ffffff, #2c2c2e);      /* what floats: menus, popovers, the composer */
-  --superego-border: light-dark(#c8c8cd, #48484a);      /* separators and frames */
-  --superego-text: light-dark(#1d1d1f, #f5f5f7);
-  --superego-muted: light-dark(#636366, #aeaeb2);
-  --superego-faint: light-dark(#7c7c80, #8e8e93);
+  --superego-border: light-dark(#d1d1d6, #444446);      /* frames: fields, menus */
+  --superego-text: light-dark(rgb(0 0 0 / .85), rgb(255 255 255 / .88));
+  --superego-muted: light-dark(rgb(0 0 0 / .55), rgb(255 255 255 / .56));
+  --superego-faint: light-dark(rgb(0 0 0 / .36), rgb(255 255 255 / .36));
   /* The accent: as chosen, or this blue. In the dark, lifted a little toward white so it carries on dark grounds. */
-  --superego-accent-base: color(display-p3 0.155 0.319 0.654);
-  --superego-accent: light-dark(var(--superego-accent-base), color-mix(in oklab, var(--superego-accent-base) 78%, white));
+  --superego-accent-base: #007aff;
+  --superego-accent: light-dark(var(--superego-accent-base), color-mix(in oklab, var(--superego-accent-base) 92%, white));
   /* Focus rings: around what has the keyboard, and the region holding it. */
   --superego-ring: var(--superego-accent);
   --superego-accent-text: #ffffff;
-  --superego-selected: light-dark(rgb(0 0 0 / .1), rgb(255 255 255 / .12));
-  --superego-hover: light-dark(rgb(0 0 0 / .05), rgb(255 255 255 / .06));
+  --superego-selected: light-dark(rgb(0 0 0 / .07), rgb(255 255 255 / .08));
+  --superego-hover: light-dark(rgb(0 0 0 / .04), rgb(255 255 255 / .05));
   /* Controls: push buttons, pop-ups, fields. */
   --superego-control: light-dark(#ffffff, #5a5a5e);
   --superego-control-active: light-dark(#e3e3e8, #6e6e73);
@@ -34,12 +36,14 @@
   --superego-field-edge: light-dark(#bdbdc2, #545458);
   --superego-focus: 0 0 0 3px color-mix(in srgb, var(--superego-accent) 45%, transparent);
   --superego-status-working: var(--superego-accent);
-  --superego-status-done: oklch(0.73 0.22 20);
-  --superego-status-dot: 8px;
-  --superego-status-icon: 12px;
-  --superego-status-blocked: light-dark(#e07800, #ff9f0a);
-  --superego-status-error: light-dark(#d70015, #ff453a);
-  --superego-status-idle: var(--superego-muted);
+  --superego-status-done: var(--superego-accent);
+  --superego-status-dot: 7px;
+  --superego-status-blocked: light-dark(#ff9500, #ff9f0a);
+  --superego-status-error: light-dark(#ff3b30, #ff453a);
+  --superego-status-idle: light-dark(rgb(0 0 0 / .2), rgb(255 255 255 / .22));
+  /* Words beside a status (needs you, failed): darker than the dot, to read as text. */
+  --superego-status-blocked-text: light-dark(#c26a00, #ff9f0a);
+  --superego-status-error-text: light-dark(#d70015, #ff6961);
   --superego-radius: 6px;
   --superego-radius-lg: 16px;
   --superego-space: 8px;
@@ -50,8 +54,8 @@
   --superego-text-xs: calc(11px * var(--superego-text-scale));
   --superego-text-sm: calc(12px * var(--superego-text-scale));
   --superego-text-ui: calc(13px * var(--superego-text-scale));
-  --superego-text-body: calc(14px * var(--superego-text-scale));
-  --superego-text-mono: calc(12.5px * var(--superego-text-scale));
+  --superego-text-body: calc(13.5px * var(--superego-text-scale));
+  --superego-text-mono: calc(12px * var(--superego-text-scale));
   --superego-text-title: calc(26px * var(--superego-text-scale));
   --superego-leading-ui: 1.45;
   --superego-leading-body: 1.55;
@@ -64,8 +68,10 @@
   --superego-space-6: 32px;
   --superego-space-7: 52px;
   /* The reading column, the sidebar, and what floats over content. */
-  --superego-column: 580px;
-  --superego-sidebar: 248px;
+  --superego-column: 640px;
+  --superego-sidebar: 220px;
+  --superego-rail: 52px;
+  --superego-titlebar: 44px;
   --superego-shadow-float: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(0 0 0 / .6)), 0 12px 36px -8px rgb(0 0 0 / .28), 0 2px 6px rgb(0 0 0 / .08);
 }
 
@@ -98,24 +104,22 @@ button, summary { -webkit-user-select: none; user-select: none; }
   background: transparent; border: 0; outline: none;
 }
 
-.superego-status { display: inline-block; width: 1em; text-align: center; font-family: var(--superego-mono); }
-.superego-status--idle { color: var(--superego-status-idle); }
-.superego-status--working { color: var(--superego-status-working); animation: superego-pulse 1.2s ease-in-out infinite; }
+/* A status: one small dot, its colour the state's; working is a ring that breathes. */
+.superego-status { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 1em; height: 1em; vertical-align: -0.12em; color: var(--superego-status-idle); }
+.superego-status::before { content: ''; box-sizing: border-box; width: var(--superego-status-dot); height: var(--superego-status-dot); border-radius: 50%; background: currentColor; }
+.superego-status--working { color: var(--superego-status-working); }
+.superego-status--working::before { background: none; border: 1.5px solid currentColor; animation: superego-pulse 1.4s ease-in-out infinite; }
 .superego-status--done { color: var(--superego-status-done); }
-:is(.superego-status--working, .superego-status--done)::before {
-  content: ''; display: inline-block; box-sizing: border-box; width: var(--superego-status-dot); height: var(--superego-status-dot); border-radius: 50%; background: currentColor; vertical-align: 0.05em;
-}
-.superego-status svg { width: var(--superego-status-icon); height: var(--superego-status-icon); vertical-align: -0.1em; }
 .superego-status--blocked { color: var(--superego-status-blocked); }
 .superego-status--error { color: var(--superego-status-error); }
 @keyframes superego-pulse { 50% { opacity: .35; } }
 
 .superego-list { list-style: none; margin: 0; padding: 0; }
-.superego-list-item { display: flex; align-items: center; gap: var(--superego-space-2); height: 32px; padding: 0 10px; border-radius: var(--superego-radius); }
+.superego-list-item { display: flex; align-items: center; gap: var(--superego-space-2); height: 28px; padding: 0 8px; border-radius: var(--superego-radius); }
 .superego-list-item:hover { background: var(--superego-hover); }
-.superego-list-item.is-selected { background: var(--superego-selected); font-weight: 500; }
+.superego-list-item.is-selected { background: var(--superego-selected); }
 .superego-list-item__body { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.superego-list-item__trailing { color: var(--superego-muted); font-size: var(--superego-text-xs); font-variant-numeric: tabular-nums; font-weight: 400; }
+.superego-list-item__trailing { color: var(--superego-faint); font-size: var(--superego-text-xs); font-variant-numeric: tabular-nums; font-weight: 400; }
 
 .superego-panel { display: flex; flex-direction: column; min-height: 0; }
 .superego-panel__header { display: flex; align-items: center; justify-content: space-between; padding: var(--superego-space-3) 10px 6px; color: var(--superego-muted); font-size: var(--superego-text-xs); font-weight: 600; }

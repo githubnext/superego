@@ -124,14 +124,11 @@ if (phase === 'first') {
   await until(`!document.querySelector('.msg--queued') && document.querySelector('.transcript').textContent.includes('then paint it') && document.querySelector('.transcript').textContent.includes('Noted for later.')`, 'queued follow-up went in')
   await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: 'faux/faux-1' })`)
   void asking
-  // Unread results elsewhere: a count beside Settings, which lists them and goes to the one picked.
+  // Unread results elsewhere: a dot on Threads in the rail, and the thread's own in the list, to go to.
   await run(`window.superego.call('local', 'thread.create', { title: 'unread elsewhere', prompt: 'finish elsewhere' })`)
-  await until(`Number(document.querySelector('.unread-button')?.textContent) >= 1`, 'unread count beside settings')
-  await run(`document.querySelector('.unread-button').click()`)
-  await until(`[...document.querySelectorAll('.unread-menu .superego-menu__item')].some((i) => i.textContent.includes('unread elsewhere'))`, 'unread threads listed')
-  await run(`[...document.querySelectorAll('.unread-menu .superego-menu__item')].find((i) => i.textContent.includes('unread elsewhere')).click()`)
+  await until(`Boolean(document.querySelector('.threads-rail__button .threads-rail__badge--done'))`, 'unread dot on Threads')
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((i) => i.textContent.includes('unread elsewhere')).click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'unread elsewhere'`, 'went to the unread thread')
-  await until(`!document.querySelector('.unread-menu')`, 'unread menu closed')
   // The sidebar's modes: the ··· menu (portalled, so a scrolling sidebar can't cut it off), ⌘\\ rail, ⌘I details.
   const key = async (keyCode, modifiers = ['meta']) => {
     const contents = BrowserWindow.getAllWindows()[0].webContents
@@ -144,7 +141,7 @@ if (phase === 'first') {
   await run(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].find((i) => i.textContent.includes('Needs you first')).click()`)
   await until(`window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['threads.sort'] === 'status')`, 'sorted by status')
   await key('\\')
-  await until(`Boolean(document.querySelector('.threads-rail.is-compact'))`, 'rail')
+  await until(`Boolean(document.querySelector('.threads-rail'))`, 'rail')
   await key('\\')
   await until(`Boolean(document.querySelector('.threads-session'))`, 'list again')
   await key('i')
@@ -223,7 +220,7 @@ if (phase === 'first') {
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('panes')).click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'panes'`, 'pane thread open')
   await key('d', ['meta', 'shift'])
-  await until(`[...document.querySelectorAll('.diff-row--add')].some((r) => r.textContent === '+two')`, 'changes pane shows the edit')
+  await until(`[...document.querySelectorAll('.diff-row--add')].some((r) => r.textContent.endsWith('+two'))`, 'changes pane shows the edit')
   await run(`window.superego.call('local', 'pane.open', { id: '${paned}', kind: 'editor', params: { path: 'notes.md' } })`)
   await until(`document.querySelector('.cm-content')?.textContent.includes('two')`, 'editor pane shows the file')
   await run(`window.superego.call('local', 'pane.open', { id: '${paned}', kind: 'artifact', params: { path: 'page.html' } })`)
@@ -347,8 +344,8 @@ if (phase === 'first') {
   await run(`document.querySelector('.composer textarea').select()`)
   await key('Backspace', [])
   await until(`document.querySelector('.composer textarea').value === ''`, 'draft cleared')
-  // ⌘/ hides the sidebar and shows it again; its button stays where it was.
-  const toggleAt = () => run(`JSON.stringify(document.querySelector('.app__sidebar-toggle').getBoundingClientRect())`)
+  // ⌘/ hides the sidebar and shows it again; Threads in the rail stays where it was.
+  const toggleAt = () => run(`JSON.stringify(document.querySelector('.threads-rail__button').getBoundingClientRect())`)
   const before = await toggleAt()
   await key('/')
   await until(`!document.querySelector('.app__sidebar')`, 'sidebar hidden')
@@ -451,7 +448,7 @@ if (phase === 'first') {
   const ego = await run(`window.superego.call('local', 'thread.list', {}).then((all) => all.find((t) => t.title === 'Set up Superego').id)`)
   // The column wearing the ring, and the one brought forward (its title lit): focus moving into a column brings it.
   const ringed = (label) => until(`(() => {
-    const ringed = [...document.querySelectorAll('.panes > [data-column]')].filter((c) => getComputedStyle(c).outlineStyle === 'solid')
+    const ringed = [...document.querySelectorAll('.panes > [data-column]')].filter((c) => getComputedStyle(c, '::before').opacity === '1')
     return ringed.length === 1 && (ringed[0].querySelector('.panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}
   })()`, `only ${label} ringed`)
   const front = (label) => until(`(document.querySelector('.panes__tab.is-active .panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}`, `${label} brought forward`)
@@ -491,9 +488,9 @@ if (phase === 'first') {
   await until(`document.activeElement?.matches('[data-column]:not([data-column="thread"])')`, 'a click on the title, into the pane')
   await run(`window.superego.call('local', 'pane.close', { id: '${ego}', pane: document.activeElement.dataset.column })`)
   await until(`!document.querySelector('.panes__tab')`, 'changes closed')
-  // Attachments: a file picked with the paperclip (over the box) waits above the composer, then goes with the message and shows under it.
+  // Attachments: a file picked with the paperclip (in the box) waits above the composer, then goes with the message and shows under it.
   await run(`(() => {
-    const input = document.querySelector('.dock__bar input[type=file]')
+    const input = document.querySelector('.composer__actions input[type=file]')
     const files = new DataTransfer()
     files.items.add(new File(['# plan\\n'], 'plan.md', { type: 'text/markdown' }))
     input.files = files.files
@@ -554,11 +551,11 @@ if (phase === 'first') {
   await until(`/⇧R|Shift\\+R/.test(${keysOf('threads.rail')}?.textContent ?? '') && Boolean(document.querySelector('[data-action="threads.rail"] button.keymap__reset'))`, 'new shortcut recorded')
   await key('\\')
   await new Promise((resolve) => setTimeout(resolve, 300))
-  if (await run(`Boolean(document.querySelector('.threads-rail.is-compact'))`)) { await fail('the old shortcut still runs the action'); throw new Error('failed') }
+  if (await run(`Boolean(document.querySelector('.threads-rail'))`)) { await fail('the old shortcut still runs the action'); throw new Error('failed') }
   await key('R', ['meta', 'shift'])
-  await until(`Boolean(document.querySelector('.threads-rail.is-compact'))`, 'the new shortcut runs the action')
+  await until(`Boolean(document.querySelector('.threads-rail'))`, 'the new shortcut runs the action')
   await key('R', ['meta', 'shift'])
-  await until(`!document.querySelector('.threads-rail.is-compact')`, 'and back')
+  await until(`!document.querySelector('.threads-rail')`, 'and back')
   await run(`window.superego.call('app', 'app.settings.set', { key: 'app.keys', value: { 'threads.rail': 'mod+shift+r', 'threads.details': 'mod+shift+r' } })`)
   await until(`document.querySelector('[data-action="threads.rail"] .keymap__clash')?.textContent.includes('Toggle thread details')`, 'clash shown')
   await run(`document.querySelector('.keymap').scrollIntoView()`)

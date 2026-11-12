@@ -5,13 +5,13 @@
 // - show as: a list, or a rail of status glyphs
 // - details: a pane beside the thread with what it runs with, spent and touched
 // UI only: it uses the core's thread methods and facts.
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import {
-  call, defineAction, type Dispatch, defineUiExtension, showSession, SORT, useAppSetting, useLocalState, useMachines, useSelection, useSessions, useThreadView, useShell, useShortcut,
+  call, defineAction, type Dispatch, defineUiExtension, showSession, SORT, unread, useAppSetting, useLocalState, useMachines, useSelection, useSessions, useSidebar, useThreadView, useShell, useShortcut,
   type MachineEntry, type Session, type Sort,
 } from '@superego/app/ui'
-import type { ThreadInfo } from '@superego/protocol'
-import { CaretRightIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
+import { rollup, type ThreadInfo } from '@superego/protocol'
+import { CaretRightIcon, ChatsIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
 import { activity, ago, freeze, nest } from './groups.ts'
 
@@ -39,6 +39,7 @@ export default defineUiExtension({
       ],
     })
     superego.slot('sidebar', Threads)
+    superego.slot('rail', ThreadsRail)
     superego.slot('thread.aside', Details)
     superego.slot('thread.header', ModelButton)
     const action = (id: string, title: string, run: () => void, keys?: string) =>
@@ -53,6 +54,24 @@ export default defineUiExtension({
   },
 })
 
+/**
+ * A narrow window folds the list into dots by itself, as if it were set to; the Threads button unfolds it there for a
+ * while (until the window is wide again). Shared by the list and the rail.
+ */
+const NARROW = '(min-width: 600px) and (max-width: 760px)'
+/** A phone (as the app's own layout takes it): the list is a drawer there, never folded. */
+const PHONE = '(max-width: 599px)'
+let unfolded = false
+const foldListeners = new Set<() => void>()
+const setUnfolded = (value: boolean) => { unfolded = value; for (const listener of foldListeners) listener() }
+function useFolded(view: View | undefined) {
+  const narrow = useSyncExternalStore((change) => { const list = matchMedia(NARROW); list.addEventListener('change', change); return () => list.removeEventListener('change', change) }, () => matchMedia(NARROW).matches)
+  const open = useSyncExternalStore((change) => { foldListeners.add(change); return () => foldListeners.delete(change) }, () => unfolded)
+  useEffect(() => { if (!narrow) setUnfolded(false) }, [narrow])
+  const phone = useSyncExternalStore((change) => { const list = matchMedia(PHONE); list.addEventListener('change', change); return () => list.removeEventListener('change', change) }, () => matchMedia(PHONE).matches)
+  return { folded: !phone && ((view ?? 'list') === 'rail' || (narrow && !open)), narrow }
+}
+
 /** Moving between threads from a command: set by the mounted sidebar, which knows the order shown. */
 let step: (by: number) => void = () => {}
 
@@ -61,6 +80,7 @@ function Threads() {
   const [view] = useAppSetting<View>(VIEW)
   const [details] = useAppSetting<boolean>(DETAILS)
   current = { sort: sort ?? 'recent', view: view ?? 'list', details: details ?? false }
+  const { folded } = useFolded(view)
   const machines = useMachines().filter((m) => m.state !== 'disabled')
   const { sessions: live, lastThread } = useSessions()
   const { selection, select } = useSelection()
@@ -90,14 +110,15 @@ function Threads() {
   const local = machines.find((m) => m.id === 'local')
   const ready = local?.state === 'connected'
 
-  if (current.view === 'rail') return <Rail sessions={sessions} isOn={isOn} onPick={(s, t) => select({ machine: s.machine.id, thread: t.id })} ready={ready} />
+  // Folded, the threads are dots in the window's rail (ThreadsRail); the sidebar has nothing to show.
+  if (folded) return null
   return (
     <div className={`threads ${ready ? 'is-ready' : ''}`} data-focus-scope onPointerEnter={() => setHovering(true)} onPointerLeave={() => setHovering(false)}>
       <div className="threads__head">
-        <span>Sessions</span>
+        <span>Threads</span>
         <span className="threads__actions">
-          <NewThreadButton label="New thread…" />
           <Options />
+          <NewThreadButton label="New thread…" />
         </span>
       </div>
       {sessions.length === 0 && <div className="threads__empty">{ready ? 'Start a thread in a project folder: it becomes a session here.' : 'Connecting…'}</div>}
@@ -116,7 +137,7 @@ function Threads() {
               return (
                 <ListItem key={thread.id} selected={isOn(session, thread)} leading={<StatusGlyph status={thread.status} />}
                   {...(level ? { className: 'threads-child', style: { '--depth': level } as CSSProperties } : {})}
-                  trailing={ago(activity(thread))} onClick={() => select({ machine: session.machine.id, thread: thread.id })}>
+                  trailing={thread.status.state === 'blocked' ? <span className="threads__why">needs you</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">failed</span> : ago(activity(thread))} onClick={() => select({ machine: session.machine.id, thread: thread.id })}>
                   {thread.title}
                 </ListItem>
               )
@@ -214,28 +235,56 @@ function Options() {
   )
 }
 
-/** The sidebar as a column of status glyphs, a gap between sessions: hover for the title, ⌘\ for the list again. */
-function Rail({ sessions, isOn, onPick, ready }: { sessions: Session[]; isOn(s: Session, t: ThreadInfo): boolean; onPick(s: Session, t: ThreadInfo): void; ready: boolean }) {
+/**
+ * In the window's rail: Threads, lit while the sidebar shows them. A click folds the list into status dots here (and
+ * back); with the sidebar closed, it opens it. Something unread you can't see from here shows as a dot on the button,
+ * in the most pressing one's colour.
+ */
+function ThreadsRail() {
+  const [view] = useAppSetting<View>(VIEW)
+  const sidebar = useSidebar()
+  const { sessions } = useSessions()
+  const { selection, select } = useSelection()
+  const fold = useFolded(view)
+  const folded = sidebar.open && fold.folded
+  const toggleKeys = useShortcut('threads.rail')
+  const waiting = sessions.flatMap((s) => s.threads.filter((t) => unread(t) && !(s.machine.id === selection?.machine && t.id === selection.thread)).map((t) => t.status))
+  const badge = !folded && waiting.length ? rollup(waiting).state : undefined
+  const click = () => {
+    if (fold.narrow) {
+      if (!sidebar.open) sidebar.toggle(true)
+      if (view === 'rail') void set(VIEW, 'list')
+      setUnfolded(sidebar.open ? folded : true)
+    } else if (!sidebar.open) { sidebar.toggle(true); if (view === 'rail') void set(VIEW, 'list') }
+    else void set(VIEW, folded ? 'list' : 'rail')
+  }
+  const isOn = (session: Session, thread: ThreadInfo) => selection?.machine === session.machine.id && selection.thread === thread.id
   return (
     <TooltipProvider>
-      <nav className={`threads-rail is-compact ${ready ? 'is-ready' : ''}`} aria-label="Threads">
-        <Tooltip content="Show the list (⌘\)">
-          <IconButton label="Show the list" className="threads-rail__expand" onClick={() => void set(VIEW, 'list')}><CaretRightIcon size={14} aria-hidden /></IconButton>
-        </Tooltip>
-        {sessions.map((session, index) => (
-          <div key={session.key} className="threads-rail__group">
-            {index > 0 && <div className="threads-rail__sep" />}
-            {session.threads.map((thread) => (
-              <Tooltip key={thread.id} content={<>{session.name} · {thread.title}<small className="threads-rail__tipnote">{thread.status.state} · {ago(activity(thread))}</small></>}>
-                <button className={`threads-rail__dot ${isOn(session, thread) ? 'is-on' : ''} ${session.machine.state !== 'connected' ? 'is-stale' : ''}`}
-                  aria-label={`${thread.title}, ${thread.status.state}`} onClick={() => onPick(session, thread)}>
-                  <StatusGlyph status={thread.status} />
-                </button>
-              </Tooltip>
-            ))}
-          </div>
-        ))}
-      </nav>
+      <Tooltip content={`Threads: ${!sidebar.open ? 'show' : folded ? 'show the list' : 'fold to dots'}${toggleKeys ? ` (${toggleKeys})` : ''}`} side="right">
+        <IconButton label="Threads" className={`app__meta threads-rail__button ${sidebar.open ? 'is-on' : ''}`} onClick={click}>
+          <ChatsIcon size={18} aria-hidden />
+          {badge && <span className={`threads-rail__badge threads-rail__badge--${badge}`} />}
+        </IconButton>
+      </Tooltip>
+      {folded && (
+        <nav className="threads-rail" aria-label="Threads">
+          {sessions.map((session, index) => (
+            <div key={session.key} className="threads-rail__group">
+              {index > 0 && <div className="threads-rail__sep" />}
+              {session.threads.map((thread) => (
+                <Tooltip key={thread.id} side="right" content={<>{thread.title}<small className="threads-rail__tipnote">{thread.status.state === 'blocked' ? 'needs you' : ago(activity(thread))}</small></>}>
+                  <button className={`threads-rail__dot ${isOn(session, thread) ? 'is-on' : ''} ${session.machine.state !== 'connected' ? 'is-stale' : ''}`}
+                    aria-label={`${thread.title}, ${thread.status.state}`} onClick={() => select({ machine: session.machine.id, thread: thread.id })}>
+                    <StatusGlyph status={thread.status} />
+                  </button>
+                </Tooltip>
+              ))}
+            </div>
+          ))}
+        </nav>
+      )}
+      <div className="threads-rail__rule" />
     </TooltipProvider>
   )
 }

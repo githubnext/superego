@@ -451,6 +451,8 @@ export function startApp(appConfig: AppConfig) {
       ...(bounds ? { x: bounds.x + 24, y: bounds.y + 24 } : {}),
       title: appConfig.name,
       titleBarStyle: 'hiddenInset',
+      // Centred in the 44pt title bar (see --superego-titlebar).
+      trafficLightPosition: { x: 16, y: 16 },
       backgroundColor: '#09090b',
       show: !headless,
       webPreferences: { preload: join(import.meta.dirname, '../preload/preload.cjs'), sandbox: true, contextIsolation: true },

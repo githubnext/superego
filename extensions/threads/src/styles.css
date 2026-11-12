@@ -1,26 +1,39 @@
+/* The list: "Threads" and +, then each session's threads under its name, quiet, on the window's colour. */
 .threads { display: flex; flex-direction: column; }
-.threads__head { display: flex; justify-content: space-between; align-items: center; padding: 0 10px var(--superego-space-1); font-size: var(--superego-text-xs); font-weight: 600; color: var(--superego-muted); }
-.threads__actions { display: flex; align-items: center; gap: 6px; }
-.threads__empty { padding: var(--superego-space-2) 10px; font-size: var(--superego-text-sm); color: var(--superego-muted); }
-.threads-session { margin-top: var(--superego-space-3); }
-.threads-session__head { display: flex; align-items: center; gap: 4px; padding: 0 4px 2px 10px; min-height: 26px; }
-.threads-session__name { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; border: 0; background: none; padding: 0; font: inherit; font-size: var(--superego-text-sm); font-weight: 600; color: var(--superego-text); text-align: left; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.threads-session__name em { font-style: normal; font-weight: 400; color: var(--superego-muted); overflow: hidden; text-overflow: ellipsis; }
-.threads-session .threads__new { opacity: 0; transition: opacity .1s; }
+.threads__head { display: flex; justify-content: space-between; align-items: center; height: 28px; padding: 0 2px 0 8px; font-size: var(--superego-text-sm); font-weight: 600; color: var(--superego-text); }
+.threads__actions { display: flex; align-items: center; gap: 2px; }
+.threads__actions .superego-icon-button { width: 22px; height: 22px; min-height: 22px; box-shadow: none; background: none; color: var(--superego-muted); }
+.threads__actions .superego-icon-button:hover { background: var(--superego-hover); color: var(--superego-text); }
+.threads-menu-trigger { opacity: 0; transition: opacity .1s; }
+.threads:hover .threads-menu-trigger, .threads-menu-trigger:focus-visible, .threads-menu-trigger[data-popup-open] { opacity: 1; }
+.threads__empty { padding: var(--superego-space-2) 8px; font-size: var(--superego-text-sm); color: var(--superego-muted); }
+.threads-session { margin-top: 10px; }
+.threads-session__head { display: flex; align-items: center; gap: 4px; padding: 0 2px 2px 8px; min-height: 22px; }
+.threads-session__name { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; border: 0; background: none; padding: 0; font: inherit; font-size: var(--superego-text-xs); font-weight: 600; color: var(--superego-muted); text-align: left; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.threads-session__name em { font-style: normal; font-weight: 400; color: var(--superego-faint); overflow: hidden; text-overflow: ellipsis; }
+.threads-session .threads__new { width: 20px; height: 20px; min-height: 20px; box-shadow: none; background: none; color: var(--superego-muted); opacity: 0; transition: opacity .1s; }
 .threads-session:hover .threads__new, .threads-session .threads__new:focus-visible { opacity: 1; }
-.superego-list-item.threads-child { padding-left: calc(10px + var(--depth) * 14px); }
+.threads .superego-list-item { color: var(--superego-text); }
+.superego-list-item.threads-child { padding-left: calc(8px + var(--depth) * 14px); }
 .threads-session.is-stale .superego-list-item, .threads-session.is-stale .threads-session__name { color: var(--superego-muted); }
+.threads__why { color: var(--superego-status-blocked-text); font-weight: 500; }
+.threads__why--error { color: var(--superego-status-error-text); }
 
-
+/* In the rail: Threads, with a dot when something unread is out of sight; folded, the threads as dots under it. */
+.threads-rail__button { position: relative; }
+.threads-rail__badge { position: absolute; right: 4px; top: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--superego-status-done); box-shadow: 0 0 0 2px var(--superego-chrome); }
+.threads-rail__button.is-on .threads-rail__badge { box-shadow: 0 0 0 2px color-mix(in srgb, var(--superego-chrome), var(--superego-text) 7%); }
+.threads-rail__badge--blocked { background: var(--superego-status-blocked); }
+.threads-rail__badge--error { background: var(--superego-status-error); }
 .threads-rail__tipnote { opacity: .65; margin-left: 8px; }
-.threads-rail { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 40px; }
-.threads-rail__group { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.threads-rail__expand { width: 32px; }
-.threads-rail__dot { width: 32px; height: 32px; border-radius: 8px; border: 0; background: none; display: flex; align-items: center; justify-content: center; font-size: calc(14px * var(--superego-text-scale)); color: inherit; }
+.threads-rail { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 2px 0; max-height: 50vh; overflow-y: auto; scrollbar-width: none; }
+.threads-rail__group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.threads-rail__dot { width: 26px; height: 20px; flex: none; border-radius: 6px; border: 0; background: none; display: grid; place-items: center; padding: 0; color: inherit; font-size: 13px; }
 .threads-rail__dot:hover { background: var(--superego-hover); }
 .threads-rail__dot.is-on { background: var(--superego-selected); }
 .threads-rail__dot.is-stale { opacity: .4; }
-.threads-rail__sep { width: 20px; height: 1px; background: var(--superego-border); margin: 4px 0; }
+.threads-rail__sep { width: 12px; height: 1px; background: var(--superego-line); margin: 3px 0; }
+.threads-rail__rule { width: 18px; height: 1px; background: var(--superego-line); margin: 4px 0; }
 
 .threads-details { padding: var(--superego-space-4) var(--superego-space-5) var(--superego-space-5); font-size: var(--superego-text-ui); }
 .threads-details h5 { margin: 0 0 10px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); }
@@ -30,8 +43,8 @@
 .threads-details__file { font: var(--superego-text-sm)/1.7 var(--superego-mono); overflow-wrap: anywhere; }
 
 /* Archived: one list across projects and machines, folded at the end of the sidebar. */
-.threads-archived { margin-top: var(--superego-space-4); }
-.threads-archived__head { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: none; padding: 0 10px; min-height: 26px; font: inherit; font-size: var(--superego-text-sm); font-weight: 600; color: var(--superego-muted); text-align: left; cursor: default; }
+.threads-archived { margin-top: 12px; }
+.threads-archived__head { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: none; padding: 0 8px; min-height: 24px; font: inherit; font-size: var(--superego-text-sm); font-weight: 400; color: var(--superego-faint); text-align: left; cursor: default; }
 .threads-archived__head:hover { color: var(--superego-text); }
 .threads-archived__head em { font-style: normal; font-weight: 400; color: var(--superego-faint); }
 .threads-archived__caret { flex: none; transition: transform .12s; }
@@ -40,6 +53,6 @@
 .threads-archived__where { font-style: normal; margin-left: 6px; color: var(--superego-faint); font-size: var(--superego-text-sm); }
 
 /* The thread's model in the title bar: a quiet button that shows its details. */
-.threads-model { max-width: 220px; height: 24px; padding: 0 8px; border: 0; border-radius: var(--superego-radius); background: none; font: inherit; font-size: var(--superego-text-sm); color: var(--superego-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
+.threads-model { max-width: 220px; height: 24px; padding: 0 6px; border: 0; border-radius: var(--superego-radius); background: none; font: inherit; font-size: var(--superego-text-sm); color: var(--superego-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
 .threads-model:hover { background: var(--superego-hover); color: var(--superego-text); }
 .threads-model.is-on { background: var(--superego-selected); color: var(--superego-text); }

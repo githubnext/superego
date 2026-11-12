@@ -1,11 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowDownRightIcon, ArrowElbowRightIcon, ArrowRightIcon, Button, CaretRightIcon, ChatCircleIcon, ChatsCircleIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, SquareSplitHorizontalIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowDownRightIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CaretRightIcon, ChatCircleIcon, ChatsCircleIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
 import { divideWork, fileKind, folderKind, paneMenu, Slot, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useShell } from './state.tsx'
+import { useShortcut } from './keys.ts'
 import { Markdown, OpenFile, OpenUrl, Scroll, ThreadMachine } from './Markdown.tsx'
 import { ThreadRef } from './thread-ref.tsx'
 import { useLocalState } from './local-state.ts'
@@ -71,21 +72,36 @@ export function ThreadView({ machine, thread }: { machine: MachineEntry; thread:
   return <ThreadPanes machine={machine} thread={thread} main={<ThreadBody machine={machine} thread={thread} />} />
 }
 
-/** The thread's title, in the window's title bar: its status, then its name, and a button to rename it (or the name being edited). */
+/**
+ * Where you are, in the window's title bar: the thread's session (and machine, where it isn't this one), then its status
+ * and title, with a button to rename it (or the name being edited), and the key that goes anywhere else.
+ */
 export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const editing = useRenaming() === `${machine.id}/${thread.id}`
+  const dispatch = useRegistry().router.dispatch
+  const goKeys = useShortcut('app.navigator')
   return (
-    <span className="titlebar__title">
-      <StatusGlyph status={thread.status} />
-      {editing ? <TitleField machine={machine} thread={thread} /> : (
-        <>
-          <span className="thread__title" title={thread.title}>{thread.title.replace(/\.$/, '')}</span>
-          <IconButton label="Rename" className="titlebar__rename" onClick={() => startRename(machine.id, thread.id)}>
-            <PencilSimpleIcon size={13} aria-hidden />
-          </IconButton>
-        </>
-      )}
+    <span className="titlebar__crumb">
+      <span className="titlebar__seg titlebar__session" title={thread.cwd}>
+        {machine.id !== 'local' && <>{machine.label}<span className="titlebar__dot">·</span></>}
+        {thread.session?.name ?? folderName(thread.cwd)}
+      </span>
+      <span className="titlebar__sep" aria-hidden>›</span>
+      <span className="titlebar__seg titlebar__title">
+        <StatusGlyph status={thread.status} />
+        {editing ? <TitleField machine={machine} thread={thread} /> : (
+          <>
+            <span className="thread__title" title={thread.title} onDoubleClick={() => startRename(machine.id, thread.id)}>{thread.title.replace(/\.$/, '')}</span>
+            <IconButton label="Rename" className="titlebar__rename" onClick={() => startRename(machine.id, thread.id)}>
+              <PencilSimpleIcon size={13} aria-hidden />
+            </IconButton>
+          </>
+        )}
+      </span>
       {thread.archived && <span className="titlebar__archived">Archived</span>}
+      {goKeys && !editing && (
+        <button type="button" className="titlebar__go" title="Go to a session, thread or pane" onClick={() => void dispatch('app.navigator', {}, { source: 'titlebar' }).catch((error) => console.error(error))}>{goKeys}</button>
+      )}
     </span>
   )
 }
@@ -121,17 +137,16 @@ export function ThreadTools({ machine, thread }: { machine: MachineEntry; thread
     <span className="thread__tools">
       <span className="thread__crumb">
         {thread.parent && <span className="titlebar__chip thread__parent">from <ThreadRef machine={machine.id} id={thread.parent} /></span>}
-        {machine.id !== 'local' && <span className="titlebar__chip">{machine.label}</span>}
-        <span className="titlebar__chip" title={thread.cwd}>{thread.session?.name ?? folderName(thread.cwd)}</span>
         {thread.worktree && <span className="titlebar__chip thread__branch" title={thread.worktree.path}>{thread.worktree.branch}</span>}
         {thread.profile && <span className="titlebar__chip thread__profile" title={thread.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{thread.profile.name}</span>}
       </span>
       <Slot name="thread.header" props={{ machine, thread }} />
-      <PaneMenu machine={machine} thread={thread} />
+      {thread.cost !== undefined && thread.cost > 0 && <span className="thread__cost" title="Spent on this thread">${thread.cost.toFixed(2)}</span>}
+      {!thread.panes?.length && <PaneMenu machine={machine} thread={thread} />}
       {thread.archived
         ? <UnarchiveButton machine={machine} thread={thread} />
         : (
-          <IconButton label="Archive" className="thread__archive" onClick={() => void dispatch('thread.archive', { id: thread.id }, { machine: machine.id, source: 'header' })}>
+          <IconButton label="Archive (⌘⇧E)" className="thread__archive" onClick={() => void dispatch('thread.archive', { id: thread.id }, { machine: machine.id, source: 'header' })}>
             <ArchiveIcon size={15} aria-hidden />
           </IconButton>
         )}
@@ -849,33 +864,17 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
       onDragOver={(e) => { if (!claim && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true) } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false) }}
       onDrop={(e) => { setDragging(false); if (!claim && e.dataTransfer.files.length) { e.preventDefault(); void attach(e.dataTransfer.files) } }}>
-    {/* Over the box, outside it: attaching files at the left, back to the end in the middle, Stop at the right. */}
+    {/* Over the box: back to the end, when you've scrolled away from it. */}
     <div className="dock__bar">
-      {!claim && !archived && (
-        <>
-          <IconButton label="Attach files" className="dock__pill dock__attach" disabled={disabled} onClick={() => picker.current?.click()}>
-            <PaperclipIcon size={15} aria-hidden />
-          </IconButton>
-          <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) void attach(e.target.files); e.target.value = '' }} />
-        </>
-      )}
       {onJump && (
         <Button className="dock__pill dock__jump" onClick={onJump}>
           <ArrowDownIcon size={13} aria-hidden />
           Jump to bottom
         </Button>
       )}
-      {busy && !claim && (
-        <span className="dock__end">
-          {sendable && <Button className="dock__pill" disabled={disabled} onClick={() => void send('followUp')}>Queue <kbd>⌃⏎</kbd></Button>}
-          <Button className="dock__pill dock__stop" onClick={() => void abort()}>
-            <StopIcon size={11} weight="fill" aria-hidden />
-            Stop <kbd>esc</kbd>
-          </Button>
-        </span>
-      )}
     </div>
     <div className="dock__above"><Slot name="composer.above" props={{ machine, thread }} /></div>
+    <div className="dock__box">
     {files.length > 0 && !claim && (
       <div className="composer__files">
         {files.map((file, index) => (
@@ -907,18 +906,32 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
       <TextArea ref={input} rows={1} value={text} disabled={disabled} onChange={(e) => { setText(e.target.value); setCaret(e.target.selectionStart) }} onKeyDown={onKeyDown}
         onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
         onPaste={(e) => { if (!claim && e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files) } }}
-        placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : suggested ? `${suggested}  ⏎` : 'Ask anything'} />
+        placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : suggested ? `${suggested}  ⏎` : 'Reply…'} />
       <div className="composer__actions">
-        {/* The box holds the text and its one action; the others (attach, Queue, Stop) float over it. */}
-        {/* Send (an arrow on), Steer (an arrow turning into the work), Answer: one key, ⏎. */}
+        {/* In the box at its end: attach, then (while the agent works) Queue and Stop, then Send, Steer or Answer: one key, ⏎. */}
+        {!claim && !archived && (
+          <>
+            <IconButton label="Attach files" className="composer__icon" disabled={disabled} onClick={() => picker.current?.click()}>
+              <PaperclipIcon size={15} aria-hidden />
+            </IconButton>
+            <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) void attach(e.target.files); e.target.value = '' }} />
+          </>
+        )}
+        {busy && !claim && sendable && <Button className="composer__pill" disabled={disabled} onClick={() => void send('followUp')}>Queue <kbd>⌃⏎</kbd></Button>}
+        {busy && !claim && (
+          <Button className="composer__pill composer__stop" onClick={() => void abort()}>
+            <span className="composer__stop-mark" aria-hidden />Stop <kbd>esc</kbd>
+          </Button>
+        )}
         {archived
           ? <UnarchiveButton machine={machine} thread={thread} className="composer__unarchive" />
-          : (
+          : (!busy || claim || sendable) && (
             <IconButton label={`${claim ? 'Answer' : busy ? 'Steer' : 'Send'} (⏎)`} aria-label={claim ? 'Answer' : busy ? 'Steer' : 'Send'} className="composer__send" disabled={disabled || !sendable} onClick={() => void send()}>
-              {busy && !claim ? <ArrowElbowRightIcon size={16} weight="bold" aria-hidden /> : <ArrowRightIcon size={16} weight="bold" aria-hidden />}
+              {busy && !claim ? <ArrowElbowRightIcon size={15} weight="bold" aria-hidden /> : <ArrowUpIcon size={15} weight="bold" aria-hidden />}
             </IconButton>
           )}
       </div>
+    </div>
     </div>
     </div>
     </ComposerContext.Provider>
@@ -927,15 +940,15 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
 }
 
 /** Open a pane beside the thread: the kinds that show something without being told what (Changes, a profile's own). */
-function PaneMenu({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
+export function PaneMenu({ machine, thread, add = false }: { machine: MachineEntry; thread: ThreadInfo; add?: boolean }) {
   const registry = useRegistry()
   const kinds = paneMenu(registry, thread)
   if (!kinds.length) return null
   const open = (kind: string) => void registry.router.dispatch('pane.open', { id: thread.id, kind }, { machine: machine.id, source: 'header' })
   return (
     <Menu.Root>
-      <Menu.Trigger render={<IconButton label="Open a pane" className="thread__panes" />}>
-        <SquareSplitHorizontalIcon size={15} aria-hidden />
+      <Menu.Trigger render={<IconButton label="Open a pane beside" className="thread__panes" />}>
+        {add ? <PlusIcon size={14} aria-hidden /> : <ColumnsIcon size={18} aria-hidden />}
       </Menu.Trigger>
       <Menu.Popup align="end">
         {kinds.map(({ kind, title }) => <Menu.Item key={kind} onClick={() => open(kind)}>{title}</Menu.Item>)}

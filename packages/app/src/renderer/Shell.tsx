@@ -3,7 +3,7 @@
 // notification, marking finished threads seen).
 import { useEffect, useRef, useState } from 'react'
 import { agentName } from '@superego/protocol'
-import { Button, CommandIcon, LifebuoyIcon, GearSixIcon, IconButton, ListIcon, MagnifyingGlassIcon, NotePencilIcon, PlusIcon, Select, SidebarSimpleIcon } from '@superego/ui'
+import { Button, LifebuoyIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select } from '@superego/ui'
 import { textScale } from '../shared.ts'
 import { UnreadButton } from './Unread.tsx'
 import { machine as client, useAppSetting, useSettings } from './client.ts'
@@ -25,7 +25,7 @@ export function useDispatch() {
 
 /** Whether the window is phone-narrow. */
 function useNarrow() {
-  const query = '(max-width: 760px)'
+  const query = '(max-width: 599px)'
   const [narrow, setNarrow] = useState(() => matchMedia(query).matches)
   useEffect(() => {
     const list = matchMedia(query)
@@ -80,93 +80,73 @@ export function Shell() {
 
   const settingsButton = (
     <IconButton label="Settings" className="app__settings" onClick={openSettings}>
-      <GearSixIcon size={16} aria-hidden />
+      <GearSixIcon size={18} aria-hidden />
     </IconButton>
   )
   const dispatch = registry.router.dispatch
-  const run = (id: string) => () => void dispatch(id, {}, { source: 'titlebar' }).catch((error) => console.error(error))
-  // At the sidebar's end in the title bar (or after the toggle, with it hidden): find, commands, a new thread.
+  // Without a sidebar, at the title bar's start: every thread in a menu, and a new one.
   const tools = (
     <span className="app__tools">
-      {hasSidebar
-        ? (
-          <>
-            <IconButton label="Go to… (⌘L)" onClick={run('app.navigator')}>
-              <MagnifyingGlassIcon size={15} aria-hidden />
-            </IconButton>
-            <IconButton label="Commands (⌘K)" onClick={run('app.palette')}>
-              <CommandIcon size={15} aria-hidden />
-            </IconButton>
-          </>
-        )
-        : <ThreadPicker />}
+      <ThreadPicker />
       <IconButton label="New thread (⌘N)" className="app__new" onClick={() => openNewThread()}>
         <NotePencilIcon size={15} aria-hidden />
       </IconButton>
     </span>
   )
   const sideOpen = hasSidebar && (narrow ? drawer : sidebar.open)
-  // Wide: a title bar over everything (the window's buttons, the tools, the thread's title and what it says about
-  // itself), a rail down the left (what's unread, Settings), then cards: the sidebar, the thread, its panes.
-  // Narrow: one column under a bar of its own, the sidebar a drawer.
+  const hasRail = registry.slots.rail.length > 0
+  // Wide: the window's own colour around a sheet. Across the top a title bar (the window's buttons, then where you are
+  // and what the thread says about itself); down the left a rail (Ego, the spaces, Settings) and the sidebar beside it;
+  // the sheet holds the thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.
   return (
     <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.superego.web ? 'is-web' : ''}`}>
       {narrow && hasSidebar && drawer && <div className="app__scrim" onClick={() => setDrawer(false)} />}
       {!narrow && (
-        <nav className="app__rail" aria-label="App">
-          <div className="app__rail-group">
-            <IconButton label={`Ask ${agentName(registry.app)}: set up machines, projects, profiles, skills`} className={`app__meta ${thread?.meta ? 'is-on' : ''}`} onClick={() => void dispatch('app.meta', {}, { source: 'rail' }).catch((error) => console.error(error))}>
-              <LifebuoyIcon size={17} aria-hidden />
-            </IconButton>
-            <UnreadButton side="right" />
-          </div>
-          <div className="app__rail-group">{settingsButton}</div>
-        </nav>
+        <header className="app__drag app__titlebar">
+          {!hasSidebar && tools}
+          {selection && thread && machine && <ThreadTitle machine={machine} thread={thread} />}
+          <span className="app__titlebar-end">
+            {!hasSidebar && <ServiceNotice />}
+            {selection && thread && machine && <ThreadTools machine={machine} thread={thread} />}
+          </span>
+        </header>
       )}
-      {sideOpen && (
-        <div className="app__side">
-          {!narrow && <div className="app__drag app__side-top">{tools}</div>}
-          {/* In the drawer, picking a thread (even the open one) closes it. */}
+      <div className="app__body">
+        {!narrow && (
+          <nav className="app__rail" aria-label="App">
+            <div className="app__rail-group">
+              <IconButton label={`Ask ${agentName(registry.app)}: set up machines, projects, profiles, skills`} className={`app__meta ${thread?.meta ? 'is-on' : ''}`} onClick={() => void dispatch('app.meta', {}, { source: 'rail' }).catch((error) => console.error(error))}>
+                <LifebuoyIcon size={18} aria-hidden />
+              </IconButton>
+              {hasRail ? <Slot name="rail" props={{}} /> : <UnreadButton side="right" />}
+            </div>
+            <div className="app__rail-group">{settingsButton}</div>
+          </nav>
+        )}
+        {sideOpen && (
+          // In the drawer, picking a thread (even the open one) closes it.
           <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) setDrawer(false) } : undefined}>
             {narrow && <div className="app__drag" />}
             <Slot name="sidebar" props={{}} />
             <div className="app__footer"><ServiceNotice />{narrow && <>{settingsButton}<UnreadButton /></>}</div>
           </aside>
-        </div>
-      )}
-      <main className="app__main">
-        {narrow && hasSidebar
-          ? (
+        )}
+        <main className="app__main">
+          {narrow && hasSidebar && (
             <div className="app__mobilebar">
               <Button onClick={() => setDrawer(true)} aria-label="Threads"><ListIcon size={16} aria-hidden /></Button>
               <span className="app__mobiletitle">{thread?.title ?? registry.app.name}</span>
               <Button onClick={() => openNewThread()} aria-label="New thread"><PlusIcon size={16} aria-hidden /></Button>
             </div>
-          )
-          : (
-            <div className="app__drag app__titlebar">
-              {!sideOpen && tools}
-              {selection && thread && machine && <ThreadTitle machine={machine} thread={thread} />}
-              <span className="app__titlebar-end">
-                {!hasSidebar && <ServiceNotice />}
-                {selection && thread && machine && <ThreadTools machine={machine} thread={thread} />}
-              </span>
-            </div>
           )}
-        {selection && thread && machine
-          ? <ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} />
-          : <div className="app__empty">{hasSidebar ? 'Select or start a thread.' : `Start a thread with: ${registry.app.id}`}</div>}
-      </main>
-      {!narrow && selection && thread && machine && registry.slots['thread.aside'].length > 0 && (
-        <aside className="app__aside"><div className="app__drag" /><div className="app__aside-card"><Slot name="thread.aside" props={{ machine, thread }} /></div></aside>
-      )}
-      {/* One place, open or closed: right of the window's buttons. After the title bar's drag regions, so its own
-          no-drag wins: a window's drag regions are taken in document order, and a later one overrides. */}
-      {hasSidebar && !narrow && (
-        <IconButton label={sidebar.open ? 'Hide sidebar' : 'Show sidebar'} className="app__sidebar-toggle" onClick={() => sidebar.toggle()}>
-          <SidebarSimpleIcon size={16} aria-hidden />
-        </IconButton>
-      )}
+          {selection && thread && machine
+            ? <ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} />
+            : <div className="app__empty">{hasSidebar ? 'Select or start a thread.' : `Start a thread with: ${registry.app.id}`}</div>}
+        </main>
+        {!narrow && selection && thread && machine && registry.slots['thread.aside'].length > 0 && (
+          <aside className="app__aside"><Slot name="thread.aside" props={{ machine, thread }} /></aside>
+        )}
+      </div>
       {settings.open && <SettingsView machines={machines} onClose={settings.close} />}
       {palette && <Palette onClose={() => setPalette(false)} />}
       {navigator && <Navigator onClose={() => setNavigator(false)} />}

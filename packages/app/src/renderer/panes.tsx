@@ -6,22 +6,23 @@
 // scrolls, and the focused column scrolls just far enough to show whole. ⌃Tab moves the focus along. On a phone each
 // column is the screen's width, and a swipe moves between them.
 // Built in: diff, editor, preview, artifact, thread. Extensions and profiles add kinds with superego.pane(kind, …).
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
-import { Button } from '@superego/ui'
+import { ArrowRightIcon, ArrowsLeftRightIcon, CaretDownIcon, ChatTextIcon, FileTextIcon, GlobeIcon, type Icon as PhosphorIcon, XIcon } from '@superego/ui'
 import { machine as client } from './client.ts'
 import { paneKind, useRegistry, type PaneProps, type UiApi } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
-import { ThreadBody } from './ThreadView.tsx'
+import { PaneMenu, ThreadBody } from './ThreadView.tsx'
 import { FileEditor } from './file-editor.tsx'
 import { focusRegion } from './focus.ts'
 
-const narrowQuery = '(max-width: 760px)'
+const narrowQuery = '(max-width: 599px)'
 /** A pane's width (a share of the row) until it's dragged, unless its kind says otherwise. */
 const DEFAULT_SHARE = 0.5
-/** Wide, the columns are cards: this much room around them and between them (the room between is a pane's handle). */
-const GAP = 8
+/** Wide, a hairline between columns (with a wider handle over it, to drag). */
+const DIVIDER = 1
 /** No column narrower than this, however many: the row scrolls instead. */
 const MIN_COLUMN = 380
 
@@ -40,6 +41,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   const [shares, setShares] = useLocalState<Record<string, number>>('pane.widths', {})
   const row = useRef<HTMLDivElement>(null)
   const [rowWidth, setRowWidth] = useState(0)
+  const [scrolled, setScrolled] = useState(0)
   useLayoutEffect(() => {
     const el = row.current
     if (!el) return
@@ -73,8 +75,8 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     return pane.title ?? (typeof named === 'function' ? named(pane) : named) ?? pane.kind
   }
 
-  // The room the cards share: the row less the gaps around and between them.
-  const room = narrow ? rowWidth : Math.max(0, rowWidth - GAP * (panes.length + 2))
+  // The room the columns share: the row less the hairlines between them.
+  const room = narrow ? rowWidth : Math.max(0, rowWidth - DIVIDER * panes.length)
   // The columns, left to right: the thread, then its panes, each by the key its width is kept under.
   const columns = [{ key: 'thread', share: shares.thread ?? DEFAULT_SHARE },
     ...panes.map((pane) => ({ key: pane.id, share: shares[pane.id] ?? paneKind(registry, pane.kind, thread)?.width ?? DEFAULT_SHARE }))]
@@ -84,6 +86,10 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   if (!narrow && used < room) widths[widths.length - 1]! += room - used
   const threadWidth = widths[0]!
   const widthOf = (pane: Pane) => widths[panes.indexOf(pane) + 1]!
+  // How much of each column is in view, and on which side the rest are: for the strip.
+  const starts = widths.map((_, i) => widths.slice(0, i).reduce((sum, w) => sum + w + DIVIDER, 0))
+  const shown = widths.map((w, i) => w ? Math.max(0, Math.min(starts[i]! + w, scrolled + rowWidth) - Math.max(starts[i]!, scrolled)) / w : 0)
+  const side = (i: number) => shown[i]! >= 0.5 ? undefined : starts[i]! < scrolled ? 'left' : 'right'
 
   // The room between two columns resizes the one on its left (`index`): its share of the row, kept for next time.
   const drag = (index: number) => (event: React.PointerEvent) => {
@@ -100,37 +106,122 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     event.preventDefault()
     event.stopPropagation()
   }
-  // On a phone, a swipe that settles on a column gives it the focus.
   const onScroll = () => {
+    const el = row.current
+    if (!el) return
+    setScrolled(el.scrollLeft)
+    // On a phone, a swipe that settles on a column gives it the focus.
     if (!narrow) return
     clearTimeout(settled.current)
     settled.current = setTimeout(() => {
-      const el = row.current
-      if (!el || !rowWidth) return
+      if (!rowWidth) return
       const index = Math.round(el.scrollLeft / rowWidth)
       focus(index === 0 ? undefined : panes[index - 1]?.id)
     }, 120)
   }
+  // A tab in the strip: brings its column into view and gives it the focus.
+  const show = (pane?: Pane) => {
+    const column = columnOf(pane?.id)
+    column?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
+    focus(pane?.id)
+    if (column) focusRegion(column, { visible: false })
+  }
+  const [notes, setNotes] = useState<Record<string, ReactNode>>({})
+  const noteFor = useRef(new Map<string, (note: ReactNode) => void>())
+  const setNoteFor = (id: string) => {
+    let set = noteFor.current.get(id)
+    if (!set) noteFor.current.set(id, set = (note) => setNotes((all) => ({ ...all, [id]: note })))
+    return set
+  }
+  const tabs = [{ id: undefined, label: 'Thread', kind: 'thread', pane: undefined }, ...panes.map((pane) => ({ id: pane.id, label: title(pane), kind: pane.kind, pane }))]
+  const total = widths.reduce((sum, w) => sum + w, 0) || 1
 
   return (
-    <div className={`panes ${narrow ? 'panes--narrow' : ''}`} ref={row} onScroll={onScroll}>
-      {/* Focus moving into a column (a click, a key) makes it the focused one: the app and the keyboard agree. */}
-      <div data-column="thread" tabIndex={-1} className={`panes__column panes__column--thread ${focused === undefined ? 'is-focused' : ''}`}
-        style={{ width: threadWidth }} onPointerDownCapture={() => focus(undefined)} onFocusCapture={() => focus(undefined)}>{main}</div>
-      {panes.map((pane, index) => (
-        <Fragment key={pane.id}>
-        {/* The room between two columns is the left one's handle: drag it to make that one wider or narrower. */}
-        {!narrow && <div className="panes__gap" onPointerDown={drag(index)} role="separator" aria-orientation="vertical" aria-label={index === 0 ? 'Thread width' : `${title(panes[index - 1]!)} width`} />}
-        <div data-column={pane.id} tabIndex={-1} className={`panes__column ${pane.id === focused ? 'is-focused' : ''}`}
-          style={{ width: widthOf(pane) }} onPointerDownCapture={() => focus(pane.id)} onFocusCapture={() => focus(pane.id)} onClick={takeFocus}>
-          <div className={`panes__tab ${pane.id === focused ? 'is-active' : ''}`}>
-            <button className="panes__label">{title(pane)}</button>
-            <button className="panes__close" aria-label={`Close ${title(pane)}`} onClick={() => close(pane)}>×</button>
+    <div className={`sheet ${panes.length ? 'has-panes' : ''}`}>
+      {panes.length > 0 && (
+        <div className={`strip ${narrow ? 'strip--narrow' : ''}`} role="tablist" aria-label="The thread and its panes">
+          <div className="strip__tabs">
+            {tabs.map((tab, i) => {
+              const Icon = KIND_ICONS[tab.kind]
+              const away = side(i)
+              return (
+                <button key={tab.id ?? 'thread'} type="button" role="tab" aria-selected={tab.id === focused}
+                  className={`strip__tab ${tab.id === focused ? 'is-focused' : away ? 'is-away' : 'is-shown'}`}
+                  onClick={() => show(tab.pane)}>
+                  {Icon && <Icon size={14} aria-hidden />}
+                  <span className={`strip__label ${tab.kind === 'editor' || tab.kind === 'artifact' ? 'strip__label--file' : ''}`}>{tab.label}</span>
+                  {tab.id && notes[tab.id]}
+                  {away === 'right' && <ArrowRightIcon className="strip__away" size={11} aria-hidden />}
+                </button>
+              )
+            })}
           </div>
-          <div className="panes__body"><PaneBody machine={machine} thread={thread} pane={pane} /></div>
+          {!narrow && (
+            <>
+              {/* The row in small: each column a bar as wide as it is, the ones in view darker. */}
+              <span className="strip__map" aria-hidden>
+                {widths.map((w, i) => <i key={i} className={shown[i]! >= 0.5 ? 'is-in' : ''} style={{ width: Math.max(4, Math.round((w / total) * 52)) }} />)}
+              </span>
+              <PaneMenu machine={machine} thread={thread} add />
+            </>
+          )}
         </div>
-        </Fragment>
-      ))}
+      )}
+      <div className={`panes ${narrow ? 'panes--narrow' : ''}`} ref={row} onScroll={onScroll}>
+        {/* Focus moving into a column (a click, a key) makes it the focused one: the app and the keyboard agree. */}
+        <div data-column="thread" tabIndex={-1} className={`panes__column panes__column--thread ${focused === undefined ? 'is-focused' : ''}`}
+          style={{ width: threadWidth }} onPointerDownCapture={() => focus(undefined)} onFocusCapture={() => focus(undefined)}>{main}</div>
+        {panes.map((pane, index) => (
+          <Fragment key={pane.id}>
+          {/* The line between two columns is the left one's handle: drag it to make that one wider or narrower. */}
+          {!narrow && <div className="panes__gap" onPointerDown={drag(index)} role="separator" aria-orientation="vertical" aria-label={index === 0 ? 'Thread width' : `${title(panes[index - 1]!)} width`} />}
+          <PaneColumn pane={pane} title={title(pane)} focused={pane.id === focused} width={widthOf(pane)}
+            onFocus={() => focus(pane.id)} onClick={takeFocus} onClose={() => close(pane)}>
+            <TabNote.Provider value={setNoteFor(pane.id)}><PaneBody machine={machine} thread={thread} pane={pane} /></TabNote.Provider>
+          </PaneColumn>
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** The icon a pane kind shows in the strip. */
+const KIND_ICONS: Record<string, PhosphorIcon | undefined> = {
+  thread: ChatTextIcon, diff: ArrowsLeftRightIcon, editor: FileTextIcon, artifact: FileTextIcon, preview: GlobeIcon,
+}
+
+/** What a pane says on its tab in the strip (Changes: +3 −1), by pane. */
+const TabNote = createContext<((note: ReactNode) => void) | null>(null)
+
+/** Shown on the pane's tab in the strip, after its title. */
+export function useTabNote(note: ReactNode, key: string) {
+  const set = useContext(TabNote)
+  useEffect(() => { set?.(note); return () => set?.(undefined) }, [key])
+}
+
+/** Where a pane's own header things go (a count, Refresh): beside its title, at the top of its column. */
+const HeaderSlot = createContext<HTMLElement | null>(null)
+
+/** Shown in the pane's header, beside its title, rather than in its body. */
+export function PaneHeader({ children }: { children: ReactNode }) {
+  const at = useContext(HeaderSlot)
+  return at ? createPortal(children, at) : <div className="pane-bar">{children}</div>
+}
+
+function PaneColumn({ pane, title, focused, width, onFocus, onClick, onClose, children }: {
+  pane: Pane; title: string; focused: boolean; width: number; onFocus(): void; onClick(event: React.MouseEvent<HTMLElement>): void; onClose(): void; children: ReactNode
+}) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null)
+  return (
+    <div data-column={pane.id} tabIndex={-1} className={`panes__column ${focused ? 'is-focused' : ''}`}
+      style={{ width }} onPointerDownCapture={onFocus} onFocusCapture={onFocus} onClick={onClick}>
+      <div className={`panes__tab ${focused ? 'is-active' : ''}`}>
+        <button className="panes__label">{title}</button>
+        <span className="panes__tools" ref={setSlot} />
+        <button className="panes__close" aria-label={`Close ${title}`} onClick={onClose}><XIcon size={12} aria-hidden /></button>
+      </div>
+      <div className="panes__body"><HeaderSlot.Provider value={slot}>{children}</HeaderSlot.Provider></div>
     </div>
   )
 }
@@ -164,22 +255,39 @@ function DiffPane({ machine, thread }: PaneProps) {
   const [error, setError] = useState<string>()
   const load = () => client(machine.id).call('thread.diff', { id: thread.id }).then((c) => { setChanges(c); setError(undefined) }, (e: Error) => setError(e.message))
   useEffect(() => { void load() }, [thread.id, thread.activeAt, thread.status.state])
+  const all = changes?.repo ? parseDiff(changes.diff) : []
+  const added = all.reduce((sum, f) => sum + f.added, 0)
+  const removed = all.reduce((sum, f) => sum + f.removed, 0)
+  useTabNote(added || removed ? <span className="strip__note"><span className="stat--add">+{added}</span> <span className="stat--del">−{removed}</span></span> : null, `${added}/${removed}`)
   if (error) return <div className="pane-empty">{error}</div>
   if (!changes) return <div className="pane-empty">Loading…</div>
   if (!changes.repo) return <div className="pane-empty">{thread.cwd} isn't a git repository.</div>
-  const files = parseDiff(changes.diff)
+  const files = all
+  const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
   return (
     <div className="pane-scroll diff-pane">
-      <div className="pane-bar"><span>{files.length} changed{changes.untracked.length ? `, ${changes.untracked.length} new` : ''}</span><Button onClick={() => void load()}>Refresh</Button></div>
+      <PaneHeader>
+        <span className="pane-header__note">{count(files.length, 'file')}{changes.untracked.length ? ` · ${changes.untracked.length} new` : ''}</span>
+        <button type="button" className="pane-header__button" onClick={() => void load()}>Refresh</button>
+      </PaneHeader>
       {!files.length && !changes.untracked.length && <div className="pane-empty">No changes.</div>}
-      {files.map((file) => (
-        <details key={file.path} className="diff-file" open>
-          <summary><span className="diff-file__path">{file.path}</span><span className="stat--add">+{file.added}</span> <span className="stat--del">−{file.removed}</span></summary>
-          <pre className="diff-file__body">{file.lines.map((line, i) => (
-            <span key={i} className={`diff-row diff-row--${line[0] === '+' ? 'add' : line[0] === '-' ? 'del' : line.startsWith('@@') ? 'hunk' : 'ctx'}`}>{line || ' '}</span>
-          ))}</pre>
-        </details>
-      ))}
+      {files.map((file) => {
+        const slash = file.path.lastIndexOf('/') + 1
+        return (
+          <details key={file.path} className="diff-file" open>
+            <summary>
+              <CaretDownIcon className="diff-file__caret" size={11} weight="bold" aria-hidden />
+              <span className="diff-file__path"><span className="diff-file__dir">{file.path.slice(0, slash)}</span>{file.path.slice(slash)}</span>
+              <span className="diff-file__stat"><span className="stat--add">+{file.added}</span> <span className="stat--del">−{file.removed}</span></span>
+            </summary>
+            <pre className="diff-file__body">{numbered(file.lines).map(({ line, number }, i) => (
+              <span key={i} className={`diff-row diff-row--${line[0] === '+' ? 'add' : line[0] === '-' ? 'del' : line.startsWith('@@') ? 'hunk' : 'ctx'}`}>
+                {!line.startsWith('@@') && <span className="diff-row__num">{number ?? ''}</span>}{line || ' '}
+              </span>
+            ))}</pre>
+          </details>
+        )
+      })}
       {changes.untracked.length > 0 && (
         <div className="diff-file"><div className="diff-untracked">New, not tracked yet: {changes.untracked.map((path) => (
           <button key={path} className="diff-untracked__file" onClick={() => void openPane(machine.id, thread.id, 'editor', { path })}>{path}</button>
@@ -187,6 +295,21 @@ function DiffPane({ machine, thread }: PaneProps) {
       )}
     </div>
   )
+}
+
+/** A file's diff lines, each with its line number: the new file's, or the old one's for a removed line. */
+function numbered(lines: string[]) {
+  let old = 0
+  let now = 0
+  return lines.map((line) => {
+    const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line)
+    if (hunk) { old = Number(hunk[1]); now = Number(hunk[2]); return { line, number: undefined } }
+    if (line.startsWith('-')) return { line, number: old++ }
+    if (line.startsWith('+')) return { line, number: now++ }
+    if (line.startsWith('\\')) return { line, number: undefined }
+    old++
+    return { line, number: now++ }
+  })
 }
 
 type DiffFile = { path: string; added: number; removed: number; lines: string[] }
@@ -229,7 +352,7 @@ function PreviewPane({ pane }: PaneProps) {
   if (!url || !/^https?:\/\//.test(url)) return <div className="pane-empty">No address (an http or https URL) given.</div>
   return (
     <div className="frame-pane">
-      <div className="pane-bar"><a href={url} target="_blank" rel="noreferrer">{url}</a><Button onClick={() => setKey((k) => k + 1)}>Reload</Button></div>
+      <PaneHeader><a className="pane-header__note pane-header__url" href={url} target="_blank" rel="noreferrer">{url}</a><button type="button" className="pane-header__button" onClick={() => setKey((k) => k + 1)}>Reload</button></PaneHeader>
       <iframe key={key} src={url} title={url} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
     </div>
   )
@@ -245,7 +368,7 @@ function ArtifactPane({ machine, thread, pane }: PaneProps) {
   if (!url) return <div className="pane-empty">Artifacts aren't shown here.</div>
   return (
     <div className="frame-pane">
-      <div className="pane-bar"><code>{path}</code><Button onClick={() => setKey((k) => k + 1)}>Reload</Button></div>
+      <PaneHeader><code className="pane-header__note">{path}</code><button type="button" className="pane-header__button" onClick={() => setKey((k) => k + 1)}>Reload</button></PaneHeader>
       <iframe key={key} src={url} title={path} sandbox="allow-scripts allow-forms allow-popups" />
     </div>
   )
