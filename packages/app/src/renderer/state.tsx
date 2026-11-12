@@ -95,7 +95,13 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useLocalState('settings.open', false)
   const [newThread, setNewThread] = useState<NewThreadStart>()
   const [sidebarOpen, setSidebarOpen] = useLocalState('sidebar.open', true)
-  const onThreads = useCallback((machine: string, list: ThreadInfo[] | undefined) => setThreads((all) => all[machine] === list ? all : { ...all, [machine]: list }), [])
+  // A daemon from before Ego was kept apart lists it with the rest: left out of the lists here, and shown from there.
+  const [listedEgo, setListedEgo] = useState<ThreadInfo>()
+  const onThreads = useCallback((machine: string, list: ThreadInfo[] | undefined) => {
+    if (machine === 'local') setListedEgo(list?.find((t) => t.meta))
+    const listed = list?.some((t) => t.meta) ? list.filter((t) => !t.meta) : list
+    setThreads((all) => all[machine] === listed ? all : { ...all, [machine]: listed })
+  }, [])
   const sessions = useSessionList(machines, threads)
   // Each session remembers the thread last shown in it: going back to the session goes back to that thread.
   const [lastThread, setLastThread] = useLocalState<Record<string, string>>('sessions.last', {})
@@ -110,7 +116,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const list = selection ? threads[selection.machine] : undefined
   const selectedMachine = machines.find((m) => m.id === selection?.machine)
   const local = machines.find((m) => m.id === 'local')
-  const ego = useEgo('local', local?.state === 'connected' && has(local, 'ego')) ?? undefined
+  const ego = useEgo('local', local?.state === 'connected' && has(local, 'ego')) ?? listedEgo
   const isEgo = selection?.machine === 'local' && selection.thread === ego?.id
   useEffect(() => {
     if (!selection || !list || shown || isEgo || selectedMachine?.state !== 'connected') return setArchived(undefined)
