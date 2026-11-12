@@ -76,6 +76,26 @@ it('lets Ego hand work to a thread of its own: top-level in its project, listed,
   socket.destroy(); server.close(); await daemon.close()
 })
 
+it("lets Ego change this machine's settings itself", async () => {
+  await writeFile(join(dir, 'turns.jsonl'), [
+    turn([{ type: 'toolCall', id: 'c1', name: 'superego_set_setting', arguments: { key: 'web.port', value: 8888 } }], 'toolUse'),
+    turn([{ type: 'text', text: 'Set.' }], 'stop'),
+  ].join('\n') + '\n')
+  process.env.THREADSTEST_MODEL = `replay:${join(dir, 'turns.jsonl')}`
+  process.env.THREADSTEST_REPLAY_SPEED = '0'
+  const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents') })
+  const server = await listen(daemon, join(dir, 's.sock'))
+  const { peer, socket } = await connectSocket(join(dir, 's.sock'))
+  await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
+
+  await peer.call<ThreadInfo>('thread.meta', { prompt: 'serve the app on port 8888' })
+  await until(async () => (await peer.call<{ value: ThreadInfo }>('meta.watch', {})).value.status.state === 'done')
+  expect((await peer.call<{ value: SettingsSnapshot }>('settings.watch', {})).value.values['web.port']).toBe(8888)
+  expect(await peer.call('thread.list', {})).toEqual([])
+
+  socket.destroy(); server.close(); await daemon.close()
+})
+
 /** The tools against a made-up set of threads. */
 function host(): ThreadsHost & { threads: ThreadInfo[]; sent: [string, string][] } {
   const thread = (id: string, title: string, extra: Partial<ThreadInfo> = {}): ThreadInfo =>

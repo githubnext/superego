@@ -1,14 +1,14 @@
 // Ego, the meta agent: Superego's own agent, one hidden thread per machine in Superego's data folder (see daemon.ts:
 // `thread.meta`, `thread.meta.clear`). It reads and explains: what Superego is (the prompt below), and this machine's
-// setup through read-only tools: its settings, its actions, its profiles, the machines this computer reaches, its
-// threads, and files. It changes nothing itself: any work it hands to a new, ordinary thread (thread_start), top-level
-// in the project it belongs to, and names that thread to the user.
+// setup through tools that read: its settings, its actions, its profiles, the machines this computer reaches, its
+// threads, and files. The one thing it changes itself is this machine's settings (superego_set_setting). Any other work
+// it hands to a new, ordinary thread (thread_start), top-level in the project it belongs to, and names that thread.
 import { readdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { createReadTool } from '@earendil-works/pi-durable/tools'
-import { bool, obj, opt, str, type ActionInfo, type Router, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
+import { bool, obj, opt, str, unknown, type ActionInfo, type Json, type Router, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 import type { DaemonContext } from './daemon.ts'
 import { lineOf, linkTo, readTool } from './thread-tools.ts'
 
@@ -32,13 +32,14 @@ export function metaPrompt({ name, agent, id, dataDir, agentsDir, hostname }: { 
 talking to you in, and about how it is set up on this machine (settings, profiles, skills, machines, projects, threads).
 You run on ${hostname}, in ${dataDir}, ${name}'s data folder there. Be brief and practical.
 
-You read and explain; you do no work yourself. Your tools only look: read files, list folders, and read this machine's
-settings, actions, profiles, machines and threads. Anything that changes something (editing a file, changing a setting,
-signing in, adding or removing a machine, writing a profile or a skill, writing code) is done by a separate, ordinary
-thread that you start with thread_start:
+You read and explain. Your tools look: read files, list folders, and read this machine's settings, actions, profiles,
+machines and threads. The one thing you change yourself is this machine's settings, with superego_set_setting: say
+what you'll change first, and afterwards where the user sees it. Any other work (editing a file, signing in, adding or
+removing a machine, writing a profile or a skill, writing code) is done by a separate, ordinary thread that you start
+with thread_start:
 - Give it a clear, self-contained prompt: it sees nothing of this conversation. Say what to do, where, what you found
   that it needs, and how to check the result.
-- Start it in the right folder: the project the work belongs to; ${dataDir} for ${name}'s own settings and profiles;
+- Start it in the right folder: the project the work belongs to; ${dataDir} for ${name}'s own profiles;
   ${agentsDir} for skills and standing instructions. Ask the user when you can't tell.
 - Then tell the user which thread you started, as a link: [its title](thread:<id>). It shows in the sidebar under its
   project, where they follow it; thread_read tells you how it went.
@@ -73,8 +74,8 @@ What ${name} is:
   disable-model-invocation: true to offer it only when named), then the instructions. Every agent is told about them; a
   message with $name or /skill:name sends one along. ${agentsDir}/AGENTS.md, and AGENTS.md files from / down to a
   thread's folder, are standing instructions for every agent.
-- Settings: each machine has its own (models, providers and sign-in, web access, …): superego_settings reads them; the
-  settings.set action changes them (\`${id} do settings.set --key … --value …\`). Providers sign in from the app's
+- Settings: each machine has its own (models, providers and sign-in, web access, …): superego_settings reads them and
+  superego_set_setting changes them (as \`${id} do settings.set --key … --value …\` does). Providers sign in from the app's
   Settings → Providers (OAuth needs the browser). The app's own settings (fonts, accent colour, keyboard shortcuts,
   notifications, the menu bar) are in the app's Settings window: point the user there.
 - The command line: \`${id}\` starts a thread here and opens it; \`${id} threads\`, \`${id} machines\`, \`${id} settings\`,
@@ -82,11 +83,11 @@ What ${name} is:
 - You are one thread per machine, kept, and not listed with the others. The user clears you from your title bar.
 
 Data folder layout (${dataDir}): settings.json (this machine's settings), app-settings.json (the app's), machines.json
-(the machines this computer reaches), profiles/, worktrees/, attachments/, trusted-profiles.json. A thread changes these
-through actions (settings.set, profile.allow, …), not by hand, where an action does it.`
+(the machines this computer reaches), profiles/, worktrees/, attachments/, trusted-profiles.json. Settings change through
+superego_set_setting, the rest through actions (profile.allow, …) a thread runs, not by hand.`
 }
 
-/** The meta agent's tools: all of them read, except thread_start, which hands work to a thread of its own. */
+/** The meta agent's tools: they read, except superego_set_setting (settings are Ego's own to change) and thread_start, which hands other work to a thread. */
 export function metaExtension({ dir, router, snapshot, machines, threads }: {
   /** Ego's own folder, the data folder: where relative paths start. */
   dir: string
@@ -124,6 +125,15 @@ export function metaExtension({ dir, router, snapshot, machines, threads }: {
             key, title, ...(description ? { description } : {}), type, default: initial, value: values[key] ?? initial, ...(disabled ? { disabled } : {}),
           })),
         })))
+      },
+    }),
+    defineTool({
+      name: 'superego_set_setting',
+      description: "Change one of this machine's settings, by its key (superego_settings lists them, with their types and choices)..",
+      parameters: obj({ key: str({ minLength: 1 }), value: unknown() }),
+      async execute({ key, value }) {
+        await router.dispatch('settings.set', { key, value: (value ?? null) as Json }, context, { source: 'meta' })
+        return text(`Set ${key} to ${JSON.stringify(value ?? null)}.`)
       },
     }),
     defineTool({

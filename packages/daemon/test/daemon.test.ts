@@ -377,7 +377,7 @@ describe('record and replay', () => {
     await close()
   })
 
-  it("keeps superego's own agent as one hidden thread per machine, in its data folder, knowing superego and only reading", async () => {
+  it("keeps superego's own agent as one hidden thread per machine, in its data folder, knowing superego, changing only its settings", async () => {
     const first = await open()
     const meta = await first.peer.call<ThreadInfo>('thread.meta', { prompt: 'help me add a machine' })
     expect(meta).toMatchObject({ meta: true, cwd: dir, title: 'superego', session: { name: 'superego' } })
@@ -393,10 +393,11 @@ describe('record and replay', () => {
     const { value } = await first.peer.call<{ value: ConversationView }>('thread.watch', { id: meta.id })
     const all = JSON.stringify(value.entries)
     expect(all).toContain("You are superego's own agent")
-    expect(all).toContain('you do no work yourself')
-    // Tools that read, and thread_start; none that change things.
+    expect(all).toContain('The one thing you change yourself is this machine\'s settings')
+    // Tools that read, the one that changes settings, and thread_start; none that change anything else.
     const tools = (value.entries.find((e) => e.kind === 'pi.system')!.model![0] as { toolsAdded: { name: string }[] }).toolsAdded.map((t) => t.name)
-    expect(tools.sort()).toEqual(['ls', 'open_pane', 'read', 'superego_actions', 'superego_profiles', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
+    expect(tools.sort()).toEqual(['ls', 'open_pane', 'read', 'superego_actions', 'superego_profiles', 'superego_set_setting', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
+    for (const tool of ['write', 'edit', 'bash', 'superego_run', 'thread_send']) expect(tools).not.toContain(tool)
     // Other threads don't get its tools or prompt, and don't see it.
     const plain = await first.peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'hi' })
     await until(async () => (await threads(first.peer)).find((t) => t.id === plain.id)!.status.state === 'done')
