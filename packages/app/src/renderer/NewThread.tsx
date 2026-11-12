@@ -13,16 +13,34 @@ const LAST = 'superego.newThread'
 type Last = { machine?: string; cwd?: Record<string, string> }
 const readLast = (): Last => { try { return JSON.parse(localStorage.getItem(LAST) ?? '{}') } catch { return {} } }
 
-export function NewThreadDialog({ start, onClose }: { start: NewThreadStart; onClose(): void }) {
+/** What a thread started beside `thread` takes after it: its machine and project, profile, model, thinking, worktree or not. */
+export function startFrom(machine: string, thread: ThreadInfo): NewThreadStart {
+  return {
+    machine, cwd: thread.session?.root ?? thread.cwd,
+    ...(thread.profile ? { profile: thread.profile.name } : {}),
+    ...(thread.chosen?.model ? { model: thread.chosen.model } : {}), ...(thread.chosen?.thinking ? { thinking: thread.chosen.thinking } : {}),
+    ...(thread.worktree ? { worktree: true } : {}),
+  }
+}
+
+export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadStart; onClose(): void }) {
   const machines = useMachines().filter((m) => m.state === 'connected' && has(m, 'threads'))
   const threads = useAllThreads()
-  const { select } = useSelection()
+  const { select, selection, thread: shown } = useSelection()
   const dispatch = useRegistry().router.dispatch
   const last = useMemo(readLast, [])
-  const [machineId, setMachineId] = useState(start.machine ?? (machines.some((m) => m.id === last.machine) ? last.machine! : 'local'))
+  // It starts like the thread shown: asked for nothing in particular (⌘N, the title bar's button), or for its project
+  // (the sidebar's + on its session). Asked for another, it starts there; asked for nothing with no thread shown, as last time.
+  const [start] = useState(() => {
+    if (!selection || !shown) return asked
+    const like = startFrom(selection.machine, shown)
+    return !asked.machine && !asked.cwd ? like : asked.machine === like.machine && asked.cwd === like.cwd ? { ...like, ...asked } : asked
+  })
+  const [machineId, setMachineId] = useState(start.machine && machines.some((m) => m.id === start.machine) ? start.machine
+    : machines.some((m) => m.id === last.machine) ? last.machine! : 'local')
   const machine = machines.find((m) => m.id === machineId) ?? machines[0]
   const [prompt, setPrompt] = useState('')
-  const [cwd, setCwd] = useState(start.cwd ?? last.cwd?.[machineId] ?? '')
+  const [cwd, setCwd] = useState(start.machine === machineId && start.cwd ? start.cwd : last.cwd?.[machineId] ?? '')
   const [title, setTitle] = useState('')
   const [model, setModel] = useState<string | null>(null)
   const [thinking, setThinking] = useState<string | null>(null)
@@ -32,7 +50,7 @@ export function NewThreadDialog({ start, onClose }: { start: NewThreadStart; onC
   const [profile, setProfile] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   /** In a repository: the checkout itself, or a worktree of its own. */
-  const [worktree, setWorktree] = useState(false)
+  const [worktree, setWorktree] = useState(Boolean(start.worktree))
   const promptRef = useRef<HTMLTextAreaElement>(null)
 
   // Each machine has its own models and default; what was picked on another doesn't carry over.
@@ -40,7 +58,13 @@ export function NewThreadDialog({ start, onClose }: { start: NewThreadStart; onC
     setCatalog(undefined); setModel(null); setThinking(null)
     if (!machine) return
     let live = true
-    client(machine.id).call('agent.models', {}).then((c) => { if (live) setCatalog(c) }, () => {})
+    client(machine.id).call('agent.models', {}).then((c) => {
+      if (!live) return
+      setCatalog(c)
+      // On the machine it started on, the model and thinking it started with, where that machine has them.
+      const from = machine.id === start.machine && c.models.find((m) => m.value === start.model)
+      if (from) { setModel(from.value); if (start.thinking && from.thinking.includes(start.thinking)) setThinking(start.thinking) }
+    }, () => {})
     return () => { live = false }
   }, [machine?.id])
 
@@ -50,7 +74,13 @@ export function NewThreadDialog({ start, onClose }: { start: NewThreadStart; onC
     let live = true
     const timer = setTimeout(() => {
       dispatch('profile.list', cwd.trim() ? { cwd: cwd.trim() } : {}, { machine: machine.id, source: 'new thread' })
-        .then((list) => { if (live) { setProfiles(list as ProfileInfo[]); setProfile(null) } }, () => { if (live) setProfiles([]) })
+        .then((list) => {
+          if (!live) return
+          const found = list as ProfileInfo[]
+          setProfiles(found)
+          // The profile it started with, while the folder is the one it started in.
+          setProfile(start.profile && start.profile !== 'default' && cwd.trim() === start.cwd && found.some((p) => p.name === start.profile) ? start.profile : null)
+        }, () => { if (live) setProfiles([]) })
     }, 250)
     return () => { live = false; clearTimeout(timer) }
   }, [machine?.id, cwd])

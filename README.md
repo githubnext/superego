@@ -26,7 +26,7 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
 
 - **The machine** is a fact about a session, said where it isn't this computer. Machines are reached over ssh (or any
   command), and a session on one works like a local one.
-- **A thread** starts in the folder you give it. Ask for a worktree (the New thread checkbox, `superego -w`) and it works in
+- **A thread** starts in the folder you give it; New thread (⌘N) starts like the thread shown: its machine, project, profile, model, thinking and worktree choice. Ask for a worktree (the New thread checkbox, `superego -w`) and it works in
   `~/.superego/worktrees/<repo>/<slug>` on branch `superego/<slug>`; archiving removes a clean worktree and keeps its branch.
   Archived threads stay readable from the sidebar's Archived list, taking no messages until you unarchive them.
 - **Threads start threads.** An agent starts one of its own for separate work (`thread_start`): a child, shown nested

@@ -11,8 +11,8 @@ import { sessionKey, useSessionList, type Session } from './sessions.ts'
 
 export type Selection = { machine: string; thread: string }
 
-/** Where the New thread dialog starts: a machine, a folder. */
-export type NewThreadStart = { machine?: string; cwd?: string }
+/** Where the New thread dialog starts: a machine and folder, and what else to start with. Empty, it takes after the thread shown. */
+export type NewThreadStart = { machine?: string; cwd?: string; profile?: string; model?: string; thinking?: string; worktree?: boolean }
 
 type ShellState = {
   machines: MachineEntry[]
