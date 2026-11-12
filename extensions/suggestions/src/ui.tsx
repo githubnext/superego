@@ -1,6 +1,6 @@
 /// <reference path="./env.d.ts" />
 // suggestions, UI half: what you might send next, over the composer once the agent has answered. Picking one puts it
-// in the composer to send or change; ⇥ in the empty composer takes the first.
+// in the composer to change; in the empty composer ←/→ pick one, ⏎ sends it and ⇥ puts it in the box.
 import { useEffect } from 'react'
 import { defineUiExtension, has, useComposer, useValue, type MachineEntry } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
@@ -18,12 +18,14 @@ function Suggestions({ machine, thread }: { machine: MachineEntry; thread: Threa
   const all = useValue<Record<string, Suggested>>(machine.id, machine.state === 'connected' && has(machine, 'ext:suggestions'), NEXT)
   const composer = useComposer()
   const shown = !thread.archived && thread.status.state !== 'working' && !composer.text ? all?.[thread.id]?.prompts ?? [] : []
-  const first = shown[0]
-  useEffect(() => { composer.hint(first); return () => composer.hint(undefined) }, [first, composer.hint])
+  const offered = shown.join('\n')
+  useEffect(() => { composer.suggest(offered ? offered.split('\n') : undefined); return () => composer.suggest(undefined) }, [offered, composer.suggest])
   if (!shown.length) return null
   return (
     <div className="suggestions" aria-label="Suggestions">
-      {shown.map((prompt) => <button key={prompt} type="button" className="suggestions__item" onClick={() => composer.fill(prompt)}>{prompt}</button>)}
+      {shown.map((prompt, index) => (
+        <button key={prompt} type="button" className={`suggestions__item ${index === composer.picked ? 'is-picked' : ''}`} onClick={() => composer.fill(prompt)}>{prompt}</button>
+      ))}
     </div>
   )
 }
