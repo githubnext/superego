@@ -631,7 +631,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     run: (params) => startThread(params),
   }))
   /** A new thread as asked for: where, with what, in a worktree or not; a child of `parent` when a thread starts it. */
-  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree: wantsWorktree, parent }: NewThread) {
+  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree: wantsWorktree, parent }: Omit<NewThread, 'attachments'> & { attachments?: Attachment[] }) {
+    // Uploads are inline again by now (see connection.ts).
     const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
     if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${machine.hostname}`)
     if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
