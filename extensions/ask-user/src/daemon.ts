@@ -1,10 +1,14 @@
 // ask-user, daemon half: an `ask_user` tool that puts a question to the user and waits for the answer. While it waits,
 // the thread shows as blocked (needs you), the question is listed live for every client, and any of them can answer.
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
-import { arr, obj, opt, str } from '@earendil-works/pi-schema'
+import { arr, obj, opt, str, union } from '@earendil-works/pi-schema'
 import { defineDaemonExtension } from '@superego/daemon'
 import { defineAction, RpcError } from '@superego/protocol'
-import { ANSWER, PENDING, TOOL, type AskDetails, type Question } from './shared.ts'
+import { ANSWER, PENDING, TOOL, type AskDetails, type Option, type Question } from './shared.ts'
+
+/** An option as given (a label, or a label and a description), as the UI shows it. */
+const optionOf = (option: string | Option): Option =>
+  typeof option === 'string' ? { label: option } : { label: option.label, ...(option.description ? { description: option.description } : {}) }
 
 export default defineDaemonExtension({
   name: 'ask-user',
@@ -24,13 +28,18 @@ export default defineDaemonExtension({
       tools: [defineTool({
         name: TOOL,
         description: 'Ask the user a question and wait for their answer. Use it for decisions and facts only they have, not for '
-          + 'permission to do what was asked. Offer options when the likely answers are known; they can still answer freely.',
-        parameters: obj({ question: str({ minLength: 1 }), options: opt(arr(str())) }),
+          + 'permission to do what was asked. The question is Markdown: any context first, then the question itself as its '
+          + 'last paragraph. Offer options when the likely answers are known (a short label each, with a description where '
+          + 'the label needs one); they can still answer freely.',
+        parameters: obj({
+          question: str({ minLength: 1 }),
+          options: opt(arr(union([str(), obj({ label: str({ minLength: 1 }), description: opt(str()) })]))),
+        }),
         // A restart while waiting asks again rather than giving up: the question still needs an answer.
         replay: 'safe',
         async execute(args, api, context) {
           const question: Question = {
-            id: api.callId, thread: String(api.conversationId), question: args.question, options: args.options ?? [], at: api.now(),
+            id: api.callId, thread: String(api.conversationId), question: args.question, options: (args.options ?? []).map(optionOf), at: api.now(),
           }
           const details: AskDetails = { id: question.id, question: question.question, options: question.options }
           await api.details(details, context)

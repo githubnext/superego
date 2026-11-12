@@ -190,6 +190,10 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 
 .dock { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); width: calc(var(--superego-column) + 2 * var(--superego-space-4)); max-width: calc(100% - 2 * var(--superego-space-5)); background: var(--superego-raised); border: 0; border-radius: var(--superego-radius); box-shadow: var(--superego-shadow-float); padding: 12px var(--superego-space-3) 12px var(--superego-space-4); }
 .dock__above:not(:empty) { margin-bottom: var(--superego-space-3); padding-bottom: var(--superego-space-3); border-bottom: 1px solid var(--superego-border); }
+/* Above the box, something can join it (`dock__join`: an agent's question with its options): one card, a hairline between. */
+.dock:has(.dock__join) .dock__above { margin-bottom: 0; }
+.dock:has(.dock__join) .dock__box { border-radius: 0 0 12px 12px; clip-path: inset(0 -32px -32px -32px); }
+.dock__join { position: relative; background: light-dark(#ffffff, #252527); border-radius: 12px 12px 0 0; border-bottom: 1px solid var(--superego-line); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .16), rgb(255 255 255 / .1)), 0 4px 14px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); clip-path: inset(-32px -32px 0 -32px); }
 .composer { display: flex; gap: var(--superego-space-2); align-items: flex-end; font-size: var(--superego-text-body); }
 .composer .superego-textarea { line-height: 22px; padding: 2px 0; min-height: 26px; }
 /* One line of text and the buttons share a 26px line, so they centre together; with more lines the buttons stay on the last. */
@@ -477,6 +481,7 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 
 /* Focus, as everywhere: the box text is typed in carries the ring, and the region holding focus says so. */
 .dock:has(.composer textarea:focus-visible), .dock:has(.composer textarea:focus) { outline: 2px solid var(--superego-ring); outline-offset: 2px; }
+:not(.has-panes) > .panes .dock:has(.composer textarea:focus) .dock__join { box-shadow: 0 0 0 2px var(--superego-ring), 0 4px 16px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); }
 .palette__input:focus { outline: 2px solid var(--superego-ring); outline-offset: -2px; }
 
 /* Attachments: chips, an image's with its thumbnail; waiting above the composer, then under the message they went with. */

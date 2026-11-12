@@ -20,8 +20,11 @@ type Message = { role: string; content: string | Block[]; toolCallId?: string; i
 /** The thread a transcript belongs to, for extension renderers. */
 const Here = createContext<{ machine: MachineEntry; thread: ThreadInfo }>(undefined as never)
 
-/** Something above the composer that wants what is typed: an answer to a question, say. The newest claim wins. */
-export type ComposerClaim = { placeholder: string; submit(text: string): Promise<unknown> }
+/**
+ * Something above the composer that wants what is typed: an answer to a question, say. The newest claim wins. `keyDown`
+ * sees the composer's keys first (with what's typed) and returns true for those it took: picking an option, say.
+ */
+export type ComposerClaim = { placeholder: string; submit(text: string): Promise<unknown>; keyDown?(event: KeyboardEvent, text: string): boolean }
 const ClaimContext = createContext<(claim: ComposerClaim) => () => void>(() => () => {})
 
 /** While mounted (and given a claim), the composer's text goes to `claim.submit` instead of the thread. */
@@ -31,7 +34,11 @@ export function useComposerClaim(claim: ComposerClaim | undefined) {
   latest.current = claim
   useEffect(() => {
     if (!claim) return
-    return register({ get placeholder() { return latest.current?.placeholder ?? '' }, submit: (text) => latest.current!.submit(text) })
+    return register({
+      get placeholder() { return latest.current?.placeholder ?? '' },
+      submit: (text) => latest.current!.submit(text),
+      keyDown: (event, text) => latest.current?.keyDown?.(event, text) ?? false,
+    })
   }, [Boolean(claim), register])
 }
 
@@ -810,6 +817,7 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
   const abort = () => dispatch('thread.abort', { id: thread.id }, { machine: machine.id, source: 'composer' })
   const sendable = Boolean(text.trim()) || (!claim && files.length > 0)
   const onKeyDown = (event: KeyboardEvent) => {
+    if (claim?.keyDown?.(event, text)) { event.preventDefault(); return }
     if (menu && naming && !event.metaKey && !event.altKey && !event.ctrlKey) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()

@@ -1,11 +1,22 @@
-/* Inside the floating composer: no frame of its own, the question first. */
-.ask-user { display: flex; flex-direction: column; gap: var(--superego-space-2); }
-.ask-user__label { font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-muted); }
-.ask-user__question { -webkit-user-select: text; user-select: text; font-size: calc(15px * var(--superego-text-scale)); font-weight: 600; line-height: 1.4; white-space: pre-wrap; }
-.ask-user__options { display: flex; gap: 6px; flex-wrap: wrap; }
-.ask-user__options .superego-button { padding: 6px 12px; border-radius: 8px; }
-.ask-user__free { display: flex; gap: 6px; }
-.ask-user__free .superego-field { flex: 1; }
-.ask-user__error { color: var(--superego-status-error); font-size: var(--superego-text-sm); }
-.ask-user-asked { font: var(--superego-text-sm)/1.6 var(--superego-mono); display: flex; gap: var(--superego-space-2); flex-wrap: wrap; color: var(--superego-muted); }
+/* Above the composer: "Needs you", the agent's context, then a card on the composer with the question and its options.
+   The thread's background behind it all, so the transcript scrolls away under it. */
+.ask-user { display: flex; flex-direction: column; background: var(--superego-bg); box-shadow: 0 -24px 24px var(--superego-bg); }
+.ask-user__label { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-status-blocked-text, var(--superego-status-blocked)); }
+.ask-user__label::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--superego-status-blocked); }
+/* A long one scrolls in itself, so the composer stays on screen. */
+.ask-user__context { max-height: 45vh; overflow: auto; margin-bottom: var(--superego-space-4); font-size: var(--superego-text-body); line-height: var(--superego-leading-body); -webkit-user-select: text; user-select: text; }
+.ask-user__card { padding: 6px; }
+.ask-user__ask { padding: 8px 10px 6px; font-size: var(--superego-text-body); font-weight: 600; line-height: 1.4; -webkit-user-select: text; user-select: text; }
+.ask-user__options { display: flex; flex-direction: column; padding-top: 2px; }
+.ask-user__option { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; cursor: default; }
+.ask-user__option:hover, .ask-user__option:focus-visible, .ask-user__option.is-active { background: var(--superego-hover); outline: none; }
+.ask-user__key { flex: none; min-width: 22px; padding: 0 4px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--superego-line); font-size: var(--superego-text-xs); color: var(--superego-muted); font-variant-numeric: tabular-nums; }
+.ask-user__option-text { display: flex; flex-direction: column; min-width: 0; }
+.ask-user__option-label { font-size: var(--superego-text-ui); line-height: 20px; }
+.ask-user__option-description { font-size: var(--superego-text-sm); line-height: 18px; color: var(--superego-muted); }
+.ask-user__error { padding: 4px 10px 6px; color: var(--superego-status-error); font-size: var(--superego-text-sm); }
+
+/* In the transcript: what was asked, and the answer. */
+.ask-user-asked__context { margin-bottom: var(--superego-space-2); -webkit-user-select: text; user-select: text; }
+.ask-user-asked__line { font: var(--superego-text-sm)/1.6 var(--superego-mono); display: flex; gap: var(--superego-space-2); flex-wrap: wrap; color: var(--superego-muted); }
 .ask-user-asked__q { color: var(--superego-text); }

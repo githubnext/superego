@@ -22,7 +22,7 @@ it('asks, blocks the thread, takes an answer from any client, and carries on', a
   dir = await mkdtemp(join(tmpdir(), 'superego-ask-'))
   // The model asks once, then answers with what it was told.
   await writeFile(join(dir, 'turns.jsonl'), [
-    turn([{ type: 'toolCall', id: 'call-1', name: 'ask_user', arguments: { question: 'Which colour?', options: ['red', 'blue'] } }], 'toolUse'),
+    turn([{ type: 'toolCall', id: 'call-1', name: 'ask_user', arguments: { question: 'Which colour?', options: ['red', { label: 'blue', description: 'like the sky' }] } }], 'toolUse'),
     turn([{ type: 'text', text: 'Blue it is.' }], 'stop'),
   ].join('\n') + '\n')
   process.env.ASKUSERTEST_MODEL = `replay:${join(dir, 'turns.jsonl')}`
@@ -40,7 +40,7 @@ it('asks, blocks the thread, takes an answer from any client, and carries on', a
   const thread = await peer.call<ThreadInfo>('thread.create', {})
   await peer.call('thread.submit', { id: thread.id, text: 'pick a colour' })
   await until(() => questions.length === 1)
-  expect(questions[0]).toMatchObject({ thread: thread.id, question: 'Which colour?', options: ['red', 'blue'] })
+  expect(questions[0]).toMatchObject({ thread: thread.id, question: 'Which colour?', options: [{ label: 'red' }, { label: 'blue', description: 'like the sky' }] })
   const blocked = (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!
   expect(blocked.status).toEqual({ state: 'blocked', kind: 'question', msg: 'Which colour?' })
 
