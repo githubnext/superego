@@ -400,8 +400,19 @@ if (phase === 'first') {
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'cmd+. reached the unread thread')
   await key(']', ['meta', 'shift'])
   await until(`document.querySelector('.thread__title')?.textContent !== 'elsewhere'`, 'cmd+shift+] to the next thread')
+  const nextTitle = await run(`document.querySelector('.thread__title')?.textContent`)
   await key('[', ['meta', 'shift'])
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'cmd+shift+[ back')
+  // ⌘[ and ⌘] : back and forward through the threads shown, as a browser goes; the buttons say where you can go.
+  await until(`!document.querySelector('.app__back').disabled && document.querySelector('.app__forward').disabled`, 'back, not forward')
+  await key('[')
+  await until(`document.querySelector('.thread__title')?.textContent === ${JSON.stringify(nextTitle)} && !document.querySelector('.app__forward').disabled`, 'cmd+[ back to the thread before')
+  await key(']')
+  await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere' && document.querySelector('.app__forward').disabled`, 'cmd+] forward again')
+  await run(`document.querySelector('.app__back').click()`)
+  await until(`document.querySelector('.thread__title')?.textContent === ${JSON.stringify(nextTitle)}`, 'the back button')
+  await run(`document.querySelector('.app__forward').click()`)
+  await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'the forward button')
   // ⌘⇧N: another window, on the same threads; closed again, so the rest goes on in the first.
   const firstWindow = BrowserWindow.getAllWindows()[0]
   await key('n', ['meta', 'shift'])

@@ -475,6 +475,17 @@ export function startApp(appConfig: AppConfig) {
       event.preventDefault()
       contents.send(CHANNEL.event, { machine: APP, method: 'app.key', params: { keys } })
     })
+    // Back and forward from outside the page: a mouse's buttons (Windows, Linux) and a swipe (macOS, as its trackpad
+    // setting lets one through). The window goes along its own history.
+    const go = (by: -1 | 1) => contents.send(CHANNEL.event, { machine: APP, method: 'app.go', params: { by } })
+    window.on('app-command', (_event, command) => {
+      if (command === 'browser-backward') go(-1)
+      if (command === 'browser-forward') go(1)
+    })
+    window.on('swipe', (_event, direction) => {
+      if (direction === 'left') go(-1)
+      if (direction === 'right') go(1)
+    })
     window.on('closed', () => refreshDesktop())
     if (process.env.ELECTRON_RENDERER_URL) void window.loadURL(process.env.ELECTRON_RENDERER_URL)
     else void window.loadFile(join(import.meta.dirname, '../renderer/index.html'))

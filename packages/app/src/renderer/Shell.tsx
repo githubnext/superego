@@ -3,7 +3,7 @@
 // notification, marking finished threads seen).
 import { useEffect, useRef, useState } from 'react'
 import { agentName } from '@superego/protocol'
-import { Button, LifebuoyIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select } from '@superego/ui'
+import { ArrowLeftIcon, ArrowRightIcon, Button, LifebuoyIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select } from '@superego/ui'
 import { textScale } from '../shared.ts'
 import { UnreadButton } from './Unread.tsx'
 import { machine as client, useAppSetting, useSettings } from './client.ts'
@@ -15,8 +15,8 @@ import { Palette } from './Palette.tsx'
 import { Navigator } from './Navigator.tsx'
 import { ActionLog, runsBare } from './actions.tsx'
 import { NewThreadDialog } from './NewThread.tsx'
-import { bound, KEYMAP, shortcutOf, useActions, type Keymap } from './keys.ts'
-import { useAllThreads, useMachines, useNewThreadDialog, useSelection, useSessions, useSettingsDialog, useShell, useSidebar, type Selection } from './state.tsx'
+import { bound, KEYMAP, shortcutOf, useActions, useShortcut, type Keymap } from './keys.ts'
+import { useAllThreads, useHistory, useMachines, useNewThreadDialog, useSelection, useSessions, useSettingsDialog, useShell, useSidebar, type Selection } from './state.tsx'
 
 /** Dispatch an action from this window: `dispatch('threads.rail')`, `dispatch('thread.select', { machine, thread })`. */
 export function useDispatch() {
@@ -55,6 +55,7 @@ export function Shell() {
   const hasSidebar = registry.slots.sidebar.length > 0
   const allThreads = useAllThreads()
   const { newThread: openNewThread } = useShell()
+  const history = useHistory()
   // A phone (or a narrow window): the sidebar becomes a drawer over the thread, opened from a bar at the top.
   const narrow = useNarrow()
   const [drawer, setDrawer] = useState(false)
@@ -68,6 +69,7 @@ export function Shell() {
     threadOf: (s) => allThreads[s.machine]?.find((x) => x.id === s.thread),
     sessions, lastThread, unreadScope: unreadScope ?? 'all',
     toggleSidebar: () => narrow ? setDrawer((open) => !open) : sidebar.toggle(),
+    back: history.back, forward: history.forward,
   })
   useAppEffects()
 
@@ -103,6 +105,7 @@ export function Shell() {
       {narrow && hasSidebar && drawer && <div className="app__scrim" onClick={() => setDrawer(false)} />}
       {!narrow && (
         <header className="app__drag app__titlebar">
+          <BackForward />
           {!hasSidebar && tools}
           {selection && thread && machine && <ThreadTitle machine={machine} thread={thread} />}
           <span className="app__titlebar-end">
@@ -154,6 +157,25 @@ export function Shell() {
       {log && <ActionLog router={registry.router.router} onClose={() => setLog(false)} />}
       {newThread.start && <NewThreadDialog start={newThread.start} onClose={newThread.close} />}
     </div>
+  )
+}
+
+/** Back and forward, at the title bar's start, as a browser has them. */
+function BackForward() {
+  const { canBack, canForward } = useHistory()
+  const dispatch = useDispatch()
+  const backKeys = useShortcut('app.back')
+  const forwardKeys = useShortcut('app.forward')
+  const go = (id: string) => void dispatch(id, {}, { source: 'titlebar' }).catch((error) => console.error(error))
+  return (
+    <span className="app__history">
+      <IconButton label={backKeys ? `Back (${backKeys})` : 'Back'} className="app__back" disabled={!canBack} onClick={() => go('app.back')}>
+        <ArrowLeftIcon size={15} aria-hidden />
+      </IconButton>
+      <IconButton label={forwardKeys ? `Forward (${forwardKeys})` : 'Forward'} className="app__forward" disabled={!canForward} onClick={() => go('app.forward')}>
+        <ArrowRightIcon size={15} aria-hidden />
+      </IconButton>
+    </span>
   )
 }
 
@@ -232,6 +254,22 @@ function useAppEffects() {
       if (pressed && runKeys(pressed)) event.preventDefault()
     }
     window.addEventListener('keydown', onKey)
+    // The mouse's back and forward buttons, and the main process's word of them or of a swipe. Some systems send a
+    // button both ways; one press goes once.
+    let wentAt = 0
+    const go = (by: number) => {
+      if (performance.now() - wentAt < 150) return
+      wentAt = performance.now()
+      void registry.router.dispatch(by < 0 ? 'app.back' : 'app.forward', {}, { source: 'pointer' }).catch((error) => console.error(error))
+    }
+    const onMouse = (event: MouseEvent) => {
+      if (event.button !== 3 && event.button !== 4) return
+      // Kept from the browser too, which would go back from the app itself.
+      event.preventDefault()
+      if (event.type === 'mouseup') go(event.button === 3 ? -1 : 1)
+    }
+    window.addEventListener('mousedown', onMouse)
+    window.addEventListener('mouseup', onMouse)
     const show = ({ open, settings }: { open?: Selection; settings?: boolean }) => {
       if (open) select(open)
       if (settings) openSettings()
@@ -242,8 +280,9 @@ function useAppEffects() {
       if (event.method === 'app.settings') show({ settings: true })
       // Pressed while a page in a pane had the keyboard: the main process caught it before the page (see app.keys).
       if (event.method === 'app.key') runKeys((event.params as { keys: string }).keys)
+      if (event.method === 'app.go') go((event.params as { by: number }).by)
     })
     void (window.superego.call('app', 'app.ready', {}) as Promise<{ open?: Selection; settings?: boolean }>).then(show)
-    return () => { window.removeEventListener('keydown', onKey); off() }
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('mousedown', onMouse); window.removeEventListener('mouseup', onMouse); off() }
   }, [])
 }

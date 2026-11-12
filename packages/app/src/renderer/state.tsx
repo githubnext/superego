@@ -1,11 +1,12 @@
 // What the shell knows and shares: the machines, every connected machine's threads (one subscription each, whatever
 // number of components show them), which thread is selected, and the Settings dialog; those two kept in the window
-// across reloads.
+// across reloads; and where the window has been, to go back and forward.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { has, useEgo, useMachineList, useThreads as useThreadsWatch } from './client.ts'
 import { useRegistry } from './extension.tsx'
+import { emptyHistory, step, visit, type History, type Place } from './history.ts'
 import { useLocalState } from './local-state.ts'
 import { sessionKey, useSessionList, type Session } from './sessions.ts'
 
@@ -33,6 +34,9 @@ type ShellState = {
   archived: ThreadInfo | undefined
   /** Ego's thread on this computer, which no list has (see `thread.meta`): shown when selected, from its rail button. */
   ego: ThreadInfo | undefined
+  canBack: boolean
+  canForward: boolean
+  go(by: -1 | 1): void
 }
 
 const Context = createContext<ShellState | undefined>(undefined)
@@ -67,6 +71,11 @@ export function useSessions() {
 export function useSidebar() {
   const { sidebarOpen, toggleSidebar } = useShellState()
   return { open: sidebarOpen, toggle: toggleSidebar }
+}
+/** Back and forward through the threads (and Settings) this window has shown. */
+export function useHistory() {
+  const { canBack, canForward, go } = useShellState()
+  return { canBack, canForward, back: () => go(-1), forward: () => go(1) }
 }
 /** The shell's own actions. */
 export function useShell() {
@@ -110,13 +119,32 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       .then((all) => { if (alive) setArchived(all.find((t) => t.id === selection.thread)) }, () => {})
     return () => { alive = false }
   }, [selection?.machine, selection?.thread, list, Boolean(shown), isEgo, selectedMachine?.state])
+  // History: every place shown is visited, whoever showed it; back and forward move along it first, so showing what
+  // they went to is where history already is. Threads no longer listed (archived, deleted; Ego's is listed apart) are
+  // stepped over.
+  const [history, setHistory] = useState<History>(emptyHistory)
+  const place: Place | undefined = settingsOpen ? { settings: true } : selection ? { thread: { machine: selection.machine, thread: selection.thread } } : undefined
+  useEffect(() => { if (place) setHistory((h) => visit(h, place)) }, [settingsOpen, selection?.machine, selection?.thread])
+  const exists = (p: Place) => 'settings' in p || (p.thread.machine === 'local' && p.thread.thread === ego?.id)
+    || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread))
   const value = useMemo<ShellState>(() => ({
     machines, threads, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived, ego,
+    canBack: Boolean(step(history, -1, place, exists)),
+    canForward: Boolean(step(history, 1, place, exists)),
+    go: (by) => {
+      const to = step(history, by, place, exists)
+      if (!to) return
+      setHistory(to.history)
+      setNewThread(undefined)
+      if ('settings' in to.place) return setSettingsOpen(true)
+      setSettingsOpen(false)
+      setSelection(to.place.thread)
+    },
     select: (next) => { setSettingsOpen(false); setNewThread(undefined); setSelection(next) },
     openSettings: (open = true) => setSettingsOpen(open),
     openNewThread: (start = {}) => setNewThread(start === false ? undefined : start),
     toggleSidebar: (open) => setSidebarOpen((was) => open ?? !was),
-  }), [machines, threads, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived, ego])
+  }), [machines, threads, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived, ego, history])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} />)}

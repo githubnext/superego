@@ -29,6 +29,9 @@ export type WindowContext = {
   lastThread: Record<string, string>
   toggleSidebar(): void
   toggleNavigator(): void
+  /** Back and forward through the threads (and Settings) this window has shown. */
+  back(): void
+  forward(): void
   /** ⌘. : the next unread thread anywhere, or only in the selected thread's session. */
   unreadScope: 'all' | 'session'
   dispatch: Dispatch
@@ -107,6 +110,9 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
   defineAction({ id: 'thread.previous', title: 'Previous thread', runs: 'window', keys: 'mod+shift+[', run: (_p, c: WindowContext) => stepThread(c, -1) }),
   defineAction({ id: 'session.next', title: 'Next session', runs: 'window', run: (_p, c: WindowContext) => stepSession(c, 1) }),
   defineAction({ id: 'session.previous', title: 'Previous session', runs: 'window', run: (_p, c: WindowContext) => stepSession(c, -1) }),
+  // Where this window has been, as a browser goes back and forward.
+  defineAction({ id: 'app.back', title: 'Back', runs: 'window', keys: 'mod+[', run: (_p, c: WindowContext) => c.back() }),
+  defineAction({ id: 'app.forward', title: 'Forward', runs: 'window', keys: 'mod+]', run: (_p, c: WindowContext) => c.forward() }),
   defineAction({ id: 'thread.unread', title: 'Next unread thread', runs: 'window', keys: 'mod+.', run: (_p, c: WindowContext) => nextUnread(c) }),
   // Focus: the region beside (sidebar, thread, each pane), and the prompt.
   defineAction({ id: 'focus.left', title: 'Focus the region to the left', runs: 'window', keys: 'mod+alt+arrowleft', run: () => focusBeside(-1) }),

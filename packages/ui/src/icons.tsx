@@ -13,6 +13,7 @@ export {
   ArrowDownIcon,
   ArrowElbowDownRightIcon,
   ArrowElbowRightIcon,
+  ArrowLeftIcon,
   ArrowRightIcon,
   BellIcon,
   BroomIcon,
