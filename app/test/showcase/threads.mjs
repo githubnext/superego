@@ -13,6 +13,29 @@ const finish = (status, outcome) => call('task_finish', { task_id: task.id, stat
 const turn = (content, stopReason = content.some((b) => b.type === 'toolCall') ? 'toolUse' : 'stop') => ({ content, stopReason })
 
 export const files = {
+  'README.md': `# Ledger
+
+Reads the CSV exports from the bank and totals them by month. See [the date parser](src/dates.mjs) and \`src/cli.mjs\`.
+
+## Usage
+
+\`\`\`sh
+node src/cli.mjs sample.csv
+\`\`\`
+
+| Month | Spent | Earned |
+| --- | ---: | ---: |
+| January | 1,204.50 | 3,100.00 |
+| February | 987.10 | 3,100.00 |
+
+## To do
+
+- [x] Parse the dates as UTC midnight
+- [ ] Group by category
+- [ ] Read [[sample.csv]] in **any** order
+
+> Dates in exports are local, not UTC: *mind the timezone*.
+`,
   'package.json': `{
   "name": "ledger",
   "type": "module",

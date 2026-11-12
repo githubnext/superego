@@ -70,6 +70,18 @@ void (async () => {
     }
     nativeTheme.themeSource = 'system'
   }
+  // A Markdown file beside the first thread, rendered and in live preview, light and dark.
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.dataset.thread === '${ids[0]}' || li.textContent.includes(${JSON.stringify(threads[0].prompt.slice(0, 20))}))?.click()`)
+  await run(`window.superego.call('local', 'pane.open', { id: '${ids[0]}', kind: 'editor', params: { path: 'README.md' } })`)
+  for (const mode of ['Rendered', 'Live']) {
+    await until(`document.querySelector('.file-editor__mode') && ([...document.querySelectorAll('.file-editor__mode button')].find((b) => b.textContent === '${mode}').click(), true)`, `${mode} shown`)
+    for (const theme of ['light', 'dark']) {
+      nativeTheme.themeSource = theme
+      await sleep(400)
+      await shot(`editor-${mode.toLowerCase()}-${theme}`)
+    }
+  }
+  nativeTheme.themeSource = 'system'
   console.log(`showcase: ${ids.length} threads in ${out}`)
   app.exit(0)
 })()
