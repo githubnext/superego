@@ -408,16 +408,24 @@ if (phase === 'first') {
   await run(`document.querySelector('.composer__unarchive').click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere' && !document.querySelector('.titlebar__archived') && !document.querySelector('.composer textarea').disabled && [...document.querySelectorAll('.threads-session .superego-list-item')].some(${isElsewhere}) && ![...document.querySelectorAll('.threads-archived .superego-list-item')].some(${isElsewhere})`, 'unarchived and shown')
   await run(`document.querySelector('.threads-archived__head').click()`)
-  // Superego's own agent: from the rail, one thread in Superego's data folder (its own session), the same one each time.
+  // Superego's own agent: from the rail, one thread in Superego's data folder, the same one each time, in no list.
+  const elsewhereItem = `[...document.querySelectorAll('.superego-list-item')].find((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere'))`
   await run(`document.querySelector('.app__meta').click()`)
-  await until(`document.querySelector('.thread__title')?.textContent === 'Set up Superego' && document.querySelector('.app__meta').classList.contains('is-on')`, 'Ego opened')
-  await until(`[...document.querySelectorAll('.threads-session__name')].some((n) => n.textContent.startsWith('Superego'))`, 'in a session of its own')
-  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere')).click()`)
+  await until(`document.querySelector('.thread__title')?.textContent === 'Ego' && document.querySelector('.app__meta').classList.contains('is-on') && !document.querySelector('.app__sidebar .superego-list-item.is-selected')`, 'Ego opened, not in the sidebar')
+  const ego = await run(`window.superego.call('local', 'thread.meta', {}).then((t) => t.id)`)
+  await run(`${elsewhereItem}.click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'away from it')
   await run(`document.querySelector('.app__meta').click()`)
-  await until(`document.querySelector('.thread__title')?.textContent === 'Set up Superego'`, 'the same one again')
-  await new Promise((r) => setTimeout(r, 300))
-  if (await run(`[...document.querySelectorAll('.superego-list-item__body')].filter((b) => b.textContent === 'Set up Superego').length`) !== 1) { await fail('a second meta thread'); throw new Error('failed') }
+  await until(`document.querySelector('.thread__title')?.textContent === 'Ego'`, 'the same one again')
+  if (await run(`window.superego.call('local', 'thread.meta', {}).then((t) => t.id)`) !== ego) { await fail('a second Ego'); throw new Error('failed') }
+  if (await run(`window.superego.call('local', 'thread.list', {}).then((all) => all.some((t) => t.meta))`)) { await fail('Ego listed'); throw new Error('failed') }
+  // Cleared from its title bar: the same thread, empty again.
+  await run(`window.superego.call('local', 'thread.submit', { id: '${ego}', text: 'what is a profile?' })`)
+  await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('what is a profile?'))`, 'asked Ego')
+  await run(`document.querySelector('.thread__clear').click()`)
+  await until(`document.querySelector('.thread__title')?.textContent === 'Ego' && !document.querySelector('.msg--user')`, 'Ego cleared')
+  await run(`${elsewhereItem}.click()`)
+  await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'back to a listed thread')
   // Focus: ⌘⌥← from the prompt goes to the sidebar, on the selected thread; ↓ moves along it; ⌘⌥→ comes back to the
   // thread itself; ⌃I goes to the prompt from anywhere, and esc leaves it for the thread. Wherever it is, it's drawn.
   // A hidden window's page never has focus, so :focus styles never apply; emulate it (nothing reaches the screen).
@@ -445,14 +453,14 @@ if (phase === 'first') {
   // keyboard and from a click into it, and a pane with nothing in it to focus but itself.
   const another = createServer((_q, r) => { r.setHeader('content-type', 'text/html'); r.end('<body style="height:100vh">A page</body>') }).listen(0, '127.0.0.1')
   await new Promise((resolve) => another.once('listening', resolve))
-  const ego = await run(`window.superego.call('local', 'thread.list', {}).then((all) => all.find((t) => t.title === 'Set up Superego').id)`)
+  const shown = await run(`window.superego.call('local', 'thread.list', {}).then((all) => all.find((t) => t.title === 'elsewhere').id)`)
   // The column wearing the ring, and the one brought forward (its title lit): focus moving into a column brings it.
   const ringed = (label) => until(`(() => {
     const ringed = [...document.querySelectorAll('.panes > [data-column]')].filter((c) => getComputedStyle(c, '::before').opacity === '1')
     return ringed.length === 1 && (ringed[0].querySelector('.panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}
   })()`, `only ${label} ringed`)
   const front = (label) => until(`(document.querySelector('.panes__tab.is-active .panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}`, `${label} brought forward`)
-  await run(`window.superego.call('local', 'pane.open', { id: '${ego}', kind: 'preview', params: { url: 'http://127.0.0.1:${another.address().port}/' } })`)
+  await run(`window.superego.call('local', 'pane.open', { id: '${shown}', kind: 'preview', params: { url: 'http://127.0.0.1:${another.address().port}/' } })`)
   await until(`Boolean(document.querySelector('.frame-pane iframe'))`, 'a page beside the thread')
   await run(`document.querySelector('.composer textarea').focus()`)
   await ringed('thread')
@@ -473,9 +481,9 @@ if (phase === 'first') {
   await until(`document.activeElement?.matches('.frame-pane iframe')`, 'a click into the page')
   await ringed('Preview')
   await front('Preview')
-  await run(`window.superego.call('local', 'pane.close', { id: '${ego}', pane: document.querySelector('[data-column]:not([data-column="thread"])').dataset.column })`)
+  await run(`window.superego.call('local', 'pane.close', { id: '${shown}', pane: document.querySelector('[data-column]:not([data-column="thread"])').dataset.column })`)
   another.close()
-  await run(`window.superego.call('local', 'pane.open', { id: '${ego}', kind: 'diff' })`)
+  await run(`window.superego.call('local', 'pane.open', { id: '${shown}', kind: 'diff' })`)
   await until(`Boolean(document.querySelector('.panes__tab'))`, 'changes beside the thread')
   await run(`document.querySelector('.composer textarea').focus()`)
   await key('Right', ['meta', 'alt'])
@@ -486,7 +494,7 @@ if (phase === 'first') {
   // A click on its title, as on the rest of its own parts, takes the focus into it.
   await click('.panes__label')
   await until(`document.activeElement?.matches('[data-column]:not([data-column="thread"])')`, 'a click on the title, into the pane')
-  await run(`window.superego.call('local', 'pane.close', { id: '${ego}', pane: document.activeElement.dataset.column })`)
+  await run(`window.superego.call('local', 'pane.close', { id: '${shown}', pane: document.activeElement.dataset.column })`)
   await until(`!document.querySelector('.panes__tab')`, 'changes closed')
   // Attachments: a file picked with the paperclip (in the box) waits above the composer, then goes with the message and shows under it.
   await run(`(() => {

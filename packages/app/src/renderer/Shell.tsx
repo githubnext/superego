@@ -115,7 +115,7 @@ export function Shell() {
         {!narrow && (
           <nav className="app__rail" aria-label="App">
             <div className="app__rail-group">
-              <IconButton label={`Ask ${agentName(registry.app)}: set up machines, projects, profiles, skills`} className={`app__meta ${thread?.meta ? 'is-on' : ''}`} onClick={() => void dispatch('app.meta', {}, { source: 'rail' }).catch((error) => console.error(error))}>
+              <IconButton label={`Ask ${agentName(registry.app)}`} className={`app__meta ${thread?.meta ? 'is-on' : ''}`} onClick={() => void dispatch('app.meta', {}, { source: 'rail' }).catch((error) => console.error(error))}>
                 <LifebuoyIcon size={18} aria-hidden />
               </IconButton>
               {hasRail ? <Slot name="rail" props={{}} /> : <UnreadButton side="right" />}

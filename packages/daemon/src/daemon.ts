@@ -768,7 +768,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         delete meta.panes
         delete meta.pane
       })
-      // Windows showing it watch again, from the start it has now.
+      // Windows showing it watch again, from the start it has now: a watch that ends `stopped` is watched again.
       for (const stop of transcriptWatches.get(id) ?? []) void stop()
       return info(id, m)
     },

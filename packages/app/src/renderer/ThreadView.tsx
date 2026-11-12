@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowDownRightIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CaretRightIcon, ChatCircleIcon, ChatsCircleIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, BroomIcon, ArrowDownIcon, ArrowElbowDownRightIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CaretRightIcon, ChatCircleIcon, ChatsCircleIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
 import { divideWork, fileKind, folderKind, paneMenu, Slot, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
@@ -145,7 +145,14 @@ export function ThreadTools({ machine, thread }: { machine: MachineEntry; thread
       <Slot name="thread.header" props={{ machine, thread }} />
       {thread.cost !== undefined && thread.cost > 0 && <span className="thread__cost" title="Spent on this thread">${thread.cost.toFixed(2)}</span>}
       {!thread.panes?.length && <PaneMenu machine={machine} thread={thread} />}
-      {thread.archived
+      {thread.meta
+        ? (
+          // Ego is kept, not archived: cleared, it starts empty again.
+          <IconButton label="Clear" className="thread__clear" onClick={() => void dispatch('thread.meta.clear', {}, { machine: machine.id, source: 'header' }).catch((error) => console.error(error))}>
+            <BroomIcon size={15} aria-hidden />
+          </IconButton>
+        )
+        : thread.archived
         ? <UnarchiveButton machine={machine} thread={thread} />
         : (
           <IconButton label="Archive (⌘⇧E)" className="thread__archive" onClick={() => void dispatch('thread.archive', { id: thread.id }, { machine: machine.id, source: 'header' })}>
@@ -216,6 +223,11 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
   const seen = useRef(new Map<number, EntryRecord>())
   const [older, setOlder] = useState<{ more: boolean; loading: boolean }>({ more: true, loading: false })
   for (const entry of watched?.entries ?? []) seen.current.set(entry.id as number, entry)
+  // A window that starts the transcript has nothing before it: entries seen earlier went with a clear.
+  if (watched && watched.before === undefined) {
+    const first = (watched.entries[0]?.id as number | undefined) ?? Infinity
+    for (const id of seen.current.keys()) if (id < first) seen.current.delete(id)
+  }
   const entries = useMemo(() => [...seen.current.values()].sort((a, b) => (a.id as number) - (b.id as number)), [watched, older])
   const atStart = watched !== undefined && (watched.before === undefined || (entries[0] !== undefined && !older.more && !older.loading))
   const view = useMemo(() => watched && { ...watched, entries, before: atStart ? undefined : entries[0]?.id }, [watched, entries, atStart])

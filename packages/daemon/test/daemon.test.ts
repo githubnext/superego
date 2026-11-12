@@ -450,13 +450,13 @@ describe('record and replay', () => {
     const state = async () => (await peer.call<{ value: ThreadInfo }>('meta.watch', {})).value.status.state
     await until(async () => await state() === 'done')
     const ended: string[] = []
-    peer.on('watch.end', (params: { sub: string }) => { ended.push(params.sub) })
+    peer.on('watch.end', (params: { sub: string; reason: string }) => { ended.push(`${params.sub}:${params.reason}`) })
     const open1 = await peer.call<{ sub: string; value: ConversationView }>('thread.watch', { id: meta.id })
     expect(open1.value.entries.length).toBeGreaterThan(0)
     const cleared = await peer.call<ThreadInfo>('thread.meta.clear', {})
     expect(cleared.id).toBe(meta.id)
     // Windows watching it are told to watch again; then it's empty, with nothing earlier to page back to.
-    await until(() => ended.includes(open1.sub))
+    await until(() => ended.includes(`${open1.sub}:stopped`))
     const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: meta.id })
     expect(value.entries).toEqual([])
     expect(value.before).toBeUndefined()

@@ -54,6 +54,8 @@ export function useWatch<T>(
   events: (keyof Notifications)[],
 ): T | undefined {
   const [value, setValue] = useState<T>()
+  // Bumped when the daemon stops the watch itself (it cleared the thread): watched again, from what it is now.
+  const [round, setRound] = useState(0)
   useEffect(() => { setValue(undefined) }, [machineId, key])
   useEffect(() => {
     if (!connected || key === undefined) return
@@ -65,6 +67,7 @@ export function useWatch<T>(
       if (sub === undefined) early.push({ method: event, params })
       else if (params.sub === sub) setValue((current) => current === undefined ? current : fold(current, event, params))
     }))
+    offs.push(client.on('watch.end', (params) => { if (sub !== undefined && params.sub === sub && params.reason === 'stopped' && !stopped) { sub = undefined; setRound((r) => r + 1) } }))
     start(client).then((result) => {
       if (stopped) { void client.call('unwatch', { sub: result.sub }).catch(() => {}); return }
       sub = result.sub
@@ -77,13 +80,18 @@ export function useWatch<T>(
       for (const off of offs) off()
       if (sub) void client.call('unwatch', { sub }).catch(() => {})
     }
-  }, [machineId, connected, key])
+  }, [machineId, connected, key, round])
   return value
 }
 
 export const useThreads = (machineId: MachineId, connected: boolean) =>
   useWatch<ThreadInfo[]>(machineId, connected, 'all', (client) => client.call('threads.watch', {}),
     (_value, _method, params: Notifications['threads.changed']) => params.value, ['threads.changed'])
+
+/** Ego's thread on `machineId`, which no list has: null until it's first opened. */
+export const useEgo = (machineId: MachineId, connected: boolean) =>
+  useWatch<ThreadInfo | null>(machineId, connected, 'ego', (client) => client.call('meta.watch', {}),
+    (_value, _method, params: Notifications['meta.changed']) => params.value, ['meta.changed'])
 
 /** A live value an extension's daemon half publishes (`superego.value`), on `machineId`. */
 export const useValue = <T,>(machineId: MachineId, connected: boolean, key: string) =>

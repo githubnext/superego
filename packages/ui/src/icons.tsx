@@ -15,6 +15,7 @@ export {
   ArrowElbowRightIcon,
   ArrowRightIcon,
   BellIcon,
+  BroomIcon,
   CaretDownIcon,
   CaretRightIcon,
   ChatCircleIcon,

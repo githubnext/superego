@@ -119,9 +119,10 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
   // Within a thread: the thread itself, then each pane beside it.
   defineAction({ id: 'pane.next', title: 'Next pane', runs: 'window', keys: 'ctrl+tab', run: (_p, c: WindowContext) => stepPane(c, 1) }),
   defineAction({ id: 'pane.previous', title: 'Previous pane', runs: 'window', keys: 'ctrl+shift+tab', run: (_p, c: WindowContext) => stepPane(c, -1) }),
-  // The app's own agent, on this computer: setting up machines, projects, profiles, skills. One thread, opened (or started).
+  // The app's own agent, on this computer: it answers questions about the app and its setup, and hands work to threads.
+  // One thread, in no list, opened (or started) from here.
   defineAction({
-    id: 'app.meta', title: `Ask ${agentName(app)}: set up machines, projects, profiles, skills`, runs: 'window',
+    id: 'app.meta', title: `Ask ${agentName(app)}`, runs: 'window',
     run: async (_p, c: WindowContext) => {
       const thread = await c.dispatch('thread.meta', {}, { machine: 'local', source: 'meta' }) as { id: string }
       c.select({ machine: 'local', thread: thread.id })
