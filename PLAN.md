@@ -81,6 +81,12 @@ The niche is real. We should borrow herdr-core's protocol hygiene wholesale, and
 
 **Electron main:** thin. Window management, machine catalog (`~/.superego/machines.json`: `{id,label,target,enabled}`), spawning ssh links, and relaying one generic `call/on` (no hand-maintained channel lists; that was a tremolo regret). Each machine link reconnects with backoff, and a disconnected machine stays visible but stale (fut).
 
+**The daemon as a hub:** a daemon keeps links of its own to the machines in its data dir's `machines.json` (the same `MachineLinks` from `@superego/client` the app uses: identity remembered, a machine reached twice refused, never itself), following the file. The app's daemon gets them through `serveDaemon({ reach })` (`machineHub`), so the daemon package doesn't depend on the client one. Its clients reach them through it: `machines.watch` lists them (itself as `local`), `relay.call` passes a call on (uploads it holds go onward on the link's own channels), and their notifications come back as `relay.event`, a watch's to the connection that opened it, anything else to every connection that has called that machine; watches end when their connection does. The desktop app keeps its own links as before; a browser and agents (`thread_*` with `machine`) go through the hub, which therefore holds every machine's access (pair browsers with care, §3c).
+
+```
+browser ──ws── daemon (hub) ──ssh/via── daemon (box)        agent on the hub ─ thread_start {machine: box}
+```
+
 **Renderer:** React 19, plain CSS on `@superego/ui` tokens, Base UI for overlays, electron-vite. The shell provides slots, the thread and its panes, Settings, the ⌘L navigator, the ⌘K palette and extensions' commands.
 
 ### Protocol surface (as built)
@@ -104,6 +110,8 @@ thread.archive / unarchive (its worktree removed if clean, and back)
 pane.open / update / focus / close        file.write              profile.list / allow
 settings.set   auth.login / respond / cancel / logout   daemon.restart   <extension>.<name>
 web.pair → {code, expires, url}           web.device.rename {id, name} / revoke {id}
+machines.watch → snapshot + machines.changed     relay.call {machine, method, params} → relay.event {machine, method, params}
+machines.reconnect {id}
 ```
 
 Reads and streams (`*.list`, `*.watch`) stay plain methods. Everything that changes something is an action (§3a). The protocol version is a generation and stays 1; peers negotiate by `features`, not by version. The method table only grows: `packages/protocol/contract.json` freezes what a bare daemon serves, and a test fails when anything in it disappears.
@@ -188,7 +196,7 @@ Every intent is an action: an id, a title, a params schema (pi-schema), where it
   - **Pairing** (this computer, or the network): Settings → Web access → Pair a browser makes a one-time code (five minutes, single use; its address carries it in the fragment). The page POSTs it to `/pair` for a credential of its own: an HttpOnly, SameSite=Strict cookie (Secure behind HTTPS). The WebSocket and `/artifact` go by that cookie; the upgrade and the pairing POST must carry this server's Origin. `web-devices.json` keeps only hashes; Settings lists each browser (name, paired, last seen) with Rename and Revoke, and revoking closes its connections at once.
   - **Tailscale:** the daemon listens on a unix socket in its data dir (0600), and Settings shows the `tailscale serve --bg --https=<port> unix:<socket>` to run and the https address. Callers are admitted by `Tailscale-User-Login`: this node's owner, plus the logins in `web.tailscale.logins`. Only tailscaled and this user can reach the socket, so the headers can't be forged by anyone who couldn't already act as this user. Unverified: whether the Mac App Store build of Tailscale may proxy to a socket; if not, "to this computer" behind `tailscale serve <port>` works, with pairing.
 - **Who's connected:** the daemon lists its connections (`clients.watch`: kind from `hello`, a label: the computer's name, a browser's device name, a Tailscale login), the action log names who dispatched, and `client.perform` passes a window action to another client (the window runs it if it has it and is on screen). Settings → a machine → Connected shows them.
-- **In a browser** the window has no preload: `window.superego` is a WebSocket bridge to that daemon (the one machine, "local"); app settings live in the browser; machines and folder picking are desktop-only.
+- **In a browser** the window has no preload: `window.superego` is a WebSocket bridge to that daemon ("local") and, through it, every machine it reaches (`relay`, §2): calls for them go as `relay.call`, their news comes back as theirs. It pings (`heartbeat`), sends large attachments ahead as uploads, and holds back while the socket's buffer is full. App settings and the allowed remote profile UIs (`ui.trust.*`) live in the browser. Settings → Machines lists the machines with Reconnect; adding, removing, logging in and installing, and folder picking, are desktop-only.
 - **Phones:** under 760px wide, one column: a bar with the threads in a drawer, the composer at the bottom, full-screen dialogs. A web manifest and icons for the home screen.
 - Not yet: TLS of its own (Tailscale gives it), a service worker for offline, the desktop app as a wrapper of a remote daemon's web UI.
 
@@ -327,6 +335,7 @@ Still open:
 - **Sessions, threads, panes (2026-11-09).** The rename (a conversation is a thread), sessions, worktrees on request, Fut's navigation, the scrolling pane row, Tremolo's focus, attachments, the window's state kept across reloads, tests that stay off the screen.
 - **Superego and Ego (2026-11-11).** The app, formerly mu, is Superego all the way down: the app, its id (`~/.superego`, `superego.sock`, the `superego` command, `SUPEREGO_*` variables, `superego/<slug>` branches, `.superego/profiles`), the packages (`@superego/*`, profiles import from `'superego'`), the window's bridge (`window.superego`), and the `--superego-*` tokens and `superego-*` classes. Its own agent is Ego: `AppConfig.agent` names it, for the ⌘K action, the rail and its prompt.
 - **The halo icon (2026-11-11).** The first icon, a serif letter, gives way to a tilted halo over a dot: `resources/superego.icon` (halo and head layers), copied to `app/resources/superego.icon`, with the Dock, `.icns`, PWA and menu bar images made from it. The menu bar's halo is drawn heavier (`resources/superego-menubar.svg`) to hold at 16px; `resources/ego.svg` is Ego's mark, the dot alone. Explorations in `design-explorations/superego-*.html`.
+- **One daemon reaches the others (2026-11-12).** The daemon as a hub (§2): its own links to `machines.json`, `machines.watch`, `relay.call` and `relay.event`; every machine in a browser; agents start, read and message threads on other machines. The app and CLI name their computer in `hello`.
 
 ## 9. Next
 

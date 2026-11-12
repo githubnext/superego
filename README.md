@@ -33,6 +33,8 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
   under its parent in the sidebar, with "from" its parent in the title bar. It reads another (`thread_read`, waiting for
   it with `wait: true`), messages one (`thread_send`), and lists those around (`thread_list`). A message names a thread
   as `[its title](thread:<id>)`, shown as that thread to open (⌘-click: beside). `thread.create` takes `parent` too.
+  The same tools take `machine`, any machine its daemon reaches (`thread_machines` lists them): a thread started there
+  is that machine's own, not nested under its parent, whose catalog is elsewhere.
 - **Panes** sit beside the thread as a row of columns that scrolls sideways (Dinky's scrolling layout); the thread
   and its panes are kept with the thread, so every client sees the same. The agent opens them too (`open_pane`).
   Built in: Changes (git diff), the file editor (Markdown in live preview, as Obsidian shows it), Preview (a web page),
@@ -134,6 +136,10 @@ Settings → Machines, which opens Terminal) logs in once and leaves a master th
 unknown host key is its own state, with ssh's message. `hello` reports `keepsRunning` and `superego machines` and Settings warn
 when a remote daemon will end at logout or reboot.
 
+Each computer's daemon links to the machines in its `machines.json` too (the list the app and `superego machines` keep),
+with the same identity checks, so a browser or an agent there reaches them through it. It never links to itself. After
+Log in, Install or Trust this machine, the app tells its daemon to reconnect as well.
+
 The daemon takes model keys from the providers' own variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) when none is
 stored in Settings. A restart keeps the environment it was started with and adds that of the shell asking for it. Where
 those keys are sealed, as on a [workbox](https://github.com/githubnext/workboxes), restart it from a terminal on the box,
@@ -169,6 +175,9 @@ notes as a graph and as notes edited in place, with search and backlink tools fo
 
 Settings → a machine → Web access: serve the app to this computer, through Tailscale (HTTPS on your tailnet; run the
 `tailscale serve` command it shows), or to the local network over plain HTTP. Off Tailscale, pair each browser: *Pair a
-browser* shows a one-time code and an address carrying it; Settings lists paired browsers to rename or revoke. On a
+browser* shows a one-time code and an address carrying it; Settings lists paired browsers to rename or revoke. The page
+shows every machine the serving daemon reaches, through it (`machines.watch`, `relay.call`, `relay.event`); Settings →
+Machines there lists them with Reconnect, while adding, removing, logging in and installing stay in the desktop app. A
+remote machine's profile UI asks first, as on the desktop, and the allow is kept in the browser. On a
 phone, add it to the home screen. Each pane is a screen wide there, and a swipe moves between
 the thread and its panes.
