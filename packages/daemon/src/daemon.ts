@@ -122,7 +122,7 @@ export type Daemon = {
    * Register this daemon's methods on a connection's peer; returns a cleanup for when it disconnects. `via`: what the
    * transport knows of it. `hangUp` closes the transport, for a peer that stopped answering its heartbeat.
    */
-  serve(peer: RpcPeer, transport?: { via?: Via; hangUp?: () => void }): () => void
+  serve(peer: RpcPeer, transport?: { via?: Via; hangUp?: () => void; ticket?: (thread: string, machine?: string) => { path: string; expires: number } }): () => void
   close(): Promise<void>
 }
 
@@ -921,7 +921,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const daemon: Daemon = {
     machine,
     settings,
-    serve(peer, { via, hangUp } = {}) {
+    serve(peer, { via, hangUp, ticket } = {}) {
       const subs = new Map<string, () => unknown>()
       const connection = serveConnection(peer, { ...(hangUp ? { hangUp } : {}) })
       const notify = <N extends keyof Notifications>(event: N, params: Notifications[N]) => peer.notify(event, params)
@@ -953,6 +953,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           return { sub, value: relay.entries() }
         },
         'relay.call': ({ machine: target, method, params }: Methods['relay.call']['params']) => relayed.call(target, method, params),
+        /** For a browser (Web access): where an iframe loads this thread's artifacts, without the page's credential. */
+        async 'artifact.ticket'({ thread, machine: elsewhere }: Methods['artifact.ticket']['params']) {
+          if (!ticket) throw new RpcError('unsupported', 'Artifacts are served by address only to a browser')
+          if (!elsewhere || elsewhere === 'local') await get(thread)
+          return ticket(thread, elsewhere && elsewhere !== 'local' ? elsewhere : undefined)
+        },
         'thread.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),
         'file.read': async ({ id, path, base64 }: { id: string; path: string; base64?: boolean }) => {
@@ -1081,6 +1087,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
     async close() {
       await web?.close()
+      // Paired browsers' changes not yet saved are, before anything else goes.
+      await devices.flush().catch(() => {})
       for (const cleanup of cleanups.reverse()) cleanup()
       agent.close()
       for (const m of mounted.values()) await m.stop()
@@ -1129,6 +1137,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           at: access === 'tailscale' ? { socket: webSocket } : { host: access === 'network-unencrypted' ? '0.0.0.0' : '127.0.0.1', port },
           auth: access === 'tailscale' ? { kind: 'tailscale', admits } : { kind: 'pairing', devices, codes },
           serve: daemon.serve,
+          tailnet: async () => (await tailnet())?.dnsName,
           artifact: async (thread, path, elsewhere) => elsewhere
             ? Buffer.from((await relay.call(elsewhere, 'file.read', { id: thread, path, base64: true }) as { content: string }).content, 'base64')
             : readFile(inFolder((await get(thread)).meta.cwd, path)),
@@ -1141,7 +1150,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     settings.invalidate()
   }
   devices.onChange(() => settings.invalidate())
-  cleanups.push(() => void devices.flush().catch(() => {}))
 
   router.register(defineAction({
     id: 'web.pair', title: 'Pair a browser', runs: 'machine', expose: ['ui', 'cli'],
@@ -1149,7 +1157,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     run() {
       if (!web || webAccess() === 'tailscale') throw new RpcError('unsupported', webAccess() === 'tailscale' ? 'Through Tailscale, callers are known by their login: there is nothing to pair.' : 'Turn on Web access first.')
       const { code, expires } = codes.issue()
-      // In the fragment, which the browser keeps to itself: the page reads it and trades it for a cookie.
+      // In the fragment, which the browser keeps to itself: the page reads it and trades it for a credential.
       return { code, expires, url: web.url ? `${web.url}#pair=${code}` : null }
     },
   }))
@@ -1165,8 +1173,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   router.register(defineAction({
     id: 'web.device.revoke', title: 'Revoke a paired browser', runs: 'machine', expose: ['ui', 'cli'],
     params: obj({ id: str() }),
-    run({ id }) {
+    async run({ id }) {
       if (!devices.revoke(id)) throw new RpcError('not_found', `No paired browser ${id}`)
+      await devices.flush()
       // Right after this answer, so a browser revoking itself hears that it worked before it is cut off.
       setImmediate(() => web?.disconnect(id))
       return null
@@ -1192,7 +1201,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         { value: 'off', label: 'Off' },
         { value: 'local', label: 'To this computer', description: 'On 127.0.0.1. Browsers pair with a code from here.' },
         { value: 'tailscale', label: 'Through Tailscale', description: 'HTTPS on your tailnet, by `tailscale serve`; callers are known by their Tailscale login.' },
-        { value: 'network-unencrypted', label: 'To the local network, unencrypted', description: 'Plain HTTP on every interface: anyone on the network can watch what you do, and steal a paired browser’s cookie.' },
+        { value: 'network-unencrypted', label: 'To the local network, unencrypted', description: 'Plain HTTP on every interface: anyone on the network can watch what you do, and steal a paired browser’s credential.' },
       ] }, disabled: () => options.webRoot ? undefined : 'This daemon has no web app to serve.' },
       { key: 'web.port', title: 'Port', default: 7777, description: 'Through Tailscale: the HTTPS port on the tailnet.', type: { type: 'number', min: 1024, max: 65535, step: 1 } },
       { key: 'web.tailscale.logins', title: 'Also allow', default: '', description: 'Tailscale logins besides this machine’s owner, separated by commas.', type: { type: 'string', placeholder: 'someone@example.com' },
@@ -1214,7 +1223,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   })
   settings.register({ id: 'clients', title: 'Connected', order: 85, ui: 'clients', settings: [], description: 'Who is using this machine right now.' })
-  settings.onChange(() => void applyWeb())
+  // A login taken off the list loses its live connections and tickets at once.
+  settings.onChange(() => { void applyWeb().then(() => web?.recheck()).catch(() => {}) })
   await applyWeb()
   return daemon
 }

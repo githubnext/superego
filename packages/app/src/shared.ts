@@ -14,8 +14,11 @@ export type SuperegoBridge = {
   onEvent(listener: (event: SuperegoEvent) => void): () => void
   /** Set in a browser (the daemon's Web access), where there is no desktop: no machines to add, no folders to pick. */
   web?: boolean
-  /** Where an artifact (an HTML file in a thread's folder) is served from, sandboxed, with its relative files beside it. */
-  artifactUrl?(machine: MachineId, thread: string, path: string): string
+  /**
+   * Where an artifact (an HTML file in a thread's folder) is served from, sandboxed, with its relative files beside it.
+   * In a browser it waits on a ticket from the daemon.
+   */
+  artifactUrl?(machine: MachineId, thread: string, path: string): string | Promise<string>
 }
 
 /** An artifact's address on the desktop: superego-artifact://<machine>/<thread>/<path>, served by the main process. */

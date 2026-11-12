@@ -251,14 +251,25 @@ function PreviewPane({ pane }: PaneProps) {
 function ArtifactPane({ machine, thread, pane }: PaneProps) {
   const { path } = params<{ path?: string }>(pane)
   const [key, setKey] = useState(0)
+  const [url, setUrl] = useState<{ ok: true; url: string; key: number } | { ok: false; error: string } | undefined>()
   useEffect(() => { setKey((k) => k + 1) }, [thread.activeAt])
+  // Each load asks again: in a browser the address carries a ticket that runs out.
+  useEffect(() => {
+    if (!path || !window.superego.artifactUrl) return
+    let live = true
+    Promise.resolve(window.superego.artifactUrl(machine.id, thread.id, path)).then(
+      (found) => { if (live) setUrl({ ok: true, url: found, key }) },
+      (error: Error) => { if (live) setUrl({ ok: false, error: error.message }) },
+    )
+    return () => { live = false }
+  }, [machine.id, thread.id, path, key])
   if (!path) return <div className="pane-empty">No file given.</div>
-  const url = window.superego.artifactUrl?.(machine.id, thread.id, path)
-  if (!url) return <div className="pane-empty">Artifacts aren't shown here.</div>
+  if (!window.superego.artifactUrl) return <div className="pane-empty">Artifacts aren't shown here.</div>
+  if (url && !url.ok) return <div className="pane-empty">{url.error}</div>
   return (
     <div className="frame-pane">
       <div className="pane-bar"><code>{path}</code><Button onClick={() => setKey((k) => k + 1)}>Reload</Button></div>
-      <iframe key={key} src={url} title={path} sandbox="allow-scripts allow-forms allow-popups" />
+      {url && <iframe key={url.key} src={url.url} title={path} sandbox="allow-scripts allow-forms allow-popups" />}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 // In a browser this machine doesn't know yet: a form for a pairing code, over everything. Settings → Web access makes
-// the code (or an address carrying it); the page trades it for a cookie of this browser's own. A page added to the home
-// screen (Safari's standalone mode) keeps its own cookies, apart from the browser's, so it pairs on its own.
+// the code (or an address carrying it); the page trades it for a credential of this browser's own, kept in its
+// localStorage. A page added to the home screen (Safari's standalone mode) keeps its own storage, apart from the
+// browser's, so it pairs on its own.
 import './pair-gate.css'
 
 /** The code from what was typed or pasted: the code itself, or the whole address with `#pair=…` in it. */

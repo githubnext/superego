@@ -6,6 +6,7 @@
     "action.log",
     "action.run",
     "agent.models",
+    "artifact.ticket",
     "auth.cancel",
     "auth.login",
     "auth.logout",

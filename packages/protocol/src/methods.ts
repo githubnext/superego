@@ -144,7 +144,7 @@ export type MachineEntry = {
   remote?: { route: string; enabled: boolean; /** Reached with ssh, so it can log in and have Superego installed. */ ssh: boolean }
 }
 
-/** A browser paired with this machine for Web access. Its credential is a cookie; the daemon keeps only a hash. */
+/** A browser paired with this machine for Web access. The page keeps its credential in localStorage; the daemon keeps only a hash. */
 export type WebDevice = { id: string; name: string; created: number; seen: number }
 
 export type Methods = {
@@ -221,10 +221,15 @@ export type Methods = {
    * Only the navigation in PERFORMABLE; anything else is refused here and ignored there.
    */
   'client.perform': { params: { client: string; action: string; params?: Json }; result: null }
+  /**
+   * Where a browser's iframe loads a thread's artifacts (`path` + the file's path), on this machine or one it reaches:
+   * a ticket for that thread only, read-only, until `expires`. Only on a Web access connection.
+   */
+  'artifact.ticket': { params: { thread: string; machine?: string }; result: { path: string; expires: number } }
   /** A one-time code a browser pairs with, for a few minutes; `url` carries it in its fragment, never sent to the server. */
   'web.pair': { params: {}; result: { code: string; expires: number; url: string | null } }
   'web.device.rename': { params: { id: string; name: string }; result: null }
-  /** Forget a paired browser: its cookie stops working and its connections close at once. */
+  /** Forget a paired browser: its credential stops working, and its connections and artifact tickets end at once. */
   'web.device.revoke': { params: { id: string }; result: null }
 
   /**

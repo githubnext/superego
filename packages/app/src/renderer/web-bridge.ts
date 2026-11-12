@@ -11,6 +11,12 @@ import { askToPair, refused, type Paired } from './pair-gate.ts'
 
 const SETTINGS = 'superego.appSettings'
 const UI_TRUST = 'superego.uiTrust'
+const CREDENTIAL = 'superego.credential'
+/** How the daemon closes a socket it won't serve: pair (again), or turned away for who this is (see the daemon's web.ts). */
+const CLOSE_UNPAIRED = 4401
+const CLOSE_REFUSED = 4403
+/** An artifact ticket is asked for again once it has less than this left. */
+const TICKET_MARGIN = 5 * 60_000
 /** Ping this often, and count the link dead after this long without a word, as the desktop's links do. */
 const PING_EVERY = 5_000
 const SILENCE = 15_000
@@ -20,7 +26,7 @@ const ROOM = 256 * 1024
 
 /**
  * A pairing code from the address Settings showed (`#pair=…`), taken out of the address bar at once. It's in the
- * fragment, so it never reached a server, and it works only once: the page trades it for a cookie (see pair-gate.ts).
+ * fragment, so it never reached a server, and it works only once: the page trades it for a credential (see pair-gate.ts).
  */
 function takeCode(): string | undefined {
   const given = new URLSearchParams(location.hash.slice(1)).get('pair') ?? undefined
@@ -28,11 +34,21 @@ function takeCode(): string | undefined {
   return given
 }
 
-/** Trade a code for this browser's credential: the daemon sets it as an HttpOnly cookie, which this page never sees. */
+/**
+ * This browser's credential for the daemon that served the page, in localStorage: only pages of this exact origin
+ * (scheme, host and port) read it, so another app on the same host, or another daemon on another port, can't.
+ */
+const credential = {
+  get: () => localStorage.getItem(CREDENTIAL) ?? undefined,
+  set: (value: string) => localStorage.setItem(CREDENTIAL, value),
+  forget: () => localStorage.removeItem(CREDENTIAL),
+}
+
+/** Trade a code for this browser's credential, and keep it. */
 async function pair(code: string, name = ''): Promise<Paired> {
   const response = await fetch('/pair', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, ...(name ? { name } : {}) }) })
-  if (response.ok) return { ok: true }
-  const body = await response.json().catch(() => ({})) as { error?: string }
+  const body = await response.json().catch(() => ({})) as { error?: string; credential?: string }
+  if (response.ok && body.credential) { credential.set(body.credential); return { ok: true } }
   return { ok: false, error: body.error ?? `The machine said ${response.status}` }
 }
 
@@ -64,6 +80,8 @@ export function webBridge(): SuperegoBridge {
   const setEntries = (next: MachineEntry[]) => { entries = next; emit({ machine: '$machines', method: '$machines', params: entries }) }
   const away = (state: MachineEntry['state']) => setEntries(entries.map((m) => m.state === 'disabled' ? m : { ...m, state }))
   let machinesSub: string | undefined
+  /** Artifact tickets by machine and thread; asked for again after a reconnect. */
+  const tickets = new Map<string, { path: string; expires: number }>()
 
   // ── The daemon, over a WebSocket that reconnects ───────────────────────────────────────────────────────────────
   let peer: RpcPeer | undefined
@@ -72,12 +90,8 @@ export function webBridge(): SuperegoBridge {
   let retry = 500
   // Who this browser is to the daemon decides what to show: the app, the pairing form, or why it isn't let in.
   let gate: Promise<void> | undefined
-  const admit = (message = '') => {
-    gate ??= (async () => {
-      const session = await fetch('/session').then(async (r) => ({ status: r.status, ...(await r.json().catch(() => ({}))) as { error?: string; pairing?: boolean } }))
-      if (session.status === 401 && session.pairing) await askToPair(pair, message)
-      else if (session.status === 401 || session.status === 403) await refused(session.error ?? 'This machine doesn’t let you in.')
-    })().finally(() => { gate = undefined; retry = 500; connect() })
+  const admit = (show: () => Promise<void>) => {
+    gate ??= show().finally(() => { gate = undefined; retry = 500; connect() })
   }
   let code = takeCode()
   const connect = () => {
@@ -85,11 +99,11 @@ export function webBridge(): SuperegoBridge {
       if (code) {
         const given = code
         code = undefined
-        void pair(given).then((paired) => paired.ok ? connect() : admit(paired.error), () => admit('Can’t reach the machine.'))
+        void pair(given).then((paired) => paired.ok ? connect() : admit(() => askToPair(pair, paired.error)), () => admit(() => askToPair(pair, 'Can’t reach the machine.')))
         return reject(new RpcError('disconnected', 'Pairing'))
       }
-      let opened = false
-      // The cookie goes with the upgrade by itself; nothing secret is in the address.
+      // Nothing secret in the address: the credential is the first message (`auth`), once the socket is open.
+      const sent = credential.get()
       const ws = socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/rpc`)
       // Full past FULL unsent bytes, as a socket's write says; it takes more once the browser has sent down to ROOM.
       let waiting = false
@@ -121,8 +135,8 @@ export function webBridge(): SuperegoBridge {
       })
       let beat: ReturnType<typeof setInterval> | undefined
       ws.onopen = async () => {
-        opened = true
         try {
+          await next.call('auth', sent ? { credential: sent } : {})
           const hello = await next.call<Hello>('hello', { client: 'web', version: PROTOCOL_VERSION, features: [...FEATURES] })
           // A link gone quiet (a phone that slept, a network that changed) closes, and this reconnects.
           if (hello.features.includes('heartbeat')) {
@@ -147,14 +161,17 @@ export function webBridge(): SuperegoBridge {
         next.close()
         peer = undefined
         machinesSub = undefined
+        tickets.clear()
         away('disconnected')
         reject(new RpcError('disconnected', 'Not connected'))
         const again = () => { setTimeout(connect, retry); retry = Math.min(retry * 2, 10_000) }
-        // Revoked in Settings: pair again.
-        if (event.code === 4401) return admit('This browser was removed from the machine. Pair it again.')
-        // Refused at the door, or only the network? The socket doesn't say; the daemon does.
-        if (opened) return again()
-        void fetch('/session').then((r) => r.ok ? again() : admit(), again)
+        // Not paired, or revoked in Settings: pair (again). Turned away for who this is (Tailscale): say why.
+        if (event.code === CLOSE_UNPAIRED) {
+          if (sent) credential.forget()
+          return admit(() => askToPair(pair, sent ? 'This browser isn’t paired with the machine any more. Pair it again.' : ''))
+        }
+        if (event.code === CLOSE_REFUSED) return admit(() => refused(event.reason || 'This machine doesn’t let you in.'))
+        again()
       }
     })
     ready.catch(() => {})
@@ -225,8 +242,17 @@ export function webBridge(): SuperegoBridge {
       return send('relay.call', { machine, method, params })
     },
     machines: async () => entries,
-    artifactUrl: (machine, thread, path) =>
-      `/artifact/${machine === 'local' ? '' : `~${encodeURIComponent(machine)}/`}${encodeURIComponent(thread)}/${path.split('/').map(encodeURIComponent).join('/')}`,
+    // An iframe can't send the credential: the daemon gives a ticket for the thread's artifacts instead, in the path, so
+    // the artifact's relative links keep working. Kept until it is nearly spent.
+    async artifactUrl(machine, thread, path) {
+      const key = `${machine}\0${thread}`
+      let held = tickets.get(key)
+      if (!held || held.expires - Date.now() < TICKET_MARGIN) {
+        held = await (peer ?? await ready).call<{ path: string; expires: number }>('artifact.ticket', { thread, ...(machine === 'local' ? {} : { machine }) })
+        tickets.set(key, held)
+      }
+      return held.path + path.split('/').map(encodeURIComponent).join('/')
+    },
     onEvent(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
     web: true,
   }
