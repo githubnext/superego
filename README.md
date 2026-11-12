@@ -64,7 +64,7 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
 | `⌘N` | New thread |
 | `⌘⇧N` | New window |
 | `⌘.` | Next unread thread (everywhere, or in this session: Settings → Navigation) |
-| `⌘⇧[` `⌘⇧]` | Previous / next thread, through every session in the sidebar's order |
+| `⌘⇧[` `⌘⇧]` | Previous / next thread: up or down the sidebar's rows as shown (threads a thread started sit under it), across sessions and around |
 | `⌘[` `⌘]` | Back / forward through the threads (and Settings) this window has shown, as a browser goes; the arrows in the title bar and the mouse's back and forward buttons too |
 | `⌃Tab` `⌃⇧Tab` | The thread and its panes, in turn |
 | `⌘⌥←` `⌘⌥→` | Focus the region beside: the sidebar, the thread, each pane (every one can hold the focus) |

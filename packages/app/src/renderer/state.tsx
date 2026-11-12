@@ -1,14 +1,14 @@
 // What the shell knows and shares: the machines, every connected machine's threads (one subscription each, whatever
 // number of components show them), which thread is selected, and the Settings dialog; those two kept in the window
 // across reloads; and where the window has been, to go back and forward.
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { has, useEgo, useMachineList, useThreads as useThreadsWatch } from './client.ts'
 import { useRegistry } from './extension.tsx'
 import { emptyHistory, step, visit, type History, type Place } from './history.ts'
 import { useLocalState } from './local-state.ts'
-import { sessionKey, useSessionList, type Session } from './sessions.ts'
+import { freeze, sessionKey, useSessionList, type Session } from './sessions.ts'
 
 export type Selection = { machine: string; thread: string }
 
@@ -24,8 +24,10 @@ type ShellState = {
   openSettings(open?: boolean): void
   newThread: NewThreadStart | undefined
   openNewThread(start?: NewThreadStart | false): void
-  /** Every session, in the sidebar's order. */
+  /** Every session, in the sidebar's order; held still while `hold` says so. */
   sessions: Session[]
+  /** Hold the order still (the pointer is over the sidebar), or let it follow activity again. */
+  hold(held: boolean): void
   /** The thread last shown in a session, by its key. */
   lastThread: Record<string, string>
   sidebarOpen: boolean
@@ -64,8 +66,8 @@ export function useSelection() {
 }
 /** Every session, in the sidebar's order, and the thread last shown in each. */
 export function useSessions() {
-  const { sessions, lastThread } = useShellState()
-  return { sessions, lastThread }
+  const { sessions, lastThread, hold } = useShellState()
+  return { sessions, lastThread, hold }
 }
 /** Whether the sidebar is open, and a way to open or close it. */
 export function useSidebar() {
@@ -102,7 +104,13 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     const listed = list?.some((t) => t.meta) ? list.filter((t) => !t.meta) : list
     setThreads((all) => all[machine] === listed ? all : { ...all, [machine]: listed })
   }, [])
-  const sessions = useSessionList(machines, threads)
+  // One order for the sidebar and everything that walks it (⌘⇧[ ⌘⇧], the navigator): held, a thread changing state
+  // doesn't move under the pointer, nor out from under the next press.
+  const live = useSessionList(machines, threads)
+  const [held, hold] = useState(false)
+  const frozen = useRef(live)
+  if (!held) frozen.current = live
+  const sessions = useMemo(() => held ? freeze(frozen.current, live) : live, [held, live])
   // Each session remembers the thread last shown in it: going back to the session goes back to that thread.
   const [lastThread, setLastThread] = useLocalState<Record<string, string>>('sessions.last', {})
   const shown = selection && threads[selection.machine]?.find((t) => t.id === selection.thread)
@@ -134,7 +142,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const exists = (p: Place) => 'settings' in p || (p.thread.machine === 'local' && p.thread.thread === ego?.id)
     || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread))
   const value = useMemo<ShellState>(() => ({
-    machines, threads, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived, ego,
+    machines, threads, selection, settingsOpen, newThread, sessions, hold, lastThread, sidebarOpen, archived, ego,
     canBack: Boolean(step(history, -1, place, exists)),
     canForward: Boolean(step(history, 1, place, exists)),
     go: (by) => {

@@ -438,6 +438,20 @@ if (phase === 'first') {
   await run(`document.querySelector('.composer__unarchive').click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere' && !document.querySelector('.titlebar__archived') && !document.querySelector('.composer textarea').disabled && [...document.querySelectorAll('.threads-session .superego-list-item')].some(${isElsewhere}) && ![...document.querySelectorAll('.threads-archived .superego-list-item')].some(${isElsewhere})`, 'unarchived and shown')
   await run(`document.querySelector('.threads-archived__head').click()`)
+  // A thread another started sits right under it, though newer; ⌘⇧] and ⌘⇧[ go down and up the rows as shown, the
+  // sidebar open or not.
+  const offshoot = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'offshoot', parent: '${other}' }).then((t) => t.id)`)
+  await until(`(() => { const rows = [...document.querySelectorAll('.threads-session .superego-list-item')], body = (li) => li?.querySelector('.superego-list-item__body')?.textContent ?? '', at = rows.findIndex((li) => body(li).startsWith('elsewhere')); return at >= 0 && body(rows[at + 1]).startsWith('offshoot') && rows[at + 1].classList.contains('threads-child') })()`, 'the offshoot under its parent')
+  await key(']', ['meta', 'shift'])
+  await until(`document.querySelector('.thread__title')?.textContent === 'offshoot'`, 'cmd+shift+] down to the offshoot')
+  await key('/')
+  await until(`!document.querySelector('.app__sidebar')`, 'sidebar hidden to step')
+  await key('[', ['meta', 'shift'])
+  await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'cmd+shift+[ up to its parent, the sidebar hidden')
+  await key('/')
+  await until(`Boolean(document.querySelector('.app__sidebar'))`, 'sidebar back after stepping')
+  await run(`window.superego.call('local', 'thread.archive', { id: '${offshoot}' })`)
+  await until(`![...document.querySelectorAll('.threads-session .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('offshoot'))`, 'offshoot put away')
   // Superego's own agent: from the rail, one thread in Superego's data folder, the same one each time, in no list.
   const elsewhereItem = `[...document.querySelectorAll('.superego-list-item')].find((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere'))`
   await run(`document.querySelector('.app__meta').click()`)

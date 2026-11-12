@@ -7,7 +7,7 @@ import { Dialog } from '@superego/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
-import { unread, type Session } from './sessions.ts'
+import { threadBeside, unread, type Session } from './sessions.ts'
 import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
 import { scrollHalfPage } from './scroll.ts'
 import { startRename } from './rename.ts'
@@ -200,12 +200,9 @@ function stepSession(c: WindowContext, by: number) {
   if (next) showSession(c, next)
 }
 
-/** The thread `by` from this one, in the sidebar's order across every session; around at the ends. */
 function stepThread(c: WindowContext, by: number) {
-  const order = c.sessions.flatMap((s) => s.threads.map((thread) => ({ machine: s.machine.id, thread: thread.id })))
-  if (!order.length) return
-  const at = order.findIndex((o) => o.machine === c.selection?.machine && o.thread === c.selection.thread)
-  c.select(order[at < 0 ? (by > 0 ? 0 : order.length - 1) : (at + by + order.length) % order.length]!)
+  const next = threadBeside(c.sessions, c.selection, by)
+  if (next) c.select(next)
 }
 
 /** The next thread after this one, in order, with something unread; around to the start, but never this one. */

@@ -5,7 +5,7 @@
 // - show as: a list, or a rail of status glyphs
 // - details: a pane beside the thread with what it runs with, spent and touched
 // UI only: it uses the core's thread methods and facts.
-import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
+import { Fragment, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import {
   call, defineAction, type Dispatch, defineUiExtension, showSession, SORT, unread, useAppSetting, useLocalState, useMachines, useSelection, useSessions, useSidebar, useThreadView, useShell, useShortcut,
   type MachineEntry, type Session, type Sort,
@@ -13,7 +13,7 @@ import {
 import { rollup, type ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, ChatsIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
-import { activity, ago, freeze, nest } from './groups.ts'
+import { activity, ago } from './groups.ts'
 
 export const VIEW = 'threads.view'
 export const DETAILS = 'threads.details'
@@ -49,8 +49,8 @@ export default defineUiExtension({
     action('threads.sort.created', 'Sort threads: newest first', () => void set(SORT, 'created'))
     action('threads.sort.status', 'Sort threads: needs you first', () => void set(SORT, 'status'))
     action('threads.sort.recent', 'Sort threads: recently active', () => void set(SORT, 'recent'))
-    action('threads.next', 'Next thread', () => step(1), 'mod+alt+arrowdown')
-    action('threads.previous', 'Previous thread', () => step(-1), 'mod+alt+arrowup')
+    action('threads.next', 'Next thread', () => void dispatch('thread.next', {}, { source: 'threads' }), 'mod+alt+arrowdown')
+    action('threads.previous', 'Previous thread', () => void dispatch('thread.previous', {}, { source: 'threads' }), 'mod+alt+arrowup')
   },
 })
 
@@ -72,9 +72,6 @@ function useFolded(view: View | undefined) {
   return { folded: !phone && ((view ?? 'list') === 'rail' || (narrow && !open)), narrow }
 }
 
-/** Moving between threads from a command: set by the mounted sidebar, which knows the order shown. */
-let step: (by: number) => void = () => {}
-
 function Threads() {
   const [sort] = useAppSetting<Sort>(SORT)
   const [view] = useAppSetting<View>(VIEW)
@@ -82,25 +79,12 @@ function Threads() {
   current = { sort: sort ?? 'recent', view: view ?? 'list', details: details ?? false }
   const { folded } = useFolded(view)
   const machines = useMachines().filter((m) => m.state !== 'disabled')
-  const { sessions: live, lastThread } = useSessions()
+  const { sessions, lastThread, hold } = useSessions()
   const { selection, select } = useSelection()
+  // While the pointer is over the list, rows keep their places: a thread changing state doesn't move under it. The
+  // order is held for the whole window, so ⌘⇧[ and ⌘⇧] go down the rows as they stand.
+  useEffect(() => () => hold(false), [])
 
-  // While the pointer is over the list, rows keep their places: a thread changing state doesn't move under it.
-  const [hovering, setHovering] = useState(false)
-  const frozen = useRef(live)
-  if (!hovering) frozen.current = live
-  // Threads a thread started sit under it, a level in.
-  const depth = new Map<string, number>()
-  const sessions = (hovering ? freeze(frozen.current, live) : live).map((session) => ({
-    ...session, threads: nest(session.threads).map(({ thread, depth: level }) => { depth.set(`${session.key}/${thread.id}`, level); return thread }),
-  }))
-
-  const order = sessions.flatMap((s) => s.threads.map((thread) => ({ machine: s.machine, thread })))
-  step = (by) => {
-    const index = order.findIndex((r) => r.machine.id === selection?.machine && r.thread.id === selection.thread)
-    const next = order[(index + by + order.length) % order.length]
-    if (next) select({ machine: next.machine.id, thread: next.thread.id })
-  }
   const isOn = (session: Session, thread: ThreadInfo) => selection?.machine === session.machine.id && selection.thread === thread.id
   // The machine is a fact about a session, said where it isn't this computer (or there are several to tell apart).
   const several = machines.length > 1
@@ -113,7 +97,7 @@ function Threads() {
   // Folded, the threads are dots in the window's rail (ThreadsRail); the sidebar has nothing to show.
   if (folded) return null
   return (
-    <div className={`threads ${ready ? 'is-ready' : ''}`} data-focus-scope onPointerEnter={() => setHovering(true)} onPointerLeave={() => setHovering(false)}>
+    <div className={`threads ${ready ? 'is-ready' : ''}`} data-focus-scope onPointerEnter={() => hold(true)} onPointerLeave={() => hold(false)}>
       <div className="threads__head">
         <span>Threads</span>
         <span className="threads__actions">
@@ -133,7 +117,7 @@ function Threads() {
           </div>
           <List>
             {session.threads.map((thread) => {
-              const level = depth.get(`${session.key}/${thread.id}`) ?? 0
+              const level = session.depth[thread.id] ?? 0
               return (
                 <ListItem key={thread.id} selected={isOn(session, thread)} leading={<StatusGlyph status={thread.status} />}
                   {...(level ? { className: 'threads-child', style: { '--depth': level } as CSSProperties } : {})}
@@ -145,7 +129,7 @@ function Threads() {
           </List>
         </section>
       ))}
-      <Archived machines={machines} live={live} />
+      <Archived machines={machines} live={sessions} />
     </div>
   )
 }
