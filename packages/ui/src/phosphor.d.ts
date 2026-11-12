@@ -24,6 +24,7 @@ declare module '@phosphor-icons/react' {
   export const FileTextIcon: Icon
   export const FolderSimpleIcon: Icon
   export const GearSixIcon: Icon
+  export const LifebuoyIcon: Icon
   export const ListIcon: Icon
   export const MagnifyingGlassIcon: Icon
   export const NotePencilIcon: Icon

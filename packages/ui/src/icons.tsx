@@ -15,6 +15,7 @@ export {
   FileTextIcon,
   FolderSimpleIcon,
   GearSixIcon,
+  LifebuoyIcon,
   ListIcon,
   MagnifyingGlassIcon,
   NotePencilIcon,

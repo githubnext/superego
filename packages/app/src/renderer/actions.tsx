@@ -2,7 +2,7 @@
 // forwarded to where they run (see `dispatch`). Every dispatch from this window is logged, and the log is one action
 // away (Show action log).
 import { useEffect, useState } from 'react'
-import { defineAction, obj, Router, str, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig } from '@superego/protocol'
+import { agentName, defineAction, obj, Router, str, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig } from '@superego/protocol'
 import { Dialog } from '@superego/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
@@ -93,7 +93,7 @@ export function createWindowRouter() {
 export type WindowRouter = ReturnType<typeof createWindowRouter>
 
 /** The shell's own actions. Extensions add theirs with `superego.action`. */
-export const coreActions: WindowAction[] = [
+export const coreActions = (app: AppConfig): WindowAction[] => [
   defineAction({ id: 'app.palette', title: 'Commands', runs: 'window', keys: 'mod+k', run: (_p, c: WindowContext) => c.togglePalette() }),
   defineAction({ id: 'app.navigator', title: 'Go to a session, thread or pane', runs: 'window', keys: 'mod+l', run: (_p, c: WindowContext) => c.toggleNavigator() }),
   defineAction({ id: 'app.sidebar', title: 'Toggle sidebar', runs: 'window', keys: 'mod+/', run: (_p, c: WindowContext) => c.toggleSidebar() }),
@@ -108,6 +108,14 @@ export const coreActions: WindowAction[] = [
   // Within a thread: the thread itself, then each pane beside it.
   defineAction({ id: 'pane.next', title: 'Next pane', runs: 'window', keys: 'ctrl+tab', run: (_p, c: WindowContext) => stepPane(c, 1) }),
   defineAction({ id: 'pane.previous', title: 'Previous pane', runs: 'window', keys: 'ctrl+shift+tab', run: (_p, c: WindowContext) => stepPane(c, -1) }),
+  // The app's own agent, on this computer: setting up machines, projects, profiles, skills. One thread, opened (or started).
+  defineAction({
+    id: 'app.meta', title: `Ask ${agentName(app)}: set up machines, projects, profiles, skills`, runs: 'window',
+    run: async (_p, c: WindowContext) => {
+      const thread = await c.dispatch('thread.meta', {}, { machine: 'local', source: 'meta' }) as { id: string }
+      c.select({ machine: 'local', thread: thread.id })
+    },
+  }),
   defineAction({ id: 'app.settings', title: 'Settings', runs: 'window', keys: 'mod+,', run: (_p, c: WindowContext) => c.openSettings() }),
   defineAction({ id: 'app.log', title: 'Show action log', runs: 'window', run: (_p, c: WindowContext) => c.showLog() }),
   // Panes of the selected thread.

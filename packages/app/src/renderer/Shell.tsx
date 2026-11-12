@@ -2,7 +2,8 @@
 // the restart notice, Settings, and the app-wide reactions (fonts, ⌘, , threads shown from the command line or a
 // notification, marking finished threads seen).
 import { useEffect, useRef, useState } from 'react'
-import { Button, CommandIcon, GearSixIcon, IconButton, ListIcon, MagnifyingGlassIcon, NotePencilIcon, PlusIcon, Select, SidebarSimpleIcon } from '@superego/ui'
+import { agentName } from '@superego/protocol'
+import { Button, CommandIcon, LifebuoyIcon, GearSixIcon, IconButton, ListIcon, MagnifyingGlassIcon, NotePencilIcon, PlusIcon, Select, SidebarSimpleIcon } from '@superego/ui'
 import { UnreadButton } from './Unread.tsx'
 import { machine as client, useAppSetting, useSettings } from './client.ts'
 import { Slot, useRegistry } from './extension.tsx'
@@ -112,7 +113,12 @@ export function Shell() {
       {narrow && hasSidebar && drawer && <div className="app__scrim" onClick={() => setDrawer(false)} />}
       {!narrow && (
         <nav className="app__rail" aria-label="App">
-          <div className="app__rail-group"><UnreadButton side="right" /></div>
+          <div className="app__rail-group">
+            <IconButton label={`Ask ${agentName(registry.app)}: set up machines, projects, profiles, skills`} className={`app__meta ${thread?.meta ? 'is-on' : ''}`} onClick={() => void dispatch('app.meta', {}, { source: 'rail' }).catch((error) => console.error(error))}>
+              <LifebuoyIcon size={17} aria-hidden />
+            </IconButton>
+            <UnreadButton side="right" />
+          </div>
           <div className="app__rail-group">{settingsButton}</div>
         </nav>
       )}

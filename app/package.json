@@ -9,6 +9,7 @@
   "dependencies": {
     "@superego/app": "workspace:*",
     "@superego/cli": "workspace:*",
+    "@superego/client": "workspace:*",
     "@superego/daemon": "workspace:*",
     "@superego/protocol": "workspace:*",
     "@superego/ask-user": "workspace:*",

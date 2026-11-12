@@ -7,6 +7,9 @@
 .app__rail { flex: none; width: 48px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 42px 0 12px; -webkit-app-region: drag; }
 .app__rail-group { display: flex; flex-direction: column; align-items: center; gap: 6px; -webkit-app-region: no-drag; }
 .app__rail .unread-button { padding: 3px 5px; }
+.app__meta { width: 30px; height: 30px; color: var(--superego-muted); box-shadow: none; background: none; }
+.app__meta:hover { color: var(--superego-text); background: var(--superego-hover); }
+.app__meta.is-on { color: var(--superego-accent); background: var(--superego-selected); }
 .app__side { flex: none; display: flex; flex-direction: column; min-height: 0; }
 /* Past the window's buttons and the toggle, the tools sit at the sidebar's end. */
 .app__side-top { display: flex; align-items: center; justify-content: flex-end; padding: 0 0 0 62px; }

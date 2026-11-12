@@ -366,6 +366,16 @@ if (phase === 'first') {
   await until(`document.querySelector('.thread__title')?.textContent !== 'elsewhere'`, 'cmd+shift+] to the next session')
   await key('[', ['meta', 'shift'])
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'cmd+shift+[ back')
+  // Superego's own agent: from the rail, one thread in Superego's data folder (its own session), the same one each time.
+  await run(`document.querySelector('.app__meta').click()`)
+  await until(`document.querySelector('.thread__title')?.textContent === 'Set up Superego' && document.querySelector('.app__meta').classList.contains('is-on')`, 'Ego opened')
+  await until(`[...document.querySelectorAll('.threads-session__name')].some((n) => n.textContent.startsWith('Superego'))`, 'in a session of its own')
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere')).click()`)
+  await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'away from it')
+  await run(`document.querySelector('.app__meta').click()`)
+  await until(`document.querySelector('.thread__title')?.textContent === 'Set up Superego'`, 'the same one again')
+  await new Promise((r) => setTimeout(r, 300))
+  if (await run(`[...document.querySelectorAll('.superego-list-item__body')].filter((b) => b.textContent === 'Set up Superego').length`) !== 1) { await fail('a second meta thread'); throw new Error('failed') }
   // Focus: ⌘⌥← from the prompt goes to the sidebar, on the selected thread; ↓ moves along it; ⌘⌥→ comes back to the
   // thread's prompt; ⌃I goes to the prompt from anywhere. Wherever it is, it's drawn.
   // A hidden window's page never has focus, so :focus styles never apply; emulate it (nothing reaches the screen).

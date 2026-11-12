@@ -15,7 +15,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  arr, type Attachment, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type ThreadInfo,
+  agentName, arr, type Attachment, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
@@ -23,6 +23,7 @@ import { createAgentSettings } from './agent-settings.ts'
 import { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveValue, type StatusContribution } from './extension.ts'
 import { serveWeb, webToken, type WebServer } from './web.ts'
 import { agentsInstructions, listSkills, mentionedSkills, skillBlock, skillsPrompt } from './skills.ts'
+import { metaExtension, metaPrompt, type MachineDirectory } from './meta.ts'
 import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileRef } from './profiles.ts'
 
 const context = BACKGROUND_CONTEXT
@@ -48,6 +49,8 @@ type ThreadMeta = {
   root?: string
   /** Its own git worktree: where, on which branch, and whether archiving removed it. */
   worktree?: { path: string; branch: string; removed?: boolean }
+  /** The machine's own agent, about Superego itself (see meta.ts). */
+  meta?: boolean
 }
 const ThreadDoc = defineDoc<ThreadMeta>({
   kind: 'superego.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current',
@@ -76,6 +79,8 @@ export type DaemonOptions = {
   webRoot?: string
   /** The folder agents share: skills in `skills/`, standing instructions in `AGENTS.md`. Defaults to `~/.agents`. */
   agentsDir?: string
+  /** The machines this computer reaches, as the app keeps them: for the meta agent to set them up. */
+  machines?: () => MachineDirectory
 }
 
 /** One mounted thread: its conversation and a small watch that keeps its status current. */
@@ -306,8 +311,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     ...(m.model ? { model: m.model } : {}), ...(m.cost ? { cost: m.cost } : {}), ...(m.meta.model ? { ownModel: true } : {}),
     ...(m.meta.profile ? { profile: m.meta.profile } : {}),
     ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),
-    session: { root: rootOf(m), name: basename(rootOf(m)) },
+    session: { root: rootOf(m), name: m.meta.meta ? options.app.name : basename(rootOf(m)) },
     ...(m.meta.worktree ? { worktree: m.meta.worktree } : {}),
+    ...(m.meta.meta ? { meta: true } : {}),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
   /** A thread's session: kept since it started; for older threads, found from its folder once (else the folder). */
@@ -348,6 +354,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const connections = new Set<RpcPeer>()
   /** Every intent this daemon answers, its own and its extensions'. Reads and watches are plain methods. */
   const router = new Router<DaemonContext>()
+  // The meta agent's tools: selected for its thread only (see agentOf), so installed but not a built-in.
+  const metaAgent = metaExtension({ router, snapshot: () => settings.snapshot(), ...(options.machines ? { machines: options.machines } : {}) })
+  registry.install(metaAgent)
   const values = new Map<string, { value: Json; listeners: Set<(value: Json) => void> }>()
   const contributors: ((threadId: string) => StatusContribution | undefined)[] = []
   const cleanups: (() => void)[] = []
@@ -452,6 +461,13 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   async function agentOf(meta: ThreadMeta) {
     const profile = meta.profile ? await profileOf(meta.profile) : undefined
     const { model, thinkingLevel } = agent.resolve({ model: meta.model ?? profile?.spec.model, thinking: meta.thinking ?? profile?.spec.thinking })
+    // The meta agent: every built-in, its own tools, and what Superego is.
+    if (meta.meta) {
+      return {
+        model, thinkingLevel, extensions: [...builtins, metaAgent],
+        instructions: metaPrompt({ name: options.app.name, agent: options.app.agent, id: options.app.id, dataDir: options.dataDir, agentsDir, hostname: machine.hostname }),
+      }
+    }
     if (!profile) return { model, thinkingLevel }
     const without = new Set(profile.spec.without ?? [])
     return {
@@ -576,23 +592,39 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           worktree = { path, branch }
         }
       }
-      const meta: ThreadMeta = {
+      return createThread({
         title: title?.trim() ?? '', cwd: workdir, createdAt: Date.now(), root: checkout?.root ?? dir, ...(worktree ? { worktree } : {}),
         ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}), ...(ref ? { profile: ref } : {}),
+      }, prompt, attachments)
+    },
+  }))
+  /** A new thread with `meta`, and its first message when there is one. */
+  async function createThread(meta: ThreadMeta, prompt?: string, attachments?: Attachment[]) {
+    const { model, thinkingLevel } = await agentOf(meta)
+    const conversation = await harness.createConversation({
+      ownership: { kind: 'ownerless' },
+      agent: { ...(model ? { model } : {}), ...(thinkingLevel ? { thinkingLevel } : {}), cwd: meta.cwd },
+      init: async (tx, created) => {
+        Object.assign(await tx.doc(ThreadDoc, created), meta)
+        ;(await tx.doc(Catalog)).ids.push(created)
+      },
+    }, context)
+    const m = await mount(conversation.id)
+    changed()
+    if (prompt?.trim() || attachments?.length) await submit(String(conversation.id), prompt ?? '', randomUUID(), undefined, attachments)
+    return info(String(conversation.id), m)
+  }
+  router.register(defineAction({
+    // One per machine, kept: the newest that isn't archived, else a new one in the app's data folder.
+    id: 'thread.meta', title: `Ask ${agentName(options.app)} (set up machines, projects, profiles, skills)`, runs: 'machine', expose: ['ui', 'cli'],
+    params: obj({ prompt: opt(str()) }),
+    async run({ prompt }) {
+      for (const thread of await list()) {
+        if (!thread.meta) continue
+        if (prompt?.trim()) await submit(thread.id, prompt, randomUUID(), 'followUp')
+        return thread
       }
-      const { model, thinkingLevel } = await agentOf(meta)
-      const conversation = await harness.createConversation({
-        ownership: { kind: 'ownerless' },
-        agent: { ...(model ? { model } : {}), ...(thinkingLevel ? { thinkingLevel } : {}), cwd: meta.cwd },
-        init: async (tx, created) => {
-          Object.assign(await tx.doc(ThreadDoc, created), meta)
-          ;(await tx.doc(Catalog)).ids.push(created)
-        },
-      }, context)
-      const m = await mount(conversation.id)
-      changed()
-      if (prompt?.trim() || attachments?.length) await submit(String(conversation.id), prompt ?? '', randomUUID(), undefined, attachments)
-      return info(String(conversation.id), m)
+      return createThread({ title: `Set up ${options.app.name}`, cwd: options.dataDir, root: options.dataDir, createdAt: Date.now(), meta: true }, prompt)
     },
   }))
   router.register(defineAction({

@@ -219,6 +219,9 @@ importers:
       '@superego/cli':
         specifier: workspace:*
         version: link:../packages/cli
+      '@superego/client':
+        specifier: workspace:*
+        version: link:../packages/client
       '@superego/daemon':
         specifier: workspace:*
         version: link:../packages/daemon

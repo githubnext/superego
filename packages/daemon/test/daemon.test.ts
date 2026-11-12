@@ -366,6 +366,26 @@ describe('record and replay', () => {
     await close()
   })
 
+  it("starts superego's own agent once per machine, in its data folder, knowing superego and with tools for it", async () => {
+    const { peer, close } = await open()
+    const meta = await peer.call<ThreadInfo>('thread.meta', { prompt: 'help me add a machine' })
+    expect(meta).toMatchObject({ meta: true, cwd: dir, session: { name: 'superego' } })
+    await until(async () => (await threads(peer)).find((t) => t.id === meta.id)!.status.state === 'done')
+    // The same thread again, not another.
+    expect((await peer.call<ThreadInfo>('thread.meta', {})).id).toBe(meta.id)
+    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: meta.id })
+    const all = JSON.stringify(value.entries)
+    expect(all).toContain("You are superego's own agent")
+    for (const tool of ['superego_settings', 'superego_actions', 'superego_run']) expect(all).toContain(tool)
+    // Other threads don't get them.
+    const plain = await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'hi' })
+    await until(async () => (await threads(peer)).find((t) => t.id === plain.id)!.status.state === 'done')
+    const other = JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { id: plain.id })).value.entries)
+    expect(other).not.toContain('superego_run')
+    expect(other).not.toContain("You are superego's own agent")
+    await close()
+  })
+
   it('offers ~/.agents skills to the agent, sends one a message names, and reads AGENTS.md', async () => {
     const { mkdir } = await import('node:fs/promises')
     const skill = async (name: string, front: string, body: string) => {

@@ -316,6 +316,8 @@ Still open:
 - **Web and phone (2026-11-05).** Web access, the browser bridge, the phone layout, a PWA.
 - **Panes and the editor (2026-11-06–09).** Panes kept with a thread; built-ins (changes, editor, preview, artifact, thread); the editor's live preview, autosave and file watch; files in a thread clickable; the `files` extension.
 - **Sessions, threads, panes (2026-11-09).** The rename (a conversation is a thread), sessions, worktrees on request, Fut's navigation, the scrolling pane row, Tremolo's focus, attachments, the window's state kept across reloads, tests that stay off the screen.
+- **Superego and Ego (2026-11-11).** The app, formerly mu, is Superego all the way down: the app, its id (`~/.superego`, `superego.sock`, the `superego` command, `SUPEREGO_*` variables, `superego/<slug>` branches, `.superego/profiles`), the packages (`@superego/*`, profiles import from `'superego'`), the window's bridge (`window.superego`), and the `--superego-*` tokens and `superego-*` classes. Its own agent is Ego: `AppConfig.agent` names it, for the ⌘K action, the rail and its prompt.
+- **The halo icon (2026-11-11).** The first icon, a serif letter, gives way to a tilted halo over a dot: `resources/superego.icon` (halo and head layers), copied to `app/resources/superego.icon`, with the Dock, `.icns`, PWA and menu bar images made from it. The menu bar's halo is drawn heavier (`resources/superego-menubar.svg`) to hold at 16px; `resources/ego.svg` is Ego's mark, the dot alone. Explorations in `design-explorations/superego-*.html`.
 
 ## 9. Next
 

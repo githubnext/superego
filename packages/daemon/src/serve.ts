@@ -6,17 +6,20 @@ import { listen } from './server.ts'
 import { appEnv, defaultDataDir, pidPath, socketPath } from './paths.ts'
 import type { AppConfig } from '@superego/protocol'
 import type { DaemonExtension } from './extension.ts'
+import type { MachineDirectory } from './meta.ts'
 
 /** Run a daemon on `socket` until SIGINT/SIGTERM. Used by `superego daemon` and by the Electron app's daemon process. */
-export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket = socketPath(app, dataDir), defaultCwd, extensions = [], webRoot }: {
+export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket = socketPath(app, dataDir), defaultCwd, extensions = [], webRoot, machines }: {
   app: AppConfig; dataDir?: string; socket?: string; defaultCwd?: string; extensions?: DaemonExtension[]
   /** The window's build, for Web access. */
   webRoot?: string
+  /** The machines this computer reaches (the app's list, in `dataDir`), for the meta agent. */
+  machines?: (dataDir: string) => MachineDirectory
 }) {
   const build = readBuild(import.meta.dirname)
   let restart = async () => {}
   const agentsDir = appEnv(app)('AGENTS')
-  const daemon = await openDaemon({ app, dataDir, defaultCwd: appEnv(app)('CWD') ?? defaultCwd ?? process.cwd(), build, extensions, ...(webRoot ? { webRoot } : {}), ...(agentsDir ? { agentsDir } : {}), onRestart: () => void restart() })
+  const daemon = await openDaemon({ app, dataDir, defaultCwd: appEnv(app)('CWD') ?? defaultCwd ?? process.cwd(), build, extensions, ...(webRoot ? { webRoot } : {}), ...(agentsDir ? { agentsDir } : {}), ...(machines ? { machines: () => machines(dataDir) } : {}), onRestart: () => void restart() })
   const server = await listen(daemon, socket)
   const pidFile = pidPath(dataDir)
   await writeFile(pidFile, String(process.pid))

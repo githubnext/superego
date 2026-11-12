@@ -28,7 +28,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
       ] }],
     })
     registerBuiltInPanes(core)
-    for (const action of coreActions) core.action(action)
+    for (const action of coreActions(app)) core.action(action)
   })
   void registry.router.load('app')
   // Declared before anything renders, so a component reading or setting them finds them registered.
