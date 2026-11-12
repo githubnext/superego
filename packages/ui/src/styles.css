@@ -34,7 +34,9 @@
   --superego-field-edge: light-dark(#bdbdc2, #545458);
   --superego-focus: 0 0 0 3px color-mix(in srgb, var(--superego-accent) 45%, transparent);
   --superego-status-working: var(--superego-accent);
-  --superego-status-done: var(--superego-text);
+  --superego-status-done: oklch(0.73 0.22 20);
+  --superego-status-dot: 8px;
+  --superego-status-icon: 12px;
   --superego-status-blocked: light-dark(#e07800, #ff9f0a);
   --superego-status-error: light-dark(#d70015, #ff453a);
   --superego-status-idle: var(--superego-muted);
@@ -100,6 +102,10 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-status--idle { color: var(--superego-status-idle); }
 .superego-status--working { color: var(--superego-status-working); animation: superego-pulse 1.2s ease-in-out infinite; }
 .superego-status--done { color: var(--superego-status-done); }
+:is(.superego-status--working, .superego-status--done)::before {
+  content: ''; display: inline-block; box-sizing: border-box; width: var(--superego-status-dot); height: var(--superego-status-dot); border-radius: 50%; background: currentColor; vertical-align: 0.05em;
+}
+.superego-status svg { width: var(--superego-status-icon); height: var(--superego-status-icon); vertical-align: -0.1em; }
 .superego-status--blocked { color: var(--superego-status-blocked); }
 .superego-status--error { color: var(--superego-status-error); }
 @keyframes superego-pulse { 50% { opacity: .35; } }

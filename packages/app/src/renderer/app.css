@@ -240,7 +240,7 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .auth-flow__head { display: flex; justify-content: space-between; align-items: center; }
 .auth-flow__events p { margin: 6px 0; }
 .auth-flow__events a { color: var(--superego-accent); }
-.auth-flow__done { color: var(--superego-status-done); }
+.auth-flow__done { color: var(--superego-text); }
 .auth-flow__prompt { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
 .auth-flow__row { display: flex; gap: 6px; }
 .auth-flow__row .superego-field { flex: 1; }

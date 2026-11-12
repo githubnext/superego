@@ -22,6 +22,7 @@ declare module '@phosphor-icons/react' {
   export const CommandIcon: Icon
   export const CopyIcon: Icon
   export const DotsThreeIcon: Icon
+  export const ExclamationMarkIcon: Icon
   export const FileIcon: Icon
   export const FilePlusIcon: Icon
   export const FileTextIcon: Icon
@@ -36,6 +37,7 @@ declare module '@phosphor-icons/react' {
   export const PauseIcon: Icon
   export const PencilSimpleIcon: Icon
   export const PlusIcon: Icon
+  export const QuestionMarkIcon: Icon
   export const SidebarSimpleIcon: Icon
   export const SparkleIcon: Icon
   export const SquareSplitHorizontalIcon: Icon
