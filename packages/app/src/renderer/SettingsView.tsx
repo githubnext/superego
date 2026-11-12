@@ -6,6 +6,7 @@ import type { AuthEvent, AuthPrompt, Json, Notifications, ProviderAuthInfo, Sect
 import { Button, Dialog, FontPicker, Select, StatusGlyph, Switch, TextField } from '@superego/ui'
 import { remoteCommand } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
+import type { UiGrant } from '../ui-trust.ts'
 
 import { machine as client, has, loadFonts, useSettings } from './client.ts'
 import { mergeSettings, type MergedSetting } from './merge-settings.ts'
@@ -390,7 +391,31 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
         </form>
       ) : <div className="machine-add__open"><Button onClick={() => setAdding(true)}>Add machine…</Button></div>}
       {error && <p className="setting__error">{error}</p>}
+      <AllowedProfileUis machines={machines} />
     </section>
+  )
+}
+
+/** The remote profile UIs allowed to run in this window, to forget one by one (it asks again next time). */
+function AllowedProfileUis({ machines }: { machines: MachineEntry[] }) {
+  const [grants, setGrants] = useState<UiGrant[]>([])
+  const load = () => { void (window.superego.call('app', 'ui.trust.list', {}) as Promise<UiGrant[]>).then(setGrants, () => {}) }
+  useEffect(load, [])
+  if (!grants.length) return null
+  return (
+    <>
+      <h3>Allowed profile UIs</h3>
+      <p className="settings__note">Code from these machines' profiles may run in this window, as of the version shown.</p>
+      {grants.map((grant) => (
+        <div key={`${grant.machine}${grant.dir}`} className="machine-row">
+          <div className="setting__label">
+            <div>{machines.find((m) => m.machine?.id === grant.machine)?.label ?? grant.machine}</div>
+            <div className="settings__note"><code>{grant.dir}</code> · {grant.hash.slice(0, 8)}</div>
+          </div>
+          <Button onClick={() => void (window.superego.call('app', 'ui.trust.forget', grant) as Promise<unknown>).then(load)}>Forget</Button>
+        </div>
+      ))}
+    </>
   )
 }
 

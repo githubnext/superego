@@ -7,6 +7,7 @@ import '@superego/ui/styles.css'
 import './app.css'
 import type { AppConfig } from '@superego/protocol'
 import { createRegistry, RegistryProvider, type UiExtension } from './extension.tsx'
+import { ProfileUiNotice } from './ProfileUiNotice.tsx'
 import { Profiles, Providers, WebAccess } from './SettingsView.tsx'
 import { Shell, UNREAD } from './Shell.tsx'
 import { ShellStateProvider } from './state.tsx'
@@ -28,6 +29,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
         { value: 'all', label: 'In every session' }, { value: 'session', label: 'In the current session' },
       ] }],
     })
+    core.slot('thread.header', ProfileUiNotice, { order: 0 })
     registerBuiltInPanes(core)
     for (const action of coreActions(app)) core.action(action)
   })
