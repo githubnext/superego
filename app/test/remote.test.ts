@@ -123,6 +123,8 @@ describe('machines add --install, through a stand-in ssh', () => {
       ...process.env, PATH: `${join(root, 'bin')}:${process.env.PATH}`, SUPEREGO_HOME: local, SUPEREGO_HEADLESS: '1', SUPEREGO_MODEL: 'faux',
       SUPEREGO_REMOTE_BUNDLE: bundle, FAKE_REMOTE_HOME: remoteHome, FAKE_SSH_LOG: join(root, 'ssh.log'), FAKE_SERVICE_LOG: join(root, 'service.log'),
       SUPEREGO_SERVICE_RUNNER: join(root, 'bin/runner'), ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '',
+      // The ssh socket's fallback directory (the data dir's path is too long for a socket), kept out of the real /tmp.
+      XDG_RUNTIME_DIR: join(root, 'run'),
     }
     const run = (args: string[]) => execFileSync(process.execPath, [CLI, ...args], { env, encoding: 'utf8', timeout: 60_000 })
 
@@ -135,7 +137,7 @@ describe('machines add --install, through a stand-in ssh', () => {
     const log = readFileSync(join(root, 'ssh.log'), 'utf8')
     expect(log).toContain('ControlMaster=no')
     expect(log).toContain('BatchMode=yes')
-    expect(log).toContain(`ControlPath=${controlPath(local, 'me@fake')}`)
+    expect(log).toContain(`ControlPath="${controlPath(local, 'me@fake', { runtime: join(root, 'run') })}"`)
 
     const list = run(['machines'])
     expect(list).toMatch(/Fake .*answers \(.*\) - stops at logout or reboot: run superego daemon install there/)

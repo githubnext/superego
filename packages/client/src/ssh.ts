@@ -25,7 +25,7 @@ export function controlPath(dataDir: string, target: string, options: { tmp?: st
 
 /** Make `dir` (mode 0700), or check one that is there is a real directory of ours that nobody else can reach. */
 function privateDir(dir: string) {
-  try { mkdirSync(dir, { mode: 0o700 }) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
   const info = lstatSync(dir)
   const mine = process.getuid ? info.uid === process.getuid() : true
   if (!info.isDirectory() || !mine || (info.mode & 0o077) !== 0) throw new Error(`${dir} is not a private directory of this user's; remove it to log in over ssh`)
