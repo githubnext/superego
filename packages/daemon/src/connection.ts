@@ -43,6 +43,8 @@ export function serveConnection(peer: RpcPeer, { hangUp, silence = 30_000 }: Con
 
   Channels.of(peer).accept('upload', (channel, { name, mimeType, size }: { name?: unknown; mimeType?: unknown; size?: unknown }) => {
     if (typeof name !== 'string' || !name || typeof mimeType !== 'string' || typeof size !== 'number' || size < 0) throw new RpcError('invalid', 'An upload needs a name, a type and a size')
+    // The channel's id names the upload: one still held can't be named again (an open one Channels refuses already).
+    if (uploads.has(channel.id)) throw new RpcError('invalid', `Upload ${channel.id} is already held on this connection`)
     if (size > UPLOAD_LIMIT) throw new RpcError('too_large', `${name} is larger than ${UPLOAD_LIMIT / 1024 / 1024} MB`)
     if (held + size > HELD_LIMIT) throw new RpcError('too_large', 'Too much uploaded and not yet sent')
     held += size
