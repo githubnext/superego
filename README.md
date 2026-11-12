@@ -35,7 +35,7 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
   as `[its title](thread:<id>)`, shown as that thread to open (⌘-click: beside). `thread.create` takes `parent` too.
 - **Panes** sit beside the thread as a row of columns that scrolls sideways (Dinky's scrolling layout); the thread
   and its panes are kept with the thread, so every client sees the same. The agent opens them too (`open_pane`).
-  Built in: Changes (git diff), the file editor (Markdown in live preview, as Obsidian shows it), Preview (a web page),
+  Built in: Changes (git diff), the file editor (Markdown rendered, in live preview as Obsidian shows it, or as source), Preview (a web page),
   Artifact (an HTML file the agent wrote, sandboxed) and another thread.
 - **Files** named in a thread (`[[Note]]`, a relative link, `` `src/app.ts` ``) open beside it; the `files` extension
   adds a tree beside the editor and quick open.

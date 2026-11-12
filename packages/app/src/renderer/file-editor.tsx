@@ -1,8 +1,9 @@
-// A file in a thread's folder, open to edit. Markdown opens in live preview (as Obsidian does: rendered, its syntax
-// back where the cursor is), or as source; anything else as source. It saves as you type, and follows the file when
-// the agent changes it: your view updates, or, with edits of yours not yet saved, it asks which to keep.
+// A file in a thread's folder, open to edit. Markdown opens rendered (to read, as a message reads: its links open
+// files and threads the same way), in live preview (as Obsidian does: rendered, its syntax back where the cursor is),
+// or as source; anything else as source. It saves as you type, and follows the file when the agent changes it: your
+// view updates, or, with edits of yours not yet saved, it asks which to keep.
 // The editor pane is this; a profile's own panes use it too (the obsidian profile's notes), with their own links.
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { history, historyKeymap, standardKeymap } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { foldGutter, HighlightStyle, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
@@ -15,7 +16,8 @@ import type { ThreadInfo } from '@superego/protocol'
 import { Button } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { machine as client } from './client.ts'
-import { fileKind, Slot, useRegistry, type EditorSlotProps } from './extension.tsx'
+import { fileKind, folderKind, Slot, useRegistry, type EditorSlotProps } from './extension.tsx'
+import { Markdown, OpenFile, OpenUrl, ThreadMachine } from './Markdown.tsx'
 import { linkAt, livePreview, type MarkdownLink } from './live-markdown.ts'
 import { arrivals } from './arrivals.ts'
 
@@ -41,6 +43,11 @@ export type FileEditorProps = {
 }
 
 const MODE = 'superego.editor.mode'
+/** How Markdown shows: read, as a message is; in live preview; or as source. */
+type Mode = 'rendered' | 'live' | 'source'
+const MODES: { mode: Mode; label: string }[] = [{ mode: 'rendered', label: 'Rendered' }, { mode: 'live', label: 'Live' }, { mode: 'source', label: 'Source' }]
+/** As last chosen; live preview if never (or something this doesn't know). */
+const storedMode = (): Mode => MODES.find((m) => m.mode === localStorage.getItem(MODE))?.mode ?? 'live'
 /** Where each file was left (scroll and cursor), for as long as the window lives: it opens there again. */
 const places = new Map<string, { top: number; anchor: number; head: number }>()
 /**
@@ -89,6 +96,17 @@ const codeHighlight = HighlightStyle.define([
 /** The file's language by its name (or none): loaded on demand, as most files need only one. */
 const languageOf = (path: string) => LanguageDescription.matchFilename(languages, path.split('/').at(-1) ?? path)
 
+/** `name` from the folder `dir` (`a/b/`, or '' at the top), as a path in the thread's folder; undefined if outside it. */
+function resolve(dir: string, name: string) {
+  if (/^([/~]|[a-z][\w+.-]*:)/i.test(name)) return undefined
+  const parts: string[] = []
+  for (const part of `${dir}${name}`.split('/')) {
+    if (part === '..') { if (!parts.pop()) return undefined }
+    else if (part !== '.' && part !== '') parts.push(part)
+  }
+  return parts.join('/')
+}
+
 /** The text as it is on disk, after `next` changed it there: only the part that differs, so the cursor stays put. */
 function minimalChange(current: string, next: string) {
   let start = 0
@@ -116,8 +134,14 @@ function goToLine(view: EditorView, line: number, scroller: HTMLElement | null) 
 
 export function FileEditor({ machine, thread, path, line, onLink, actions, children, onOpenFile }: FileEditorProps) {
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path)
-  const [mode, setMode] = useState<'live' | 'source'>(() => localStorage.getItem(MODE) === 'source' ? 'source' : 'live')
-  const live = isMarkdown && mode === 'live'
+  const [mode, setMode] = useState<Mode>(storedMode)
+  /** The editor in live preview: shown, or kept behind the rendered text. */
+  const live = isMarkdown && mode !== 'source'
+  const rendered = isMarkdown && mode === 'rendered'
+  const renderedRef = useRef(rendered)
+  renderedRef.current = rendered
+  /** The text rendered: the editor's, as it changes, while it's shown. */
+  const [text, setText] = useState<string>()
   const host = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const place = `${machine.id}/${thread.id}/${path}`
@@ -133,7 +157,8 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
   const [conflict, setConflictState] = useState<string>()
   const conflictRef = useRef<string>(undefined)
   const setConflict = (text: string | undefined) => { conflictRef.current = text; setConflictState(text) }
-  const dispatch = useRegistry().router.dispatch
+  const registry = useRegistry()
+  const dispatch = registry.router.dispatch
   const linkRef = useRef(onLink)
   linkRef.current = onLink
   // The line to open at, for the editor made below.
@@ -183,11 +208,13 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
     if (!host.current) return
     let alive = true
     disk.current = undefined
+    setText(undefined)
     setNote(undefined)
     setConflict(undefined)
     client(machine.id).call('file.read', { id: thread.id, path }).then(({ content }) => {
       if (!alive || !host.current) return
       disk.current = content
+      setText(content)
       view.current = new EditorView({
         parent: host.current,
         doc: content,
@@ -200,6 +227,8 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
           // What the agent (or anyone) changes on disk flashes as it arrives.
           arrivals(fromDisk),
           EditorView.updateListener.of((update) => {
+            // Rendered, it follows the text: what arrives from disk, and what's taken over it.
+            if (update.docChanged && renderedRef.current) setText(update.state.doc.toString())
             if (!update.docChanged || update.transactions.every((t) => t.annotation(fromDisk))) return
             setNote({ text: 'Edited' })
             clearTimeout(timer.current)
@@ -258,6 +287,20 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
   // Live preview or source, without losing the cursor or undo.
   useEffect(() => { view.current?.dispatch({ effects: modeSlot.current.reconfigure(modeExtensions(live)) }) }, [live])
 
+  // Rendered or the editor, each scrolled as far through the text as the other was. The editor stays as it was, only
+  // hidden: its cursor, undo and search.
+  const through = useRef<number>(undefined)
+  useLayoutEffect(() => {
+    const el = scroller.current
+    const at = through.current
+    through.current = undefined
+    if (!el || at === undefined) return
+    const scroll = () => { el.scrollTop = at * (el.scrollHeight - el.clientHeight) }
+    // The editor measures itself once shown.
+    scroll()
+    requestAnimationFrame(scroll)
+  }, [rendered])
+
   // The file on disk as it changes, whoever changes it (the agent, another editor, git), watched on its machine: shown
   // here at once when nothing typed here is waiting to be saved, else asked about. Its own saves are recognised.
   const connected = machine.state === 'connected'
@@ -300,8 +343,42 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
   }
   const keepMine = () => { disk.current = conflict; setConflict(undefined); void save() }
 
-  const chooseMode = (next: 'live' | 'source') => { localStorage.setItem(MODE, next); setMode(next) }
-  const registry = useRegistry()
+  const chooseMode = (next: Mode) => {
+    localStorage.setItem(MODE, next)
+    const el = scroller.current
+    if (el && (next === 'rendered') !== rendered) through.current = el.scrollTop / Math.max(1, el.scrollHeight - el.clientHeight)
+    if (next === 'rendered' && view.current) setText(view.current.state.doc.toString())
+    setMode(next)
+  }
+
+  // A file the text names: from beside this one first, as a link in it means, else as a message's would be (by its
+  // name, anywhere in the folder). Opened beside the thread, in the pane kind that takes it; else why not.
+  const findAndOpen = async (name: string): Promise<string | undefined> => {
+    if (linkRef.current) return void linkRef.current({ kind: /[/.]/.test(name) ? 'url' : 'wiki', target: name })
+    try {
+      const peer = client(machine.id)
+      const at = /^(.+?)((?::\d+)+|#L\d+.*)$/.exec(name)
+      const near = resolve(path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : '', at?.[1] ?? name)
+      const beside = near ? await peer.call('file.find', { id: thread.id, name: `${near}${at?.[2] ?? ''}` }) : undefined
+      const found = beside && (beside.path === near || beside.path === `${near}.md`) ? beside : await peer.call('file.find', { id: thread.id, name })
+      if (found.outside) return "outside this thread's folder"
+      if (found.path === null) return "not in this thread's folder"
+      const kind = found.folder ? folderKind(registry, thread) : fileKind(registry, thread, found.path)
+      if (!kind) return 'a folder, and nothing here shows folders'
+      await dispatch('pane.open', { id: thread.id, kind, params: { path: found.path, ...(found.line ? { line: found.line } : {}) } }, { machine: machine.id, source: 'editor' })
+      return undefined
+    } catch (error) { return (error as Error).message }
+  }
+  const findAndOpenRef = useRef(findAndOpen)
+  findAndOpenRef.current = findAndOpen
+  // Kept the same, so the rendered text isn't laid out again on each render here.
+  const openFile = useCallback((name: string) => findAndOpenRef.current(name), [])
+  // A web page it links to, opened beside the thread.
+  const openUrl = useCallback((url: string) => {
+    const host = URL.parse(url)?.host
+    void dispatch('pane.open', { id: thread.id, kind: 'preview', ...(host ? { title: host } : {}), params: { url } }, { machine: machine.id, source: 'editor' })
+      .catch((error) => console.error(error))
+  }, [machine.id, thread.id])
   const slot: EditorSlotProps = {
     machine, thread, path,
     open: (file, { beside = false } = {}) => onOpenFile
@@ -309,7 +386,7 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
       : void dispatch('pane.open', { id: thread.id, kind: fileKind(registry, thread, file), params: { path: file } }, { machine: machine.id, source: 'editor' }),
   }
   return (
-    <div className={`file-editor ${live ? 'file-editor--live' : ''}`}>
+    <div className={`file-editor ${rendered ? 'file-editor--rendered' : live ? 'file-editor--live' : ''}`}>
       <div className="pane-bar">
         <code title={path}>{path}</code>
         <span className={`pane-bar__note ${note?.error ? 'is-error' : ''}`}>{note?.text}</span>
@@ -317,8 +394,9 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
         <Slot name="editor.bar" props={slot} />
         {isMarkdown && (
           <span className="file-editor__mode" role="group" aria-label="Show as">
-            <button className={live ? 'is-on' : ''} aria-pressed={live} onClick={() => chooseMode('live')}>Live</button>
-            <button className={!live ? 'is-on' : ''} aria-pressed={!live} onClick={() => chooseMode('source')}>Source</button>
+            {MODES.map(({ mode: each, label }) => (
+              <button key={each} className={mode === each ? 'is-on' : ''} aria-pressed={mode === each} onClick={() => chooseMode(each)}>{label}</button>
+            ))}
           </span>
         )}
       </div>
@@ -333,7 +411,18 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
         <Slot name="editor.side" props={slot} />
         <div className="file-editor__scroll" ref={scroller}
           onScroll={(e) => { const was = places.get(place); places.set(place, { anchor: was?.anchor ?? 0, head: was?.head ?? 0, top: e.currentTarget.scrollTop }) }}>
-          <div className="file-editor__host" ref={host} />
+          <div className="file-editor__host" ref={host} hidden={rendered} />
+          {rendered && text !== undefined && (
+            <div className="file-editor__rendered" tabIndex={-1}>
+              <OpenFile.Provider value={openFile}>
+                <OpenUrl.Provider value={openUrl}>
+                  <ThreadMachine.Provider value={machine.id}>
+                    <Markdown text={text} />
+                  </ThreadMachine.Provider>
+                </OpenUrl.Provider>
+              </OpenFile.Provider>
+            </div>
+          )}
           {children && <div className="file-editor__after">{children}</div>}
         </div>
       </div>

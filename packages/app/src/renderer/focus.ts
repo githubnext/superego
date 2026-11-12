@@ -15,11 +15,12 @@ function regions(): HTMLElement[] {
 
 /**
  * What to focus in a region: what's used there. A thread is its transcript (to read and scroll; typing goes on to the
- * prompt), an editor its text, a page itself; any other pane takes the focus itself.
+ * prompt), an editor its text (rendered, the text to read), a page itself; any other pane takes the focus itself.
  */
 function target(region: HTMLElement): HTMLElement | null {
   return region.querySelector<HTMLElement>('.superego-list-item.is-selected[tabindex]')
     ?? region.querySelector<HTMLElement>('.thread__scroll')
+    ?? region.querySelector<HTMLElement>('.file-editor__rendered')
     ?? region.querySelector<HTMLElement>('.cm-content')
     ?? region.querySelector<HTMLElement>('.superego-list-item[tabindex]')
     ?? region.querySelector<HTMLElement>('.panes__body iframe')

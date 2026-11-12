@@ -223,6 +223,23 @@ if (phase === 'first') {
   await until(`[...document.querySelectorAll('.diff-row--add')].some((r) => r.textContent.endsWith('+two'))`, 'changes pane shows the edit')
   await run(`window.superego.call('local', 'pane.open', { id: '${paned}', kind: 'editor', params: { path: 'notes.md' } })`)
   await until(`document.querySelector('.cm-content')?.textContent.includes('two')`, 'editor pane shows the file')
+  // Rendered: read as a message reads, following the file as it changes; the editor kept behind it, for Live again.
+  await run(`[...document.querySelectorAll('.file-editor__mode button')].find((b) => b.textContent === 'Rendered').click()`)
+  await until(`document.querySelector('.file-editor__rendered .md')?.textContent.includes('two') && document.querySelector('.file-editor__host').hidden`, 'rendered shows the file')
+  await run(`window.superego.call('local', 'file.write', { id: '${paned}', path: 'notes.md', content: '# Notes\\n\\ntwo, and **three**, see [[page.html]]\\n' })`)
+  await until(`document.querySelector('.file-editor__rendered h1')?.textContent === 'Notes' && document.querySelector('.file-editor__rendered strong')?.textContent === 'three' && document.querySelector('.file-editor__rendered a.md__file')?.textContent === 'page.html'`, 'rendered follows the file')
+  if (await run(`Boolean(document.querySelector('.file-editor__rendered .cm-content, .file-editor__rendered [contenteditable]'))`)) { await fail('rendered is editable'); throw new Error('failed') }
+  // Its links open files beside the thread, as a message's do.
+  git('mkdir', ['-p', `${repo}/docs`]); writeFileSync(`${repo}/docs/plan.md`, 'the plan\n')
+  await run(`window.superego.call('local', 'file.write', { id: '${paned}', path: 'notes.md', content: '# Notes\\n\\ntwo, and **three**, see [[page.html]] and [the plan](docs/plan.md)\\n' })`)
+  await until(`[...document.querySelectorAll('.file-editor__rendered a.md__file')].some((a) => a.textContent === 'the plan')`, 'a link to a file')
+  await run(`[...document.querySelectorAll('.file-editor__rendered a.md__file')].find((a) => a.textContent === 'the plan').click()`)
+  await until(`[...document.querySelectorAll('.panes__tab')].some((t) => t.textContent.startsWith('plan.md'))`, 'the link opened the file beside')
+  const plan = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${paned}').panes.find((p) => p.params?.path === 'docs/plan.md').id)`)
+  await run(`window.superego.call('local', 'pane.close', { id: '${paned}', pane: '${plan}' })`)
+  await until(`![...document.querySelectorAll('.panes__tab')].some((t) => t.textContent.startsWith('plan.md'))`, 'and closed')
+  await run(`[...document.querySelectorAll('.file-editor__mode button')].find((b) => b.textContent === 'Live').click()`)
+  await until(`!document.querySelector('.file-editor__rendered') && !document.querySelector('.file-editor__host').hidden && document.querySelector('.cm-content')?.textContent.includes('three')`, 'live again, with the change')
   await run(`window.superego.call('local', 'pane.open', { id: '${paned}', kind: 'artifact', params: { path: 'page.html' } })`)
   const artifactRan = async () => {
     for (let i = 0; i < 100; i++) {

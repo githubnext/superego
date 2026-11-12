@@ -85,7 +85,7 @@
 .transcript__error { color: var(--superego-status-error); font-size: var(--superego-text-ui); border-left: 2px solid currentColor; padding-left: var(--superego-space-3); }
 .msg { overflow-wrap: anywhere; }
 /* What's read and copied: messages, the agent's thinking and output, diffs, files, errors. */
-:is(.msg, .step__note, .step__thinking, .step__output, .transcript__error, .composer__error, .diff-file__body, .file-editor .cm-editor, .service-notice__detail) { -webkit-user-select: text; user-select: text; }
+:is(.msg, .step__note, .step__thinking, .step__output, .transcript__error, .composer__error, .diff-file__body, .file-editor .cm-editor, .file-editor__rendered, .service-notice__detail) { -webkit-user-select: text; user-select: text; }
 /* Your turns: a bubble on the right, with clear air above; the agent's work reads down the column. */
 .msg--user { white-space: pre-wrap; align-self: flex-end; max-width: 78%; background: var(--superego-bubble); border-radius: 14px; padding: 8px 13px; line-height: 1.5; }
 /* A turn starts well clear of the last one (56px against 12px inside a turn). */
@@ -431,9 +431,15 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .file-editor__host .cm-editor.cm-focused { outline: none; }
 .file-editor__host .cm-scroller { font-family: var(--superego-mono); overflow: visible; }
 .file-editor__host .cm-gutters { background: var(--superego-sidebar-bg); border-right: 1px solid var(--superego-border); color: var(--superego-faint); }
-.file-editor:not(.file-editor--live) .file-editor__scroll { background: var(--superego-bg); }
+.file-editor:not(.file-editor--live, .file-editor--rendered) .file-editor__scroll { background: var(--superego-bg); }
 .file-editor__after { padding: 0 var(--superego-space-5) 48px; max-width: 720px; margin: 0 auto; }
-.file-editor--live .file-editor__after { box-sizing: content-box; }
+:is(.file-editor--live, .file-editor--rendered) .file-editor__after { box-sizing: content-box; }
+/* Rendered: the file read as a message reads, in live preview's column. */
+.file-editor__rendered { max-width: 720px; margin: 0 auto; padding: 20px var(--superego-space-5) 32px; font-size: var(--superego-text-body); line-height: var(--superego-leading-body); overflow-wrap: anywhere; }
+.file-editor__rendered:focus-visible { outline: none; }
+/* A task list is its boxes, as live preview shows it. */
+.file-editor__rendered .contains-task-list { list-style: none; padding-left: 0; }
+.file-editor__rendered .task-list-item input { margin: 0 0.45em 0 0; vertical-align: -0.1em; }
 .file-editor__mode { display: inline-flex; border: 1px solid var(--superego-border); border-radius: 6px; overflow: hidden; flex: none; }
 .file-editor__mode button { font: inherit; font-size: calc(12px * var(--superego-text-scale)); border: 0; background: none; color: var(--superego-muted); padding: 2px 8px; cursor: default; }
 .file-editor__mode button.is-on { background: color-mix(in srgb, var(--superego-text) 9%, transparent); color: var(--superego-text); }
