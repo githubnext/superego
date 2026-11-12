@@ -32,6 +32,8 @@ export type ThreadInfo = {
   model?: string
   /** Whether it chose its own model and thinking, rather than following the machine's settings. */
   ownModel?: boolean
+  /** The model (`provider/model`) and thinking it chose itself, rather than following its profile or the machine's settings. */
+  chosen?: { model?: string; thinking?: string }
   /** What it has spent so far, in dollars, as the providers price it. */
   cost?: number
   /** The panes open beside it, and the one in front (none: the thread itself). */

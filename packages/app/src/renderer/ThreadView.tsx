@@ -40,10 +40,15 @@ export type Composer = {
   text: string
   /** Replace what's typed with `text`, ready to send or change. */
   fill(text: string): void
-  /** Offer `text` in the empty composer, taken with ⇥; undefined offers nothing. */
-  hint(text: string | undefined): void
+  /**
+   * Offer `messages` in the empty composer: ←/→ pick one (shown as the placeholder), ⏎ sends it, ⇥ puts it in the box
+   * to change. Undefined (or none) offers nothing.
+   */
+  suggest(messages: string[] | undefined): void
+  /** Which offered message is picked, while the composer offers them. */
+  picked: number | undefined
 }
-const ComposerContext = createContext<Composer>({ text: '', fill() {}, hint() {} })
+const ComposerContext = createContext<Composer>({ text: '', fill() {}, suggest() {}, picked: undefined })
 
 /** The composer of the thread this is drawn above. */
 export const useComposer = () => useContext(ComposerContext)
@@ -137,6 +142,9 @@ function UnarchiveButton({ machine, thread, className = '' }: { machine: Machine
   )
 }
 
+/** How far from its end a transcript still counts as at its end, and follows what comes in. */
+const PINNED = 80
+
 /** A thread's transcript and composer. Also what a "thread" pane draws. */
 export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const registry = useRegistry()
@@ -209,10 +217,22 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
     if (el && view && !atStart && !older.loading && el.scrollHeight <= el.clientHeight + 200) loadOlder()
   }, [view, atStart, older.loading])
 
-  useEffect(() => {
+  // At the end, the transcript stays at its end as anything changes size: a reply streaming in, a step opening, code
+  // laid out, the composer floating over the end growing (suggestions, a question, files; the transcript keeps room for
+  // it below its end, --dock). Scrolled up past the dead zone (PINNED), it stays where it was put.
+  useLayoutEffect(() => {
     const el = scroller.current
-    if (el && pinned.current) el.scrollTop = el.scrollHeight
-  }, [watched])
+    const column = el?.querySelector<HTMLElement>('.thread__column')
+    const dock = el?.parentElement?.querySelector<HTMLElement>(':scope > .dock')
+    if (!el || !column || !dock) return
+    const observer = new ResizeObserver(() => {
+      el.parentElement!.style.setProperty('--dock', `${dock.offsetHeight}px`)
+      if (pinned.current) el.scrollTop = el.scrollHeight
+    })
+    observer.observe(column)
+    observer.observe(dock)
+    return () => observer.disconnect()
+  }, [])
 
   return (
     <OpenFile.Provider value={openFile}>
@@ -223,7 +243,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
       <div className="thread__scroll" ref={scroller}
         onScroll={(e) => {
           const el = e.currentTarget
-          pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+          pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < PINNED
           setAway(el.scrollHeight - el.scrollTop - el.clientHeight > 200)
           el.parentElement?.classList.toggle('is-scrolled', el.scrollTop > 8)
           if (el.scrollTop < el.clientHeight) loadOlder()
@@ -734,8 +754,11 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
   }, [wanting, machine.id])
   useEffect(() => { setPick(0) }, [naming?.query, naming?.start])
   useEffect(() => { if (!naming) setDismissed(undefined) }, [naming === undefined])
-  // What an extension above offers, and what it puts in.
-  const [hint, setHint] = useState<string>()
+  // What an extension above offers, picked from with ←/→ while the box is empty, and what it puts in.
+  const [offers, setOffers] = useState<{ messages: string[]; picked: number }>({ messages: [], picked: 0 })
+  const offering = !claim && !text && !busy && offers.messages.length > 0
+  const suggested = offering ? offers.messages[offers.picked] : undefined
+  const suggest = useCallback((messages: string[] | undefined) => setOffers({ messages: messages ?? [], picked: 0 }), [])
   const composer = useMemo<Composer>(() => ({
     text,
     fill(next) {
@@ -743,9 +766,9 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
       setCaret(next.length)
       requestAnimationFrame(() => { input.current?.focus(); input.current?.setSelectionRange(next.length, next.length) })
     },
-    hint: setHint,
-  }), [text, setText])
-  const suggested = !claim && !text && !busy ? hint : undefined
+    suggest,
+    picked: offering ? offers.picked : undefined,
+  }), [text, setText, suggest, offering, offers.picked])
   const takeSkill = (skill: SkillInfo) => {
     if (!naming) return
     const word = `${naming.trigger === '$' ? '$' : '/skill:'}${skill.name} `
@@ -756,9 +779,10 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
     requestAnimationFrame(() => { input.current?.setSelectionRange(at, at); input.current?.focus() })
   }
 
-  const send = async (whenBusy: 'steer' | 'followUp' = 'steer') => {
+  /** Send what the box holds (`typed`: a suggestion picked instead). */
+  const send = async (whenBusy: 'steer' | 'followUp' = 'steer', typed?: string) => {
     // What the box holds now: a keypress straight after typing can come before the typing's render.
-    const value = (input.current?.value ?? text).trim()
+    const value = (typed ?? input.current?.value ?? text).trim()
     const sending = claim ? [] : files
     if (!value && !sending.length) return
     setText('')
@@ -787,7 +811,16 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
       if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) { event.preventDefault(); takeSkill(menu[pick] ?? menu[0]!); return }
       if (event.key === 'Escape') { event.preventDefault(); setDismissed(naming.start); return }
     }
-    if (event.key === 'Tab' && !event.shiftKey && suggested) { event.preventDefault(); composer.fill(suggested); return }
+    if (suggested && !event.metaKey && !event.altKey && !event.ctrlKey && !event.shiftKey) {
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault()
+        const by = event.key === 'ArrowRight' ? 1 : -1
+        setOffers((o) => ({ ...o, picked: (o.picked + by + o.messages.length) % o.messages.length }))
+        return
+      }
+      if (event.key === 'Tab') { event.preventDefault(); composer.fill(suggested); return }
+      if (event.key === 'Enter') { event.preventDefault(); void send('steer', suggested); return }
+    }
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(event.ctrlKey ? 'followUp' : 'steer') }
     if (event.key === 'Escape' && busy) { event.preventDefault(); void abort() }
   }
@@ -856,7 +889,7 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
       <TextArea ref={input} rows={1} value={text} disabled={disabled} onChange={(e) => { setText(e.target.value); setCaret(e.target.selectionStart) }} onKeyDown={onKeyDown}
         onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
         onPaste={(e) => { if (!claim && e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files) } }}
-        placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : suggested ? `${suggested}  ⇥` : 'Ask anything'} />
+        placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : suggested ? `${suggested}  ⏎` : 'Ask anything'} />
       <div className="composer__actions">
         {/* The box holds the text and its one action; the others (attach, Queue, Stop) float over it. */}
         {/* Send (an arrow on), Steer (an arrow turning into the work), Answer: one key, ⏎. */}

@@ -161,7 +161,7 @@ describe('new threads', () => {
     await expect(peer.call('thread.create', { model: 'nope/nope' })).rejects.toMatchObject({ kind: 'invalid' })
 
     const created = await peer.call<ThreadInfo>('thread.create', { cwd: dir, model: 'faux/faux-1', prompt: 'first words' })
-    expect(created).toMatchObject({ cwd: dir, title: 'first words', ownModel: true })
+    expect(created).toMatchObject({ cwd: dir, title: 'first words', ownModel: true, chosen: { model: 'faux/faux-1' } })
     await until(async () => (await threads(peer))[0]!.status.state === 'done')
     // Changing this machine's default leaves the thread on its own model.
     await peer.call('settings.set', { key: 'agent.model', value: 'faux/faux-1' })

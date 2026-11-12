@@ -63,7 +63,8 @@
 /* The thread: a crumb, a title and a reading column; the composer floats at the bottom. */
 .thread { display: flex; flex-direction: column; flex: 1; min-height: 0; position: relative; }
 .thread__scroll { flex: 1; overflow: auto; scrollbar-gutter: stable; }
-.thread__column { width: var(--superego-column); max-width: calc(100% - 2 * var(--superego-space-6)); margin: 0 auto; padding: var(--superego-space-4) 0 170px; }
+/* Room below the end for the composer floating over it (--dock: its height, kept by ThreadBody), its bar above it, and air. */
+.thread__column { width: var(--superego-column); max-width: calc(100% - 2 * var(--superego-space-6)); margin: 0 auto; padding: var(--superego-space-4) 0 calc(var(--dock, 70px) + 100px); }
 /* Text scrolls away under soft edges: at the top, and behind the floating composer. */
 .thread::before, .thread::after { content: ''; position: absolute; left: 0; right: 12px; pointer-events: none; z-index: 1; }
 .thread::before { top: 0; height: 16px; background: linear-gradient(var(--superego-bg), transparent); opacity: 0; transition: opacity .15s; }
