@@ -738,7 +738,8 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
   }
 
   const send = async (whenBusy: 'steer' | 'followUp' = 'steer') => {
-    const value = text.trim()
+    // What the box holds now: a keypress straight after typing can come before the typing's render.
+    const value = (input.current?.value ?? text).trim()
     const sending = claim ? [] : files
     if (!value && !sending.length) return
     setText('')
