@@ -47,7 +47,9 @@ void (async () => {
   for (const [index, id] of ids.entries()) {
     await run(`window.superego.call('local', 'thread.seen', { id: '${id}' })`)
     await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.dataset.thread === '${id}' || li.textContent.includes(${JSON.stringify(threads[index].prompt.slice(0, 20))}))?.click()`)
-    await until(`document.querySelectorAll('.transcript .msg').length > 2`, `thread ${index + 1} shown`)
+    // Shown once the title bar names it and its transcript is in (a thread may be just a prompt and its answer).
+    const title = await run(`window.superego.call('local', 'thread.list', {}).then((list) => list.find((t) => t.id === '${id}').title)`)
+    await until(`document.querySelector('.thread__title')?.title === ${JSON.stringify(title)} && document.querySelectorAll('.transcript .msg').length >= 2`, `thread ${index + 1} shown`)
     for (const theme of ['light', 'dark']) {
       nativeTheme.themeSource = theme
       await sleep(400)
