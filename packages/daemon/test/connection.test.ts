@@ -53,7 +53,7 @@ it('keeps a peer that keeps pinging, and one that never pings', async () => {
   quiet.socket.destroy()
 })
 
-it('refuses an upload id still held, so a reused id can't upset the accounting', async () => {
+it('refuses an upload id still held, so a reused id cannot upset the accounting', async () => {
   const { peer, socket } = await connect(10_000)
   const upload = async (data: string) => {
     await peer.call('ch.open', { ch: 'same', kind: 'upload', params: { name: 'a.txt', mimeType: 'text/plain', size: data.length }, window: 1 << 20 })

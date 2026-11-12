@@ -485,11 +485,21 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return { name, title: bundled?.title, description: bundled?.description }
   }))
   const features = [...FEATURES, ...(options.extensions ?? []).map((extension) => `ext:${extension.name}`)]
+  // Whether this daemon outlives a logout, for hello: asked now, then again in the background at most once a minute,
+  // so hello never waits on loginctl.
+  let keeps = { at: Date.now(), value: await keepsRunning(options.app), asking: false }
+  const kept = () => {
+    if (Date.now() - keeps.at > 60_000 && !keeps.asking) {
+      keeps.asking = true
+      void keepsRunning(options.app).then((value) => { keeps = { at: Date.now(), value, asking: false } }, () => { keeps = { ...keeps, at: Date.now(), asking: false } })
+    }
+    return keeps.value
+  }
 
   // The other machines, reached through links this daemon keeps (see relay.ts); this one first, as 'local'.
   const relay = createRelay(options.reach?.(machine), () => ({
     id: 'local', label: machine.hostname, state: 'connected', machine: { id: machine.id, hostname: machine.hostname }, features,
-    keepsRunning: keepsRunning(options.app),
+    keepsRunning: kept(),
   }))
   cleanups.push(() => relay.close())
   router.register(defineAction({
@@ -926,7 +936,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           if (version !== PROTOCOL_VERSION) throw versionMismatch(options.app, machine.hostname, version)
           if (typeof name === 'string') client = name
           clients.hello(self, client, typeof label === 'string' ? label : undefined)
-          return { version: PROTOCOL_VERSION, features, machine: { ...machine, keepsRunning: keepsRunning(options.app) }, methods: peer.methods, client: self }
+          return { version: PROTOCOL_VERSION, features, machine: { ...machine, keepsRunning: kept() }, methods: peer.methods, client: self }
         },
         async 'clients.watch'() {
           const sub = randomUUID()

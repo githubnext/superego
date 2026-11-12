@@ -2,23 +2,30 @@
 // with lingering on Linux, starts it at boot and keeps it through a logout. Without one the daemon is only a detached
 // process that the first connection started: it ends with a reboot. Every command that touches the system goes through
 // `run`, so tests write into a temp home and record the commands instead of installing anything.
-import { spawnSync } from 'node:child_process'
+import { execFile, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, userInfo } from 'node:os'
 import { dirname, join } from 'node:path'
 import { envName, type AppConfig, type KeepsRunning } from '@superego/protocol'
 
-export type Run = (command: string, args: string[]) => { code: number; stdout: string; stderr: string }
+export type RunResult = { code: number; stdout: string; stderr: string }
+export type Run = (command: string, args: string[]) => RunResult
 
 export const realRun: Run = (command, args) => {
   const result = spawnSync(command, args, { encoding: 'utf8', timeout: 15_000 })
   return { code: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? result.error?.message ?? '' }
 }
 
+/** The same, without blocking: for what a running daemon asks. */
+const realRunAsync = (command: string, args: string[]) => new Promise<RunResult>((resolve) => {
+  execFile(command, args, { encoding: 'utf8', timeout: 15_000 }, (error, stdout, stderr) =>
+    resolve({ code: error ? (typeof error.code === 'number' ? error.code : 1) : 0, stdout: stdout ?? '', stderr: stderr || (error?.message ?? '') }))
+})
+
 /** `<ID>_SERVICE_RUNNER`: a program that is run in place of systemctl, loginctl and launchctl (`runner systemctl --user …`), for tests. */
-const runnerFor = (app: AppConfig): Run => {
+function runnerFor<R>(app: AppConfig, run: (command: string, args: string[]) => R): (command: string, args: string[]) => R {
   const runner = process.env[envName(app, 'SERVICE_RUNNER')]
-  return runner ? (command, args) => realRun(runner, [command, ...args]) : realRun
+  return runner ? (command, args) => run(runner, [command, ...args]) : run
 }
 
 export type ServiceContext = {
@@ -40,7 +47,7 @@ function resolve(context: ServiceContext): Resolved {
   if (!kind) throw new Error(`No service manager known for ${platform}: run the daemon yourself, or leave it to be started on demand`)
   return {
     app: context.app, platform, kind, home: context.home ?? homedir(), user: context.user ?? userInfo().username,
-    uid: context.uid ?? process.getuid?.() ?? 0, run: context.run ?? runnerFor(context.app),
+    uid: context.uid ?? process.getuid?.() ?? 0, run: context.run ?? runnerFor(context.app, realRun),
   }
 }
 
@@ -188,21 +195,15 @@ export const runningUnder = (app: AppConfig, env: NodeJS.ProcessEnv = process.en
   return value === 'systemd' || value === 'launchd' ? value : null
 }
 
-let cached: { at: number; value: KeepsRunning } | undefined
-
 /**
  * Whether this daemon will outlive a logout and a reboot. Under a systemd unit that depends on lingering; under a launchd
  * agent on the login session (a Mac that stays logged in keeps it), so that is not known; with no service nothing
- * brings it back. Asking systemd takes a moment, so the answer is kept for a minute.
+ * brings it back. Asking systemd takes a moment, so this doesn't block: the daemon asks once a minute at most.
  */
-export function keepsRunning(app: AppConfig, options: { env?: NodeJS.ProcessEnv; run?: Run; user?: string; now?: number } = {}): KeepsRunning {
-  const now = options.now ?? Date.now()
-  if (!options.env && !options.run && cached && now - cached.at < 60_000) return cached.value
+export async function keepsRunning(app: AppConfig, options: { env?: NodeJS.ProcessEnv; run?: (command: string, args: string[]) => RunResult | Promise<RunResult>; user?: string } = {}): Promise<KeepsRunning> {
   const service = runningUnder(app, options.env)
-  let afterLogout: boolean | null = false
-  if (service === 'systemd') afterLogout = isLingering({ ...resolve({ app, platform: 'linux', ...(options.user ? { user: options.user } : {}), ...(options.run ? { run: options.run } : {}) }) })
-  else if (service === 'launchd') afterLogout = null
-  const value = { service, afterLogout }
-  if (!options.env && !options.run) cached = { at: now, value }
-  return value
+  if (service !== 'systemd') return { service, afterLogout: service === 'launchd' ? null : false }
+  const run = options.run ?? runnerFor(app, realRunAsync)
+  const result = await run('loginctl', ['show-user', options.user ?? userInfo().username, '--property=Linger'])
+  return { service, afterLogout: result.code !== 0 ? null : /^Linger=yes/m.test(result.stdout) }
 }

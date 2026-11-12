@@ -124,18 +124,18 @@ describe('installing a service', () => {
 })
 
 describe('keepsRunning, as hello reports it', () => {
-  it('is nothing for a daemon no service started: it ends with the machine', () => {
-    expect(keepsRunning(app, { env: {} })).toEqual({ service: null, afterLogout: false })
+  it('is nothing for a daemon no service started: it ends with the machine', async () => {
+    expect(await keepsRunning(app, { env: {} })).toEqual({ service: null, afterLogout: false })
   })
 
-  it('under systemd it is whether the user lingers', () => {
+  it('under systemd it is whether the user lingers', async () => {
     const env = { SUPEREGO_SERVICE: 'systemd' }
-    expect(keepsRunning(app, { env, user: 'me', run: recorder({ 'loginctl show-user me': { stdout: 'Linger=yes\n' } }).run })).toEqual({ service: 'systemd', afterLogout: true })
-    expect(keepsRunning(app, { env, user: 'me', run: recorder({ 'loginctl show-user me': { stdout: 'Linger=no\n' } }).run })).toEqual({ service: 'systemd', afterLogout: false })
-    expect(keepsRunning(app, { env, user: 'me', run: recorder({ 'loginctl show-user me': { code: 1 } }).run })).toEqual({ service: 'systemd', afterLogout: null })
+    expect(await keepsRunning(app, { env, user: 'me', run: recorder({ 'loginctl show-user me': { stdout: 'Linger=yes\n' } }).run })).toEqual({ service: 'systemd', afterLogout: true })
+    expect(await keepsRunning(app, { env, user: 'me', run: recorder({ 'loginctl show-user me': { stdout: 'Linger=no\n' } }).run })).toEqual({ service: 'systemd', afterLogout: false })
+    expect(await keepsRunning(app, { env, user: 'me', run: recorder({ 'loginctl show-user me': { code: 1 } }).run })).toEqual({ service: 'systemd', afterLogout: null })
   })
 
-  it('under launchd it is not known: the agent lasts as long as the login session', () => {
-    expect(keepsRunning(app, { env: { SUPEREGO_SERVICE: 'launchd' } })).toEqual({ service: 'launchd', afterLogout: null })
+  it('under launchd it is not known: the agent lasts as long as the login session', async () => {
+    expect(await keepsRunning(app, { env: { SUPEREGO_SERVICE: 'launchd' } })).toEqual({ service: 'launchd', afterLogout: null })
   })
 })
