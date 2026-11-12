@@ -30,8 +30,10 @@ declare module '@phosphor-icons/react' {
   export const LifebuoyIcon: Icon
   export const ListIcon: Icon
   export const MagnifyingGlassIcon: Icon
+  export const MinusIcon: Icon
   export const NotePencilIcon: Icon
   export const PaperclipIcon: Icon
+  export const PauseIcon: Icon
   export const PencilSimpleIcon: Icon
   export const PlusIcon: Icon
   export const SidebarSimpleIcon: Icon
@@ -40,4 +42,5 @@ declare module '@phosphor-icons/react' {
   export const StopIcon: Icon
   export const TerminalIcon: Icon
   export const WrenchIcon: Icon
+  export const XIcon: Icon
 }

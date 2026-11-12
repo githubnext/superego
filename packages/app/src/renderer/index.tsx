@@ -45,6 +45,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
 export {
   defineUiExtension, fileKind, Slot, useApp, useRegistry,
   type EditorSlotProps, type EntryProps, type PaneKind, type PaneProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type UiApi, type UiExtension,
+  type WorkBlock, type WorkPart, type WorkRun, type WorkStatus,
 } from './extension.tsx'
 export { useAppSetting } from './client.ts'
 export { useDispatch } from './Shell.tsx'

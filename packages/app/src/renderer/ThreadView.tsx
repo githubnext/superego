@@ -1,10 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, Button, CaretRightIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, PaperclipIcon, PencilSimpleIcon, SparkleIcon, SquareSplitHorizontalIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon } from '@superego/ui'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, Button, CaretRightIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, SquareSplitHorizontalIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
-import { fileKind, paneMenu, Slot, useRegistry, type ToolCallProps } from './extension.tsx'
+import { divideWork, fileKind, paneMenu, Slot, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useShell } from './state.tsx'
 import { Markdown, OpenFile, OpenUrl, Scroll } from './Markdown.tsx'
 import { useLocalState } from './local-state.ts'
@@ -13,7 +13,6 @@ import { matchSkills, skillAt, type SkillInfo } from './skill-names.ts'
 import { useProfileUi } from './profile-ui.ts'
 import { ThreadPanes } from './panes.tsx'
 
-type Block = { type: string; text?: string; thinking?: string; id?: string; name?: string; arguments?: unknown }
 type Message = { role: string; content: string | Block[]; toolCallId?: string; isError?: boolean; details?: unknown }
 
 /** The thread a transcript belongs to, for extension renderers. */
@@ -196,6 +195,7 @@ export const shortPath = (path: string) => path.replace(/^\/(?:Users|home)\/[^/]
 
 function Transcript({ view, live }: { view: ConversationView; live: LiveState | undefined }) {
   const here = useContext(Here)
+  const registry = useRegistry()
   // Tool results render inside the call that asked for them.
   const results = useMemo(() => {
     const map = new Map<string, Message>()
@@ -208,6 +208,7 @@ function Transcript({ view, live }: { view: ConversationView; live: LiveState | 
   const running = new Map((live?.tools ?? []).map((slot) => [slot.callId, slot]))
   const partial = live?.generation?.message as Message | undefined
   const items = useMemo(() => flatten(view.entries, partial), [view.entries, partial])
+  const result = (id: string) => { const message = results.get(id); return message && { text: textOf(message), isError: Boolean(message.isError) } }
 
   return (
     <div className="transcript">
@@ -219,8 +220,16 @@ function Transcript({ view, live }: { view: ConversationView; live: LiveState | 
           case 'text': return (
             <div key={item.key} className={`msg msg__text ${item.narration ? 'msg__text--narration' : ''} ${item.streaming ? 'is-streaming' : ''}`}><Markdown text={item.text} /></div>
           )
-          case 'work': return <Work key={item.key} blocks={item.blocks} results={results} running={running} active={last && Boolean(live?.run)} />
-          case 'end': return <TurnEnd key={item.key} blocks={item.blocks} results={results} />
+          case 'work': {
+            // Extensions may divide a run into parts (an agent's reported tasks); the last part is the one going on, and a
+            // task still running is only ever that one (one left open when its run ends is interrupted).
+            const active = last && Boolean(live?.run)
+            const parts = divideWork(registry, { blocks: item.blocks, active, result })
+            return parts.map((part, i) => part.title !== undefined
+              ? <Task key={`${item.key}:${i}`} part={part} results={results} running={running} />
+              : part.blocks.length ? <Work key={`${item.key}:${i}`} blocks={part.blocks} results={results} running={running} active={active && i === parts.length - 1} /> : null)
+          }
+          case 'end': return <TurnEnd key={item.key} blocks={divideWork(registry, { blocks: item.blocks, active: false, result }).flatMap((part) => part.blocks)} results={results} />
         }
       })}
       {live?.run && !partial && here.thread.status.state === 'working' && <div className="transcript__thinking">working…</div>}
@@ -364,6 +373,13 @@ function Entry({ entry }: { entry: EntryRecord }) {
   return <div className="msg msg--note">{entry.kind}</div>
 }
 
+/** A run's blocks as rows: thinking, what the agent said along the way, tool calls. */
+const steps = (blocks: Block[], results: Map<string, Message>, running: Slots) => blocks.map((block, index) => block.type === 'thinking'
+  ? <Thinking key={index} text={block.thinking ?? ''} />
+  : block.type === 'text'
+    ? <div key={index} className="step__note"><Markdown text={block.text ?? ''} /></div>
+    : <ToolCall key={block.id ?? index} block={block} result={results.get(block.id!)} slot={running.get(block.id!)} />)
+
 /**
  * A run of work. One step shows as itself; more fold into one line saying what was done ("Read 2 files and ran a
  * command"), open while the run is going and closed once the agent has moved on.
@@ -373,11 +389,7 @@ function Entry({ entry }: { entry: EntryRecord }) {
  */
 function Work({ blocks, results, running, active }: { blocks: Block[]; results: Map<string, Message>; running: Slots; active: boolean }) {
   const [open, setOpen] = useState<boolean>()
-  const rows = blocks.map((block, index) => block.type === 'thinking'
-    ? <Thinking key={index} text={block.thinking ?? ''} />
-    : block.type === 'text'
-      ? <div key={index} className="step__note"><Markdown text={block.text ?? ''} /></div>
-      : <ToolCall key={block.id ?? index} block={block} result={results.get(block.id!)} slot={running.get(block.id!)} />)
+  const rows = steps(blocks, results, running)
   if (blocks.length === 1 && blocks[0]!.type !== 'text') return <div className="steps">{rows}</div>
   const calls = blocks.filter((b) => b.type === 'toolCall')
   const failed = calls.filter((b) => results.get(b.id!)?.isError).length
@@ -396,6 +408,44 @@ function Work({ blocks, results, running, active }: { blocks: Block[]; results: 
       <div className="run__steps">{rows}</div>
     </details>
   )
+}
+
+/**
+ * A titled part of a run (a task the agent reported): how it went, its title, and its outcome under it, all shown
+ * folded; its steps under that, opened by hand.
+ */
+function Task({ part, results, running }: { part: WorkPart; results: Map<string, Message>; running: Slots }) {
+  const [open, setOpen] = useState(false)
+  const status = part.status ?? 'success'
+  const calls = part.blocks.filter((b) => b.type === 'toolCall')
+  const stats = sumStats(calls, results)
+  const rows = steps(part.blocks, results, running)
+  const summary = (
+    <>
+      {status === 'running' ? <StatusGlyph status={{ state: 'working' }} /> : <TaskIcon status={status} />}
+      <span className="task__body">
+        <span className="task__head">
+          <span className="row__label row__summary task__title" title={part.title}>{part.title}</span>
+          {(stats.added > 0 || stats.removed > 0) && <span className="row__meta"><Stat {...stats} /></span>}
+        </span>
+        {part.outcome && <span className="task__outcome">{part.outcome}</span>}
+      </span>
+    </>
+  )
+  if (!rows.length) return <div className={`steps task task--${status}`}><div className="row task__row">{summary}</div></div>
+  return (
+    <details className={`steps steps--run task task--${status}`} open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary className="row task__row" aria-label={`${part.title} — ${TASK_LABELS[status]}`}><Chevron />{summary}</summary>
+      <div className="run__steps">{rows}</div>
+    </details>
+  )
+}
+
+const TASK_LABELS: Record<WorkStatus, string> = { running: 'Running', success: 'Done', failure: 'Failed', inconclusive: 'Inconclusive', interrupted: 'Interrupted' }
+const TASK_ICONS: Record<Exclude<WorkStatus, 'running'>, PhosphorIcon> = { success: CheckIcon, failure: XIcon, inconclusive: MinusIcon, interrupted: PauseIcon }
+function TaskIcon({ status }: { status: Exclude<WorkStatus, 'running'> }) {
+  const Glyph = TASK_ICONS[status]
+  return <Glyph className="row__icon task__icon" size={14} weight="bold" aria-label={TASK_LABELS[status]} />
 }
 
 /** What a run mostly did, by weight: an edit matters more than a command, a command more than a read. */

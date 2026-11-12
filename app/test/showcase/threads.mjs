@@ -6,6 +6,10 @@ const text = (t) => ({ type: 'text', text: t })
 const thinking = (t) => ({ type: 'thinking', thinking: t })
 let ids = 0
 const call = (name, args) => ({ type: 'toolCall', id: `call-${++ids}`, name, arguments: args })
+// Tasks the agent reports (extensions/tasks): `task_start` returns its own call's id, which `task_finish` names.
+let task
+const start = (title) => (task = call('task_start', { title }))
+const finish = (status, outcome) => call('task_finish', { task_id: task.id, status, outcome })
 const turn = (content, stopReason = content.some((b) => b.type === 'toolCall') ? 'toolUse' : 'stop') => ({ content, stopReason })
 
 export const files = {
@@ -83,6 +87,7 @@ export const turns = [
   // ── Thread 1: dates ─────────────────────────────────────────────────────────────────────────────────────────────
   turn([
     thinking('Two symptoms: a day early (timezone — local midnight converted to UTC lands on the previous day east of Greenwich… or west, depending) and ISO dates producing Invalid Date (the split on "/" gives one element). Read the parser and its tests first.'),
+    start('Reproducing the date bugs'),
     text('Let me read the parser and its tests first.'),
     call('read', { path: 'src/dates.mjs' }),
     call('read', { path: 'test/dates.test.mjs' }),
@@ -90,6 +95,10 @@ export const turns = [
   turn([
     text('Both symptoms point at `parseDate`. Running the tests to see exactly how they fail:'),
     call('bash', { command: 'node --test 2>&1 | head -40' }),
+  ]),
+  turn([
+    finish('success', 'Two bugs: dates are built at local midnight, and ISO dates are split on "/".'),
+    start('Fixing parseDate'),
   ]),
   turn([
     thinking('new Date(year, month - 1, day) builds local midnight. With TZ=America/New_York that is 05:00Z — not a day early there, but in any zone east of UTC it is the previous day in UTC. Either way it is wrong: the result must be UTC midnight, so Date.UTC. ISO: "2026-11-03".split("/") is one element, so month and year are undefined → NaN → Invalid Date. Match ISO explicitly.'),
@@ -117,6 +126,9 @@ Fixing both in one place:`),
   ]),
   turn([
     call('bash', { command: 'node --test 2>&1 | head -8' }),
+  ]),
+  turn([
+    finish('success', 'Dates are built in UTC and ISO dates are matched first; both tests pass.'),
   ]),
   turn([
     text(`Fixed, and both tests pass.

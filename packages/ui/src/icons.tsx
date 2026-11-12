@@ -21,8 +21,10 @@ export {
   LifebuoyIcon,
   ListIcon,
   MagnifyingGlassIcon,
+  MinusIcon,
   NotePencilIcon,
   PaperclipIcon,
+  PauseIcon,
   PencilSimpleIcon,
   PlusIcon,
   SidebarSimpleIcon,
@@ -31,5 +33,6 @@ export {
   StopIcon,
   TerminalIcon,
   WrenchIcon,
+  XIcon,
   type Icon, type IconProps, type IconWeight,
 } from '@phosphor-icons/react'

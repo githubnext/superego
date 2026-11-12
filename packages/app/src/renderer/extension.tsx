@@ -65,6 +65,24 @@ export type EntryProps = { machine: MachineEntry; thread: ThreadInfo; entry: { i
 
 export type SettingsComponentProps = { target: string; section: SectionInfo }
 
+/** A block of what the agent wrote: thinking, text, or a tool call (`id`, `name`, `arguments`). */
+export type WorkBlock = { type: string; text?: string; thinking?: string; id?: string; name?: string; arguments?: unknown }
+
+/**
+ * A run of work in the transcript: what the agent did between your message and its answer. `active` while the run
+ * goes on (it's the transcript's last and the agent is working); `result` is a tool call's, once it has one.
+ */
+export type WorkRun = { blocks: WorkBlock[]; active: boolean; result(callId: string): { text: string; isError: boolean } | undefined }
+
+/** How a titled part of a run went: still going, done, failed, unsure (plans changed, no proof), or cut off. */
+export type WorkStatus = 'running' | 'success' | 'failure' | 'inconclusive' | 'interrupted'
+
+/**
+ * A part of a run. Untitled, it shows as the core shows any run (a line saying what was done); titled, as that title,
+ * how it went and its outcome, its blocks folded under it. Blocks left out of every part don't show.
+ */
+export type WorkPart = { blocks: WorkBlock[]; title?: string; status?: WorkStatus; outcome?: string }
+
 
 export type UiApi = {
   app: AppConfig
@@ -72,6 +90,11 @@ export type UiApi = {
   /** Draw calls to the tool `name` (of the extension's daemon half, or any other). */
   tool(name: string, component: ComponentType<ToolCallProps>): void
   entry(kind: string, component: ComponentType<EntryProps>): void
+  /**
+   * Divide runs of work into parts: the tasks an agent reported, say. The first divider to return parts for a run
+   * draws it; `undefined` leaves it to the next, then to the core.
+   */
+  work(divide: (run: WorkRun) => WorkPart[] | undefined): void
   /** Draw the settings section that names `ui` (its daemon half registers the section). */
   settings(ui: string, component: ComponentType<SettingsComponentProps>): void
   /**
@@ -112,6 +135,7 @@ export type Registry = {
   /** Pane kinds; `profile`: the folder of the profile that added it. */
   panes: Map<string, (PaneKind & { profile?: string })[]>
   entries: Map<string, ComponentType<EntryProps>>
+  work: ((run: WorkRun) => WorkPart[] | undefined)[]
   settings: Map<string, ComponentType<SettingsComponentProps>>
   router: WindowRouter
   appSettings: DeclaredSection[]
@@ -126,7 +150,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   const registry: Registry = {
     app, extensions: extensions.map((e) => e.name),
     slots: { 'sidebar': [], 'thread.header': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
-    tools: new Map(), panes: new Map(), entries: new Map(), settings: new Map(), router: createWindowRouter(), appSettings: [],
+    tools: new Map(), panes: new Map(), entries: new Map(), work: [], settings: new Map(), router: createWindowRouter(), appSettings: [],
     version: 0,
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
     installProfile(profile, list) {
@@ -153,6 +177,10 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     },
     tool: (name, component) => { registry.tools.set(name, component) },
     entry: (kind, component) => { registry.entries.set(kind, component) },
+    work(divide) {
+      if (profile) return console.warn(`Profile extension ${extension}: dividing work from a profile's UI isn't supported yet`)
+      registry.work.push(divide)
+    },
     settings: (ui, component) => { registry.settings.set(ui, component) },
     pane(kind, pane) {
       const list = (registry.panes.get(kind) ?? []).filter((entry) => entry.profile !== profile)
@@ -202,6 +230,17 @@ export function Slot<S extends SlotName>({ name, props }: { name: S; props: Slot
   const entries = (registry.slots[name] as { component: ComponentType<SlotProps[S]>; extension: string; profile?: string }[])
     .filter((entry) => !entry.profile || entry.profile === profile)
   return <>{entries.map(({ component: Component, extension, profile }, index) => <Component key={`${profile ?? ''}${extension}-${index}`} {...props} />)}</>
+}
+
+/** A run of work in parts, as the first extension that divides it says; else whole. */
+export function divideWork(registry: Registry, run: WorkRun): WorkPart[] {
+  for (const divide of registry.work) {
+    try {
+      const parts = divide(run)
+      if (parts) return parts
+    } catch (error) { console.error('Dividing work failed', error) }
+  }
+  return [{ blocks: run.blocks }]
 }
 
 /** The pane kind `kind` as `thread` sees it: its profile's own first, else the app's. */

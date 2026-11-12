@@ -111,6 +111,19 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .stat--add { color: light-dark(#248a3d, rgb(48 209 88 / .85)); }
 .stat--del { color: light-dark(#d70015, rgb(255 105 97 / .85)); }
 .run__steps { margin: 0 0 var(--superego-space-1) 21px; }
+/* A task an agent reported: how it went, its title, and its outcome on a line of its own under the title. */
+.task__row { height: auto; min-height: 26px; align-items: flex-start; padding-top: 3px; padding-bottom: 3px; }
+.task__row > .row__chevron { top: 7px; }
+.task__row > .row__icon { margin-top: 3px; }
+.task__row > .superego-status { line-height: 20px; }
+.task__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.task__head { display: flex; align-items: center; gap: var(--superego-space-2); min-width: 0; line-height: 20px; }
+.task__title { color: var(--superego-text); }
+.task__outcome { color: var(--superego-muted); line-height: 1.45; }
+.task + .task { margin-top: -8px; }
+.task--success .task__icon { color: var(--superego-muted); }
+.task--failure .task__icon { color: var(--superego-status-error); }
+.task--inconclusive .task__title, .task--interrupted .task__title { color: var(--superego-muted); }
 .step__thinking { white-space: pre-wrap; font-size: var(--superego-text-ui); line-height: 1.45; color: var(--superego-muted); margin: 2px 0 var(--superego-space-2); }
 /* Bodies align under the label: alone, 21px in; inside a run (already 21px in), flush. */
 .steps:not(.steps--run) > .step > :is(.step__output, .step__thinking) { margin-left: 21px; }
