@@ -2,7 +2,7 @@
 // the restart notice, Settings, and the app-wide reactions (fonts, ⌘, , threads shown from the command line or a
 // notification, marking finished threads seen).
 import { useEffect, useRef, useState } from 'react'
-import { agentName } from '@superego/protocol'
+import { agentName, type Notifications } from '@superego/protocol'
 import { Button, CommandIcon, LifebuoyIcon, GearSixIcon, IconButton, ListIcon, MagnifyingGlassIcon, NotePencilIcon, PlusIcon, Select, SidebarSimpleIcon } from '@superego/ui'
 import { textScale } from '../shared.ts'
 import { UnreadButton } from './Unread.tsx'
@@ -257,6 +257,13 @@ function useAppEffects() {
       if (settings) openSettings()
     }
     const off = window.superego.onEvent((event) => {
+      // Another client asks for one of this window's own actions (see client.perform). Every window of the app hears it;
+      // the ones on screen run it.
+      if (event.method === 'client.perform' && document.visibilityState === 'visible') {
+        const { from, action, params } = event.params as Notifications['client.perform']
+        if (registry.router.router.has(action)) void registry.router.dispatch(action, (params ?? {}) as Record<string, unknown>, { source: `${from.label} (${from.kind})` }).catch((error) => console.error(error))
+        return
+      }
       if (event.machine !== 'app') return
       if (event.method === 'app.select') show({ open: event.params as Selection })
       if (event.method === 'app.settings') show({ settings: true })

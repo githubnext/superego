@@ -7,7 +7,8 @@ import '@superego/ui/styles.css'
 import './app.css'
 import type { AppConfig } from '@superego/protocol'
 import { createRegistry, RegistryProvider, type UiExtension } from './extension.tsx'
-import { Profiles, Providers, WebAccess } from './SettingsView.tsx'
+import { Profiles, Providers } from './SettingsView.tsx'
+import { ConnectedClients, WebAccess } from './WebAccess.tsx'
 import { Shell, UNREAD } from './Shell.tsx'
 import { ShellStateProvider } from './state.tsx'
 import { coreActions } from './actions.tsx'
@@ -21,6 +22,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
   const registry = createRegistry(app, extensions, (core) => {
     core.settings('providers', Providers)
     core.settings('web', WebAccess)
+    core.settings('clients', ConnectedClients)
     core.settings('profiles', Profiles)
     core.appSettings({
       id: 'navigation', title: 'Navigation', order: 60,

@@ -4,20 +4,26 @@
 import { FEATURES, PROTOCOL_VERSION, RpcError, RpcPeer, type Hello } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '../shared.ts'
-import { askToken } from './token-gate.ts'
+import { askToPair, refused, type Paired } from './pair-gate.ts'
 
-const TOKEN = 'superego.webToken'
 const SETTINGS = 'superego.appSettings'
 
-/** The page's token: from the address Settings showed (`#token=…`), kept in this browser, then out of the address bar. */
-function takeToken(): string | undefined {
-  const hash = new URLSearchParams(location.hash.slice(1))
-  const given = hash.get('token')
-  if (given) {
-    localStorage.setItem(TOKEN, given)
-    history.replaceState(null, '', location.pathname + location.search)
-  }
-  return given ?? localStorage.getItem(TOKEN) ?? undefined
+/**
+ * A pairing code from the address Settings showed (`#pair=…`), taken out of the address bar at once. It's in the
+ * fragment, so it never reached a server, and it works only once: the page trades it for a cookie (see pair-gate.ts).
+ */
+function takeCode(): string | undefined {
+  const given = new URLSearchParams(location.hash.slice(1)).get('pair') ?? undefined
+  if (given) history.replaceState(null, '', location.pathname + location.search)
+  return given
+}
+
+/** Trade a code for this browser's credential: the daemon sets it as an HttpOnly cookie, which this page never sees. */
+async function pair(code: string, name = ''): Promise<Paired> {
+  const response = await fetch('/pair', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, ...(name ? { name } : {}) }) })
+  if (response.ok) return { ok: true }
+  const body = await response.json().catch(() => ({})) as { error?: string }
+  return { ok: false, error: body.error ?? `The machine said ${response.status}` }
 }
 
 /** App settings, kept in localStorage. */
@@ -29,7 +35,6 @@ const store: SettingsStore = {
 export function webBridge(): SuperegoBridge {
   const listeners = new Set<(event: SuperegoEvent) => void>()
   const emit = (event: SuperegoEvent) => { for (const listener of listeners) listener(event) }
-  let token = takeToken()
   let entry: MachineEntry = { id: 'local', label: location.hostname, state: 'connecting' }
   const setEntry = (next: Partial<MachineEntry>) => { entry = { ...entry, ...next }; emit({ machine: '$machines', method: '$machines', params: [entry] }) }
 
@@ -37,31 +42,27 @@ export function webBridge(): SuperegoBridge {
   let peer: RpcPeer | undefined
   let ready: Promise<RpcPeer>
   let retry = 500
-  // Without a token, or with one the daemon refuses, the page asks for it (see token-gate.ts).
-  const accepted = async (given: string) => (await fetch(`/rpc?token=${encodeURIComponent(given)}`)).status !== 401
-  let asking = false
-  const ask = (rejected: boolean) => {
-    if (asking) return
-    asking = true
-    localStorage.removeItem(TOKEN)
-    void askToken(accepted, rejected).then((given) => {
-      asking = false
-      token = given
-      localStorage.setItem(TOKEN, given)
-      retry = 500
-      connect()
-    })
+  // Who this browser is to the daemon decides what to show: the app, the pairing form, or why it isn't let in.
+  let gate: Promise<void> | undefined
+  const admit = (message = '') => {
+    gate ??= (async () => {
+      const session = await fetch('/session').then(async (r) => ({ status: r.status, ...(await r.json().catch(() => ({}))) as { error?: string; pairing?: boolean } }))
+      if (session.status === 401 && session.pairing) await askToPair(pair, message)
+      else if (session.status === 401 || session.status === 403) await refused(session.error ?? 'This machine doesn’t let you in.')
+    })().finally(() => { gate = undefined; retry = 500; connect() })
   }
+  let code = takeCode()
   const connect = () => {
     ready = new Promise((resolve, reject) => {
-      if (!token) {
-        setEntry({ state: 'disconnected' })
-        ask(false)
-        return reject(new RpcError('unauthorized', 'No token'))
+      if (code) {
+        const given = code
+        code = undefined
+        void pair(given).then((paired) => paired.ok ? connect() : admit(paired.error), () => admit('Can’t reach the machine.'))
+        return reject(new RpcError('disconnected', 'Pairing'))
       }
-      const given = token
       let opened = false
-      const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/rpc?token=${encodeURIComponent(token)}`)
+      // The cookie goes with the upgrade by itself; nothing secret is in the address.
+      const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/rpc`)
       const next = new RpcPeer((line) => { if (ws.readyState === WebSocket.OPEN) ws.send(line.trimEnd()) })
       ws.onmessage = (message) => next.receive(String(message.data))
       next.onAny((method, params) => emit({ machine: 'local', method, params }))
@@ -75,15 +76,17 @@ export function webBridge(): SuperegoBridge {
           resolve(next)
         } catch (error) { reject(error) }
       }
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         next.close()
         peer = undefined
         setEntry({ state: 'disconnected' })
         reject(new RpcError('disconnected', 'Not connected'))
         const again = () => { setTimeout(connect, retry); retry = Math.min(retry * 2, 10_000) }
-        // Refused at the door: the token, or only the network? The socket doesn't say; the daemon does.
+        // Revoked in Settings: pair again.
+        if (event.code === 4401) return admit('This browser was removed from the machine. Pair it again.')
+        // Refused at the door, or only the network? The socket doesn't say; the daemon does.
         if (opened) return again()
-        void accepted(given).then((ok) => ok ? again() : ask(true), again)
+        void fetch('/session').then((r) => r.ok ? again() : admit(), again)
       }
     })
     ready.catch(() => {})
@@ -133,7 +136,7 @@ export function webBridge(): SuperegoBridge {
       return (peer ?? await ready).call(method, params)
     },
     machines: async () => [entry],
-    artifactUrl: (_machine, thread, path) => `/artifact/${encodeURIComponent(thread)}/${path.split('/').map(encodeURIComponent).join('/')}?token=${encodeURIComponent(token ?? '')}`,
+    artifactUrl: (_machine, thread, path) => `/artifact/${encodeURIComponent(thread)}/${path.split('/').map(encodeURIComponent).join('/')}`,
     onEvent(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
     web: true,
   }

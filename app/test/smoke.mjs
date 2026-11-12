@@ -568,13 +568,19 @@ if (phase === 'first') {
   await run(`window.superego.call('local', 'settings.set', { key: 'web.port', value: ${port} })`)
   await run(`window.superego.call('local', 'settings.set', { key: 'web.access', value: 'local' })`)
   const url = await until(`window.superego.call('local', 'settings.watch', {}).then((r) => r.value.sections.find((s) => s.id === 'web')?.data?.url)`, 'web address')
+  if (url.includes('#')) { await fail(`a secret in the web address: ${url}`); throw new Error('failed') }
+  // Paired by the address Settings shows with a one-time code; the code is gone from it once the page has it.
+  const pairing = await run(`window.superego.call('local', 'web.pair', {})`)
+  // The app's own window, by name: with the browser open, it's no longer the first of all windows.
+  const deskContents = BrowserWindow.getAllWindows()[0].webContents
+  const desk = (js) => deskContents.executeJavaScript(js)
   const browser = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } })
-  await browser.loadURL(url)
+  await browser.loadURL(pairing.url)
   const inBrowser = async (js, label) => {
     for (let i = 0; i < 150; i++) { if (await browser.webContents.executeJavaScript(js).catch(() => false)) return; await new Promise((r) => setTimeout(r, 100)) }
     await fail(`web: waiting for ${label}`); throw new Error('failed')
   }
-  await inBrowser(`window.superego.web === true && location.hash === ''`, 'web bridge, token out of the address bar')
+  await inBrowser(`window.superego.web === true && location.hash === ''`, 'web bridge, the code out of the address bar')
   await inBrowser(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'threads in the browser')
   await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await inBrowser(`document.querySelector('.transcript')?.textContent.includes('echo: hello from smoke')`, 'a transcript in the browser')
@@ -588,20 +594,18 @@ if (phase === 'first') {
   if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-drawer.png`, (await browser.webContents.capturePage()).toPNG())
   await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await inBrowser(`!document.querySelector('.app__sidebar')`, 'drawer closes on picking a thread')
-  const wrongToken = await browser.webContents.executeJavaScript(`new Promise((resolve) => { const ws = new WebSocket('ws://' + location.host + '/rpc?token=wrong'); ws.onopen = () => resolve('open'); ws.onerror = () => resolve('refused') })`)
-  if (wrongToken !== 'refused') { await fail(`a wrong token got in: ${wrongToken}`); throw new Error('failed') }
-  // Without the token (a page on the home screen keeps its own storage): it asks, refuses a wrong one, takes the address.
-  await browser.webContents.executeJavaScript(`localStorage.clear()`)
+  if (await browser.webContents.executeJavaScript(`Object.keys(localStorage).some((key) => /token/i.test(key)) || document.cookie !== ''`)) { await fail('a credential the page can read'); throw new Error('failed') }
+  // Revoked from Settings: the page asks to pair again, refuses a wrong code, takes a new one.
+  const devices = await desk(`window.superego.call('local', 'settings.watch', {}).then((r) => r.value.sections.find((s) => s.id === 'web').data.devices)`)
   browser.setContentSize(1100, 760)
-  await browser.loadURL(url.replace(/#.*/, ''))
-  await inBrowser(`document.activeElement?.classList.contains('token-gate__input')`, 'the token form, focused')
-  const submitToken = (value) => browser.webContents.executeJavaScript(`(() => { document.querySelector('.token-gate__input').value = ${JSON.stringify(value)}; document.querySelector('.token-gate').requestSubmit() })()`)
-  await submitToken('wrong')
-  await inBrowser(`document.querySelector('.token-gate__error')?.textContent.includes('isn’t this machine’s')`, 'a wrong token refused')
-  await submitToken(url)
-  await inBrowser(`!document.querySelector('.token-gate')`, 'the token form gone')
-  await inBrowser(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'threads after typing the token')
-  await inBrowser(`localStorage.getItem('superego.webToken') === ${JSON.stringify(new URL(url).hash.slice('#token='.length))}`, 'the token kept')
+  await desk(`window.superego.call('local', 'web.device.revoke', { id: ${JSON.stringify(devices[0].id)} })`)
+  await inBrowser(`document.activeElement?.classList.contains('pair-gate__code')`, 'the pairing form, focused')
+  const submitCode = (value) => browser.webContents.executeJavaScript(`(() => { document.querySelector('.pair-gate__code').value = ${JSON.stringify(value)}; document.querySelector('.pair-gate').requestSubmit() })()`)
+  await submitCode('AAAA-AAAA')
+  await inBrowser(`document.querySelector('.pair-gate__error')?.textContent.includes('isn’t open')`, 'a wrong code refused')
+  await submitCode((await desk(`window.superego.call('local', 'web.pair', {})`)).code)
+  await inBrowser(`!document.querySelector('.pair-gate')`, 'the pairing form gone')
+  await inBrowser(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'threads after pairing again')
   browser.destroy()
   await run(`window.superego.call('local', 'settings.set', { key: 'web.access', value: 'off' })`)
   console.log('smoke(first): ok')
