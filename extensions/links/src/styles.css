@@ -1,0 +1,4 @@
+/* Where a link goes, after what it says: cut short before the title is. */
+.links__target { flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.links__keys { display: flex; gap: 14px; padding: 8px 14px; border-top: 1px solid var(--superego-border); font-size: var(--superego-text-xs); color: var(--superego-faint); }
+.links__keys kbd { font: var(--superego-text-xs) var(--superego-mono); margin-right: 4px; }

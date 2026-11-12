@@ -4,7 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@12.14.0",
   "scripts": {
-    "typecheck": "tsc -p packages/protocol && tsc -p packages/settings && tsc -p packages/daemon && tsc -p packages/client && tsc -p packages/cli && tsc -p packages/ui && tsc -p packages/app && tsc -p extensions/threads && tsc -p extensions/ask-user && tsc -p extensions/files && tsc -p extensions/tasks && tsc -p extensions/suggestions && tsc -p app",
+    "typecheck": "tsc -p packages/protocol && tsc -p packages/settings && tsc -p packages/daemon && tsc -p packages/client && tsc -p packages/cli && tsc -p packages/ui && tsc -p packages/app && tsc -p extensions/threads && tsc -p extensions/ask-user && tsc -p extensions/files && tsc -p extensions/tasks && tsc -p extensions/suggestions && tsc -p extensions/links && tsc -p app",
     "test": "vitest run",
     "dev": "pnpm --filter superego dev",
     "build": "pnpm --filter superego build",
