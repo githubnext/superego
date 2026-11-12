@@ -26,6 +26,9 @@ const DIVIDER = 1
 /** No column narrower than this, however many: the row scrolls instead. */
 const MIN_COLUMN = 380
 
+/** Where the strip goes, when the window has a place for it (the title bar); without one, it heads the columns. */
+export const StripSlot = createContext<HTMLElement | null>(null)
+
 export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['machine']; thread: ThreadInfo; main: ReactNode }) {
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
@@ -135,38 +138,40 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   }
   const tabs = [{ id: undefined, label: 'Thread', kind: 'thread', pane: undefined }, ...panes.map((pane) => ({ id: pane.id, label: title(pane), kind: pane.kind, pane }))]
   const total = widths.reduce((sum, w) => sum + w, 0) || 1
+  const stripSlot = useContext(StripSlot)
 
+  const strip = panes.length > 0 && (
+    <div className={`strip ${narrow ? 'strip--narrow' : ''}`} role="tablist" aria-label="The thread and its panes">
+      <div className="strip__tabs">
+        {tabs.map((tab, i) => {
+          const Icon = KIND_ICONS[tab.kind]
+          const away = side(i)
+          return (
+            <button key={tab.id ?? 'thread'} type="button" role="tab" aria-selected={tab.id === focused}
+              className={`strip__tab ${tab.id === focused ? 'is-focused' : away ? 'is-away' : 'is-shown'}`}
+              onClick={() => show(tab.pane)}>
+              {Icon && <Icon size={14} aria-hidden />}
+              <span className={`strip__label ${tab.kind === 'editor' || tab.kind === 'artifact' ? 'strip__label--file' : ''}`}>{tab.label}</span>
+              {tab.id && notes[tab.id]}
+              {away === 'right' && <ArrowRightIcon className="strip__away" size={11} aria-hidden />}
+            </button>
+          )
+        })}
+      </div>
+      {!narrow && (
+        <>
+          {/* The row in small: each column a bar as wide as it is, the ones in view darker. */}
+          <span className="strip__map" aria-hidden>
+            {widths.map((w, i) => <i key={i} className={shown[i]! >= 0.5 ? 'is-in' : ''} style={{ width: Math.max(4, Math.round((w / total) * 52)) }} />)}
+          </span>
+          <PaneMenu machine={machine} thread={thread} add />
+        </>
+      )}
+    </div>
+  )
   return (
     <div className={`sheet ${panes.length ? 'has-panes' : ''}`}>
-      {panes.length > 0 && (
-        <div className={`strip ${narrow ? 'strip--narrow' : ''}`} role="tablist" aria-label="The thread and its panes">
-          <div className="strip__tabs">
-            {tabs.map((tab, i) => {
-              const Icon = KIND_ICONS[tab.kind]
-              const away = side(i)
-              return (
-                <button key={tab.id ?? 'thread'} type="button" role="tab" aria-selected={tab.id === focused}
-                  className={`strip__tab ${tab.id === focused ? 'is-focused' : away ? 'is-away' : 'is-shown'}`}
-                  onClick={() => show(tab.pane)}>
-                  {Icon && <Icon size={14} aria-hidden />}
-                  <span className={`strip__label ${tab.kind === 'editor' || tab.kind === 'artifact' ? 'strip__label--file' : ''}`}>{tab.label}</span>
-                  {tab.id && notes[tab.id]}
-                  {away === 'right' && <ArrowRightIcon className="strip__away" size={11} aria-hidden />}
-                </button>
-              )
-            })}
-          </div>
-          {!narrow && (
-            <>
-              {/* The row in small: each column a bar as wide as it is, the ones in view darker. */}
-              <span className="strip__map" aria-hidden>
-                {widths.map((w, i) => <i key={i} className={shown[i]! >= 0.5 ? 'is-in' : ''} style={{ width: Math.max(4, Math.round((w / total) * 52)) }} />)}
-              </span>
-              <PaneMenu machine={machine} thread={thread} add />
-            </>
-          )}
-        </div>
-      )}
+      {stripSlot ? strip && createPortal(strip, stripSlot) : strip}
       <div className={`panes ${narrow ? 'panes--narrow' : ''}`} ref={row} onScroll={onScroll}>
         {/* Focus moving into a column (a click, a key) makes it the focused one: the app and the keyboard agree. */}
         <div data-column="thread" tabIndex={-1} className={`panes__column panes__column--thread ${focused === undefined ? 'is-focused' : ''}`}
@@ -240,7 +245,7 @@ function PaneBody({ machine, thread, pane }: PaneProps) {
 const fileName = (pane: Pane) => (pane.params as { path?: string } | undefined)?.path?.split('/').at(-1)
 
 export function registerBuiltInPanes(superego: UiApi) {
-  superego.pane('diff', { title: 'Changes', component: DiffPane, menu: true, width: 0.6 })
+  superego.pane('diff', { title: 'Changes', component: DiffPane, menu: true, width: 0.45 })
   superego.pane('editor', { title: (pane) => fileName(pane) ?? 'Editor', component: EditorPane, opens: () => true })
   superego.pane('preview', { title: 'Preview', component: PreviewPane, width: 0.6 })
   superego.pane('artifact', { title: (pane) => fileName(pane) ?? 'Artifact', component: ArtifactPane })

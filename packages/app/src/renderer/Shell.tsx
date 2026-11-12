@@ -10,6 +10,7 @@ import { machine as client, useAppSetting, useSettings } from './client.ts'
 import { Slot, useRegistry } from './extension.tsx'
 import { ServiceNotice } from './ServiceNotice.tsx'
 import { ThreadTitle, ThreadTools, ThreadView } from './ThreadView.tsx'
+import { StripSlot } from './panes.tsx'
 import { SettingsView } from './SettingsView.tsx'
 import { Palette } from './Palette.tsx'
 import { Navigator } from './Navigator.tsx'
@@ -59,6 +60,8 @@ export function Shell() {
   // A phone (or a narrow window): the sidebar becomes a drawer over the thread, opened from a bar at the top.
   const narrow = useNarrow()
   const [drawer, setDrawer] = useState(false)
+  // Where the thread's columns show their tabs: in the title bar, wide.
+  const [strip, setStrip] = useState<HTMLElement | null>(null)
   useEffect(() => { setDrawer(false) }, [selection?.machine, selection?.thread, narrow])
   // Actions read the shell as it is when they run.
   registry.router.setContext({
@@ -97,9 +100,9 @@ export function Shell() {
   )
   const sideOpen = hasSidebar && (narrow ? drawer : sidebar.open)
   const hasRail = registry.slots.rail.length > 0
-  // Wide: the window's own colour around a sheet. Across the top a title bar (the window's buttons, then where you are
-  // and what the thread says about itself); down the left a rail (Ego, the spaces, Settings) and the sidebar beside it;
-  // the sheet holds the thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.
+  // Wide: across the top a title bar (the window's buttons, then where you are, the thread's columns and what the thread
+  // says about itself); down the left a rail (Ego, the spaces, Settings) and the sidebar beside it; the rest holds the
+  // thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.
   return (
     <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.superego.web ? 'is-web' : ''}`}>
       {narrow && hasSidebar && drawer && <div className="app__scrim" onClick={() => setDrawer(false)} />}
@@ -110,6 +113,7 @@ export function Shell() {
           {selection && thread && machine && <ThreadTitle machine={machine} thread={thread} />}
           <span className="app__titlebar-end">
             {!hasSidebar && <ServiceNotice />}
+            <span className="app__strip" ref={setStrip} />
             {selection && thread && machine && <ThreadTools machine={machine} thread={thread} />}
           </span>
         </header>
@@ -143,7 +147,7 @@ export function Shell() {
             </div>
           )}
           {selection && thread && machine
-            ? <ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} />
+            ? <StripSlot.Provider value={narrow ? null : strip}><ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} /></StripSlot.Provider>
             : <div className="app__empty">{hasSidebar ? 'Select or start a thread.' : `Start a thread with: ${registry.app.id}`}</div>}
         </main>
         {!narrow && selection && thread && machine && registry.slots['thread.aside'].length > 0 && (

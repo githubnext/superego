@@ -389,7 +389,7 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .panes__column { flex: none; display: flex; flex-direction: column; min-height: 0; position: relative; background: var(--superego-bg); }
 .panes__column--thread { border-left: 0; overflow: hidden; }
 .panes__column--thread > .thread { flex: 1; min-width: 0; }
-.panes__column--thread .thread__column { max-width: calc(100% - 2 * var(--superego-space-5)); }
+.panes__column--thread .thread__column { max-width: calc(100% - 2 * var(--superego-space-7)); }
 .panes__column--thread .dock { max-width: calc(100% - 2 * var(--superego-space-4)); }
 .panes__tab { display: flex; align-items: center; gap: 8px; flex: none; height: 36px; padding: 0 8px 0 14px; font-size: var(--superego-text-sm); color: var(--superego-muted); white-space: nowrap; }
 
@@ -619,6 +619,17 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .strip__map i.is-in { background: light-dark(rgb(0 0 0 / .32), rgb(255 255 255 / .36)); }
 .strip .thread__panes { width: 26px; height: 24px; min-height: 24px; color: var(--superego-muted); box-shadow: none; background: none; }
 .strip .thread__panes:hover { background: var(--superego-hover); color: var(--superego-text); }
+/* Wide, the strip sits in the title bar: the tabs on a quiet track, the focused one raised. */
+/* Short of room, the tabs shrink to their icons, then the track. */
+.app__strip { display: flex; min-width: 0; }
+.app__strip:empty { display: none; }
+.app__strip .strip { flex: 0 1 auto; min-width: 0; height: auto; padding: 0; border-bottom: 0; gap: 4px; }
+.app__strip .strip__tabs { flex: 0 1 auto; min-width: 44px; padding: 2px; border-radius: 8px; background: var(--superego-fill); }
+.app__strip .strip__tab { padding: 0 9px; color: var(--superego-muted); overflow: hidden; }
+.app__strip .strip__tab.is-focused { background: var(--superego-raised); color: var(--superego-text); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(255 255 255 / .08)), 0 1px 2px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); }
+.app__strip .strip__tab.is-away { color: var(--superego-faint); }
+.app__strip .strip__tab:not(.is-focused):hover { background: var(--superego-hover); color: var(--superego-text); }
+.app__strip .strip .thread__panes { width: 28px; height: 28px; min-height: 28px; border-radius: 6px; }
 /* Narrow: a switcher, one column at a time. */
 .strip--narrow { height: 40px; border-bottom: 0; padding: 0 8px; }
 .strip--narrow .strip__tabs { padding: 2px; border-radius: 7px; background: var(--superego-fill); }
