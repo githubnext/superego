@@ -8,11 +8,11 @@ Superego was a framework with a generator (`superego new`, each app its own buil
 
 - **One app** (`app/`): the desktop app, its daemon and the `superego` command. No generator, no per-app builds.
 - **Profiles** (§3b): `profile.ts` (`defineProfile` from `'superego'`) in `~/.superego/profiles/<name>` or `<repo>/.superego/profiles/<name>`, with a model, a prompt, agent extensions (tools, prompt sections, hooks) and UI extensions. A thread takes its folder's profile when it starts; a project's profile runs only once allowed.
-- **Web and phone** (§3c): a machine's daemon serves the same window to browsers (Web access), over a WebSocket guarded by a token; narrow windows get a phone layout, and it installs as a PWA.
+- **Web and phone** (§3c): a machine's daemon serves the same window to browsers (Web access), over a WebSocket open to paired browsers or Tailscale logins; narrow windows get a phone layout, and it installs as a PWA.
 - **Sessions, threads, panes** (§3d, 2026-11-09): a session is a project on a machine; it holds threads (conversations, each in the folder or a worktree of its own); a thread holds panes beside it. Navigation follows Fut; focus follows Tremolo.
 - Packaging the one app (`pnpm --filter superego package`) builds a signed `superego.app`.
 
-Principle 6 below (no network listener) gave way: Web access is a network listener, off by default, with a token. Real auth (accounts, TLS) is still to come.
+Principle 6 below (no network listener) gave way: Web access is a network listener, off by default, on loopback unless a setting that says "unencrypted" opens it to the network. Browsers pair per device; Tailscale gives HTTPS and named callers.
 
 Research sources: `~/dev/fut`, `~/dev/wt`, `~/dev/gh/tremolo`, pi-mono (`~/.cache/checkouts/github.com/badlogic/pi-mono`, v1.5.0), herdr / herdr-core / herdr-app (`~/.cache/checkouts/github.com/herdrdev/*`), pi-pocket, durable-pi.
 
@@ -85,7 +85,9 @@ The niche is real. We should borrow herdr-core's protocol hygiene wholesale, and
 ### Protocol surface (as built)
 
 ```
-hello {client, version, features}         → {version, features, machine{id, build, …}, methods}
+hello {client, version, features, label} → {version, features, machine{id, build, …}, methods, client}
+clients.watch                             → snapshot + clients.changed (id, kind, label, via, connectedAt, activeAt)
+client.perform {client, action, params}   → the other client gets client.perform and runs its own window action
 thread.list {archived?}                   agent.models
 thread.watch {id}                         → snapshot + watch.ops (Chord delta ops)
 threads.watch                             → snapshot + threads.changed (status, model, cost, activeAt, session, worktree, panes)
@@ -98,6 +100,7 @@ thread.create {cwd, prompt, attachments, profile, worktree} / submit {text, atta
 thread.archive / unarchive (its worktree removed if clean, and back)
 pane.open / update / focus / close        file.write              profile.list / allow
 settings.set   auth.login / respond / cancel / logout   daemon.restart   <extension>.<name>
+web.pair → {code, expires, url}           web.device.rename {id, name} / revoke {id}
 ```
 
 Reads and streams (`*.list`, `*.watch`) stay plain methods. Everything that changes something is an action (§3a). The protocol version stays 1 until a release; after it, peers negotiate by `features`, not by version.
@@ -178,10 +181,13 @@ Every intent is an action: an id, a title, a params schema (pi-schema), where it
 
 ## 3c. Web and phone
 
-- **Web access** (a machine setting: off, to this computer, to the local network; a port): the daemon serves the window's build over HTTP and the protocol over a WebSocket at `/rpc`, guarded by a token in its data dir. Settings shows the address with the token.
+- **Web access** (a machine setting: off; to this computer; through Tailscale; to the local network, unencrypted; a port): the daemon serves the window's build over HTTP and the protocol over a WebSocket at `/rpc`. No secret is ever in a URL.
+  - **Pairing** (this computer, or the network): Settings → Web access → Pair a browser makes a one-time code (five minutes, single use; its address carries it in the fragment). The page POSTs it to `/pair` for a credential of its own: an HttpOnly, SameSite=Strict cookie (Secure behind HTTPS). The WebSocket and `/artifact` go by that cookie; the upgrade and the pairing POST must carry this server's Origin. `web-devices.json` keeps only hashes; Settings lists each browser (name, paired, last seen) with Rename and Revoke, and revoking closes its connections at once.
+  - **Tailscale:** the daemon listens on a unix socket in its data dir (0600), and Settings shows the `tailscale serve --bg --https=<port> unix:<socket>` to run and the https address. Callers are admitted by `Tailscale-User-Login`: this node's owner, plus the logins in `web.tailscale.logins`. Only tailscaled and this user can reach the socket, so the headers can't be forged by anyone who couldn't already act as this user. Unverified: whether the Mac App Store build of Tailscale may proxy to a socket; if not, "to this computer" behind `tailscale serve <port>` works, with pairing.
+- **Who's connected:** the daemon lists its connections (`clients.watch`: kind from `hello`, a label: the computer's name, a browser's device name, a Tailscale login), the action log names who dispatched, and `client.perform` passes a window action to another client (the window runs it if it has it and is on screen). Settings → a machine → Connected shows them.
 - **In a browser** the window has no preload: `window.superego` is a WebSocket bridge to that daemon (the one machine, "local"); app settings live in the browser; machines and folder picking are desktop-only.
 - **Phones:** under 760px wide, one column: a bar with the threads in a drawer, the composer at the bottom, full-screen dialogs. A web manifest and icons for the home screen.
-- Not yet: accounts and TLS (put it behind Tailscale or a proxy for now), a service worker for offline, the desktop app as a wrapper of a remote daemon's web UI.
+- Not yet: TLS of its own (Tailscale gives it), a service worker for offline, the desktop app as a wrapper of a remote daemon's web UI.
 
 ## 3d. Sessions, threads, panes
 
