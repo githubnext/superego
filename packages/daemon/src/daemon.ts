@@ -24,6 +24,7 @@ import { threadTools } from './thread-tools.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveValue, type StatusContribution } from './extension.ts'
 import { serveWeb, webToken, type WebServer } from './web.ts'
+import { serveConnection, versionMismatch } from './connection.ts'
 import { agentsInstructions, listSkills, mentionedSkills, skillBlock, skillsPrompt } from './skills.ts'
 import { metaExtension, metaPrompt, type MachineDirectory } from './meta.ts'
 import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileRef } from './profiles.ts'
@@ -105,8 +106,11 @@ const costOf = (usage: { models?: Record<string, Usage>; tools?: Record<string, 
 export type Daemon = {
   machine: MachineInfo
   settings: SettingsRegistry
-  /** Register this daemon's methods on a connection's peer; returns a cleanup for when it disconnects. */
-  serve(peer: RpcPeer): () => void
+  /**
+   * Register this daemon's methods on a connection's peer; returns a cleanup for when it disconnects. `hangUp` closes
+   * the transport, for a peer that stopped answering its heartbeat.
+   */
+  serve(peer: RpcPeer, hangUp?: () => void): () => void
   close(): Promise<void>
 }
 
@@ -882,18 +886,17 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const daemon: Daemon = {
     machine,
     settings,
-    serve(peer) {
+    serve(peer, hangUp) {
       const subs = new Map<string, () => unknown>()
+      const connection = serveConnection(peer, { ...(hangUp ? { hangUp } : {}) })
       const notify = <N extends keyof Notifications>(event: N, params: Notifications[N]) => peer.notify(event, params)
       let client = 'client'
       // Reads and watches; every intent is an action, served below under its id.
       const handlers: Record<string, (params: any) => unknown> = {
         async hello({ version, client: name }: Methods['hello']['params']) {
-          if (version !== PROTOCOL_VERSION) {
-            throw new RpcError('version_mismatch', `This machine's superego speaks protocol ${PROTOCOL_VERSION}, the client ${version}`, { hint: 'Update superego on the older side.' })
-          }
+          if (version !== PROTOCOL_VERSION) throw versionMismatch(options.app, machine.hostname, version)
           if (typeof name === 'string') client = name
-          return { version: PROTOCOL_VERSION, features, machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id)] }
+          return { version: PROTOCOL_VERSION, features, machine, methods: peer.methods }
         },
         'thread.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),
@@ -998,6 +1001,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           router.dispatch(id, params, { notify, source: client }, { source: exposure ?? client, ...(exposure ? { exposure } : {}) }),
         /** The newest dispatches on this machine, oldest first. */
         'action.log': async () => router.log(),
+        ...connection.handlers,
       }
       const ctx: DaemonContext = { notify: (event, params) => notify(event as keyof Notifications, params as never), source: client }
       for (const action of router.list()) {
@@ -1007,11 +1011,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       for (const [method, handler] of Object.entries(handlers)) {
         peer.handle(method, (params: unknown) => {
           if (restarting && method !== 'hello') throw new RpcError('restarting', 'The daemon is restarting. Try again in a moment.')
-          return (handler as (params: unknown) => unknown)(params)
+          return (handler as (params: unknown) => unknown)(connection.resolve(method, params))
         })
       }
       return () => {
         connections.delete(peer)
+        connection.close()
         for (const stop of subs.values()) void stop()
         subs.clear()
       }

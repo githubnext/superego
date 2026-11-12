@@ -13,3 +13,16 @@ export type MachineConfig = {
 
 /** How a machine is reached, as the user would type it. `ssh <target>` runs the app's remote command unless it says. */
 export const routeOf = (config: MachineConfig, app: AppConfig) => config.via ?? `ssh ${config.target} ${config.command ?? remoteCommand(app)}`
+
+export type MachineId = string
+export type ConnectionState = 'connecting' | 'connected' | 'disconnected'
+
+/** A machine as a client shows it: its link's state, and what the last hello said. */
+export type MachineEntry = {
+  id: MachineId; label: string; state: ConnectionState | 'disabled'; error?: string; errorKind?: string
+  /** Who answered, from the last hello: the daemon's identity and hostname, and what it offers. */
+  machine?: { id: string; hostname: string }
+  features?: string[]
+  /** Absent for this computer, which can't be removed. */
+  remote?: { route: string; enabled: boolean }
+}

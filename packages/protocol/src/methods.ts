@@ -7,7 +7,8 @@ import type { Status } from './status.ts'
 
 /**
  * The protocol's generation. It changes only for a break no feature flag can bridge; a daemon and client of different
- * generations refuse each other. Everything else is additive and announced in `FEATURES`.
+ * generations refuse each other. Everything else is additive: the method table only grows (contract.json freezes what
+ * a daemon serves, and a test holds it to that), and what is new is announced in `FEATURES`.
  */
 export const PROTOCOL_VERSION = 1
 
@@ -15,7 +16,7 @@ export const PROTOCOL_VERSION = 1
  * What a daemon of this build offers, announced in `hello`. Clients check a feature before using it, so an older
  * daemon on another machine keeps working with a newer app (and the other way round) for whatever both know.
  */
-export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions'] as const
+export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'heartbeat', 'channels', 'uploads'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -72,6 +73,8 @@ export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean 
 
 /** A file sent with a message: images go to the model as images; any file is saved on the thread's machine. */
 export type Attachment = { name: string; mimeType: string; /** Base64. */ data: string }
+/** An attachment as a message carries it: inline, or (with the `uploads` feature) by an upload on the same connection. */
+export type AttachmentRef = Attachment | { name: string; mimeType: string; upload: string }
 
 export type NewThread = {
   cwd?: string
@@ -83,7 +86,7 @@ export type NewThread = {
   /** A first message, sent right away. */
   prompt?: string
   /** Files sent with the first message. */
-  attachments?: Attachment[]
+  attachments?: AttachmentRef[]
   /** In a git repository: a worktree of its own, rather than the checkout (its profile's choice when unset; else no). */
   worktree?: boolean
   /** The profile to run with; unset takes the folder's default (the project's, else the user's). */
@@ -102,6 +105,10 @@ export type Hello = { version: number; features: string[]; machine: MachineInfo;
 
 export type Methods = {
   hello: { params: { client: string; version: number; features?: string[] }; result: Hello }
+  /** Nothing, answered at once: a client pinging every few seconds notices a dead link in seconds (`heartbeat`). */
+  ping: { params: {}; result: null }
+  /** Open a channel (see channels.ts). The daemon accepts `upload` {name, mimeType, size}; its id names the upload. */
+  'ch.open': { params: { ch: string; kind: string; params?: unknown; window: number }; result: { window: number } }
   /** The threads, newest first; `archived` lists the ones put away instead. */
   'thread.list': { params: { archived?: boolean }; result: ThreadInfo[] }
   'thread.create': { params: NewThread; result: ThreadInfo }
@@ -125,7 +132,7 @@ export type Methods = {
   /** One module of a profile's UI, as JavaScript (types stripped); its own imports are left for the window to load. */
   'profile.module': { params: ProfileRef & { path: string }; result: { path: string; code: string } }
   'thread.rename': { params: { id: ThreadId; title: string }; result: null }
-  'thread.submit': { params: { id: ThreadId; text: string; attachments?: Attachment[]; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
+  'thread.submit': { params: { id: ThreadId; text: string; attachments?: AttachmentRef[]; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
   'thread.abort': { params: { id: ThreadId }; result: null }
   /** The user looked at the thread: its done/error status clears. */
   'thread.seen': { params: { id: ThreadId }; result: null }
@@ -172,7 +179,19 @@ export type Notifications = {
   'value.changed': { sub: string; key: string; value: Json }
   /** A watched file, as it is on disk now (`content: null`: gone). */
   'file.changed': { sub: string; content: string | null }
+  /** Channels (see channels.ts). */
+  'ch.data': { ch: string; data: string }
+  'ch.ack': { ch: string; bytes: number }
+  'ch.end': { ch: string }
+  'ch.abort': { ch: string; message: string }
 }
+
+const NOTIFICATION_NAMES: Record<keyof Notifications, true> = {
+  'watch.ops': true, 'watch.end': true, 'threads.changed': true, 'settings.changed': true, 'auth.event': true, 'value.changed': true,
+  'file.changed': true, 'ch.data': true, 'ch.ack': true, 'ch.end': true, 'ch.abort': true,
+}
+/** Every notification a daemon sends, at runtime (the contract test checks them). */
+export const NOTIFICATIONS = Object.keys(NOTIFICATION_NAMES) as (keyof Notifications)[]
 
 /** The methods every settings endpoint (a daemon, or the app itself) answers. */
 export type SettingsMethods = Pick<Methods, 'settings.watch' | 'settings.set' | 'unwatch'>
