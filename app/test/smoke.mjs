@@ -112,6 +112,7 @@ if (phase === 'first') {
   // from the card reaches it, and it carries on.
   await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: 'replay/replay' })`)
   const asking = await run(`window.superego.call('local', 'thread.create', {}).then((s) => window.superego.call('local', 'thread.submit', { id: s.id, text: 'pick a colour' }).then(() => s.id))`)
+  await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('pick a colour'))`, 'new thread listed')
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('pick a colour'))?.click()`)
   await until(`document.querySelector('.ask-user')?.textContent.includes('Which colour?')`, 'question card above the composer')
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('pick a colour') && li.querySelector('.superego-status--blocked'))`, 'thread marked as needing you')
