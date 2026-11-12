@@ -22,7 +22,10 @@ import { FileSettingsStore } from '@superego/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveValue, type StatusContribution } from './extension.ts'
-import { serveWeb, webToken, type WebServer } from './web.ts'
+import { serveWeb, type WebServer } from './web.ts'
+import { Clients, type Via } from './clients.ts'
+import { Devices, PairingCodes } from './web-auth.ts'
+import { allowedLogins, serveCommand, tailscaleNode, type TailscaleNode } from './tailscale.ts'
 import { agentsInstructions, listSkills, mentionedSkills, skillBlock, skillsPrompt } from './skills.ts'
 import { metaExtension, metaPrompt, type MachineDirectory } from './meta.ts'
 import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileRef } from './profiles.ts'
@@ -82,6 +85,8 @@ export type DaemonOptions = {
   agentsDir?: string
   /** The machines this computer reaches, as the app keeps them: for the meta agent to set them up. */
   machines?: () => MachineDirectory
+  /** This tailnet node, for Web access through Tailscale; defaults to asking `tailscale status`. Tests give their own. */
+  tailscale?: () => Promise<TailscaleNode | undefined>
 }
 
 /** One mounted thread: its conversation and a small watch that keeps its status current. */
@@ -102,8 +107,8 @@ const costOf = (usage: { models?: Record<string, Usage>; tools?: Record<string, 
 export type Daemon = {
   machine: MachineInfo
   settings: SettingsRegistry
-  /** Register this daemon's methods on a connection's peer; returns a cleanup for when it disconnects. */
-  serve(peer: RpcPeer): () => void
+  /** Register this daemon's methods on a connection's peer; returns a cleanup for when it disconnects. `via`: what the transport knows of it. */
+  serve(peer: RpcPeer, via?: Via): () => void
   close(): Promise<void>
 }
 
@@ -382,6 +387,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   // ── Extensions ──────────────────────────────────────────────────────────────────────────────────────────────────
 
   const connections = new Set<RpcPeer>()
+  /** Who is connected, for `clients.watch` and the action log (see clients.ts). */
+  const clients = new Clients()
   /** Every intent this daemon answers, its own and its extensions'. Reads and watches are plain methods. */
   const router = new Router<DaemonContext>()
   // The meta agent's tools: selected for its thread only (see agentOf), so installed but not a built-in.
@@ -858,18 +865,31 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const daemon: Daemon = {
     machine,
     settings,
-    serve(peer) {
+    serve(peer, via) {
       const subs = new Map<string, () => unknown>()
       const notify = <N extends keyof Notifications>(event: N, params: Notifications[N]) => peer.notify(event, params)
       let client = 'client'
+      const self = clients.add(peer, via)
+      /** Who dispatched, for the action log. */
+      const by = () => { const info = clients.get(self); return info && { id: info.id, kind: info.kind, label: info.label } }
       // Reads and watches; every intent is an action, served below under its id.
       const handlers: Record<string, (params: any) => unknown> = {
-        async hello({ version, client: name }: Methods['hello']['params']) {
+        async hello({ version, client: name, label }: Methods['hello']['params']) {
           if (version !== PROTOCOL_VERSION) {
             throw new RpcError('version_mismatch', `This machine's superego speaks protocol ${PROTOCOL_VERSION}, the client ${version}`, { hint: 'Update superego on the older side.' })
           }
           if (typeof name === 'string') client = name
-          return { version: PROTOCOL_VERSION, features, machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id)] }
+          clients.hello(self, client, typeof label === 'string' ? label : undefined)
+          return { version: PROTOCOL_VERSION, features, machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id)], client: self }
+        },
+        async 'clients.watch'() {
+          const sub = randomUUID()
+          subs.set(sub, clients.watch((value) => notify('clients.changed', { sub, value })))
+          return { sub, value: clients.list() }
+        },
+        async 'client.perform'({ client: target, action, params }: Methods['client.perform']['params']) {
+          clients.perform(self, target, action, params)
+          return null
         },
         'thread.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),
@@ -971,23 +991,25 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         'action.list': async () => router.list(),
         /** Run an action by id, as `exposure` (the command line passes `cli`); params may be strings to coerce. */
         'action.run': ({ id, params, exposure }: { id: string; params?: unknown; exposure?: Exposure }) =>
-          router.dispatch(id, params, { notify, source: client }, { source: exposure ?? client, ...(exposure ? { exposure } : {}) }),
+          router.dispatch(id, params, { notify, source: client }, { source: exposure ?? client, client: by(), ...(exposure ? { exposure } : {}) }),
         /** The newest dispatches on this machine, oldest first. */
         'action.log': async () => router.log(),
       }
       const ctx: DaemonContext = { notify: (event, params) => notify(event as keyof Notifications, params as never), source: client }
       for (const action of router.list()) {
-        handlers[action.id] = (params: unknown) => router.dispatch(action.id, params, { ...ctx, source: client }, { source: client })
+        handlers[action.id] = (params: unknown) => router.dispatch(action.id, params, { ...ctx, source: client }, { source: client, client: by() })
       }
       connections.add(peer)
       for (const [method, handler] of Object.entries(handlers)) {
         peer.handle(method, (params: unknown) => {
           if (restarting && method !== 'hello') throw new RpcError('restarting', 'The daemon is restarting. Try again in a moment.')
+          clients.touch(self)
           return (handler as (params: unknown) => unknown)(params)
         })
       }
       return () => {
         connections.delete(peer)
+        clients.remove(self)
         for (const stop of subs.values()) void stop()
         subs.clear()
       }
@@ -1003,13 +1025,32 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   // ── Web access ──────────────────────────────────────────────────────────────────────────────────────────────────
 
+  // Off; "to this computer" (loopback, browsers pair); through Tailscale (a unix socket behind `tailscale serve`, which
+  // says who is calling); or to the whole network over plain HTTP, which the option's name owns up to. A value from
+  // before these (`network`) counts as off.
   let web: WebServer | undefined
   let webKey = ''
   let webError: string | undefined
+  const devices = new Devices(options.dataDir)
+  const codes = new PairingCodes()
+  const webSocket = join(options.dataDir, 'web.sock')
+  const tailscale = options.tailscale ?? tailscaleNode
+  /** This tailnet node, asked again at most once a minute: who owns it decides who gets in. */
+  let node: { at: number; value: Promise<TailscaleNode | undefined> } | undefined
+  const tailnet = () => {
+    if (!node || Date.now() - node.at > 60_000) node = { at: Date.now(), value: tailscale().catch(() => undefined) }
+    return node.value
+  }
+  const admits = async (login: string) => allowedLogins((await tailnet())?.owner, settings.get<string>('web.tailscale.logins') ?? '').has(login.toLowerCase())
+  const webAccess = () => {
+    const access = settings.get<string>('web.access')
+    return access === 'local' || access === 'tailscale' || access === 'network-unencrypted' ? access : 'off'
+  }
+  const webPort = () => settings.get<number>('web.port') ?? 7777
   /** Serve (or stop serving) browsers as the Web access settings say, whenever they change. */
   const applyWeb = async () => {
-    const access = settings.get<string>('web.access') ?? 'off'
-    const port = settings.get<number>('web.port') ?? 7777
+    const access = webAccess()
+    const port = webPort()
     const key = access === 'off' || !options.webRoot ? '' : `${access}:${port}`
     if (key === webKey) return
     webKey = key
@@ -1018,14 +1059,52 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     webError = undefined
     if (key) {
       try {
-        web = await serveWeb({ root: options.webRoot!, host: access === 'network' ? '0.0.0.0' : '127.0.0.1', port, token: await webToken(options.dataDir), serve: daemon.serve,
-          artifact: async (thread, path) => readFile(inFolder((await get(thread)).meta.cwd, path)) })
+        web = await serveWeb({
+          root: options.webRoot!,
+          at: access === 'tailscale' ? { socket: webSocket } : { host: access === 'network-unencrypted' ? '0.0.0.0' : '127.0.0.1', port },
+          auth: access === 'tailscale' ? { kind: 'tailscale', admits } : { kind: 'pairing', devices, codes },
+          serve: daemon.serve,
+          artifact: async (thread, path) => readFile(inFolder((await get(thread)).meta.cwd, path)),
+        })
+        if (access === 'tailscale') node = undefined
       } catch (error) {
         webError = (error as Error).message
       }
     }
     settings.invalidate()
   }
+  devices.onChange(() => settings.invalidate())
+  cleanups.push(() => void devices.flush().catch(() => {}))
+
+  router.register(defineAction({
+    id: 'web.pair', title: 'Pair a browser', runs: 'machine', expose: ['ui', 'cli'],
+    description: 'A one-time code for a browser or phone to pair with this machine, open for five minutes.',
+    run() {
+      if (!web || webAccess() === 'tailscale') throw new RpcError('unsupported', webAccess() === 'tailscale' ? 'Through Tailscale, callers are known by their login: there is nothing to pair.' : 'Turn on Web access first.')
+      const { code, expires } = codes.issue()
+      // In the fragment, which the browser keeps to itself: the page reads it and trades it for a cookie.
+      return { code, expires, url: web.url ? `${web.url}#pair=${code}` : null }
+    },
+  }))
+  router.register(defineAction({
+    id: 'web.device.rename', title: 'Rename a paired browser', runs: 'machine', expose: ['ui', 'cli'],
+    params: obj({ id: str(), name: str() }),
+    run({ id, name }) {
+      if (!devices.rename(id, name)) throw new RpcError('not_found', `No paired browser ${id}, or no name`)
+      clients.relabel(id, devices.get(id)!.name)
+      return null
+    },
+  }))
+  router.register(defineAction({
+    id: 'web.device.revoke', title: 'Revoke a paired browser', runs: 'machine', expose: ['ui', 'cli'],
+    params: obj({ id: str() }),
+    run({ id }) {
+      if (!devices.revoke(id)) throw new RpcError('not_found', `No paired browser ${id}`)
+      // Right after this answer, so a browser revoking itself hears that it worked before it is cut off.
+      setImmediate(() => web?.disconnect(id))
+      return null
+    },
+  }))
   // The profiles threads here can start with: the user's, and those of the projects that have threads.
   settings.register({
     id: 'profiles', title: 'Profiles', order: 75, ui: 'profiles', settings: [],
@@ -1043,12 +1122,31 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     description: 'Use this machine from a browser or a phone: it serves the app and its threads.',
     settings: [
       { key: 'web.access', title: 'Serve the app', default: 'off', type: { type: 'choice', options: [
-        { value: 'off', label: 'Off' }, { value: 'local', label: 'To this computer' }, { value: 'network', label: 'To the local network' },
+        { value: 'off', label: 'Off' },
+        { value: 'local', label: 'To this computer', description: 'On 127.0.0.1. Browsers pair with a code from here.' },
+        { value: 'tailscale', label: 'Through Tailscale', description: 'HTTPS on your tailnet, by `tailscale serve`; callers are known by their Tailscale login.' },
+        { value: 'network-unencrypted', label: 'To the local network, unencrypted', description: 'Plain HTTP on every interface: anyone on the network can watch what you do, and steal a paired browser’s cookie.' },
       ] }, disabled: () => options.webRoot ? undefined : 'This daemon has no web app to serve.' },
-      { key: 'web.port', title: 'Port', default: 7777, type: { type: 'number', min: 1024, max: 65535, step: 1 } },
+      { key: 'web.port', title: 'Port', default: 7777, description: 'Through Tailscale: the HTTPS port on the tailnet.', type: { type: 'number', min: 1024, max: 65535, step: 1 } },
+      { key: 'web.tailscale.logins', title: 'Also allow', default: '', description: 'Tailscale logins besides this machine’s owner, separated by commas.', type: { type: 'string', placeholder: 'someone@example.com' },
+        hidden: () => webAccess() !== 'tailscale' },
     ],
-    data: () => ({ url: web?.url ?? null, error: webError ?? null }),
+    data: async () => {
+      const access = webAccess()
+      const found = access === 'tailscale' ? await tailnet() : undefined
+      return {
+        access, url: web?.url ?? null, error: webError ?? null,
+        devices: devices.list(),
+        tailscale: access === 'tailscale' ? {
+          command: serveCommand(webSocket, webPort()),
+          address: found?.dnsName ? `https://${found.dnsName}${webPort() === 443 ? '' : `:${webPort()}`}/` : null,
+          owner: found?.owner ?? null,
+          running: Boolean(found),
+        } : null,
+      }
+    },
   })
+  settings.register({ id: 'clients', title: 'Connected', order: 85, ui: 'clients', settings: [], description: 'Who is using this machine right now.' })
   settings.onChange(() => void applyWeb())
   await applyWeb()
   return daemon

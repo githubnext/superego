@@ -1,25 +1,24 @@
 /// <reference path="./ws.d.ts" />
-// Superego in a browser: the daemon serves the app's window (the same build Electron loads) over HTTP, and the protocol over a
-// WebSocket at /rpc. Off unless the machine's "Web access" setting turns it on. A token, made once per data dir, guards
-// the protocol: the address Settings shows carries it (`#token=…`), and the page keeps it.
-import { randomBytes, timingSafeEqual } from 'node:crypto'
+// Superego in a browser: the daemon serves the app's window (the same build Electron loads) over HTTP, and the protocol
+// over a WebSocket at /rpc. Off unless the machine's "Web access" setting turns it on. The page itself is public; the
+// protocol and artifacts need a caller this machine knows, one of two ways:
+// - pairing: a browser trades a one-time code from Settings (POST /pair) for a credential of its own, kept as an
+//   HttpOnly, SameSite=Strict cookie. No secret ever rides in a URL. See web-auth.ts.
+// - tailscale: `tailscale serve` says who is calling, on a unix socket only it can reach. See tailscale.ts.
+// Cookies go with requests from other sites too, so the WebSocket upgrade and the pairing POST must come from a page
+// this server served: their Origin has to name the host they were sent to.
+import { chmod, mkdir, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { readFile, stat, writeFile } from 'node:fs/promises'
-import { createServer, type Server } from 'node:http'
+import { readFile, stat } from 'node:fs/promises'
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { networkInterfaces } from 'node:os'
-import { extname, join, normalize, sep } from 'node:path'
-import { WebSocketServer } from 'ws'
+import { dirname, extname, join, normalize, sep } from 'node:path'
+import type { TLSSocket } from 'node:tls'
+import { WebSocketServer, type WebSocket } from 'ws'
 import { RpcPeer } from '@superego/protocol'
-
-/** The token a browser needs to speak to this daemon: kept in the data dir, made the first time. */
-export async function webToken(dataDir: string): Promise<string> {
-  const path = join(dataDir, 'web-token')
-  const existing = await readFile(path, 'utf8').catch(() => '')
-  if (existing.trim()) return existing.trim()
-  const token = randomBytes(24).toString('base64url')
-  await writeFile(path, token + '\n', { mode: 0o600 })
-  return token
-}
+import type { Via } from './clients.ts'
+import { deviceName, type Devices, type PairingCodes } from './web-auth.ts'
+import { tailscaleCaller } from './tailscale.ts'
 
 /** The first address other devices on the local network can reach this machine at. */
 export function lanAddress(): string | undefined {
@@ -34,31 +33,82 @@ const TYPES: Record<string, string> = {
   '.webmanifest': 'application/manifest+json', '.htm': 'text/html; charset=utf-8', '.mjs': 'text/javascript', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.txt': 'text/plain; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
 }
 
-export type WebServer = { url: string; close(): Promise<void> }
+export const COOKIE = 'superego-device'
 
-/** Serve `root` (the window's build) and the protocol on host:port, each connection a peer handed to `serve`. */
-export async function serveWeb({ root, host, port, token, serve, artifact }: {
-  root: string; host: string; port: number; token: string; serve(peer: RpcPeer): () => void
+/** How callers prove who they are: a paired device's cookie, or Tailscale's word for it (see the top of this file). */
+export type WebAuth =
+  | { kind: 'pairing'; devices: Devices; codes: PairingCodes }
+  | { kind: 'tailscale'; admits(login: string): Promise<boolean> }
+
+export type WebServer = {
+  /** Where browsers open it, when it listens on TCP; nothing secret in it. */
+  url: string | null
+  /** Close a device's live connections at once (it was revoked). */
+  disconnect(device: string): void
+  close(): Promise<void>
+}
+
+/** Who a request is from, or why it isn't let in: `401` nobody we know, `403` someone not allowed. */
+type Identity = { ok: true; via: Via } | { ok: false; status: 401 | 403; why: string }
+
+/** Serve `root` (the window's build) and the protocol, on host:port or a unix socket; each connection a peer handed to `serve`. */
+export async function serveWeb({ root, at, auth, serve, artifact }: {
+  root: string; at: { host: string; port: number } | { socket: string }; auth: WebAuth; serve(peer: RpcPeer, via: Via): () => void
   /** A file of an artifact (an HTML page in a thread's folder, and what it links to), at /artifact/<thread>/<path>. */
   artifact?(thread: string, path: string): Promise<Buffer>
 }): Promise<WebServer> {
-  const expected = Buffer.from(token)
-  const allowed = (given: string | null) => { const b = Buffer.from(given ?? ''); return b.length === expected.length && timingSafeEqual(b, expected) }
+  const identify = async (request: IncomingMessage): Promise<Identity> => {
+    if (auth.kind === 'tailscale') {
+      const caller = tailscaleCaller(request.headers)
+      if (!caller) return { ok: false, status: 401, why: 'Open this through `tailscale serve`, signed in to Tailscale.' }
+      if (!(await auth.admits(caller.login))) return { ok: false, status: 403, why: `${caller.login} isn't allowed on this machine.` }
+      return { ok: true, via: { via: 'tailscale', label: caller.login } }
+    }
+    const device = auth.devices.verify(cookie(request, COOKIE))
+    return device ? { ok: true, via: { via: 'web', label: device.name, device: device.id } } : { ok: false, status: 401, why: 'Not paired with this machine.' }
+  }
+
   const server: Server = createServer(async (request, response) => {
+    try { await handle(request, response) } catch (error) {
+      if (!response.headersSent) response.writeHead(500, { 'content-type': 'text/plain' })
+      response.end((error as Error).message)
+    }
+  })
+  const handle = async (request: IncomingMessage, response: ServerResponse) => {
     const requested = new URL(request.url ?? '/', 'http://x')
     const path = decodeURIComponent(requested.pathname)
-    // Artifacts: token-checked (a cookie set by the first request, so the page's relative links work too), sandboxed.
+    // Who this browser is to us: the page asks before it connects, and shows the pairing form when it's nobody.
+    if (path === '/session') {
+      const who = await identify(request)
+      const body = who.ok ? { via: who.via.via, name: who.via.label, ...(who.via.device ? { device: who.via.device } : {}) } : { error: who.why, pairing: auth.kind === 'pairing' }
+      json(response, who.ok ? 200 : who.status, body)
+      return
+    }
+    // A code from Settings for a credential of this browser's own, as a cookie.
+    if (path === '/pair') {
+      if (request.method !== 'POST') { response.writeHead(405, { allow: 'POST' }).end(); return }
+      if (auth.kind !== 'pairing') { json(response, 404, { error: 'This machine admits callers by Tailscale; there is nothing to pair.' }); return }
+      if (!sameOrigin(request)) { json(response, 403, { error: 'Pair from this machine’s own page.' }); return }
+      if (!/^application\/json\b/.test(request.headers['content-type'] ?? '')) { json(response, 415, { error: 'Expected JSON' }); return }
+      const body = await readJson(request).catch(() => undefined) as { code?: unknown; name?: unknown } | undefined
+      if (typeof body?.code !== 'string' || !auth.codes.take(body.code)) { json(response, 401, { error: 'That code isn’t open on this machine. Make a new one in Settings → Web access.' }); return }
+      const { device, credential } = auth.devices.add(typeof body.name === 'string' && body.name.trim() ? body.name : deviceName(request.headers['user-agent']))
+      const secure = isHttps(request) ? '; Secure' : ''
+      // Browsers keep a cookie 400 days at most; past that, pair again.
+      response.setHeader('set-cookie', `${COOKIE}=${credential}; Path=/; HttpOnly; SameSite=Strict; Max-Age=34560000${secure}`)
+      json(response, 200, { device: device.id, name: device.name })
+      return
+    }
+    // Artifacts: the caller's cookie (or Tailscale), then sandboxed.
     if (path.startsWith('/artifact/') && artifact) {
-      const cookie = /(?:^|; )superego-artifact=([^;]+)/.exec(request.headers.cookie ?? '')?.[1]
-      const given = requested.searchParams.get('token') ?? (cookie ? decodeURIComponent(cookie) : null)
-      if (!allowed(given)) { response.writeHead(401).end(); return }
+      const who = await identify(request)
+      if (!who.ok) { response.writeHead(who.status, { 'content-type': 'text/plain' }).end(who.why); return }
       const [thread, ...rest] = path.slice('/artifact/'.length).split('/')
       try {
         const content = await artifact(thread!, rest.join('/'))
         response.writeHead(200, {
           'content-type': TYPES[extname(path)] ?? 'application/octet-stream',
           'content-security-policy': "sandbox allow-scripts allow-forms allow-popups; default-src 'self' data: blob: https: 'unsafe-inline' 'unsafe-eval'",
-          'set-cookie': `superego-artifact=${encodeURIComponent(token)}; Path=/artifact/; HttpOnly; SameSite=Strict`,
           'cache-control': 'no-cache',
         })
         response.end(content)
@@ -67,8 +117,6 @@ export async function serveWeb({ root, host, port, token, serve, artifact }: {
       }
       return
     }
-    // Whether a token is right, for a page asking for one: the protocol itself only says so by closing.
-    if (path === '/rpc') { response.writeHead(allowed(requested.searchParams.get('token')) ? 204 : 401).end(); return }
     const file = normalize(join(root, path === '/' ? 'index.html' : path))
     if (!file.startsWith(root + sep) && file !== root) { response.writeHead(403).end(); return }
     // Unknown paths are the app's own (it has no routes yet), so they get the page.
@@ -80,26 +128,100 @@ export async function serveWeb({ root, host, port, token, serve, artifact }: {
       'cache-control': target.includes(`${sep}assets${sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache',
     })
     response.end(await readFile(target))
-  })
+  }
+
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 32 * 1024 * 1024 })
-  server.on('upgrade', (request, socket, head) => {
-    const url = new URL(request.url ?? '/', 'http://x')
-    if (url.pathname !== '/rpc' || !allowed(url.searchParams.get('token'))) {
-      socket.end('HTTP/1.1 401 Unauthorized\r\n\r\n')
-      return
-    }
+  /** Each paired device's live connections, and how to end one: at once, before the browser has said goodbye. */
+  const byDevice = new Map<string, Map<WebSocket, () => void>>()
+  server.on('upgrade', async (request, socket, head) => {
+    const refuse = (status: number, why: string) => socket.end(`HTTP/1.1 ${status} ${status === 401 ? 'Unauthorized' : status === 404 ? 'Not Found' : 'Forbidden'}\r\ncontent-type: text/plain\r\n\r\n${why}`)
+    if (new URL(request.url ?? '/', 'http://x').pathname !== '/rpc') return refuse(404, 'Not here')
+    if (!sameOrigin(request)) return refuse(403, 'Connect from this machine’s own page.')
+    const who = await identify(request)
+    if (!who.ok) return refuse(who.status, who.why)
     sockets.handleUpgrade(request, socket, head, (ws) => {
+      const device = who.via.device
       const peer = new RpcPeer((line) => { if (ws.readyState === ws.OPEN) ws.send(line.trimEnd()) })
-      const cleanup = serve(peer)
-      ws.on('message', (data) => peer.receive(String(data)))
-      ws.on('close', () => { peer.close(); cleanup() })
+      const cleanup = serve(peer, who.via)
+      let ended = false
+      const end = () => {
+        if (ended) return
+        ended = true
+        if (device) byDevice.get(device)?.delete(ws)
+        peer.close()
+        cleanup()
+      }
+      if (device) { if (!byDevice.has(device)) byDevice.set(device, new Map()); byDevice.get(device)!.set(ws, end) }
+      ws.on('message', (data) => { if (!ended) peer.receive(String(data)) })
+      ws.on('close', end)
       ws.on('error', () => {})
     })
   })
-  await new Promise<void>((resolve, reject) => server.once('error', reject).listen(port, host, resolve))
-  const shown = host === '0.0.0.0' ? lanAddress() ?? '127.0.0.1' : host
-  return {
-    url: `http://${shown}:${port}/#token=${token}`,
-    close: () => new Promise<void>((resolve) => { for (const client of sockets.clients) client.terminate(); sockets.close(); server.close(() => resolve()); server.closeAllConnections() }),
+
+  let url: string | null = null
+  if ('socket' in at) {
+    // Only this user, and tailscaled (root), can connect: see tailscale.ts.
+    await mkdir(dirname(at.socket), { recursive: true, mode: 0o700 })
+    await rm(at.socket, { force: true })
+    await new Promise<void>((resolve, reject) => server.once('error', reject).listen(at.socket, resolve))
+    await chmod(at.socket, 0o600)
+  } else {
+    await new Promise<void>((resolve, reject) => server.once('error', reject).listen(at.port, at.host, resolve))
+    const shown = at.host === '0.0.0.0' ? lanAddress() ?? '127.0.0.1' : at.host
+    url = `http://${shown}:${at.port}/`
   }
+  return {
+    url,
+    disconnect(device) {
+      // 4401: the page reads it as "pair again", not as the network dropping. Nothing it sends after this is heard.
+      for (const [ws, end] of byDevice.get(device) ?? []) {
+        end()
+        ws.close(4401, 'Revoked')
+        setTimeout(() => ws.terminate(), 1000).unref()
+      }
+      byDevice.delete(device)
+    },
+    close: () => new Promise<void>((resolve) => {
+      for (const client of sockets.clients) client.terminate()
+      sockets.close()
+      server.close(() => resolve())
+      server.closeAllConnections()
+      if ('socket' in at) void rm(at.socket, { force: true })
+    }),
+  }
+}
+
+/** Whether a request comes from a page this server served: its Origin names the host it was sent to (or, behind a proxy, the one the browser used). */
+function sameOrigin(request: IncomingMessage): boolean {
+  const origin = request.headers.origin
+  if (!origin) return false
+  let host: string
+  try { host = new URL(origin).host } catch { return false }
+  const forwarded = request.headers['x-forwarded-host']
+  return [request.headers.host, ...(Array.isArray(forwarded) ? forwarded : [forwarded])].some((h) => h?.toLowerCase() === host.toLowerCase())
+}
+
+/** Whether the browser sees HTTPS: here, or at a proxy in front (`tailscale serve`), which only marks the cookie Secure. */
+const isHttps = (request: IncomingMessage) => Boolean((request.socket as TLSSocket).encrypted) || request.headers['x-forwarded-proto'] === 'https'
+
+function cookie(request: IncomingMessage, name: string): string | undefined {
+  for (const part of (request.headers.cookie ?? '').split(/;\s*/)) {
+    const at = part.indexOf('=')
+    if (at > 0 && part.slice(0, at) === name) return part.slice(at + 1)
+  }
+  return undefined
+}
+
+function json(response: ServerResponse, status: number, body: unknown) {
+  response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(body))
+}
+
+function readJson(request: IncomingMessage, limit = 4096): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let text = ''
+    request.setEncoding('utf8')
+    request.on('data', (chunk: string) => { text += chunk; if (text.length > limit) { reject(new Error('Too large')); request.destroy() } })
+    request.on('end', () => { try { resolve(JSON.parse(text)) } catch (error) { reject(error) } })
+    request.on('error', reject)
+  })
 }
