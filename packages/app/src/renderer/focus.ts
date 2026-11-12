@@ -1,8 +1,9 @@
 // Focus, after Tremolo: always visible (one ring, see @superego/ui's styles), and in one place the app and the keyboard
 // agree on. The window is a row of regions, left to right: the sidebar, the thread, each pane beside it. ⌘⌥← and ⌘⌥→
-// move between them, ⌃I goes to the prompt; going to a region focuses what's used there (the selected thread in the
-// sidebar, the prompt, an editor's text, a page, else the first control). Focus moving into a pane makes it the thread's
-// focused pane; a pane brought forward from the keyboard (⌃Tab, the navigator) takes the focus with it.
+// move between them, ⌃I goes to the prompt (esc leaves it for the thread); going to a region focuses what's used there
+// (the selected thread in the sidebar, the thread's transcript, an editor's text, a page, else the pane itself). Focus
+// moving into a pane makes it the thread's focused pane; a pane brought forward from the keyboard (⌃Tab, the
+// navigator) takes the focus with it.
 
 /** The regions, left to right, as the window shows them now. */
 function regions(): HTMLElement[] {
@@ -12,14 +13,16 @@ function regions(): HTMLElement[] {
   return [...(sidebar ? [sidebar] : []), ...thread, ...columns]
 }
 
-/** What to focus in a region: what's used there. */
+/**
+ * What to focus in a region: what's used there. A thread is its transcript (to read and scroll; typing goes on to the
+ * prompt), an editor its text, a page itself; any other pane takes the focus itself.
+ */
 function target(region: HTMLElement): HTMLElement | null {
   return region.querySelector<HTMLElement>('.superego-list-item.is-selected[tabindex]')
-    ?? region.querySelector<HTMLElement>('.composer textarea:not(:disabled)')
+    ?? region.querySelector<HTMLElement>('.thread__scroll')
     ?? region.querySelector<HTMLElement>('.cm-content')
     ?? region.querySelector<HTMLElement>('.superego-list-item[tabindex]')
     ?? region.querySelector<HTMLElement>('.panes__body iframe')
-    ?? region.querySelector<HTMLElement>('.panes__body button, .panes__body input, .panes__body textarea, .panes__body select, .panes__body [tabindex]:not([tabindex="-1"]), .panes__body iframe')
     ?? (region.tabIndex >= 0 || region.hasAttribute('tabindex') ? region : null)
 }
 
@@ -44,6 +47,11 @@ export function focusBeside(by: -1 | 1) {
   const at = all.findIndex((r) => r.contains(document.activeElement))
   const from = at < 0 ? all.findIndex((r) => r.matches('.thread, [data-column="thread"]')) : at
   for (let i = from + by; i >= 0 && i < all.length; i += by) if (focusRegion(all[i])) return
+}
+
+/** The thread shown: its transcript, from its prompt (esc) or a command. */
+export function focusThread() {
+  focusRegion(document.querySelector<HTMLElement>('.app__main [data-column="thread"]') ?? document.querySelector<HTMLElement>('.app__main .thread'))
 }
 
 /** ⌃I: the prompt. */

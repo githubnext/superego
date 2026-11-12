@@ -62,8 +62,10 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
 | `⌘.` | Next unread thread (everywhere, or in this session: Settings → Navigation) |
 | `⌘⇧[` `⌘⇧]` | Previous / next thread, through every session in the sidebar's order |
 | `⌃Tab` `⌃⇧Tab` | The thread and its panes, in turn |
-| `⌘⌥←` `⌘⌥→` | Focus the region beside: the sidebar, the thread, each pane |
-| `⌃I` | Focus the prompt |
+| `⌘⌥←` `⌘⌥→` | Focus the region beside: the sidebar, the thread, each pane (every one can hold the focus) |
+| `⌃I` | Focus the prompt (`Esc` there leaves it for the thread, to read and scroll; typing goes back to the prompt) |
+| `⌃D` `⌃U` | Scroll what has the focus (the thread, from its prompt) half a page down / up |
+| `⌃O` | The links in the thread, to follow from the keyboard |
 | `⌘/` | Hide or show the sidebar |
 | `⌘⇧E` | The file tree beside the editor |
 | `⌘⇧D` | Show changes |
@@ -89,7 +91,7 @@ Focus is always visible: whatever has it wears one solid ring, and the region ho
 | `extensions/threads` | the sidebar: sessions and their threads (UI) |
 | `extensions/ask-user` | an `ask_user` tool; the question card and blocked status (daemon + UI) |
 | `extensions/files` | the file tree beside the editor and quick open (`⌘P`) (daemon + UI) |
-| `extensions/links` | ⌃U: the links in the thread, newest first, fuzzy filtered; ⏎ follows one, ⌘⏎ opens it in a pane, ⌃1–9 / ⌃⌘1–9 the first nine (UI) |
+| `extensions/links` | ⌃O: the links in the thread, newest first, fuzzy filtered; ⏎ follows one, ⌘⏎ opens it in a pane, ⌃1–9 / ⌃⌘1–9 the first nine (UI) |
 | `extensions/suggestions` | after each answer, a side call to the thread's model for what you might send next; offered over the composer, ⇥ takes the first (daemon + UI) |
 | `extensions/tasks` | `task_start`/`task_finish` tools and a prompt asking the agent to report its work as tasks; the transcript folds work under each task's title, status and outcome (daemon + UI) |
 

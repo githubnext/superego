@@ -8,7 +8,8 @@ import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
 import { unread, type Session } from './sessions.ts'
-import { focusBeside, focusColumn, focusPrompt } from './focus.ts'
+import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
+import { scrollHalfPage } from './scroll.ts'
 import { startRename } from './rename.ts'
 
 /** What a window action gets besides its parameters. */
@@ -111,6 +112,10 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
   defineAction({ id: 'focus.left', title: 'Focus the region to the left', runs: 'window', keys: 'mod+alt+arrowleft', run: () => focusBeside(-1) }),
   defineAction({ id: 'focus.right', title: 'Focus the region to the right', runs: 'window', keys: 'mod+alt+arrowright', run: () => focusBeside(1) }),
   defineAction({ id: 'focus.prompt', title: 'Focus the prompt', runs: 'window', keys: 'ctrl+i', run: () => focusPrompt() }),
+  defineAction({ id: 'focus.thread', title: 'Focus the thread', runs: 'window', run: () => focusThread() }),
+  // What has the focus (the thread from its prompt) scrolls half a page.
+  defineAction({ id: 'scroll.down', title: 'Scroll down half a page', runs: 'window', keys: 'ctrl+d', run: () => scrollHalfPage(1) }),
+  defineAction({ id: 'scroll.up', title: 'Scroll up half a page', runs: 'window', keys: 'ctrl+u', run: () => scrollHalfPage(-1) }),
   // Within a thread: the thread itself, then each pane beside it.
   defineAction({ id: 'pane.next', title: 'Next pane', runs: 'window', keys: 'ctrl+tab', run: (_p, c: WindowContext) => stepPane(c, 1) }),
   defineAction({ id: 'pane.previous', title: 'Previous pane', runs: 'window', keys: 'ctrl+shift+tab', run: (_p, c: WindowContext) => stepPane(c, -1) }),

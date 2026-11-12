@@ -142,6 +142,9 @@ function UnarchiveButton({ machine, thread, className = '' }: { machine: Machine
   )
 }
 
+/** A prompt's transcript: the thread it's under. */
+const transcriptOf = (prompt: Element) => prompt.closest('.dock')?.parentElement?.querySelector<HTMLElement>(':scope > .thread__scroll')
+
 /** How far from its end a transcript still counts as at its end, and follows what comes in. */
 const PINNED = 80
 
@@ -240,7 +243,12 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
     <ThreadMachine.Provider value={machine.id}>
     <Here.Provider value={{ machine, thread }}>
     <div className="thread">
-      <div className="thread__scroll" ref={scroller}
+      {/* The thread itself can hold the focus, to read and scroll from the keyboard; typing there goes on to the prompt (space pages down). */}
+      <div className="thread__scroll" ref={scroller} tabIndex={-1}
+        onKeyDown={(e) => {
+          if (e.key.length !== 1 || e.key === ' ' || e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented || e.target !== e.currentTarget) return
+          e.currentTarget.parentElement?.querySelector<HTMLTextAreaElement>(':scope > .dock .composer textarea:not(:disabled)')?.focus()
+        }}
         onScroll={(e) => {
           const el = e.currentTarget
           pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < PINNED
@@ -823,6 +831,8 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
     }
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(event.ctrlKey ? 'followUp' : 'steer') }
     if (event.key === 'Escape' && busy) { event.preventDefault(); void abort() }
+    // Esc otherwise leaves the prompt for the thread above it: to read, and scroll from the keyboard.
+    else if (event.key === 'Escape') { event.preventDefault(); transcriptOf(event.currentTarget)?.focus({ preventScroll: true }) }
   }
   return (
     <ClaimContext.Provider value={register}>

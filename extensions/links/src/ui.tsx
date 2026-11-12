@@ -1,5 +1,5 @@
 /// <reference path="./env.d.ts" />
-// links, UI half: ⌃U lists the links in the selected thread's transcript, newest first; typing narrows them. ⏎ follows
+// links, UI half: ⌃O lists the links in the selected thread's transcript, newest first; typing narrows them. ⏎ follows
 // one as a click would, ⌘⏎ opens it in a pane where it can be. The first nine take ⌃1–⌃9 (⌃⌘ for the pane).
 import { useMemo, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
 import { defineAction, defineUiExtension, keyLabel, useSelection } from '@superego/app/ui'
@@ -16,7 +16,7 @@ export default defineUiExtension({
   name: 'links',
   setup(superego) {
     superego.slot('overlay', Links)
-    superego.action(defineAction({ id: 'links.list', title: 'Links in this thread…', runs: 'window', keys: 'ctrl+u', run: () => show(!shown) }))
+    superego.action(defineAction({ id: 'links.list', title: 'Links in this thread…', runs: 'window', keys: 'ctrl+o', run: () => show(!shown) }))
   },
 })
 

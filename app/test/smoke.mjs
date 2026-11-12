@@ -415,7 +415,7 @@ if (phase === 'first') {
   await new Promise((r) => setTimeout(r, 300))
   if (await run(`[...document.querySelectorAll('.superego-list-item__body')].filter((b) => b.textContent === 'Set up Superego').length`) !== 1) { await fail('a second meta thread'); throw new Error('failed') }
   // Focus: ⌘⌥← from the prompt goes to the sidebar, on the selected thread; ↓ moves along it; ⌘⌥→ comes back to the
-  // thread's prompt; ⌃I goes to the prompt from anywhere. Wherever it is, it's drawn.
+  // thread itself; ⌃I goes to the prompt from anywhere, and esc leaves it for the thread. Wherever it is, it's drawn.
   // A hidden window's page never has focus, so :focus styles never apply; emulate it (nothing reaches the screen).
   const dbg = BrowserWindow.getAllWindows()[0].webContents.debugger
   if (!dbg.isAttached()) dbg.attach()
@@ -428,10 +428,14 @@ if (phase === 'first') {
   await until(`document.activeElement?.matches('.app__sidebar .superego-list-item:not(.is-selected)')`, 'down the sidebar')
   await shot('focus')
   await key('Right', ['meta', 'alt'])
-  await until(`document.activeElement?.matches('.composer textarea')`, 'focus back to the prompt')
+  await until(`document.activeElement?.matches('.thread__scroll')`, 'focus back to the thread')
   await key('Left', ['meta', 'alt'])
   await key('i', ['control'])
   await until(`document.activeElement?.matches('.composer textarea')`, 'ctrl+i to the prompt')
+  await key('Escape', [])
+  await until(`document.activeElement?.matches('.thread__scroll')`, 'esc from the prompt to the thread')
+  await key('i', ['control'])
+  await until(`document.activeElement?.matches('.composer textarea')`, 'ctrl+i back to the prompt')
   if (ring !== 'solid') { await fail(`focus not drawn: ${ring}`); throw new Error('failed') }
   // Attachments: a file picked with the paperclip (over the box) waits above the composer, then goes with the message and shows under it.
   await run(`(() => {
