@@ -107,7 +107,11 @@ export type Methods = {
   /** A file in a thread's folder, then `file.changed` whenever it changes on disk (by anyone), until unwatched. */
   'file.watch': { params: { id: ThreadId; path: string }; result: { sub: string; content: string | null } }
   /** A file in a thread's folder by the name a link gives it ([[Note]], Note.md, path/Note): its path, or null. */
-  'file.find': { params: { id: ThreadId; name: string }; result: { path: string | null } }
+  /**
+   * What a path a message names points at in a thread's folder: a file (or a note by its name), or a `folder` (`''` the
+   * folder itself), with the `line` it names. `path` is null when there's nothing, `outside` when it's past the folder.
+   */
+  'file.find': { params: { id: ThreadId; name: string }; result: { path: string | null; folder?: boolean; line?: number; outside?: boolean } }
   /** The skills on this machine (`~/.agents/skills`), which a message names as `$name` or `/skill:name`. */
   'skill.list': { params: {}; result: { name: string; description: string }[] }
   /** What changed in a thread's folder, by git: the unified diff against HEAD, and files git doesn't track yet. */

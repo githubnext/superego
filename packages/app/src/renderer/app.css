@@ -422,6 +422,8 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .md a.md__file { color: var(--superego-accent); text-decoration: none; cursor: pointer; }
 .md a.md__file:hover { text-decoration: underline; text-underline-offset: 2px; }
 .md a.md__file--code code { color: inherit; }
+/* Tried, and not there (or past the thread's folder): back to plain text, struck through; the title says why. */
+.md a.md__file--missing { color: var(--superego-muted); text-decoration: line-through; cursor: default; }
 /* Beside a web link: open it in a pane. Faint until the link or it is hovered. */
 .md__pane-link { display: inline-flex; margin-left: 3px; padding: 2px; vertical-align: baseline; border: 0; border-radius: 4px; background: none; color: var(--superego-faint); opacity: .6; cursor: default; }
 /* The icon is the button's only item and has no baseline of its own, so its bottom edge sits on the text's baseline;

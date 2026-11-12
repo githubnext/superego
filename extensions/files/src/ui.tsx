@@ -1,14 +1,15 @@
 /// <reference path="./env.d.ts" />
 // files, UI half: a file tree beside every file editor (its bar's button, or ⌘⇧E, shows and hides it), and quick open
 // (⌘P): any file in the selected thread's folder by a few letters of its name, opened beside the thread in the pane
-// kind that takes it. Clicking a file in the tree shows it in that editor; ⌘-click opens it beside.
+// kind that takes it. Clicking a file in the tree shows it in that editor; ⌘-click opens it beside. A folder a thread
+// names opens in a pane of its own (`folder`), as a tree to open files from.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from 'react'
 import {
   defineAction, defineUiExtension, fileKind, score, useAllThreads, useMachines, useRegistry, useSelection,
-  type Dispatch, type EditorSlotProps, type MachineEntry,
+  type Dispatch, type EditorSlotProps, type MachineEntry, type PaneProps,
 } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
-import { Dialog, FolderSimpleIcon, IconButton } from '@superego/ui'
+import { CaretRightIcon, Dialog, FolderSimpleIcon, IconButton } from '@superego/ui'
 import './styles.css'
 import { LIST, type FileList } from './shared.ts'
 
@@ -52,6 +53,7 @@ export default defineUiExtension({
     superego.slot('editor.side', Tree)
     superego.slot('editor.bar', TreeButton)
     superego.slot('overlay', QuickOpen)
+    superego.pane('folder', { title: (pane) => folderTitle((pane.params as { path?: string } | undefined)?.path), component: FolderPane, folders: true })
     superego.action(defineAction({ id: 'files.tree', title: 'Toggle file tree', runs: 'window', keys: 'mod+shift+e', run: () => treeShown.set(!treeShown.get()) }))
     superego.action(defineAction({ id: 'files.open', title: 'Open a file…', runs: 'window', keys: 'mod+p', run: () => quickOpen.set(true) }))
   },
@@ -104,29 +106,61 @@ function Tree({ machine, thread, path, open }: EditorSlotProps) {
   const here = useRef<HTMLDivElement>(null)
   useEffect(() => { here.current?.querySelector('.is-current')?.scrollIntoView({ block: 'nearest' }) }, [path, list])
   if (!shown) return null
-  const pick = (file: string) => (event: MouseEvent) => open(file, { beside: event.metaKey || event.ctrlKey })
+  const pick = (file: string, event: MouseEvent) => open(file, { beside: event.metaKey || event.ctrlKey })
 
-  const draw = (folder: Folder, depth: number): React.ReactNode => (
+  return (
+    <div className="files-tree" ref={here} aria-label="Files">
+      {!list ? <div className="files-tree__note">Reading…</div> : <FolderRows folder={root} depth={0} isOpen={isOpen} toggle={toggle} pick={pick} current={path} />}
+      {list?.truncated && <div className="files-tree__note">Only the first {list.files.length} files.</div>}
+    </div>
+  )
+}
+
+/** A folder's rows, folders first: each folder a row that opens and closes, then its files by name. */
+function FolderRows({ folder, depth, isOpen, toggle, pick, current }: {
+  folder: Folder; depth: number; isOpen(path: string): boolean; toggle(path: string): void; pick(file: string, event: MouseEvent): void; current?: string
+}) {
+  return (
     <>
       {[...folder.folders.values()].sort((a, b) => a.name.localeCompare(b.name)).map((child) => (
         <div key={child.path}>
           <button className="files-tree__row files-tree__folder" style={{ paddingLeft: 8 + depth * 12 }} onClick={() => toggle(child.path)}>
-            <span className="files-tree__caret">{isOpen(child.path) ? '▾' : '▸'}</span>{child.name}
+            <CaretRightIcon size={10} weight="bold" className={`files-tree__caret ${isOpen(child.path) ? 'is-open' : ''}`} aria-hidden />{child.name}
           </button>
-          {isOpen(child.path) && draw(child, depth + 1)}
+          {isOpen(child.path) && <FolderRows folder={child} depth={depth + 1} isOpen={isOpen} toggle={toggle} pick={pick} {...(current ? { current } : {})} />}
         </div>
       ))}
       {folder.files.map((file) => (
-        <button key={file} className={`files-tree__row ${file === path ? 'is-current' : ''}`} style={{ paddingLeft: 20 + depth * 12 }}
-          title={file} onClick={pick(file)}>
+        <button key={file} className={`files-tree__row ${file === current ? 'is-current' : ''}`} style={{ paddingLeft: 22 + depth * 12 }}
+          title={file} onClick={(event) => pick(file, event)}>
           {file.split('/').at(-1)}
         </button>
       ))}
     </>
   )
+}
+
+// ── A folder, in a pane ──────────────────────────────────────────────────────────────────────────────────────────
+
+/** A folder pane's tab: the folder's own name. */
+const folderTitle = (path: string | undefined) => path ? `${path.split('/').at(-1)}/` : undefined
+
+/** A folder a thread names (`''`: its whole folder), as a tree to browse; a file opens beside the thread (⌘-click too). */
+function FolderPane({ machine, thread, pane }: PaneProps) {
+  const registry = useRegistry()
+  const path = ((pane.params as { path?: string } | undefined)?.path ?? '').replace(/\/+$/, '')
+  const list = useFiles(machine.id, thread)
+  // The thread's whole tree, shown from this folder down.
+  const folder = useMemo(() => path.split('/').filter(Boolean).reduce<Folder | undefined>((at, part) => at?.folders.get(part), treeOf(list?.files ?? [])), [list, path])
+  const [open, setOpen] = useState<Set<string>>(() => new Set())
+  const toggle = (child: string) => setOpen((was) => { const next = new Set(was); if (!next.delete(child)) next.add(child); return next })
+  const show = (file: string) =>
+    void dispatch('pane.open', { id: thread.id, kind: fileKind(registry, thread, file), params: { path: file } }, { machine: machine.id, source: 'folder' })
   return (
-    <div className="files-tree" ref={here} aria-label="Files">
-      {!list ? <div className="files-tree__note">Reading…</div> : draw(root, 0)}
+    <div className="files-folder" aria-label={path || 'Files'}>
+      {!list ? <div className="files-tree__note">Reading…</div>
+        : !folder ? <div className="files-tree__note">No files here.</div>
+        : <FolderRows folder={folder} depth={0} isOpen={(child) => open.has(child)} toggle={toggle} pick={show} />}
       {list?.truncated && <div className="files-tree__note">Only the first {list.files.length} files.</div>}
     </div>
   )

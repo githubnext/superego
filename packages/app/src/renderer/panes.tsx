@@ -224,14 +224,14 @@ const openPane = (machine: string, id: string, kind: string, params: Record<stri
 
 /** A file in the thread's folder, to read and edit (see FileEditor). */
 function EditorPane({ machine, thread, pane }: PaneProps) {
-  const { path } = params<{ path?: string }>(pane)
+  const { path, line } = params<{ path?: string; line?: number }>(pane)
   const dispatch = useRegistry().router.dispatch
   if (!path) return <div className="pane-empty">No file given.</div>
   // Another file from beside it (the file tree): shown here instead, or in a pane of its own beside.
   const open = (file: string, { beside }: { beside: boolean }) => beside
     ? void dispatch('pane.open', { id: thread.id, kind: 'editor', params: { path: file } }, { machine: machine.id, source: 'editor' })
     : void dispatch('pane.update', { id: thread.id, pane: pane.id, params: { path: file } }, { machine: machine.id, source: 'editor' })
-  return <FileEditor key={path} machine={machine} thread={thread} path={path} onOpenFile={open} />
+  return <FileEditor key={path} machine={machine} thread={thread} path={path} {...(line ? { line } : {})} onOpenFile={open} />
 }
 
 /** A web page: a local dev server, docs. */

@@ -5,7 +5,7 @@ import { watch as watchFs } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { link, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, hostname, platform } from 'node:os'
-import { basename, dirname, join, relative, resolve as resolvePath } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
 import {
   type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, defineExtension, defineTool, type EntryId, type Extension, Harness, hook,
@@ -206,6 +206,27 @@ async function findFile(root: string, name: string): Promise<string | undefined>
   await walk(root, '')
   return best
 }
+/**
+ * What a path in a message points at, in a thread's folder `root`: a file (by `findFile`), a folder, and a line when it
+ * names one (`src/a.ts:12`, `src/a.ts#L12`). Absolute and `~` paths count when they're in the folder; `outside` when not.
+ */
+export async function locate(root: string, name: string): Promise<{ path: string | null; folder?: boolean; line?: number; outside?: boolean }> {
+  let given = name.trim()
+  let line: number | undefined
+  const at = /^(.+?)(?::(\d+)(?::\d+)?|#L(\d+)(?:-L?\d+)?)$/.exec(given)
+  if (at) { given = at[1]!; line = Number(at[2] ?? at[3]) }
+  if (given === '~' || given.startsWith('~/')) given = join(homedir(), given.slice(1))
+  if (isAbsolute(given)) {
+    const inside = relative(root, given)
+    if (inside.startsWith('..') || isAbsolute(inside)) return { path: null, outside: true }
+    given = inside
+  }
+  const folder = await (async () => { try { return (await stat(inFolder(root, given || '.'))).isDirectory() } catch { return false } })()
+  if (folder) return { path: given.replace(/\/+$/, ''), folder: true }
+  const path = await findFile(root, given)
+  return path ? { path, ...(line ? { line } : {}) } : { path: null }
+}
+
 export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
   const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')))
@@ -861,7 +882,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         },
         /** The skills a message can name, for completing `$name` as it's typed. */
         'skill.list': async () => (await listSkills(skillsDir)).map(({ name, description }) => ({ name, description })),
-        'file.find': async ({ id, name }: { id: string; name: string }) => ({ path: await findFile((await get(id)).meta.cwd, name) ?? null }),
+        'file.find': async ({ id, name }: { id: string; name: string }) => locate((await get(id)).meta.cwd, name),
         'thread.diff': async ({ id }: { id: string }) => {
           const cwd = (await get(id)).meta.cwd
           const git = (args: string[]) => new Promise<string>((done, fail) => execFile('git', ['-C', cwd, ...args], { maxBuffer: 16 * 1024 * 1024 }, (error, out) => error ? fail(error) : done(out)))

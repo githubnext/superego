@@ -25,6 +25,8 @@ export type FileEditorProps = {
   thread: ThreadInfo
   /** In the thread's folder. */
   path: string
+  /** A line to show, with the cursor at its start: on opening, and whenever it changes. */
+  line?: number
   /** Opening a link (a click on it, or ⌘-click while it's being edited). Without one, links open beside the thread. */
   onLink?: (link: MarkdownLink) => void
   /** In the bar, after the file's name. */
@@ -96,7 +98,23 @@ function minimalChange(current: string, next: string) {
   return { from: start, to: current.length - end, insert: next.slice(start, next.length - end) }
 }
 
-export function FileEditor({ machine, thread, path, onLink, actions, children, onOpenFile }: FileEditorProps) {
+/**
+ * The cursor at the start of `line` (1-based, kept in the file), and the line in the middle of `scroller` (the
+ * editor's own scroll, around it), once the text is laid out.
+ */
+function goToLine(view: EditorView, line: number, scroller: HTMLElement | null) {
+  const at = view.state.doc.line(Math.min(Math.max(1, line), view.state.doc.lines)).from
+  view.dispatch({ selection: { anchor: at } })
+  const center = () => {
+    const coords = view.coordsAtPos(at)
+    if (!coords || !scroller) return
+    const box = scroller.getBoundingClientRect()
+    scroller.scrollTop += coords.top - box.top - box.height / 2
+  }
+  requestAnimationFrame(() => { center(); requestAnimationFrame(center) })
+}
+
+export function FileEditor({ machine, thread, path, line, onLink, actions, children, onOpenFile }: FileEditorProps) {
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path)
   const [mode, setMode] = useState<'live' | 'source'>(() => localStorage.getItem(MODE) === 'source' ? 'source' : 'live')
   const live = isMarkdown && mode === 'live'
@@ -118,6 +136,9 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
   const dispatch = useRegistry().router.dispatch
   const linkRef = useRef(onLink)
   linkRef.current = onLink
+  // The line to open at, for the editor made below.
+  const lineRef = useRef(line)
+  lineRef.current = line
 
   const modeExtensions = (liveMode: boolean): Extension => liveMode
     ? [markdown({ base: markdownLanguage, codeLanguages: languages }), livePreview(), syntaxHighlighting(liveHighlight), syntaxHighlighting(codeHighlight), EditorView.editorAttributes.of({ class: 'is-live' })]
@@ -149,8 +170,8 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
     void (async () => {
       const base = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
       const target = link.kind === 'url' ? `${base}${decodeURI(link.target.split('#')[0]!)}` : link.target
-      const { path: found } = await client(machine.id).call('file.find', { id: thread.id, name: target })
-      if (!found) return setNote({ text: `No file ${link.target}`, error: true })
+      const { path: found, folder } = await client(machine.id).call('file.find', { id: thread.id, name: target })
+      if (found === null || folder) return setNote({ text: `No file ${link.target}`, error: true })
       await dispatch('pane.open', { id: thread.id, kind: 'editor', params: { path: found } }, { machine: machine.id, source: 'editor' })
     })()
   }
@@ -205,9 +226,10 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
       if (language) void language.load().then((support) => {
         if (alive && view.current) view.current.dispatch({ effects: languageSlot.current.reconfigure(support) })
       }, () => {})
-      // Back where it was left: the cursor, and the scroll once the text is laid out.
+      // At the line asked for; else back where it was left: the cursor, and the scroll once the text is laid out.
       const was = places.get(place)
-      if (was) {
+      if (lineRef.current) goToLine(view.current, lineRef.current, scroller.current)
+      else if (was) {
         const length = view.current.state.doc.length
         view.current.dispatch({ selection: { anchor: Math.min(was.anchor, length), head: Math.min(was.head, length) } })
         const restore = () => { if (scroller.current) scroller.current.scrollTop = was.top }
@@ -229,6 +251,9 @@ export function FileEditor({ machine, thread, path, onLink, actions, children, o
       view.current = undefined
     }
   }, [machine.id, thread.id, path])
+
+  // Asked for another line of the open file.
+  useEffect(() => { if (line && view.current) goToLine(view.current, line, scroller.current) }, [line])
 
   // Live preview or source, without losing the cursor or undo.
   useEffect(() => { view.current?.dispatch({ effects: modeSlot.current.reconfigure(modeExtensions(live)) }) }, [live])

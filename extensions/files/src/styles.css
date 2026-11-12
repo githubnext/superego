@@ -3,6 +3,8 @@
 .files-tree__row:hover { background: var(--superego-hover); }
 .files-tree__row.is-current { background: var(--superego-selected); }
 .files-tree__folder { color: var(--superego-muted); }
-.files-tree__caret { display: inline-block; width: 12px; color: var(--superego-faint); font-size: calc(10px * var(--superego-text-scale)); }
+.files-tree__caret { flex: none; width: 10px; height: 10px; margin-right: 4px; color: var(--superego-faint); transition: transform .12s; }
+.files-tree__caret.is-open { transform: rotate(90deg); }
 .files-tree__note { padding: 6px 12px; color: var(--superego-muted); font-size: var(--superego-text-sm); }
 .files-toggle.is-on { color: var(--superego-accent); }
+.files-folder { flex: 1; min-height: 0; overflow: auto; padding: 6px 0 24px; font-size: var(--superego-text-ui); }

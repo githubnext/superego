@@ -48,6 +48,8 @@ export type PaneKind = {
   menu?: boolean
   /** Files it shows, given `{ path }`: a file opened from the thread opens in the first kind that takes it. */
   opens?: (path: string) => boolean
+  /** It shows folders, given `{ path }` (in the thread's folder; `''` for the folder itself): a folder a thread names opens in it. */
+  folders?: boolean
   /** Its width to start with, as a share of the row (0.5 when unset); dragging its edge changes it for that pane. */
   width?: number
 }
@@ -249,13 +251,25 @@ export function paneKind(registry: Registry, kind: string, thread: ThreadInfo): 
   return entries.find((e) => e.profile && e.profile === thread.profile?.dir) ?? entries.find((e) => !e.profile)
 }
 
+/** The pane kinds `thread` can open that `take` something: the app's, and its profile's (marked). */
+function takers(registry: Registry, thread: ThreadInfo, take: (kind: PaneKind) => boolean) {
+  return [...registry.panes.entries()].flatMap(([kind, entries]) => entries
+    .filter((e) => take(e) && (!e.profile || e.profile === thread.profile?.dir)).map((e) => ({ kind, profile: Boolean(e.profile) })))
+}
+
 /**
  * The pane kind a file opens in, for a thread: its profile's kind that takes the file, else any other that does
  * besides the editor, else the editor, which takes anything.
  */
 export function fileKind(registry: Registry, thread: ThreadInfo, path: string): string {
-  const takers = [...registry.panes.entries()].flatMap(([kind, entries]) => entries.filter((e) => e.opens?.(path) && (!e.profile || e.profile === thread.profile?.dir)).map((e) => ({ kind, profile: Boolean(e.profile) })))
-  return (takers.find((t) => t.profile) ?? takers.find((t) => t.kind !== 'editor'))?.kind ?? 'editor'
+  const found = takers(registry, thread, (e) => Boolean(e.opens?.(path)))
+  return (found.find((t) => t.profile) ?? found.find((t) => t.kind !== 'editor'))?.kind ?? 'editor'
+}
+
+/** The pane kind a folder opens in, for a thread: its profile's that shows folders, else any other; none, if none does. */
+export function folderKind(registry: Registry, thread: ThreadInfo): string | undefined {
+  const found = takers(registry, thread, (e) => Boolean(e.folders))
+  return (found.find((t) => t.profile) ?? found[0])?.kind
 }
 
 /** The panes a thread's menu offers: the built-in ones and its profile's that open without params. */

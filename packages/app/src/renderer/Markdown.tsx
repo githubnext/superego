@@ -78,15 +78,18 @@ function CodeBlock(props: ComponentProps<'pre'> & { node?: unknown }) {
   )
 }
 
-/** Opens a file by the name the text gives it. Provided where there's a folder to look in: a thread. */
-export const OpenFile = createContext<((name: string) => void) | undefined>(undefined)
+/**
+ * Opens a file (or folder) by the name the text gives it; resolves to why it couldn't, if it couldn't. Provided where
+ * there's a folder to look in: a thread.
+ */
+export const OpenFile = createContext<((name: string) => Promise<string | undefined>) | undefined>(undefined)
 
 /** Opens a web page in a pane beside the thread. Provided where there's a thread to open it beside. */
 export const OpenUrl = createContext<((url: string) => void) | undefined>(undefined)
 
 const FILE = 'superego-file:'
-/** A path, by its look: no spaces at its ends, a slash or a file extension, and no scheme. */
-const PATHLIKE = /^(?![a-z][\w+.-]*:)(?:[\w.@~-][^\n`]*\/[^\n`]*[^\s/]|[\w@~-][^\n`/]*\.[A-Za-z][\w]{0,7})$/
+/** A path, by its look: no spaces at its ends, a slash or a file extension, and no scheme. A folder may end in `/`. */
+const PATHLIKE = /^(?![a-z][\w+.-]*:)(?:[\w.@~/-][^\n`]*\/[^\n`]*[^\s]|[\w@~-][^\n`/]*\.[A-Za-z][\w]{0,7}(?::\d+)*)$/
 
 /** [[target|alias]] and ![[embeds]] as links to the file, outside code. */
 function wikilinks(text: string) {
@@ -94,9 +97,14 @@ function wikilinks(text: string) {
     (_all, target: string, alias?: string) => `[${(alias ?? target).trim().replace(/[[\]]/g, '')}](<${FILE}${encodeURIComponent(target.trim())}>)`)).join('')
 }
 
+/** A file or folder a message names. One that can't be opened says why, and looks it. */
 function FileLink({ name, children, className }: { name: string; children: React.ReactNode; className?: string }) {
   const open = useContext(OpenFile)!
-  return <a href="#" className={className ? `md__file ${className}` : 'md__file'} title={name} onClick={(e) => { e.preventDefault(); open(name) }}>{children}</a>
+  const [problem, setProblem] = useState<string>()
+  return (
+    <a href="#" className={['md__file', className, problem && 'md__file--missing'].filter(Boolean).join(' ')} title={problem ? `${name}: ${problem}` : name}
+      onClick={(e) => { e.preventDefault(); void open(name).then(setProblem) }}>{children}</a>
+  )
 }
 
 /** Beside a web link: open it in a pane instead of the browser. */

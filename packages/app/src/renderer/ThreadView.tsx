@@ -4,7 +4,7 @@ import type { Attachment, ThreadInfo } from '@superego/protocol'
 import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, Button, CaretRightIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, SquareSplitHorizontalIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
-import { divideWork, fileKind, paneMenu, Slot, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
+import { divideWork, fileKind, folderKind, paneMenu, Slot, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useShell } from './state.tsx'
 import { Markdown, OpenFile, OpenUrl, Scroll } from './Markdown.tsx'
 import { useLocalState } from './local-state.ts'
@@ -109,13 +109,21 @@ function UnarchiveButton({ machine, thread, className = '' }: { machine: Machine
 export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
-  // A file the thread names, opened beside it: in the pane kind that takes it (a profile's, else the editor).
+  // A file the thread names, opened beside it: in the pane kind that takes it (a profile's, else the editor), at the
+  // line it names; a folder in the kind that shows folders. Else why not, for the link to say.
   const threadRef = useRef(thread)
   threadRef.current = thread
-  const openFile = useCallback((name: string) => {
-    void client(machine.id).call('file.find', { id: thread.id, name }).then(({ path }) => {
-      if (path) return dispatch('pane.open', { id: thread.id, kind: fileKind(registry, threadRef.current, path), params: { path } }, { machine: machine.id, source: 'thread' })
-    }).catch((error) => console.error(error))
+  const openFile = useCallback(async (name: string): Promise<string | undefined> => {
+    try {
+      const found = await client(machine.id).call('file.find', { id: thread.id, name })
+      const folder = shortPath(threadRef.current.cwd)
+      if (found.outside) return `outside ${folder}, where this thread works`
+      if (found.path === null) return `not in ${folder}`
+      const kind = found.folder ? folderKind(registry, threadRef.current) : fileKind(registry, threadRef.current, found.path)
+      if (!kind) return 'a folder, and nothing here shows folders'
+      await dispatch('pane.open', { id: thread.id, kind, params: { path: found.path, ...(found.line ? { line: found.line } : {}) } }, { machine: machine.id, source: 'thread' })
+      return undefined
+    } catch (error) { return (error as Error).message }
   }, [machine.id, thread.id, registry])
   // A web page the thread links to, opened beside it.
   const openUrl = useCallback((url: string) => {
