@@ -1,0 +1,118 @@
+# Profiles
+
+A profile is what an agent is: a folder with a `profile.ts`, and whatever files it names.
+
+| Where | Whose | Runs |
+|---|---|---|
+| `~/.superego/profiles/<name>/` | yours, for every folder on this machine | always |
+| `<project>/.superego/profiles/<name>/` | the project's, for threads in it and below | once allowed |
+
+A thread takes its profile when it starts and keeps it. Without `-P`, it gets the profile called `default`: the
+project's if there is one, else yours, else none (plain Superego). A project's profile of a name replaces yours of
+that name, unless it `extends` it.
+
+```sh
+superego profile new support           # scaffolds .superego/profiles/support/profile.ts here, and allows it
+superego profile new --user            # ~/.superego/profiles/default
+superego -P support -p "Order 1234?"   # a thread with it
+```
+
+## profile.ts
+
+```ts
+import { defineProfile } from 'superego'
+
+export default defineProfile({
+  description: 'Answers customer mail',              // shown where a profile is picked
+  model: 'anthropic/claude-sonnet-4-5',              // provider/model; else the machine's default
+  thinking: 'medium',
+  prompt: 'You answer customer email for Acme. Be brief.',
+  extensions: ['./orders.ts'],                       // daemon side: see below
+  ui: ['./ui/order.tsx'],                            // window side: defineUiExtension modules
+  panes: {                                           // pane kinds its UI adds, told to the agent for open_pane
+    order: 'an order, with its lines and status. Params: { id }',
+  },
+  without: ['ask-user'],                             // built-ins to leave out
+  worktree: true,                                    // its threads get a worktree each (in a git repository)
+  extends: 'user:default',                           // start from your profile of that name, and add to it
+})
+```
+
+Every field is optional.
+
+- **`prompt`** is the agent's instructions, after the prompt sections of its extensions. With `extends`, the two
+  prompts are joined.
+- **`extensions`** are paths from the profile's folder. A module's default export is either
+  - an **agent extension**, `defineExtension({ name, tools, sections })`: tools and prompt sections
+    (`superego --skill tools`), or
+  - a **daemon extension**, `defineDaemonExtension({ name, setup(superego) { … } })`: actions the UI and command
+    line run, live values, a thread's blocked status, and agent extensions of its own (`superego --skill daemon`).
+- **`ui`** are modules for the window (`superego --skill ui`). They draw only in this profile's threads.
+- **`panes`** describes each pane kind the UI registers, so the agent knows it can open one and with which params.
+- **`without`** takes the names of built-ins: `coding-tools` (read, write, edit, bash), `panes` (open_pane),
+  `skills`, `agents-md`, and the bundled extensions `ask-user`, `files`, `tasks`, `suggestions`.
+
+Profile files are TypeScript (types are stripped; no type checking) or JavaScript. They may import each other and
+Node's built-ins (`node:fs/promises`, …). `'superego'` is the only package they get; there is no `npm install`.
+
+## What 'superego' exports
+
+```ts
+import {
+  defineProfile,                                     // profile.ts
+  defineExtension, defineTool, section,              // agent extensions
+  wrapTool, wrapSection, hook,                       // decorating other extensions' tools and sections
+  defineDaemonExtension, defineAction, RpcError,     // daemon extensions
+  obj, str, num, int, bool, arr, opt, lit, union, nullable, unknown,   // JSON Schema for parameters
+} from 'superego'
+```
+
+## Trust
+
+A project's profile runs code from that repository, so the daemon refuses it until it is allowed, and again whenever
+any file in its folder changes (the folder is hashed; `node_modules` and dotfiles aside):
+
+```sh
+superego profile allow support     # in the project
+```
+
+`superego profile new` allows what it scaffolds; after you edit a project's profile yourself, allow it again. Your own
+profiles in `~/.superego/profiles` are never asked about.
+
+## When changes apply
+
+- The daemon loads a profile when a thread with it takes a turn, and again when its files changed: edit, then send the
+  thread another message. Daemon extensions are torn down (their cleanup runs) and set up again.
+- The window loads a profile's UI when it shows one of its threads, and again once the thread moves on after a change.
+- `model`, `thinking` and `worktree` apply where a thread hasn't chosen its own.
+
+## An example
+
+`~/.superego/profiles/obsidian` (if present on this machine) is a complete one: a vault's notes as a graph pane and a
+note pane, `search_notes` and `backlinks` tools, and actions the panes call. Read it for a working pattern.
+
+A minimal one with a tool:
+
+```ts
+// .superego/profiles/support/profile.ts
+import { defineProfile } from 'superego'
+export default defineProfile({ prompt: 'Answer customers. Look orders up before answering.', extensions: ['./orders.ts'] })
+```
+
+```ts
+// .superego/profiles/support/orders.ts
+import { defineExtension, defineTool, obj, str } from 'superego'
+
+export default defineExtension({
+  name: 'orders',
+  tools: [defineTool({
+    name: 'find_order',
+    description: 'Find an order by its number.',
+    parameters: obj({ number: str() }),
+    async execute({ number }) {
+      const order = await fetch(`https://acme.example/orders/${number}`).then((r) => r.json())
+      return { output: [{ type: 'text', text: JSON.stringify(order) }] }
+    },
+  })],
+})
+```

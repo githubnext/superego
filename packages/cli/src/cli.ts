@@ -3,7 +3,7 @@
 // this computer or, with `-m <machine>`, on any machine the app knows. `<id> connect` is what `ssh <host> <id> connect`
 // runs on the far side. An app's bin calls `runCli(app, { appDir, bin })`.
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, openSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, openSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { createConnection } from 'node:net'
 import { join, resolve } from 'node:path'
@@ -72,6 +72,8 @@ Usage:
   ${app.id} daemon [status|stop]       Run this computer's daemon in the foreground, or check on it
   ${app.id} daemon restart [--now]     Restart it onto the installed code; --now interrupts working agents
   ${app.id} connect [--start]          Bridge stdio to this computer's daemon (ssh runs this)
+
+  ${app.id} --skill [topic]            How to use and extend ${app.name}, for agents: an overview and its topics
 
 Options:
   -m, --machine <name>          Work on another machine (default: this computer)
@@ -484,6 +486,21 @@ async function doCommand(argv: string[]) {
   print(result ?? { ok: true }, () => { if (result !== undefined && result !== null) console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2)) })
 }
 
+// ── The skill ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+// A skill for agents, in tiers: `--skill` prints SKILL.md (what Superego is, a quick reference, and an index), which a
+// skills folder can keep as is; `--skill <topic>` prints one topic in depth. They live in ../skill.
+const SKILL_DIR = fileURLToPath(new URL('../skill/', import.meta.url))
+
+/** The topics `--skill <topic>` prints: every page beside SKILL.md. */
+export const skillTopics = () => readdirSync(SKILL_DIR).filter((f) => f.endsWith('.md') && f !== 'SKILL.md').map((f) => f.slice(0, -3)).sort()
+
+export function skill(topic?: string): string {
+  if (!topic) return readFileSync(join(SKILL_DIR, 'SKILL.md'), 'utf8')
+  if (!skillTopics().includes(topic)) throw new RpcError('usage', `No topic ${topic}. Topics: ${skillTopics().join(', ')}`)
+  return readFileSync(join(SKILL_DIR, `${topic}.md`), 'utf8')
+}
+
 // ── Dispatch ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 const COMMANDS = new Set(['open', 'threads', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles'])
@@ -500,12 +517,13 @@ async function main() {
       machine: { type: 'string', short: 'm' }, prompt: { type: 'string', short: 'p' }, json: { type: 'boolean' }, profile: { type: 'string', short: 'P' }, worktree: { type: 'boolean', short: 'w' },
       user: { type: 'boolean' }, archived: { type: 'boolean' },
       all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
-      start: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
+      start: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, skill: { type: 'boolean' },
     },
   })
   json = Boolean(values.json)
   const [first, ...rest] = positionals
   if (values.help || first === 'help') return console.log(help())
+  if (values.skill) return void process.stdout.write(skill(first))
   // No command, or a directory: start a thread there and open it.
   if (!first || !COMMANDS.has(first)) return startThread({ dir: first, machine: values.machine, prompt: values.prompt, profile: values.profile, worktree: values.worktree, open: true })
   switch (first) {

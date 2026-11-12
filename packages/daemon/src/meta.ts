@@ -43,7 +43,8 @@ What ${name} is:
       extends: 'user:default',                       // a project's profile building on the user's
     })
   A project's profile is code from that repo: it runs only once allowed (the profile.allow action, or \`${id} profile
-  allow\` there), and again after its files change. \`${id} profile new [name]\` scaffolds one.
+  allow\` there), and again after its files change. \`${id} profile new [name]\` scaffolds one. Before writing a
+  profile's extensions (tools, actions, panes, UI), read \`${id} --skill\` and the topics it lists (\`${id} --skill ui\`, …).
 - Skills live in ${agentsDir}/skills/<name>/SKILL.md: front matter with name and description (and
   disable-model-invocation: true to offer it only when named), then the instructions. Every agent is told about them; a
   message with $name or /skill:name sends one along. ${agentsDir}/AGENTS.md, and AGENTS.md files from / down to a

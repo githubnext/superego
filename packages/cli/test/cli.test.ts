@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -131,6 +131,16 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     const auth = await superegoJson(['auth'])
     expect(auth.find((p: any) => p.id === 'anthropic')).toMatchObject({ auth: { source: 'ANTHROPIC_API_KEY' } })
     expect(auth.find((p: any) => p.id === 'openai')).toMatchObject({ auth: { source: 'OPENAI_API_KEY' } })
+  })
+
+  it('prints its skill: the overview, which lists every topic, and each topic', async () => {
+    const overview = await superego(['--skill'])
+    expect(overview).toMatch(/^---\nname: superego\ndescription: .+\n---\n/)
+    const listed = [...overview.matchAll(/^\| `([a-z-]+)` \|/gm)].map((m) => m[1]).sort()
+    const pages = (await readdir(fileURLToPath(new URL('../skill/', import.meta.url)))).filter((f) => f !== 'SKILL.md').map((f) => f.replace(/\.md$/, '')).sort()
+    expect(listed).toEqual(pages)
+    expect(await superego(['--skill', 'profiles'])).toMatch(/^# Profiles\n/)
+    await expect(superego(['--skill', 'nope'])).rejects.toThrow(/Topics: bundled, cli/)
   })
 
   it('stops the daemon', async () => {
