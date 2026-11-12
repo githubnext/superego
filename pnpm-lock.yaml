@@ -231,6 +231,9 @@ importers:
       '@superego/protocol':
         specifier: workspace:*
         version: link:../packages/protocol
+      '@superego/suggestions':
+        specifier: workspace:*
+        version: link:../extensions/suggestions
       '@superego/tasks':
         specifier: workspace:*
         version: link:../extensions/tasks
@@ -293,6 +296,31 @@ importers:
       '@superego/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      react:
+        specifier: ^19
+        version: 19.3.1
+
+  extensions/suggestions:
+    dependencies:
+      '@earendil-works/pi-durable':
+        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)
+      '@earendil-works/pi-schema':
+        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@superego/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
     devDependencies:
       '@types/react':
         specifier: ^19

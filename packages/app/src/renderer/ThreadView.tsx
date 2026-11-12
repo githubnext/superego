@@ -33,6 +33,19 @@ export function useComposerClaim(claim: ComposerClaim | undefined) {
   }, [Boolean(claim), register])
 }
 
+/** The composer, to what's above it (`composer.above`): what's typed, and ways to put words in it. */
+export type Composer = {
+  text: string
+  /** Replace what's typed with `text`, ready to send or change. */
+  fill(text: string): void
+  /** Offer `text` in the empty composer, taken with ⇥; undefined offers nothing. */
+  hint(text: string | undefined): void
+}
+const ComposerContext = createContext<Composer>({ text: '', fill() {}, hint() {} })
+
+/** The composer of the thread this is drawn above. */
+export const useComposer = () => useContext(ComposerContext)
+
 const blocks = (message: Message | undefined): Block[] =>
   !message ? [] : typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content
 const textOf = (message: Message | undefined) => blocks(message).map((b) => b.text ?? '').join('')
@@ -664,6 +677,18 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
   }, [wanting, machine.id])
   useEffect(() => { setPick(0) }, [naming?.query, naming?.start])
   useEffect(() => { if (!naming) setDismissed(undefined) }, [naming === undefined])
+  // What an extension above offers, and what it puts in.
+  const [hint, setHint] = useState<string>()
+  const composer = useMemo<Composer>(() => ({
+    text,
+    fill(next) {
+      setText(next)
+      setCaret(next.length)
+      requestAnimationFrame(() => { input.current?.focus(); input.current?.setSelectionRange(next.length, next.length) })
+    },
+    hint: setHint,
+  }), [text, setText])
+  const suggested = !claim && !text && !busy ? hint : undefined
   const takeSkill = (skill: SkillInfo) => {
     if (!naming) return
     const word = `${naming.trigger === '$' ? '$' : '/skill:'}${skill.name} `
@@ -704,11 +729,13 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
       if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) { event.preventDefault(); takeSkill(menu[pick] ?? menu[0]!); return }
       if (event.key === 'Escape') { event.preventDefault(); setDismissed(naming.start); return }
     }
+    if (event.key === 'Tab' && !event.shiftKey && suggested) { event.preventDefault(); composer.fill(suggested); return }
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(event.ctrlKey ? 'followUp' : 'steer') }
     if (event.key === 'Escape' && busy) { event.preventDefault(); void abort() }
   }
   return (
     <ClaimContext.Provider value={register}>
+    <ComposerContext.Provider value={composer}>
     <div className={`dock ${dragging ? 'is-dropping' : ''}`}
       onDragOver={(e) => { if (!claim && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true) } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false) }}
@@ -771,7 +798,7 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
       <TextArea ref={input} rows={1} value={text} disabled={disabled} onChange={(e) => { setText(e.target.value); setCaret(e.target.selectionStart) }} onKeyDown={onKeyDown}
         onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
         onPaste={(e) => { if (!claim && e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files) } }}
-        placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : 'Ask anything'} />
+        placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : suggested ? `${suggested}  ⇥` : 'Ask anything'} />
       <div className="composer__actions">
         {/* The box holds the text and its one action; the others (attach, Queue, Stop) float over it. */}
         {/* Send (an arrow on), Steer (an arrow turning into the work), Answer: one key, ⏎. */}
@@ -785,6 +812,7 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
       </div>
     </div>
     </div>
+    </ComposerContext.Provider>
     </ClaimContext.Provider>
   )
 }

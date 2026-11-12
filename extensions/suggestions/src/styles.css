@@ -1,0 +1,4 @@
+/* What you might send next: quiet pills over the composer, wrapping when they don't fit. */
+.suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 2px 8px; }
+.suggestions__item { font: inherit; font-size: var(--superego-text-sm); color: var(--superego-muted); background: var(--superego-raised); border: 0; box-shadow: var(--superego-card-edge); border-radius: 999px; padding: 4px 10px; cursor: default; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggestions__item:hover { color: var(--superego-text); background: var(--superego-control-active); }
