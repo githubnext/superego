@@ -7,6 +7,7 @@ import { call, machine as client, useThreadView } from './client.ts'
 import { divideWork, fileKind, folderKind, paneMenu, Slot, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useShell } from './state.tsx'
 import { useShortcut } from './keys.ts'
+import { ctrlDigit } from './shortcuts.ts'
 import { Markdown, OpenFile, OpenUrl, Scroll, ThreadMachine } from './Markdown.tsx'
 import { ThreadRef } from './thread-ref.tsx'
 import { useLocalState } from './local-state.ts'
@@ -50,7 +51,8 @@ export type Composer = {
   fill(text: string): void
   /**
    * Offer `messages` in the empty composer: ←/→ pick one (shown as the placeholder), ⏎ sends it, ⇥ puts it in the box
-   * to change. Undefined (or none) offers nothing.
+   * to change. ⌃1–⌃9 send the first nine, from the prompt or anywhere else in the thread's view. Undefined (or none)
+   * offers nothing.
    */
   suggest(messages: string[] | undefined): void
   /** Which offered message is picked, while the composer offers them. */
@@ -829,6 +831,24 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
       setError(error as { kind?: string; message: string })
     }
   }
+  // ⌃1–⌃9 send that offer, wherever the focus is in this thread's view (its column and the panes beside it).
+  const sendRef = useRef(send)
+  sendRef.current = send
+  const numbered = offering ? offers.messages : undefined
+  useEffect(() => {
+    if (!numbered) return
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      const digit = ctrlDigit(event)
+      const message = digit === undefined ? undefined : numbered[digit - 1]
+      if (!message || event.defaultPrevented || event.repeat) return
+      const view = input.current?.closest('.panes') ?? input.current?.closest('.thread')
+      if (event.target !== document.body && !(event.target instanceof Node && view?.contains(event.target))) return
+      event.preventDefault()
+      void sendRef.current('steer', message)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [numbered])
   const abort = () => dispatch('thread.abort', { id: thread.id }, { machine: machine.id, source: 'composer' })
   const sendable = Boolean(text.trim()) || (!claim && files.length > 0)
   const onKeyDown = (event: KeyboardEvent) => {

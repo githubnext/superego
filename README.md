@@ -93,7 +93,7 @@ Focus is always visible: whatever has it wears one solid ring, and the region ho
 | `extensions/ask-user` | an `ask_user` tool; the question card and blocked status (daemon + UI) |
 | `extensions/files` | the file tree beside the editor and quick open (`⌘P`) (daemon + UI) |
 | `extensions/links` | ⌃O: the links in the thread, newest first, fuzzy filtered; ⏎ follows one, ⌘⏎ opens it in a pane, ⌃1–9 / ⌃⌘1–9 the first nine (UI) |
-| `extensions/suggestions` | after each answer, a side call to the thread's model for what you might send next; offered over the composer, ⇥ takes the first (daemon + UI) |
+| `extensions/suggestions` | after each answer, a side call to the thread's model for what you might send next; offered over the composer, numbered; ←/→ pick, ⏎ sends, ⇥ takes it to change, ⌃1–9 send that one (daemon + UI) |
 | `extensions/tasks` | `task_start`/`task_finish` tools and a prompt asking the agent to report its work as tasks; the transcript folds work under each task's title, status and outcome (daemon + UI) |
 
 An extension has a daemon half (`defineDaemonExtension`: agent tools and hooks, settings, actions, live values, thread

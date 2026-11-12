@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bound, conflicts, keyLabel, normalize, safe, shortcutOf } from '../src/renderer/shortcuts.ts'
+import { bound, conflicts, ctrlDigit, keyLabel, normalize, safe, shortcutOf } from '../src/renderer/shortcuts.ts'
 
 const press = (key: string, mods: Partial<Record<'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey', boolean>> = {}) =>
   ({ key, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...mods })
@@ -40,6 +40,22 @@ describe.each([['MacIntel', true], ['Win32', false]])('shortcuts on %s', (platfo
     stub()
     expect(keyLabel('mod+shift+k')).toBe(mac ? '⌘⇧K' : 'Ctrl+Shift+K')
     expect(keyLabel('alt+arrowdown')).toBe(mac ? '⌥↓' : 'Alt+↓')
+  })
+})
+
+describe('ctrl digits', () => {
+  const press = (code: string, mods: Partial<Record<'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey', boolean>> = {}) =>
+    ({ code, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...mods })
+
+  it('reads ⌃1–⌃9 by the key’s place, and nothing else', () => {
+    expect(ctrlDigit(press('Digit1', { ctrlKey: true }))).toBe(1)
+    expect(ctrlDigit(press('Digit9', { ctrlKey: true }))).toBe(9)
+    expect(ctrlDigit(press('Digit0', { ctrlKey: true }))).toBeUndefined()
+    expect(ctrlDigit(press('Numpad1', { ctrlKey: true }))).toBeUndefined()
+    expect(ctrlDigit(press('Digit1'))).toBeUndefined()
+    expect(ctrlDigit(press('Digit1', { ctrlKey: true, metaKey: true }))).toBeUndefined()
+    expect(ctrlDigit(press('Digit1', { ctrlKey: true, shiftKey: true }))).toBeUndefined()
+    expect(ctrlDigit(press('Digit1', { ctrlKey: true, altKey: true }))).toBeUndefined()
   })
 })
 

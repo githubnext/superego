@@ -522,6 +522,19 @@ if (phase === 'first') {
   await until(`Boolean(document.querySelector('[data-column="thread"] .dock__jump'))`, 'jump to bottom offered')
   await run(`document.querySelector('[data-column="thread"] .dock__jump').click()`)
   await until(`(() => { const el = document.querySelector('[data-column="thread"] .thread__scroll'); return el.scrollHeight - el.scrollTop - el.clientHeight < 40 && !document.querySelector('.dock__jump') })()`, 'jumped to the bottom')
+  // Suggestions: numbered over the composer once the agent has answered (the echo model echoes them back from the
+  // message). ⌃n sends the one with that number, from the thread as from the prompt; a number past them does nothing.
+  const suggesting = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'suggesting' }).then((t) => t.id)`)
+  await run(`window.superego.call('local', 'thread.submit', { id: '${suggesting}', text: 'next? ["Run the tests", "Commit this"]' })`)
+  await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('suggesting'))`, 'suggesting thread in the sidebar')
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('suggesting')).click()`)
+  await until(`[...document.querySelectorAll('.suggestions__item')].map((b) => b.textContent).join('|') === '${process.platform === 'darwin' ? '⌃1Run the tests|⌃2Commit this' : 'Ctrl+1Run the tests|Ctrl+2Commit this'}'`, 'suggestions with their keys')
+  await run(`document.querySelector('[data-column="thread"] .thread__scroll').focus()`)
+  const sent = `[...document.querySelectorAll('.msg--user')].map((m) => m.textContent)`
+  await key('3', ['control'])
+  await key('2', ['control'])
+  await until(`${sent}.some((t) => t.includes('Commit this') && !t.includes('['))`, 'ctrl+2 sent the second suggestion')
+  if (await run(`${sent}.length`) !== 2) { await fail(`ctrl+3 or ctrl+2 sent more: ${await run(`${sent}.join(' | ')`)}`); throw new Error('failed') }
   // Settings: the app's own sections, then the machine's, drawn from what each registers.
   await run(`document.querySelector('.app__settings').click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Appearance') && document.querySelector('.settings').textContent.includes('Notifications')`, 'app settings')

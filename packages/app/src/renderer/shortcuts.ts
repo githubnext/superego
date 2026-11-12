@@ -35,6 +35,12 @@ export function shortcutOf(event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlK
   return normalize([...parts, key].join('+'))
 }
 
+/** ⌃1–⌃9 (⌃ on every platform, alone): the digit, by the key's place, as ⌃ may change what the key types. */
+export function ctrlDigit(event: Pick<KeyboardEvent, 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>): number | undefined {
+  if (!event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return undefined
+  return /^Digit[1-9]$/.test(event.code) ? Number(event.code.slice(5)) : undefined
+}
+
 /** Whether a shortcut leaves plain typing alone: it has a modifier other than shift, or is a function or navigation key. */
 export function safe(keys: string): boolean {
   const parts = normalize(keys).split('+')

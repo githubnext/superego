@@ -4,3 +4,5 @@
 .suggestions__item:hover { color: var(--superego-text); background: var(--superego-hover); }
 .suggestions__item:first-child { color: var(--superego-text); }
 .suggestions__item.is-picked { color: var(--superego-text); box-shadow: 0 0 0 1.5px var(--superego-accent); }
+/* Its key, ⌃1–⌃9: quieter than the words. */
+.suggestions__key { margin-right: 6px; font-size: var(--superego-text-xs); color: var(--superego-muted); opacity: .7; font-variant-numeric: tabular-nums; }
