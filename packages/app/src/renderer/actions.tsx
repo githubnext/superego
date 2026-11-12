@@ -9,6 +9,7 @@ import type { MachineEntry } from '../shared.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
 import { unread, type Session } from './sessions.ts'
 import { focusBeside, focusColumn, focusPrompt } from './focus.ts'
+import { startRename } from './rename.ts'
 
 /** What a window action gets besides its parameters. */
 export type WindowContext = {
@@ -152,6 +153,10 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
       await c.dispatch('pane.close', { id: c.selection.thread, pane: panes[index]!.id }, { machine: c.selection.machine, source: 'panes' })
       focusColumn(panes[index - 1]?.id)
     },
+  }),
+  defineAction({
+    id: 'thread.startRename', title: 'Rename thread…', runs: 'window',
+    run: (_p, c: WindowContext) => { if (c.selection) startRename(c.selection.machine, c.selection.thread) },
   }),
   defineAction({
     id: 'thread.new', title: 'New thread…', runs: 'window', keys: 'mod+n',

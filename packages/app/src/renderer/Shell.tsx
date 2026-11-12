@@ -146,7 +146,7 @@ export function Shell() {
           : (
             <div className="app__drag app__titlebar">
               {!sideOpen && tools}
-              {selection && thread && machine && <ThreadTitle thread={thread} />}
+              {selection && thread && machine && <ThreadTitle machine={machine} thread={thread} />}
               <span className="app__titlebar-end">
                 {!hasSidebar && <ServiceNotice />}
                 {selection && thread && machine && <ThreadTools machine={machine} thread={thread} />}
