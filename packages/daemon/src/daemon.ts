@@ -3,7 +3,7 @@
 import { execFile } from 'node:child_process'
 import { watch as watchFs } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { link, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { link, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, hostname, platform } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
@@ -830,10 +830,21 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       const exists = await stat(tree.path).then(() => true, () => false)
       const clean = exists && (await git(tree.path, ['status', '--porcelain']).catch(() => 'unknown')) === ''
       if (!exists) removed = true
-      else if (clean) removed = await git(meta.root ?? tree.path, ['worktree', 'remove', tree.path]).then(() => true, () => false)
+      else if (clean) removed = await removeWorktree(tree.path, meta.root)
     }
     await updateMeta(id, (m) => { m.archived = true; delete m.archiveWhenDone; if (m.worktree && removed) m.worktree.removed = true })
     return { worktree: tree ? (removed ? 'removed' as const : 'kept' as const) : null }
+  }
+  /**
+   * A clean worktree, gone at once: moved aside and let go of by git, then deleted in the background. Deleting it in
+   * place (`git worktree remove`) takes as long as its files do, many seconds with a node_modules in it.
+   */
+  async function removeWorktree(path: string, root: string | undefined) {
+    const aside = join(dirname(path), `.${basename(path)}.removing-${randomUUID().slice(0, 8)}`)
+    if (!await rename(path, aside).then(() => true, () => false)) return false
+    await git(root ?? aside, ['worktree', 'prune']).catch(() => {})
+    void rm(aside, { recursive: true, force: true }).catch(() => {})
+    return true
   }
   /**
    * Archive a thread once its run ends: how a thread archives itself, mid-turn, without its worktree going from under

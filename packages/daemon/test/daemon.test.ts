@@ -1,7 +1,7 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { existsSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
@@ -342,6 +342,9 @@ describe('record and replay', () => {
     expect(await peer.call('thread.archive', { id: thread.id })).toEqual({ worktree: 'removed' })
     expect(existsSync(thread.worktree!.path)).toBe(false)
     expect(git('branch', '--list', thread.worktree!.branch)).toContain(thread.worktree!.branch)
+    // Let go of by git at once; its files deleted after.
+    expect(git('worktree', 'list')).not.toContain(thread.worktree!.path)
+    await until(async () => (await readdir(dirname(thread.worktree!.path))).length === 0)
     await peer.call('thread.unarchive', { id: thread.id })
     expect(existsSync(join(thread.worktree!.path, 'app/readme.md'))).toBe(true)
     // With changes in it, archiving leaves it be.
