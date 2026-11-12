@@ -1,12 +1,22 @@
 // Superego in a browser: the same window as the desktop app, with `window.superego` over a WebSocket to the daemon that served the
-// page (its Web access setting), instead of Electron's preload. That daemon is the one machine, "local". What the desktop
-// keeps in its main process (the app's own settings) is kept in this browser.
-import { FEATURES, PROTOCOL_VERSION, RpcError, RpcPeer, type Hello } from '@superego/protocol'
+// page (its Web access setting), instead of Electron's preload. That daemon is "local", and every machine it reaches is
+// here too: calls for them go through it (`relay.call`) and their news comes back from it (`relay.event`). What the
+// desktop keeps in its main process (the app's own settings, which remote profile UIs may run) is kept in this browser.
+import { FEATURES, PROTOCOL_VERSION, RpcError, RpcPeer, type Hello, type Notifications } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
+import { carriesFiles, uploadAttachments } from '@superego/client/uploads'
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '../shared.ts'
+import { sameGrant, type UiGrant } from '../ui-trust.ts'
 import { askToPair, refused, type Paired } from './pair-gate.ts'
 
 const SETTINGS = 'superego.appSettings'
+const UI_TRUST = 'superego.uiTrust'
+/** Ping this often, and count the link dead after this long without a word, as the desktop's links do. */
+const PING_EVERY = 5_000
+const SILENCE = 15_000
+/** Unsent bytes past which the WebSocket counts as full, and below which it takes more again. */
+const FULL = 1024 * 1024
+const ROOM = 256 * 1024
 
 /**
  * A pairing code from the address Settings showed (`#pair=…`), taken out of the address bar at once. It's in the
@@ -26,6 +36,20 @@ async function pair(code: string, name = ''): Promise<Paired> {
   return { ok: false, error: body.error ?? `The machine said ${response.status}` }
 }
 
+/** The remote profile UIs allowed to run in this window (see ../ui-trust.ts), kept in localStorage. */
+const uiTrust = {
+  list(): UiGrant[] {
+    try {
+      const parsed: unknown = JSON.parse(localStorage.getItem(UI_TRUST) ?? '[]')
+      return Array.isArray(parsed) ? parsed.filter((g): g is UiGrant => [g?.machine, g?.dir, g?.hash].every((v) => typeof v === 'string')) : []
+    } catch { return [] }
+  },
+  save: (grants: UiGrant[]) => localStorage.setItem(UI_TRUST, JSON.stringify(grants)),
+  /** One version of a profile's UI; an earlier version of the same profile from that machine is replaced. */
+  allow(grant: UiGrant) { this.save([...this.list().filter((g) => !(g.machine === grant.machine && g.dir === grant.dir)), { machine: grant.machine, dir: grant.dir, hash: grant.hash }]) },
+  forget(grant: UiGrant) { this.save(this.list().filter((g) => !sameGrant(g, grant))) },
+}
+
 /** App settings, kept in localStorage. */
 const store: SettingsStore = {
   load: () => { try { return JSON.parse(localStorage.getItem(SETTINGS) ?? '{}') } catch { return {} } },
@@ -35,11 +59,15 @@ const store: SettingsStore = {
 export function webBridge(): SuperegoBridge {
   const listeners = new Set<(event: SuperegoEvent) => void>()
   const emit = (event: SuperegoEvent) => { for (const listener of listeners) listener(event) }
-  let entry: MachineEntry = { id: 'local', label: location.hostname, state: 'connecting' }
-  const setEntry = (next: Partial<MachineEntry>) => { entry = { ...entry, ...next }; emit({ machine: '$machines', method: '$machines', params: [entry] }) }
+  // The machines as the daemon last listed them: itself, then those it reaches. While it's away, all of them are.
+  let entries: MachineEntry[] = [{ id: 'local', label: location.hostname, state: 'connecting' }]
+  const setEntries = (next: MachineEntry[]) => { entries = next; emit({ machine: '$machines', method: '$machines', params: entries }) }
+  const away = (state: MachineEntry['state']) => setEntries(entries.map((m) => m.state === 'disabled' ? m : { ...m, state }))
+  let machinesSub: string | undefined
 
   // ── The daemon, over a WebSocket that reconnects ───────────────────────────────────────────────────────────────
   let peer: RpcPeer | undefined
+  let socket: WebSocket | undefined
   let ready: Promise<RpcPeer>
   let retry = 500
   // Who this browser is to the daemon decides what to show: the app, the pairing form, or why it isn't let in.
@@ -62,24 +90,64 @@ export function webBridge(): SuperegoBridge {
       }
       let opened = false
       // The cookie goes with the upgrade by itself; nothing secret is in the address.
-      const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/rpc`)
-      const next = new RpcPeer((line) => { if (ws.readyState === WebSocket.OPEN) ws.send(line.trimEnd()) })
+      const ws = socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/rpc`)
+      // Full past FULL unsent bytes, as a socket's write says; it takes more once the browser has sent down to ROOM.
+      let waiting = false
+      const wait = () => {
+        if (ws.readyState !== WebSocket.OPEN) return
+        if (ws.bufferedAmount > ROOM) { setTimeout(wait, 20); return }
+        waiting = false
+        next.drain()
+      }
+      const next = new RpcPeer((line) => {
+        if (ws.readyState !== WebSocket.OPEN) return true
+        ws.send(line.trimEnd())
+        if (ws.bufferedAmount < FULL) return true
+        if (!waiting) { waiting = true; setTimeout(wait, 20) }
+        return false
+      })
       ws.onmessage = (message) => next.receive(String(message.data))
-      next.onAny((method, params) => emit({ machine: 'local', method, params }))
+      next.onAny((method, params) => {
+        if (method === 'relay.event') {
+          const relayed = params as Notifications['relay.event']
+          return emit({ machine: relayed.machine, method: relayed.method, params: relayed.params })
+        }
+        if (method === 'machines.changed') {
+          const { sub, value } = params as Notifications['machines.changed']
+          if (sub === machinesSub) setEntries(value)
+          return
+        }
+        emit({ machine: 'local', method, params })
+      })
+      let beat: ReturnType<typeof setInterval> | undefined
       ws.onopen = async () => {
         opened = true
         try {
           const hello = await next.call<Hello>('hello', { client: 'web', version: PROTOCOL_VERSION, features: [...FEATURES] })
+          // A link gone quiet (a phone that slept, a network that changed) closes, and this reconnects.
+          if (hello.features.includes('heartbeat')) {
+            beat = setInterval(() => {
+              if (Date.now() - next.lastReceived > SILENCE) ws.close()
+              else next.call('ping', {}).catch(() => {})
+            }, PING_EVERY)
+          }
+          const self: MachineEntry = { id: 'local', label: hello.machine.hostname, state: 'connected', machine: { id: hello.machine.id, hostname: hello.machine.hostname }, features: hello.features }
+          if (hello.features.includes('relay')) {
+            const { sub, value } = await next.call<{ sub: string; value: MachineEntry[] }>('machines.watch', {})
+            machinesSub = sub
+            setEntries(value.map((m) => m.id === 'local' ? { ...m, ...self } : m))
+          } else setEntries([self])
           peer = next
           retry = 500
-          setEntry({ state: 'connected', label: hello.machine.hostname, machine: { id: hello.machine.id, hostname: hello.machine.hostname }, features: hello.features, error: undefined })
           resolve(next)
         } catch (error) { reject(error) }
       }
       ws.onclose = (event) => {
+        clearInterval(beat)
         next.close()
         peer = undefined
-        setEntry({ state: 'disconnected' })
+        machinesSub = undefined
+        away('disconnected')
         reject(new RpcError('disconnected', 'Not connected'))
         const again = () => { setTimeout(connect, retry); retry = Math.min(retry * 2, 10_000) }
         // Revoked in Settings: pair again.
@@ -109,7 +177,10 @@ export function webBridge(): SuperegoBridge {
   })
   const subs = new Map<string, () => unknown>()
   const served = serveSettings(settings, (params) => emit({ machine: 'app', method: 'settings.changed', params }), subs)
-  const appActions = [{ id: 'app.settings.set', title: 'Change an app setting', runs: 'app', expose: ['ui'] }]
+  const appActions = [
+    { id: 'app.settings.set', title: 'Change an app setting', runs: 'app', expose: ['ui'] },
+    { id: 'machines.reconnect', title: 'Reconnect a machine', runs: 'app', expose: ['ui'] },
+  ]
   const app: Record<string, (params: never) => unknown> = {
     'settings.watch': served['settings.watch'] as never,
     'app.settings.set': async ({ key, value }: { key: string; value: never }) => { await settings.set(key, value); return null },
@@ -123,6 +194,23 @@ export function webBridge(): SuperegoBridge {
     'app.ready': async () => ({}),
     'app.desktop': async () => ({ web: true }),
     'service.get': async () => ({ phase: 'current', busy: false }),
+    'ui.trust.list': async () => uiTrust.list(),
+    'ui.trust.allow': async (grant: UiGrant) => { uiTrust.allow(grant); return null },
+    'ui.trust.forget': async (grant: UiGrant) => { uiTrust.forget(grant); return null },
+    /** This page's own connection, or the serving daemon's link to another machine. Adding, removing, logging in and installing are the desktop app's. */
+    'machines.reconnect': async ({ id }: { id: string }) => {
+      if (id !== 'local') return (peer ?? await ready).call('machines.reconnect', { id })
+      socket?.close()
+      return null
+    },
+  }
+
+  /** A call on the daemon, its larger attachments sent ahead as uploads when it takes them (see @superego/client's uploads.ts). */
+  const send = async (method: string, params: unknown) => {
+    const to = peer ?? await ready
+    const local = entries.find((m) => m.id === 'local')
+    if (local?.features?.includes('uploads') && carriesFiles(method, params)) return to.call(method, await uploadAttachments(to, method, params))
+    return to.call(method, params)
   }
 
   return {
@@ -132,11 +220,13 @@ export function webBridge(): SuperegoBridge {
         if (!handler) throw new RpcError('unsupported', `${method} is part of the desktop app`)
         return handler(params as never)
       }
-      if (machine !== 'local') throw new RpcError('not_found', `No machine ${machine} here`)
-      return (peer ?? await ready).call(method, params)
+      if (machine === 'local') return send(method, params)
+      if (!entries.some((m) => m.id === machine)) throw new RpcError('not_found', `No machine ${machine} here`)
+      return send('relay.call', { machine, method, params })
     },
-    machines: async () => [entry],
-    artifactUrl: (_machine, thread, path) => `/artifact/${encodeURIComponent(thread)}/${path.split('/').map(encodeURIComponent).join('/')}`,
+    machines: async () => entries,
+    artifactUrl: (machine, thread, path) =>
+      `/artifact/${machine === 'local' ? '' : `~${encodeURIComponent(machine)}/`}${encodeURIComponent(thread)}/${path.split('/').map(encodeURIComponent).join('/')}`,
     onEvent(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
     web: true,
   }

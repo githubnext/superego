@@ -32,7 +32,7 @@ export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; 
       <div className="settings__body">
         <nav className="settings__nav">
           <button className={target === APP ? 'is-selected' : ''} onClick={() => setTarget(APP)}>General</button>
-          {!window.superego.web && <button className={target === MACHINES ? 'is-selected' : ''} onClick={() => setTarget(MACHINES)}>Machines</button>}
+          <button className={target === MACHINES ? 'is-selected' : ''} onClick={() => setTarget(MACHINES)}>Machines</button>
           {editable.length > 1 && <button className={target === ALL ? 'is-selected' : ''} onClick={() => setTarget(ALL)}>All machines</button>}
           {machines.filter((m) => m.state !== 'disabled').map((m) => (
             <button key={m.id} className={`settings__nav-machine ${target === m.id ? 'is-selected' : ''}`} onClick={() => setTarget(m.id)}>
@@ -321,21 +321,29 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
   const app = client(APP) as unknown as { call(method: string, params: unknown): Promise<unknown> }
   const dispatch = useRegistry().router.dispatch
   const act = (id: string, params: Record<string, unknown>) => { setError(undefined); return dispatch(id, params, { machine: APP, source: 'settings' }).catch((e: Error) => { setError(e.message); throw e }) }
+  // In a browser, the machines are those the daemon serving the page reaches: they are managed on its computer.
+  const web = Boolean(window.superego.web)
+  const serving = machines.find((m) => m.id === 'local')?.label ?? 'this machine'
 
   return (
     <section className="settings-section">
       <h2>Machines</h2>
-      <p className="settings__note">
+      {web ? (
+        <p className="settings__note">
+          The machines {serving} reaches: this page uses them through it. Adding, removing, logging in and installing are done in the
+          desktop app on {serving} (Settings → Machines), or with <code>{appConfig.id} machines</code> there.
+        </p>
+      ) : <p className="settings__note">
         Every machine runs its own {appConfig.name} daemon with its own threads, models and credentials. Other machines are reached with
         {' '}<code>ssh &lt;target&gt; {DEFAULT_REMOTE_COMMAND}</code> (they need {appConfig.name}, which Install copies over ssh, and ssh access: keys, or Log in for a password or code), or with
         any command that pipes stdio to a daemon, such as <code>docker exec -i</code>.
-      </p>
+      </p>}
       {machines.map((m) => (
         <div key={m.id} className="machine-row">
           <div className="setting__label">
             <div>
               <StatusGlyph status={{ state: m.state === 'connected' ? 'idle' : m.state === 'connecting' ? 'working' : m.state === 'disabled' ? 'idle' : 'error' }} />{' '}
-              {m.remote ? <input className="machine-row__label" defaultValue={m.label} aria-label="Name"
+              {m.remote && !web ? <input className="machine-row__label" defaultValue={m.label} aria-label="Name"
                 onBlur={(e) => { if (e.target.value.trim() && e.target.value !== m.label) void act('machines.update', { id: m.id, label: e.target.value.trim() }) }} /> : m.label}
             </div>
             <div className="settings__note">
@@ -350,6 +358,8 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
           </div>
           <div className="provider__actions">
             {m.state === 'connected' && <Button onClick={() => onOpen(m.id)}>Settings</Button>}
+            {web && m.remote && m.state !== 'disabled' && <Button onClick={() => void act('machines.reconnect', { id: m.id })}>Reconnect</Button>}
+            {web ? null : <>
             {m.state === 'needs-login' && <Button onClick={() => void act('machines.login', { id: m.id })} title="Opens a terminal where ssh can ask for your password or code">Log in</Button>}
             {m.state === 'host-key' && <Button onClick={() => void act('machines.reconnect', { id: m.id })}>Retry</Button>}
             {m.remote?.ssh && (m.errorKind === 'not_installed' || m.state === 'connected') && (
@@ -361,10 +371,11 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
             {(m.errorKind === 'version_mismatch' || m.errorKind === 'duplicate_machine') && <Button onClick={() => void act('machines.reconnect', { id: m.id })}>Retry</Button>}
             {m.remote && <Switch label={`Connect to ${m.label}`} checked={m.remote.enabled} onChange={(enabled) => void act('machines.update', { id: m.id, enabled })} />}
             {m.remote && <Button onClick={() => void act('machines.remove', { id: m.id })}>Remove</Button>}
+            </>}
           </div>
         </div>
       ))}
-      {adding ? (
+      {web ? null : adding ? (
         <form className="machine-add" onSubmit={(e) => {
           e.preventDefault()
           const form = new FormData(e.currentTarget)
