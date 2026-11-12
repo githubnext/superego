@@ -1,20 +1,24 @@
 // Ego, the meta agent: Superego's own agent, one hidden thread per machine in Superego's data folder (see daemon.ts:
 // `thread.meta`, `thread.meta.clear`). It reads and explains: what Superego is (the prompt below), and this machine's
 // setup through tools that read: its settings, its actions, its profiles, the machines this computer reaches, its
-// threads, and files. The one thing it changes itself is this machine's settings (superego_set_setting). Any other work
-// it hands to a new, ordinary thread (thread_start), top-level in the project it belongs to, and names that thread.
+// threads, and files. What it changes itself is setup: this machine's settings (superego_set_setting) and the machines
+// this computer reaches (superego_machines). Any other work it hands to a new, ordinary thread (thread_start), top-level
+// in the project it belongs to, and names that thread.
 import { readdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { createReadTool } from '@earendil-works/pi-durable/tools'
-import { bool, obj, opt, str, unknown, type ActionInfo, type Json, type Router, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
+import { bool, lit, obj, opt, str, union, unknown, type ActionInfo, type Json, type Router, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 import type { DaemonContext } from './daemon.ts'
 import { lineOf, linkTo, readTool } from './thread-tools.ts'
 
-/** The machines a computer reaches, as the app keeps them (`machines.json`); given to the daemon by the app, for Ego to read. */
+/** The machines a computer reaches, as the app keeps them (`machines.json`); given to the daemon by the app, for Ego. */
 export type MachineDirectory = {
   list(): { id: string; label: string; target: string; command?: string; via?: string; enabled: boolean }[]
+  add(input: { label?: string; target?: string; command?: string; via?: string }): Promise<{ id: string; label: string }>
+  update(id: string, patch: { label?: string; enabled?: boolean }): Promise<unknown>
+  remove(id: string): Promise<unknown>
 }
 
 /** What Ego needs of the daemon's threads: the listed ones (never Ego itself), and starting a top-level one. */
@@ -33,10 +37,10 @@ talking to you in, and about how it is set up on this machine (settings, profile
 You run on ${hostname}, in ${dataDir}, ${name}'s data folder there. Be brief and practical.
 
 You read and explain. Your tools look: read files, list folders, and read this machine's settings, actions, profiles,
-machines and threads. The one thing you change yourself is this machine's settings, with superego_set_setting: say
-what you'll change first, and afterwards where the user sees it. Any other work (editing a file, signing in, adding or
-removing a machine, writing a profile or a skill, writing code) is done by a separate, ordinary thread that you start
-with thread_start:
+machines and threads. What you change yourself is setup: this machine's settings (superego_set_setting) and the
+machines this computer reaches (superego_machines: add, rename, enable, disable, remove). Say what you'll change first,
+ask before removing a machine, and afterwards say where the user sees it. Any other work (editing a file, signing in,
+writing a profile or a skill, writing code) is done by a separate, ordinary thread that you start with thread_start:
 - Give it a clear, self-contained prompt: it sees nothing of this conversation. Say what to do, where, what you found
   that it needs, and how to check the result.
 - Start it in the right folder: the project the work belongs to; ${dataDir} for ${name}'s own profiles;
@@ -83,11 +87,14 @@ What ${name} is:
 - You are one thread per machine, kept, and not listed with the others. The user clears you from your title bar.
 
 Data folder layout (${dataDir}): settings.json (this machine's settings), app-settings.json (the app's), machines.json
-(the machines this computer reaches), profiles/, worktrees/, attachments/, trusted-profiles.json. Settings change through
-superego_set_setting, the rest through actions (profile.allow, …) a thread runs, not by hand.`
+(the machines this computer reaches), profiles/, worktrees/, attachments/, trusted-profiles.json. Settings and
+machines change through your tools, the rest through actions (profile.allow, …) a thread runs, not by hand.`
 }
 
-/** The meta agent's tools: they read, except superego_set_setting (settings are Ego's own to change) and thread_start, which hands other work to a thread. */
+/**
+ * The meta agent's tools: they read, except those for setup, which is Ego's own to change (superego_set_setting,
+ * superego_machines), and thread_start, which hands any other work to a thread.
+ */
 export function metaExtension({ dir, router, snapshot, machines, threads }: {
   /** Ego's own folder, the data folder: where relative paths start. */
   dir: string
@@ -129,7 +136,7 @@ export function metaExtension({ dir, router, snapshot, machines, threads }: {
     }),
     defineTool({
       name: 'superego_set_setting',
-      description: "Change one of this machine's settings, by its key (superego_settings lists them, with their types and choices)..",
+      description: "Change one of this machine's settings, by its key (superego_settings lists them, with their types and choices).",
       parameters: obj({ key: str({ minLength: 1 }), value: unknown() }),
       async execute({ key, value }) {
         await router.dispatch('settings.set', { key, value: (value ?? null) as Json }, context, { source: 'meta' })
@@ -178,9 +185,27 @@ export function metaExtension({ dir, router, snapshot, machines, threads }: {
   ]
   if (machines) tools.push(defineTool({
     name: 'superego_machines',
-    description: 'The machines this computer reaches besides itself, as the app keeps them: id, name, ssh target (or `via` command), whether enabled.',
-    parameters: obj({}),
-    async execute() { return json(machines().list()) },
+    description: 'The machines this computer reaches besides itself, as the app keeps them: list; add (by ssh target, or `via` any command piping stdio to the far side, with an optional name and the command to run there); rename; enable; disable; remove. The app connects to an added machine on its own; it needs superego installed there.',
+    parameters: obj({
+      op: union([lit('list'), lit('add'), lit('rename'), lit('enable'), lit('disable'), lit('remove')]),
+      machine: opt(str({ description: 'Which one, by id or name (not for list or add)' })),
+      target: opt(str({ description: 'add: an ssh target, user@host or a Host from ~/.ssh/config' })),
+      via: opt(str({ description: 'add: instead of ssh, a command whose stdio reaches the far side' })),
+      command: opt(str({ description: 'add: what to run there instead of `superego connect --start`' })),
+      name: opt(str({ description: 'add, rename: what to call it' })),
+    }),
+    async execute({ op, machine, target, via, command, name }) {
+      const directory = machines()
+      if (op === 'list') return json(directory.list())
+      if (op === 'add') return json(await directory.add({ ...(target ? { target } : {}), ...(via ? { via } : {}), ...(command ? { command } : {}), ...(name ? { label: name } : {}) }))
+      const all = directory.list()
+      const found = all.find((m) => m.id === machine) ?? all.filter((m) => m.label.toLowerCase() === machine?.toLowerCase()).at(0)
+      if (!found) throw new Error(`No machine ${machine ?? '(none given)'}: ${all.map((m) => m.label).join(', ') || 'none added yet'}`)
+      if (op === 'remove') await directory.remove(found.id)
+      else if (op === 'rename') { if (!name?.trim()) throw new Error('rename needs a name'); await directory.update(found.id, { label: name.trim() }) }
+      else await directory.update(found.id, { enabled: op === 'enable' })
+      return json(directory.list())
+    },
   }) as typeof tools[number])
   return defineExtension({ name: 'meta', tools })
 }

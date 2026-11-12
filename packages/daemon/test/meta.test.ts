@@ -28,7 +28,7 @@ describe('Ego, the meta agent', () => {
     answer: async () => undefined,
   })
 
-  it('reads settings, actions, profiles, machines, threads and files, and changes settings; nothing else', async () => {
+  it('reads settings, actions, profiles, machines, threads and files, and changes settings and machines; nothing else', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'superego-meta-'))
     try {
       const router = new Router<DaemonContext>()
@@ -36,18 +36,19 @@ describe('Ego, the meta agent', () => {
       const set: unknown[] = []
       router.register(defineAction({ id: 'settings.set', title: 'Set', runs: 'machine', expose: ['cli'], params: obj({ key: str(), value: unknown() }), run: (params) => { set.push(params); return null } }))
       router.register(defineAction({ id: 'profile.list', title: 'Profiles', runs: 'machine', expose: ['cli'], params: obj({ cwd: opt(str()) }), run: ({ cwd }) => [{ name: 'default', dir: cwd }] }))
-      const machines: MachineDirectory = { list: () => [{ id: 'm1', label: 'box', target: 'me@box', enabled: true }] }
+      const machines: MachineDirectory = { list: () => [{ id: 'm1', label: 'box', target: 'me@box', enabled: true }], add: async () => ({ id: 'm2', label: 'x' }), update: async () => {}, remove: async () => {} }
       const { tools = [] } = metaExtension({ dir, router, snapshot, machines: () => machines, threads: threads() })
       const names = (tools as unknown as Tool[]).map((t) => t.name)
       expect(names.sort()).toEqual(['ls', 'read', 'superego_actions', 'superego_machines', 'superego_profiles', 'superego_set_setting', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
+      // Setup (settings, machines) is what it changes itself; files, profiles, skills and code go to threads, so it has
+      // no tool that writes or runs anything.
       for (const mutating of ['write', 'edit', 'bash', 'superego_run', 'thread_send']) expect(names).not.toContain(mutating)
-      // Settings are the one thing it changes itself.
       expect(await text(tools, 'superego_set_setting', { key: 'web.access', value: 'local' })).toBe('Set web.access to "local".')
       expect(set).toEqual([{ key: 'web.access', value: 'local' }])
       // What it reads.
       expect((await run(tools, 'superego_actions', {}) as { id: string }[]).map((a) => a.id)).toEqual(['echo.say', 'settings.set', 'profile.list'])
       expect(await run(tools, 'superego_settings', {})).toEqual([{ id: 'agent', title: 'Agent', settings: [{ key: 'agent.model', title: 'Model', type: { type: 'string' }, default: null, value: 'faux/faux-1' }] }])
-      expect(await run(tools, 'superego_machines', {})).toEqual(machines.list())
+      expect(await run(tools, 'superego_machines', { op: 'list' })).toEqual(machines.list())
       expect(await run(tools, 'superego_profiles', { cwd: 'proj' })).toEqual([{ name: 'default', dir: join(dir, 'proj') }])
       await mkdir(join(dir, 'profiles'))
       await writeFile(join(dir, 'settings.json'), '{}')
@@ -58,6 +59,24 @@ describe('Ego, the meta agent', () => {
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
+  })
+
+  it('adds, renames, disables and removes machines in the list it is given', async () => {
+    let list: ReturnType<MachineDirectory['list']> = []
+    const directory: MachineDirectory = {
+      list: () => list,
+      add: async ({ label, target = '' }) => { const added = { id: `m${list.length + 1}`, label: label ?? target, target, enabled: true }; list = [...list, added]; return added },
+      update: async (id, patch) => { list = list.map((m) => m.id === id ? { ...m, ...patch } : m) },
+      remove: async (id) => { list = list.filter((m) => m.id !== id) },
+    }
+    const { tools = [] } = metaExtension({ dir: '/data', router: new Router(), snapshot, machines: () => directory, threads: threads() })
+    await run(tools, 'superego_machines', { op: 'add', target: 'me@box', name: 'box' })
+    await run(tools, 'superego_machines', { op: 'rename', machine: 'box', name: 'Build box' })
+    await run(tools, 'superego_machines', { op: 'disable', machine: 'Build box' })
+    expect(await run(tools, 'superego_machines', { op: 'list' })).toEqual([{ id: 'm1', label: 'Build box', target: 'me@box', enabled: false }])
+    await run(tools, 'superego_machines', { op: 'remove', machine: 'm1' })
+    expect(list).toEqual([])
+    await expect(run(tools, 'superego_machines', { op: 'enable', machine: 'nope' })).rejects.toThrow(/No machine nope/)
   })
 
   it('hands work to a thread of its own, where the work belongs, and names it', async () => {

@@ -59,7 +59,7 @@ Useful ones:
 | `pane.open` `id kind title? params?` | open a pane beside a thread (`diff`, `editor`, `preview`, `artifact`, `thread`, a profile's own) |
 | `pane.close` `id pane`, `pane.focus` `id pane?` | |
 | `profile.list` `cwd?`, `profile.allow` `cwd? name?` | |
-| `thread.meta` `prompt?` | ask Ego, Superego's own agent (one hidden thread per machine): it answers, changes settings, and starts threads for any other work |
+| `thread.meta` `prompt?` | ask Ego, Superego's own agent (one hidden thread per machine): it answers, changes settings and machines, and starts threads for any other work |
 | `thread.meta.clear` | clear Ego's conversation: the same thread, empty again |
 
 `pane.open` takes nested `params`, so give it JSON:

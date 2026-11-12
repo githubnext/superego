@@ -42,9 +42,9 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
 - **Messages** take files: attach, drop or paste them into the composer. Images go to the model as images; every file
   is saved on the thread's machine and named to the agent by its path.
 - **Ego**, Superego's own agent (the lifebuoy in the rail, or *Ask Ego* in ⌘K), answers questions about Superego and
-  how this computer has it set up: settings, profiles, skills, machines, projects and threads. It changes this machine's
-  settings itself; any other work (a profile, a skill, a machine, code) it hands to an ordinary thread it starts in the
-  right project, and links you to it. One thread per machine, in `~/.superego`, kept for good and in no list: it can't be archived, and *Clear* in its
+  how this computer has it set up: settings, profiles, skills, machines, projects and threads. It changes setup itself
+  (this machine's settings, and the machines this computer reaches); any other work (a profile, a skill, code) it hands
+  to an ordinary thread it starts in the right project, and links you to it. One thread per machine, in `~/.superego`, kept for good and in no list: it can't be archived, and *Clear* in its
   title bar (or `superego do thread.meta.clear`) empties it. From a shell, `superego do thread.meta --prompt "…"`.
 - **Skills** are the ones in `~/.agents/skills` on the thread's machine (a folder each, with a `SKILL.md`). The agent is
   told each one's name and description and reads one when it fits; `$name` or `/skill:name` in a message (completed
