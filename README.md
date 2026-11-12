@@ -110,7 +110,7 @@ them. Every command takes `-m <machine>` and `--json`; `superego help` lists the
 `ssh <host> superego connect --start`:
 
 ```sh
-gh repo clone mikker/mu ~/dev/mu && ~/dev/mu/scripts/install-machine.sh   # again to update
+gh repo clone mikker/superego ~/dev/superego && ~/dev/superego/scripts/install-machine.sh   # again to update
 ```
 
 It installs `~/.local/bin/superego`, which a non-interactive ssh shell may not have on its PATH; then add the machine with

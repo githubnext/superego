@@ -2,7 +2,7 @@
 # Make this machine one the Superego app can reach over ssh: a checkout of Superego, its dependencies (no Electron, the
 # daemon runs on Node), and `superego` in ~/.local/bin. Run it again to update; it restarts a running daemon.
 #
-#   gh repo clone mikker/mu ~/dev/mu && ~/dev/mu/scripts/install-machine.sh
+#   gh repo clone mikker/superego ~/dev/superego && ~/dev/superego/scripts/install-machine.sh
 #
 # Node comes from mise when it's there (see mise.toml), else from PATH: it needs to run TypeScript (22.18+).
 set -euo pipefail
