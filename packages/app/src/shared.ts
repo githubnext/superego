@@ -1,7 +1,12 @@
 // The contract between the main process and the renderer, exposed as `window.superego` by the preload.
+import type { KeepsRunning } from '@superego/protocol'
 
 export type MachineId = string
-export type ConnectionState = 'connecting' | 'connected' | 'disconnected'
+/**
+ * `needs-login`: ssh wants a password, a code or a key it doesn't have, so the link waits for a login instead of
+ * retrying. `host-key`: the host key is unknown or changed (the error says which), and it waits for that to be put right.
+ */
+export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'needs-login' | 'host-key'
 import type { MachineConfig } from '@superego/client/shared'
 
 export type { MachineConfig }
@@ -10,9 +15,11 @@ export type MachineEntry = {
   id: MachineId; label: string; state: ConnectionState | 'disabled'; error?: string; errorKind?: string
   /** Who answered, from the last hello: the daemon's identity and hostname, and what it offers. */
   machine?: { id: string; hostname: string }
+  /** Whether its daemon will outlive a logout and a reboot, from the last hello. */
+  keepsRunning?: KeepsRunning
   features?: string[]
   /** Absent for this computer, which can't be removed. */
-  remote?: { route: string; enabled: boolean }
+  remote?: { route: string; enabled: boolean; /** Reached with ssh, so it can log in and have Superego installed. */ ssh: boolean }
 }
 
 

@@ -26,6 +26,7 @@ import { serveWeb, webToken, type WebServer } from './web.ts'
 import { agentsInstructions, listSkills, mentionedSkills, skillBlock, skillsPrompt } from './skills.ts'
 import { metaExtension, metaPrompt, type MachineDirectory } from './meta.ts'
 import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileRef } from './profiles.ts'
+import { keepsRunning } from './service.ts'
 
 const context = BACKGROUND_CONTEXT
 
@@ -869,7 +870,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
             throw new RpcError('version_mismatch', `This machine's superego speaks protocol ${PROTOCOL_VERSION}, the client ${version}`, { hint: 'Update superego on the older side.' })
           }
           if (typeof name === 'string') client = name
-          return { version: PROTOCOL_VERSION, features, machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id)] }
+          return { version: PROTOCOL_VERSION, features, machine: { ...machine, keepsRunning: keepsRunning(options.app) }, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id)] }
         },
         'thread.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),

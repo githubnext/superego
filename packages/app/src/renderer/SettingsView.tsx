@@ -340,7 +340,7 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
       <h2>Machines</h2>
       <p className="settings__note">
         Every machine runs its own {appConfig.name} daemon with its own threads, models and credentials. Other machines are reached with
-        {' '}<code>ssh &lt;target&gt; {DEFAULT_REMOTE_COMMAND}</code> (they need {appConfig.name} installed and key-based ssh access), or with
+        {' '}<code>ssh &lt;target&gt; {DEFAULT_REMOTE_COMMAND}</code> (they need {appConfig.name}, which Install copies over ssh, and ssh access: keys, or Log in for a password or code), or with
         any command that pipes stdio to a daemon, such as <code>docker exec -i</code>.
       </p>
       {machines.map((m) => (
@@ -353,11 +353,23 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
             </div>
             <div className="settings__note">
               {m.remote ? <code>{m.remote.route}</code> : 'Local daemon'}
-              {m.machine && m.machine.hostname !== m.label ? ` · ${m.machine.hostname}` : ''} · {m.state}{m.error && m.state !== 'connected' ? ` — ${m.error}` : ''}
+              {m.machine && m.machine.hostname !== m.label ? ` · ${m.machine.hostname}` : ''} · {m.state === 'needs-login' ? 'needs login' : m.state === 'host-key' ? 'host key' : m.state}{m.error && m.state !== 'connected' ? ` — ${m.error}` : ''}
             </div>
+            {m.remote && m.state === 'connected' && m.keepsRunning && (m.keepsRunning.service === null || m.keepsRunning.afterLogout === false) && (
+              <div className="settings__note machine-row__warning">
+                The daemon there stops at logout or reboot, and so does the work in it. On that machine, run <code>{appConfig.id} daemon install</code>.
+              </div>
+            )}
           </div>
           <div className="provider__actions">
             {m.state === 'connected' && <Button onClick={() => onOpen(m.id)}>Settings</Button>}
+            {m.state === 'needs-login' && <Button onClick={() => void act('machines.login', { id: m.id })} title="Opens a terminal where ssh can ask for your password or code">Log in</Button>}
+            {m.state === 'host-key' && <Button onClick={() => void act('machines.reconnect', { id: m.id })}>Retry</Button>}
+            {m.remote?.ssh && (m.errorKind === 'not_installed' || m.state === 'connected') && (
+              <Button onClick={() => void act('machines.install', { id: m.id, service: true })} title={`Copies ${appConfig.name} to ${m.label} over ssh and keeps its daemon running there`}>
+                {m.errorKind === 'not_installed' ? 'Install' : 'Update'}
+              </Button>
+            )}
             {m.errorKind === 'wrong_machine' && <Button onClick={() => void act('machines.trust', { id: m.id })} title="Use whichever machine answers there now, e.g. after a reinstall">Trust this machine</Button>}
             {(m.errorKind === 'version_mismatch' || m.errorKind === 'duplicate_machine') && <Button onClick={() => void act('machines.reconnect', { id: m.id })}>Retry</Button>}
             {m.remote && <Switch label={`Connect to ${m.label}`} checked={m.remote.enabled} onChange={(enabled) => void act('machines.update', { id: m.id, enabled })} />}

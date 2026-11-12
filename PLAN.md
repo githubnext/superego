@@ -272,7 +272,7 @@ Styled over eight rounds of impartial review of the showcase screenshots (scores
 6. **Base UI** for the kit's overlays: portals, positioning, focus and Escape done right, instead of hand-rolled.
 
 Still open:
-- **Remote install.** v0 expects `node` and Superego on the remote PATH. Later: self-install over ssh.
+- **Remote install.** Done: `superego machines install` copies one bundle (`app/out/remote/`, built by `pnpm build`) over ssh to `~/.superego/bin` and writes a shim; it needs only Node 22.18+ there. `superego daemon install` keeps the daemon alive as a systemd user unit (with lingering) or a launchd agent, and `hello` reports `keepsRunning`. ssh rides a shared ControlMaster, and a failed login is the `needs-login` state, fixed with `machines login`.
 - **Name and package scope.** `@superego/*` for now; publishing decides it.
 
 ## 8. Progress
@@ -329,4 +329,3 @@ Still open:
 - **Types for profile authors** (`superego profile new` writing a tsconfig and declarations).
 - **The code, support and readonly profiles**, as further proofs of profiles.
 - **Publishing the packages**, so new apps don't need this checkout; then runtime-installed extensions.
-- **Remote install** over ssh.

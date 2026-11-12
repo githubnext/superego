@@ -6,7 +6,10 @@ import type { ConnectionState, MachineEntry, MachineId } from '../shared.ts'
 import type { Transport } from '@superego/client'
 
 /** Errors that another attempt can't fix: the link waits for the user (or a restart) instead of retrying. */
-const FINAL = new Set(['version_mismatch', 'wrong_machine', 'duplicate_machine'])
+const FINAL = new Set(['version_mismatch', 'wrong_machine', 'duplicate_machine', 'needs_login', 'host_key_changed', 'host_key_unknown'])
+
+/** Errors that are a state of their own, not a failure. */
+const stateOf = (kind: string): ConnectionState => kind === 'needs_login' ? 'needs-login' : kind.startsWith('host_key') ? 'host-key' : 'disconnected'
 
 export type LinkOptions = {
   id: MachineId
@@ -40,6 +43,7 @@ export class Link {
       id: this.id, label: this.label, state: this.state,
       ...(this.error ? { error: this.error.message, errorKind: this.error.kind } : {}),
       ...(this.hello ? { machine: { id: this.hello.machine.id, hostname: this.hello.machine.hostname }, features: this.hello.features } : {}),
+      ...(this.hello?.machine.keepsRunning ? { keepsRunning: this.hello.machine.keepsRunning } : {}),
     }
   }
 
@@ -89,7 +93,7 @@ export class Link {
         this.#transport = undefined
         const kind = error instanceof RpcError ? error.kind : 'error'
         final = FINAL.has(kind)
-        this.#set('disconnected', { kind, message: error instanceof Error ? error.message : String(error) })
+        this.#set(stateOf(kind), { kind, message: error instanceof Error ? error.message : String(error) })
       }
       if (this.#stopped || final) return
       await new Promise((resolve) => setTimeout(resolve, this.#delay))

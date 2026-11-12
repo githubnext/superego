@@ -15,7 +15,7 @@ export const PROTOCOL_VERSION = 1
  * What a daemon of this build offers, announced in `hello`. Clients check a feature before using it, so an older
  * daemon on another machine keeps working with a newer app (and the other way round) for whatever both know.
  */
-export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions'] as const
+export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'keeps-running'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -88,8 +88,17 @@ export type NewThread = {
   profile?: string
 }
 
+/**
+ * Whether a daemon will still be there after the user logs out or the machine reboots: the service that runs it (systemd
+ * or launchd; null when it is only a process the first connection started), and whether that service survives a logout
+ * (lingering on Linux; null when not known, as for a launchd agent, which lasts as long as the login session).
+ */
+export type KeepsRunning = { service: 'systemd' | 'launchd' | null; afterLogout: boolean | null }
+
 export type MachineInfo = {
   id: string; hostname: string; platform: string; pid: number; dataDir: string
+  /** With the `keeps-running` feature. */
+  keepsRunning?: KeepsRunning
   /** The build of the code this daemon runs (see `readBuild`); clients compare it with what is on disk now. */
   build: string
 }
