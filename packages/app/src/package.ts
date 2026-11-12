@@ -12,10 +12,10 @@ import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import type { AppConfig } from '@mu/protocol'
+import type { AppConfig } from '@superego/protocol'
 
 export type PackageOptions = {
-  /** Reverse-DNS bundle id; defaults to `dev.mu.<id>`. */
+  /** Reverse-DNS bundle id; defaults to `dev.superego.<id>`. */
   bundleId?: string
   /** Code signing identity ("Developer ID Application: …"); unset signs ad hoc, for this computer. */
   identity?: string | null
@@ -42,7 +42,7 @@ export async function packageApp(root: string, app: AppConfig, options: PackageO
   const electron = dirname(createRequire(join(root, 'package.json')).resolve('electron/package.json'))
   const electronVersion = (JSON.parse(readFileSync(join(electron, 'package.json'), 'utf8')) as { version: string }).version
   const config = {
-    appId: options.bundleId ?? app.bundleId ?? `dev.mu.${app.id}`,
+    appId: options.bundleId ?? app.bundleId ?? `dev.superego.${app.id}`,
     productName: app.name,
     electronVersion,
     electronDist: join(electron, 'dist'),

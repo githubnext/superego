@@ -1,5 +1,5 @@
 <!--
-  mu: the threads sidebar's modes, in one look. Four views of one extension.
+  Superego: the threads sidebar's modes, in one look. Four views of one extension.
   Source: extensions/threads, packages/app/src/renderer, design-explorations/main-window.html (D's look, A's rows, C's sorting and inspector)
   Date: 2026-11-04
 -->
@@ -8,7 +8,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>mu: the threads sidebar</title>
+  <title>Superego: the threads sidebar</title>
   <style>
     /* ----------------------------------------------------------------
        NEUTRAL DEFAULTS — override these with the host repo's brand
@@ -385,11 +385,11 @@
     </div>
   </aside><main class="x-main">
     <div class="x-col">
-      <div class="x-crumb">This computer · ~/dev/gh/mu · needs you</div>
+      <div class="x-crumb">This computer · ~/dev/gh/superego · needs you</div>
       <div class="x-title">Why does the smoke test flake on fonts?</div>
       <div class="x-you">It failed once right after a build.</div>
       <div class="x-turn">Let me look at how the smoke test waits for the font list.</div>
-      <div class="x-steps"><span>read smoke.mjs</span><span>bash pnpm --filter mu smoke · exit 1</span></div>
+      <div class="x-steps"><span>read smoke.mjs</span><span>bash pnpm --filter superego smoke · exit 1</span></div>
       <div class="x-turn">The picker calls queryLocalFonts() on first open. Right after a build, a fresh Electron profile can take longer to enumerate fonts than the test’s 40 seconds.</div>
     </div>
     <div class="x-dock">
@@ -429,11 +429,11 @@
     <div class="x-foot">Settings</div>
   </aside><main class="x-main">
     <div class="x-col">
-      <div class="x-crumb">This computer · ~/dev/gh/mu · needs you</div>
+      <div class="x-crumb">This computer · ~/dev/gh/superego · needs you</div>
       <div class="x-title">Why does the smoke test flake on fonts?</div>
       <div class="x-you">It failed once right after a build.</div>
       <div class="x-turn">Let me look at how the smoke test waits for the font list.</div>
-      <div class="x-steps"><span>read smoke.mjs</span><span>bash pnpm --filter mu smoke · exit 1</span></div>
+      <div class="x-steps"><span>read smoke.mjs</span><span>bash pnpm --filter superego smoke · exit 1</span></div>
       <div class="x-turn">The picker calls queryLocalFonts() on first open. Right after a build, a fresh Electron profile can take longer to enumerate fonts than the test’s 40 seconds.</div>
     </div>
     <div class="x-dock">
@@ -469,11 +469,11 @@
     <div class="x-tip">Add a git diff extension<small>working · now</small></div>
   </nav><main class="x-main">
     <div class="x-col">
-      <div class="x-crumb">This computer · ~/dev/gh/mu · needs you</div>
+      <div class="x-crumb">This computer · ~/dev/gh/superego · needs you</div>
       <div class="x-title">Why does the smoke test flake on fonts?</div>
       <div class="x-you">It failed once right after a build.</div>
       <div class="x-turn">Let me look at how the smoke test waits for the font list.</div>
-      <div class="x-steps"><span>read smoke.mjs</span><span>bash pnpm --filter mu smoke · exit 1</span></div>
+      <div class="x-steps"><span>read smoke.mjs</span><span>bash pnpm --filter superego smoke · exit 1</span></div>
       <div class="x-turn">The picker calls queryLocalFonts() on first open. Right after a build, a fresh Electron profile can take longer to enumerate fonts than the test’s 40 seconds.</div>
     </div>
     <div class="x-dock">
@@ -486,7 +486,7 @@
       <div class="variant-analysis">
         <div class="analysis-block"><h4>What works</h4><p>D’s focus, as a mode of the same sidebar rather than a different app: the transcript gets the window, and status stays visible.</p></div>
         <div class="analysis-block is-risk"><h4>What it needs</h4><p>A tooltip on hover, and a way to switch by name without the list (a command palette). The app already lets extensions bind keys; a palette is a core addition.</p></div>
-        <div class="analysis-block is-pick"><h4>Default when</h4><p>mu was opened with `mu` for one project and the window is about that one thing.</p></div>
+        <div class="analysis-block is-pick"><h4>Default when</h4><p>Superego was opened with `superego` for one project and the window is about that one thing.</p></div>
       </div>
     </section>
     <section class="variant">
@@ -511,11 +511,11 @@
     <div class="x-foot">Settings</div>
   </aside><main class="x-main">
     <div class="x-col" style="width:460px">
-      <div class="x-crumb">This computer · ~/dev/gh/mu · needs you</div>
+      <div class="x-crumb">This computer · ~/dev/gh/superego · needs you</div>
       <div class="x-title">Why does the smoke test flake on fonts?</div>
       <div class="x-you">It failed once right after a build.</div>
       <div class="x-turn">Let me look at how the smoke test waits for the font list.</div>
-      <div class="x-steps"><span>read smoke.mjs</span><span>bash pnpm --filter mu smoke · exit 1</span></div>
+      <div class="x-steps"><span>read smoke.mjs</span><span>bash pnpm --filter superego smoke · exit 1</span></div>
       <div class="x-turn">The picker calls queryLocalFonts() on first open. Right after a build, a fresh Electron profile can take longer to enumerate fonts than the test’s 40 seconds.</div>
     </div>
     <div class="x-dock" style="width:480px">
@@ -525,7 +525,7 @@
     </div>
   </main><aside class="x-det">
     <h5>Session</h5>
-    <div class="x-kv"><span>Machine</span><span>This computer</span><span>Folder</span><span>~/dev/gh/mu</span><span>Model</span><span>claude-opus-5-5</span><span>Started</span><span>13:52</span><span>Cost</span><span>$0.42</span></div>
+    <div class="x-kv"><span>Machine</span><span>This computer</span><span>Folder</span><span>~/dev/gh/superego</span><span>Model</span><span>claude-opus-5-5</span><span>Started</span><span>13:52</span><span>Cost</span><span>$0.42</span></div>
     <h5>Tools</h5>
     <div class="x-kv"><span>read</span><span>1</span><span>bash</span><span>1 · 1 failed</span></div>
     <h5>Files touched</h5>

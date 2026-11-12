@@ -2,17 +2,17 @@
 // ask-user, UI half: the question an agent is waiting on shows above the composer, with its options and room for a
 // free answer; in the transcript, the question and the answer it got.
 import { useState } from 'react'
-import { defineUiExtension, useDispatch, has, useComposerClaim, useValue, type MachineEntry, type ToolCallProps } from '@mu/app/ui'
-import type { ThreadInfo } from '@mu/protocol'
-import { Button } from '@mu/ui'
+import { defineUiExtension, useDispatch, has, useComposerClaim, useValue, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
+import type { ThreadInfo } from '@superego/protocol'
+import { Button } from '@superego/ui'
 import { ANSWER, PENDING, TOOL, type AskDetails, type Question } from './shared.ts'
 import './styles.css'
 
 export default defineUiExtension({
   name: 'ask-user',
-  setup(mu) {
-    mu.slot('composer.above', Waiting)
-    mu.tool(TOOL, Asked)
+  setup(superego) {
+    superego.slot('composer.above', Waiting)
+    superego.tool(TOOL, Asked)
   },
 })
 

@@ -4,10 +4,10 @@ import { readBuild } from './build.ts'
 import { openDaemon } from './daemon.ts'
 import { listen } from './server.ts'
 import { appEnv, defaultDataDir, pidPath, socketPath } from './paths.ts'
-import type { AppConfig } from '@mu/protocol'
+import type { AppConfig } from '@superego/protocol'
 import type { DaemonExtension } from './extension.ts'
 
-/** Run a daemon on `socket` until SIGINT/SIGTERM. Used by `mu daemon` and by the Electron app's daemon process. */
+/** Run a daemon on `socket` until SIGINT/SIGTERM. Used by `superego daemon` and by the Electron app's daemon process. */
 export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket = socketPath(app, dataDir), defaultCwd, extensions = [], webRoot }: {
   app: AppConfig; dataDir?: string; socket?: string; defaultCwd?: string; extensions?: DaemonExtension[]
   /** The window's build, for Web access. */

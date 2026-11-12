@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// `mu`: mu's command line.
+// `superego`: Superego's command line.
 import { fileURLToPath } from 'node:url'
-import { runCli } from '@mu/cli'
-import app from '../mu.config.ts'
+import { runCli } from '@superego/cli'
+import app from '../superego.config.ts'
 
 runCli(app, {
   appDir: fileURLToPath(new URL('..', import.meta.url)),

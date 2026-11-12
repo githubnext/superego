@@ -1,5 +1,5 @@
-// The mu daemon: one per user per machine. It owns a pi-durable Harness on SQLite, the thread catalog, and every
-// live subscription. Clients (the Electron app, the CLI, a remote app over ssh) speak the protocol in @mu/protocol.
+// The Superego daemon: one per user per machine. It owns a pi-durable Harness on SQLite, the thread catalog, and every
+// live subscription. Clients (the Electron app, the CLI, a remote app over ssh) speak the protocol in @superego/protocol.
 import { execFile } from 'node:child_process'
 import { watch as watchFs } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -16,9 +16,9 @@ import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
   arr, type Attachment, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type ThreadInfo,
-} from '@mu/protocol'
-import { serveSettings, SettingsRegistry, type SettingsStore } from '@mu/settings'
-import { FileSettingsStore } from '@mu/settings/file'
+} from '@superego/protocol'
+import { serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
+import { FileSettingsStore } from '@superego/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
 import { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveValue, type StatusContribution } from './extension.ts'
 import { serveWeb, webToken, type WebServer } from './web.ts'
@@ -29,7 +29,7 @@ const context = BACKGROUND_CONTEXT
 
 /** Which conversations are threads, newest last. Child conversations (subagents) are not listed here. */
 const Catalog = defineDoc<{ ids: number[] }>({
-  kind: 'mu.catalog', version: 1, scope: 'session', initial: () => ({ ids: [] }), checkpointWhen: () => true,
+  kind: 'superego.catalog', version: 1, scope: 'session', initial: () => ({ ids: [] }), checkpointWhen: () => true,
 })
 
 /** A thread's own metadata, next to its transcript. */
@@ -37,7 +37,7 @@ type ThreadMeta = {
   title: string; cwd: string; createdAt: number; seen?: { entryId?: number; failureTaskId?: number }
   /** The thread's own model and thinking; unset follows its profile, else this machine's settings. */
   model?: string; thinking?: string
-  /** The profile it started with (see profiles.ts); unset runs plain mu. */
+  /** The profile it started with (see profiles.ts); unset runs plain Superego. */
   profile?: ProfileRef
   /** Put away: left out of the thread list (and the sidebar) until unarchived. */
   archived?: boolean
@@ -50,7 +50,7 @@ type ThreadMeta = {
   worktree?: { path: string; branch: string; removed?: boolean }
 }
 const ThreadDoc = defineDoc<ThreadMeta>({
-  kind: 'mu.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current',
+  kind: 'superego.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current',
   initial: () => ({ title: '', cwd: '', createdAt: 0 }), checkpointWhen: () => true,
 })
 
@@ -168,7 +168,7 @@ const isText = (mimeType: string, name: string) =>
     || /\.(md|markdown|txt|ts|tsx|js|jsx|mjs|json|css|html|py|rs|go|rb|swift|kt|java|c|h|cpp|yml|yaml|toml|csv|log|sh|sql|ini|env)$/i.test(name)
 
 /** Folders a file search never enters: tools' and dependencies' own. */
-const UNSEARCHED = new Set(['node_modules', '.git', '.obsidian', '.trash', '.mu', 'dist', 'out', 'build'])
+const UNSEARCHED = new Set(['node_modules', '.git', '.obsidian', '.trash', '.superego', 'dist', 'out', 'build'])
 
 /**
  * A file in `root` by the name a link gives it, as Obsidian resolves [[links]]: a path if it is one (with or without
@@ -230,7 +230,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const skillsDir = join(agentsDir, 'skills')
   installBuiltin(defineExtension({ name: 'skills', sections: [section('skills', async () => skillsPrompt(await listSkills(skillsDir)))] }))
   installBuiltin(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] }))
-  // Profiles and their extensions import from 'mu'; this is what they get.
+  // Profiles and their extensions import from 'superego'; this is what they get.
   provideSdk({
     defineProfile, defineExtension, defineTool, section, hook, wrapTool, wrapSection, defineDaemonExtension, defineAction, RpcError,
     arr, bool, int, lit, nullable, num, obj, opt, str, union, unknown,
@@ -566,7 +566,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       if (checkout && (wantsWorktree ?? loaded?.spec.worktree ?? false)) {
         const name = `${slugOf(title?.trim() || (prompt ? titleOf(prompt) : ''))}-${randomUUID().slice(0, 6)}`
         const path = join(options.dataDir, 'worktrees', basename(checkout.root), name)
-        const branch = `mu/${name}`
+        const branch = `${options.app.id}/${name}`
         await mkdir(dirname(path), { recursive: true })
         const made = await git(checkout.top, ['worktree', 'add', '-q', '-b', branch, path, 'HEAD']).then(() => true, () => false)
         if (made) {
@@ -797,7 +797,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       const handlers: Record<string, (params: any) => unknown> = {
         async hello({ version, client: name }: Methods['hello']['params']) {
           if (version !== PROTOCOL_VERSION) {
-            throw new RpcError('version_mismatch', `This machine's mu speaks protocol ${PROTOCOL_VERSION}, the client ${version}`, { hint: 'Update mu on the older side.' })
+            throw new RpcError('version_mismatch', `This machine's superego speaks protocol ${PROTOCOL_VERSION}, the client ${version}`, { hint: 'Update superego on the older side.' })
           }
           if (typeof name === 'string') client = name
           return { version: PROTOCOL_VERSION, features, machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id)] }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { SettingsSnapshot } from '@mu/protocol'
+import type { SettingsSnapshot } from '@superego/protocol'
 import { mergeSettings } from '../src/renderer/merge-settings.ts'
 
 const snapshot = (models: string[], value: string | null, fast: boolean): SettingsSnapshot => ({

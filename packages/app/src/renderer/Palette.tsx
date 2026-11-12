@@ -1,8 +1,8 @@
 // The command palette (⌘K): commands only, filtered as you type; going somewhere is the navigator's (⌘L). Arrow keys
 // move, Enter runs, Escape closes. Every action that runs without more input is in it, with its shortcut.
 import { useMemo, useState, type KeyboardEvent } from 'react'
-import { Dialog, StatusGlyph } from '@mu/ui'
-import type { Status } from '@mu/protocol'
+import { Dialog, StatusGlyph } from '@superego/ui'
+import type { Status } from '@superego/protocol'
 import { score } from './score.ts'
 import { useRegistry } from './extension.tsx'
 import { useSelection } from './state.tsx'

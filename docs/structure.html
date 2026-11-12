@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>mu — structure</title>
+<title>Superego — structure</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -57,8 +57,8 @@
 </head>
 <body>
 <main>
-  <h1><span>µ</span> mu: structure</h1>
-  <p class="lede">A framework for agent apps. One daemon per machine, its own protocol, an Electron app layer, and extensions with a daemon half and a UI half. Apps are made with <code>mu new</code>. As of the icon work, 33 commits.</p>
+  <h1>Superego: structure</h1>
+  <p class="lede">A framework for agent apps. One daemon per machine, its own protocol, an Electron app layer, and extensions with a daemon half and a UI half. Apps are made with <code>superego new</code>. As of the icon work, 33 commits.</p>
 
   <div class="grid g4" style="margin-top:24px">
     <div class="card"><div class="stat">~6.8k<small>lines of source</small></div></div>
@@ -82,7 +82,7 @@
       <text class="small" x="56" y="160">hooks for extensions</text>
       <rect class="box" x="250" y="62" width="90" height="130" rx="8"/>
       <text class="title" x="264" y="86">Preload</text>
-      <text class="small" x="264" y="106">window.mu</text>
+      <text class="small" x="264" y="106">window.superego</text>
       <rect class="box" x="360" y="62" width="220" height="130" rx="8"/>
       <text class="title" x="376" y="86">Main</text>
       <text class="small" x="376" y="106">machine links · app settings</text>
@@ -91,16 +91,16 @@
       <text class="small" x="376" y="160">single instance per data dir</text>
       <path class="line" d="M230 127 H248" marker-end="url(#a)"/><path class="line" d="M340 127 H358" marker-end="url(#a)"/>
       <rect class="group" x="630" y="20" width="350" height="190" rx="12"/>
-      <text class="title" x="646" y="44">Command</text><text class="small" x="722" y="44">runCli(app) · mu, mu-minimal, …</text>
+      <text class="title" x="646" y="44">Command</text><text class="small" x="722" y="44">runCli(app) · superego, superego-minimal, …</text>
       <rect class="box" x="650" y="62" width="310" height="130" rx="8"/>
       <text x="666" y="86"><tspan class="title">&lt;id&gt;</tspan><tspan class="small">  new thread here → opens app</tspan></text>
       <text class="mono" x="666" y="110">create · send · open · threads</text>
       <text class="mono" x="666" y="128">machines · settings [--all] · auth</text>
       <text class="mono" x="666" y="146">daemon status|restart|stop</text>
-      <text class="mono" x="666" y="164">connect   ·   mu only: new &lt;dir&gt;</text>
-      <path class="line" d="M650 100 H582" marker-end="url(#a)"/><text class="label" x="590" y="94">--mu-open</text>
+      <text class="mono" x="666" y="164">connect   ·   Superego only: new &lt;dir&gt;</text>
+      <path class="line" d="M650 100 H582" marker-end="url(#a)"/><text class="label" x="590" y="94">--superego-open</text>
       <rect class="box" x="250" y="240" width="500" height="40" rx="8"/>
-      <text class="title" x="266" y="265">@mu/client</text><text class="small" x="356" y="265">socket · ssh · any stdio command · machines.json · identity</text>
+      <text class="title" x="266" y="265">@superego/client</text><text class="small" x="356" y="265">socket · ssh · any stdio command · machines.json · identity</text>
       <path class="line" d="M470 192 V238" marker-end="url(#a)"/><path class="line" d="M805 192 V220 H650 V238" marker-end="url(#a)"/>
       <rect class="hot" x="40" y="310" width="440" height="110" rx="10"/>
       <text class="title" x="58" y="336">daemon · this computer</text>
@@ -125,8 +125,8 @@
       <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
       <text class="mono" x="20" y="32">APPS</text>
       <rect class="box" x="120" y="12" width="200" height="40" rx="8"/><text class="title" x="136" y="37">examples/minimal</text>
-      <rect class="box" x="360" y="12" width="200" height="40" rx="8"/><text class="title" x="376" y="37">examples/full = mu</text>
-      <rect class="box" x="600" y="12" width="200" height="40" rx="8" style="stroke-dasharray:4 4"/><text class="title" x="616" y="37">your app</text><text class="small" x="700" y="37">mu new</text>
+      <rect class="box" x="360" y="12" width="200" height="40" rx="8"/><text class="title" x="376" y="37">examples/full = Superego</text>
+      <rect class="box" x="600" y="12" width="200" height="40" rx="8" style="stroke-dasharray:4 4"/><text class="title" x="616" y="37">your app</text><text class="small" x="700" y="37">superego new</text>
       <text class="mono" x="20" y="112">EXTENSIONS</text>
       <rect class="box" x="360" y="92" width="200" height="40" rx="8"/><text class="title" x="376" y="117">threads</text><text class="small" x="440" y="117">ui</text>
       <rect class="box" x="600" y="92" width="200" height="40" rx="8"/><text class="title" x="616" y="117">ask-user</text><text class="small" x="690" y="117">daemon + ui</text>
@@ -155,12 +155,12 @@
   <div class="grid g2">
     <div class="card">
       <div class="k">files</div>
-<pre><b>mu.config.ts</b>           defineApp({ name, id, glyph })
+<pre><b>superego.config.ts</b>           defineApp({ name, id, glyph })
 <b>src/daemon.ts</b>          serveDaemon({ app, extensions })
 <b>src/renderer/main.tsx</b>  mountApp(app, { extensions })
 <b>src/main.ts</b>            startApp(app)
 <b>bin/&lt;id&gt;.ts</b>            runCli(app, …)
-<b>electron.vite.config</b>   muConfig(import.meta.dirname)
+<b>electron.vite.config</b>   superegoConfig(import.meta.dirname)
 <b>test/smoke.mjs</b>         headless end to end</pre>
     </div>
     <div class="card">
@@ -171,8 +171,8 @@
         <tr><td>&lt;ID&gt;_HOME, _MODEL, …</td><td>environment</td></tr>
         <tr><td>name, glyph</td><td>window, menus, menu bar</td></tr>
       </table>
-      <div class="k" style="margin-top:14px">mu new &lt;dir&gt; [--minimal]</div>
-      <p style="font-size:13px">Copies an example, renames everything (smoke test included), links <code>@mu/*</code> to this checkout. A generated app installs, builds and passes its smoke test outside the repo.</p>
+      <div class="k" style="margin-top:14px">superego new &lt;dir&gt; [--minimal]</div>
+      <p style="font-size:13px">Copies an example, renames everything (smoke test included), links <code>@superego/*</code> to this checkout. A generated app installs, builds and passes its smoke test outside the repo.</p>
     </div>
   </div>
 
@@ -274,9 +274,9 @@
       <tr><th>suite</th><th>covers</th></tr>
       <tr><td>daemon</td><td>protocol over a real socket · actions: list, run with coerced params, log · status · restarts · settings · sign-in · restart refusal · record/replay</td></tr>
       <tr><td>ask-user</td><td>a replayed agent asks; blocked status; live pending list; answer from a client; agent carries on</td></tr>
-      <tr><td>cli · generate</td><td>real commands on two machines · settings --all · auth · <code>mu actions</code> / <code>mu do</code> · daemon restart · <code>mu new</code> for both templates</td></tr>
+      <tr><td>cli · generate</td><td>real commands on two machines · settings --all · auth · <code>superego actions</code> / <code>superego do</code> · daemon restart · <code>superego new</code> for both templates</td></tr>
       <tr><td>registry · identity · shortcuts · merge · restart · score · groups · title</td><td>validation and upsert · wrong/duplicate machine · "Mixed" · restart state machine · shortcuts and keymaps · palette ranking · sidebar grouping · thread titles</td></tr>
-      <tr><td>examples/full smoke</td><td>two app processes: chat · ask-user · sidebar menu, rail, details · ⌘K · action log · Settings → Keyboard (record, clash, reset) · fonts · machines · All machines · menu bar · restart ×2 · <code>mu</code> → running app</td></tr>
+      <tr><td>examples/full smoke</td><td>two app processes: chat · ask-user · sidebar menu, rail, details · ⌘K · action log · Settings → Keyboard (record, clash, reset) · fonts · machines · All machines · menu bar · restart ×2 · <code>superego</code> → running app</td></tr>
       <tr><td>examples/full showcase</td><td>three scripted threads with real tool calls (a failing test, edits, a missed edit) on a fixture project · screenshots top/middle/end · light/dark · expanded</td></tr>
       <tr><td>examples/minimal smoke</td><td>core alone: picker instead of sidebar · chat · command hand-off · no extension features</td></tr>
     </table>
@@ -284,7 +284,7 @@
 
   <h2>9 · The look</h2>
   <div class="grid g2">
-    <div class="card"><div class="k">tokens · @mu/ui</div><table>
+    <div class="card"><div class="k">tokens · @superego/ui</div><table>
       <tr><td>colour</td><td>macOS system greys · system blue accent · tinted sidebars</td></tr>
       <tr><td>type</td><td>13 UI · 14/1.55 reading · 20 title · 12.5 mono</td></tr>
       <tr><td>space</td><td>4px grid · 580px reading column · 248px sidebar</td></tr>
@@ -297,7 +297,7 @@
   <h2>10 · Next</h2>
   <div class="card">
     <ul class="tight">
-      <li class="todo">Packaging: <code>mu.app</code> with <code>mu.icon</code> and its variants, the command inside</li>
+      <li class="todo">Packaging: <code>superego.app</code> with <code>superego.icon</code> and its variants, the command inside</li>
       <li class="todo">Web and mobile: daemon on the network · browser bridge · PWA · responsive shell</li>
       <li class="todo">MCP server from actions</li>
       <li class="todo">Extensions: git/diff · background jobs and subagents · suggestions</li>

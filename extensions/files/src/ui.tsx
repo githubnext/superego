@@ -6,9 +6,9 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type Keyboa
 import {
   defineAction, defineUiExtension, fileKind, score, useAllThreads, useMachines, useRegistry, useSelection,
   type Dispatch, type EditorSlotProps, type MachineEntry,
-} from '@mu/app/ui'
-import type { ThreadInfo } from '@mu/protocol'
-import { Dialog, FolderSimpleIcon, IconButton } from '@mu/ui'
+} from '@superego/app/ui'
+import type { ThreadInfo } from '@superego/protocol'
+import { Dialog, FolderSimpleIcon, IconButton } from '@superego/ui'
 import './styles.css'
 import { LIST, type FileList } from './shared.ts'
 
@@ -25,10 +25,10 @@ function store<T>(key: string | undefined, initial: T) {
   }
 }
 /** The tree beside the editor: closed until asked for, then as last left. */
-const treeShown = store('mu.files.tree', false)
+const treeShown = store('superego.files.tree', false)
 const quickOpen = store<boolean>(undefined, false)
 /** Folders open in the tree, by session. */
-const expanded = store<Record<string, string[]>>('mu.files.expanded', {})
+const expanded = store<Record<string, string[]>>('superego.files.expanded', {})
 const use = <T,>(s: ReturnType<typeof store<T>>) => useSyncExternalStore(s.subscribe, s.get)
 
 let dispatch: Dispatch = () => Promise.reject(new Error('files is not set up'))
@@ -47,13 +47,13 @@ function useFiles(machine: string | undefined, thread: ThreadInfo | undefined) {
 
 export default defineUiExtension({
   name: 'files',
-  setup(mu) {
-    dispatch = mu.dispatch
-    mu.slot('editor.side', Tree)
-    mu.slot('editor.bar', TreeButton)
-    mu.slot('overlay', QuickOpen)
-    mu.action(defineAction({ id: 'files.tree', title: 'Toggle file tree', runs: 'window', keys: 'mod+shift+e', run: () => treeShown.set(!treeShown.get()) }))
-    mu.action(defineAction({ id: 'files.open', title: 'Open a file…', runs: 'window', keys: 'mod+p', run: () => quickOpen.set(true) }))
+  setup(superego) {
+    dispatch = superego.dispatch
+    superego.slot('editor.side', Tree)
+    superego.slot('editor.bar', TreeButton)
+    superego.slot('overlay', QuickOpen)
+    superego.action(defineAction({ id: 'files.tree', title: 'Toggle file tree', runs: 'window', keys: 'mod+shift+e', run: () => treeShown.set(!treeShown.get()) }))
+    superego.action(defineAction({ id: 'files.open', title: 'Open a file…', runs: 'window', keys: 'mod+p', run: () => quickOpen.set(true) }))
   },
 })
 

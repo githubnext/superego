@@ -2,7 +2,7 @@
 // tool calls and entries in the transcript, adds custom settings components and actions (with keys). Components reach
 // everything else (machines, threads, selection, live values, calls) through the hooks this package exports.
 import { createContext, useContext, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
-import type { AppConfig, DeclaredSection, Pane, SectionInfo, ThreadInfo } from '@mu/protocol'
+import type { AppConfig, DeclaredSection, Pane, SectionInfo, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowRouter } from './actions.tsx'
 
@@ -96,10 +96,10 @@ export type UiApi = {
 export type UiExtension = {
   /** The same name as the daemon half, if there is one; the UI uses it to tell whether a machine has that half. */
   name: string
-  setup(mu: UiApi): void
+  setup(superego: UiApi): void
 }
 
-/** Identity for type inference: `export default defineUiExtension({ name, setup(mu) { … } })`. */
+/** Identity for type inference: `export default defineUiExtension({ name, setup(superego) { … } })`. */
 export const defineUiExtension = (extension: UiExtension) => extension
 
 /** Everything the app's extensions registered, in the order they were listed. */
@@ -122,7 +122,7 @@ export type Registry = {
   subscribe(listener: () => void): () => void
 }
 
-export function createRegistry(app: AppConfig, extensions: UiExtension[], core: (mu: UiApi) => void): Registry {
+export function createRegistry(app: AppConfig, extensions: UiExtension[], core: (superego: UiApi) => void): Registry {
   const registry: Registry = {
     app, extensions: extensions.map((e) => e.name),
     slots: { 'sidebar': [], 'thread.header': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
@@ -186,7 +186,7 @@ export const RegistryProvider = ({ registry, children }: { registry: Registry; c
 
 export function useRegistry(): Registry {
   const registry = useContext(RegistryContext)
-  if (!registry) throw new Error('mu hooks need mountApp')
+  if (!registry) throw new Error('superego hooks need mountApp')
   return registry
 }
 

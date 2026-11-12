@@ -2,9 +2,9 @@
 // forwarded to where they run (see `dispatch`). Every dispatch from this window is logged, and the log is one action
 // away (Show action log).
 import { useEffect, useState } from 'react'
-import { defineAction, obj, Router, str, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig } from '@mu/protocol'
-import { Dialog } from '@mu/ui'
-import type { ThreadInfo } from '@mu/protocol'
+import { defineAction, obj, Router, str, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig } from '@superego/protocol'
+import { Dialog } from '@superego/ui'
+import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
 import { unread, type Session } from './sessions.ts'
@@ -56,14 +56,14 @@ export function createWindowRouter() {
       return router.dispatch(id, params, context, { source })
     }
     if (machine === 'app' || remote.get('app')?.some((a) => a.id === id)) {
-      return router.track(id, params, source, () => window.mu.call('app', id, params))
+      return router.track(id, params, source, () => window.superego.call('app', id, params))
     }
     const target = machine ?? (typeof params.machine === 'string' ? params.machine : undefined) ?? context?.selection?.machine ?? 'local'
     const action = remote.get(target)?.find((a) => a.id === id)
     const { machine: _machine, ...rest } = params
     const filled = action?.thread && rest.id === undefined && context?.selection?.machine === target ? { ...rest, id: context.selection.thread } : rest
     // Through action.run: it finds actions registered after this window connected (a profile's, as it loads).
-    const ran = router.track(id, filled, `${source} → ${target}`, () => window.mu.call(target, 'action.run', { id, params: filled }))
+    const ran = router.track(id, filled, `${source} → ${target}`, () => window.superego.call(target, 'action.run', { id, params: filled }))
     // A pane opened from this window was asked for here: the focus goes into it. (The agent's open beside, unfocused.)
     if (id === 'pane.open') void ran.then((pane) => { const opened = (pane as { id?: string } | null)?.id; if (opened) focusColumn(opened) }, () => {})
     return ran
@@ -76,7 +76,7 @@ export function createWindowRouter() {
     /** Fetch what `target` offers ('app', or a connected machine's id). */
     async load(target: string) {
       try {
-        remote.set(target, await window.mu.call(target, 'action.list', {}) as ActionInfo[])
+        remote.set(target, await window.superego.call(target, 'action.list', {}) as ActionInfo[])
         version++
         for (const listener of listeners) listener()
       } catch { /* an older daemon without actions: nothing to offer */ }
@@ -92,7 +92,7 @@ export function createWindowRouter() {
 }
 export type WindowRouter = ReturnType<typeof createWindowRouter>
 
-/** The shell's own actions. Extensions add theirs with `mu.action`. */
+/** The shell's own actions. Extensions add theirs with `superego.action`. */
 export const coreActions: WindowAction[] = [
   defineAction({ id: 'app.palette', title: 'Commands', runs: 'window', keys: 'mod+k', run: (_p, c: WindowContext) => c.togglePalette() }),
   defineAction({ id: 'app.navigator', title: 'Go to a session, thread or pane', runs: 'window', keys: 'mod+l', run: (_p, c: WindowContext) => c.toggleNavigator() }),

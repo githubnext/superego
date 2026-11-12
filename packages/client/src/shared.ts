@@ -1,9 +1,9 @@
 // Machine types and helpers with no Node imports, so a browser renderer can use them too.
-import { remoteCommand, type AppConfig } from '@mu/protocol'
+import { remoteCommand, type AppConfig } from '@superego/protocol'
 
 /**
  * A machine a client connects to besides this computer: reached with `ssh <target> <command>`, or with `via`, any shell
- * command whose stdin and stdout reach the app's daemon (`docker exec -i box mu connect --start`, `fly ssh console ...`).
+ * command whose stdin and stdout reach the app's daemon (`docker exec -i box superego connect --start`, `fly ssh console ...`).
  */
 export type MachineConfig = {
   id: string; label: string; target: string; command?: string; via?: string; enabled: boolean

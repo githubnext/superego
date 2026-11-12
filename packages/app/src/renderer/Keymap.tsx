@@ -1,8 +1,8 @@
 // Settings → Keyboard: every action that runs without asking for more, with its shortcut. Click one and press keys to
 // change it; ⌫ removes it, Esc keeps it. What differs from the actions' own is all that is stored (`app.keys`).
 import { useState, type KeyboardEvent } from 'react'
-import type { ActionInfo, Json, SettingInfo } from '@mu/protocol'
-import { Button, IconButton } from '@mu/ui'
+import type { ActionInfo, Json, SettingInfo } from '@superego/protocol'
+import { Button, IconButton } from '@superego/ui'
 import { runsBare } from './actions.tsx'
 import { bound, conflicts, keyLabel, normalize, safe, shortcutOf, useActions, type Keymap as KeymapValue } from './keys.ts'
 import { useSelection } from './state.tsx'

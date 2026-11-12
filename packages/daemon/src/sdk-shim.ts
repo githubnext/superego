@@ -1,7 +1,7 @@
-// What `import … from 'mu'` resolves to where Node's loader hook can't reach (vitest): the same SDK object the daemon
+// What `import … from 'superego'` resolves to where Node's loader hook can't reach (vitest): the same SDK object the daemon
 // provides (profiles.ts). Keep the names in step with SDK_EXPORTS; a test checks.
 /* eslint-disable */
-const sdk = (globalThis as { __muSdk?: Record<string, never> }).__muSdk ?? {}
+const sdk = (globalThis as { __superegoSdk?: Record<string, never> }).__superegoSdk ?? {}
 const get = (key: string) => (...args: unknown[]) => (sdk[key] as unknown as (...a: unknown[]) => unknown)(...args)
 export const defineProfile = get('defineProfile'), defineExtension = get('defineExtension'), defineTool = get('defineTool')
 export const section = get('section'), hook = get('hook'), wrapTool = get('wrapTool'), wrapSection = get('wrapSection')

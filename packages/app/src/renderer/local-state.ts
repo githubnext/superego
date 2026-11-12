@@ -3,7 +3,7 @@
 // read when a component first shows it. A value back at its initial one is forgotten, so drafts don't pile up.
 import { useCallback, useState } from 'react'
 
-const PREFIX = 'mu.'
+const PREFIX = 'superego.'
 
 function read<T>(key: string, initial: T): T {
   try {

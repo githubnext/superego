@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Make this machine one the mu app can reach over ssh: a checkout of mu, its dependencies (no Electron, the
-# daemon runs on Node), and `mu` in ~/.local/bin. Run it again to update; it restarts a running daemon.
+# Make this machine one the Superego app can reach over ssh: a checkout of Superego, its dependencies (no Electron, the
+# daemon runs on Node), and `superego` in ~/.local/bin. Run it again to update; it restarts a running daemon.
 #
 #   gh repo clone mikker/mu ~/dev/mu && ~/dev/mu/scripts/install-machine.sh
 #
@@ -10,8 +10,8 @@ set -euo pipefail
 # In braces, so bash reads it all before `git pull` below changes it.
 {
 dir=$(cd "$(dirname "$0")/.." && pwd)
-bin=${MU_BIN:-$HOME/.local/bin}
-registry=${MU_REGISTRY:-https://packagefeedproxy.microsoft.io/npm/}
+bin=${SUPEREGO_BIN:-$HOME/.local/bin}
+registry=${SUPEREGO_REGISTRY:-https://packagefeedproxy.microsoft.io/npm/}
 cd "$dir"
 
 # Where mise is now, for the wrapper below: ssh's PATH may not have it (~/.local/bin, say).
@@ -26,22 +26,22 @@ git pull --ff-only --quiet 2> /dev/null || echo "install-machine: not updated fr
 # The lockfile is resolved through this feed; pnpm refuses tarballs from anywhere else.
 ELECTRON_SKIP_BINARY_DOWNLOAD=1 CI=1 pnpm install --frozen-lockfile --registry="$registry"
 
-# The window's build, for Web access. Only that: with a built main, `mu` would run the daemon on Electron, which
+# The window's build, for Web access. Only that: with a built main, `superego` would run the daemon on Electron, which
 # isn't here; without, it runs app/src/daemon.ts on Node.
 (cd app && pnpm exec electron-vite build --logLevel error)
 rm -rf app/out/main app/out/preload
 
-# A wrapper, not a symlink: ssh runs `mu connect --start` in a non-login shell, where mise hasn't set up PATH.
+# A wrapper, not a symlink: ssh runs `superego connect --start` in a non-login shell, where mise hasn't set up PATH.
 mkdir -p "$bin"
-cat > "$bin/mu" << EOF
+cat > "$bin/superego" << EOF
 #!/bin/sh
 # Written by $dir/scripts/install-machine.sh
-if [ -x "$mise" ]; then exec "$mise" exec -C "$dir" -- node "$dir/app/bin/mu.ts" "\$@"; fi
-exec node "$dir/app/bin/mu.ts" "\$@"
+if [ -x "$mise" ]; then exec "$mise" exec -C "$dir" -- node "$dir/app/bin/superego.ts" "\$@"; fi
+exec node "$dir/app/bin/superego.ts" "\$@"
 EOF
-chmod +x "$bin/mu"
+chmod +x "$bin/superego"
 
-"$bin/mu" daemon status | grep -q '^Running' && "$bin/mu" daemon restart
-echo "Installed $bin/mu ($(git rev-parse --short HEAD))"
+"$bin/superego" daemon status | grep -q '^Running' && "$bin/superego" daemon restart
+echo "Installed $bin/superego ($(git rev-parse --short HEAD))"
 exit
 }

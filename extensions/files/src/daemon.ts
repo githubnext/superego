@@ -4,8 +4,8 @@ import { execFile } from 'node:child_process'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { obj, str } from '@earendil-works/pi-schema'
-import { defineDaemonExtension } from '@mu/daemon'
-import { defineAction, RpcError } from '@mu/protocol'
+import { defineDaemonExtension } from '@superego/daemon'
+import { defineAction, RpcError } from '@superego/protocol'
 import { LIST, type FileList } from './shared.ts'
 
 /** Past this many, the list stops: a folder that big (a home directory) isn't browsed file by file. */
@@ -41,14 +41,14 @@ export async function listFiles(dir: string): Promise<FileList> {
 
 export default defineDaemonExtension({
   name: 'files',
-  setup(mu) {
+  setup(superego) {
     // A short cache: the tree and quick open ask often, and a folder changes slowly.
     const cache = new Map<string, { at: number; list: Promise<FileList> }>()
-    mu.action(defineAction({
+    superego.action(defineAction({
       id: LIST, title: "List a thread's files", runs: 'machine', expose: ['ui', 'cli'],
       params: obj({ id: str() }),
       async run({ id }) {
-        const thread = (await mu.threads.list()).find((t) => t.id === id)
+        const thread = (await superego.threads.list()).find((t) => t.id === id)
         if (!thread) throw new RpcError('not_found', `No thread ${id}`)
         const hit = cache.get(thread.cwd)
         if (hit && Date.now() - hit.at < 3_000) return hit.list

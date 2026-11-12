@@ -2,9 +2,9 @@
 // (`<id> connect --start` by default) splices stdio to that machine's daemon, or any command doing the same (`via`).
 // ssh does all authentication; transports parse nothing but lines.
 import { spawn } from 'node:child_process'
-import { connectSocket, isListening } from '@mu/daemon/client'
-import { lineSplitter, RpcError, RpcPeer } from '@mu/protocol'
-import { remoteCommand, type AppConfig } from '@mu/protocol'
+import { connectSocket, isListening } from '@superego/daemon/client'
+import { lineSplitter, RpcError, RpcPeer } from '@superego/protocol'
+import { remoteCommand, type AppConfig } from '@superego/protocol'
 import type { MachineConfig } from './shared.ts'
 
 export type Transport = { peer: RpcPeer; closed: Promise<void>; close(): void }

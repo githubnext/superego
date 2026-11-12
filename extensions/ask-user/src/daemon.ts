@@ -2,22 +2,22 @@
 // the thread shows as blocked (needs you), the question is listed live for every client, and any of them can answer.
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { arr, obj, opt, str } from '@earendil-works/pi-schema'
-import { defineDaemonExtension } from '@mu/daemon'
-import { defineAction, RpcError } from '@mu/protocol'
+import { defineDaemonExtension } from '@superego/daemon'
+import { defineAction, RpcError } from '@superego/protocol'
 import { ANSWER, PENDING, TOOL, type AskDetails, type Question } from './shared.ts'
 
 export default defineDaemonExtension({
   name: 'ask-user',
-  setup(mu) {
-    const pending = mu.value<Question[]>(PENDING, [])
+  setup(superego) {
+    const pending = superego.value<Question[]>(PENDING, [])
     const answers = new Map<string, (answer: string) => void>()
     const settle = (id: string) => {
       answers.delete(id)
       pending.update((list) => list.filter((q) => q.id !== id))
-      mu.invalidate()
+      superego.invalidate()
     }
 
-    mu.agent(defineExtension({
+    superego.agent(defineExtension({
       name: 'ask-user',
       tools: [defineTool({
         name: TOOL,
@@ -37,7 +37,7 @@ export default defineDaemonExtension({
             context.abortSignal?.addEventListener('abort', () => reject(new Error('The question was withdrawn')), { once: true })
           })
           pending.update((list) => [...list.filter((q) => q.id !== question.id), question])
-          mu.invalidate()
+          superego.invalidate()
           try {
             const answer = await answered
             return { output: [{ type: 'text', text: `The user answered: ${answer}` }], details: { ...details, answer } }
@@ -48,12 +48,12 @@ export default defineDaemonExtension({
       })],
     }))
 
-    mu.status((thread) => {
+    superego.status((thread) => {
       const question = pending.get().find((q) => q.thread === thread)
       return question && { kind: 'question', msg: question.question }
     })
 
-    mu.action(defineAction({
+    superego.action(defineAction({
       id: ANSWER, title: 'Answer the agent’s question', runs: 'machine', expose: ['ui', 'cli'],
       params: obj({ id: str(), answer: str({ minLength: 1 }) }),
       run({ id, answer }) {

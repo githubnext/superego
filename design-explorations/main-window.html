@@ -1,5 +1,5 @@
 <!--
-  mu: main window, typography, spacing and layout. Four directions.
+  Superego: main window, typography, spacing and layout. Four directions.
   Source: examples/full (packages/app/src/renderer, extensions/threads, extensions/ask-user), packages/ui/src/styles.css
   Date: 2026-11-04
 -->
@@ -8,7 +8,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>mu: type, spacing and layout</title>
+  <title>Superego: type, spacing and layout</title>
   <style>
     /* ----------------------------------------------------------------
        NEUTRAL DEFAULTS — override these with the host repo's brand
@@ -400,7 +400,7 @@
   <main class="page">
     <header class="doc-header">
       <div class="doc-eyebrow">Design exploration</div>
-      <h1 class="doc-title">mu’s main window: type, spacing, layout</h1>
+      <h1 class="doc-title">Superego’s main window: type, spacing, layout</h1>
       <p class="doc-subtitle">Four directions for the full example: sidebar, session header, transcript with tool calls, the ask-user card and the composer. Same session, same monochrome zinc tokens, system fonts.</p>
       <div class="doc-meta">
         <div><b>Source</b> examples/full · packages/app/src/renderer · extensions/threads, ask-user</div>
@@ -435,13 +435,13 @@
   <main class="va-main">
     <header class="va-head"><div class="va-col">
       <div class="va-title">Why does the smoke test flake on fonts?</div>
-      <div class="va-meta">This computer · ~/dev/gh/mu · claude-opus-5-5 · needs you</div>
+      <div class="va-meta">This computer · ~/dev/gh/superego · claude-opus-5-5 · needs you</div>
     </div></header>
     <div class="va-body"><div class="va-col">
       <div class="va-turn va-you">Why does the smoke test flake on fonts? It failed once right after a build.</div>
       <div class="va-turn">Let me look at how the smoke test waits for the font list.
         <div class="va-tool">↳ <b>read</b> examples/full/test/smoke.mjs</div>
-        <div class="va-tool">↳ <b>bash</b> pnpm --filter mu smoke · exit 1</div>
+        <div class="va-tool">↳ <b>bash</b> pnpm --filter superego smoke · exit 1</div>
         <div class="va-out">smoke(first): FAIL waiting for installed fonts listed</div>
       </div>
       <div class="va-turn">The picker calls <code>queryLocalFonts()</code> on first open. Right after a build, a fresh Electron profile can take longer to enumerate fonts than the test’s 40 seconds.</div>
@@ -457,7 +457,7 @@
       <div class="variant-analysis">
         <div class="analysis-block"><h4>What works</h4><p>Clear hierarchy from one scale (11.5 mono · 13 · 15 · 17) and an 8px rhythm with 24–28px between turns. The user turn as a left rule reads like a question in a document, not a chat bubble far right.</p></div>
         <div class="analysis-block is-risk"><h4>What risks</h4><p>Long tool-heavy runs become a stack of grey lines; you need to click to see output. 15px body makes the sidebar (13px) feel like a different app unless both scale together.</p></div>
-        <div class="analysis-block is-pick"><h4>Pick this if</h4><p>You mostly read and steer one session at a time and want mu to feel calm, like a document you’re working in.</p></div>
+        <div class="analysis-block is-pick"><h4>Pick this if</h4><p>You mostly read and steer one session at a time and want Superego to feel calm, like a document you’re working in.</p></div>
       </div>
     </section>
     <section class="variant">
@@ -482,12 +482,12 @@
     <div class="vb-foot"><span>settings</span><span>⌘,</span></div>
   </aside>
   <main class="vb-main">
-    <header class="vb-head"><span>this computer</span>/<span>~/dev/gh/mu</span>/<b>Why does the smoke test flake on fonts?</b><span class="sp">claude-opus-5-5 · ? needs you</span></header>
+    <header class="vb-head"><span>this computer</span>/<span>~/dev/gh/superego</span>/<b>Why does the smoke test flake on fonts?</b><span class="sp">claude-opus-5-5 · ? needs you</span></header>
     <div class="vb-body">
       <div class="vb-line"><span class="vb-when">13:52 you</span><span class="vb-you">Why does the smoke test flake on fonts? It failed once right after a build.</span></div>
       <div class="vb-line"><span class="vb-when">13:52</span><span>Let me look at how the smoke test waits for the font list.
         <div class="vb-tools"><span class="glyph">✓</span><span>read</span><span>examples/full/test/smoke.mjs</span><small>0.1s</small></div>
-        <div class="vb-tools"><span class="glyph">!</span><span>bash</span><span>pnpm --filter mu smoke</span><small>exit 1 · 74s</small></div>
+        <div class="vb-tools"><span class="glyph">!</span><span>bash</span><span>pnpm --filter superego smoke</span><small>exit 1 · 74s</small></div>
         <div class="vb-out">smoke(first): FAIL waiting for installed fonts listed</div>
       </span></div>
       <div class="vb-line"><span class="vb-when">13:54</span><span>The picker calls queryLocalFonts() on first open. Right after a build, a fresh Electron profile can take longer to enumerate fonts than the test’s 40 seconds.</span></div>
@@ -517,30 +517,30 @@
         <div class="preview"><div class="frame vc">
   <aside class="vc-side">
     <div><div class="vc-h">Needs you <i>1</i></div>
-      <div class="vc-row is-on"><div>? Why does the smoke test flake on fonts?</div><small>This computer · mu · 2m</small></div></div>
+      <div class="vc-row is-on"><div>? Why does the smoke test flake on fonts?</div><small>This computer · superego · 2m</small></div></div>
     <div><div class="vc-h">Working <i>1</i></div>
-      <div class="vc-row"><div><span class="g-working">●</span> Add a git diff extension</div><small>This computer · mu · now</small></div></div>
+      <div class="vc-row"><div><span class="g-working">●</span> Add a git diff extension</div><small>This computer · superego · now</small></div></div>
     <div><div class="vc-h">Done <i>1</i></div>
-      <div class="vc-row"><div>* Refactor the settings registry to support font pickers</div><small>This computer · mu · 1h</small></div></div>
+      <div class="vc-row"><div>* Refactor the settings registry to support font pickers</div><small>This computer · superego · 1h</small></div></div>
     <div><div class="vc-h">Idle <i>2</i></div>
-      <div class="vc-row"><div><span class="g-idle">○</span> hi</div><small>This computer · mu · Tue</small></div>
-      <div class="vc-row" style="color:#a1a1aa"><div>○ Profile the replay provider</div><small>Build box (offline) · mu-bench</small></div></div>
+      <div class="vc-row"><div><span class="g-idle">○</span> hi</div><small>This computer · superego · Tue</small></div>
+      <div class="vc-row" style="color:#a1a1aa"><div>○ Profile the replay provider</div><small>Build box (offline) · superego-bench</small></div></div>
   </aside>
   <main class="vc-main">
     <header class="vc-head"><span class="vc-title">Why does the smoke test flake on fonts?</span><span class="vc-chip">? needs you</span></header>
     <div class="vc-body">
       <div class="vc-msg"><div class="vc-av is-you">M</div><div><div class="vc-name">You<small>13:52</small></div>Why does the smoke test flake on fonts? It failed once right after a build.</div></div>
-      <div class="vc-msg"><div class="vc-av">µ</div><div><div class="vc-name">Agent<small>13:52</small></div>Let me look at how the smoke test waits for the font list.
+      <div class="vc-msg"><div class="vc-av">S</div><div><div class="vc-name">Agent<small>13:52</small></div>Let me look at how the smoke test waits for the font list.
         <div class="vc-tool">✓ read <code>examples/full/test/smoke.mjs</code></div>
-        <div class="vc-tool">! bash <code>pnpm --filter mu smoke · exit 1</code></div>
+        <div class="vc-tool">! bash <code>pnpm --filter superego smoke · exit 1</code></div>
         The picker calls queryLocalFonts() on first open; a fresh profile can take longer than the test’s 40 seconds.</div></div>
     </div>
     <div class="vc-ask"><b>Prefetch fonts when Settings opens, or keep the test’s longer wait?</b><button class="vc-btn is-main">Prefetch on open</button><button class="vc-btn">Keep the wait</button></div>
-    <div class="vc-comp">Reply…<div class="vc-comp-bar"><span class="vc-chip">~/dev/gh/mu</span><span class="vc-chip">claude-opus-5-5</span></div></div>
+    <div class="vc-comp">Reply…<div class="vc-comp-bar"><span class="vc-chip">~/dev/gh/superego</span><span class="vc-chip">claude-opus-5-5</span></div></div>
   </main>
   <aside class="vc-insp">
     <h5>Session</h5>
-    <div class="vc-kv"><span>Machine</span><span>This computer</span><span>Folder</span><span>~/dev/gh/mu</span><span>Model</span><span>claude-opus-5-5</span><span>Started</span><span>13:52</span><span>Cost</span><span>$0.42</span></div>
+    <div class="vc-kv"><span>Machine</span><span>This computer</span><span>Folder</span><span>~/dev/gh/superego</span><span>Model</span><span>claude-opus-5-5</span><span>Started</span><span>13:52</span><span>Cost</span><span>$0.42</span></div>
     <h5>Tools</h5>
     <div class="vc-kv"><span>read</span><span>1</span><span>bash</span><span>1 · 1 failed</span></div>
     <h5>Files touched</h5>
@@ -576,11 +576,11 @@
   </nav>
   <main class="vd-main">
     <div class="vd-col">
-      <div class="vd-crumb">This computer · ~/dev/gh/mu · needs you</div>
+      <div class="vd-crumb">This computer · ~/dev/gh/superego · needs you</div>
       <div class="vd-title">Why does the smoke test flake on fonts?</div>
       <div class="vd-you">It failed once right after a build.</div>
       <div class="vd-turn">Let me look at how the smoke test waits for the font list.</div>
-      <div class="vd-steps"><span>read smoke.mjs</span><span>bash pnpm --filter mu smoke · exit 1</span></div>
+      <div class="vd-steps"><span>read smoke.mjs</span><span>bash pnpm --filter superego smoke · exit 1</span></div>
       <div class="vd-turn">The picker calls queryLocalFonts() on first open. Right after a build, a fresh Electron profile can take longer to enumerate fonts than the test’s 40 seconds.</div>
     </div>
     <div class="vd-dock">
@@ -594,13 +594,13 @@
       </div>
       <div class="variant-analysis">
         <div class="analysis-block"><h4>What works</h4><p>The most generous type and whitespace of the four; the question and the reply live in one floating card, so what the agent needs is always in reach.</p></div>
-        <div class="analysis-block is-risk"><h4>What risks</h4><p>Without titles in view, switching depends on a command palette mu doesn’t have yet. The floating dock covers content on short windows.</p></div>
-        <div class="analysis-block is-pick"><h4>Pick this if</h4><p>mu is mostly launched per project with <code>mu</code>, and you want each window to be about the one thing it was opened for.</p></div>
+        <div class="analysis-block is-risk"><h4>What risks</h4><p>Without titles in view, switching depends on a command palette Superego doesn’t have yet. The floating dock covers content on short windows.</p></div>
+        <div class="analysis-block is-pick"><h4>Pick this if</h4><p>Superego is mostly launched per project with <code>superego</code>, and you want each window to be about the one thing it was opened for.</p></div>
       </div>
     </section>
     <section class="decision">
       <h3>How to pick a direction</h3>
-      <p class="decision-sub">The pick’s type scale and spacing become tokens in @mu/ui; its layout becomes the shell’s default.</p>
+      <p class="decision-sub">The pick’s type scale and spacing become tokens in @superego/ui; its layout becomes the shell’s default.</p>
       <div class="decision-grid">
         <div class="decision-cell"><b>Calm reading →</b><span>A. Document</span></div>
         <div class="decision-cell"><b>Many sessions, logs →</b><span>B. Dense log</span></div>

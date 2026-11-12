@@ -1,6 +1,6 @@
 // Files with a message: read in the window to send (base64), and found again in a sent message to show. The daemon
 // names each to the agent as an <attachment name type path /> text block, an image's followed by the image itself.
-import type { Attachment } from '@mu/protocol'
+import type { Attachment } from '@superego/protocol'
 
 /** What one file may weigh: the daemon's limit too. */
 export const ATTACHMENT_LIMIT = 20 * 1024 * 1024

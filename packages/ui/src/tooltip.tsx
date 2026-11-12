@@ -7,8 +7,8 @@ export function Tooltip({ content, children, side = 'right' }: { content: ReactN
     <Base.Root>
       <Base.Trigger render={children} />
       <Base.Portal>
-        <Base.Positioner className="mu-layer" side={side} sideOffset={8}>
-          <Base.Popup className="mu-tooltip">{content}</Base.Popup>
+        <Base.Positioner className="superego-layer" side={side} sideOffset={8}>
+          <Base.Popup className="superego-tooltip">{content}</Base.Popup>
         </Base.Positioner>
       </Base.Portal>
     </Base.Root>

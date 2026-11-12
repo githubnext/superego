@@ -5,10 +5,10 @@
 // resizes the one on its left, as macOS does, and the last column takes what's left over. Past the edge the row
 // scrolls, and the focused column scrolls just far enough to show whole. ⌃Tab moves the focus along. On a phone each
 // column is the screen's width, and a swipe moves between them.
-// Built in: diff, editor, preview, artifact, thread. Extensions and profiles add kinds with mu.pane(kind, …).
+// Built in: diff, editor, preview, artifact, thread. Extensions and profiles add kinds with superego.pane(kind, …).
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import type { Pane, ThreadInfo } from '@mu/protocol'
-import { Button } from '@mu/ui'
+import type { Pane, ThreadInfo } from '@superego/protocol'
+import { Button } from '@superego/ui'
 import { machine as client } from './client.ts'
 import { paneKind, useRegistry, type PaneProps, type UiApi } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
@@ -160,12 +160,12 @@ function PaneBody({ machine, thread, pane }: PaneProps) {
 /** The file a pane shows, by name: its tab's title. */
 const fileName = (pane: Pane) => (pane.params as { path?: string } | undefined)?.path?.split('/').at(-1)
 
-export function registerBuiltInPanes(mu: UiApi) {
-  mu.pane('diff', { title: 'Changes', component: DiffPane, menu: true, width: 0.6 })
-  mu.pane('editor', { title: (pane) => fileName(pane) ?? 'Editor', component: EditorPane, opens: () => true })
-  mu.pane('preview', { title: 'Preview', component: PreviewPane, width: 0.6 })
-  mu.pane('artifact', { title: (pane) => fileName(pane) ?? 'Artifact', component: ArtifactPane })
-  mu.pane('thread', { title: 'Thread', component: ThreadPane })
+export function registerBuiltInPanes(superego: UiApi) {
+  superego.pane('diff', { title: 'Changes', component: DiffPane, menu: true, width: 0.6 })
+  superego.pane('editor', { title: (pane) => fileName(pane) ?? 'Editor', component: EditorPane, opens: () => true })
+  superego.pane('preview', { title: 'Preview', component: PreviewPane, width: 0.6 })
+  superego.pane('artifact', { title: (pane) => fileName(pane) ?? 'Artifact', component: ArtifactPane })
+  superego.pane('thread', { title: 'Thread', component: ThreadPane })
 }
 
 const params = <T,>(pane: Pane) => (pane.params ?? {}) as T
@@ -220,7 +220,7 @@ export function parseDiff(diff: string): DiffFile[] {
 }
 
 const openPane = (machine: string, id: string, kind: string, params: Record<string, unknown>) =>
-  window.mu.call(machine, 'pane.open', { id, kind, params })
+  window.superego.call(machine, 'pane.open', { id, kind, params })
 
 /** A file in the thread's folder, to read and edit (see FileEditor). */
 function EditorPane({ machine, thread, pane }: PaneProps) {
@@ -253,7 +253,7 @@ function ArtifactPane({ machine, thread, pane }: PaneProps) {
   const [key, setKey] = useState(0)
   useEffect(() => { setKey((k) => k + 1) }, [thread.activeAt])
   if (!path) return <div className="pane-empty">No file given.</div>
-  const url = window.mu.artifactUrl?.(machine.id, thread.id, path)
+  const url = window.superego.artifactUrl?.(machine.id, thread.id, path)
   if (!url) return <div className="pane-empty">Artifacts aren't shown here.</div>
   return (
     <div className="frame-pane">

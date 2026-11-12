@@ -1,3 +1,3 @@
-import { muConfig } from '@mu/app/vite'
+import { superegoConfig } from '@superego/app/vite'
 
-export default muConfig(import.meta.dirname)
+export default superegoConfig(import.meta.dirname)

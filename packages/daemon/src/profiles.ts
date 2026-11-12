@@ -1,8 +1,8 @@
-// Profiles: what an agent is, as files. A profile is a folder with a `profile.ts`, in the user's `~/.mu/profiles/<name>`
-// or in a project's own `.mu/profiles/<name>`, so a repo can carry the harness it needs (a customer-service agent in the
+// Profiles: what an agent is, as files. A profile is a folder with a `profile.ts`, in the user's `~/.superego/profiles/<name>`
+// or in a project's own `.superego/profiles/<name>`, so a repo can carry the harness it needs (a customer-service agent in the
 // support repo, say). A thread takes its profile when it starts and keeps it.
 //
-//   import { defineProfile } from 'mu'
+//   import { defineProfile } from 'superego'
 //   export default defineProfile({
 //     description: 'Answers customer mail',
 //     model: 'anthropic/claude-sonnet-4-5',
@@ -12,7 +12,7 @@
 //   })
 //
 // A project's profile replaces the user's of the same name, unless it `extends: 'user:<name>'`. A project's profile is
-// code from that repo, so it runs only once allowed (`mu profile allow`), and again after any of its files change.
+// code from that repo, so it runs only once allowed (`superego profile allow`), and again after any of its files change.
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -22,7 +22,7 @@ import { registerHooks } from 'node:module'
 import { transform } from 'sucrase'
 import type { Extension } from '@earendil-works/pi-durable'
 import type { DaemonExtension } from './extension.ts'
-import { RpcError } from '@mu/protocol'
+import { RpcError } from '@superego/protocol'
 
 export type ProfileSpec = {
   description?: string
@@ -39,12 +39,12 @@ export type ProfileSpec = {
   extensions?: string[]
   /**
    * UI extensions, as paths from the profile's folder: modules whose default export is defineUiExtension({ … }), drawn
-   * for this profile's threads. They import from 'mu/ui' (hooks, components, `h` for elements) and 'react'.
+   * for this profile's threads. They import from 'superego/ui' (hooks, components, `h` for elements) and 'react'.
    */
   ui?: string[]
   /**
    * Pane kinds this profile's UI adds, and what each shows: told to the agent, so it can open them (open_pane). The UI
-   * registers them with mu.pane(kind, …).
+   * registers them with superego.pane(kind, …).
    */
   panes?: Record<string, string>
   /** Whether its threads get a git worktree of their own (in a repository), unless a thread is started otherwise. */
@@ -72,10 +72,10 @@ export type LoadedProfile = ProfileRef & {
 
 export const DEFAULT_PROFILE = 'default'
 
-/** The folder holding a project's profiles: the nearest `.mu/profiles` at or above `cwd`. */
+/** The folder holding a project's profiles: the nearest `.superego/profiles` at or above `cwd`. */
 export function projectProfiles(cwd: string): string | undefined {
   for (let dir = resolve(cwd); ; dir = dirname(dir)) {
-    const candidate = join(dir, '.mu', 'profiles')
+    const candidate = join(dir, '.superego', 'profiles')
     if (existsSync(candidate) && statSync(candidate).isDirectory()) return candidate
     if (dirname(dir) === dir) return undefined
   }
@@ -97,7 +97,7 @@ export function listProfiles(cwd: string, userRoot: string): ProfileRef[] {
 export function findProfile(cwd: string, userRoot: string, name?: string): ProfileRef | undefined {
   const wanted = name ?? DEFAULT_PROFILE
   const found = listProfiles(cwd, userRoot).find((p) => p.name === wanted)
-  if (!found && name) throw new RpcError('not_found', `No profile ${name} for ${cwd}`, { hint: `Make one: mu profile new ${name}` })
+  if (!found && name) throw new RpcError('not_found', `No profile ${name} for ${cwd}`, { hint: `Make one: superego profile new ${name}` })
   return found
 }
 
@@ -132,38 +132,38 @@ export class Trust {
   }
 }
 
-/** What `import … from 'mu'` gives a profile and its extensions. */
+/** What `import … from 'superego'` gives a profile and its extensions. */
 export type ProfileSdk = Record<string, unknown>
 
 /**
  * Node's own `import()`, out of reach of bundlers and test runners that would rewrite it: profiles must load through
- * Node's loader, where the hook for 'mu' and TypeScript's type stripping are.
+ * Node's loader, where the hook for 'superego' and TypeScript's type stripping are.
  */
 const nativeImport = new Function('url', 'return import(url)') as (url: string) => Promise<unknown>
-/** Where modules run in a VM without Node's loader (vitest), plain `import()`, with 'mu' aliased to sdk-shim.ts. */
+/** Where modules run in a VM without Node's loader (vitest), plain `import()`, with 'superego' aliased to sdk-shim.ts. */
 const load = (url: string) => nativeImport(url).catch((error: unknown) => {
   if (!/dynamic import callback/.test(String(error))) throw error
   return import(/* @vite-ignore */ url)
 })
 
-/** What 'mu' exports: kept in step with sdk-shim.ts (a test checks). */
+/** What 'superego' exports: kept in step with sdk-shim.ts (a test checks). */
 export const SDK_EXPORTS = [
   'defineProfile', 'defineExtension', 'defineTool', 'section', 'hook', 'wrapTool', 'wrapSection', 'defineDaemonExtension', 'defineAction', 'RpcError',
   'arr', 'bool', 'int', 'lit', 'nullable', 'num', 'obj', 'opt', 'str', 'union', 'unknown',
 ] as const
 
 let hooked = false
-/** Profiles and their extensions `import … from 'mu'` without installing anything: the daemon answers with its own API. */
+/** Profiles and their extensions `import … from 'superego'` without installing anything: the daemon answers with its own API. */
 export function provideSdk(sdk: ProfileSdk) {
   const missing = SDK_EXPORTS.filter((key) => !(key in sdk))
   if (missing.length) throw new Error(`The profile SDK lacks ${missing.join(', ')}`)
-  ;(globalThis as { __muSdk?: ProfileSdk }).__muSdk = sdk
+  ;(globalThis as { __superegoSdk?: ProfileSdk }).__superegoSdk = sdk
   if (hooked) return
   hooked = true
-  const source = `const sdk = globalThis.__muSdk;\n${SDK_EXPORTS.map((key) => `export const ${key} = sdk.${key};`).join('\n')}\nexport default sdk;\n`
+  const source = `const sdk = globalThis.__superegoSdk;\n${SDK_EXPORTS.map((key) => `export const ${key} = sdk.${key};`).join('\n')}\nexport default sdk;\n`
   registerHooks({
     resolve(specifier, context, next) {
-      if (specifier === 'mu') return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true }
+      if (specifier === 'superego') return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true }
       return next(specifier, context)
     },
   })
@@ -174,7 +174,7 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
   const hash = hashProfile(ref.dir)
   if (!(await trust.allowed(ref, hash))) {
     throw new RpcError('untrusted_profile', `The profile ${ref.name} in ${dirname(dirname(dirname(ref.dir)))} runs that project's code: allow it first (again, if it changed since)`, {
-      hint: `Look it over, then: mu profile allow ${ref.name}`,
+      hint: `Look it over, then: superego profile allow ${ref.name}`,
     })
   }
   // A query that changes with the files makes Node load them again rather than reuse the first import.
@@ -207,10 +207,10 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
   return { ...ref, spec: merged, extensions, daemon, hash }
 }
 
-/** Whether `dir` is a profile folder at all: under the user's profiles, or a project's `.mu/profiles`. */
+/** Whether `dir` is a profile folder at all: under the user's profiles, or a project's `.superego/profiles`. */
 export function isProfileDir(ref: ProfileRef, userRoot: string): boolean {
   const parent = dirname(ref.dir)
-  const ok = ref.scope === 'user' ? resolve(parent) === resolve(userRoot) : parent.endsWith(join('.mu', 'profiles'))
+  const ok = ref.scope === 'user' ? resolve(parent) === resolve(userRoot) : parent.endsWith(join('.superego', 'profiles'))
   return ok && ref.name === ref.dir.split(/[\\/]/).at(-1) && existsSync(join(ref.dir, 'profile.ts'))
 }
 

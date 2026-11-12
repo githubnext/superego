@@ -1,4 +1,4 @@
-// Settings as data: sections of typed settings that any part of mu (core, bundled modules, extensions) registers, and a
+// Settings as data: sections of typed settings that any part of Superego (core, bundled modules, extensions) registers, and a
 // generic UI renders. Machine settings live in that machine's daemon; app settings in the app. Both speak the same
 // `settings.*` methods.
 
@@ -58,7 +58,7 @@ export type ProviderAuthInfo = {
   name: string
   /** How the provider is authenticated now, if at all: `source` is e.g. an env var or "stored credential". */
   auth?: { type: 'api_key' | 'oauth'; source?: string }
-  /** Whether mu stores its credential, and so can sign out. */
+  /** Whether Superego stores its credential, and so can sign out. */
   stored: boolean
   apiKey: boolean
   /** The label of its OAuth sign-in, when it has one. */

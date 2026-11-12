@@ -1,11 +1,11 @@
-// The machines a client connects to besides this computer, kept in `machines.json` in mu's data dir. The app and the
+// The machines a client connects to besides this computer, kept in `machines.json` in Superego's data dir. The app and the
 // CLI share the file; each notices the other's changes.
 import { randomUUID } from 'node:crypto'
 import { readFileSync, watch, type FSWatcher } from 'node:fs'
 import { mkdirSync } from 'node:fs'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { RpcError } from '@mu/protocol'
+import { RpcError } from '@superego/protocol'
 import type { MachineConfig } from './shared.ts'
 
 export class MachineStore {

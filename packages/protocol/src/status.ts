@@ -1,4 +1,4 @@
-// Agent status uses the OSC 7501 Program Status vocabulary, so mu threads, Claude Code, Codex and pi all read alike.
+// Agent status uses the OSC 7501 Program Status vocabulary, so Superego threads, Claude Code, Codex and pi all read alike.
 
 export type StatusState = 'idle' | 'working' | 'done' | 'blocked' | 'error'
 export type BlockedKind = 'permission' | 'question' | 'auth'

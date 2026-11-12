@@ -2,15 +2,15 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, openSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, protocol, session, shell, type MenuItemConstructorOptions } from 'electron'
-import { appEnv, daemonStarting, defaultDataDir, readBuild, socketPath } from '@mu/daemon/client'
+import { appEnv, daemonStarting, defaultDataDir, readBuild, socketPath } from '@superego/daemon/client'
 import {
   bool, defineAction, lit, obj, opt, Router, RpcError, str, union, unknown,
   type AppConfig, type DeclaredSection, type Json, type Notifications, type ThreadInfo, type SettingType,
-} from '@mu/protocol'
-import { serveSettings } from '@mu/settings'
-import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type MuEvent } from '../shared.ts'
+} from '@superego/protocol'
+import { serveSettings } from '@superego/settings'
+import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type SuperegoEvent } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
-import { checkIdentity, MachineStore, openLocal as openLocalSocket, openMachine, routeOf } from '@mu/client'
+import { checkIdentity, MachineStore, openLocal as openLocalSocket, openMachine, routeOf } from '@superego/client'
 import { Link } from './link.ts'
 import { MenuBar } from './tray.ts'
 import { ServiceRestart, type ServiceAction } from './restart.ts'
@@ -38,7 +38,7 @@ export function startApp(appConfig: AppConfig) {
   }
   const openLocal = () => openLocalSocket(socket, startDaemon)
 
-  const broadcast = (event: MuEvent) => {
+  const broadcast = (event: SuperegoEvent) => {
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send(CHANNEL.event, event)
   }
 
@@ -66,7 +66,7 @@ export function startApp(appConfig: AppConfig) {
       const { canceled, filePaths } = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
       return canceled ? null : filePaths[0] ?? null
     },
-    /** How mu sits on the desktop now. */
+    /** How Superego sits on the desktop now. */
       async 'service.get'() { return service.state },
       /**
        * The shortcuts that run actions in this window now. While a page in one of its panes has the keyboard, the
@@ -235,7 +235,7 @@ export function startApp(appConfig: AppConfig) {
 
   /**
    * One app per data dir: its Electron state lives in the data dir, so the lock that keeps a second launch from opening
-   * a second app is per data dir too. A second launch (`mu`, `mu open`) hands its arguments over and exits.
+   * a second app is per data dir too. A second launch (`superego`, `superego open`) hands its arguments over and exits.
    */
   app.setName(appConfig.name)
   app.setPath('userData', join(dataDir, 'app'))
@@ -243,9 +243,9 @@ export function startApp(appConfig: AppConfig) {
   if (!primary) app.quit()
 
   type Open = { machine: string; thread: string }
-  /** `--mu-open=<machine>/<thread>`, as `mu` passes it. */
+  /** `--superego-open=<machine>/<thread>`, as `superego` passes it. */
   function openArgument(argv: string[]): Open | undefined {
-    const value = argv.find((arg) => arg.startsWith('--mu-open='))?.slice('--mu-open='.length)
+    const value = argv.find((arg) => arg.startsWith('--superego-open='))?.slice('--superego-open='.length)
     const slash = value?.lastIndexOf('/') ?? -1
     return value && slash > 0 ? { machine: value.slice(0, slash), thread: value.slice(slash + 1) } : undefined
   }
@@ -285,7 +285,7 @@ export function startApp(appConfig: AppConfig) {
   const resources = join(import.meta.dirname, '../../resources')
   /**
    * Run from source there's no bundle to carry the icon, so the Dock takes the app's own images: `icon.png`, and
-   * `icon-dark.png` while the system is dark. A packaged app's icon (`mu.icon`) does all of this, and more, itself.
+   * `icon-dark.png` while the system is dark. A packaged app's icon (`superego.icon`) does all of this, and more, itself.
    * They must sit on macOS's icon grid like any app icon: the tile 824px inside a transparent 1024px canvas. Icon
    * Composer exports fill the canvas, so pad them (magick in.png -resize 824 -background none -gravity center
    * -extent 1024x1024 out.png) or the Dock shows them a quarter larger than every other icon.
@@ -311,7 +311,7 @@ export function startApp(appConfig: AppConfig) {
     restart: () => void service.act('restart'),
   }, headless, join(resources, 'trayTemplate.png'))
 
-  /** The Dock icon shows while a window is open, unless hidden in Settings; with no window it goes, if the menu bar has mu. */
+  /** The Dock icon shows while a window is open, unless hidden in Settings; with no window it goes, if the menu bar has Superego. */
   function refreshDesktop() {
     // Settings announce changes from the start; the menu bar and the Dock exist only once the app is ready.
     if (!app.isReady()) return
@@ -427,7 +427,7 @@ export function startApp(appConfig: AppConfig) {
       const { response } = await dialog.showMessageBox({
         type: 'warning', buttons: ['Stop Agents and Quit', 'Cancel'], defaultId: 0, cancelId: 1,
         message: `${working.length === 1 ? 'An agent is' : `${working.length} agents are`} still working`,
-        detail: 'Stopping the background process ends their work. Quitting mu alone leaves them running.',
+        detail: 'Stopping the background process ends their work. Quitting superego alone leaves them running.',
       })
       if (response !== 0) return
     }
@@ -472,9 +472,9 @@ export function startApp(appConfig: AppConfig) {
   }
 
   // Artifacts: HTML the agent wrote, served from the thread's machine on a scheme of their own, sandboxed.
-  protocol.registerSchemesAsPrivileged([{ scheme: 'mu-artifact', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
+  protocol.registerSchemesAsPrivileged([{ scheme: 'superego-artifact', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
   app.whenReady().then(() => {
-    protocol.handle('mu-artifact', async (request) => {
+    protocol.handle('superego-artifact', async (request) => {
       const url = new URL(request.url)
       const [thread, ...rest] = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
       const link = links.get(decodeURIComponent(url.hostname))
@@ -525,7 +525,7 @@ export function startApp(appConfig: AppConfig) {
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
   })
 
-  // With the menu bar on, mu stays there without windows; without it, closing the last window quits (except on macOS).
+  // With the menu bar on, Superego stays there without windows; without it, closing the last window quits (except on macOS).
   app.on('window-all-closed', () => {
     refreshDesktop()
     if (!mac && !menuBarOn()) app.quit()

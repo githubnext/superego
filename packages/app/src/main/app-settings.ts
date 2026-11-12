@@ -2,9 +2,9 @@
 // how it sits on the desktop.
 // They are served under the reserved machine id "app" with the same settings methods a daemon answers.
 import { join } from 'node:path'
-import { SettingsRegistry } from '@mu/settings'
-import { FileSettingsStore } from '@mu/settings/file'
-import type { AppConfig } from '@mu/protocol'
+import { SettingsRegistry } from '@superego/settings'
+import { FileSettingsStore } from '@superego/settings/file'
+import type { AppConfig } from '@superego/protocol'
 
 export const APP = 'app'
 export const APP_KEYS = {
@@ -31,7 +31,7 @@ export function createAppSettings(dataDir: string, app: AppConfig) {
     id: 'notifications', title: 'Notifications', order: 60,
     settings: [{
       key: APP_KEYS.notifications, title: 'Notify when a thread needs a look', default: true,
-      description: 'A system notification when a thread finishes, fails or needs you while mu is not focused.',
+      description: 'A system notification when a thread finishes, fails or needs you while superego is not focused.',
       type: { type: 'boolean' },
     }],
   })

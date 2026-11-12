@@ -11,8 +11,8 @@ import { Annotation, Compartment, type Extension } from '@codemirror/state'
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, keymap, lineNumbers } from '@codemirror/view'
 import { closeSearchPanel, findNext, findPrevious, openSearchPanel } from '@codemirror/search'
 import { tags } from '@lezer/highlight'
-import type { ThreadInfo } from '@mu/protocol'
-import { Button } from '@mu/ui'
+import type { ThreadInfo } from '@superego/protocol'
+import { Button } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { machine as client } from './client.ts'
 import { fileKind, Slot, useRegistry, type EditorSlotProps } from './extension.tsx'
@@ -38,7 +38,7 @@ export type FileEditorProps = {
   onOpenFile?: (path: string, options: { beside: boolean }) => void
 }
 
-const MODE = 'mu.editor.mode'
+const MODE = 'superego.editor.mode'
 /** Where each file was left (scroll and cursor), for as long as the window lives: it opens there again. */
 const places = new Map<string, { top: number; anchor: number; head: number }>()
 /**
@@ -58,10 +58,10 @@ const fromDisk = Annotation.define<boolean>()
 
 /** In live preview the syntax is quiet when shown, and code is monospace; the rest is the preview's own styling. */
 const liveHighlight = HighlightStyle.define([
-  { tag: tags.processingInstruction, color: 'var(--mu-faint)' },
-  { tag: [tags.url, tags.labelName], color: 'var(--mu-muted)' },
-  { tag: tags.monospace, fontFamily: 'var(--mu-mono)', fontSize: '0.92em' },
-  { tag: tags.meta, color: 'var(--mu-muted)' },
+  { tag: tags.processingInstruction, color: 'var(--superego-faint)' },
+  { tag: [tags.url, tags.labelName], color: 'var(--superego-muted)' },
+  { tag: tags.monospace, fontFamily: 'var(--superego-mono)', fontSize: '0.92em' },
+  { tag: tags.meta, color: 'var(--superego-muted)' },
 ])
 
 /**
@@ -73,14 +73,14 @@ const codeHighlight = HighlightStyle.define([
   { tag: [tags.keyword, tags.operatorKeyword, tags.modifier, tags.controlKeyword, tags.definitionKeyword, tags.moduleKeyword], color: c('#a626a4', '#c792ea') },
   { tag: [tags.string, tags.special(tags.string), tags.regexp, tags.character], color: c('#50a14f', '#a5d68a') },
   { tag: [tags.number, tags.bool, tags.null, tags.atom, tags.unit], color: c('#b76b01', '#f2b46d') },
-  { tag: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment], color: 'var(--mu-faint)', fontStyle: 'italic' },
+  { tag: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment], color: 'var(--superego-faint)', fontStyle: 'italic' },
   { tag: [tags.function(tags.variableName), tags.function(tags.propertyName), tags.function(tags.definition(tags.variableName))], color: c('#2f6fdb', '#82aaff') },
   { tag: [tags.typeName, tags.className, tags.namespace, tags.standard(tags.typeName)], color: c('#c18401', '#ffcb6b') },
   { tag: [tags.tagName, tags.angleBracket], color: c('#e45649', '#f07178') },
   { tag: [tags.attributeName, tags.propertyName, tags.labelName], color: c('#986801', '#e0c08a') },
   { tag: [tags.definition(tags.variableName), tags.definition(tags.propertyName)], color: c('#0f6e8a', '#89ddff') },
-  { tag: [tags.meta, tags.processingInstruction, tags.documentMeta, tags.annotation], color: 'var(--mu-muted)' },
-  { tag: [tags.invalid], color: 'var(--mu-status-error)' },
+  { tag: [tags.meta, tags.processingInstruction, tags.documentMeta, tags.annotation], color: 'var(--superego-muted)' },
+  { tag: [tags.invalid], color: 'var(--superego-status-error)' },
   { tag: tags.link, textDecoration: 'underline' },
 ])
 

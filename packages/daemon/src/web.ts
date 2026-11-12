@@ -1,5 +1,5 @@
 /// <reference path="./ws.d.ts" />
-// mu in a browser: the daemon serves the app's window (the same build Electron loads) over HTTP, and the protocol over a
+// Superego in a browser: the daemon serves the app's window (the same build Electron loads) over HTTP, and the protocol over a
 // WebSocket at /rpc. Off unless the machine's "Web access" setting turns it on. A token, made once per data dir, guards
 // the protocol: the address Settings shows carries it (`#token=…`), and the page keeps it.
 import { randomBytes, timingSafeEqual } from 'node:crypto'
@@ -9,7 +9,7 @@ import { createServer, type Server } from 'node:http'
 import { networkInterfaces } from 'node:os'
 import { extname, join, normalize, sep } from 'node:path'
 import { WebSocketServer } from 'ws'
-import { RpcPeer } from '@mu/protocol'
+import { RpcPeer } from '@superego/protocol'
 
 /** The token a browser needs to speak to this daemon: kept in the data dir, made the first time. */
 export async function webToken(dataDir: string): Promise<string> {
@@ -49,7 +49,7 @@ export async function serveWeb({ root, host, port, token, serve, artifact }: {
     const path = decodeURIComponent(requested.pathname)
     // Artifacts: token-checked (a cookie set by the first request, so the page's relative links work too), sandboxed.
     if (path.startsWith('/artifact/') && artifact) {
-      const cookie = /(?:^|; )mu-artifact=([^;]+)/.exec(request.headers.cookie ?? '')?.[1]
+      const cookie = /(?:^|; )superego-artifact=([^;]+)/.exec(request.headers.cookie ?? '')?.[1]
       const given = requested.searchParams.get('token') ?? (cookie ? decodeURIComponent(cookie) : null)
       if (!allowed(given)) { response.writeHead(401).end(); return }
       const [thread, ...rest] = path.slice('/artifact/'.length).split('/')
@@ -58,7 +58,7 @@ export async function serveWeb({ root, host, port, token, serve, artifact }: {
         response.writeHead(200, {
           'content-type': TYPES[extname(path)] ?? 'application/octet-stream',
           'content-security-policy': "sandbox allow-scripts allow-forms allow-popups; default-src 'self' data: blob: https: 'unsafe-inline' 'unsafe-eval'",
-          'set-cookie': `mu-artifact=${encodeURIComponent(token)}; Path=/artifact/; HttpOnly; SameSite=Strict`,
+          'set-cookie': `superego-artifact=${encodeURIComponent(token)}; Path=/artifact/; HttpOnly; SameSite=Strict`,
           'cache-control': 'no-cache',
         })
         response.end(content)

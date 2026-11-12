@@ -1,8 +1,8 @@
 // Beside Settings, when agents have something you haven't seen (a result, a failure, a question): a bell and how many,
 // coloured by the most pressing (as Fut shows its waiting agents). It opens a list of them, the most pressing first;
 // picking one goes there. Nothing shows when there's nothing unread.
-import { rollup, type Status } from '@mu/protocol'
-import { BellIcon, Button, Menu, StatusGlyph } from '@mu/ui'
+import { rollup, type Status } from '@superego/protocol'
+import { BellIcon, Button, Menu, StatusGlyph } from '@superego/ui'
 import { unread } from './sessions.ts'
 import { useSelection, useSessions } from './state.tsx'
 

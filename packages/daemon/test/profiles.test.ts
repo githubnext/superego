@@ -3,21 +3,21 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { defineApp, PROTOCOL_VERSION, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@mu/protocol'
+import { defineApp, PROTOCOL_VERSION, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, listen, openDaemon } from '../src/index.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
 
-const MU = defineApp({ name: 'mu', id: 'mu' })
+const SUPEREGO = defineApp({ name: 'superego', id: 'superego' })
 let dir: string
 let home: string
 let project: string
 
 const open = async () => {
-  process.env.MU_MODEL = 'faux'
-  const daemon = await openDaemon({ app: MU, dataDir: home, defaultCwd: dir })
-  const server = await listen(daemon, join(home, 'mu.sock'))
-  const { peer, socket } = await connectSocket(join(home, 'mu.sock'))
+  process.env.SUPEREGO_MODEL = 'faux'
+  const daemon = await openDaemon({ app: SUPEREGO, dataDir: home, defaultCwd: dir })
+  const server = await listen(daemon, join(home, 'superego.sock'))
+  const { peer, socket } = await connectSocket(join(home, 'superego.sock'))
   await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
   return { peer, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
 }
@@ -44,14 +44,14 @@ const until = async (check: () => Promise<boolean>) => {
 const done = (peer: RpcPeer, id: string) => until(async () => (await peer.call<ThreadInfo[]>('thread.list', {})).find((s) => s.id === id)?.status.state === 'done')
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'mu-profiles-'))
+  dir = await mkdtemp(join(tmpdir(), 'superego-profiles-'))
   home = join(dir, 'home')
   project = join(dir, 'acme')
   mkdirSync(join(project, 'src'), { recursive: true })
 })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
-it('runs plain mu where there are no profiles', async () => {
+it('runs plain superego where there are no profiles', async () => {
   const { peer, close } = await open()
   const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project })
   expect(thread.profile).toBeUndefined()
@@ -61,7 +61,7 @@ it('runs plain mu where there are no profiles', async () => {
 
 it("takes the user's default profile: its prompt and model", async () => {
   write(join(home, 'profiles', 'default'), {
-    'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ description: 'Mine', prompt: 'Answer in haiku.' })\n`,
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ description: 'Mine', prompt: 'Answer in haiku.' })\n`,
   })
   const { peer, close } = await open()
   const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hello' })
@@ -73,10 +73,10 @@ it("takes the user's default profile: its prompt and model", async () => {
 })
 
 it("runs a project's profile and its extensions only once allowed, and again after it changes", async () => {
-  const profile = join(project, '.mu', 'profiles', 'support')
+  const profile = join(project, '.superego', 'profiles', 'support')
   write(profile, {
-    'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ prompt: 'You answer customer email.', extensions: ['./orders.ts'], without: ['ask-user'] })\n`,
-    'orders.ts': `import { defineExtension, defineTool, obj, str } from 'mu'
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ prompt: 'You answer customer email.', extensions: ['./orders.ts'], without: ['ask-user'] })\n`,
+    'orders.ts': `import { defineExtension, defineTool, obj, str } from 'superego'
 export default defineExtension({
   name: 'orders',
   tools: [defineTool({
@@ -110,10 +110,10 @@ export default defineExtension({
 
 it("lets a project's profile replace the user's, or extend it", async () => {
   write(join(home, 'profiles', 'default'), {
-    'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ prompt: 'Be kind.' })\n`,
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ prompt: 'Be kind.' })\n`,
   })
-  write(join(project, '.mu', 'profiles', 'default'), {
-    'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ extends: 'user:default', prompt: 'Know the Acme codebase.' })\n`,
+  write(join(project, '.superego', 'profiles', 'default'), {
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extends: 'user:default', prompt: 'Know the Acme codebase.' })\n`,
   })
   const { peer, close } = await open()
   expect((await peer.call<ProfileInfo[]>('profile.list', { cwd: project })).map((p) => `${p.scope}:${p.name}`)).toEqual(['project:default'])
@@ -125,17 +125,17 @@ it("lets a project's profile replace the user's, or extend it", async () => {
   await close()
 })
 
-it("keeps the test shim for 'mu' in step with the SDK", async () => {
+it("keeps the test shim for 'superego' in step with the SDK", async () => {
   const { SDK_EXPORTS } = await import('../src/profiles.ts')
   const shim = await import('../src/sdk-shim.ts')
   expect(Object.keys(shim).filter((key) => key !== 'default').sort()).toEqual([...SDK_EXPORTS].sort())
 })
 
 it("serves a profile's UI modules, types stripped, only from inside it and only once allowed", async () => {
-  const profile = join(project, '.mu', 'profiles', 'default')
+  const profile = join(project, '.superego', 'profiles', 'default')
   write(profile, {
-    'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ ui: ['./ui/badge.ts'] })\n`,
-    'ui/badge.ts': `import { defineUiExtension, h } from 'mu/ui'\nimport { label } from './label.ts'\nconst n: number = 1\nexport default defineUiExtension({ name: 'badge', setup(mu) { mu.slot('thread.header', () => h('span', null, label)) } })\n`,
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ ui: ['./ui/badge.ts'] })\n`,
+    'ui/badge.ts': `import { defineUiExtension, h } from 'superego/ui'\nimport { label } from './label.ts'\nconst n: number = 1\nexport default defineUiExtension({ name: 'badge', setup(superego) { superego.slot('thread.header', () => h('span', null, label)) } })\n`,
     'ui/label.ts': `export const label: string = 'Acme'\n`,
   })
   const { peer, close } = await open()
@@ -154,8 +154,8 @@ it("serves a profile's UI modules, types stripped, only from inside it and only 
 
 it("compiles a profile's UI written in TSX to calls into the window's React", async () => {
   write(join(home, 'profiles', 'default'), {
-    'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ ui: ['./ui/badge.tsx'] })\n`,
-    'ui/badge.tsx': `import { defineUiExtension } from 'mu/ui'\nconst label: string = 'Acme'\nexport default defineUiExtension({ name: 'badge', setup(mu) { mu.slot('thread.header', () => <span className="badge">{label}</span>) } })\n`,
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ ui: ['./ui/badge.tsx'] })\n`,
+    'ui/badge.tsx': `import { defineUiExtension } from 'superego/ui'\nconst label: string = 'Acme'\nexport default defineUiExtension({ name: 'badge', setup(superego) { superego.slot('thread.header', () => <span className="badge">{label}</span>) } })\n`,
   })
   const { peer, close } = await open()
   const ref = { scope: 'user', name: 'default', dir: join(home, 'profiles', 'default') }
@@ -169,21 +169,21 @@ it("compiles a profile's UI written in TSX to calls into the window's React", as
 
 it("sets up a profile's daemon extensions (actions, values, tools of their own) and tears them down when it changes", async () => {
   const profile = join(home, 'profiles', 'default')
-  const extension = (answer: string) => `import { defineDaemonExtension, defineAction, defineExtension, defineTool, obj, str } from 'mu'
+  const extension = (answer: string) => `import { defineDaemonExtension, defineAction, defineExtension, defineTool, obj, str } from 'superego'
 export default defineDaemonExtension({
   name: 'vault',
-  setup(mu) {
-    const count = mu.value('vault.count', 0)
-    mu.action(defineAction({ id: 'vault.answer', title: 'Answer', params: obj({ id: str() }), async run({ id }) {
-      const thread = (await mu.threads.list()).find((s) => s.id === id)
+  setup(superego) {
+    const count = superego.value('vault.count', 0)
+    superego.action(defineAction({ id: 'vault.answer', title: 'Answer', params: obj({ id: str() }), async run({ id }) {
+      const thread = (await superego.threads.list()).find((s) => s.id === id)
       count.update((n) => n + 1)
       return { answer: '${answer}', cwd: thread.cwd }
     } }))
-    mu.agent(defineExtension({ name: 'notes', tools: [defineTool({ name: 'note', description: 'A note.', parameters: obj({}), async execute() { return { output: [{ type: 'text', text: 'hi' }] } } })] }))
+    superego.agent(defineExtension({ name: 'notes', tools: [defineTool({ name: 'note', description: 'A note.', parameters: obj({}), async execute() { return { output: [{ type: 'text', text: 'hi' }] } } })] }))
   },
 })
 `
-  write(profile, { 'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': extension('one') })
+  write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': extension('one') })
   const { peer, close } = await open()
   const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
   await done(peer, thread.id)
@@ -200,16 +200,16 @@ export default defineDaemonExtension({
 it("undoes a profile's actions when a later part of it fails, so it loads once fixed", async () => {
   const profile = join(home, 'profiles', 'default')
   // Its action registers, then its agent extension fails to install (a section key pi refuses).
-  const extension = (key: string) => `import { defineDaemonExtension, defineAction, defineExtension, obj, section } from 'mu'
+  const extension = (key: string) => `import { defineDaemonExtension, defineAction, defineExtension, obj, section } from 'superego'
 export default defineDaemonExtension({
   name: 'vault',
-  setup(mu) {
-    mu.action(defineAction({ id: 'vault.ping', title: 'Ping', params: obj({}), async run() { return 'pong' } }))
-    mu.agent(defineExtension({ name: 'notes', sections: [section('${key}', () => 'notes')] }))
+  setup(superego) {
+    superego.action(defineAction({ id: 'vault.ping', title: 'Ping', params: obj({}), async run() { return 'pong' } }))
+    superego.agent(defineExtension({ name: 'notes', sections: [section('${key}', () => 'notes')] }))
   },
 })
 `
-  write(profile, { 'profile.ts': `import { defineProfile } from 'mu'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': extension('Not A Key') })
+  write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': extension('Not A Key') })
   const { peer, close } = await open()
   await expect(peer.call('thread.create', { cwd: project })).rejects.toThrow(/Section key/)
   write(profile, { 'vault.ts': extension('notes') })

@@ -1,8 +1,8 @@
 {
-  "name": "@mu/client",
+  "name": "@superego/client",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts", "./shared": "./src/shared.ts" },
-  "dependencies": { "@mu/protocol": "workspace:*", "@mu/daemon": "workspace:*" }
+  "dependencies": { "@superego/protocol": "workspace:*", "@superego/daemon": "workspace:*" }
 }

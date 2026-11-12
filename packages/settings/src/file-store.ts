@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import type { Json } from '@mu/protocol'
+import type { Json } from '@superego/protocol'
 import type { SettingsStore } from './registry.ts'
 
 /** Settings in a JSON file, read once at start and replaced atomically on every save. */

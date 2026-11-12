@@ -1,14 +1,14 @@
 {
-  "name": "mu",
+  "name": "superego",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.14.0",
   "scripts": {
     "typecheck": "tsc -p packages/protocol && tsc -p packages/settings && tsc -p packages/daemon && tsc -p packages/client && tsc -p packages/cli && tsc -p packages/ui && tsc -p packages/app && tsc -p extensions/threads && tsc -p extensions/ask-user && tsc -p extensions/files && tsc -p app",
     "test": "vitest run",
-    "dev": "pnpm --filter mu dev",
-    "build": "pnpm --filter mu build",
-    "link:cli": "ln -sf \"$PWD/app/bin/mu.ts\" \"$HOME/.local/bin/mu\" && echo \"Linked $HOME/.local/bin/mu\""
+    "dev": "pnpm --filter superego dev",
+    "build": "pnpm --filter superego build",
+    "link:cli": "ln -sf \"$PWD/app/bin/superego.ts\" \"$HOME/.local/bin/superego\" && echo \"Linked $HOME/.local/bin/superego\""
   },
   "devDependencies": {
     "@types/node": "^24",

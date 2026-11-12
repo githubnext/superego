@@ -1,4 +1,4 @@
-import { RpcError, type Hello } from '@mu/protocol'
+import { RpcError, type Hello } from '@superego/protocol'
 
 /**
  * Whether the daemon that answered a machine's route may be that machine. `expected` is the identity remembered from

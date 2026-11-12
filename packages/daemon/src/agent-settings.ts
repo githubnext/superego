@@ -1,4 +1,4 @@
-// Everything about which model the agents use and how mu is signed in to its providers, as settings: the Model and
+// Everything about which model the agents use and how Superego is signed in to its providers, as settings: the Model and
 // Providers sections, the credential store, and sign-in flows. Nothing else in the daemon knows about auth.
 import { randomUUID } from 'node:crypto'
 import { readFile, rename, writeFile } from 'node:fs/promises'
@@ -9,14 +9,14 @@ import { createModels, getSupportedThinkingLevels, clampThinkingLevel, type Mode
 import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic'
 import { openaiProvider } from '@earendil-works/pi-ai/providers/openai'
 import type { ModelRef } from '@earendil-works/pi-durable'
-import { RpcError, type AppConfig, type AuthEvent, type ModelCatalog, type AuthPrompt, type ProviderAuthInfo, type SettingOption } from '@mu/protocol'
-import type { SettingsRegistry } from '@mu/settings'
+import { RpcError, type AppConfig, type AuthEvent, type ModelCatalog, type AuthPrompt, type ProviderAuthInfo, type SettingOption } from '@superego/protocol'
+import type { SettingsRegistry } from '@superego/settings'
 import { appEnv } from './paths.ts'
 import { replayProvider, withRecording } from './replay.ts'
 
 /** The model each provider starts on when it is the first one signed in. */
 const PREFERRED: Record<string, string> = { anthropic: 'claude-opus-5-5', openai: 'gpt-6.1-sol' }
-/** Providers whose OAuth sign-in mu offers (as tremolo does); the rest use API keys or the environment. */
+/** Providers whose OAuth sign-in Superego offers (as tremolo does); the rest use API keys or the environment. */
 const OAUTH = new Set(['openai'])
 /** Providers with a fast mode: OpenAI's priority service tier. */
 const FAST = new Set(['openai'])

@@ -1,4 +1,4 @@
-// An app built on mu: its identity. Everything that names the app on disk, on the command line or on screen comes
+// An app built on Superego: its identity. Everything that names the app on disk, on the command line or on screen comes
 // from here, so two apps (and two copies of one, in tests) never share a data dir, socket or lock.
 
 export type AppConfig = {
@@ -13,7 +13,7 @@ export type AppConfig = {
   glyph?: string
   /** Where the app lives; sent to model providers as attribution. */
   url?: string
-  /** macOS bundle identifier, reverse-DNS (`com.githubnext.mu`). Running from source it gets `.dev` added. */
+  /** macOS bundle identifier, reverse-DNS (`com.githubnext.superego`). Running from source it gets `.dev` added. */
   bundleId?: string
 }
 
@@ -22,7 +22,7 @@ export function defineApp(config: AppConfig): AppConfig {
   return config
 }
 
-/** The environment variable for `key` in this app: `MU_HOME` for mu, `MY_AGENT_HOME` for my-agent. */
+/** The environment variable for `key` in this app: `SUPEREGO_HOME` for Superego, `MY_AGENT_HOME` for my-agent. */
 export const envName = (app: AppConfig, key: string) => `${app.id.toUpperCase().replace(/-/g, '_')}_${key}`
 
 /** What `ssh <host>` runs to reach this app's daemon there, unless a machine says otherwise. */

@@ -2,7 +2,7 @@
 // the restart notice, Settings, and the app-wide reactions (fonts, ⌘, , threads shown from the command line or a
 // notification, marking finished threads seen).
 import { useEffect, useRef, useState } from 'react'
-import { Button, CommandIcon, GearSixIcon, IconButton, ListIcon, MagnifyingGlassIcon, NotePencilIcon, PlusIcon, Select, SidebarSimpleIcon } from '@mu/ui'
+import { Button, CommandIcon, GearSixIcon, IconButton, ListIcon, MagnifyingGlassIcon, NotePencilIcon, PlusIcon, Select, SidebarSimpleIcon } from '@superego/ui'
 import { UnreadButton } from './Unread.tsx'
 import { machine as client, useAppSetting, useSettings } from './client.ts'
 import { Slot, useRegistry } from './extension.tsx'
@@ -108,7 +108,7 @@ export function Shell() {
   // itself), a rail down the left (what's unread, Settings), then cards: the sidebar, the thread, its panes.
   // Narrow: one column under a bar of its own, the sidebar a drawer.
   return (
-    <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.mu.web ? 'is-web' : ''}`}>
+    <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.superego.web ? 'is-web' : ''}`}>
       {narrow && hasSidebar && drawer && <div className="app__scrim" onClick={() => setDrawer(false)} />}
       {!narrow && (
         <nav className="app__rail" aria-label="App">
@@ -120,7 +120,7 @@ export function Shell() {
         <div className="app__side">
           {!narrow && <div className="app__drag app__side-top">{tools}</div>}
           {/* In the drawer, picking a thread (even the open one) closes it. */}
-          <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.mu-list-item')) setDrawer(false) } : undefined}>
+          <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) setDrawer(false) } : undefined}>
             {narrow && <div className="app__drag" />}
             <Slot name="sidebar" props={{}} />
             <div className="app__footer"><ServiceNotice />{narrow && <>{settingsButton}<UnreadButton /></>}</div>
@@ -210,20 +210,20 @@ function useAppEffects() {
   useEffect(() => {
     const style = document.documentElement.style
     const set = (variable: string, family: unknown) => typeof family === 'string' ? style.setProperty(variable, `"${family.replace(/"/g, '')}", var(${variable}-fallback)`) : style.removeProperty(variable)
-    set('--mu-font', interfaceFont)
-    set('--mu-mono', monoFont)
-    // The accent everything takes its colour from (see --mu-accent in @mu/ui's styles); one the browser can't read
+    set('--superego-font', interfaceFont)
+    set('--superego-mono', monoFont)
+    // The accent everything takes its colour from (see --superego-accent in @superego/ui's styles); one the browser can't read
     // leaves the default.
-    if (typeof accent === 'string' && CSS.supports('color', accent)) style.setProperty('--mu-accent-base', accent)
-    else style.removeProperty('--mu-accent-base')
+    if (typeof accent === 'string' && CSS.supports('color', accent)) style.setProperty('--superego-accent-base', accent)
+    else style.removeProperty('--superego-accent-base')
   }, [interfaceFont, monoFont, accent])
   // The shortcuts bound now, for the main process: a page in a pane (Preview, an artifact) that has the keyboard gets
   // key presses before this window could, so the main process takes these ones first and hands them here.
   const actions = useActions(selection?.machine)
   const boundKeys = [...new Set(actions.filter(runsBare).map((action) => bound(action, keymapRef.current)).filter((k): k is string => Boolean(k)))].sort().join(' ')
   useEffect(() => {
-    if (window.mu.web) return
-    void window.mu.call('app', 'app.keys', { keys: boundKeys ? boundKeys.split(' ') : [] }).catch(() => {})
+    if (window.superego.web) return
+    void window.superego.call('app', 'app.keys', { keys: boundKeys ? boundKeys.split(' ') : [] }).catch(() => {})
   }, [boundKeys])
   useEffect(() => {
     document.title = registry.app.name
@@ -247,14 +247,14 @@ function useAppEffects() {
       if (open) select(open)
       if (settings) openSettings()
     }
-    const off = window.mu.onEvent((event) => {
+    const off = window.superego.onEvent((event) => {
       if (event.machine !== 'app') return
       if (event.method === 'app.select') show({ open: event.params as Selection })
       if (event.method === 'app.settings') show({ settings: true })
       // Pressed while a page in a pane had the keyboard: the main process caught it before the page (see app.keys).
       if (event.method === 'app.key') runKeys((event.params as { keys: string }).keys)
     })
-    void (window.mu.call('app', 'app.ready', {}) as Promise<{ open?: Selection; settings?: boolean }>).then(show)
+    void (window.superego.call('app', 'app.ready', {}) as Promise<{ open?: Selection; settings?: boolean }>).then(show)
     return () => { window.removeEventListener('keydown', onKey); off() }
   }, [])
 }

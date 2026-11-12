@@ -1,188 +1,188 @@
-/* mu's design tokens and base components. Extensions style against the same variables. */
+/* Superego's design tokens and base components. Extensions style against the same variables. */
 :root {
   color-scheme: light dark;
-  --mu-font-fallback: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
-  --mu-mono-fallback: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
-  --mu-font: var(--mu-font-fallback);
-  --mu-mono: var(--mu-mono-fallback);
+  --superego-font-fallback: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+  --superego-mono-fallback: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --superego-font: var(--superego-font-fallback);
+  --superego-mono: var(--superego-mono-fallback);
   /* macOS's own: system grays, real controls; the accent is the app's (Settings → Appearance → Accent colour). */
-  --mu-bg: light-dark(#ffffff, #1e1e1e);          /* content */
-  --mu-sidebar-bg: light-dark(#e9e9ec, #2c2c2e);  /* sidebars and side panes */
-  --mu-chrome: light-dark(#f3f3f5, #161618);      /* the window around its cards: title bar, rail, the room between */
-  --mu-card-edge: 0 0 0 .5px var(--mu-border), 0 1px 3px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .3));
-  --mu-surface: light-dark(#f3f3f6, #2e2e31);     /* wells: code, tool output */
-  --mu-bubble: light-dark(color-mix(in oklab, var(--mu-accent) 11%, #fff), color-mix(in oklab, var(--mu-accent) 16%, #2a2a2c));      /* your messages */
-  --mu-code-chip: light-dark(rgb(0 0 0 / .055), rgb(255 255 255 / .08));
-  --mu-raised: light-dark(#ffffff, #2c2c2e);      /* what floats: menus, popovers, the composer */
-  --mu-border: light-dark(#c8c8cd, #48484a);      /* separators and frames */
-  --mu-text: light-dark(#1d1d1f, #f5f5f7);
-  --mu-muted: light-dark(#636366, #aeaeb2);
-  --mu-faint: light-dark(#7c7c80, #8e8e93);
+  --superego-bg: light-dark(#ffffff, #1e1e1e);          /* content */
+  --superego-sidebar-bg: light-dark(#e9e9ec, #2c2c2e);  /* sidebars and side panes */
+  --superego-chrome: light-dark(#f3f3f5, #161618);      /* the window around its cards: title bar, rail, the room between */
+  --superego-card-edge: 0 0 0 .5px var(--superego-border), 0 1px 3px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .3));
+  --superego-surface: light-dark(#f3f3f6, #2e2e31);     /* wells: code, tool output */
+  --superego-bubble: light-dark(color-mix(in oklab, var(--superego-accent) 11%, #fff), color-mix(in oklab, var(--superego-accent) 16%, #2a2a2c));      /* your messages */
+  --superego-code-chip: light-dark(rgb(0 0 0 / .055), rgb(255 255 255 / .08));
+  --superego-raised: light-dark(#ffffff, #2c2c2e);      /* what floats: menus, popovers, the composer */
+  --superego-border: light-dark(#c8c8cd, #48484a);      /* separators and frames */
+  --superego-text: light-dark(#1d1d1f, #f5f5f7);
+  --superego-muted: light-dark(#636366, #aeaeb2);
+  --superego-faint: light-dark(#7c7c80, #8e8e93);
   /* The accent: as chosen, or this blue. In the dark, lifted a little toward white so it carries on dark grounds. */
-  --mu-accent-base: color(display-p3 0.155 0.319 0.654);
-  --mu-accent: light-dark(var(--mu-accent-base), color-mix(in oklab, var(--mu-accent-base) 78%, white));
+  --superego-accent-base: color(display-p3 0.155 0.319 0.654);
+  --superego-accent: light-dark(var(--superego-accent-base), color-mix(in oklab, var(--superego-accent-base) 78%, white));
   /* Focus rings: around what has the keyboard, and the region holding it. */
-  --mu-ring: var(--mu-accent);
-  --mu-accent-text: #ffffff;
-  --mu-selected: light-dark(rgb(0 0 0 / .1), rgb(255 255 255 / .12));
-  --mu-hover: light-dark(rgb(0 0 0 / .05), rgb(255 255 255 / .06));
+  --superego-ring: var(--superego-accent);
+  --superego-accent-text: #ffffff;
+  --superego-selected: light-dark(rgb(0 0 0 / .1), rgb(255 255 255 / .12));
+  --superego-hover: light-dark(rgb(0 0 0 / .05), rgb(255 255 255 / .06));
   /* Controls: push buttons, pop-ups, fields. */
-  --mu-control: light-dark(#ffffff, #5a5a5e);
-  --mu-control-active: light-dark(#e3e3e8, #6e6e73);
-  --mu-control-edge: 0 0 0 .5px light-dark(rgb(0 0 0 / .22), rgb(0 0 0 / .5)), 0 1px 1.5px light-dark(rgb(0 0 0 / .14), rgb(0 0 0 / .35));
-  --mu-field-bg: light-dark(#ffffff, #2a2a2c);
-  --mu-field-edge: light-dark(#bdbdc2, #545458);
-  --mu-focus: 0 0 0 3px color-mix(in srgb, var(--mu-accent) 45%, transparent);
-  --mu-status-working: var(--mu-accent);
-  --mu-status-done: var(--mu-text);
-  --mu-status-blocked: light-dark(#e07800, #ff9f0a);
-  --mu-status-error: light-dark(#d70015, #ff453a);
-  --mu-status-idle: var(--mu-muted);
-  --mu-radius: 6px;
-  --mu-radius-lg: 16px;
-  --mu-space: 8px;
+  --superego-control: light-dark(#ffffff, #5a5a5e);
+  --superego-control-active: light-dark(#e3e3e8, #6e6e73);
+  --superego-control-edge: 0 0 0 .5px light-dark(rgb(0 0 0 / .22), rgb(0 0 0 / .5)), 0 1px 1.5px light-dark(rgb(0 0 0 / .14), rgb(0 0 0 / .35));
+  --superego-field-bg: light-dark(#ffffff, #2a2a2c);
+  --superego-field-edge: light-dark(#bdbdc2, #545458);
+  --superego-focus: 0 0 0 3px color-mix(in srgb, var(--superego-accent) 45%, transparent);
+  --superego-status-working: var(--superego-accent);
+  --superego-status-done: var(--superego-text);
+  --superego-status-blocked: light-dark(#e07800, #ff9f0a);
+  --superego-status-error: light-dark(#d70015, #ff453a);
+  --superego-status-idle: var(--superego-muted);
+  --superego-radius: 6px;
+  --superego-radius-lg: 16px;
+  --superego-space: 8px;
 
   /* Type: UI text at 13, reading text at 15.5, one title size; mono for meta. */
-  --mu-text-xs: 11px;
-  --mu-text-sm: 12px;
-  --mu-text-ui: 13px;
-  --mu-text-body: 14px;
-  --mu-text-mono: 12.5px;
-  --mu-text-title: 26px;
-  --mu-leading-ui: 1.45;
-  --mu-leading-body: 1.55;
+  --superego-text-xs: 11px;
+  --superego-text-sm: 12px;
+  --superego-text-ui: 13px;
+  --superego-text-body: 14px;
+  --superego-text-mono: 12.5px;
+  --superego-text-title: 26px;
+  --superego-leading-ui: 1.45;
+  --superego-leading-body: 1.55;
   /* Space on a 4px grid. */
-  --mu-space-1: 4px;
-  --mu-space-2: 8px;
-  --mu-space-3: 12px;
-  --mu-space-4: 16px;
-  --mu-space-5: 24px;
-  --mu-space-6: 32px;
-  --mu-space-7: 52px;
+  --superego-space-1: 4px;
+  --superego-space-2: 8px;
+  --superego-space-3: 12px;
+  --superego-space-4: 16px;
+  --superego-space-5: 24px;
+  --superego-space-6: 32px;
+  --superego-space-7: 52px;
   /* The reading column, the sidebar, and what floats over content. */
-  --mu-column: 580px;
-  --mu-sidebar: 248px;
-  --mu-shadow-float: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(0 0 0 / .6)), 0 12px 36px -8px rgb(0 0 0 / .28), 0 2px 6px rgb(0 0 0 / .08);
+  --superego-column: 580px;
+  --superego-sidebar: 248px;
+  --superego-shadow-float: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(0 0 0 / .6)), 0 12px 36px -8px rgb(0 0 0 / .28), 0 2px 6px rgb(0 0 0 / .08);
 }
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
-body { font: var(--mu-text-ui)/var(--mu-leading-ui) var(--mu-font); background: var(--mu-bg); color: var(--mu-text); -webkit-font-smoothing: antialiased; }
+body { font: var(--superego-text-ui)/var(--superego-leading-ui) var(--superego-font); background: var(--superego-bg); color: var(--superego-text); -webkit-font-smoothing: antialiased; }
 
-.mu-button {
-  font: inherit; font-weight: 500; color: var(--mu-text); background: var(--mu-control); border: 0; box-shadow: var(--mu-control-edge);
-  border-radius: var(--mu-radius); padding: 3px 11px; min-height: 24px; cursor: default; white-space: nowrap;
+.superego-button {
+  font: inherit; font-weight: 500; color: var(--superego-text); background: var(--superego-control); border: 0; box-shadow: var(--superego-control-edge);
+  border-radius: var(--superego-radius); padding: 3px 11px; min-height: 24px; cursor: default; white-space: nowrap;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
-.mu-button:active:not(:disabled) { background: var(--mu-control-active); }
-.mu-button:disabled { opacity: .45; }
+.superego-button:active:not(:disabled) { background: var(--superego-control-active); }
+.superego-button:disabled { opacity: .45; }
 /* The one action a view is for: few of these. */
-.mu-button--primary { background: var(--mu-accent); color: var(--mu-accent-text); box-shadow: 0 0 0 .5px rgb(0 0 0 / .15), 0 1px 1.5px rgb(0 0 0 / .18), inset 0 .5px 0 rgb(255 255 255 / .25); }
-.mu-button--primary:active:not(:disabled) { background: color-mix(in srgb, var(--mu-accent) 85%, #000); }
+.superego-button--primary { background: var(--superego-accent); color: var(--superego-accent-text); box-shadow: 0 0 0 .5px rgb(0 0 0 / .15), 0 1px 1.5px rgb(0 0 0 / .18), inset 0 .5px 0 rgb(255 255 255 / .25); }
+.superego-button--primary:active:not(:disabled) { background: color-mix(in srgb, var(--superego-accent) 85%, #000); }
 /* No background until hovered; for the rare control that sits inside text. */
-.mu-button--ghost { background: transparent; box-shadow: none; font-weight: 400; }
-.mu-button--ghost:hover { background: var(--mu-hover); }
-.mu-icon-button { padding: 0; width: 24px; min-height: 24px; height: 24px; font-size: 14px; line-height: 1; }
+.superego-button--ghost { background: transparent; box-shadow: none; font-weight: 400; }
+.superego-button--ghost:hover { background: var(--superego-hover); }
+.superego-icon-button { padding: 0; width: 24px; min-height: 24px; height: 24px; font-size: 14px; line-height: 1; }
 
-.mu-textarea {
+.superego-textarea {
   font: inherit; color: inherit; width: 100%; resize: none; field-sizing: content; min-height: 1.5em;
   background: transparent; border: 0; outline: none;
 }
 
-.mu-status { display: inline-block; width: 1em; text-align: center; font-family: var(--mu-mono); }
-.mu-status--idle { color: var(--mu-status-idle); }
-.mu-status--working { color: var(--mu-status-working); animation: mu-pulse 1.2s ease-in-out infinite; }
-.mu-status--done { color: var(--mu-status-done); }
-.mu-status--blocked { color: var(--mu-status-blocked); }
-.mu-status--error { color: var(--mu-status-error); }
-@keyframes mu-pulse { 50% { opacity: .35; } }
+.superego-status { display: inline-block; width: 1em; text-align: center; font-family: var(--superego-mono); }
+.superego-status--idle { color: var(--superego-status-idle); }
+.superego-status--working { color: var(--superego-status-working); animation: superego-pulse 1.2s ease-in-out infinite; }
+.superego-status--done { color: var(--superego-status-done); }
+.superego-status--blocked { color: var(--superego-status-blocked); }
+.superego-status--error { color: var(--superego-status-error); }
+@keyframes superego-pulse { 50% { opacity: .35; } }
 
-.mu-list { list-style: none; margin: 0; padding: 0; }
-.mu-list-item { display: flex; align-items: center; gap: var(--mu-space-2); height: 32px; padding: 0 10px; border-radius: var(--mu-radius); }
-.mu-list-item:hover { background: var(--mu-hover); }
-.mu-list-item.is-selected { background: var(--mu-selected); font-weight: 500; }
-.mu-list-item__body { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mu-list-item__trailing { color: var(--mu-muted); font-size: var(--mu-text-xs); font-variant-numeric: tabular-nums; font-weight: 400; }
+.superego-list { list-style: none; margin: 0; padding: 0; }
+.superego-list-item { display: flex; align-items: center; gap: var(--superego-space-2); height: 32px; padding: 0 10px; border-radius: var(--superego-radius); }
+.superego-list-item:hover { background: var(--superego-hover); }
+.superego-list-item.is-selected { background: var(--superego-selected); font-weight: 500; }
+.superego-list-item__body { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.superego-list-item__trailing { color: var(--superego-muted); font-size: var(--superego-text-xs); font-variant-numeric: tabular-nums; font-weight: 400; }
 
-.mu-panel { display: flex; flex-direction: column; min-height: 0; }
-.mu-panel__header { display: flex; align-items: center; justify-content: space-between; padding: var(--mu-space-3) 10px 6px; color: var(--mu-muted); font-size: var(--mu-text-xs); font-weight: 600; }
-.mu-panel__body { flex: 1; min-height: 0; overflow: auto; }
+.superego-panel { display: flex; flex-direction: column; min-height: 0; }
+.superego-panel__header { display: flex; align-items: center; justify-content: space-between; padding: var(--superego-space-3) 10px 6px; color: var(--superego-muted); font-size: var(--superego-text-xs); font-weight: 600; }
+.superego-panel__body { flex: 1; min-height: 0; overflow: auto; }
 
-.mu-field {
-  font: inherit; color: inherit; background: var(--mu-field-bg); border: 1px solid var(--mu-field-edge);
+.superego-field {
+  font: inherit; color: inherit; background: var(--superego-field-bg); border: 1px solid var(--superego-field-edge);
   border-radius: 5px; padding: 3px 7px; min-width: 0; min-height: 24px; box-shadow: inset 0 1px 1px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .2));
 }
-.mu-field::placeholder { color: var(--mu-muted); }
-.mu-field:focus { outline: 2px solid var(--mu-ring); outline-offset: 1px; }
+.superego-field::placeholder { color: var(--superego-muted); }
+.superego-field:focus { outline: 2px solid var(--superego-ring); outline-offset: 1px; }
 /* A pop-up button, as macOS draws it: a push button with ⌃⌄ on the right. */
-.mu-select {
-  appearance: none; font-weight: 500; background-color: var(--mu-control); border: 0; box-shadow: var(--mu-control-edge); padding: 3px 26px 3px 10px;
+.superego-select {
+  appearance: none; font-weight: 500; background-color: var(--superego-control); border: 0; box-shadow: var(--superego-control-edge); padding: 3px 26px 3px 10px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='12' viewBox='0 0 8 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 4.5 4 1.5 7 4.5M1 7.5 4 10.5 7 7.5'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 9px center;
 }
 
-.mu-switch { width: 34px; height: 20px; border-radius: 10px; border: 0; padding: 2px; background: light-dark(#d9d9de, #48484a); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .12); display: inline-flex; transition: background .15s; }
-.mu-switch.is-on { background: var(--mu-accent); }
-.mu-switch__thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .3), 0 0 0 .5px rgb(0 0 0 / .08); transition: transform .15s; }
-.mu-switch.is-on .mu-switch__thumb { transform: translateX(14px); }
-.mu-switch:disabled { opacity: .5; }
+.superego-switch { width: 34px; height: 20px; border-radius: 10px; border: 0; padding: 2px; background: light-dark(#d9d9de, #48484a); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .12); display: inline-flex; transition: background .15s; }
+.superego-switch.is-on { background: var(--superego-accent); }
+.superego-switch__thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .3), 0 0 0 .5px rgb(0 0 0 / .08); transition: transform .15s; }
+.superego-switch.is-on .superego-switch__thumb { transform: translateX(14px); }
+.superego-switch:disabled { opacity: .5; }
 
-.mu-font-picker { position: relative; }
-.mu-font-picker__button { min-width: 220px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
-.mu-font-picker__popover { width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 8px; }
-.mu-font-picker__all { font-size: 12px; color: var(--mu-muted); display: flex; gap: 6px; align-items: center; }
-.mu-font-picker__list { max-height: 280px; overflow: auto; display: flex; flex-direction: column; }
-.mu-font-picker__list button { font-size: 14px; color: inherit; text-align: left; background: none; border: 0; padding: 4px 8px; border-radius: 4px; }
-.mu-font-picker__list button:hover { background: var(--mu-accent); color: var(--mu-accent-text); }
-.mu-font-picker__list button[aria-selected="true"]:not(:hover) { background: var(--mu-selected); }
-.mu-font-picker__note { color: var(--mu-muted); font-size: 12px; padding: 4px 8px; }
+.superego-font-picker { position: relative; }
+.superego-font-picker__button { min-width: 220px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+.superego-font-picker__popover { width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 8px; }
+.superego-font-picker__all { font-size: 12px; color: var(--superego-muted); display: flex; gap: 6px; align-items: center; }
+.superego-font-picker__list { max-height: 280px; overflow: auto; display: flex; flex-direction: column; }
+.superego-font-picker__list button { font-size: 14px; color: inherit; text-align: left; background: none; border: 0; padding: 4px 8px; border-radius: 4px; }
+.superego-font-picker__list button:hover { background: var(--superego-accent); color: var(--superego-accent-text); }
+.superego-font-picker__list button[aria-selected="true"]:not(:hover) { background: var(--superego-selected); }
+.superego-font-picker__note { color: var(--superego-muted); font-size: 12px; padding: 4px 8px; }
 
 /* Layers: dialogs, then what opens from anything (menus, popovers, tooltips) above them. */
-.mu-layer { z-index: 100; outline: none; }
-.mu-dialog__backdrop { position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / .28); transition: opacity .14s; }
-.mu-dialog__backdrop[data-starting-style], .mu-dialog__backdrop[data-ending-style] { opacity: 0; }
-.mu-dialog {
+.superego-layer { z-index: 100; outline: none; }
+.superego-dialog__backdrop { position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / .28); transition: opacity .14s; }
+.superego-dialog__backdrop[data-starting-style], .superego-dialog__backdrop[data-ending-style] { opacity: 0; }
+.superego-dialog {
   position: fixed; z-index: 51; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  border: 0; border-radius: 12px; color: var(--mu-text); background: var(--mu-bg);
+  border: 0; border-radius: 12px; color: var(--superego-text); background: var(--superego-bg);
   box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .25), rgb(255 255 255 / .15)), 0 24px 64px rgb(0 0 0 / .32); max-width: 92vw; max-height: 86vh; overflow: hidden; outline: none;
   transition: opacity .14s, transform .14s;
 }
-.mu-dialog[data-starting-style], .mu-dialog[data-ending-style] { opacity: 0; transform: translate(-50%, calc(-50% + 6px)) scale(.985); }
-.mu-dialog--small { width: 420px; }
-.mu-dialog--medium { width: 640px; }
-.mu-dialog--large { width: 880px; height: 640px; }
-.mu-dialog__frame { display: flex; flex-direction: column; height: 100%; max-height: 86vh; }
-.mu-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 10px 10px 16px; border-bottom: 1px solid var(--mu-border); background: var(--mu-sidebar-bg); }
-.mu-dialog__title { font-size: 13px; font-weight: 600; margin: 0; }
-.mu-dialog__actions { display: flex; gap: 4px; align-items: center; }
-.mu-dialog__body { flex: 1; min-height: 0; overflow: auto; }
+.superego-dialog[data-starting-style], .superego-dialog[data-ending-style] { opacity: 0; transform: translate(-50%, calc(-50% + 6px)) scale(.985); }
+.superego-dialog--small { width: 420px; }
+.superego-dialog--medium { width: 640px; }
+.superego-dialog--large { width: 880px; height: 640px; }
+.superego-dialog__frame { display: flex; flex-direction: column; height: 100%; max-height: 86vh; }
+.superego-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 10px 10px 16px; border-bottom: 1px solid var(--superego-border); background: var(--superego-sidebar-bg); }
+.superego-dialog__title { font-size: 13px; font-weight: 600; margin: 0; }
+.superego-dialog__actions { display: flex; gap: 4px; align-items: center; }
+.superego-dialog__body { flex: 1; min-height: 0; overflow: auto; }
 
-.mu-menu, .mu-popover {
-  min-width: 200px; background: var(--mu-raised); border: 0; border-radius: 10px;
-  box-shadow: var(--mu-shadow-float); padding: 6px; outline: none; font-size: var(--mu-text-ui);
+.superego-menu, .superego-popover {
+  min-width: 200px; background: var(--superego-raised); border: 0; border-radius: 10px;
+  box-shadow: var(--superego-shadow-float); padding: 6px; outline: none; font-size: var(--superego-text-ui);
   transform-origin: var(--transform-origin); transition: opacity .1s, transform .1s;
 }
-.mu-menu[data-starting-style], .mu-menu[data-ending-style], .mu-popover[data-starting-style], .mu-popover[data-ending-style] { opacity: 0; transform: scale(.98); }
-.mu-menu__item { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 5px 8px; border-radius: var(--mu-radius); cursor: default; outline: none; user-select: none; }
-.mu-menu__item[data-highlighted] { background: var(--mu-accent); color: var(--mu-accent-text); }
-.mu-menu__item[data-highlighted] .mu-menu__hint, .mu-menu__item[data-highlighted] .mu-menu__check { color: inherit; }
-.mu-menu__item[data-disabled] { opacity: .5; }
-.mu-menu__hint { display: inline-flex; gap: 6px; align-items: center; color: var(--mu-muted); font: var(--mu-text-xs) var(--mu-mono); }
-.mu-menu__check { color: var(--mu-text); }
-.mu-menu__label { margin: 6px 8px 4px; font-size: var(--mu-text-xs); color: var(--mu-muted); }
-.mu-menu__separator { border-top: 1px solid var(--mu-border); margin: 5px 8px; }
-.mu-tooltip { background: var(--mu-text); color: var(--mu-bg); font-size: var(--mu-text-sm); border-radius: 6px; padding: 5px 8px; white-space: nowrap; transition: opacity .1s; }
-.mu-tooltip[data-starting-style], .mu-tooltip[data-ending-style] { opacity: 0; }
+.superego-menu[data-starting-style], .superego-menu[data-ending-style], .superego-popover[data-starting-style], .superego-popover[data-ending-style] { opacity: 0; transform: scale(.98); }
+.superego-menu__item { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 5px 8px; border-radius: var(--superego-radius); cursor: default; outline: none; user-select: none; }
+.superego-menu__item[data-highlighted] { background: var(--superego-accent); color: var(--superego-accent-text); }
+.superego-menu__item[data-highlighted] .superego-menu__hint, .superego-menu__item[data-highlighted] .superego-menu__check { color: inherit; }
+.superego-menu__item[data-disabled] { opacity: .5; }
+.superego-menu__hint { display: inline-flex; gap: 6px; align-items: center; color: var(--superego-muted); font: var(--superego-text-xs) var(--superego-mono); }
+.superego-menu__check { color: var(--superego-text); }
+.superego-menu__label { margin: 6px 8px 4px; font-size: var(--superego-text-xs); color: var(--superego-muted); }
+.superego-menu__separator { border-top: 1px solid var(--superego-border); margin: 5px 8px; }
+.superego-tooltip { background: var(--superego-text); color: var(--superego-bg); font-size: var(--superego-text-sm); border-radius: 6px; padding: 5px 8px; white-space: nowrap; transition: opacity .1s; }
+.superego-tooltip[data-starting-style], .superego-tooltip[data-ending-style] { opacity: 0; }
 
 /* Focus is always apparent, and always the same: one solid outline in the accent colour, whatever a component's own
    styles say. Text being typed shows it on the box it's typed in (a field, the composer), and an editor on its column;
    a splitter on its bar. Keyboard focus only: a click on a button doesn't ring it. */
 :focus:not(:focus-visible) { outline: none; }
 :focus-visible:not(input, textarea, select, [contenteditable], [role="separator"]) {
-  outline: 2px solid var(--mu-ring) !important; outline-offset: 2px;
+  outline: 2px solid var(--superego-ring) !important; outline-offset: 2px;
 }
-.mu-select:focus-visible { outline: 2px solid var(--mu-ring) !important; outline-offset: 2px; }
-.mu-list-item:focus-visible { outline-offset: -2px; }
+.superego-select:focus-visible { outline: 2px solid var(--superego-ring) !important; outline-offset: 2px; }
+.superego-list-item:focus-visible { outline-offset: -2px; }
 
 /* Scrollbars that stay out of the way: thin, no track, darker on hover. */
 ::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }

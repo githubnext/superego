@@ -1,13 +1,13 @@
-// mu in a browser: the same window as the desktop app, with `window.mu` over a WebSocket to the daemon that served the
+// Superego in a browser: the same window as the desktop app, with `window.superego` over a WebSocket to the daemon that served the
 // page (its Web access setting), instead of Electron's preload. That daemon is the one machine, "local". What the desktop
 // keeps in its main process (the app's own settings) is kept in this browser.
-import { FEATURES, PROTOCOL_VERSION, RpcError, RpcPeer, type Hello } from '@mu/protocol'
-import { serveSettings, SettingsRegistry, type SettingsStore } from '@mu/settings'
-import type { MachineEntry, MuBridge, MuEvent } from '../shared.ts'
+import { FEATURES, PROTOCOL_VERSION, RpcError, RpcPeer, type Hello } from '@superego/protocol'
+import { serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
+import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '../shared.ts'
 import { askToken } from './token-gate.ts'
 
-const TOKEN = 'mu.webToken'
-const SETTINGS = 'mu.appSettings'
+const TOKEN = 'superego.webToken'
+const SETTINGS = 'superego.appSettings'
 
 /** The page's token: from the address Settings showed (`#token=…`), kept in this browser, then out of the address bar. */
 function takeToken(): string | undefined {
@@ -26,9 +26,9 @@ const store: SettingsStore = {
   save: async (values) => localStorage.setItem(SETTINGS, JSON.stringify(values)),
 }
 
-export function webBridge(): MuBridge {
-  const listeners = new Set<(event: MuEvent) => void>()
-  const emit = (event: MuEvent) => { for (const listener of listeners) listener(event) }
+export function webBridge(): SuperegoBridge {
+  const listeners = new Set<(event: SuperegoEvent) => void>()
+  const emit = (event: SuperegoEvent) => { for (const listener of listeners) listener(event) }
   let token = takeToken()
   let entry: MachineEntry = { id: 'local', label: location.hostname, state: 'connecting' }
   const setEntry = (next: Partial<MachineEntry>) => { entry = { ...entry, ...next }; emit({ machine: '$machines', method: '$machines', params: [entry] }) }

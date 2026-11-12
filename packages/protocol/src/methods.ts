@@ -36,7 +36,7 @@ export type ThreadInfo = {
   /** The panes open beside it, and the one in front (none: the thread itself). */
   panes?: Pane[]
   pane?: string
-  /** The profile it runs with: one of the project's, or one of the user's. Absent: plain mu. */
+  /** The profile it runs with: one of the project's, or one of the user's. Absent: plain Superego. */
   profile?: ProfileRef
   /** The session it belongs to, on its machine: a project, by the folder it lives in (a repository's main checkout). */
   session: { root: string; name: string }
@@ -59,7 +59,7 @@ export type ModelCatalog = {
  */
 export type Pane = { id: string; kind: string; title?: string; params?: Json }
 
-/** A profile: the user's (`~/.mu/profiles/<name>`) or a project's (`.mu/profiles/<name>`), and its folder. */
+/** A profile: the user's (`~/.superego/profiles/<name>`) or a project's (`.superego/profiles/<name>`), and its folder. */
 export type ProfileRef = { name: string; scope: 'user' | 'project'; dir: string }
 /** A profile a thread in some folder could start with (see the daemon's profiles.ts). */
 export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean }

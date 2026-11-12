@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
-import { connectSocket, listen, openDaemon } from '@mu/daemon'
-import { defineApp, PROTOCOL_VERSION, type Json, type Notifications, type ThreadInfo } from '@mu/protocol'
+import { connectSocket, listen, openDaemon } from '@superego/daemon'
+import { defineApp, PROTOCOL_VERSION, type Json, type Notifications, type ThreadInfo } from '@superego/protocol'
 import askUser from '../src/daemon.ts'
 import { ANSWER, PENDING, type Question } from '../src/shared.ts'
 
@@ -19,7 +19,7 @@ const until = async (check: () => boolean | Promise<boolean>) => {
 const turn = (content: Json[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
 
 it('asks, blocks the thread, takes an answer from any client, and carries on', async () => {
-  dir = await mkdtemp(join(tmpdir(), 'mu-ask-'))
+  dir = await mkdtemp(join(tmpdir(), 'superego-ask-'))
   // The model asks once, then answers with what it was told.
   await writeFile(join(dir, 'turns.jsonl'), [
     turn([{ type: 'toolCall', id: 'call-1', name: 'ask_user', arguments: { question: 'Which colour?', options: ['red', 'blue'] } }], 'toolUse'),

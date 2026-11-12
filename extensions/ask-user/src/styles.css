@@ -1,11 +1,11 @@
 /* Inside the floating composer: no frame of its own, the question first. */
-.ask-user { display: flex; flex-direction: column; gap: var(--mu-space-2); }
-.ask-user__label { font: var(--mu-text-xs) var(--mu-mono); color: var(--mu-muted); }
+.ask-user { display: flex; flex-direction: column; gap: var(--superego-space-2); }
+.ask-user__label { font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-muted); }
 .ask-user__question { font-size: 15px; font-weight: 600; line-height: 1.4; white-space: pre-wrap; }
 .ask-user__options { display: flex; gap: 6px; flex-wrap: wrap; }
-.ask-user__options .mu-button { padding: 6px 12px; border-radius: 8px; }
+.ask-user__options .superego-button { padding: 6px 12px; border-radius: 8px; }
 .ask-user__free { display: flex; gap: 6px; }
-.ask-user__free .mu-field { flex: 1; }
-.ask-user__error { color: var(--mu-status-error); font-size: var(--mu-text-sm); }
-.ask-user-asked { font: var(--mu-text-sm)/1.6 var(--mu-mono); display: flex; gap: var(--mu-space-2); flex-wrap: wrap; color: var(--mu-muted); }
-.ask-user-asked__q { color: var(--mu-text); }
+.ask-user__free .superego-field { flex: 1; }
+.ask-user__error { color: var(--superego-status-error); font-size: var(--superego-text-sm); }
+.ask-user-asked { font: var(--superego-text-sm)/1.6 var(--superego-mono); display: flex; gap: var(--superego-space-2); flex-wrap: wrap; color: var(--superego-muted); }
+.ask-user-asked__q { color: var(--superego-text); }

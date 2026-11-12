@@ -1,14 +1,14 @@
 .threads { display: flex; flex-direction: column; }
-.threads__head { display: flex; justify-content: space-between; align-items: center; padding: 0 10px var(--mu-space-1); font-size: var(--mu-text-xs); font-weight: 600; color: var(--mu-muted); }
+.threads__head { display: flex; justify-content: space-between; align-items: center; padding: 0 10px var(--superego-space-1); font-size: var(--superego-text-xs); font-weight: 600; color: var(--superego-muted); }
 .threads__actions { display: flex; align-items: center; gap: 6px; }
-.threads__empty { padding: var(--mu-space-2) 10px; font-size: var(--mu-text-sm); color: var(--mu-muted); }
-.threads-session { margin-top: var(--mu-space-3); }
+.threads__empty { padding: var(--superego-space-2) 10px; font-size: var(--superego-text-sm); color: var(--superego-muted); }
+.threads-session { margin-top: var(--superego-space-3); }
 .threads-session__head { display: flex; align-items: center; gap: 4px; padding: 0 4px 2px 10px; min-height: 26px; }
-.threads-session__name { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; border: 0; background: none; padding: 0; font: inherit; font-size: var(--mu-text-sm); font-weight: 600; color: var(--mu-text); text-align: left; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.threads-session__name em { font-style: normal; font-weight: 400; color: var(--mu-muted); overflow: hidden; text-overflow: ellipsis; }
+.threads-session__name { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; border: 0; background: none; padding: 0; font: inherit; font-size: var(--superego-text-sm); font-weight: 600; color: var(--superego-text); text-align: left; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.threads-session__name em { font-style: normal; font-weight: 400; color: var(--superego-muted); overflow: hidden; text-overflow: ellipsis; }
 .threads-session .threads__new { opacity: 0; transition: opacity .1s; }
 .threads-session:hover .threads__new, .threads-session .threads__new:focus-visible { opacity: 1; }
-.threads-session.is-stale .mu-list-item, .threads-session.is-stale .threads-session__name { color: var(--mu-muted); }
+.threads-session.is-stale .superego-list-item, .threads-session.is-stale .threads-session__name { color: var(--superego-muted); }
 
 
 .threads-rail__tipnote { opacity: .65; margin-left: 8px; }
@@ -16,14 +16,14 @@
 .threads-rail__group { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .threads-rail__expand { width: 32px; }
 .threads-rail__dot { width: 32px; height: 32px; border-radius: 8px; border: 0; background: none; display: flex; align-items: center; justify-content: center; font-size: 14px; color: inherit; }
-.threads-rail__dot:hover { background: var(--mu-hover); }
-.threads-rail__dot.is-on { background: var(--mu-selected); }
+.threads-rail__dot:hover { background: var(--superego-hover); }
+.threads-rail__dot.is-on { background: var(--superego-selected); }
 .threads-rail__dot.is-stale { opacity: .4; }
-.threads-rail__sep { width: 20px; height: 1px; background: var(--mu-border); margin: 4px 0; }
+.threads-rail__sep { width: 20px; height: 1px; background: var(--superego-border); margin: 4px 0; }
 
-.threads-details { padding: var(--mu-space-4) var(--mu-space-5) var(--mu-space-5); font-size: var(--mu-text-ui); }
-.threads-details h5 { margin: 0 0 10px; font-size: var(--mu-text-xs); font-weight: 500; color: var(--mu-muted); }
-.threads-details dl { display: grid; grid-template-columns: 70px 1fr; gap: 6px 10px; margin: 0 0 var(--mu-space-5); }
-.threads-details dt { color: var(--mu-muted); }
+.threads-details { padding: var(--superego-space-4) var(--superego-space-5) var(--superego-space-5); font-size: var(--superego-text-ui); }
+.threads-details h5 { margin: 0 0 10px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); }
+.threads-details dl { display: grid; grid-template-columns: 70px 1fr; gap: 6px 10px; margin: 0 0 var(--superego-space-5); }
+.threads-details dt { color: var(--superego-muted); }
 .threads-details dd { margin: 0; overflow-wrap: anywhere; }
-.threads-details__file { font: var(--mu-text-sm)/1.7 var(--mu-mono); overflow-wrap: anywhere; }
+.threads-details__file { font: var(--superego-text-sm)/1.7 var(--superego-mono); overflow-wrap: anywhere; }

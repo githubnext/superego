@@ -1,5 +1,5 @@
 // Runs the scripted threads (test/showcase/threads.mjs) in the real app and screenshots each one: top, middle and end,
-// light and dark, into $MU_SHOWCASE_OUT. Run by test/showcase.sh.
+// light and dark, into $SUPEREGO_SHOWCASE_OUT. Run by test/showcase.sh.
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { threads } from './showcase/threads.mjs'
@@ -23,30 +23,30 @@ void (async () => {
     fail(`waiting for ${label}`)
     throw new Error(label)
   }
-  await until(`window.mu.machines().then((list) => list.find((m) => m.id === 'local')?.state === 'connected')`, 'local machine')
+  await until(`window.superego.machines().then((list) => list.find((m) => m.id === 'local')?.state === 'connected')`, 'local machine')
   win().setContentSize(1440, 900)
 
-  const project = process.env.MU_SHOWCASE_PROJECT
-  const state = (id) => `window.mu.call('local', 'thread.list', {}).then((list) => list.find((s) => s.id === '${id}')?.status.state)`
+  const project = process.env.SUPEREGO_SHOWCASE_PROJECT
+  const state = (id) => `window.superego.call('local', 'thread.list', {}).then((list) => list.find((s) => s.id === '${id}')?.status.state)`
   /** Send `text` and wait for the answer: seen first, so "done" can only mean this run finished. */
   const turnOn = async (id, text) => {
-    await run(`window.mu.call('local', 'thread.seen', { id: '${id}' })`)
-    await run(`window.mu.call('local', 'thread.submit', { id: '${id}', text: ${JSON.stringify(text)} })`)
+    await run(`window.superego.call('local', 'thread.seen', { id: '${id}' })`)
+    await run(`window.superego.call('local', 'thread.submit', { id: '${id}', text: ${JSON.stringify(text)} })`)
     await until(`${state(id)}.then((s) => s === 'done' || s === 'error')`, `answer in ${id}`)
   }
   const ids = []
   for (const thread of threads) {
-    const { id } = await run(`window.mu.call('local', 'thread.create', { cwd: ${JSON.stringify(project)} })`)
+    const { id } = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(project)} })`)
     ids.push(id)
     await turnOn(id, thread.prompt)
     for (const text of thread.followUps) await turnOn(id, text)
   }
 
-  const out = process.env.MU_SHOWCASE_OUT
+  const out = process.env.SUPEREGO_SHOWCASE_OUT
   const shot = async (name) => writeFileSync(`${out}/${name}.png`, (await win().webContents.capturePage()).toPNG())
   for (const [index, id] of ids.entries()) {
-    await run(`window.mu.call('local', 'thread.seen', { id: '${id}' })`)
-    await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.dataset.thread === '${id}' || li.textContent.includes(${JSON.stringify(threads[index].prompt.slice(0, 20))}))?.click()`)
+    await run(`window.superego.call('local', 'thread.seen', { id: '${id}' })`)
+    await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.dataset.thread === '${id}' || li.textContent.includes(${JSON.stringify(threads[index].prompt.slice(0, 20))}))?.click()`)
     await until(`document.querySelectorAll('.transcript .msg').length > 2`, `thread ${index + 1} shown`)
     for (const theme of ['light', 'dark']) {
       nativeTheme.themeSource = theme

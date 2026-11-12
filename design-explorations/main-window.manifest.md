@@ -1,12 +1,12 @@
 # main-window: data manifest
 
-Counted against `~/.mu` (1 session) and the protocol's `SessionInfo`, `ConversationView` and live docs.
+Counted against `~/.superego` (1 session) and the protocol's `SessionInfo`, `ConversationView` and live docs.
 
 | Element | Field | Class | Note |
 |---|---|---|---|
 | Session title | `SessionInfo.title` | ✅ Real | from the first message |
 | Status glyph | `SessionInfo.status.state` | ✅ Real | idle · working · done · blocked · error |
-| Folder | `SessionInfo.cwd` | ✅ Real | shown shortened (`~/dev/gh/mu`) |
+| Folder | `SessionInfo.cwd` | ✅ Real | shown shortened (`~/dev/gh/superego`) |
 | Machine and offline state | `MachineEntry.label/state` | ✅ Real | |
 | Transcript text, tool name, arguments, output | `ConversationView.entries`, `pi.live.tools` | ✅ Real | |
 | Exit code | bash tool result | ⚠️ Sometimes | bash only; other tools have none |

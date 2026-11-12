@@ -1,4 +1,4 @@
-// Actions: every intent in mu (start a thread, send a message, toggle the rail, add a machine) is defined once, with
+// Actions: every intent in Superego (start a thread, send a message, toggle the rail, add a machine) is defined once, with
 // a schema for its parameters, and runs through a router. Keys, the palette, the command line and tests all dispatch
 // the same way, and every dispatch is logged. Streams (watches) and reads are not actions.
 import { compile, type JsonSchema, type Static } from '@earendil-works/pi-schema'
@@ -127,5 +127,5 @@ export class Router<C = unknown> {
 
 const info = ({ run: _run, ...rest }: ActionDef<any, unknown, any>): ActionInfo => rest
 
-/** Schema builders for action parameters, so extensions need nothing beyond @mu/*. */
+/** Schema builders for action parameters, so extensions need nothing beyond @superego/*. */
 export { arr, bool, int, lit, nullable, num, obj, opt, str, union, unknown } from '@earendil-works/pi-schema'

@@ -1,5 +1,5 @@
 {
-  "name": "@mu/files",
+  "name": "@superego/files",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,10 +9,10 @@
   },
   "dependencies": {
     "@earendil-works/pi-schema": "1.5.0",
-    "@mu/daemon": "workspace:*",
-    "@mu/protocol": "workspace:*",
-    "@mu/app": "workspace:*",
-    "@mu/ui": "workspace:*"
+    "@superego/daemon": "workspace:*",
+    "@superego/protocol": "workspace:*",
+    "@superego/app": "workspace:*",
+    "@superego/ui": "workspace:*"
   },
   "peerDependencies": {
     "react": "^19"

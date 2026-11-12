@@ -1,5 +1,5 @@
 {
-  "name": "@mu/daemon",
+  "name": "@superego/daemon",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,8 +11,8 @@
     "@earendil-works/chord": "1.5.0",
     "@earendil-works/pi-ai": "1.5.0",
     "@earendil-works/pi-durable": "1.5.0",
-    "@mu/protocol": "workspace:*",
-    "@mu/settings": "workspace:*",
+    "@superego/protocol": "workspace:*",
+    "@superego/settings": "workspace:*",
     "sucrase": "^3.35.1",
     "ws": "8.22.1"
   }

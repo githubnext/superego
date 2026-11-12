@@ -1,7 +1,7 @@
 import { chmod, mkdir, rm } from 'node:fs/promises'
 import { createConnection, createServer, type Server, type Socket } from 'node:net'
 import { dirname } from 'node:path'
-import { lineSplitter, RpcPeer } from '@mu/protocol'
+import { lineSplitter, RpcPeer } from '@superego/protocol'
 import type { Daemon } from './daemon.ts'
 
 /** Whether something answers on `path`. */

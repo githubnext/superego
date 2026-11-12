@@ -22,16 +22,16 @@ export function Dialog({ open = true, onClose, title, actions, children, classNa
   return (
     <Base.Root open={open} onOpenChange={(next) => { if (!next) onClose() }}>
       <Base.Portal>
-        <Base.Backdrop className="mu-dialog__backdrop" />
-        <Base.Popup className={`mu-dialog mu-dialog--${size} ${className}`} aria-label={label}>
-          <div className="mu-dialog__frame">
+        <Base.Backdrop className="superego-dialog__backdrop" />
+        <Base.Popup className={`superego-dialog superego-dialog--${size} ${className}`} aria-label={label}>
+          <div className="superego-dialog__frame">
             {(title || actions) && (
-              <header className="mu-dialog__header">
-                <Base.Title className="mu-dialog__title">{title}</Base.Title>
-                <div className="mu-dialog__actions">{actions}<Base.Close render={<IconButton label="Close" />}>✕</Base.Close></div>
+              <header className="superego-dialog__header">
+                <Base.Title className="superego-dialog__title">{title}</Base.Title>
+                <div className="superego-dialog__actions">{actions}<Base.Close render={<IconButton label="Close" />}>✕</Base.Close></div>
               </header>
             )}
-            <div className="mu-dialog__body">{children}</div>
+            <div className="superego-dialog__body">{children}</div>
           </div>
         </Base.Popup>
       </Base.Portal>

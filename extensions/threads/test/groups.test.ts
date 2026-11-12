@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
-import type { MachineEntry } from '@mu/app/ui'
-import type { ThreadInfo, Status } from '@mu/protocol'
+import type { MachineEntry } from '@superego/app/ui'
+import type { ThreadInfo, Status } from '@superego/protocol'
 import { groupSessions } from '../../../packages/app/src/renderer/sessions.ts'
 import { ago, freeze } from '../src/groups.ts'
 
@@ -9,20 +9,20 @@ const thread = (id: string, root: string, state: Status['state'], createdAt: num
   ({ id, title: id, cwd: `${root}/x`, createdAt, activeAt, session: { root, name: root.split('/').at(-1)! }, status: { state } })
 const machines = [machine('local'), machine('box', 'disconnected')]
 const threads = {
-  local: [thread('old-busy', '/code/mu', 'working', 1, 50), thread('new-done', '/code/site', 'done', 30, 31), thread('mid-asks', '/code/mu', 'blocked', 20, 40)],
-  box: [thread('far', '/code/mu', 'idle', 10, 10)],
+  local: [thread('old-busy', '/code/superego', 'working', 1, 50), thread('new-done', '/code/site', 'done', 30, 31), thread('mid-asks', '/code/superego', 'blocked', 20, 40)],
+  box: [thread('far', '/code/superego', 'idle', 10, 10)],
 }
 const shape = (sessions: ReturnType<typeof groupSessions>) => sessions.map((s) => [s.name, s.machine.id, s.threads.map((t) => t.id)])
 
 it('groups threads into sessions: a project on a machine, the machine a fact about it', () => {
   expect(shape(groupSessions(machines, threads, 'recent'))).toEqual([
-    ['mu', 'local', ['old-busy', 'mid-asks']], ['site', 'local', ['new-done']], ['mu', 'box', ['far']],
+    ['superego', 'local', ['old-busy', 'mid-asks']], ['site', 'local', ['new-done']], ['superego', 'box', ['far']],
   ])
   expect(shape(groupSessions(machines, threads, 'created'))).toEqual([
-    ['site', 'local', ['new-done']], ['mu', 'local', ['mid-asks', 'old-busy']], ['mu', 'box', ['far']],
+    ['site', 'local', ['new-done']], ['superego', 'local', ['mid-asks', 'old-busy']], ['superego', 'box', ['far']],
   ])
   const byStatus = groupSessions(machines, threads, 'status')
-  expect(shape(byStatus)[0]).toEqual(['mu', 'local', ['mid-asks', 'old-busy']])
+  expect(shape(byStatus)[0]).toEqual(['superego', 'local', ['mid-asks', 'old-busy']])
   expect(byStatus[0]!.status.state).toBe('blocked')
 })
 
@@ -31,7 +31,7 @@ it('holds the order still while the pointer is over it, taking in what changed',
   const later = { ...threads, local: [...threads.local, thread('newest', '/code/new', 'working', 60, 60)].map((t) => t.id === 'mid-asks' ? { ...t, activeAt: 99 } : t) }
   const held = freeze(before, groupSessions(machines, later, 'recent'))
   expect(shape(held)).toEqual([
-    ['mu', 'local', ['old-busy', 'mid-asks']], ['site', 'local', ['new-done']], ['mu', 'box', ['far']], ['new', 'local', ['newest']],
+    ['superego', 'local', ['old-busy', 'mid-asks']], ['site', 'local', ['new-done']], ['superego', 'box', ['far']], ['new', 'local', ['newest']],
   ])
 })
 

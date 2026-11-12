@@ -4,7 +4,7 @@
 import { createContext, memo, useContext, useLayoutEffect, useRef, type ComponentProps } from 'react'
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { SquareSplitHorizontalIcon } from '@mu/ui'
+import { SquareSplitHorizontalIcon } from '@superego/ui'
 
 /** Code scrolls sideways, never wraps; it fades at the right edge only while a line runs past it. */
 export function Scroll({ node: _node, ...props }: ComponentProps<'pre'> & { node?: unknown }) {
@@ -28,7 +28,7 @@ export const OpenFile = createContext<((name: string) => void) | undefined>(unde
 /** Opens a web page in a pane beside the thread. Provided where there's a thread to open it beside. */
 export const OpenUrl = createContext<((url: string) => void) | undefined>(undefined)
 
-const FILE = 'mu-file:'
+const FILE = 'superego-file:'
 /** A path, by its look: no spaces at its ends, a slash or a file extension, and no scheme. */
 const PATHLIKE = /^(?![a-z][\w+.-]*:)(?:[\w.@~-][^\n`]*\/[^\n`]*[^\s/]|[\w@~-][^\n`/]*\.[A-Za-z][\w]{0,7})$/
 

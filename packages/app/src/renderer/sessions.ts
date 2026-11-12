@@ -2,7 +2,7 @@
 // holds the threads started there, worktrees and all. The machine is a fact about the session, not a level above it.
 // One order for every place that walks them (the sidebar, the navigator, ⌘⇧[ and ⌘⇧]), set by the sidebar's sort.
 import { useMemo } from 'react'
-import { rollup, type Status, type ThreadInfo } from '@mu/protocol'
+import { rollup, type Status, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { useAppSetting } from './client.ts'
 

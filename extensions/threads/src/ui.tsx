@@ -9,9 +9,9 @@ import { Fragment, useMemo, useRef, useState } from 'react'
 import {
   defineAction, type Dispatch, defineUiExtension, showSession, SORT, useAppSetting, useMachines, useSelection, useSessions, useThreadView, useShell, useShortcut,
   type MachineEntry, type Session, type Sort,
-} from '@mu/app/ui'
-import type { ThreadInfo } from '@mu/protocol'
-import { CaretRightIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@mu/ui'
+} from '@superego/app/ui'
+import type { ThreadInfo } from '@superego/protocol'
+import { CaretRightIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
 import { activity, ago, freeze } from './groups.ts'
 
@@ -26,9 +26,9 @@ let current: { sort: Sort; view: View; details: boolean } = { sort: 'recent', vi
 
 export default defineUiExtension({
   name: 'threads',
-  setup(mu) {
-    dispatch = mu.dispatch
-    mu.appSettings({
+  setup(superego) {
+    dispatch = superego.dispatch
+    superego.appSettings({
       id: 'threads', title: 'Sidebar', order: 55,
       settings: [
         { key: SORT, title: 'Sort sessions and threads', default: 'recent', type: 'choice', options: [
@@ -38,10 +38,10 @@ export default defineUiExtension({
         { key: DETAILS, title: 'Thread details', description: 'A pane beside the thread: machine, model, cost, tools, files.', default: false, type: 'boolean' },
       ],
     })
-    mu.slot('sidebar', Threads)
-    mu.slot('thread.aside', Details)
+    superego.slot('sidebar', Threads)
+    superego.slot('thread.aside', Details)
     const action = (id: string, title: string, run: () => void, keys?: string) =>
-      mu.action(defineAction({ id, title, runs: 'window', ...(keys ? { keys } : {}), run }))
+      superego.action(defineAction({ id, title, runs: 'window', ...(keys ? { keys } : {}), run }))
     action('threads.rail', 'Toggle sidebar rail', () => void set(VIEW, current.view === 'rail' ? 'list' : 'rail'), 'mod+\\')
     action('threads.details', 'Toggle thread details', () => void set(DETAILS, !current.details), 'mod+i')
     action('threads.sort.created', 'Sort threads: newest first', () => void set(SORT, 'created'))

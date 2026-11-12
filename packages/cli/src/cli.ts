@@ -1,4 +1,4 @@
-// The command line of an app built on mu (`mu` for mu itself). With no command it starts a thread in the current
+// The command line of an app built on Superego (`superego` for Superego itself). With no command it starts a thread in the current
 // directory and opens it in the app. Everything else (threads, machines, settings, sign-in, the daemon itself) works on
 // this computer or, with `-m <machine>`, on any machine the app knows. `<id> connect` is what `ssh <host> <id> connect`
 // runs on the far side. An app's bin calls `runCli(app, { appDir, bin })`.
@@ -10,12 +10,12 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { devApp } from './dev-app.ts'
-import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, type MachineConfig, type Transport } from '@mu/client'
-import { appEnv, daemonStarting, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@mu/daemon'
+import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, type MachineConfig, type Transport } from '@superego/client'
+import { appEnv, daemonStarting, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@superego/daemon'
 import {
   FEATURES, PROTOCOL_VERSION, RpcError, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ThreadInfo, type SettingsSnapshot,
-} from '@mu/protocol'
+} from '@superego/protocol'
 
 export type CliOptions = {
   /** The app's directory: where its built Electron app (`out/`) and `package.json` are. */
@@ -41,14 +41,14 @@ const help = () => `${app.id}: ${app.name}
 Usage:
   ${app.id} [dir] [-p prompt]          Start a thread in dir (default: here) and open it in the app
   ${app.id} open <thread>             Open a thread in the app
-  ${app.id} threads [--archived]      List threads, or the archived ones (also: mu ls)
+  ${app.id} threads [--archived]      List threads, or the archived ones (also: superego ls)
   ${app.id} create [dir] [-p prompt]   Start a thread without opening the app; prints its id (also: new)
   ${app.id} send <thread> <text...>   Send a message to a thread
       -P, --profile <name>        Start with this profile (default: the folder's default, the project's before yours)
-  -w, --worktree                  In a git repository, work in a worktree of its own (~/.mu/worktrees) instead of the checkout
+  -w, --worktree                  In a git repository, work in a worktree of its own (~/.superego/worktrees) instead of the checkout
 
   ${app.id} profile                    List the profiles a thread here could start with
-  ${app.id} profile new [name] [--user] Make a profile in this project's .mu/profiles (or yours, ~/.${app.id}/profiles)
+  ${app.id} profile new [name] [--user] Make a profile in this project's .superego/profiles (or yours, ~/.${app.id}/profiles)
   ${app.id} profile allow [name]       Let this project's profile run (again, after it changed)
 
   ${app.id} machines                   List machines and whether they answer
@@ -95,13 +95,13 @@ const GLYPH: Record<string, string> = { idle: '○', working: '●', done: '*', 
 const appDir = () => appEnv(app)('APP') ?? options.appDir
 
 /**
- * The daemon code this computer would run: the app's build when there is one (so the app and `mu` agree on what is
+ * The daemon code this computer would run: the app's build when there is one (so the app and `superego` agree on what is
  * current, and the app's restart notice means the same as ours), else this checkout's source.
  */
 function installedDaemon(): { dir: string; command: string[]; env: NodeJS.ProcessEnv } {
   const bundled = resolve(appDir(), 'out/main/daemon.js')
   if (existsSync(bundled)) {
-    // The app's own (development) bundle, so the daemon is "mu" in Activity Monitor, not "Electron".
+    // The app's own (development) bundle, so the daemon is "Superego" in Activity Monitor, not "Electron".
     return { dir: resolve(appDir(), 'out/main'), command: [devApp(appDir(), app), bundled], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }
   }
   const command = options.daemon ? [process.execPath, options.daemon] : [process.execPath, options.bin, 'daemon']
@@ -160,7 +160,7 @@ function openInApp(machine: string, thread: string) {
   if (!existsSync(resolve(dir, 'out/main/main.js'))) {
     throw new RpcError('no_app', `The app isn't built in ${dir}`, { hint: 'Build it: pnpm build in the app.' })
   }
-  spawn(devApp(dir, app), [dir, `--mu-open=${machine}/${thread}`], { detached: true, stdio: 'ignore' }).unref()
+  spawn(devApp(dir, app), [dir, `--superego-open=${machine}/${thread}`], { detached: true, stdio: 'ignore' }).unref()
 }
 
 // ── Commands ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -383,7 +383,7 @@ async function bridge(start: boolean) {
 
 const PROFILE_TEMPLATE = (name: string) => `// The ${name} profile: what an agent started with it is. Threads in this folder (and below) can start with it;
 // "default" is the one they get unless they ask for another. Edits apply from the next turn.
-import { defineProfile } from 'mu'
+import { defineProfile } from 'superego'
 
 export default defineProfile({
   description: '',
@@ -411,7 +411,7 @@ async function profileCommand(sub: string | undefined, rest: string[], values: {
     if (machine.config) throw new RpcError('usage', `${app.id} profile new makes a profile here; on ${machine.label}, run it there`)
     const name = rest[0] ?? 'default'
     if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) throw new RpcError('usage', 'A profile name is lowercase letters, digits and dashes')
-    const dir = values.user ? join(dataDir, 'profiles', name) : join(process.cwd(), '.mu', 'profiles', name)
+    const dir = values.user ? join(dataDir, 'profiles', name) : join(process.cwd(), '.superego', 'profiles', name)
     if (existsSync(join(dir, 'profile.ts'))) throw new RpcError('exists', `${join(dir, 'profile.ts')} is there already`)
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'profile.ts'), PROFILE_TEMPLATE(name))

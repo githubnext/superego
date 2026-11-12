@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { listFiles } from '../src/daemon.ts'
 
 let dir: string
-beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'mu-files-')) })
+beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-files-')) })
 afterEach(() => rm(dir, { recursive: true, force: true }))
 
 const put = async (files: Record<string, string>) => {

@@ -1,9 +1,9 @@
 // The navigator (⌘L), after Fut's: every session, its threads, and their panes, as one tree to go anywhere from
-// anywhere. Typing searches the whole path ("mu login diff"); without a query the tree is browsable: ← to the parent,
+// anywhere. Typing searches the whole path ("superego login diff"); without a query the tree is browsable: ← to the parent,
 // → to the first child. ⌃S, ⌃T and ⌃P show only sessions, threads or panes (again: everything). Enter goes there.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { Dialog, StatusGlyph } from '@mu/ui'
-import type { Pane, Status, ThreadInfo } from '@mu/protocol'
+import { Dialog, StatusGlyph } from '@superego/ui'
+import type { Pane, Status, ThreadInfo } from '@superego/protocol'
 import { score } from './score.ts'
 import { paneKind, useRegistry } from './extension.tsx'
 import { useMachines, useSelection, useSessions } from './state.tsx'

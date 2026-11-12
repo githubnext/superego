@@ -1,12 +1,12 @@
 {
-  "name": "@mu/cli",
+  "name": "@superego/cli",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@mu/client": "workspace:*",
-    "@mu/daemon": "workspace:*",
-    "@mu/protocol": "workspace:*"
+    "@superego/client": "workspace:*",
+    "@superego/daemon": "workspace:*",
+    "@superego/protocol": "workspace:*"
   },
   "exports": {
     ".": "./src/index.ts"

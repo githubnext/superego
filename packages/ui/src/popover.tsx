@@ -9,8 +9,8 @@ export function Popover({ trigger, children, open, onOpenChange, align = 'end', 
     <Base.Root {...(open !== undefined ? { open } : {})} onOpenChange={(next) => onOpenChange?.(next)}>
       <Base.Trigger render={trigger} />
       <Base.Portal>
-        <Base.Positioner className="mu-layer" side="bottom" align={align} sideOffset={6}>
-          <Base.Popup className={`mu-popover ${className}`}>{children}</Base.Popup>
+        <Base.Positioner className="superego-layer" side="bottom" align={align} sideOffset={6}>
+          <Base.Popup className={`superego-popover ${className}`}>{children}</Base.Popup>
         </Base.Positioner>
       </Base.Portal>
     </Base.Root>

@@ -19,10 +19,10 @@ export function askToken(check: (token: string) => Promise<boolean>, rejected = 
       <div class="token-gate__card">
         <h1 class="token-gate__title"></h1>
         <p class="token-gate__hint">Paste the token, or the address from Settings → Web access.</p>
-        <input class="mu-field token-gate__input" name="token" type="password" autocomplete="current-password"
+        <input class="superego-field token-gate__input" name="token" type="password" autocomplete="current-password"
           autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Token" />
         <p class="token-gate__error" role="alert"></p>
-        <button class="mu-button mu-button--primary token-gate__go" type="submit">Connect</button>
+        <button class="superego-button superego-button--primary token-gate__go" type="submit">Connect</button>
       </div>`
     gate.querySelector('.token-gate__title')!.textContent = location.hostname
     const input = gate.querySelector('input')!

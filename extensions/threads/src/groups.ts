@@ -1,6 +1,6 @@
 // The sidebar's order, without React: how times read, and how the list holds still under the pointer.
-import type { Session } from '@mu/app/ui'
-import type { ThreadInfo } from '@mu/protocol'
+import type { Session } from '@superego/app/ui'
+import type { ThreadInfo } from '@superego/protocol'
 
 /** When a thread last did something; a daemon from before last-activity was reported gives its creation. */
 export const activity = (thread: ThreadInfo) => thread.activeAt ?? thread.createdAt

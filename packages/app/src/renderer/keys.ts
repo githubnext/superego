@@ -1,6 +1,6 @@
 // The hooks over shortcuts.ts: the user's keymap and what runs on which keys now.
 import { useSyncExternalStore } from 'react'
-import type { ActionInfo } from '@mu/protocol'
+import type { ActionInfo } from '@superego/protocol'
 import { useAppSetting } from './client.ts'
 import { useRegistry } from './extension.tsx'
 import { bound, KEYMAP, keyLabel, type Keymap } from './shortcuts.ts'

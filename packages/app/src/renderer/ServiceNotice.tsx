@@ -1,7 +1,7 @@
 // "Restart required": the background process runs older code than is installed. Outside the transcript and never a
 // modal: restart now, when idle, or later (which leaves a quiet reminder).
 import { useEffect, useState } from 'react'
-import { Button } from '@mu/ui'
+import { Button } from '@superego/ui'
 import { useRegistry } from './extension.tsx'
 import type { ServiceAction, ServiceState } from '../main/restart.ts'
 
@@ -9,8 +9,8 @@ export function ServiceNotice() {
   const [state, setState] = useState<ServiceState>()
   useEffect(() => {
     let live = true
-    const off = window.mu.onEvent((event) => { if (event.machine === 'app' && event.method === 'service.changed') setState(event.params as ServiceState) })
-    void (window.mu.call('app', 'service.get', {}) as Promise<ServiceState>).then((next) => { if (live) setState((current) => current ?? next) })
+    const off = window.superego.onEvent((event) => { if (event.machine === 'app' && event.method === 'service.changed') setState(event.params as ServiceState) })
+    void (window.superego.call('app', 'service.get', {}) as Promise<ServiceState>).then((next) => { if (live) setState((current) => current ?? next) })
     return () => { live = false; off() }
   }, [])
   const dispatch = useRegistry().router.dispatch

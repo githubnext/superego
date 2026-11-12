@@ -1,7 +1,7 @@
 // The settings registry: sections of typed settings registered by whoever owns them, values kept in one store.
 // Types can be computed (a model list that depends on which providers are signed in), so the registry resolves them
 // whenever a snapshot is taken; `invalidate()` tells watchers that something they depend on changed.
-import { RpcError, type Json, type SectionInfo, type SettingInfo, type SettingsSnapshot, type SettingType } from '@mu/protocol'
+import { RpcError, type Json, type SectionInfo, type SettingInfo, type SettingsSnapshot, type SettingType } from '@superego/protocol'
 
 export type SettingSpec = {
   key: string

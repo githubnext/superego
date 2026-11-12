@@ -5,21 +5,21 @@ import { basename, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
-import { defineApp, PROTOCOL_VERSION, type ActionInfo, type ActionLogEntry, type AuthEvent, type Hello, type ModelCatalog, type Notifications, type ProviderAuthInfo, type RpcPeer, type ThreadInfo, type SettingsSnapshot } from '@mu/protocol'
+import { defineApp, PROTOCOL_VERSION, type ActionInfo, type ActionLogEntry, type AuthEvent, type Hello, type ModelCatalog, type Notifications, type ProviderAuthInfo, type RpcPeer, type ThreadInfo, type SettingsSnapshot } from '@superego/protocol'
 import { connectSocket, listen, openDaemon, type Daemon } from '../src/index.ts'
 
 // Only the scripted model, whatever keys the machine running the tests has.
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
 
-const MU = defineApp({ name: 'mu', id: 'mu' })
+const SUPEREGO = defineApp({ name: 'superego', id: 'superego' })
 let dir: string
 const open = async ({ faux = true } = {}) => {
-  if (faux) process.env.MU_MODEL = 'faux'
-  else delete process.env.MU_MODEL
+  if (faux) process.env.SUPEREGO_MODEL = 'faux'
+  else delete process.env.SUPEREGO_MODEL
   // Skills and AGENTS.md from the test's own folder, never the machine's.
-  const daemon = await openDaemon({ app: MU, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents') })
-  const server = await listen(daemon, join(dir, 'mu.sock'))
-  const { peer, socket } = await connectSocket(join(dir, 'mu.sock'))
+  const daemon = await openDaemon({ app: SUPEREGO, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents') })
+  const server = await listen(daemon, join(dir, 'superego.sock'))
+  const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
   await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
   return { daemon, peer, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
 }
@@ -34,7 +34,7 @@ const until = async (check: () => boolean | Promise<boolean>, ms = 5000) => {
 
 const threads = (peer: RpcPeer) => peer.call<ThreadInfo[]>('thread.list', {})
 
-beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'mu-test-')) })
+beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-test-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 describe('daemon', () => {
@@ -69,10 +69,10 @@ describe('daemon', () => {
     peer.on('threads.changed', ({ value }: Notifications['threads.changed']) => changes.push(value))
     expect(list.value.map((s) => s.id)).toEqual([created.id])
 
-    await peer.call('thread.submit', { id: created.id, text: 'hello mu' })
+    await peer.call('thread.submit', { id: created.id, text: 'hello superego' })
     await until(() => view.entries.some((entry) => entry.kind === 'pi.assistant'))
     const answer = view.entries.find((entry) => entry.kind === 'pi.assistant')!
-    expect(JSON.stringify(answer)).toContain('echo: hello mu')
+    expect(JSON.stringify(answer)).toContain('echo: hello superego')
 
     await until(async () => (await threads(peer))[0]!.status.state === 'done')
     expect(changes.flat().some((s) => s.status.state === 'working')).toBe(true)
@@ -175,13 +175,13 @@ describe('restart', () => {
     // A long answer replayed slowly keeps the thread working for as long as the test needs.
     const recording = join(dir, 'slow.jsonl')
     await writeFile(recording, JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content: [{ type: 'text', text: 'word '.repeat(2000) }], stopReason: 'stop' } }) + '\n')
-    process.env.MU_MODEL = 'replay:' + recording
-    process.env.MU_REPLAY_SPEED = '20'
+    process.env.SUPEREGO_MODEL = 'replay:' + recording
+    process.env.SUPEREGO_REPLAY_SPEED = '20'
     let restarts = 0
-    const daemon = await openDaemon({ app: MU, dataDir: dir, defaultCwd: dir, build: 'b1', onRestart: () => restarts++ })
-    delete process.env.MU_REPLAY_SPEED
-    const server = await listen(daemon, join(dir, 'mu.sock'))
-    const { peer, socket } = await connectSocket(join(dir, 'mu.sock'))
+    const daemon = await openDaemon({ app: SUPEREGO, dataDir: dir, defaultCwd: dir, build: 'b1', onRestart: () => restarts++ })
+    delete process.env.SUPEREGO_REPLAY_SPEED
+    const server = await listen(daemon, join(dir, 'superego.sock'))
+    const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
     await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
     await peer.call('settings.set', { key: 'agent.model', value: 'replay/replay' })
 
@@ -202,7 +202,7 @@ describe('restart', () => {
 describe('record and replay', () => {
   it('records answers and plays them back in order', async () => {
     const recording = join(dir, 'turns.jsonl')
-    process.env.MU_RECORD = recording
+    process.env.SUPEREGO_RECORD = recording
     const first = await open()
     const one = await first.peer.call<ThreadInfo>('thread.create', {})
     await first.peer.call('thread.submit', { id: one.id, text: 'first' })
@@ -210,14 +210,14 @@ describe('record and replay', () => {
     await first.peer.call('thread.submit', { id: one.id, text: 'second' })
     await until(async () => (await threads(first.peer))[0]!.status.state === 'done')
     await first.close()
-    delete process.env.MU_RECORD
+    delete process.env.SUPEREGO_RECORD
 
     const replayDir = join(dir, 'replay')
-    process.env.MU_MODEL = 'replay:' + recording
-    process.env.MU_REPLAY_SPEED = '0'
-    const daemon = await openDaemon({ app: MU, dataDir: replayDir, defaultCwd: dir })
-    const server = await listen(daemon, join(replayDir, 'mu.sock'))
-    const { peer, socket } = await connectSocket(join(replayDir, 'mu.sock'))
+    process.env.SUPEREGO_MODEL = 'replay:' + recording
+    process.env.SUPEREGO_REPLAY_SPEED = '0'
+    const daemon = await openDaemon({ app: SUPEREGO, dataDir: replayDir, defaultCwd: dir })
+    const server = await listen(daemon, join(replayDir, 'superego.sock'))
+    const { peer, socket } = await connectSocket(join(replayDir, 'superego.sock'))
     await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
     const created = await peer.call<ThreadInfo>('thread.create', {})
     const answers: string[] = []
@@ -232,7 +232,7 @@ describe('record and replay', () => {
     expect(answers[1]).toContain('echo: second')
     expect(answers[2]).toContain('Replay finished')
     socket.destroy(); server.close(); await daemon.close()
-    delete process.env.MU_REPLAY_SPEED
+    delete process.env.SUPEREGO_REPLAY_SPEED
   })
 
   it('lists its actions, runs them from the command line with coerced params, and logs each dispatch', async () => {
@@ -319,7 +319,7 @@ describe('record and replay', () => {
     const { peer, close } = await open()
     // Started in a folder below the top: the same folder, in its own worktree.
     const thread = await peer.call<ThreadInfo>('thread.create', { cwd: join(dir, 'app'), title: 'Fix the login flow', worktree: true })
-    expect(thread.worktree?.branch).toMatch(/^mu\/fix-the-login-flow-[0-9a-f]{6}$/)
+    expect(thread.worktree?.branch).toMatch(/^superego\/fix-the-login-flow-[0-9a-f]{6}$/)
     expect(thread.cwd).toBe(join(thread.worktree!.path, 'app'))
     expect(thread.session).toEqual({ root, name: basename(root) })
     expect(git('branch', '--list', thread.worktree!.branch)).toContain(thread.worktree!.branch)

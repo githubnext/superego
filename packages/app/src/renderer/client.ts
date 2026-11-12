@@ -3,18 +3,18 @@
 import { useEffect, useState } from 'react'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
-import type { Client, Feature, Json, MethodName, Notifications, Params, Result, ThreadInfo, SettingsSnapshot } from '@mu/protocol'
-import type { MachineEntry, MachineId, MuBridge } from '../shared.ts'
+import type { Client, Feature, Json, MethodName, Notifications, Params, Result, ThreadInfo, SettingsSnapshot } from '@superego/protocol'
+import type { MachineEntry, MachineId, SuperegoBridge } from '../shared.ts'
 import { useRegistry } from './extension.tsx'
 
 declare global {
-  interface Window { mu: MuBridge }
+  interface Window { superego: SuperegoBridge }
 }
 
 export function machine(id: MachineId): Client {
   return {
-    call: <M extends MethodName>(method: M, params: Params<M>) => window.mu.call(id, method, params) as Promise<Result<M>>,
-    on: (event, listener) => window.mu.onEvent((e) => { if (e.machine === id && e.method === event) listener(e.params as never) }),
+    call: <M extends MethodName>(method: M, params: Params<M>) => window.superego.call(id, method, params) as Promise<Result<M>>,
+    on: (event, listener) => window.superego.onEvent((e) => { if (e.machine === id && e.method === event) listener(e.params as never) }),
   }
 }
 
@@ -26,8 +26,8 @@ export function useMachineList(): MachineEntry[] {
   const [machines, setMachines] = useState<MachineEntry[]>([])
   useEffect(() => {
     let live = true
-    void window.mu.machines().then((list) => { if (live) setMachines(list) })
-    const off = window.mu.onEvent((event) => { if (event.method === '$machines') setMachines(event.params as MachineEntry[]) })
+    void window.superego.machines().then((list) => { if (live) setMachines(list) })
+    const off = window.superego.onEvent((event) => { if (event.method === '$machines') setMachines(event.params as MachineEntry[]) })
     return () => { live = false; off() }
   }, [])
   return machines
@@ -85,13 +85,13 @@ export const useThreads = (machineId: MachineId, connected: boolean) =>
   useWatch<ThreadInfo[]>(machineId, connected, 'all', (client) => client.call('threads.watch', {}),
     (_value, _method, params: Notifications['threads.changed']) => params.value, ['threads.changed'])
 
-/** A live value an extension's daemon half publishes (`mu.value`), on `machineId`. */
+/** A live value an extension's daemon half publishes (`superego.value`), on `machineId`. */
 export const useValue = <T,>(machineId: MachineId, connected: boolean, key: string) =>
   useWatch<T>(machineId, connected, key, (client) => client.call('value.watch', { key }) as Promise<{ sub: string; value: T }>,
     (_value, _method, params: Notifications['value.changed']) => params.value as T, ['value.changed'])
 
 /** Call any method on a machine, including an extension's own (`<extension>.<method>`). */
-export const call = <R = unknown,>(machineId: MachineId, method: string, params: unknown = {}) => window.mu.call(machineId, method, params) as Promise<R>
+export const call = <R = unknown,>(machineId: MachineId, method: string, params: unknown = {}) => window.superego.call(machineId, method, params) as Promise<R>
 
 export const useThreadView = (machineId: MachineId, connected: boolean, id: string | undefined) =>
   useWatch<ConversationView>(machineId, connected, id, (client) => client.call('thread.watch', { id: id! }),
@@ -103,7 +103,7 @@ export const useSettings = (machineId: MachineId, connected: boolean) =>
     (_value, _method, params: Notifications['settings.changed']) => params.value, ['settings.changed'])
 
 /**
- * One of the app's settings (those UI halves declare with `mu.appSettings`, or the core's), and a way to change it.
+ * One of the app's settings (those UI halves declare with `superego.appSettings`, or the core's), and a way to change it.
  * Undefined until the app's settings have loaded.
  */
 export function useAppSetting<T extends Json>(key: string): [T | undefined, (value: T) => Promise<unknown>] {

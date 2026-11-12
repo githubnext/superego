@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto'
 import { cpSync, existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import type { AppConfig } from '@mu/protocol'
+import type { AppConfig } from '@superego/protocol'
 
 /** The executable to run the app at `appDir` with: its own development bundle on macOS, else Electron's. */
 export function devApp(appDir: string, app: AppConfig): string {
@@ -17,7 +17,7 @@ export function devApp(appDir: string, app: AppConfig): string {
   if (process.platform !== 'darwin') return electron
   const source = join(dirname(dirname(dirname(electron))))
   if (!source.endsWith('.app')) return electron
-  const bundleId = `${app.bundleId ?? `dev.mu.${app.id}`}.dev`
+  const bundleId = `${app.bundleId ?? `dev.superego.${app.id}`}.dev`
   const icon = join(appDir, 'resources', `${app.id}.icon`)
   const icns = join(appDir, 'resources', 'icon.icns')
   const home = join(appDir, 'node_modules', `.${app.id}-dev`)

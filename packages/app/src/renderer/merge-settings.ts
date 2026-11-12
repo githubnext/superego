@@ -1,6 +1,6 @@
 // "All machines" in Settings: one view over the settings of every connected machine, for editing them together. It is
 // a bulk edit, not a global default: machines that are offline or added later keep their own values.
-import type { Json, SectionInfo, SettingInfo, SettingsSnapshot } from '@mu/protocol'
+import type { Json, SectionInfo, SettingInfo, SettingsSnapshot } from '@superego/protocol'
 
 export type MergedSetting = SettingInfo & {
   /** The machines that have this setting; a change goes to each of them. */

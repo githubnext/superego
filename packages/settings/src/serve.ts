@@ -1,4 +1,4 @@
-import type { Json, Methods, Notifications } from '@mu/protocol'
+import type { Json, Methods, Notifications } from '@superego/protocol'
 import type { SettingsRegistry } from './registry.ts'
 
 type Handlers = { [M in 'settings.watch' | 'settings.set']: (params: Methods[M]['params']) => Promise<Methods[M]['result']> }

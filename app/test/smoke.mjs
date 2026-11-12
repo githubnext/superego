@@ -3,15 +3,15 @@
 // daemon, which outlived the first app. Run by test/smoke.sh.
 import { app, BrowserWindow } from 'electron'
 
-const phase = process.env.MU_SMOKE_PHASE ?? 'first'
+const phase = process.env.SUPEREGO_SMOKE_PHASE ?? 'first'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 const fail = async (message) => {
   console.error(`smoke(${phase}): FAIL ${message}`)
   const window = BrowserWindow.getAllWindows()[0]
-  if (window) console.error('POPOVER:', await window.webContents.executeJavaScript(`document.querySelector('.mu-font-picker__popover')?.textContent ?? 'none'`).catch(String))
+  if (window) console.error('POPOVER:', await window.webContents.executeJavaScript(`document.querySelector('.superego-font-picker__popover')?.textContent ?? 'none'`).catch(String))
   if (window) console.error('ROWS:', await window.webContents.executeJavaScript(`[...document.querySelectorAll('.machine-row')].map((r) => r.textContent).join(' | ')`).catch(String))
   if (window) console.error('DOM:', (await window.webContents.executeJavaScript('document.body.innerText').catch((e) => String(e))).slice(0, 2000))
-  try { console.error('daemon.log:', readFileSync(`${process.env.MU_HOME}/daemon.log`, 'utf8').slice(-2000)) } catch {}
+  try { console.error('daemon.log:', readFileSync(`${process.env.SUPEREGO_HOME}/daemon.log`, 'utf8').slice(-2000)) } catch {}
   app.exit(1)
 }
 // Any uncaught error in the main process fails the run; in the app it would be an error dialog.
@@ -39,30 +39,30 @@ const until = async (js, label, ms = 15_000) => {
 }
 const STRAY = new URL('../out/main/zz-smoke-restart.js', import.meta.url).pathname
 async function restartOntoNewCode(change) {
-  const before = await run(`window.mu.machines().then((list) => list.find((m) => m.id === 'local'))`)
+  const before = await run(`window.superego.machines().then((list) => list.find((m) => m.id === 'local'))`)
   change()
   await until(`document.querySelector('.service-notice')?.textContent.includes('Restart required')`, 'restart required shown')
   await run(`[...document.querySelectorAll('.service-notice button')].find((b) => b.textContent === 'Restart now').click()`)
   await until(`!document.querySelector('.service-notice')`, 'restart done', 40_000)
-  const after = await run(`window.mu.call('local', 'hello', { client: 'smoke', version: 1 })`)
-  if (after.machine.id !== before.machine.id || !(await run(`window.mu.call('local', 'thread.list', {})`)).length) { await fail('restart lost the machine or its threads'); throw new Error('failed') }
+  const after = await run(`window.superego.call('local', 'hello', { client: 'smoke', version: 1 })`)
+  if (after.machine.id !== before.machine.id || !(await run(`window.superego.call('local', 'thread.list', {})`)).length) { await fail('restart lost the machine or its threads'); throw new Error('failed') }
   return after
 }
-/** With MU_SMOKE_SHOTS=<dir>, a screenshot of the window at this point. */
+/** With SUPEREGO_SMOKE_SHOTS=<dir>, a screenshot of the window at this point. */
 const shot = async (name) => {
-  if (!process.env.MU_SMOKE_SHOTS) return
+  if (!process.env.SUPEREGO_SMOKE_SHOTS) return
   const image = await BrowserWindow.getAllWindows()[0].webContents.capturePage()
-  writeFileSync(`${process.env.MU_SMOKE_SHOTS}/${name}.png`, image.toPNG())
+  writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/${name}.png`, image.toPNG())
 }
 const run = (js, gesture = false) => BrowserWindow.getAllWindows()[0].webContents.executeJavaScript(js, gesture)
 
 await until(`Boolean(document.querySelector('.threads.is-ready'))`, 'local machine connected')
 
 if (phase === 'first') {
-  const id = await run(`window.mu.call('local', 'thread.create', { title: '' }).then((s) => s.id)`)
-  await run(`window.mu.call('local', 'thread.submit', { id: '${id}', text: 'hello from smoke' })`)
-  await until(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread in sidebar')
-  await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
+  const id = await run(`window.superego.call('local', 'thread.create', { title: '' }).then((s) => s.id)`)
+  await run(`window.superego.call('local', 'thread.submit', { id: '${id}', text: 'hello from smoke' })`)
+  await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread in sidebar')
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: hello from smoke')`, 'answer rendered')
   await until(`document.querySelector('.thread__profile')?.textContent === 'default'`, "the user's default profile, shown in the header")
   await until(`document.querySelector('.smoke-badge')?.textContent === 'profile ui: hello from smoke'`, "the profile's own UI, loaded at runtime")
@@ -97,7 +97,7 @@ if (phase === 'first') {
   })
   await new Promise((resolve) => site.listen(0, '127.0.0.1', resolve))
   const page = `http://127.0.0.1:${site.address().port}/page`
-  await run(`window.mu.call('local', 'thread.submit', { id: '${id}', text: 'see ${page}' })`)
+  await run(`window.superego.call('local', 'thread.submit', { id: '${id}', text: 'see ${page}' })`)
   await until(`Boolean(document.querySelector('.md a[href="${page}"] + .md__pane-link'))`, 'pane button beside a web link')
   await run(`document.querySelector('.md a[href="${page}"] + .md__pane-link').click()`)
   await until(`Boolean(document.querySelector('.frame-pane iframe[src="${page}"]'))`, 'link opened in a preview pane')
@@ -110,25 +110,25 @@ if (phase === 'first') {
   site.close()
   // ask-user: a replayed agent asks; the question shows above the composer and the thread as needing you; an answer
   // from the card reaches it, and it carries on.
-  await run(`window.mu.call('local', 'settings.set', { key: 'agent.model', value: 'replay/replay' })`)
-  const asking = await run(`window.mu.call('local', 'thread.create', {}).then((s) => window.mu.call('local', 'thread.submit', { id: s.id, text: 'pick a colour' }).then(() => s.id))`)
-  await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('pick a colour'))?.click()`)
+  await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: 'replay/replay' })`)
+  const asking = await run(`window.superego.call('local', 'thread.create', {}).then((s) => window.superego.call('local', 'thread.submit', { id: s.id, text: 'pick a colour' }).then(() => s.id))`)
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('pick a colour'))?.click()`)
   await until(`document.querySelector('.ask-user')?.textContent.includes('Which colour?')`, 'question card above the composer')
-  await until(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('pick a colour') && li.querySelector('.mu-status--blocked'))`, 'thread marked as needing you')
+  await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('pick a colour') && li.querySelector('.superego-status--blocked'))`, 'thread marked as needing you')
   // Sent while it's busy, a follow-up shows at once as waiting, and goes in when the agent is done.
-  await run(`window.mu.call('local', 'thread.submit', { id: '${asking}', text: 'then paint it', whenBusy: 'followUp' })`)
+  await run(`window.superego.call('local', 'thread.submit', { id: '${asking}', text: 'then paint it', whenBusy: 'followUp' })`)
   await until(`document.querySelector('.msg--queued')?.textContent.includes('then paint it') && document.querySelector('.msg--queued').textContent.includes('Queued')`, 'follow-up shown as queued')
   await run(`[...document.querySelectorAll('.ask-user button')].find((b) => b.textContent === 'blue').click()`)
   await until(`!document.querySelector('.ask-user') && document.querySelector('.ask-user-asked')?.textContent.includes('blue') && document.querySelector('.transcript').textContent.includes('Blue it is.')`, 'answered, agent carried on')
   await until(`!document.querySelector('.msg--queued') && document.querySelector('.transcript').textContent.includes('then paint it') && document.querySelector('.transcript').textContent.includes('Noted for later.')`, 'queued follow-up went in')
-  await run(`window.mu.call('local', 'settings.set', { key: 'agent.model', value: 'faux/faux-1' })`)
+  await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: 'faux/faux-1' })`)
   void asking
   // Unread results elsewhere: a count beside Settings, which lists them and goes to the one picked.
-  await run(`window.mu.call('local', 'thread.create', { title: 'unread elsewhere', prompt: 'finish elsewhere' })`)
+  await run(`window.superego.call('local', 'thread.create', { title: 'unread elsewhere', prompt: 'finish elsewhere' })`)
   await until(`Number(document.querySelector('.unread-button')?.textContent) >= 1`, 'unread count beside settings')
   await run(`document.querySelector('.unread-button').click()`)
-  await until(`[...document.querySelectorAll('.unread-menu .mu-menu__item')].some((i) => i.textContent.includes('unread elsewhere'))`, 'unread threads listed')
-  await run(`[...document.querySelectorAll('.unread-menu .mu-menu__item')].find((i) => i.textContent.includes('unread elsewhere')).click()`)
+  await until(`[...document.querySelectorAll('.unread-menu .superego-menu__item')].some((i) => i.textContent.includes('unread elsewhere'))`, 'unread threads listed')
+  await run(`[...document.querySelectorAll('.unread-menu .superego-menu__item')].find((i) => i.textContent.includes('unread elsewhere')).click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'unread elsewhere'`, 'went to the unread thread')
   await until(`!document.querySelector('.unread-menu')`, 'unread menu closed')
   // The sidebar's modes: the ··· menu (portalled, so a scrolling sidebar can't cut it off), ⌘\\ rail, ⌘I details.
@@ -138,10 +138,10 @@ if (phase === 'first') {
     contents.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
   }
   await run(`document.querySelector('.threads-menu-trigger').click()`)
-  await until(`[...document.querySelectorAll('.mu-menu .mu-menu__item')].some((i) => i.textContent.includes('Needs you first'))`, 'sidebar menu open')
+  await until(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].some((i) => i.textContent.includes('Needs you first'))`, 'sidebar menu open')
   await shot('menu')
-  await run(`[...document.querySelectorAll('.mu-menu .mu-menu__item')].find((i) => i.textContent.includes('Needs you first')).click()`)
-  await until(`window.mu.call('app', 'settings.watch', {}).then((r) => r.value.values['threads.sort'] === 'status')`, 'sorted by status')
+  await run(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].find((i) => i.textContent.includes('Needs you first')).click()`)
+  await until(`window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['threads.sort'] === 'status')`, 'sorted by status')
   await key('\\')
   await until(`Boolean(document.querySelector('.threads-rail.is-compact'))`, 'rail')
   await key('\\')
@@ -150,7 +150,7 @@ if (phase === 'first') {
   await until(`document.querySelector('.threads-details')?.textContent.includes('Machine')`, 'details pane')
   await key('i')
   await until(`!document.querySelector('.threads-details')`, 'details closed')
-  await run(`window.mu.call('app', 'app.settings.set', { key: 'threads.sort', value: 'created' })`)
+  await run(`window.superego.call('app', 'app.settings.set', { key: 'threads.sort', value: 'created' })`)
   // ⌘K is commands only; ⌘L finds a thread by name and opens it.
   await key('k')
   await until(`Boolean(document.querySelector('.palette__input'))`, 'palette')
@@ -193,28 +193,28 @@ if (phase === 'first') {
   await setValue('.new-thread [aria-label="Prompt"]', 'hello from the dialog')
   await run(`[...document.querySelectorAll('.new-thread button')].find((b) => b.textContent.startsWith('Start')).click()`)
   await until(`document.querySelector('.new-thread__error')?.textContent.includes('No folder')`, 'missing folder refused')
-  await setValue('.new-thread [aria-label="Project folder"]', process.env.MU_HOME)
+  await setValue('.new-thread [aria-label="Project folder"]', process.env.SUPEREGO_HOME)
   await key('Enter', ['meta'])
   await until(`!document.querySelector('.new-thread') && document.querySelector('.transcript')?.textContent.includes('echo: hello from the dialog')`, 'started with the prompt')
   // Panes: in a git repo, the changes, the editor and an artifact the agent could have written, beside the thread.
   const { execFileSync: git } = await import('node:child_process')
-  const repo = `${process.env.MU_HOME}/repo`
+  const repo = `${process.env.SUPEREGO_HOME}/repo`
   git('mkdir', ['-p', repo]); git('git', ['init', '-q', repo])
   writeFileSync(`${repo}/notes.md`, 'one\n')
   git('git', ['-C', repo, 'add', '.']); git('git', ['-C', repo, '-c', 'user.email=s@s', '-c', 'user.name=s', 'commit', '-q', '-m', 'start'])
-  const paned = await run(`window.mu.call('local', 'thread.create', { cwd: ${JSON.stringify(repo)}, title: 'panes' }).then((s) => s.id)`)
-  await run(`window.mu.call('local', 'file.write', { id: '${paned}', path: 'notes.md', content: 'two\\n' })`)
-  await run(`window.mu.call('local', 'file.write', { id: '${paned}', path: 'page.html', content: '<body><script>document.body.dataset.ok = \\'yes\\'</script>An artifact</body>' })`)
-  await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('panes')).click()`)
+  const paned = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(repo)}, title: 'panes' }).then((s) => s.id)`)
+  await run(`window.superego.call('local', 'file.write', { id: '${paned}', path: 'notes.md', content: 'two\\n' })`)
+  await run(`window.superego.call('local', 'file.write', { id: '${paned}', path: 'page.html', content: '<body><script>document.body.dataset.ok = \\'yes\\'</script>An artifact</body>' })`)
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('panes')).click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'panes'`, 'pane thread open')
   await key('d', ['meta', 'shift'])
   await until(`[...document.querySelectorAll('.diff-row--add')].some((r) => r.textContent === '+two')`, 'changes pane shows the edit')
-  await run(`window.mu.call('local', 'pane.open', { id: '${paned}', kind: 'editor', params: { path: 'notes.md' } })`)
+  await run(`window.superego.call('local', 'pane.open', { id: '${paned}', kind: 'editor', params: { path: 'notes.md' } })`)
   await until(`document.querySelector('.cm-content')?.textContent.includes('two')`, 'editor pane shows the file')
-  await run(`window.mu.call('local', 'pane.open', { id: '${paned}', kind: 'artifact', params: { path: 'page.html' } })`)
+  await run(`window.superego.call('local', 'pane.open', { id: '${paned}', kind: 'artifact', params: { path: 'page.html' } })`)
   const artifactRan = async () => {
     for (let i = 0; i < 100; i++) {
-      const frame = BrowserWindow.getAllWindows()[0].webContents.mainFrame.framesInSubtree.find((f) => f.url.startsWith('mu-artifact:'))
+      const frame = BrowserWindow.getAllWindows()[0].webContents.mainFrame.framesInSubtree.find((f) => f.url.startsWith('superego-artifact:'))
       if (frame && await frame.executeJavaScript('document.body?.dataset.ok').catch(() => undefined) === 'yes') return
       await new Promise((r) => setTimeout(r, 100))
     }
@@ -245,8 +245,8 @@ if (phase === 'first') {
   await until(`!document.querySelector('.panes__tab')`, 'panes closed')
   // The header's pane menu opens one too.
   await run(`document.querySelector('.thread__panes').click()`)
-  await until(`[...document.querySelectorAll('.mu-menu__item')].some((i) => i.textContent === 'Changes')`, 'pane menu offers Changes')
-  await run(`[...document.querySelectorAll('.mu-menu__item')].find((i) => i.textContent === 'Changes').click()`)
+  await until(`[...document.querySelectorAll('.superego-menu__item')].some((i) => i.textContent === 'Changes')`, 'pane menu offers Changes')
+  await run(`[...document.querySelectorAll('.superego-menu__item')].find((i) => i.textContent === 'Changes').click()`)
   await until(`document.querySelector('.panes__tab')?.textContent.startsWith('Changes')`, 'pane menu opened Changes')
   await key('w')
   await until(`!document.querySelector('.panes__tab')`, 'menu pane closed')
@@ -274,9 +274,9 @@ if (phase === 'first') {
   await until(`(() => { const base = getComputedStyle(document.querySelector('.cm-content')).color; return [...document.querySelectorAll('.cm-content .cm-line span')].some((s) => s.textContent === 'body' && getComputedStyle(s).color !== base) })()`, 'html in the editor is highlighted')
   await shot('files')
   // The editor keeps its place: when focus comes back to it from the keyboard, and when its thread is shown again.
-  await run(`window.mu.call('local', 'file.write', { id: '${paned}', path: 'long.md', content: Array.from({ length: 300 }, (_, i) => 'line ' + i).join('\\n') })`)
-  const editorPane = await run(`window.mu.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${paned}').panes[0].id)`)
-  await run(`window.mu.call('local', 'pane.update', { id: '${paned}', pane: '${editorPane}', params: { path: 'long.md' } })`)
+  await run(`window.superego.call('local', 'file.write', { id: '${paned}', path: 'long.md', content: Array.from({ length: 300 }, (_, i) => 'line ' + i).join('\\n') })`)
+  const editorPane = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${paned}').panes[0].id)`)
+  await run(`window.superego.call('local', 'pane.update', { id: '${paned}', pane: '${editorPane}', params: { path: 'long.md' } })`)
   await until(`document.querySelector('.file-editor__scroll')?.scrollHeight > 3000`, 'a long file open')
   await run(`document.querySelector('.file-editor__scroll').scrollTop = 1500`)
   await new Promise((r) => setTimeout(r, 200))
@@ -298,9 +298,9 @@ if (phase === 'first') {
   await key('Escape', [])
   await until(`!document.querySelector('.navigator')`, 'navigator closed')
   if (await run(`document.querySelector('.cm-content').textContent`) !== docBefore) { await fail('the editor changed its text on app keys'); throw new Error('failed') }
-  await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => !li.classList.contains('is-selected')).click()`)
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => !li.classList.contains('is-selected')).click()`)
   await until(`document.querySelector('.thread__title')?.textContent !== 'panes'`, 'another thread')
-  await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('panes')).click()`)
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('panes')).click()`)
   await until(`document.querySelector('.file-editor__scroll')?.scrollHeight > 3000`, 'the long file again')
   await until(`Math.abs(document.querySelector('.file-editor__scroll').scrollTop - 1500) <= 4`, 'the editor where it was left')
   // Changed on disk by someone else while open (another editor, git): the editor shows it at once, still in place.
@@ -309,7 +309,7 @@ if (phase === 'first') {
   renameSync(`${repo}/.long.md.tmp`, `${repo}/long.md`)
   await until(`document.querySelector('.cm-content')?.textContent.includes('edited ')`, 'the change shown')
   await until(`Boolean(document.querySelector('.cm-content .cm-arrived'))`, 'the change flashes as it arrives')
-  if (process.env.MU_SMOKE_SHOTS) writeFileSync(`${process.env.MU_SMOKE_SHOTS}/arrival.png`, (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG())
+  if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/arrival.png`, (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG())
   await until(`!document.querySelector('.cm-content .cm-arrived')`, 'and fades')
   await until(`Math.abs(document.querySelector('.file-editor__scroll').scrollTop - 1500) <= 4`, 'still where it was')
   // ⌘W closes the pane with the focus: the editor's, here (switching back put it in the prompt).
@@ -335,7 +335,7 @@ if (phase === 'first') {
   await until(`Boolean(document.querySelector('.app__sidebar'))`, 'sidebar shown')
   // ⌃Tab: from where keyboard focus is (the prompt, in the thread), to each pane beside it, and around; ⌘W closes the
   // one it's in.
-  await run(`window.mu.call('local', 'pane.open', { id: '${paned}', kind: 'diff' })`)
+  await run(`window.superego.call('local', 'pane.open', { id: '${paned}', kind: 'diff' })`)
   await until(`Boolean(document.querySelector('.panes__tab'))`, 'a pane beside')
   await run(`document.querySelector('.composer textarea').focus()`)
   await key('Tab', ['control'])
@@ -348,12 +348,12 @@ if (phase === 'first') {
   await until(`!document.querySelector('.panes__tab')`, 'diff closed')
   // Sessions: the panes repository is one, the home folder another; ⌘⇧[ and ⌘⇧] go between them.
   const { mkdirSync } = await import('node:fs')
-  const elsewhere = `${process.env.MU_HOME}/elsewhere`
+  const elsewhere = `${process.env.SUPEREGO_HOME}/elsewhere`
   mkdirSync(elsewhere, { recursive: true })
-  const other = await run(`window.mu.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'elsewhere', prompt: 'hi' }).then((t) => t.id)`)
+  const other = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'elsewhere', prompt: 'hi' }).then((t) => t.id)`)
   await until(`[...document.querySelectorAll('.threads-session__name')].some((n) => n.textContent.startsWith('elsewhere'))`, 'a session per project')
   // ⌘. : the next thread with something unread, here the new one once it has answered.
-  await until(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('elsewhere') && li.querySelector('.mu-status--done'))`, 'other thread done, in the window')
+  await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('elsewhere') && li.querySelector('.superego-status--done'))`, 'other thread done, in the window')
   // Each press goes to the next unread one; looking at it marks it seen, so the presses reach the new one.
   for (let press = 0; press < 6 && await run(`document.querySelector('.thread__title')?.textContent`) !== 'elsewhere'; press++) {
     const was = await run(`document.querySelector('.thread__title')?.textContent`)
@@ -374,10 +374,10 @@ if (phase === 'first') {
   await dbg.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true })
   await run(`document.querySelector('.composer textarea').focus()`)
   await key('Left', ['meta', 'alt'])
-  await until(`document.activeElement?.matches('.app__sidebar .mu-list-item.is-selected')`, 'focus to the sidebar, on the selected thread')
+  await until(`document.activeElement?.matches('.app__sidebar .superego-list-item.is-selected')`, 'focus to the sidebar, on the selected thread')
   const ring = await run(`getComputedStyle(document.activeElement).outlineStyle`)
   await key('Down', [])
-  await until(`document.activeElement?.matches('.app__sidebar .mu-list-item:not(.is-selected)')`, 'down the sidebar')
+  await until(`document.activeElement?.matches('.app__sidebar .superego-list-item:not(.is-selected)')`, 'down the sidebar')
   await shot('focus')
   await key('Right', ['meta', 'alt'])
   await until(`document.activeElement?.matches('.composer textarea')`, 'focus back to the prompt')
@@ -400,13 +400,13 @@ if (phase === 'first') {
   await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('read this') && m.querySelector('.msg__files .attachment__name')?.textContent === 'plan.md') && !document.querySelector('.composer__files')`, 'file sent with the message')
   await shot('sessions')
   // Scrolling back: a thread longer than its watch holds pages in its earlier messages as the top comes near.
-  const long = await run(`window.mu.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'long' }).then((t) => t.id)`)
+  const long = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'long' }).then((t) => t.id)`)
   for (let i = 0; i < 30; i++) {
-    await run(`window.mu.call('local', 'thread.submit', { id: '${long}', text: 'message ${i}' })`)
-    await until(`window.mu.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${long}').status.state === 'done')`, `long thread turn ${i}`)
+    await run(`window.superego.call('local', 'thread.submit', { id: '${long}', text: 'message ${i}' })`)
+    await until(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${long}').status.state === 'done')`, `long thread turn ${i}`)
   }
-  await run(`window.mu.call('local', 'thread.seen', { id: '${long}' }).then(() => null)`)
-  await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('long')).click()`)
+  await run(`window.superego.call('local', 'thread.seen', { id: '${long}' }).then(() => null)`)
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('long')).click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'long' && document.querySelector('.transcript')?.textContent.includes('message 29')`, 'the long thread, at its end')
   if (await run(`document.querySelector('.transcript').textContent.includes('echo: message 0')`)) { await fail('the whole long thread came at once'); throw new Error('failed') }
   for (let i = 0; i < 20 && !(await run(`document.querySelector('.transcript').textContent.includes('echo: message 0')`)); i++) {
@@ -423,19 +423,19 @@ if (phase === 'first') {
   await until(`document.querySelector('.settings')?.textContent.includes('Appearance') && document.querySelector('.settings').textContent.includes('Notifications')`, 'app settings')
   await shot('settings')
   // Fonts: the picker lists installed families (needs a user gesture), and a choice sets the CSS variable.
-  await run(`document.querySelector('[data-key="app.font.interface"] .mu-font-picker__button').click()`, true)
-  await until(`document.querySelectorAll('.mu-font-picker__list button').length > 5`, 'installed fonts listed', 40_000)
-  await run(`[...document.querySelectorAll('.mu-font-picker__list button')].find((b) => b.textContent === 'Helvetica' || b.textContent === 'Arial').click()`)
-  await until(`/Helvetica|Arial/.test(document.documentElement.style.getPropertyValue('--mu-font'))`, 'interface font applied')
-  await run(`window.mu.call('app', 'app.settings.set', { key: 'app.font.mono', value: 'Menlo' })`)
-  await until(`document.documentElement.style.getPropertyValue('--mu-mono').includes('Menlo')`, 'mono font applied')
+  await run(`document.querySelector('[data-key="app.font.interface"] .superego-font-picker__button').click()`, true)
+  await until(`document.querySelectorAll('.superego-font-picker__list button').length > 5`, 'installed fonts listed', 40_000)
+  await run(`[...document.querySelectorAll('.superego-font-picker__list button')].find((b) => b.textContent === 'Helvetica' || b.textContent === 'Arial').click()`)
+  await until(`/Helvetica|Arial/.test(document.documentElement.style.getPropertyValue('--superego-font'))`, 'interface font applied')
+  await run(`window.superego.call('app', 'app.settings.set', { key: 'app.font.mono', value: 'Menlo' })`)
+  await until(`document.documentElement.style.getPropertyValue('--superego-mono').includes('Menlo')`, 'mono font applied')
   // The accent: shown as a swatch and its CSS, and applied as the colour everything accented takes.
   await until(`document.querySelector('[data-key="app.accent"] .color-field input:not([type=color])')?.value === 'color(display-p3 0.155 0.319 0.654)'`, 'accent colour shown')
   await setValue('[data-key="app.accent"] .color-field input:not([type=color])', 'oklch(0.6 0.2 30)')
   await run(`document.querySelector('[data-key="app.accent"] .color-field input:not([type=color])').dispatchEvent(new FocusEvent('focusout', { bubbles: true }))`)
-  await until(`document.documentElement.style.getPropertyValue('--mu-accent-base') === 'oklch(0.6 0.2 30)'`, 'accent colour applied')
+  await until(`document.documentElement.style.getPropertyValue('--superego-accent-base') === 'oklch(0.6 0.2 30)'`, 'accent colour applied')
   await run(`[...document.querySelectorAll('[data-key="app.accent"] button')].find((b) => b.textContent === 'Reset').click()`)
-  await until(`document.documentElement.style.getPropertyValue('--mu-accent-base').startsWith('color(display-p3')`, 'accent colour reset')
+  await until(`document.documentElement.style.getPropertyValue('--superego-accent-base').startsWith('color(display-p3')`, 'accent colour reset')
   // Keyboard: record a new shortcut for an action; the old one stops working, the new one runs it; a clash shows.
   const keysOf = (id) => `document.querySelector('[data-action="${id}"] .keymap__keys')`
   await until(`${keysOf('threads.rail')}?.textContent === '${process.platform === 'darwin' ? '⌘\\\\' : 'Ctrl+\\\\'}'`, 'keyboard settings list the rail shortcut')
@@ -452,7 +452,7 @@ if (phase === 'first') {
   await until(`Boolean(document.querySelector('.threads-rail.is-compact'))`, 'the new shortcut runs the action')
   await key('R', ['meta', 'shift'])
   await until(`!document.querySelector('.threads-rail.is-compact')`, 'and back')
-  await run(`window.mu.call('app', 'app.settings.set', { key: 'app.keys', value: { 'threads.rail': 'mod+shift+r', 'threads.details': 'mod+shift+r' } })`)
+  await run(`window.superego.call('app', 'app.settings.set', { key: 'app.keys', value: { 'threads.rail': 'mod+shift+r', 'threads.details': 'mod+shift+r' } })`)
   await until(`document.querySelector('[data-action="threads.rail"] .keymap__clash')?.textContent.includes('Toggle thread details')`, 'clash shown')
   await run(`document.querySelector('.keymap').scrollIntoView()`)
   await shot('keyboard')
@@ -460,17 +460,17 @@ if (phase === 'first') {
   await until(`!document.querySelector('.keymap__clash') && ${keysOf('threads.rail')}?.textContent.includes('\\\\')`, 'reset to the actions’ own')
   // Machines: add one over ssh that can't connect; it shows its error, then goes away again.
   await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent === 'Machines').click()`)
-  await run(`window.mu.call('app', 'machines.add', { label: 'Nowhere', target: 'mu-smoke.invalid' })`)
-  await until(`[...document.querySelectorAll('.machine-row')].some((row) => row.textContent.includes('mu-smoke.invalid') && /disconnected/.test(row.textContent))`, 'ssh machine listed with its error')
-  await run(`(async () => { const list = await window.mu.machines(); await window.mu.call('app', 'machines.remove', { id: list.find((m) => m.label === 'Nowhere').id }) })()`)
-  await until(`![...document.querySelectorAll('.machine-row')].some((row) => row.textContent.includes('mu-smoke.invalid'))`, 'machine removed')
+  await run(`window.superego.call('app', 'machines.add', { label: 'Nowhere', target: 'superego-smoke.invalid' })`)
+  await until(`[...document.querySelectorAll('.machine-row')].some((row) => row.textContent.includes('superego-smoke.invalid') && /disconnected/.test(row.textContent))`, 'ssh machine listed with its error')
+  await run(`(async () => { const list = await window.superego.machines(); await window.superego.call('app', 'machines.remove', { id: list.find((m) => m.label === 'Nowhere').id }) })()`)
+  await until(`![...document.querySelectorAll('.machine-row')].some((row) => row.textContent.includes('superego-smoke.invalid'))`, 'machine removed')
   // A second machine: another daemon, reached through a command that pipes stdio to it (as docker exec would).
-  const second = `MU_HOME='${process.env.MU_HOME}/second' MU_MODEL=faux node '${new URL('../bin/mu.ts', import.meta.url).pathname}' connect --start`
-  await run(`window.mu.call('app', 'machines.add', { label: 'Second', via: ${JSON.stringify(second)} })`)
+  const second = `SUPEREGO_HOME='${process.env.SUPEREGO_HOME}/second' SUPEREGO_MODEL=faux node '${new URL('../bin/superego.ts', import.meta.url).pathname}' connect --start`
+  await run(`window.superego.call('app', 'machines.add', { label: 'Second', via: ${JSON.stringify(second)} })`)
   await until(`[...document.querySelectorAll('.machine-row')].some((row) => row.querySelector('input')?.value === 'Second' && / · connected/.test(row.textContent))`, 'second machine connected', 30_000)
   await shot('machines')
   // All machines: a disagreement shows as Mixed, and one change reaches both.
-  await run(`window.mu.call('local', 'settings.set', { key: 'agent.model', value: 'faux/faux-1' })`)
+  await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: 'faux/faux-1' })`)
   await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent === 'All machines').click()`)
   await until(`document.querySelector('[data-key="agent.model"]')?.textContent.includes('Mixed')`, 'mixed model across machines')
   await run(`(() => {
@@ -479,25 +479,25 @@ if (phase === 'first') {
     select.dispatchEvent(new Event('change', { bubbles: true }))
   })()`)
   await until(`!document.querySelector('[data-key="agent.model"]')?.textContent.includes('Mixed')`, 'model set on all machines')
-  const secondId = await run(`window.mu.machines().then((list) => list.find((m) => m.label === 'Second').id)`)
-  const secondModel = await run(`window.mu.call('${secondId}', 'settings.watch', {}).then((r) => r.value.values['agent.model'])`)
+  const secondId = await run(`window.superego.machines().then((list) => list.find((m) => m.label === 'Second').id)`)
+  const secondModel = await run(`window.superego.call('${secondId}', 'settings.watch', {}).then((r) => r.value.values['agent.model'])`)
   if (secondModel !== 'faux/faux-1') { await fail(`second machine model is ${secondModel}`); throw new Error('failed') }
-  await until(`window.mu.machines().then((list) => list.filter((m) => m.state === 'connected').length === 2)`, 'both machines connected')
+  await until(`window.superego.machines().then((list) => list.filter((m) => m.state === 'connected').length === 2)`, 'both machines connected')
   await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent.includes('This computer')).click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Providers') && Boolean(document.querySelector('[data-key="agent.model"]'))`, 'machine settings')
   await shot('providers')
   const hasFaux = await run(`[...document.querySelectorAll('[data-key="agent.model"] option')].some((o) => o.value === 'faux/faux-1')`)
   if (!hasFaux) { await fail('model choices'); throw new Error('failed') }
   // The menu bar: on by default; "Hide Dock icon" needs it; turning it off takes the item away.
-  const desktop = () => run(`window.mu.call('app', 'app.desktop', {})`)
+  const desktop = () => run(`window.superego.call('app', 'app.desktop', {})`)
   if (!(await desktop()).menuBar) { await fail('menu bar item not up by default'); throw new Error('failed') }
-  await run(`window.mu.call('app', 'app.settings.set', { key: 'app.hideDock', value: true })`)
+  await run(`window.superego.call('app', 'app.settings.set', { key: 'app.hideDock', value: true })`)
   if (process.platform === 'darwin' && !(await desktop()).dockHidden) { await fail('dock not hidden'); throw new Error('failed') }
-  await run(`window.mu.call('app', 'app.settings.set', { key: 'app.menuBar', value: false })`)
-  await until(`window.mu.call('app', 'app.desktop', {}).then((d) => !d.menuBar && !d.dockHidden)`, 'menu bar off, dock back')
-  const refused = await run(`window.mu.call('app', 'app.settings.set', { key: 'app.hideDock', value: true }).then(() => 'set', (e) => e.message)`)
+  await run(`window.superego.call('app', 'app.settings.set', { key: 'app.menuBar', value: false })`)
+  await until(`window.superego.call('app', 'app.desktop', {}).then((d) => !d.menuBar && !d.dockHidden)`, 'menu bar off, dock back')
+  const refused = await run(`window.superego.call('app', 'app.settings.set', { key: 'app.hideDock', value: true }).then(() => 'set', (e) => e.message)`)
   if (process.platform === 'darwin' && !/menu bar/.test(refused)) { await fail(`hide dock without menu bar: ${refused}`); throw new Error('failed') }
-  await run(`window.mu.call('app', 'app.settings.set', { key: 'app.menuBar', value: true })`)
+  await run(`window.superego.call('app', 'app.settings.set', { key: 'app.menuBar', value: true })`)
   // Restart: new daemon code on disk (faked with an extra file in the build) shows "Restart required"; restarting
   // brings up a daemon of that build, with the threads still there.
   await restartOntoNewCode(() => writeFileSync(STRAY, '// smoke\n'))
@@ -509,36 +509,36 @@ if (phase === 'first') {
   }
   await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent === 'General').click()`)
   await until(`Boolean(document.querySelector('[data-key="app.font.mono"]'))`, 'general pane')
-  await run(`document.querySelector('[data-key="app.font.mono"] .mu-font-picker__button').click()`, true)
+  await run(`document.querySelector('[data-key="app.font.mono"] .superego-font-picker__button').click()`, true)
   await until(`document.activeElement?.placeholder === 'Search fonts'`, 'picker focused')
   await escape()
-  await until(`!document.querySelector('.mu-font-picker__popover') && Boolean(document.querySelector('.mu-dialog.settings'))`, 'picker closed, dialog open')
+  await until(`!document.querySelector('.superego-font-picker__popover') && Boolean(document.querySelector('.superego-dialog.settings'))`, 'picker closed, dialog open')
   await escape()
-  await until(`!document.querySelector('.mu-dialog.settings')`, 'dialog closed by Escape')
+  await until(`!document.querySelector('.superego-dialog.settings')`, 'dialog closed by Escape')
   // Web access: the daemon serves the same window to a browser. A window without the preload is just a web page.
   const port = 20000 + Math.floor(Math.random() * 20000)
-  await run(`window.mu.call('local', 'settings.set', { key: 'web.port', value: ${port} })`)
-  await run(`window.mu.call('local', 'settings.set', { key: 'web.access', value: 'local' })`)
-  const url = await until(`window.mu.call('local', 'settings.watch', {}).then((r) => r.value.sections.find((s) => s.id === 'web')?.data?.url)`, 'web address')
+  await run(`window.superego.call('local', 'settings.set', { key: 'web.port', value: ${port} })`)
+  await run(`window.superego.call('local', 'settings.set', { key: 'web.access', value: 'local' })`)
+  const url = await until(`window.superego.call('local', 'settings.watch', {}).then((r) => r.value.sections.find((s) => s.id === 'web')?.data?.url)`, 'web address')
   const browser = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } })
   await browser.loadURL(url)
   const inBrowser = async (js, label) => {
     for (let i = 0; i < 150; i++) { if (await browser.webContents.executeJavaScript(js).catch(() => false)) return; await new Promise((r) => setTimeout(r, 100)) }
     await fail(`web: waiting for ${label}`); throw new Error('failed')
   }
-  await inBrowser(`window.mu.web === true && location.hash === ''`, 'web bridge, token out of the address bar')
-  await inBrowser(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'threads in the browser')
-  await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
+  await inBrowser(`window.superego.web === true && location.hash === ''`, 'web bridge, token out of the address bar')
+  await inBrowser(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'threads in the browser')
+  await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await inBrowser(`document.querySelector('.transcript')?.textContent.includes('echo: hello from smoke')`, 'a transcript in the browser')
   // A phone: one column, the threads in a drawer from the bar at the top.
   browser.setContentSize(390, 844)
   await inBrowser(`Boolean(document.querySelector('.app__mobilebar')) && !document.querySelector('.app__sidebar')`, 'phone layout')
-  if (process.env.MU_SMOKE_SHOTS) writeFileSync(`${process.env.MU_SMOKE_SHOTS}/phone-thread.png`, (await browser.webContents.capturePage()).toPNG())
+  if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-thread.png`, (await browser.webContents.capturePage()).toPNG())
   await browser.webContents.executeJavaScript(`document.querySelector('.app__mobilebar button').click()`)
   await inBrowser(`Boolean(document.querySelector('.app.has-drawer .app__sidebar'))`, 'drawer open')
   await new Promise((r) => setTimeout(r, 300))
-  if (process.env.MU_SMOKE_SHOTS) writeFileSync(`${process.env.MU_SMOKE_SHOTS}/phone-drawer.png`, (await browser.webContents.capturePage()).toPNG())
-  await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
+  if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-drawer.png`, (await browser.webContents.capturePage()).toPNG())
+  await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await inBrowser(`!document.querySelector('.app__sidebar')`, 'drawer closes on picking a thread')
   const wrongToken = await browser.webContents.executeJavaScript(`new Promise((resolve) => { const ws = new WebSocket('ws://' + location.host + '/rpc?token=wrong'); ws.onopen = () => resolve('open'); ws.onerror = () => resolve('refused') })`)
   if (wrongToken !== 'refused') { await fail(`a wrong token got in: ${wrongToken}`); throw new Error('failed') }
@@ -552,25 +552,25 @@ if (phase === 'first') {
   await inBrowser(`document.querySelector('.token-gate__error')?.textContent.includes('isn’t this machine’s')`, 'a wrong token refused')
   await submitToken(url)
   await inBrowser(`!document.querySelector('.token-gate')`, 'the token form gone')
-  await inBrowser(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'threads after typing the token')
-  await inBrowser(`localStorage.getItem('mu.webToken') === ${JSON.stringify(new URL(url).hash.slice('#token='.length))}`, 'the token kept')
+  await inBrowser(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'threads after typing the token')
+  await inBrowser(`localStorage.getItem('superego.webToken') === ${JSON.stringify(new URL(url).hash.slice('#token='.length))}`, 'the token kept')
   browser.destroy()
-  await run(`window.mu.call('local', 'settings.set', { key: 'web.access', value: 'off' })`)
+  await run(`window.superego.call('local', 'settings.set', { key: 'web.access', value: 'off' })`)
   console.log('smoke(first): ok')
 } else {
-  await until(`[...document.querySelectorAll('.mu-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread after reopen')
-  await until(`window.mu.machines().then((list) => list.filter((m) => m.state === 'connected').length === 2)`, 'second machine reconnected after reopen', 30_000)
-  await run(`[...document.querySelectorAll('.mu-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
+  await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread after reopen')
+  await until(`window.superego.machines().then((list) => list.filter((m) => m.state === 'connected').length === 2)`, 'second machine reconnected after reopen', 30_000)
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: typed message')`, 'transcript after reopen')
-  // `mu <dir> -p ...` from a terminal: a new thread there, shown in this (already running) app.
+  // `superego <dir> -p ...` from a terminal: a new thread there, shown in this (already running) app.
   const { execFileSync } = await import('node:child_process')
-  const cli = new URL('../bin/mu.ts', import.meta.url).pathname
-  execFileSync('node', [cli, process.env.MU_HOME, '-p', 'from the cli'], { env: { ...process.env, MU_APP: new URL('..', import.meta.url).pathname } })
+  const cli = new URL('../bin/superego.ts', import.meta.url).pathname
+  execFileSync('node', [cli, process.env.SUPEREGO_HOME, '-p', 'from the cli'], { env: { ...process.env, SUPEREGO_APP: new URL('..', import.meta.url).pathname } })
   await until(`document.querySelector('.thread__title')?.textContent === 'from the cli' && document.querySelector('.transcript')?.textContent.includes('echo: from the cli')`, 'thread opened from the command line', 30_000)
   // The extra file is gone again: the daemon is out of date once more, and restarts back.
   await restartOntoNewCode(() => rmSync(STRAY, { force: true }))
   // App settings persisted in the app's own file.
-  await until(`document.documentElement.style.getPropertyValue('--mu-mono').includes('Menlo')`, 'font after reopen')
+  await until(`document.documentElement.style.getPropertyValue('--superego-mono').includes('Menlo')`, 'font after reopen')
   console.log('smoke(reopen): ok')
 }
 app.exit(0)

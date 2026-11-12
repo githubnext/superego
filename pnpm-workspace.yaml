@@ -9,7 +9,7 @@ allowBuilds:
   protobufjs: false
 minimumReleaseAgeExclude:
   - '@earendil-works/*'
-# The six @earendil-works packages mu is built on aren't on the approved package feed at 1.5.0 (npmjs.org is
+# The six @earendil-works packages Superego is built on aren't on the approved package feed at 1.5.0 (npmjs.org is
 # blocked here): they come from vendor/, packed from the published 1.5.0 tarballs. The rest are pinned to the newest
 # versions the feed carries (it lags npm by a few days). Drop these once the feed has caught up.
 overrides:

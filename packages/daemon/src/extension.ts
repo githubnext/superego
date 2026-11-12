@@ -3,18 +3,18 @@
 // tools, prompt sections and hooks (pi-durable extensions), register settings, define actions, publish live values
 // for the UI to watch, and add to a thread's status.
 import type { Conversation, Extension, Harness } from '@earendil-works/pi-durable'
-import type { ActionDef, AppConfig, BlockedKind, Json, ThreadInfo } from '@mu/protocol'
+import type { ActionDef, AppConfig, BlockedKind, Json, ThreadInfo } from '@superego/protocol'
 import type { DaemonContext } from './daemon.ts'
-import type { SettingsRegistry } from '@mu/settings'
+import type { SettingsRegistry } from '@superego/settings'
 
 export type DaemonExtension = {
   /** Lowercase, unique in the app: `ask-user`, `git`. Its methods and values are named `<name>.<something>`. */
   name: string
   /** Called once when the daemon starts, before interrupted work resumes. May return a cleanup. */
-  setup(mu: DaemonApi): void | (() => void) | Promise<void | (() => void)>
+  setup(superego: DaemonApi): void | (() => void) | Promise<void | (() => void)>
 }
 
-/** Identity for type inference: `export default defineDaemonExtension({ name, setup(mu) { … } })`. */
+/** Identity for type inference: `export default defineDaemonExtension({ name, setup(superego) { … } })`. */
 export const defineDaemonExtension = (extension: DaemonExtension) => extension
 
 /** A value an extension publishes; clients watch it with `value.watch` and get every change. Kept in memory only. */

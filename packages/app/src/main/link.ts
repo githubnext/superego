@@ -1,9 +1,9 @@
 // A link to one machine's daemon. It connects, says hello, relays notifications, and reconnects with backoff when the
 // transport drops. While down, calls fail fast and the renderer keeps showing what it last knew (stale, not gone).
-import { FEATURES, PROTOCOL_VERSION, RpcError, type Hello } from '@mu/protocol'
+import { FEATURES, PROTOCOL_VERSION, RpcError, type Hello } from '@superego/protocol'
 import type { ConnectionState, MachineEntry, MachineId } from '../shared.ts'
 
-import type { Transport } from '@mu/client'
+import type { Transport } from '@superego/client'
 
 /** Errors that another attempt can't fix: the link waits for the user (or a restart) instead of retrying. */
 const FINAL = new Set(['version_mismatch', 'wrong_machine', 'duplicate_machine'])
@@ -76,7 +76,7 @@ export class Link {
         const transport = await this.#options.open()
         this.#transport = transport
         transport.peer.onAny((method, params) => this.#options.onEvent(method, params))
-        const hello = await transport.peer.call<Hello>('hello', { client: 'mu-app', version: PROTOCOL_VERSION, features: [...FEATURES] })
+        const hello = await transport.peer.call<Hello>('hello', { client: 'superego-app', version: PROTOCOL_VERSION, features: [...FEATURES] })
         this.#options.verify?.(hello)
         this.hello = hello
         this.#delay = 500

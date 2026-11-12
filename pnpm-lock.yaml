@@ -210,25 +210,25 @@ importers:
 
   app:
     dependencies:
-      '@mu/app':
+      '@superego/app':
         specifier: workspace:*
         version: link:../packages/app
-      '@mu/ask-user':
+      '@superego/ask-user':
         specifier: workspace:*
         version: link:../extensions/ask-user
-      '@mu/cli':
+      '@superego/cli':
         specifier: workspace:*
         version: link:../packages/cli
-      '@mu/daemon':
+      '@superego/daemon':
         specifier: workspace:*
         version: link:../packages/daemon
-      '@mu/files':
+      '@superego/files':
         specifier: workspace:*
         version: link:../extensions/files
-      '@mu/protocol':
+      '@superego/protocol':
         specifier: workspace:*
         version: link:../packages/protocol
-      '@mu/threads':
+      '@superego/threads':
         specifier: workspace:*
         version: link:../extensions/threads
     devDependencies:
@@ -250,16 +250,16 @@ importers:
       '@earendil-works/pi-schema':
         specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
         version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
-      '@mu/app':
+      '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
-      '@mu/daemon':
+      '@superego/daemon':
         specifier: workspace:*
         version: link:../../packages/daemon
-      '@mu/protocol':
+      '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@mu/ui':
+      '@superego/ui':
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
@@ -275,16 +275,16 @@ importers:
       '@earendil-works/pi-schema':
         specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
         version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
-      '@mu/app':
+      '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
-      '@mu/daemon':
+      '@superego/daemon':
         specifier: workspace:*
         version: link:../../packages/daemon
-      '@mu/protocol':
+      '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@mu/ui':
+      '@superego/ui':
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
@@ -297,13 +297,13 @@ importers:
 
   extensions/threads:
     dependencies:
-      '@mu/app':
+      '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
-      '@mu/protocol':
+      '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@mu/ui':
+      '@superego/ui':
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
@@ -352,19 +352,19 @@ importers:
       '@lezer/highlight':
         specifier: 1.2.5
         version: 1.2.5
-      '@mu/client':
+      '@superego/client':
         specifier: workspace:*
         version: link:../client
-      '@mu/daemon':
+      '@superego/daemon':
         specifier: workspace:*
         version: link:../daemon
-      '@mu/protocol':
+      '@superego/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@mu/settings':
+      '@superego/settings':
         specifier: workspace:*
         version: link:../settings
-      '@mu/ui':
+      '@superego/ui':
         specifier: workspace:*
         version: link:../ui
       '@vitejs/plugin-react':
@@ -404,22 +404,22 @@ importers:
 
   packages/cli:
     dependencies:
-      '@mu/client':
+      '@superego/client':
         specifier: workspace:*
         version: link:../client
-      '@mu/daemon':
+      '@superego/daemon':
         specifier: workspace:*
         version: link:../daemon
-      '@mu/protocol':
+      '@superego/protocol':
         specifier: workspace:*
         version: link:../protocol
 
   packages/client:
     dependencies:
-      '@mu/daemon':
+      '@superego/daemon':
         specifier: workspace:*
         version: link:../daemon
-      '@mu/protocol':
+      '@superego/protocol':
         specifier: workspace:*
         version: link:../protocol
 
@@ -434,10 +434,10 @@ importers:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
         version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)
-      '@mu/protocol':
+      '@superego/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@mu/settings':
+      '@superego/settings':
         specifier: workspace:*
         version: link:../settings
       sucrase:
@@ -458,7 +458,7 @@ importers:
 
   packages/settings:
     dependencies:
-      '@mu/protocol':
+      '@superego/protocol':
         specifier: workspace:*
         version: link:../protocol
 
@@ -467,12 +467,12 @@ importers:
       '@base-ui/react':
         specifier: ^1.9.0
         version: 1.9.0(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      '@mu/protocol':
-        specifier: workspace:*
-        version: link:../protocol
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../protocol
     devDependencies:
       '@types/react':
         specifier: ^19

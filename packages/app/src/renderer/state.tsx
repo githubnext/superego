@@ -2,7 +2,7 @@
 // number of components show them), which thread is selected, and the Settings dialog; those two kept in the window
 // across reloads.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { ThreadInfo } from '@mu/protocol'
+import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { has, useMachineList, useThreads as useThreadsWatch } from './client.ts'
 import { useRegistry } from './extension.tsx'
@@ -35,7 +35,7 @@ const Context = createContext<ShellState | undefined>(undefined)
 
 function useShellState(): ShellState {
   const state = useContext(Context)
-  if (!state) throw new Error('mu hooks need mountApp')
+  if (!state) throw new Error('superego hooks need mountApp')
   return state
 }
 

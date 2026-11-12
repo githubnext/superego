@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { envName, type AppConfig } from '@mu/protocol'
+import { envName, type AppConfig } from '@superego/protocol'
 
-/** The app's environment variables: `env(app)('HOME')` reads `MU_HOME` for mu. */
+/** The app's environment variables: `env(app)('HOME')` reads `SUPEREGO_HOME` for Superego. */
 export const appEnv = (app: AppConfig) => (key: string): string | undefined => process.env[envName(app, key)] || undefined
 
 /** Where the app keeps its data: `<ID>_HOME`, else `~/.<id>`. */

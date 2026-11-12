@@ -2,14 +2,14 @@
 // choices follow the folder's default profile and that machine's settings. ⌘⏎ starts it. A project's profile that
 // isn't allowed yet (it runs that repo's code) can be allowed here, and started.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import type { ModelCatalog, ProfileInfo, ThreadInfo } from '@mu/protocol'
+import type { ModelCatalog, ProfileInfo, ThreadInfo } from '@superego/protocol'
 import { useRegistry } from './extension.tsx'
-import { Button, Dialog, Select, TextArea, TextField } from '@mu/ui'
+import { Button, Dialog, Select, TextArea, TextField } from '@superego/ui'
 import { has, machine as client } from './client.ts'
 import { shortPath } from './ThreadView.tsx'
 import { useAllThreads, useMachines, useSelection, type NewThreadStart } from './state.tsx'
 
-const LAST = 'mu.newThread'
+const LAST = 'superego.newThread'
 type Last = { machine?: string; cwd?: Record<string, string> }
 const readLast = (): Last => { try { return JSON.parse(localStorage.getItem(LAST) ?? '{}') } catch { return {} } }
 
@@ -91,7 +91,7 @@ export function NewThreadDialog({ start, onClose }: { start: NewThreadStart; onC
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void create() }
   }
   const browse = async () => {
-    const picked = await window.mu.call('app', 'app.pickFolder', { defaultPath: cwd || undefined }) as string | null
+    const picked = await window.superego.call('app', 'app.pickFolder', { defaultPath: cwd || undefined }) as string | null
     if (picked) setCwd(picked)
   }
 
@@ -106,7 +106,7 @@ export function NewThreadDialog({ start, onClose }: { start: NewThreadStart; onC
             <span>Project</span>
             <div className="new-thread__row">
               <TextField aria-label="Project folder" placeholder="Folder (empty: home)" value={cwd} onChange={(e) => setCwd(e.target.value)} />
-              {machine?.id === 'local' && !window.mu.web && <Button onClick={() => void browse()}>Browse…</Button>}
+              {machine?.id === 'local' && !window.superego.web && <Button onClick={() => void browse()}>Browse…</Button>}
             </div>
           </label>
           {recent.length > 0 && (

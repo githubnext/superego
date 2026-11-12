@@ -2,9 +2,9 @@
 // may name a custom component (`ui`) drawn below their settings; the Providers section is one.
 import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { useLocalState } from './local-state.ts'
-import type { AuthEvent, AuthPrompt, Json, Notifications, ProviderAuthInfo, SectionInfo, SettingInfo, SettingsSnapshot } from '@mu/protocol'
-import { Button, Dialog, FontPicker, Select, StatusGlyph, Switch, TextField } from '@mu/ui'
-import { remoteCommand } from '@mu/protocol'
+import type { AuthEvent, AuthPrompt, Json, Notifications, ProviderAuthInfo, SectionInfo, SettingInfo, SettingsSnapshot } from '@superego/protocol'
+import { Button, Dialog, FontPicker, Select, StatusGlyph, Switch, TextField } from '@superego/ui'
+import { remoteCommand } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 
 import { machine as client, has, loadFonts, useSettings } from './client.ts'
@@ -31,7 +31,7 @@ export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; 
       <div className="settings__body">
         <nav className="settings__nav">
           <button className={target === APP ? 'is-selected' : ''} onClick={() => setTarget(APP)}>General</button>
-          {!window.mu.web && <button className={target === MACHINES ? 'is-selected' : ''} onClick={() => setTarget(MACHINES)}>Machines</button>}
+          {!window.superego.web && <button className={target === MACHINES ? 'is-selected' : ''} onClick={() => setTarget(MACHINES)}>Machines</button>}
           {editable.length > 1 && <button className={target === ALL ? 'is-selected' : ''} onClick={() => setTarget(ALL)}>All machines</button>}
           {machines.filter((m) => m.state !== 'disabled').map((m) => (
             <button key={m.id} className={`settings__nav-machine ${target === m.id ? 'is-selected' : ''}`} onClick={() => setTarget(m.id)}>
@@ -43,7 +43,7 @@ export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; 
           {target === MACHINES ? <Machines machines={machines} onOpen={setTarget} />
             : target === ALL ? <AllMachines machines={editable} />
             : !connected ? <p className="settings__note">{machine?.label} is {machine?.state}. Its settings live on it, so they show once it is back.</p>
-            : !supported ? <p className="settings__note">The mu on {machine?.label} is too old to change its settings from here. Update it there.</p>
+            : !supported ? <p className="settings__note">The superego on {machine?.label} is too old to change its settings from here. Update it there.</p>
             : !snapshot ? <p className="settings__note">Loading…</p>
             : snapshot.sections.map((section) => <Section key={section.id} target={target} section={section} values={snapshot.values} />)}
         </div>

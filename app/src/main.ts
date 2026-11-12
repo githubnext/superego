@@ -1,4 +1,4 @@
-import { startApp } from '@mu/app/main'
-import app from '../mu.config.ts'
+import { startApp } from '@superego/app/main'
+import app from '../superego.config.ts'
 
 startApp(app)

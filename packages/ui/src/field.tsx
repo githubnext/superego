@@ -2,7 +2,7 @@ import { forwardRef, type InputHTMLAttributes, type SelectHTMLAttributes } from 
 
 export const TextField = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function TextField({ className = '', ...props }, ref) {
-    return <input ref={ref} className={`mu-field ${className}`} {...props} />
+    return <input ref={ref} className={`superego-field ${className}`} {...props} />
   },
 )
 
@@ -19,7 +19,7 @@ export function Select({ options, value, onChange, nullLabel, placeholder, class
   for (const option of options) groups.set(option.group, [...groups.get(option.group) ?? [], option])
   const render = (list: SelectOption[]) => list.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)
   return (
-    <select className={`mu-field mu-select ${className}`} value={placeholder !== undefined ? PLACEHOLDER : value ?? ''}
+    <select className={`superego-field superego-select ${className}`} value={placeholder !== undefined ? PLACEHOLDER : value ?? ''}
       onChange={(e) => { if (e.target.value !== PLACEHOLDER) onChange(e.target.value === '' ? null : e.target.value) }} {...props}>
       {placeholder !== undefined && <option value={PLACEHOLDER} disabled hidden>{placeholder}</option>}
       {nullLabel !== undefined && <option value="">{nullLabel}</option>}
@@ -31,8 +31,8 @@ export function Select({ options, value, onChange, nullLabel, placeholder, class
 export function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange(checked: boolean): void; label: string; disabled?: boolean }) {
   return (
     <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled}
-      className={`mu-switch ${checked ? 'is-on' : ''}`} onClick={() => onChange(!checked)}>
-      <span className="mu-switch__thumb" />
+      className={`superego-switch ${checked ? 'is-on' : ''}`} onClick={() => onChange(!checked)}>
+      <span className="superego-switch__thumb" />
     </button>
   )
 }
