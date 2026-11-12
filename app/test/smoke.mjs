@@ -444,6 +444,8 @@ if (phase === 'first') {
   await until(`document.querySelector('.composer__files .attachment__name')?.textContent === 'plan.md'`, 'file waiting to be sent')
   await run(`document.querySelector('.composer textarea').focus()`)
   BrowserWindow.getAllWindows()[0].webContents.insertText('read this')
+  // insertText and the key reach the page by different routes: the key can come first and send the file alone.
+  await until(`document.querySelector('.composer textarea').value === 'read this'`, 'message typed')
   await key('Enter', [])
   await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('read this') && m.querySelector('.msg__files .attachment__name')?.textContent === 'plan.md') && !document.querySelector('.composer__files')`, 'file sent with the message')
   await shot('sessions')
@@ -594,7 +596,8 @@ if (phase === 'first') {
   if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-drawer.png`, (await browser.webContents.capturePage()).toPNG())
   await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await inBrowser(`!document.querySelector('.app__sidebar')`, 'drawer closes on picking a thread')
-  if (await browser.webContents.executeJavaScript(`Object.keys(localStorage).some((key) => /token/i.test(key)) || document.cookie !== ''`)) { await fail('a credential the page can read'); throw new Error('failed') }
+  // The credential lives in this origin's localStorage, never in a cookie (which every port on the host would get).
+  if (!(await browser.webContents.executeJavaScript(`Boolean(localStorage.getItem('superego.credential')) && document.cookie === ''`))) { await fail('the credential not in localStorage, or a cookie'); throw new Error('failed') }
   // Revoked from Settings: the page asks to pair again, refuses a wrong code, takes a new one.
   const devices = await desk(`window.superego.call('local', 'settings.watch', {}).then((r) => r.value.sections.find((s) => s.id === 'web').data.devices)`)
   browser.setContentSize(1100, 760)
