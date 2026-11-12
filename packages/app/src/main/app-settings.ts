@@ -5,10 +5,11 @@ import { join } from 'node:path'
 import { SettingsRegistry } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import type { AppConfig } from '@superego/protocol'
+import { TEXT_SIZES } from '../shared.ts'
 
 export const APP = 'app'
 export const APP_KEYS = {
-  keymap: 'app.keys', interfaceFont: 'app.font.interface', monoFont: 'app.font.mono', accent: 'app.accent', notifications: 'app.notifications', menuBar: 'app.menuBar', hideDock: 'app.hideDock',
+  keymap: 'app.keys', interfaceFont: 'app.font.interface', textSize: 'app.font.size', monoFont: 'app.font.mono', accent: 'app.accent', notifications: 'app.notifications', menuBar: 'app.menuBar', hideDock: 'app.hideDock',
 } as const
 
 export function createAppSettings(dataDir: string, app: AppConfig) {
@@ -17,6 +18,10 @@ export function createAppSettings(dataDir: string, app: AppConfig) {
     id: 'appearance', title: 'Appearance', order: 50,
     settings: [
       { key: APP_KEYS.interfaceFont, title: 'Interface font', default: null, type: { type: 'font', nullLabel: 'System' } },
+      {
+        key: APP_KEYS.textSize, title: 'Text size', default: 'base',
+        type: { type: 'choice', slider: true, options: TEXT_SIZES.map((value) => ({ value, label: value })) },
+      },
       {
         key: APP_KEYS.monoFont, title: 'Monospace font', default: null, description: 'Code, tool output and paths.',
         type: { type: 'font', monospace: true, nullLabel: 'System monospace' },

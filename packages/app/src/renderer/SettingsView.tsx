@@ -83,7 +83,9 @@ function Setting({ setting, value, apply, mixed, note }: {
   let control
   switch (setting.type) {
     case 'boolean': control = <Switch label={setting.title} checked={!mixed && value === true} disabled={disabled} onChange={set} />; break
-    case 'choice': control = <Select aria-label={setting.title} options={setting.options} value={typeof value === 'string' ? value : null} disabled={disabled}
+    case 'choice': control = setting.slider
+      ? <StepSlider label={setting.title} options={setting.options} value={typeof value === 'string' ? value : null} disabled={disabled} onChange={set} />
+      : <Select aria-label={setting.title} options={setting.options} value={typeof value === 'string' ? value : null} disabled={disabled}
       placeholder={mixed ? 'Mixed' : undefined} nullLabel={setting.nullable ? setting.nullLabel ?? 'Default' : undefined} onChange={set} />; break
     case 'number': control = <TextField type="number" aria-label={setting.title} defaultValue={String(value ?? '')} min={setting.min} max={setting.max} step={setting.step}
       disabled={disabled} onBlur={(e) => set(Number(e.target.value))} />; break
@@ -104,6 +106,22 @@ function Setting({ setting, value, apply, mixed, note }: {
       </div>
       <div className="setting__control">{control}</div>
     </div>
+  )
+}
+
+/** A choice along a scale: a slider that stops at each option, named under its stops. */
+function StepSlider({ label, options, value, disabled, onChange }: {
+  label: string; options: { value: string; label: string }[]; value: string | null; disabled: boolean; onChange(value: string): void
+}) {
+  const at = Math.max(0, options.findIndex((o) => o.value === value))
+  return (
+    <span className="step-slider">
+      <input type="range" aria-label={label} aria-valuetext={options[at]?.label} min={0} max={options.length - 1} step={1} value={at} disabled={disabled}
+        onChange={(e) => onChange(options[Number(e.target.value)]!.value)} />
+      <span className="step-slider__stops" aria-hidden>
+        {options.map((option, index) => <span key={option.value} className={index === at ? 'is-current' : ''}>{option.label}</span>)}
+      </span>
+    </span>
   )
 }
 

@@ -15,7 +15,7 @@
 .threads-rail { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 40px; }
 .threads-rail__group { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .threads-rail__expand { width: 32px; }
-.threads-rail__dot { width: 32px; height: 32px; border-radius: 8px; border: 0; background: none; display: flex; align-items: center; justify-content: center; font-size: 14px; color: inherit; }
+.threads-rail__dot { width: 32px; height: 32px; border-radius: 8px; border: 0; background: none; display: flex; align-items: center; justify-content: center; font-size: calc(14px * var(--superego-text-scale)); color: inherit; }
 .threads-rail__dot:hover { background: var(--superego-hover); }
 .threads-rail__dot.is-on { background: var(--superego-selected); }
 .threads-rail__dot.is-stale { opacity: .4; }

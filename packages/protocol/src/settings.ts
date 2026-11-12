@@ -11,7 +11,8 @@ export type SettingType =
   | { type: 'string'; placeholder?: string; secret?: boolean }
   | { type: 'number'; min?: number; max?: number; step?: number }
   /** One of `options`; `null` is allowed when `nullable`, shown as `nullLabel`. */
-  | { type: 'choice'; options: SettingOption[]; nullable?: boolean; nullLabel?: string }
+  /** `slider`: drawn as steps along a slider, in the options' order (a scale, like sizes), rather than a menu. */
+  | { type: 'choice'; options: SettingOption[]; nullable?: boolean; nullLabel?: string; slider?: boolean }
   /** A font family installed where the client runs, or `null` for the default. The client lists the fonts. */
   | { type: 'font'; monospace?: boolean; nullLabel?: string }
   /** A CSS colour (`#2f5bd3`, `color(display-p3 …)`, `oklch(…)`): checked where it's shown, as the browser reads it. */

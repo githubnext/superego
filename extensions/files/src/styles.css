@@ -3,6 +3,6 @@
 .files-tree__row:hover { background: var(--superego-hover); }
 .files-tree__row.is-current { background: var(--superego-selected); }
 .files-tree__folder { color: var(--superego-muted); }
-.files-tree__caret { display: inline-block; width: 12px; color: var(--superego-faint); font-size: 10px; }
+.files-tree__caret { display: inline-block; width: 12px; color: var(--superego-faint); font-size: calc(10px * var(--superego-text-scale)); }
 .files-tree__note { padding: 6px 12px; color: var(--superego-muted); font-size: var(--superego-text-sm); }
 .files-toggle.is-on { color: var(--superego-accent); }

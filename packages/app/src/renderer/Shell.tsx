@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { agentName } from '@superego/protocol'
 import { Button, CommandIcon, LifebuoyIcon, GearSixIcon, IconButton, ListIcon, MagnifyingGlassIcon, NotePencilIcon, PlusIcon, Select, SidebarSimpleIcon } from '@superego/ui'
+import { textScale } from '../shared.ts'
 import { UnreadButton } from './Unread.tsx'
 import { machine as client, useAppSetting, useSettings } from './client.ts'
 import { Slot, useRegistry } from './extension.tsx'
@@ -212,6 +213,7 @@ function useAppEffects() {
   const interfaceFont = appSettings?.values['app.font.interface']
   const monoFont = appSettings?.values['app.font.mono']
   const accent = appSettings?.values['app.accent']
+  const textSize = appSettings?.values['app.font.size']
   const registry = useRegistry()
   useEffect(() => {
     const style = document.documentElement.style
@@ -222,7 +224,8 @@ function useAppEffects() {
     // leaves the default.
     if (typeof accent === 'string' && CSS.supports('color', accent)) style.setProperty('--superego-accent-base', accent)
     else style.removeProperty('--superego-accent-base')
-  }, [interfaceFont, monoFont, accent])
+    style.setProperty('--superego-text-scale', String(textScale(textSize)))
+  }, [interfaceFont, monoFont, accent, textSize])
   // The shortcuts bound now, for the main process: a page in a pane (Preview, an artifact) that has the keyboard gets
   // key presses before this window could, so the main process takes these ones first and hands them here.
   const actions = useActions(selection?.machine)

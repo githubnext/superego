@@ -44,3 +44,11 @@ export const ARTIFACT_TYPES: Record<string, string> = {
 }
 
 export const CHANNEL = { call: 'superego:call', machines: 'superego:machines', event: 'superego:event' } as const
+
+/** Text sizes (Settings → Appearance), smallest first: each a step of 1px on the interface's 13px. */
+export const TEXT_SIZES = ['xs', 'sm', 'base', 'lg', 'xl'] as const
+/** How much a text size scales every size of text (--superego-text-scale); 1 for an unknown one. */
+export const textScale = (size: unknown) => {
+  const step = TEXT_SIZES.indexOf(size as (typeof TEXT_SIZES)[number])
+  return step < 0 ? 1 : (11 + step) / 13
+}
