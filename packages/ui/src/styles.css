@@ -8,7 +8,8 @@
   /* macOS's own: system grays, real controls; the accent is the app's (Settings → Appearance → Accent colour). */
   --superego-bg: light-dark(#ffffff, #1d1d1f);          /* the sheet: the thread, its panes, dialogs */
   --superego-sidebar-bg: light-dark(#f2f2f4, #262628);  /* headers and side lists inside dialogs */
-  --superego-chrome: light-dark(#ececee, #262628);      /* the window around the sheet: title bar, rail, sidebar */
+  --superego-chrome: light-dark(#f2f2f4, #262628);      /* the window's side: the sidebar, and the strip over it */
+  --superego-rail-bg: light-dark(#ebebed, #212123);     /* the rail, a shade under the sidebar beside it */
   --superego-line: light-dark(rgb(0 0 0 / .09), rgb(255 255 255 / .07));   /* hairlines between columns and parts */
   --superego-fill: light-dark(rgb(0 0 0 / .05), rgb(255 255 255 / .06));   /* quiet fills: file heads, small buttons */
   --superego-card-edge: 0 0 0 .5px var(--superego-border), 0 1px 3px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .3));
@@ -69,9 +70,9 @@
   --superego-space-7: 52px;
   /* The reading column, the sidebar, and what floats over content. */
   --superego-column: 640px;
-  --superego-sidebar: 220px;
+  --superego-sidebar: 232px;
   --superego-rail: 52px;
-  --superego-titlebar: 44px;
+  --superego-titlebar: 48px;
   --superego-shadow-float: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(0 0 0 / .6)), 0 12px 36px -8px rgb(0 0 0 / .28), 0 2px 6px rgb(0 0 0 / .08);
 }
 

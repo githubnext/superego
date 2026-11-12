@@ -1,28 +1,31 @@
-/* The window: its own colour (the chrome) around a sheet. A title bar across the top, then the rail and the sidebar down
-   the left, both on the chrome, and the sheet (the thread and its panes) filling the rest. */
-.app { display: flex; flex-direction: column; height: 100%; background: var(--superego-chrome); }
+/* The window: the side (the rail and the sidebar) down the left on the window's greys, the thread and its panes white
+   beside it. Across the top, one hairline: under the window's buttons over the side, and under the title bar beside. */
+.app { display: flex; flex-direction: column; height: 100%; background: var(--superego-bg); }
 .app__drag { height: 38px; -webkit-app-region: drag; flex: none; }
 .app__drag :is(button, a, input, select, textarea, summary, [role="button"], [contenteditable]) { -webkit-app-region: no-drag; }
-.app__body { flex: 1; display: flex; min-height: 0; }
-.app__rail { flex: none; width: var(--superego-rail); display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 4px 0 12px; -webkit-app-region: drag; }
+.app__body { flex: 1; display: flex; min-height: 0; background: var(--superego-chrome); }
+.app__rail { flex: none; width: var(--superego-rail); display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 9px 0 12px; background: var(--superego-rail-bg); box-shadow: inset -1px 0 0 var(--superego-line); -webkit-app-region: drag; }
 .app__rail-group { display: flex; flex-direction: column; align-items: center; gap: 4px; -webkit-app-region: no-drag; }
 .app__rail .unread-button { padding: 3px 5px; }
 .app__meta { position: relative; width: 34px; height: 34px; min-height: 34px; border-radius: 8px; color: var(--superego-muted); box-shadow: none; background: none; }
 .app__meta:hover { color: var(--superego-text); background: var(--superego-hover); }
 .app__meta.is-on { color: var(--superego-text); background: var(--superego-selected); }
-/* The sidebar: on the chrome beside the rail, no card of its own. Hidden while what's in it shows nothing. What's in it
-   scrolls inside a clear border, where its focus ring goes. */
-.app__sidebar { position: relative; width: var(--superego-sidebar); flex: none; min-height: 0; overflow: auto; border: 5px solid transparent; padding: 0 5px 7px 0; display: flex; flex-direction: column; }
+/* The sidebar: on the side's grey beside the rail, a hairline at its edge. Hidden while what's in it shows nothing.
+   What's in it scrolls inside a clear border, where its focus ring goes. */
+.app__sidebar { position: relative; width: var(--superego-sidebar); flex: none; min-height: 0; overflow: auto; border: 5px solid transparent; padding: 4px 5px 7px; display: flex; flex-direction: column; }
 .app__sidebar:has(> .app__footer:first-child:empty) { display: none; }
 .app__tools { display: flex; align-items: center; gap: 2px; }
 .app__tools .superego-icon-button { color: var(--superego-muted); }
 .app__tools .superego-icon-button:hover { color: var(--superego-text); }
-/* The sheet: the thread and its panes, white (or the dark's deepest grey), its corner tucked under the title bar. */
-.app__main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; background: var(--superego-bg); border-top-left-radius: 10px; box-shadow: -.5px -.5px 0 light-dark(rgb(0 0 0 / .14), rgb(255 255 255 / .1)); overflow: hidden; }
-/* The title bar: past the window's buttons (or, with the list open, over the sheet's edge), where you are; what the
-   thread says about itself at the right. */
-.app__titlebar { position: relative; height: var(--superego-titlebar); display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 12px 0 84px; }
-.app.has-sidebar:has(.app__sidebar > :not(.app__footer):first-child) .app__titlebar { padding-left: calc(var(--superego-rail) + var(--superego-sidebar)); }
+/* The thread and its panes, white (or the dark's deepest grey); a hairline between it and the list. */
+.app__main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; background: var(--superego-bg); overflow: hidden; }
+.app.has-sidebar:not(.is-narrow):has(.app__sidebar > :not(.app__footer):first-child) .app__main { border-left: 1px solid var(--superego-line); }
+/* The title bar: past the window's buttons (or, with the list open, past the side), where you are; the thread's
+   columns and what it says about itself at the right. Over the list, the side's grey runs up behind the window's
+   buttons, with back and forward at its right edge. */
+.app__titlebar { position: relative; height: var(--superego-titlebar); display: flex; align-items: center; gap: var(--superego-space-3); min-width: 0; padding: 0 12px 0 84px; border-bottom: 1px solid var(--superego-line); }
+.app.has-sidebar:has(.app__sidebar > :not(.app__footer):first-child) .app__titlebar { padding-left: calc(var(--superego-rail) + var(--superego-sidebar) + 1px + var(--superego-space-3)); }
+.app.has-sidebar:has(.app__sidebar > :not(.app__footer):first-child) .app__titlebar::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: calc(var(--superego-rail) + var(--superego-sidebar)); background: var(--superego-chrome); border-right: 1px solid var(--superego-line); pointer-events: none; }
 .titlebar__crumb { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 0 1 auto; font-weight: 500; }
 .titlebar__seg { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border-radius: 6px; white-space: nowrap; min-width: 0; }
 .titlebar__session { color: var(--superego-muted); flex: none; max-width: 30%; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 26px; }
