@@ -597,7 +597,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   // ── Panes and files ─────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** Open a pane beside thread `id`, or bring forward the same one already open. */
+  /**
+   * Open a pane beside thread `id` (or find the same one already open). Opening isn't focusing: the agent's pane opens
+   * beside, and the focus stays where it is. A window that asked for one moves its focus into it, which brings it
+   * forward (pane.focus): the focus is in one place, the prompt or the pane.
+   */
   async function openPane(id: string, pane: Omit<Pane, 'id'>): Promise<Pane> {
     await get(id)
     // Models sometimes send params as a string of JSON: take what it says.
@@ -610,7 +614,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       opened = same ?? { id: randomUUID().slice(0, 8), ...pane }
       if (!same) meta.panes = [...(meta.panes ?? []), opened]
       else if (pane.title) same.title = pane.title
-      meta.pane = opened.id
       // A plain copy: what the transaction hands over is only valid inside it.
       opened = JSON.parse(JSON.stringify(opened)) as Pane
     })

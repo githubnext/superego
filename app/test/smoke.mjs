@@ -249,8 +249,15 @@ if (phase === 'first') {
     window.dispatchEvent(new PointerEvent('pointerup', { clientX: x + 60, clientY: 300 }))
   })()`)
   await until(`(() => { const w = [...document.querySelectorAll('.panes > [data-column]')].map((c) => Math.round(c.getBoundingClientRect().width)); return Math.abs(w[0] - ${threadBefore} - 60) <= 2 && Math.abs(w[1] - ${firstBefore}) <= 2 })()`, 'the gap resized the thread, not the pane')
-  // Keys typed into a frame stay in it: out of it first (not into the thread, which would take the focus from the pane).
-  await run(`document.activeElement?.blur()`)
+  // Opened from outside the window (as the agent opens them), they open beside and the focus stays put. ⌘W closes the
+  // one with the focus, from inside the page too: the window takes its shortcuts before a frame.
+  if (await run(`Boolean(document.querySelector('.panes__tab.is-active'))`)) { await fail('a pane the window did not open took the focus'); throw new Error('failed') }
+  // A hidden window's page never has focus, so focus never moves; emulate it (nothing reaches the screen).
+  const emulated = BrowserWindow.getAllWindows()[0].webContents.debugger
+  if (!emulated.isAttached()) emulated.attach()
+  await emulated.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true })
+  await run(`document.querySelector('.frame-pane iframe').focus()`)
+  await until(`document.querySelector('.panes__tab.is-active')?.textContent.startsWith('page.html')`, 'focus into the page brings it forward')
   for (let left = 2; left >= 0; left--) {
     await key('w')
     await until("document.querySelectorAll('.panes__tab').length === " + left, 'a pane closed, ' + left + ' left')

@@ -274,7 +274,7 @@ describe('record and replay', () => {
     await close()
   })
 
-  it('keeps panes with a thread: open (the same one again comes forward), focus, close', async () => {
+  it('keeps panes with a thread: open (beside, the same one once), focus, close', async () => {
     const { peer, close } = await open()
     const thread = await peer.call<ThreadInfo>('thread.create', { title: 'panes' })
     const diff = await peer.call<{ id: string }>('pane.open', { id: thread.id, kind: 'diff' })
@@ -282,9 +282,12 @@ describe('record and replay', () => {
     expect((await peer.call<{ id: string }>('pane.open', { id: thread.id, kind: 'diff' })).id).toBe(diff.id)
     let info = (await threads(peer)).find((s) => s.id === thread.id)!
     expect(info.panes?.map((p) => p.kind)).toEqual(['diff', 'preview'])
-    expect(info.pane).toBe(diff.id)
+    expect(info.pane).toBeUndefined()
+    await peer.call('pane.focus', { id: thread.id, pane: diff.id })
+    expect((await threads(peer)).find((s) => s.id === thread.id)!.pane).toBe(diff.id)
     await peer.call('pane.focus', { id: thread.id })
     expect((await threads(peer)).find((s) => s.id === thread.id)!.pane).toBeUndefined()
+    await peer.call('pane.focus', { id: thread.id, pane: diff.id })
     await peer.call('pane.focus', { id: thread.id, pane: preview.id })
     await peer.call('pane.close', { id: thread.id, pane: preview.id })
     info = (await threads(peer)).find((s) => s.id === thread.id)!
