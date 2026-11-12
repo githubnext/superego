@@ -354,6 +354,17 @@ describe('record and replay', () => {
     await close()
   })
 
+  it('deletes the worktrees a previous process was deleting when it ended', async () => {
+    const { mkdir } = await import('node:fs/promises')
+    const repo = join(dir, 'worktrees', 'app')
+    await mkdir(join(repo, '.fix-a1b2c3.removing-0badf00d', 'node_modules'), { recursive: true })
+    await mkdir(join(repo, 'in-use-d4e5f6'), { recursive: true })
+    const { close } = await open()
+    await until(async () => !existsSync(join(repo, '.fix-a1b2c3.removing-0badf00d')))
+    expect(existsSync(join(repo, 'in-use-d4e5f6'))).toBe(true)
+    await close()
+  })
+
   it('sends files with a message: saved on the machine, named to the agent, images as images', async () => {
     const { readFile } = await import('node:fs/promises')
     const { peer, close } = await open()

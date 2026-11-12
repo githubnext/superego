@@ -41,6 +41,9 @@ const Catalog = defineDoc<{ ids: number[]; ego?: number }>({
 /** What Ego goes without, of what every thread has: it changes nothing itself, and starts threads its own way (see meta.ts). */
 const EGO_WITHOUT = new Set(['coding-tools', 'threads'])
 
+/** What a worktree being deleted is renamed with, between its name and a random suffix (see removeWorktree). */
+const REMOVING = '.removing-'
+
 /** A thread's own metadata, next to its transcript. */
 type ThreadMeta = {
   title: string; cwd: string; createdAt: number; seen?: { entryId?: number; failureTaskId?: number }
@@ -840,11 +843,20 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * place (`git worktree remove`) takes as long as its files do, many seconds with a node_modules in it.
    */
   async function removeWorktree(path: string, root: string | undefined) {
-    const aside = join(dirname(path), `.${basename(path)}.removing-${randomUUID().slice(0, 8)}`)
+    const aside = join(dirname(path), `.${basename(path)}${REMOVING}${randomUUID().slice(0, 8)}`)
     if (!await rename(path, aside).then(() => true, () => false)) return false
     await git(root ?? aside, ['worktree', 'prune']).catch(() => {})
     void rm(aside, { recursive: true, force: true }).catch(() => {})
     return true
+  }
+  /** The worktrees a previous process moved aside and didn't get to delete (see removeWorktree), deleted now. */
+  async function sweepRemoved() {
+    const root = join(options.dataDir, 'worktrees')
+    for (const repo of await readdir(root).catch(() => [])) {
+      for (const name of await readdir(join(root, repo)).catch(() => [])) {
+        if (name.startsWith('.') && name.includes(REMOVING)) await rm(join(root, repo, name), { recursive: true, force: true }).catch(() => {})
+      }
+    }
   }
   /**
    * Archive a thread once its run ends: how a thread archives itself, mid-turn, without its worktree going from under
@@ -869,6 +881,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       const tree = meta.worktree
       if (tree?.removed && meta.root) {
         await mkdir(dirname(tree.path), { recursive: true })
+        // Pruned first, in case a process ended before letting go of it (see removeWorktree).
+        await git(meta.root, ['worktree', 'prune']).catch(() => {})
         await git(meta.root, ['worktree', 'add', '-q', tree.path, tree.branch])
           .catch((error: Error) => { throw new RpcError('invalid', `Couldn't restore its worktree: ${error.message}`) })
       }
@@ -1002,6 +1016,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   await list()
   if (egoId) await get(egoId)
   harness.resume()
+  void sweepRemoved()
 
 
   const daemon: Daemon = {
