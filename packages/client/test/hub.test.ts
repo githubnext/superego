@@ -93,8 +93,8 @@ it('lists the machines it reaches, passes calls on, and brings their news back t
   await until(() => a.machines().find((m) => m.id === hub.box)?.state === 'connected')
   expect(a.machines().find((m) => m.id === hub.box)).toMatchObject({ label: 'Box', machine: { id: box.daemon.machine.id }, remote: { ssh: false } })
   expect(a.machines().find((m) => m.id === hub.box)!.features).toContain('relay')
-  // The machine id it remembered for next time.
-  expect(new MachineStore(join(dir, 'hub')).get(hub.box)?.daemonId).toBe(box.daemon.machine.id)
+  // The machine id it remembered for next time, written once it connected.
+  await until(() => new MachineStore(join(dir, 'hub')).get(hub.box)?.daemonId === box.daemon.machine.id)
 
   // The far daemon lists the hub as a client, named for its computer.
   const { value: boxClients } = await connectSocket(box.socket).then(async ({ peer, socket }) => {
@@ -148,10 +148,11 @@ it('refuses a machine reached twice, and a route back to itself', async () => {
   const hub = await hubReaching(box, [{ label: 'Box again', via: await viaTo(box.socket) }, { label: 'Myself', via: await viaTo(hubSocket) }])
   const a = await client(hub.socket)
   const entry = (label: string) => a.machines().find((m) => m.label === label)
-  await until(() => entry('Box')?.state === 'connected' && entry('Myself')?.errorKind === 'duplicate_machine')
+  await until(() => entry('Myself')?.errorKind === 'duplicate_machine')
   expect(entry('Myself')!.error).toMatch(/itself/)
-  await until(() => entry('Box again')?.errorKind === 'duplicate_machine')
-  expect(entry('Box')!.state).toBe('connected')
+  // The two routes to the box race: whichever answers first is the box, the other the duplicate.
+  const routes = () => [entry('Box'), entry('Box again')]
+  await until(() => routes().some((e) => e?.state === 'connected') && routes().some((e) => e?.errorKind === 'duplicate_machine'))
 })
 
 it('lets an agent start a thread on another machine', async () => {

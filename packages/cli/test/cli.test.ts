@@ -29,9 +29,15 @@ const until = async (check: () => Promise<boolean>) => {
 
 beforeAll(async () => { home = await mkdtemp(join(tmpdir(), 'superego-cli-')) })
 afterAll(async () => {
+  // Each daemon, gone before its files are: one still shutting down writes as the folder is removed.
   for (const dir of [home, join(home, 'second')]) {
     const pid = Number(await readFile(join(dir, 'daemon.pid'), 'utf8').catch(() => '0'))
-    if (pid) try { process.kill(pid) } catch {}
+    if (!pid) continue
+    try { process.kill(pid) } catch { continue }
+    for (let i = 0; i < 100; i++) {
+      try { process.kill(pid, 0) } catch { break }
+      await new Promise((r) => setTimeout(r, 50))
+    }
   }
   await rm(home, { recursive: true, force: true })
 })
