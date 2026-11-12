@@ -1,10 +1,11 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { defineApp } from '@superego/protocol'
 import {
-  installService, keepsRunning, launchdLabel, launchdPlist, serviceInstalled, servicePath, startService, systemdUnit, uninstallService, type Run,
+  installService, keepsRunning, launchdLabel, launchdPlist, RESTART_EXIT, restartVia, saveRestartEnv, serviceInstalled, servicePath, startService, systemdUnit,
+  takeRestartEnv, uninstallService, type Run,
 } from '../src/service.ts'
 
 const app = defineApp({ name: 'Superego', id: 'superego', bundleId: 'com.example.superego' })
@@ -30,19 +31,24 @@ describe('service files', () => {
     expect(unit).toContain('ExecStart=/usr/bin/node /home/me/.superego/bin/app/main/daemon.js\n')
     expect(unit).toContain('Environment="PATH=/usr/bin:/my dir/bin"')
     expect(unit).toContain('Environment=SUPEREGO_SERVICE=systemd')
-    expect(unit).toContain('Restart=always')
+    // A stop stays stopped; a crash, or a restart's own exit code, brings it back.
+    expect(unit).toContain('Restart=on-failure')
+    expect(unit).toContain(`RestartForceExitStatus=${RESTART_EXIT}`)
+    expect(unit).not.toContain('Restart=always')
     expect(unit).toContain('WantedBy=default.target')
   })
 
-  it('escapes what systemd would expand', () => {
-    expect(systemdUnit(app, { command: ['/bin/x', '50%', '$HOME'], env: {} })).toContain('ExecStart=/bin/x "50%%" "$$HOME"')
+  it('escapes what systemd would expand: $ only on ExecStart, % everywhere', () => {
+    const unit = systemdUnit(app, { command: ['/bin/x', '50%', '$HOME'], env: { KEY: 'a$b c%d' } })
+    expect(unit).toContain('ExecStart=/bin/x "50%%" "$$HOME"')
+    expect(unit).toContain('Environment="KEY=a$b c%%d"')
   })
 
   it('writes a launchd agent that keeps the daemon alive, escaping XML', () => {
     const plist = launchdPlist(app, { command: ['/usr/local/bin/node', '/Users/me/a&b/daemon.js'], env: { PATH: '/usr/bin' }, log: '/Users/me/.superego/daemon.log' })
     expect(plist).toContain('<key>Label</key><string>com.example.superego.daemon</string>')
     expect(plist).toContain('<string>/Users/me/a&amp;b/daemon.js</string>')
-    expect(plist).toContain('<key>KeepAlive</key><true/>')
+    expect(plist).toMatch(/<key>KeepAlive<\/key>\s*<dict>\s*<key>SuccessfulExit<\/key><false\/>/)
     expect(plist).toContain('<key>PATH</key><string>/usr/bin</string>')
     expect(plist).toContain('<key>StandardErrorPath</key><string>/Users/me/.superego/daemon.log</string>')
   })
@@ -120,6 +126,33 @@ describe('installing a service', () => {
     expect(existsSync(servicePath({ app, platform: 'linux', home: h }))).toBe(false)
     expect(calls).toEqual(['systemctl --user disable --now superego.service', 'systemctl --user daemon-reload'])
     expect(uninstallService({ app, platform: 'linux', home: h, user: 'me', run })).toBe(false)
+  })
+})
+
+describe('restarting', () => {
+  it('under a service, leaves it to the service; with one installed, starts it; else, or when that fails, spawns', () => {
+    const h = home()
+    const nothing = recorder()
+    expect(restartVia({ app, platform: 'linux', home: h, run: nothing.run }, {})).toBe('self')
+    expect(nothing.calls).toEqual([])
+    expect(restartVia({ app, platform: 'linux', home: h, run: nothing.run }, { SUPEREGO_SERVICE: 'systemd' })).toBe('manager')
+    expect(nothing.calls).toEqual([])
+
+    installService({ app, platform: 'linux', home: h, user: 'me', run: recorder().run }, { command: ['/n'], log: '/l' })
+    const started = recorder()
+    expect(restartVia({ app, platform: 'linux', home: h, run: started.run }, {})).toBe('service')
+    expect(started.calls).toEqual(['systemctl --user start superego.service'])
+    const failed = recorder({ 'systemctl --user start': { code: 1 } })
+    expect(restartVia({ app, platform: 'linux', home: h, run: failed.run }, {})).toBe('self')
+  })
+
+  it('leaves the restart\'s environment for the successor a service starts, once', () => {
+    const dir = home()
+    saveRestartEnv(dir, { ANTHROPIC_API_KEY: 'k', SSH_AUTH_SOCK: '/run/agent' })
+    expect(statSync(join(dir, 'restart-env.json')).mode & 0o777).toBe(0o600)
+    expect(takeRestartEnv(dir)).toEqual({ ANTHROPIC_API_KEY: 'k', SSH_AUTH_SOCK: '/run/agent' })
+    expect(existsSync(join(dir, 'restart-env.json'))).toBe(false)
+    expect(takeRestartEnv(dir)).toEqual({})
   })
 })
 

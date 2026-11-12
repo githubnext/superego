@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { rm, writeFile } from 'node:fs/promises'
 import { readBuild } from './build.ts'
 import { openDaemon } from './daemon.ts'
-import { serviceInstalled, startService } from './service.ts'
+import { RESTART_EXIT, restartVia, saveRestartEnv, takeRestartEnv } from './service.ts'
 import { listen } from './server.ts'
 import { appEnv, defaultDataDir, pidPath, socketPath } from './paths.ts'
 import type { AppConfig } from '@superego/protocol'
@@ -22,6 +22,9 @@ export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket =
   reach?: (dataDir: string, self: MachineInfo) => MachineReach
 }) {
   const build = readBuild(import.meta.dirname)
+  // What the restart that started this daemon brought, when a service started it (see restart below).
+  const carried = takeRestartEnv(dataDir)
+  Object.assign(process.env, carried)
   let restart = async (_env: Record<string, string>) => {}
   const agentsDir = appEnv(app)('AGENTS')
   const daemon = await openDaemon({ app, dataDir, defaultCwd: appEnv(app)('CWD') ?? defaultCwd ?? process.cwd(), build, extensions, ...(webRoot ? { webRoot } : {}), ...(agentsDir ? { agentsDir } : {}), ...(machines ? { machines: () => machines(dataDir) } : {}), ...(reach ? { reach: (self: MachineInfo) => reach(dataDir, self) } : {}), onRestart: (env) => void restart(env) })
@@ -41,16 +44,17 @@ export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket =
   // The successor is this same command with this same environment, so whatever the daemon was started with (API keys
   // from `box run`, say) outlives restarts, plus what the restart brought: `box run superego daemon restart` adds keys
   // to a daemon started without them, and a restart from a plain shell takes none away. The code it runs is whatever
-  // is installed now. Clients wait meanwhile (see daemonStarting).
+  // is installed now. Clients wait meanwhile (see daemonStarting). A service starts its successor with the unit's
+  // environment, so what this one had beyond it (what earlier restarts carried, and this one's) is left for it to take.
   restart = async (env) => {
     await writeFile(pidFile, String(process.pid))
     await close()
-    // With a service installed it is the one to bring the daemon back (or, already the one running it, to restart us).
-    if (serviceInstalled({ app })) {
-      await rm(pidFile, { force: true })
-      startService({ app })
-      process.exit(0)
-    }
+    const extra = { ...carried, ...env }
+    saveRestartEnv(dataDir, extra)
+    const via = restartVia({ app })
+    if (via === 'manager') { await rm(pidFile, { force: true }); process.exit(RESTART_EXIT) }
+    if (via === 'service') { await rm(pidFile, { force: true }); process.exit(0) }
+    takeRestartEnv(dataDir)
     const successor = spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], { detached: true, stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, ...env } })
     successor.unref()
     await writeFile(pidFile, String(successor.pid))

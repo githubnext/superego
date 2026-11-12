@@ -3,7 +3,7 @@
 // process that the first connection started: it ends with a reboot. Every command that touches the system goes through
 // `run`, so tests write into a temp home and record the commands instead of installing anything.
 import { execFile, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, userInfo } from 'node:os'
 import { dirname, join } from 'node:path'
 import { envName, type AppConfig, type KeepsRunning } from '@superego/protocol'
@@ -72,8 +72,15 @@ export function serviceInstalled(context: ServiceContext): boolean {
   return existsSync(servicePath(context))
 }
 
-// A word of an ExecStart line: systemd expands % and $ itself.
-const systemdWord = (word: string) => /^[\w@+=:,./-]+$/.test(word) ? word : `"${word.replace(/[\\"]/g, '\\$&').replace(/%/g, '%%').replace(/\$/g, '$$$$')}"`
+// A word of an ExecStart line: systemd expands % and $ there. Environment= expands only %: a $ in it is itself.
+const systemdWord = (word: string, dollars = true) => /^[\w@+=:,./-]+$/.test(word) ? word
+  : `"${word.replace(/[\\"]/g, '\\$&').replace(/%/g, '%%').replace(/\$/g, dollars ? '$$$$' : '$')}"`
+
+/**
+ * The exit code of a daemon that restarts itself under a service: the service starts it again. Any other clean exit
+ * (`daemon stop`, a SIGTERM) leaves it stopped, and a crash brings it back.
+ */
+export const RESTART_EXIT = 75
 
 export function systemdUnit(app: AppConfig, { command, env }: { command: string[]; env: Record<string, string> }): string {
   return [
@@ -81,10 +88,12 @@ export function systemdUnit(app: AppConfig, { command, env }: { command: string[
     `Description=${app.name} daemon`,
     '',
     '[Service]',
-    `ExecStart=${command.map(systemdWord).join(' ')}`,
-    ...Object.entries(env).map(([key, value]) => `Environment=${systemdWord(`${key}=${value}`)}`),
-    // A restart (an update, `daemon restart`) is the daemon exiting: this brings it back.
-    'Restart=always',
+    `ExecStart=${command.map((word) => systemdWord(word)).join(' ')}`,
+    ...Object.entries(env).map(([key, value]) => `Environment=${systemdWord(`${key}=${value}`, false)}`),
+    // Back after a crash, and after a restart (an update, `daemon restart`), which exits RESTART_EXIT; a stop stays one.
+    'Restart=on-failure',
+    `RestartForceExitStatus=${RESTART_EXIT}`,
+    `SuccessExitStatus=${RESTART_EXIT}`,
     'RestartSec=1',
     '',
     '[Install]',
@@ -110,7 +119,10 @@ ${command.map((word) => `    <string>${xml(word)}</string>`).join('\n')}
 ${Object.entries(env).map(([key, value]) => `    <key>${xml(key)}</key><string>${xml(value)}</string>`).join('\n')}
   </dict>
   <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key><false/>
+  </dict>
   <key>ThrottleInterval</key><integer>2</integer>
   <key>StandardOutPath</key><string>${xml(log)}</string>
   <key>StandardErrorPath</key><string>${xml(log)}</string>
@@ -187,6 +199,38 @@ function isLingering(c: Resolved): boolean | null {
   const result = c.run('loginctl', ['show-user', c.user, '--property=Linger'])
   if (result.code !== 0) return null
   return /^Linger=yes/m.test(result.stdout)
+}
+
+/**
+ * How a restarting daemon hands over to its successor. Under a service it exits RESTART_EXIT and the service starts it
+ * again (`manager`). Not under one but with one installed (`daemon install` handing over a daemon started on demand),
+ * it starts the service and exits (`service`). Else, or when starting the service failed, it spawns the successor
+ * itself (`self`).
+ */
+export function restartVia(context: ServiceContext, env: NodeJS.ProcessEnv = process.env): 'manager' | 'service' | 'self' {
+  if (runningUnder(context.app, env)) return 'manager'
+  return startService(context) ? 'service' : 'self'
+}
+
+const restartEnvPath = (dataDir: string) => join(dataDir, 'restart-env.json')
+
+/**
+ * What a restart adds to the environment, for a successor the service starts: the service gives it only the unit's
+ * own, so the daemon leaves the rest here (0600) and the successor takes it when it starts (see `takeRestartEnv`).
+ */
+export function saveRestartEnv(dataDir: string, env: Record<string, string>) {
+  const path = restartEnvPath(dataDir)
+  writeFileSync(`${path}.tmp`, JSON.stringify(env), { mode: 0o600 })
+  renameSync(`${path}.tmp`, path)
+}
+
+/** What a restart left for this daemon, read once and removed. */
+export function takeRestartEnv(dataDir: string): Record<string, string> {
+  const path = restartEnvPath(dataDir)
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>
+    return Object.fromEntries(Object.entries(parsed).filter((e): e is [string, string] => typeof e[1] === 'string'))
+  } catch { return {} } finally { rmSync(path, { force: true }) }
 }
 
 /** The service the running daemon was started by (from its environment), if any. */
