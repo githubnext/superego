@@ -54,6 +54,7 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
 | `⌘K` | Commands |
 | `⌘P` | Open a file in the thread's folder |
 | `⌘N` | New thread |
+| `⌘⇧N` | New window |
 | `⌘.` | Next unread thread (everywhere, or in this session: Settings → Navigation) |
 | `⌘⇧[` `⌘⇧]` | Previous / next thread, through every session in the sidebar's order |
 | `⌃Tab` `⌃⇧Tab` | The thread and its panes, in turn |

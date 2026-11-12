@@ -97,9 +97,11 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
   defineAction({ id: 'app.palette', title: 'Commands', runs: 'window', keys: 'mod+k', run: (_p, c: WindowContext) => c.togglePalette() }),
   defineAction({ id: 'app.navigator', title: 'Go to a session, thread or pane', runs: 'window', keys: 'mod+l', run: (_p, c: WindowContext) => c.toggleNavigator() }),
   defineAction({ id: 'app.sidebar', title: 'Toggle sidebar', runs: 'window', keys: 'mod+/', run: (_p, c: WindowContext) => c.toggleSidebar() }),
-  // Between sessions: the thread last shown in each.
-  defineAction({ id: 'session.next', title: 'Next session', runs: 'window', keys: 'mod+shift+]', run: (_p, c: WindowContext) => stepSession(c, 1) }),
-  defineAction({ id: 'session.previous', title: 'Previous session', runs: 'window', keys: 'mod+shift+[', run: (_p, c: WindowContext) => stepSession(c, -1) }),
+  // Through every thread, in the sidebar's order, across sessions; and between sessions, at the thread last shown in each.
+  defineAction({ id: 'thread.next', title: 'Next thread', runs: 'window', keys: 'mod+shift+]', run: (_p, c: WindowContext) => stepThread(c, 1) }),
+  defineAction({ id: 'thread.previous', title: 'Previous thread', runs: 'window', keys: 'mod+shift+[', run: (_p, c: WindowContext) => stepThread(c, -1) }),
+  defineAction({ id: 'session.next', title: 'Next session', runs: 'window', run: (_p, c: WindowContext) => stepSession(c, 1) }),
+  defineAction({ id: 'session.previous', title: 'Previous session', runs: 'window', run: (_p, c: WindowContext) => stepSession(c, -1) }),
   defineAction({ id: 'thread.unread', title: 'Next unread thread', runs: 'window', keys: 'mod+.', run: (_p, c: WindowContext) => nextUnread(c) }),
   // Focus: the region beside (sidebar, thread, each pane), and the prompt.
   defineAction({ id: 'focus.left', title: 'Focus the region to the left', runs: 'window', keys: 'mod+alt+arrowleft', run: () => focusBeside(-1) }),
@@ -115,6 +117,11 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
       const thread = await c.dispatch('thread.meta', {}, { machine: 'local', source: 'meta' }) as { id: string }
       c.select({ machine: 'local', thread: thread.id })
     },
+  }),
+  // Another window (in a browser, another tab), showing what this one does.
+  defineAction({
+    id: 'app.newWindow', title: 'New window', runs: 'window', keys: 'mod+shift+n',
+    run: async () => { if (window.superego.web) window.open(location.href, '_blank'); else await window.superego.call('app', 'app.newWindow', {}) },
   }),
   defineAction({ id: 'app.settings', title: 'Settings', runs: 'window', keys: 'mod+,', run: (_p, c: WindowContext) => c.openSettings() }),
   defineAction({ id: 'app.log', title: 'Show action log', runs: 'window', run: (_p, c: WindowContext) => c.showLog() }),
@@ -163,6 +170,14 @@ function stepSession(c: WindowContext, by: number) {
   const { index } = current(c)
   const next = c.sessions[index < 0 ? (by > 0 ? 0 : c.sessions.length - 1) : (index + by + c.sessions.length) % c.sessions.length]
   if (next) showSession(c, next)
+}
+
+/** The thread `by` from this one, in the sidebar's order across every session; around at the ends. */
+function stepThread(c: WindowContext, by: number) {
+  const order = c.sessions.flatMap((s) => s.threads.map((thread) => ({ machine: s.machine.id, thread: thread.id })))
+  if (!order.length) return
+  const at = order.findIndex((o) => o.machine === c.selection?.machine && o.thread === c.selection.thread)
+  c.select(order[at < 0 ? (by > 0 ? 0 : order.length - 1) : (at + by + order.length) % order.length]!)
 }
 
 /** The next thread after this one, in order, with something unread; around to the start, but never this one. */

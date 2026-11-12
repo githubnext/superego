@@ -68,6 +68,12 @@ export function startApp(appConfig: AppConfig) {
     },
     /** How Superego sits on the desktop now. */
       async 'service.get'() { return service.state },
+      /** Another window, beside the one asking. */
+      async 'app.newWindow'() {
+        const window = createWindow(BrowserWindow.fromWebContents(contents) ?? undefined)
+        if (!headless) { window.show(); window.focus() }
+        return null
+      },
       /**
        * The shortcuts that run actions in this window now. While a page in one of its panes has the keyboard, the
        * page gets key presses and the window never sees them: these are taken first (see createWindow) and sent on.
@@ -437,9 +443,12 @@ export function startApp(appConfig: AppConfig) {
     app.quit()
   }
 
-  function createWindow() {
+  /** A window; beside `near` (down and right of it, as the system cascades), its size, when given. */
+  function createWindow(near?: BrowserWindow) {
+    const bounds = near && !near.isDestroyed() ? near.getBounds() : undefined
     const window = new BrowserWindow({
-      width: 1100, height: 760, minWidth: 600, minHeight: 400,
+      width: bounds?.width ?? 1100, height: bounds?.height ?? 760, minWidth: 600, minHeight: 400,
+      ...(bounds ? { x: bounds.x + 24, y: bounds.y + 24 } : {}),
       title: appConfig.name,
       titleBarStyle: 'hiddenInset',
       backgroundColor: '#09090b',

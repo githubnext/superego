@@ -40,6 +40,7 @@ export default defineUiExtension({
     })
     superego.slot('sidebar', Threads)
     superego.slot('thread.aside', Details)
+    superego.slot('thread.header', ModelButton)
     const action = (id: string, title: string, run: () => void, keys?: string) =>
       superego.action(defineAction({ id, title, runs: 'window', ...(keys ? { keys } : {}), run }))
     action('threads.rail', 'Toggle sidebar rail', () => void set(VIEW, current.view === 'rail' ? 'list' : 'rail'), 'mod+\\')
@@ -231,9 +232,28 @@ function Rail({ sessions, isOn, onPick, ready }: { sessions: Session[]; isOn(s: 
   )
 }
 
+/**
+ * In the title bar: the model the thread runs with, as a button that shows or hides its details (what it runs with,
+ * spent and touched), lit while they're shown.
+ */
+function ModelButton({ thread }: { machine: MachineEntry; thread: ThreadInfo }) {
+  const [on] = useAppSetting<boolean>(DETAILS)
+  const keys = useShortcut('threads.details')
+  const model = thread.model?.split('/').at(-1) ?? 'No model'
+  return (
+    <button type="button" className={`threads-model ${on ? 'is-on' : ''}`} aria-pressed={Boolean(on)}
+      title={`${thread.model ?? 'No model'}: ${on ? 'hide' : 'show'} thread details${keys ? ` (${keys})` : ''}`}
+      onClick={() => void set(DETAILS, !on)}>
+      {model}
+    </button>
+  )
+}
+
 /** The details pane: facts about the selected thread, and what its tools did. Nothing while it's turned off. */
 function Details({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const [on] = useAppSetting<boolean>(DETAILS)
+  // Kept here too: the sidebar (which keeps the rest of `current`) may be hidden, and ⌘I must still turn this off.
+  current.details = on ?? false
   if (!on) return null
   return <DetailsPane machine={machine} thread={thread} />
 }

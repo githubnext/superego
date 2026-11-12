@@ -149,7 +149,21 @@ if (phase === 'first') {
   await key('i')
   await until(`document.querySelector('.threads-details')?.textContent.includes('Machine')`, 'details pane')
   await key('i')
-  await until(`!document.querySelector('.threads-details')`, 'details closed')
+  await until(`!document.querySelector('.threads-details') && !document.querySelector('.app__aside')?.getBoundingClientRect().width`, 'details closed, its column gone')
+  // The model in the title bar shows and hides them too; with the sidebar hidden, ⌘I turns them on and off as well.
+  await until(`Boolean(document.querySelector('.app__titlebar .threads-model')?.textContent)`, 'the model in the title bar')
+  await run(`document.querySelector('.threads-model').click()`)
+  await until(`Boolean(document.querySelector('.threads-details')) && document.querySelector('.threads-model').classList.contains('is-on')`, 'details from the model button')
+  await run(`document.querySelector('.threads-model').click()`)
+  await until(`!document.querySelector('.threads-details')`, 'and off again')
+  await key('/')
+  await until(`!document.querySelector('.app__sidebar')`, 'sidebar hidden')
+  await key('i')
+  await until(`Boolean(document.querySelector('.threads-details'))`, 'details on with the sidebar hidden')
+  await key('i')
+  await until(`!document.querySelector('.threads-details') && !document.querySelector('.threads-model').classList.contains('is-on')`, 'and off')
+  await key('/')
+  await until(`Boolean(document.querySelector('.app__sidebar'))`, 'sidebar back')
   await run(`window.superego.call('app', 'app.settings.set', { key: 'threads.sort', value: 'created' })`)
   // ⌘K is commands only; ⌘L finds a thread by name and opens it.
   await key('k')
@@ -346,7 +360,7 @@ if (phase === 'first') {
   await until(`Boolean(document.activeElement?.closest('[data-column]:not([data-column="thread"])'))`, 'and to the pane again')
   await key('w')
   await until(`!document.querySelector('.panes__tab')`, 'diff closed')
-  // Sessions: the panes repository is one, the home folder another; ⌘⇧[ and ⌘⇧] go between them.
+  // Sessions: the panes repository is one, the home folder another; ⌘⇧[ and ⌘⇧] go through every thread, across them.
   const { mkdirSync } = await import('node:fs')
   const elsewhere = `${process.env.SUPEREGO_HOME}/elsewhere`
   mkdirSync(elsewhere, { recursive: true })
@@ -363,9 +377,18 @@ if (phase === 'first') {
   }
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'cmd+. reached the unread thread')
   await key(']', ['meta', 'shift'])
-  await until(`document.querySelector('.thread__title')?.textContent !== 'elsewhere'`, 'cmd+shift+] to the next session')
+  await until(`document.querySelector('.thread__title')?.textContent !== 'elsewhere'`, 'cmd+shift+] to the next thread')
   await key('[', ['meta', 'shift'])
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'cmd+shift+[ back')
+  // ⌘⇧N: another window, on the same threads; closed again, so the rest goes on in the first.
+  const firstWindow = BrowserWindow.getAllWindows()[0]
+  await key('n', ['meta', 'shift'])
+  for (let i = 0; i < 50 && BrowserWindow.getAllWindows().length < 2; i++) await new Promise((r) => setTimeout(r, 100))
+  const newWindow = BrowserWindow.getAllWindows().find((w) => w !== firstWindow)
+  if (!newWindow) { await fail('cmd+shift+n opened no window'); throw new Error('failed') }
+  for (let i = 0; i < 100 && !(await newWindow.webContents.executeJavaScript(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`).catch(() => false)); i++) await new Promise((r) => setTimeout(r, 100))
+  if (!(await newWindow.webContents.executeJavaScript(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`).catch(() => false))) { await fail('the new window does not show the thread'); throw new Error('failed') }
+  newWindow.destroy()
   // Archived: folded at the sidebar's end; opened, one list across projects.
   await run(`window.superego.call('local', 'thread.archive', { id: '${other}' })`)
   await until(`![...document.querySelectorAll('.threads-session .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere'))`, 'archived out of its session')
