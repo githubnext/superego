@@ -1,5 +1,5 @@
 // Screenshots of the window's layout (run by test/look.sh): the sidebar open, folded to dots and closed; the thread
-// alone and with Changes beside it; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
+// alone and with Changes beside it (and a file past it); light and dark. Into $SUPEREGO_SHOWCASE_OUT.
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { threads } from './showcase/threads.mjs'
@@ -65,6 +65,18 @@ void (async () => {
   console.log('pane:', await run(`document.querySelector('.panes__column:last-child')?.innerText.slice(0, 200)`))
   await sleep(500)
   await both('open-changes')
+  // Changes focused, a file beside it off to the right.
+  await run(`window.superego.call('local', 'pane.open', { id: '${id}', kind: 'editor', params: { path: 'README.md' } })`)
+  await until(`!!document.querySelector('.file-editor')`, 'editor')
+  const panesOf = () => run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').panes.map((p) => p.id))`)
+  const [diffId, editorId] = await panesOf()
+  await run(`window.superego.call('local', 'pane.focus', { id: '${id}', pane: '${diffId}' })`)
+  await sleep(300)
+  await run(`document.querySelector('[data-column="${diffId}"]')?.focus()`)
+  await both('open-changes-file')
+  await run(`window.superego.call('local', 'pane.close', { id: '${id}', pane: '${editorId}' })`)
+  await run(`document.activeElement?.blur()`)
+  await sleep(300)
   await setting('threads.view', 'rail')
   await sleep(300)
   await both('dots-changes')
