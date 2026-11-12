@@ -1,0 +1,115 @@
+// Threads, for the agents in them: start one of their own (a child, nested under its parent in the sidebar), read
+// another (waiting for it, if asked), send one a message, and list the threads around. A thread is named in a message
+// as a link, [its title](thread:<id>), which the window shows as one.
+import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
+import { bool, obj, opt, str, type ThreadInfo } from '@superego/protocol'
+
+/** What the tools need of the daemon. Threads are named by id, as strings. */
+export type ThreadsHost = {
+  /** The thread a conversation is, if it is one. */
+  info(id: string): Promise<ThreadInfo | undefined>
+  list(): Promise<ThreadInfo[]>
+  start(parent: string, params: { prompt: string; title?: string; cwd?: string; profile?: string; worktree?: boolean }): Promise<ThreadInfo>
+  send(id: string, text: string): Promise<void>
+  /** Its last answer, as text, if it has one. */
+  answer(id: string): Promise<string | undefined>
+}
+
+/** A thread as a link in a message: what the window shows as one, and what the agent is told to write. */
+export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.title.replace(/[[\]]/g, '')}](thread:${thread.id})`
+
+const text = (value: string) => ({ output: [{ type: 'text' as const, text: value }] })
+const LIMIT = 6_000
+const clip = (value: string) => value.length > LIMIT ? `${value.slice(0, LIMIT)}\n… (${value.length - LIMIT} more characters)` : value
+
+export function threadTools(host: ThreadsHost) {
+  /** Where a thread stands, in a line: its link, its status, and where it works. */
+  const line = (thread: ThreadInfo) => `${linkTo(thread)}: ${thread.status.state}${thread.status.msg ? ` (${thread.status.msg})` : ''}, in ${thread.cwd}`
+  const here = async (conversationId: number) => {
+    const thread = await host.info(String(conversationId))
+    if (!thread) throw new Error('Only a thread can do this')
+    return thread
+  }
+
+  return defineExtension({
+    name: 'threads',
+    tools: [
+      defineTool({
+        name: 'thread_start',
+        description: 'Start a thread of its own for separate work, as a child of this one: another agent, with the prompt as its first message. ' +
+          'It works on its own; thread_read (wait: true) gets its answer. Defaults to this thread\'s folder.',
+        parameters: obj({
+          prompt: str({ minLength: 1, description: 'Its first message: everything it needs, since it sees nothing of this thread.' }),
+          title: opt(str()), cwd: opt(str({ description: 'Its folder, if not this thread\'s.' })),
+          profile: opt(str()), worktree: opt(bool({ description: 'Work in a git worktree of its own.' })),
+        }),
+        async execute(args, api) {
+          const parent = await here(api.conversationId)
+          const child = await host.start(parent.id, { ...args, cwd: args.cwd ?? parent.cwd })
+          return { ...text(`Started ${linkTo(child)} (id ${child.id}).`), details: { id: child.id, title: child.title } }
+        },
+      }),
+      defineTool({
+        name: 'thread_read',
+        description: 'Read another thread: where it stands, its parent and children, and its last answer. wait: true waits until it is ' +
+          'no longer working first.',
+        parameters: obj({ id: str(), wait: opt(bool()) }),
+        async execute({ id, wait }, api, context) {
+          if (wait && id === String(api.conversationId)) throw new Error('A thread can\'t wait on itself')
+          let thread = await host.info(id)
+          if (!thread) throw new Error(`No thread ${id}`)
+          while (wait && thread.status.state === 'working') {
+            if (context.abortSignal?.aborted) throw new Error('Stopped waiting')
+            await new Promise((resolve) => setTimeout(resolve, 500))
+            thread = (await host.info(id))!
+          }
+          const all = await host.list()
+          const parent = thread.parent ? all.find((t) => t.id === thread!.parent) : undefined
+          const children = all.filter((t) => t.parent === id)
+          const answer = await host.answer(id)
+          return text([
+            line(thread),
+            parent && `Started by ${linkTo(parent)}.`,
+            children.length && `Its threads:\n${children.map((c) => `- ${line(c)}`).join('\n')}`,
+            answer ? `Its last answer:\n${clip(answer)}` : 'No answer yet.',
+          ].filter(Boolean).join('\n\n'))
+        },
+      }),
+      defineTool({
+        name: 'thread_send',
+        description: 'Send another thread a message, from this one: it goes in when that thread is next free.',
+        parameters: obj({ id: str(), text: str({ minLength: 1 }) }),
+        async execute({ id, text: message }, api) {
+          const from = await here(api.conversationId)
+          const to = await host.info(id)
+          if (!to) throw new Error(`No thread ${id}`)
+          await host.send(id, `From ${linkTo(from)}:\n\n${message}`)
+          return text(`Sent to ${linkTo(to)}.`)
+        },
+      }),
+      defineTool({
+        name: 'thread_list',
+        description: 'The threads around this one: its parent, its children, and the others in its project.',
+        parameters: obj({}),
+        async execute(_args, api) {
+          const self = await here(api.conversationId)
+          const all = await host.list()
+          const others = all.filter((t) => t.session.root === self.session.root && t.id !== self.id)
+          const parentOf = (t: ThreadInfo) => all.find((p) => p.id === t.parent)
+          return text(others.length ? others.map((t) => `- ${line(t)}${parentOf(t) ? `, started by ${linkTo(parentOf(t)!)}` : ''}`).join('\n') : 'No other threads here.')
+        },
+      }),
+    ],
+    sections: [section('threads', async ({ conversationId }) => {
+      const self = await host.info(String(conversationId))
+      if (!self) return undefined
+      const parent = self.parent ? await host.info(self.parent) : undefined
+      return [
+        `This thread is ${linkTo(self)}${parent ? `, started by ${linkTo(parent)}` : ''}.`,
+        'Name a thread in a message as a link, [its title](thread:<id>): it shows as one, to open.',
+        'For separate work that can go on alongside this (another part of a change, a question to look into), start a thread ' +
+          'of its own with thread_start, and give it everything it needs; thread_read with wait: true gets its answer.',
+      ].join('\n')
+    })],
+  })
+}

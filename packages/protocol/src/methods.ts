@@ -40,6 +40,8 @@ export type ThreadInfo = {
   profile?: ProfileRef
   /** The session it belongs to, on its machine: a project, by the folder it lives in (a repository's main checkout). */
   session: { root: string; name: string }
+  /** The thread that started it, if one did (an agent's thread_start, say): it shows nested under that one. */
+  parent?: ThreadId
   /** Its own git worktree, when it has one; `removed` once archiving took it away (its branch stays). */
   worktree?: { path: string; branch: string; removed?: boolean }
   /** Put away: listed only with `archived`, readable, and taking no messages until unarchived. */
@@ -86,6 +88,8 @@ export type NewThread = {
   worktree?: boolean
   /** The profile to run with; unset takes the folder's default (the project's, else the user's). */
   profile?: string
+  /** The thread starting it, on the same machine. */
+  parent?: string
 }
 
 export type MachineInfo = {

@@ -29,6 +29,10 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
 - **A thread** starts in the folder you give it. Ask for a worktree (the New thread checkbox, `superego -w`) and it works in
   `~/.superego/worktrees/<repo>/<slug>` on branch `superego/<slug>`; archiving removes a clean worktree and keeps its branch.
   Archived threads stay readable from the sidebar's Archived list, taking no messages until you unarchive them.
+- **Threads start threads.** An agent starts one of its own for separate work (`thread_start`): a child, shown nested
+  under its parent in the sidebar, with "from" its parent in the title bar. It reads another (`thread_read`, waiting for
+  it with `wait: true`), messages one (`thread_send`), and lists those around (`thread_list`). A message names a thread
+  as `[its title](thread:<id>)`, shown as that thread to open (⌘-click: beside). `thread.create` takes `parent` too.
 - **Panes** sit beside the thread as a row of columns that scrolls sideways (Dinky's scrolling layout); the thread
   and its panes are kept with the thread, so every client sees the same. The agent opens them too (`open_pane`).
   Built in: Changes (git diff), the file editor (Markdown in live preview, as Obsidian shows it), Preview (a web page),

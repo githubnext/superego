@@ -425,6 +425,14 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 
 /* Files a thread names, opened beside it. */
 .md a.md__file { color: var(--superego-accent); text-decoration: none; cursor: pointer; }
+/* A thread named somewhere (a message, a tool call, the title bar): its status and title, in the accent, to open. */
+.thread-ref { display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; max-width: 100%; color: var(--superego-accent); text-decoration: none; cursor: pointer; }
+.thread-ref:hover .thread-ref__title { text-decoration: underline; text-underline-offset: 2px; }
+.md a.thread-ref:hover { text-decoration: none; }
+.thread-ref__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thread-ref .superego-status { width: auto; flex: none; }
+.row__thread { flex: 0 1 auto; align-items: center; }
+.thread__parent .thread-ref { color: inherit; }
 .md a.md__file:hover { text-decoration: underline; text-underline-offset: 2px; }
 .md a.md__file--code code { color: inherit; }
 /* Tried, and not there (or past the thread's folder): back to plain text, struck through; the title says why. */

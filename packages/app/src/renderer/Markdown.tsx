@@ -1,10 +1,12 @@
 // An assistant's text, as the markdown it is: GitHub-flavoured (tables, task lists, strikethrough). No raw HTML.
 // Web links open in the browser, not in the window; in a thread (OpenUrl) a button beside each opens it in a pane. Where a file can be opened (a thread: OpenFile), the files it
-// names open beside it: [[wikilinks]], relative links, and code that reads as a path (`notes/plan.md`).
+// names open beside it: [[wikilinks]], relative links, and code that reads as a path (`notes/plan.md`). A thread it
+// names ([title](thread:<id>)) shows as that thread, to open (ThreadMachine).
 import { createContext, memo, useContext, useEffect, useLayoutEffect, useRef, useState, type ComponentProps } from 'react'
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CheckIcon, CopyIcon, SquareSplitHorizontalIcon } from '@superego/ui'
+import { ThreadRef } from './thread-ref.tsx'
 
 /** Code scrolls sideways, never wraps; it fades at the right edge only while a line runs past it. */
 export function Scroll({ node: _node, ...props }: ComponentProps<'pre'> & { node?: unknown }) {
@@ -84,10 +86,14 @@ function CodeBlock(props: ComponentProps<'pre'> & { node?: unknown }) {
  */
 export const OpenFile = createContext<((name: string) => Promise<string | undefined>) | undefined>(undefined)
 
+/** The machine whose threads a message names ([title](thread:<id>)). Provided in a thread. */
+export const ThreadMachine = createContext<string | undefined>(undefined)
+
 /** Opens a web page in a pane beside the thread. Provided where there's a thread to open it beside. */
 export const OpenUrl = createContext<((url: string) => void) | undefined>(undefined)
 
 const FILE = 'superego-file:'
+const THREAD = 'thread:'
 /** A path, by its look: no spaces at its ends, a slash or a file extension, and no scheme. A folder may end in `/`. */
 const PATHLIKE = /^(?![a-z][\w+.-]*:)(?:[\w.@~/-][^\n`]*\/[^\n`]*[^\s]|[\w@~-][^\n`/]*\.[A-Za-z][\w]{0,7}(?::\d+)*)$/
 
@@ -121,6 +127,8 @@ function PaneLinkButton({ url }: { url: string }) {
 const components: Components = {
   a: ({ node: _node, href = '', ...props }) => {
     const open = useContext(OpenFile)
+    const machine = useContext(ThreadMachine)
+    if (machine && href.startsWith(THREAD)) return <ThreadRef machine={machine} id={href.slice(THREAD.length)}>{props.children}</ThreadRef>
     if (open && href.startsWith(FILE)) return <FileLink name={decodeURIComponent(href.slice(FILE.length))}>{props.children}</FileLink>
     if (open && href && !/^([a-z][\w+.-]*:|#|\/\/)/i.test(href)) return <FileLink name={decodeURI(href.split('#')[0]!)}>{props.children}</FileLink>
     const web = <a {...props} href={href} target="_blank" rel="noreferrer" />
@@ -137,7 +145,7 @@ const components: Components = {
   pre: CodeBlock,
 }
 
-const urlTransform = (url: string) => url.startsWith(FILE) ? url : defaultUrlTransform(url)
+const urlTransform = (url: string) => url.startsWith(FILE) || url.startsWith(THREAD) ? url : defaultUrlTransform(url)
 
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   const files = useContext(OpenFile)

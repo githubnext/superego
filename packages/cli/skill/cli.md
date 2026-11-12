@@ -22,6 +22,9 @@ superego threads [--archived]                  # list them (also: ls)
   yours, or none.
 - `-w` gives the thread a git worktree of its own: `~/.superego/worktrees/<repo>/<slug>`, branch `superego/<slug>`.
 - On another machine (`-m`), `dir` is a path there.
+- `superego do thread.create --parent <thread> …` starts it as that thread's child (nested under it in the sidebar).
+  Inside a thread, agents have `thread_start`, `thread_read` (`wait: true`), `thread_send` and `thread_list`, and name
+  threads in messages as `[title](thread:<id>)`.
 
 A thread's status is `idle`, `working`, `done`, `blocked` (waiting on the user: a question, say) or `error`. To wait
 for an answer from a script, poll:

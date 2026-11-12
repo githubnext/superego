@@ -1,12 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, Button, CaretRightIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, SquareSplitHorizontalIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowDownRightIcon, ArrowElbowRightIcon, ArrowRightIcon, Button, CaretRightIcon, ChatCircleIcon, ChatsCircleIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, SquareSplitHorizontalIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
 import { divideWork, fileKind, folderKind, paneMenu, Slot, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useShell } from './state.tsx'
-import { Markdown, OpenFile, OpenUrl, Scroll } from './Markdown.tsx'
+import { Markdown, OpenFile, OpenUrl, Scroll, ThreadMachine } from './Markdown.tsx'
+import { ThreadRef } from './thread-ref.tsx'
 import { useLocalState } from './local-state.ts'
 import { readAttachment, splitMessage } from './attachments.ts'
 import { matchSkills, skillAt, type SkillInfo } from './skill-names.ts'
@@ -107,6 +108,7 @@ export function ThreadTools({ machine, thread }: { machine: MachineEntry; thread
   return (
     <span className="thread__tools">
       <span className="thread__crumb">
+        {thread.parent && <span className="titlebar__chip thread__parent">from <ThreadRef machine={machine.id} id={thread.parent} /></span>}
         {machine.id !== 'local' && <span className="titlebar__chip">{machine.label}</span>}
         <span className="titlebar__chip" title={thread.cwd}>{thread.session?.name ?? folderName(thread.cwd)}</span>
         {thread.worktree && <span className="titlebar__chip thread__branch" title={thread.worktree.path}>{thread.worktree.branch}</span>}
@@ -215,6 +217,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
   return (
     <OpenFile.Provider value={openFile}>
     <OpenUrl.Provider value={openUrl}>
+    <ThreadMachine.Provider value={machine.id}>
     <Here.Provider value={{ machine, thread }}>
     <div className="thread">
       <div className="thread__scroll" ref={scroller}
@@ -233,6 +236,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
       <Composer machine={machine} thread={thread} busy={Boolean(live?.run)} onJump={away ? jumpToEnd : undefined} />
     </div>
     </Here.Provider>
+    </ThreadMachine.Provider>
     </OpenUrl.Provider>
     </OpenFile.Provider>
   )
@@ -526,6 +530,10 @@ function describe(blocks: Block[]): string[] {
       case 'bash': return `ran ${n(k, 'a command', 'commands')}`
       case 'edit': return `edited ${n(k, 'a file', 'files')}`
       case 'write': return `wrote ${n(k, 'a file', 'files')}`
+      case 'thread_start': return `started ${n(k, 'a thread', 'threads')}`
+      case 'thread_read': return `read ${n(k, 'a thread', 'threads')}`
+      case 'thread_send': return `messaged ${n(k, 'a thread', 'threads')}`
+      case 'thread_list': return 'listed threads'
       default: return `used ${kind}${k > 1 ? ` ${k}×` : ''}`
     }
   })
@@ -567,6 +575,8 @@ function verbOf(name: string, state: string): string {
   const verbs: Record<string, [string, string, string]> = {
     read: ['Read', 'Reading', 'Read failed'], bash: ['Ran', 'Running', 'Command failed'],
     edit: ['Edited', 'Editing', 'Edit failed'], write: ['Wrote', 'Writing', 'Write failed'],
+    thread_start: ['Started', 'Starting', 'Couldn’t start a thread'], thread_read: ['Read', 'Waiting on', 'Couldn’t read'],
+    thread_send: ['Messaged', 'Messaging', 'Couldn’t message'], thread_list: ['Listed threads', 'Listing threads', 'Couldn’t list threads'],
   }
   const verb = verbs[name]
   if (!verb) return state === 'error' ? `${name} failed` : name
@@ -592,18 +602,24 @@ function ToolCall({ block, result, slot }: { block: Block; result: Message | und
   const diff = !result?.isError ? diffOf(result?.details) : undefined
   const written = block.name === 'write' && typeof args.content === 'string' ? args.content : undefined
   const stat = diff ? diffStat(diff) : undefined
+  // A thread the call is about: the one it started, read or messaged, named as itself.
+  const other = block.name === 'thread_start' ? (result?.details as { id?: string } | undefined)?.id : block.name?.startsWith('thread_') && typeof args.id === 'string' ? args.id : undefined
   return (
     <details className={`step step--${state}`}>
       <summary className="row">
         <Chevron />
         {state === 'working' ? <StatusGlyph status={{ state }} /> : <Icon name={block.name ?? ''} />}
         <span className="row__label">{verbOf(block.name ?? '', state)}</span>
-        <span className="row__arg" title={summaryOf(block.name ?? '', args)}>{summaryOf(block.name ?? '', args)}</span>
+        {other ? <ThreadRef machine={here.machine.id} id={other} className="row__thread" />
+          : block.name === 'thread_start' ? <span className="row__arg">{String(args.title ?? 'a thread')}</span>
+          : block.name !== 'thread_list' && <span className="row__arg" title={summaryOf(block.name ?? '', args)}>{summaryOf(block.name ?? '', args)}</span>}
         {stat && <span className="row__meta"><Stat {...stat} /></span>}
         {written !== undefined && <span className="row__meta">{lineCount(written)} lines</span>}
       </summary>
       {diff ? <Diff diff={diff} />
         : written !== undefined ? <Output text={written} />
+        // A thread started or messaged is named in the row; what the call said back only repeats it.
+        : other && state === 'done' && block.name !== 'thread_read' ? null
         : output ? <Output text={output} className={state === 'error' ? 'is-error' : ''} /> : null}
     </details>
   )
@@ -628,7 +644,10 @@ function diffStat(diff: string) {
 }
 
 /** A small, static glyph per kind of row: thinking, a page to read, a prompt to run, a pencil, a new page. */
-const ROW_ICONS: Record<string, PhosphorIcon> = { thinking: SparkleIcon, read: FileTextIcon, bash: TerminalIcon, edit: PencilSimpleIcon, write: FilePlusIcon }
+const ROW_ICONS: Record<string, PhosphorIcon> = {
+  thinking: SparkleIcon, read: FileTextIcon, bash: TerminalIcon, edit: PencilSimpleIcon, write: FilePlusIcon,
+  thread_start: ArrowElbowDownRightIcon, thread_read: ChatCircleIcon, thread_send: ChatCircleIcon, thread_list: ChatsCircleIcon,
+}
 function Icon({ name }: { name: string }) {
   const Glyph = ROW_ICONS[name] ?? WrenchIcon
   return <Glyph className="row__icon" size={14} aria-hidden />

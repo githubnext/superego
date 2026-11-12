@@ -5,7 +5,7 @@
 // - show as: a list, or a rail of status glyphs
 // - details: a pane beside the thread with what it runs with, spent and touched
 // UI only: it uses the core's thread methods and facts.
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   call, defineAction, type Dispatch, defineUiExtension, showSession, SORT, useAppSetting, useLocalState, useMachines, useSelection, useSessions, useThreadView, useShell, useShortcut,
   type MachineEntry, type Session, type Sort,
@@ -13,7 +13,7 @@ import {
 import type { ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
-import { activity, ago, freeze } from './groups.ts'
+import { activity, ago, freeze, nest } from './groups.ts'
 
 export const VIEW = 'threads.view'
 export const DETAILS = 'threads.details'
@@ -69,7 +69,11 @@ function Threads() {
   const [hovering, setHovering] = useState(false)
   const frozen = useRef(live)
   if (!hovering) frozen.current = live
-  const sessions = hovering ? freeze(frozen.current, live) : live
+  // Threads a thread started sit under it, a level in.
+  const depth = new Map<string, number>()
+  const sessions = (hovering ? freeze(frozen.current, live) : live).map((session) => ({
+    ...session, threads: nest(session.threads).map(({ thread, depth: level }) => { depth.set(`${session.key}/${thread.id}`, level); return thread }),
+  }))
 
   const order = sessions.flatMap((s) => s.threads.map((thread) => ({ machine: s.machine, thread })))
   step = (by) => {
@@ -107,12 +111,16 @@ function Threads() {
             <NewThreadButton label={`New thread in ${session.name}`} machine={session.machine} cwd={session.root} />
           </div>
           <List>
-            {session.threads.map((thread) => (
-              <ListItem key={thread.id} selected={isOn(session, thread)} leading={<StatusGlyph status={thread.status} />}
-                trailing={ago(activity(thread))} onClick={() => select({ machine: session.machine.id, thread: thread.id })}>
-                {thread.title}
-              </ListItem>
-            ))}
+            {session.threads.map((thread) => {
+              const level = depth.get(`${session.key}/${thread.id}`) ?? 0
+              return (
+                <ListItem key={thread.id} selected={isOn(session, thread)} leading={<StatusGlyph status={thread.status} />}
+                  {...(level ? { className: 'threads-child', style: { '--depth': level } as CSSProperties } : {})}
+                  trailing={ago(activity(thread))} onClick={() => select({ machine: session.machine.id, thread: thread.id })}>
+                  {thread.title}
+                </ListItem>
+              )
+            })}
           </List>
         </section>
       ))}

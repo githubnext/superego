@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import type { MachineEntry } from '@superego/app/ui'
 import type { ThreadInfo, Status } from '@superego/protocol'
 import { groupSessions } from '../../../packages/app/src/renderer/sessions.ts'
-import { ago, freeze } from '../src/groups.ts'
+import { ago, freeze, nest } from '../src/groups.ts'
 
 const machine = (id: string, state: MachineEntry['state'] = 'connected'): MachineEntry => ({ id, label: id === 'local' ? 'This computer' : 'Build box', state })
 const thread = (id: string, root: string, state: Status['state'], createdAt: number, activeAt: number): ThreadInfo =>
@@ -40,4 +40,12 @@ it('says how long ago briefly', () => {
   expect(ago(now - 20_000, now)).toBe('now')
   expect(ago(now - 5 * 60_000, now)).toBe('5m')
   expect(ago(now - 3 * 3_600_000, now)).toBe('3h')
+})
+
+it('puts the threads a thread started under it, a level in; one whose parent is elsewhere on its own', () => {
+  const t = (id: string, parent?: string) => ({ ...thread(id, '/code/superego', 'idle', 0, 0), ...(parent ? { parent } : {}) })
+  const order = [t('child-b', 'parent'), t('parent'), t('grandchild', 'child-a'), t('child-a', 'parent'), t('orphan', 'archived'), t('other')]
+  expect(nest(order).map(({ thread, depth }) => [thread.id, depth])).toEqual([
+    ['parent', 0], ['child-b', 1], ['child-a', 1], ['grandchild', 2], ['orphan', 0], ['other', 0],
+  ])
 })

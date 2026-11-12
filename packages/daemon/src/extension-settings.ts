@@ -11,6 +11,7 @@ const CORE: Record<string, { title: string; description: string }> = {
   panes: { title: 'Panes', description: 'Open panes beside a thread: diffs, previews, files.' },
   skills: { title: 'Skills', description: 'Know the shared skills, and use them when they fit.' },
   'agents-md': { title: 'AGENTS.md', description: 'Follow the standing instructions in AGENTS.md files.' },
+  threads: { title: 'Threads', description: 'Start threads of their own, and read and message others.' },
 }
 
 export type ExtensionAbout = { name: string; title?: string | undefined; description?: string | undefined }

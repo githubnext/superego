@@ -33,3 +33,23 @@ export function freeze(frozen: Session[], live: Session[]): Session[] {
   })
   return [...kept, ...now.values()]
 }
+
+/**
+ * A session's threads with each one a thread started right under it, a level deeper (and its own under it), in the
+ * order given otherwise. A thread whose parent isn't among them (archived, or in another project) stands on its own.
+ */
+export function nest(threads: ThreadInfo[]): { thread: ThreadInfo; depth: number }[] {
+  const here = new Set(threads.map((t) => t.id))
+  const children = new Map<string, ThreadInfo[]>()
+  for (const thread of threads) if (thread.parent && here.has(thread.parent)) children.set(thread.parent, [...children.get(thread.parent) ?? [], thread])
+  const out: { thread: ThreadInfo; depth: number }[] = []
+  const placed = new Set<string>()
+  const place = (thread: ThreadInfo, depth: number) => {
+    if (placed.has(thread.id)) return
+    placed.add(thread.id)
+    out.push({ thread, depth })
+    for (const child of children.get(thread.id) ?? []) place(child, depth + 1)
+  }
+  for (const thread of threads) if (!thread.parent || !here.has(thread.parent)) place(thread, 0)
+  return out
+}

@@ -60,7 +60,7 @@ it('is listed in Settings → Extensions, and switched off there the agent goes 
 
   const { value: settings } = await peer.call<{ value: SettingsSnapshot }>('settings.watch', {})
   const section = settings.sections.find((s) => s.id === 'extensions')!
-  expect(section.settings.map((s) => s.key)).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.skills', 'extensions.agents-md', 'extensions.tasks'])
+  expect(section.settings.map((s) => s.key)).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.skills', 'extensions.agents-md', 'extensions.threads', 'extensions.tasks'])
   expect(section.settings.at(-1)).toMatchObject({ title: 'Task reporting', default: true })
   expect(settings.sections.find((s) => s.id === 'profiles')?.data).toEqual([])
 

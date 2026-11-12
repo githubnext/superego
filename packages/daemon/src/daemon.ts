@@ -15,11 +15,12 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  agentName, arr, type Attachment, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type Notifications, type RpcPeer, type ThreadInfo,
+  agentName, arr, type Attachment, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
+import { threadTools } from './thread-tools.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveValue, type StatusContribution } from './extension.ts'
 import { serveWeb, webToken, type WebServer } from './web.ts'
@@ -52,6 +53,8 @@ type ThreadMeta = {
   worktree?: { path: string; branch: string; removed?: boolean }
   /** The machine's own agent, about Superego itself (see meta.ts). */
   meta?: boolean
+  /** The thread that started it (by thread_start, or thread.create's `parent`). */
+  parent?: string
 }
 const ThreadDoc = defineDoc<ThreadMeta>({
   kind: 'superego.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current',
@@ -264,6 +267,23 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const skillsDir = join(agentsDir, 'skills')
   installBuiltin(defineExtension({ name: 'skills', sections: [section('skills', async () => skillsPrompt(await listSkills(skillsDir)))] }))
   installBuiltin(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] }))
+  // Threads starting, reading and messaging threads (see thread-tools.ts).
+  installBuiltin(threadTools({
+    info: async (id) => { const m = await get(id).catch(() => undefined); return m && info(id, m) },
+    list: () => list(),
+    start: (parent, params) => startThread({ ...params, parent }),
+    send: async (id, text) => { await submit(id, text, randomUUID(), 'followUp') },
+    async answer(id) {
+      const page = await (await get(id)).conversation.entries({ order: 'descending' }, 50, undefined, context)
+      for (const entry of page.items) {
+        const message = entry.model?.[0] as { role?: string; content?: unknown } | undefined
+        if (message?.role !== 'assistant' || !Array.isArray(message.content)) continue
+        const said = (message.content as { type: string; text?: string }[]).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim()
+        if (said) return said
+      }
+      return undefined
+    },
+  }))
   // Profiles and their extensions import from 'superego'; this is what they get.
   provideSdk({
     defineProfile, defineExtension, defineTool, section, hook, wrapTool, wrapSection, defineDaemonExtension, defineAction, RpcError,
@@ -344,6 +364,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     ...(m.meta.worktree ? { worktree: m.meta.worktree } : {}),
     ...(m.meta.archived ? { archived: true } : {}),
     ...(m.meta.meta ? { meta: true } : {}),
+    ...(m.meta.parent ? { parent: m.meta.parent } : {}),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
   /** A thread's session: kept since it started; for older threads, found from its folder once (else the folder). */
@@ -602,38 +623,41 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const thread = { thread: true as const }
   router.register(defineAction({
     id: 'thread.create', title: 'Start a thread (no dialog)', runs: 'machine', expose: ['ui', 'cli'],
-    params: obj({ cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), attachments: opt(arr(ATTACHMENT)), profile: opt(str()), worktree: opt(bool()) }),
-    async run({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree: wantsWorktree }) {
-      const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
-      if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${machine.hostname}`)
-      if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
-      // The project's profile (or the user's) of that name, else the default one there is; checked (and allowed) now.
-      const ref = findProfile(dir, userProfiles, profileName?.trim() || undefined)
-      const loaded = ref ? await profileOf(ref) : undefined
-      // Its session is the project. It works in the folder given, or, asked to (or its profile says so), in a worktree
-      // of its own: in a repository that has a commit to start from.
-      const checkout = await checkoutOf(dir)
-      let workdir = dir
-      let worktree: ThreadMeta['worktree']
-      if (checkout && (wantsWorktree ?? loaded?.spec.worktree ?? false)) {
-        const name = `${slugOf(title?.trim() || (prompt ? titleOf(prompt) : ''))}-${randomUUID().slice(0, 6)}`
-        const path = join(options.dataDir, 'worktrees', basename(checkout.root), name)
-        const branch = `${options.app.id}/${name}`
-        await mkdir(dirname(path), { recursive: true })
-        const made = await git(checkout.top, ['worktree', 'add', '-q', '-b', branch, path, 'HEAD']).then(() => true, () => false)
-        if (made) {
-          // git gives real paths; so must the folder be, to find where in the checkout it is.
-          const below = relative(checkout.top, await realpath(dir))
-          workdir = below ? join(path, below) : path
-          worktree = { path, branch }
-        }
-      }
-      return createThread({
-        title: title?.trim() ?? '', cwd: workdir, createdAt: Date.now(), root: checkout?.root ?? dir, ...(worktree ? { worktree } : {}),
-        ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}), ...(ref ? { profile: ref } : {}),
-      }, prompt, attachments)
-    },
+    params: obj({ cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), attachments: opt(arr(ATTACHMENT)), profile: opt(str()), worktree: opt(bool()), parent: opt(str()) }),
+    run: (params) => startThread(params),
   }))
+  /** A new thread as asked for: where, with what, in a worktree or not; a child of `parent` when a thread starts it. */
+  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree: wantsWorktree, parent }: NewThread) {
+    const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
+    if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${machine.hostname}`)
+    if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
+    if (parent) await get(parent)
+    // The project's profile (or the user's) of that name, else the default one there is; checked (and allowed) now.
+    const ref = findProfile(dir, userProfiles, profileName?.trim() || undefined)
+    const loaded = ref ? await profileOf(ref) : undefined
+    // Its session is the project. It works in the folder given, or, asked to (or its profile says so), in a worktree
+    // of its own: in a repository that has a commit to start from.
+    const checkout = await checkoutOf(dir)
+    let workdir = dir
+    let worktree: ThreadMeta['worktree']
+    if (checkout && (wantsWorktree ?? loaded?.spec.worktree ?? false)) {
+      const name = `${slugOf(title?.trim() || (prompt ? titleOf(prompt) : ''))}-${randomUUID().slice(0, 6)}`
+      const path = join(options.dataDir, 'worktrees', basename(checkout.root), name)
+      const branch = `${options.app.id}/${name}`
+      await mkdir(dirname(path), { recursive: true })
+      const made = await git(checkout.top, ['worktree', 'add', '-q', '-b', branch, path, 'HEAD']).then(() => true, () => false)
+      if (made) {
+        // git gives real paths; so must the folder be, to find where in the checkout it is.
+        const below = relative(checkout.top, await realpath(dir))
+        workdir = below ? join(path, below) : path
+        worktree = { path, branch }
+      }
+    }
+    return createThread({
+      title: title?.trim() ?? '', cwd: workdir, createdAt: Date.now(), root: checkout?.root ?? dir, ...(worktree ? { worktree } : {}),
+      ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}), ...(ref ? { profile: ref } : {}), ...(parent ? { parent } : {}),
+    }, prompt, attachments)
+  }
   /** A new thread with `meta`, and its first message when there is one. */
   async function createThread(meta: ThreadMeta, prompt?: string, attachments?: Attachment[]) {
     const { model, thinkingLevel } = await agentOf(meta)

@@ -8,6 +8,7 @@
 .threads-session__name em { font-style: normal; font-weight: 400; color: var(--superego-muted); overflow: hidden; text-overflow: ellipsis; }
 .threads-session .threads__new { opacity: 0; transition: opacity .1s; }
 .threads-session:hover .threads__new, .threads-session .threads__new:focus-visible { opacity: 1; }
+.superego-list-item.threads-child { padding-left: calc(10px + var(--depth) * 14px); }
 .threads-session.is-stale .superego-list-item, .threads-session.is-stale .threads-session__name { color: var(--superego-muted); }
 
 
