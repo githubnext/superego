@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { clampPan, FIT, MAX_SCALE, toggleAt, zoomAt } from '../src/zoom.ts'
+import { clampPan, FIT, MAX_SCALE, toggleAt, zoomAt } from '../src/renderer/zoom.ts'
 
 // An 800×600 image fitted on a 1000×800 stage.
 const bounds = { width: 800, height: 600, stageWidth: 1000, stageHeight: 800 }

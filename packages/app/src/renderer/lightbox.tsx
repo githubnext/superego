@@ -1,13 +1,11 @@
-// The lightbox: an image over the whole window, to look at closely. Click or tap to zoom in where you click (again to
+// The lightbox: an image of a thread's (one an agent showed, or one in a message or a rendered file) over the whole window, to look at closely. Click or tap to zoom in where you click (again to
 // fit), scroll or pinch to zoom, drag to pan; ←/→, the side buttons or a swipe go through the set; Esc, the close
 // button or a click beside the image close it. The focus stays inside while it is open and goes back where it was.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
-import type { MachineEntry } from '@superego/app/ui'
 import { CaretLeftIcon, CaretRightIcon, ImageBrokenIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, XIcon } from '@superego/ui'
-import { sourceOf, useSource } from './load.ts'
-import { describe } from './names.ts'
-import type { Shown } from './shared.ts'
+import type { MachineEntry } from '../shared.ts'
+import { describeImage, imageSourceOf, useImageSource, type ImageItem } from './images.tsx'
 import { CLICK_SCALE, clampPan, FIT, toggleAt, zoomAt, type Bounds, type Point, type View } from './zoom.ts'
 
 /** How far a finger or the mouse may move and still be a click; how far a swipe must go to turn the page. */
@@ -26,7 +24,7 @@ type Gesture = {
 export function Lightbox({ machine, thread, images, start, onClose }: {
   machine: MachineEntry
   thread: string
-  images: Shown[]
+  images: ImageItem[]
   start: number
   onClose(): void
 }) {
@@ -42,7 +40,7 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
   const pointers = useRef(new Map<number, Point>())
   const gesture = useRef<Gesture | undefined>(undefined)
   const image = images[index]!
-  const { src, broken } = useSource(machine, thread, image, true)
+  const { src, broken, problem } = useImageSource(machine, thread, image, true)
   const [ready, setReady] = useState<string>()
   const many = images.length > 1
 
@@ -55,7 +53,7 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
   // Its neighbours, read ahead so going through the set doesn't wait.
   useEffect(() => {
     if (!many) return
-    for (const by of [1, -1]) void sourceOf(machine.id, thread, images[(index + by + images.length) % images.length]!).catch(() => {})
+    for (const by of [1, -1]) void imageSourceOf(machine.id, thread, images[(index + by + images.length) % images.length]!).catch(() => {})
   }, [machine.id, thread, images, index, many])
 
   // The focus inside while it's open, and back where it was after.
@@ -169,7 +167,7 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
     event.stopPropagation()
   }
 
-  const label = describe(image)
+  const label = describeImage(image)
   const zoomed = view.scale > 1
   return createPortal(
     <div ref={root} className="lightbox" role="dialog" aria-modal="true" aria-label={many ? `${label}, ${index + 1} of ${images.length}` : label} tabIndex={-1} onKeyDown={onKeyDown}>
@@ -179,7 +177,7 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
       >
         {broken ? (
-          <div className="lightbox__broken"><ImageBrokenIcon size={32} aria-hidden /><span>{image.name} can’t be shown</span></div>
+          <div className="lightbox__broken"><ImageBrokenIcon size={32} aria-hidden /><span>{image.name} can’t be shown</span>{problem && <span className="lightbox__why">{problem}</span>}</div>
         ) : src && (
           <img
             ref={img}

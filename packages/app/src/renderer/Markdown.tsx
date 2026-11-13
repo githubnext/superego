@@ -1,15 +1,19 @@
 // An assistant's text, as the markdown it is: GitHub-flavoured (tables, task lists, strikethrough), its fenced code
 // coloured by the language it names. No raw HTML in a message: agents write `<T>` and `<div>` loosely, and those would
-// vanish. A file (`html`) has it as GitHub shows it, sanitized, with its images read from beside it (Images).
+// vanish. A file (`html`) has it as GitHub shows it, sanitized. In a thread (Images), images that are its files are read
+// from its machine (a message's from its folder, a file's from beside it), and open in the lightbox.
 // Web links open in the browser, not in the window; in a thread (OpenUrl) a button beside each opens it in a pane. Where a file can be opened (a thread: OpenFile), the files it
 // names open beside it: [[wikilinks]], relative links, and code that reads as a path (`notes/plan.md`). A thread it
 // names ([title](thread:<id>)) shows as that thread, to open (ThreadMachine).
-import { createContext, memo, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from 'react'
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from 'react'
 import ReactMarkdown, { defaultUrlTransform, type Components, type ExtraProps } from 'react-markdown'
 import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import { highlight, languageNamed } from './code-highlight.ts'
-import { htmlPlugins, imagePath, looksLikePath, mediaMatches, parseSrcset } from './markdown-html.ts'
+import { htmlPlugins, imageSource, looksLikePath, mediaMatches, parseSrcset } from './markdown-html.ts'
+import type { MachineEntry } from '../shared.ts'
+import { ImageFrame, imageSourceOf, type ImageItem } from './images.tsx'
+import { Lightbox } from './lightbox.tsx'
 import { CheckIcon, CopyIcon, SquareSplitHorizontalIcon } from '@superego/ui'
 import { ThreadRef } from './thread-ref.tsx'
 
@@ -98,10 +102,45 @@ export const ThreadMachine = createContext<string | undefined>(undefined)
 export const OpenUrl = createContext<((url: string) => void) | undefined>(undefined)
 
 /**
- * Where a rendered file's images come from: its folder (`a/b/`), and a read of a file in the thread's folder to a URL
- * the window can show. Without it, images are left as they are.
+ * Where images come from: the thread's machine, the thread, and an image's address as it is to be read there (`src`
+ * from a message, or from beside a rendered file). Without it, images are left as they are.
  */
-export const Images = createContext<{ dir: string; load: (path: string) => Promise<string> } | undefined>(undefined)
+export type ImagesIn = { machine: MachineEntry; thread: string; resolve(src: string): ImageItem }
+export const Images = createContext<ImagesIn | undefined>(undefined)
+
+/** The images of a thread in `cwd`, written in a document in `dir` there (`a/b/`; '' for a message). */
+export function imagesIn(machine: MachineEntry, thread: string, cwd: string, dir = ''): ImagesIn {
+  return {
+    machine, thread,
+    resolve(src) {
+      const source = imageSource(src, { cwd, dir, thread })
+      return 'refused' in source ? { name: src, problem: source.refused } : { name: src, ...source }
+    },
+  }
+}
+
+/** The images of one message or file, in order, to go through in the lightbox from the one clicked. */
+const Gallery = createContext<{ add(element: Element, image: ImageItem): () => void; open(element: Element): void } | undefined>(undefined)
+
+function GalleryOf({ images, children }: { images: ImagesIn; children: ReactNode }) {
+  const shown = useRef(new Map<Element, ImageItem>())
+  const [open, setOpen] = useState<{ images: ImageItem[]; start: number }>()
+  const add = useCallback((element: Element, image: ImageItem) => {
+    shown.current.set(element, image)
+    return () => { shown.current.delete(element) }
+  }, [])
+  const show = useCallback((element: Element) => {
+    const order = [...shown.current.keys()].sort((a, b) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)
+    setOpen({ images: order.map((e) => shown.current.get(e)!), start: Math.max(0, order.indexOf(element)) })
+  }, [])
+  const gallery = useMemo(() => ({ add, open: show }), [add, show])
+  return (
+    <Gallery.Provider value={gallery}>
+      {children}
+      {open && <Lightbox machine={images.machine} thread={images.thread} images={open.images} start={open.start} onClose={() => setOpen(undefined)} />}
+    </Gallery.Provider>
+  )
+}
 
 const FILE = 'superego-file:'
 const THREAD = 'thread:'
@@ -175,33 +214,46 @@ function watchTheme(changed: () => void) {
 const useAppDark = () => useSyncExternalStore(watchTheme, appDark, () => false)
 
 type ImageProps = { src?: string; srcSet?: string; alt?: string; title?: string; width?: string | number; height?: string | number }
-const WEB = /^https?:\/\//i
 
 /**
- * An image in a rendered file: one beside it is read from the thread's machine (and its srcset's too); one on the web
- * is shown from there. While reading, nothing; a file that can't be read says so, by its alt text.
+ * An image in a message or a rendered file, in a thread: one of its files is read from its machine as it nears the
+ * screen (a srcset's other sizes too), one on the web shown from there. It fits the column, and opens in the lightbox.
+ * One that can't be read says so quietly, by its alt text, and why on hover.
  */
-function FileImage({ src, srcSet, alt, title, width, height }: ImageProps) {
+function InlineImage({ src, srcSet, alt, title, width, height }: ImageProps) {
   const images = useContext(Images)!
+  const gallery = useContext(Gallery)
   const candidates = srcSet ? parseSrcset(srcSet) : []
-  const wanted = [...new Set([src, ...candidates.map((c) => c.url)].filter((url): url is string => Boolean(url)))]
-  const key = wanted.join('\n')
-  const [loaded, setLoaded] = useState<{ key: string; urls: Map<string, string | null> }>()
+  const main = src || candidates[0]?.url || ''
+  const image = useMemo(() => ({ ...images.resolve(main), ...(alt ? { alt } : {}), ...(title ? { caption: title } : {}) }), [images, main, alt, title])
+  const sizes = useSrcset(images, candidates)
+  const ref = useRef<HTMLSpanElement>(null)
+  useLayoutEffect(() => {
+    const element = ref.current
+    return element && gallery ? gallery.add(element, image) : undefined
+  }, [gallery, image])
+  return (
+    <span ref={ref} className="md__image">
+      <ImageFrame machine={images.machine} thread={images.thread} image={image} className="image-frame--inline"
+        srcSet={sizes} width={width} height={height} brokenLabel={alt || image.name}
+        onOpen={() => { if (ref.current) gallery?.open(ref.current) }} />
+    </span>
+  )
+}
+
+/** A srcset with each of its files read as the window can load them (those that can't be, left out); none for one size. */
+function useSrcset(images: ImagesIn, candidates: { url: string; descriptor: string }[]) {
+  const key = candidates.length > 1 ? candidates.map((c) => `${c.url} ${c.descriptor}`).join(',') : ''
+  const [set, setSet] = useState<{ key: string; value: string }>()
   useEffect(() => {
+    if (!key) return
     let alive = true
-    void Promise.all(wanted.map(async (url): Promise<[string, string | null]> => {
-      if (WEB.test(url)) return [url, url]
-      const path = imagePath(images.dir, url)
-      return [url, path === undefined ? null : await images.load(path).catch(() => null)]
-    })).then((pairs) => { if (alive) setLoaded({ key, urls: new Map(pairs) }) })
+    void Promise.all(candidates.map((c) => imageSourceOf(images.machine.id, images.thread, images.resolve(c.url))
+      .then((url) => `${url}${c.descriptor ? ` ${c.descriptor}` : ''}`, () => undefined)))
+      .then((urls) => { if (alive) setSet({ key, value: urls.filter(Boolean).join(', ') }) })
     return () => { alive = false }
-  }, [images, key])
-  if (loaded?.key !== key) return null
-  const at = (url: string | undefined) => url ? loaded.urls.get(url) ?? undefined : undefined
-  const set = candidates.flatMap((c) => { const url = at(c.url); return url ? [`${url}${c.descriptor ? ` ${c.descriptor}` : ''}`] : [] }).join(', ')
-  const shown = at(src) ?? at(candidates[0]?.url)
-  if (!shown) return <span className="md__image-missing" title={src ?? srcSet}>{alt || src}</span>
-  return <img src={shown} srcSet={set || undefined} alt={alt ?? ''} title={title} width={width} height={height} />
+  }, [images.machine.id, images.thread, key])
+  return set?.key === key && set.value ? set.value : undefined
 }
 
 type HastNode = { type: string; tagName?: string; properties?: Record<string, unknown>; children?: HastNode[] }
@@ -221,7 +273,7 @@ function Picture({ node, children }: ExtraProps & { children?: ReactNode }) {
       && (!text(props.type) || /^image\/(svg\+xml|png|jpe?g|gif|webp|avif)$/i.test(text(props.type)!)))
   const srcSet = text(source?.srcSet)
   return (
-    <FileImage key={srcSet ?? 'img'} src={srcSet ? undefined : text(img.src)} srcSet={srcSet ?? text(img.srcSet)} alt={text(img.alt)}
+    <InlineImage key={srcSet ?? 'img'} src={srcSet ? undefined : text(img.src)} srcSet={srcSet ?? text(img.srcSet)} alt={text(img.alt)}
       title={text(img.title)} width={text(img.width)} height={text(img.height)} />
   )
 }
@@ -246,7 +298,7 @@ const components: Components = {
   },
   img: ({ node: _node, src, srcSet, alt, title, width, height, ...props }) => {
     if (!useContext(Images)) return <img src={src} alt={alt} title={title} width={width} height={height} {...props} />
-    return <FileImage src={src} srcSet={srcSet} alt={alt} title={title} width={width} height={height} />
+    return <InlineImage src={src} srcSet={srcSet} alt={alt} title={title} width={width} height={height} />
   },
   picture: Picture,
   // Tables scroll sideways inside the column instead of widening it.
@@ -254,7 +306,9 @@ const components: Components = {
   pre: CodeBlock,
 }
 
-const urlTransform = (url: string) => url.startsWith(FILE) || url.startsWith(THREAD) ? url : defaultUrlTransform(url)
+/** Links to files and threads kept; an image's data, blob or file:// address too (read as the others, in a thread). */
+const urlTransform = (url: string, key: string) => url.startsWith(FILE) || url.startsWith(THREAD) || (key === 'src' && /^(data:image\/|blob:|file:)/i.test(url))
+  ? url : defaultUrlTransform(url)
 
 /** Footnotes' ids are prefixed once, by the sanitizing, not again before it. */
 const noPrefix = { clobberPrefix: '' }
@@ -268,11 +322,13 @@ const gfmWithBreaks = [remarkGfm, remarkBreaks]
  */
 export const Markdown = memo(function Markdown({ text, html = false, breaks = false }: { text: string; html?: boolean; breaks?: boolean }) {
   const files = useContext(OpenFile)
-  return (
+  const images = useContext(Images)
+  const rendered = (
     <div className="md">
       <ReactMarkdown remarkPlugins={breaks ? gfmWithBreaks : gfm} {...(html ? { rehypePlugins: htmlPlugins, remarkRehypeOptions: noPrefix } : {})} components={components} urlTransform={urlTransform}>
         {files ? wikilinks(text) : text}
       </ReactMarkdown>
     </div>
   )
+  return images ? <GalleryOf images={images}>{rendered}</GalleryOf> : rendered
 })

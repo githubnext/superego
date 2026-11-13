@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { describe, expect, it } from 'vitest'
-import { folderOf, htmlPlugins, imagePath, imageType, looksLikePath, mediaMatches, parseSrcset, resolve } from '../src/renderer/markdown-html.ts'
+import { folderOf, htmlPlugins, imageSource, imageType, OUTSIDE, looksLikePath, mediaMatches, parseSrcset, resolve } from '../src/renderer/markdown-html.ts'
 
 const render = (text: string) => renderToStaticMarkup(createElement(ReactMarkdown, { remarkPlugins: [remarkGfm], rehypePlugins: htmlPlugins, urlTransform: (url: string) => url }, text))
 
@@ -41,13 +41,60 @@ describe('relative paths', () => {
   it('resolves against the document’s folder, inside the thread’s', () => {
     expect(folderOf('docs/writing-extensions.md')).toBe('docs/')
     expect(folderOf('README.md')).toBe('')
-    expect(imagePath('docs/', 'writing-extensions/big-picture.svg')).toBe('docs/writing-extensions/big-picture.svg')
-    expect(imagePath('docs/', './a%20b.png?v=2#x')).toBe('docs/a b.png')
-    expect(imagePath('docs/guide/', '../img/x.png')).toBe('docs/img/x.png')
-    expect(imagePath('', '../outside.png')).toBeUndefined()
-    expect(imagePath('docs/', '/etc/passwd')).toBeUndefined()
-    expect(imagePath('docs/', 'https://example.com/a.png')).toBeUndefined()
+    const file = (src: string) => imageSource(src, { cwd: '/repo', dir: 'docs/' })
+    expect(file('writing-extensions/big-picture.svg')).toEqual({ path: 'docs/writing-extensions/big-picture.svg' })
+    expect(file('./a%20b.png?v=2#x')).toEqual({ path: 'docs/a b.png' })
+    expect(imageSource('../img/x.png', { cwd: '/repo', dir: 'docs/guide/' })).toEqual({ path: 'docs/img/x.png' })
+    expect(file('../../outside.png')).toEqual({ refused: OUTSIDE })
+    expect(file('/etc/passwd')).toEqual({ refused: OUTSIDE })
     expect(resolve('a/', 'b/../c.md')).toBe('a/c.md')
+  })
+})
+
+describe('images in a thread', () => {
+  const cwd = '/Users/me/dev/dinky'
+  const at = (src: string) => imageSource(src, { cwd, thread: 't1' })
+
+  it('reads a relative path from the thread’s folder', () => {
+    expect(at('shots/a.png')).toEqual({ path: 'shots/a.png' })
+    expect(at('./a b.png')).toEqual({ path: 'a b.png' })
+    expect(at('shots/../a.png')).toEqual({ path: 'a.png' })
+  })
+
+  it('reads an absolute path inside the thread’s folder, as one in it', () => {
+    expect(at('/Users/me/dev/dinky/build/reviews/pr-77/corner-comparison.png')).toEqual({ path: 'build/reviews/pr-77/corner-comparison.png' })
+    expect(at('/Users/me/dev/dinky/./a/../b.png')).toEqual({ path: 'b.png' })
+    expect(at('file:///Users/me/dev/dinky/c%20d.png')).toEqual({ path: 'c d.png' })
+  })
+
+  it('refuses a path outside the thread’s folder', () => {
+    expect(at('../other/a.png')).toEqual({ refused: OUTSIDE })
+    expect(at('/Users/me/dev/dinky-other/a.png')).toEqual({ refused: OUTSIDE })
+    expect(at('/Users/me/dev/dinky/../secret.png')).toEqual({ refused: OUTSIDE })
+    expect(at('/etc/passwd')).toEqual({ refused: OUTSIDE })
+    expect(at('file://elsewhere/Users/me/dev/dinky/a.png')).toHaveProperty('refused')
+  })
+
+  it('takes ~ as the home the thread’s folder is in', () => {
+    expect(at('~/dev/dinky/a.png')).toEqual({ path: 'a.png' })
+    expect(at('~/Desktop/a.png')).toEqual({ refused: OUTSIDE })
+    expect(imageSource('~/a.png', { cwd: '/home/me/x' })).toEqual({ refused: OUTSIDE })
+    expect(imageSource('~/x/a.png', { cwd: '/home/me/x' })).toEqual({ path: 'a.png' })
+    expect(imageSource('~/a.png', { cwd: '/srv/app' })).toEqual({ refused: OUTSIDE })
+  })
+
+  it('leaves the files the thread keeps to its machine to read', () => {
+    expect(at('/Users/me/.superego/attachments/t1/shown/x.png')).toEqual({ path: '/Users/me/.superego/attachments/t1/shown/x.png' })
+    expect(at('/Users/me/.superego/attachments/t2/shown/x.png')).toEqual({ refused: OUTSIDE })
+  })
+
+  it('shows web, data and blob addresses as they are; refuses other schemes', () => {
+    expect(at('https://example.com/a.png?x=1')).toEqual({ url: 'https://example.com/a.png?x=1' })
+    expect(at('http://localhost:3000/a.png')).toEqual({ url: 'http://localhost:3000/a.png' })
+    expect(at('data:image/png;base64,AAAA')).toEqual({ url: 'data:image/png;base64,AAAA' })
+    expect(at('blob:http://x/1')).toEqual({ url: 'blob:http://x/1' })
+    expect(at('javascript:alert(1)')).toHaveProperty('refused')
+    expect(at('')).toHaveProperty('refused')
   })
 
   it('reads a srcset', () => {

@@ -18,6 +18,8 @@ export const schema: Schema = {
     ...defaultSchema.protocols,
     // A message's own links: to files ([[wikilinks]]) and threads.
     href: [...(defaultSchema.protocols?.href ?? []), 'superego-file', 'thread'],
+    // Images inline and in files of the thread's, as Markdown's own may be.
+    src: [...(defaultSchema.protocols?.src ?? []), 'data', 'blob', 'file'],
   },
 }
 
@@ -57,13 +59,54 @@ export function looksLikePath(text: string) {
 /** The folder `path` is in, as `resolve` takes it: `a/b/` for `a/b/c.md`, '' at the top. */
 export const folderOf = (path: string) => path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
 
-/** An image's address as a file beside the document (`src`, query and fragment dropped, %-escapes undone), if it is one. */
-export function imagePath(dir: string, src: string) {
-  const bare = src.split(/[?#]/)[0]!
-  if (!bare) return undefined
+/** Where an image in a message or a rendered file comes from: a web (or data, blob) address, a file of the thread's, or neither, and why. */
+export type ImageSource = { url: string } | { path: string } | { refused: string }
+
+export const OUTSIDE = "outside the thread's folder"
+
+/**
+ * `src` as an image of the thread in `cwd` on its machine, written in a document in `dir` there (`a/b/`, or '' for a
+ * message): a web, data or blob address as it is; a path (relative to `dir`, absolute, `~/…` or file://) as one in the
+ * thread's folder, relative to it, or among the files the thread keeps (`attachments/<thread>/`, absolute). Anything
+ * else is refused: `file.read` wouldn't read it, so it isn't asked to.
+ */
+export function imageSource(src: string, { cwd, dir = '', thread }: { cwd: string; dir?: string; thread?: string }): ImageSource {
+  const given = src.trim()
+  if (/^(https?|data|blob):/i.test(given)) return { url: given }
   let name: string
-  try { name = decodeURI(bare) } catch { name = bare }
-  return resolve(dir, name)
+  if (/^file:/i.test(given)) {
+    const url = URL.parse(given)
+    if (!url || (url.host && url.host !== 'localhost')) return { refused: 'not a file on the thread’s machine' }
+    name = url.pathname
+  } else if (/^[a-z][\w+.-]*:/i.test(given)) return { refused: 'not a file or a web address' }
+  else name = given.split(/[?#]/)[0]!
+  try { name = decodeURI(name) } catch {}
+  if (!name) return { refused: 'no address' }
+  const folder = normalize(cwd)
+  if (/^~(\/|$)/.test(name)) {
+    // The machine's home, as far as the thread's folder tells it; one not under a home is not under this one either.
+    const home = /^(\/Users\/[^/]+|\/home\/[^/]+|\/root)(?=\/|$)/.exec(folder)?.[1]
+    if (!home) return { refused: OUTSIDE }
+    name = `${home}${name.slice(1)}`
+  }
+  if (!name.startsWith('/')) {
+    const path = resolve(dir, name)
+    return path === undefined ? { refused: OUTSIDE } : { path }
+  }
+  const path = normalize(name)
+  if (path.startsWith(`${folder}/`)) return { path: path.slice(folder.length + 1) }
+  if (thread && path.includes(`/attachments/${thread}/`)) return { path }
+  return { refused: OUTSIDE }
+}
+
+/** An absolute path with its `.`, `..` and doubled slashes gone (none above the root). */
+function normalize(path: string) {
+  const parts: string[] = []
+  for (const part of path.split('/')) {
+    if (part === '..') parts.pop()
+    else if (part !== '.' && part !== '') parts.push(part)
+  }
+  return `/${parts.join('/')}`
 }
 
 /** A srcset's candidates: each URL with its descriptor (`2x`, `640w`), if it has one. */

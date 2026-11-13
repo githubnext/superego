@@ -217,7 +217,6 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 /* A document's images (HTML or Markdown): no wider than the text. */
 .md img { max-width: 100%; height: auto; vertical-align: middle; }
 .md picture { display: inline; }
-.md__image-missing { color: var(--superego-muted); text-decoration: line-through; }
 .md details { margin: 0 0 var(--superego-space-3); }
 .md summary { cursor: default; }
 .md kbd { font: 0.82em var(--superego-mono); padding: 1px 5px; border-radius: 4px; background: var(--superego-code-chip); box-shadow: inset 0 -1px 0 var(--superego-border); }

@@ -4,11 +4,8 @@
 // ←/→ when focused, a swipe on touch). Any opens in the lightbox. Each is read only as it nears the screen, holding its
 // place (its size is known) until then, and says so when its file is gone.
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { defineUiExtension, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
+import { defineUiExtension, describeImage, ImageFrame, Lightbox, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
 import { CaretLeftIcon, CaretRightIcon, ImageBrokenIcon } from '@superego/ui'
-import { Lightbox } from './lightbox.tsx'
-import { useNear, useSource } from './load.ts'
-import { describe, fileName } from './names.ts'
 import { about, TOOL, type ShowDetails, type Shown } from './shared.ts'
 import './styles.css'
 
@@ -40,7 +37,7 @@ function ShownImages({ machine, thread, call, result }: ToolCallProps) {
   const { images, layout, title } = details
   const props = { machine, thread: thread.id, images, onOpen: setOpen }
   return (
-    <figure className={`images images--${layout}`} aria-label={title ?? (images.length === 1 ? describe(images[0]!) : `${images.length} images`)}>
+    <figure className={`images images--${layout}`} aria-label={title ?? (images.length === 1 ? describeImage(images[0]!) : `${images.length} images`)}>
       {title && <figcaption className="images__title">{title}</figcaption>}
       {layout === 'carousel' && images.length > 1 ? <Carousel {...props} />
         : layout === 'grid' && images.length > 1 ? <Grid {...props} />
@@ -136,7 +133,7 @@ function Carousel(props: Props) {
   )
 }
 
-/** An image as a button that opens the lightbox: a placeholder until it's read and drawn, broken when it can't be. */
+/** An image as a button that opens the lightbox (the app's own frame: read as it nears the screen, broken when it can't be). */
 function Picture({ machine, thread, image, index, onOpen, fit, className, style, wanted = true, tabIndex }: Props & {
   image: Shown
   index: number
@@ -146,31 +143,11 @@ function Picture({ machine, thread, image, index, onOpen, fit, className, style,
   wanted?: boolean
   tabIndex?: number
 }) {
-  const frame = useRef<HTMLButtonElement>(null)
-  const near = useNear(frame)
-  const { src, broken: unread } = useSource(machine, thread, image, near && wanted)
-  const [drawn, setDrawn] = useState<string>()
-  const [failed, setFailed] = useState<string>()
-  const broken = unread || (src !== undefined && failed === src)
-  const name = describe(image)
   return (
-    <button
-      ref={frame}
-      type="button"
-      className={`images__frame ${className} ${broken ? 'is-broken' : drawn === src && src ? 'is-ready' : 'is-loading'}`}
-      style={style}
-      title={broken ? `${image.name} can’t be shown` : image.caption ?? fileName(image.name)}
-      aria-label={broken ? `${name}: can’t be shown` : `Open ${name}`}
-      disabled={broken}
-      tabIndex={tabIndex}
-      onClick={() => onOpen(index)}
-    >
-      {broken ? (
-        <span className="images__broken"><ImageBrokenIcon size={20} aria-hidden /><span>Image not found</span></span>
-      ) : src && (
-        <img src={src} alt={image.alt ?? image.caption ?? ''} decoding="async" draggable={false} className={`images__img images__img--${fit}`}
-          onLoad={() => setDrawn(src)} onError={() => setFailed(src)} />
-      )}
-    </button>
+    <ImageFrame machine={machine} thread={thread} image={image} onOpen={() => onOpen(index)} className={`images__frame ${className}`}
+      imgClassName={`images__img images__img--${fit}`} style={style} wanted={wanted} tabIndex={tabIndex} near={nearFrom} />
   )
 }
+
+/** What scrolls an image here: the thread, not a carousel's own strip. */
+const nearFrom = (element: Element) => element.closest('.images')?.parentElement

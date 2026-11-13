@@ -17,9 +17,9 @@ import { Button } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { machine as client } from './client.ts'
 import { fileKind, folderKind, Slot, urlKind, useRegistry, type EditorSlotProps } from './extension.tsx'
-import { Images, Markdown, OpenFile, OpenUrl, ThreadMachine } from './Markdown.tsx'
+import { Images, imagesIn, Markdown, OpenFile, OpenUrl, ThreadMachine } from './Markdown.tsx'
 import { codeHighlight } from './code-highlight.ts'
-import { folderOf, imageType, resolve } from './markdown-html.ts'
+import { folderOf, resolve } from './markdown-html.ts'
 import { linkAt, livePreview, type MarkdownLink } from './live-markdown.ts'
 import { arrivals } from './arrivals.ts'
 
@@ -77,32 +77,6 @@ const liveHighlight = HighlightStyle.define([
 
 /** The file's language by its name (or none): loaded on demand, as most files need only one. */
 const languageOf = (path: string) => LanguageDescription.matchFilename(languages, path.split('/').at(-1) ?? path)
-
-const decode = (base64: string): Uint8Array<ArrayBuffer> => {
-  const typed = Uint8Array as unknown as { fromBase64?(s: string): Uint8Array<ArrayBuffer> }
-  return typed.fromBase64 ? typed.fromBase64(base64) : Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
-}
-
-/**
- * The images a rendered file shows, read from its thread's machine as any file of the thread's is (`file.read`, over
- * the socket or the WebSocket) into blob URLs: each once while the file is open, let go when it closes.
- */
-function fileImages(machine: string, thread: string, path: string) {
-  const read = new Map<string, Promise<string>>()
-  const load = (file: string) => {
-    let url = read.get(file)
-    if (!url) {
-      url = client(machine).call('file.read', { id: thread, path: file, base64: true })
-        .then(({ content }) => URL.createObjectURL(new Blob([decode(content)], { type: imageType(file) })))
-      // Tried again when next wanted.
-      url.catch(() => { if (read.get(file) === url) read.delete(file) })
-      read.set(file, url)
-    }
-    return url
-  }
-  const release = () => { for (const url of read.values()) url.then(URL.revokeObjectURL, () => {}); read.clear() }
-  return { dir: folderOf(path), load, release }
-}
 
 /** The text as it is on disk, after `next` changed it there: only the part that differs, so the cursor stays put. */
 function minimalChange(current: string, next: string) {
@@ -382,8 +356,8 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
       .catch((error) => console.error(error))
   }, [machine.id, thread.id, webKind])
   const openIn = (kind: string | undefined, file: string) => kind && dispatch('pane.open', { id: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'editor' })
-  const images = useMemo(() => fileImages(machine.id, thread.id, path), [machine.id, thread.id, path])
-  useEffect(() => images.release, [images])
+  // Its images, read from beside it on the thread's machine.
+  const images = useMemo(() => imagesIn(machine, thread.id, thread.cwd, folderOf(path)), [machine, thread.id, thread.cwd, path])
   const slot: EditorSlotProps = {
     machine, thread, path,
     open: (file, { beside = false } = {}) => onOpenFile
