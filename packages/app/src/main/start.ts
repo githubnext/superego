@@ -24,6 +24,8 @@ import { shortcutOf } from '../renderer/shortcuts.ts'
 export function startApp(appConfig: AppConfig) {
   /** Headless (tests): no window, Dock icon, notification or focus; nothing that reaches the screen. */
   const headless = Boolean(appEnv(appConfig)('HEADLESS'))
+  // Before it finishes launching, so the Dock never shows it.
+  if (headless) app.dock?.hide()
   const dataDir = defaultDataDir(appConfig)
   const socket = socketPath(appConfig, dataDir)
 
@@ -574,9 +576,8 @@ export function startApp(appConfig: AppConfig) {
       }
     })
     if (!primary) return
-    if (headless) app.dock?.hide()
     // From source on the stock Electron.app (tests), the Dock needs telling; the app's own dev bundle has the icon.
-    else if (!app.isPackaged && process.execPath.includes('/Electron.app/')) dockIcon()
+    if (!headless && !app.isPackaged && process.execPath.includes('/Electron.app/')) dockIcon()
     setMenu()
     refreshDesktop()
     // Font pickers list the installed fonts (the Local Font Access API); nothing else is granted.
