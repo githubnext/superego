@@ -1,8 +1,8 @@
 // Panes: views beside a thread. A thread keeps which are open and which has focus (pane.open, pane.focus, pane.close),
 // so they follow it to every client; the agent opens them too (open_pane). The thread and its panes are a row of
-// columns (cards, with room around and between), scrolled as Dinky's (and niri's) scrolling layout is. Each column has
-// its own width, a share of the row: the thread's half to start, a pane's its kind's; the room between two columns
-// resizes the one on its left, as macOS does, and the last column takes what's left over. Past the edge the row
+// columns with room between, scrolled as Dinky's (and niri's) scrolling layout is. Each column has its own width, a
+// share of the row: the thread's half to start, a pane's its kind's; the room after a column (the last one's too, at
+// the row's end) is its handle, and the last column takes what's left over until it's dragged. Past the edge the row
 // scrolls, and the focused column scrolls just far enough to show whole. ⌃Tab moves the focus along. On a phone each
 // column is the screen's width, and a swipe moves between them.
 // Built in: diff, editor, preview, artifact, thread. Extensions and profiles add kinds with superego.pane(kind, …).
@@ -21,8 +21,8 @@ import { focusRegion } from './focus.ts'
 const narrowQuery = '(max-width: 599px)'
 /** A pane's width (a share of the row) until it's dragged, unless its kind says otherwise. */
 const DEFAULT_SHARE = 0.5
-/** Wide, a hairline between columns (with a wider handle over it, to drag). */
-const DIVIDER = 1
+/** Wide, the room after each column (the last too): its handle, to drag it wider or narrower. */
+const GAP = 8
 /** No column narrower than this, however many: the row scrolls instead. */
 const MIN_COLUMN = 380
 
@@ -76,37 +76,57 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   const where = { machine: machine.id, thread }
   const title = (pane: Pane) => paneTitle(registry, pane, where)
 
-  // The room the columns share: the row less the hairlines between them.
-  const room = narrow ? rowWidth : Math.max(0, rowWidth - DIVIDER * panes.length)
-  // The columns, left to right: the thread, then its panes, each by the key its width is kept under.
-  const columns = [{ key: 'thread', share: shares.thread ?? DEFAULT_SHARE },
-    ...panes.map((pane) => ({ key: pane.id, share: shares[pane.id] ?? paneKind(registry, pane.kind, where)?.width ?? DEFAULT_SHARE }))]
-  const widths = columns.map((c) => narrow ? rowWidth : Math.min(room, Math.max(MIN_COLUMN, Math.round(c.share * room))))
-  // The last column takes the room the others leave.
-  const used = widths.reduce((sum, w) => sum + w, 0)
-  if (!narrow && used < room) widths[widths.length - 1]! += room - used
+  // The room the columns share: the row less the gap after each.
+  const room = narrow ? rowWidth : Math.max(0, rowWidth - GAP * (panes.length + 1))
+  // The columns, left to right: the thread, then its panes, each by the key its width is kept under. The last one's
+  // width is kept apart (`<key>:end`): dragged from its own handle at the end, it's its width while it is last.
+  const keys = ['thread', ...panes.map((pane) => pane.id)]
+  const last = keys.length - 1
+  const shareOf = (key: string, index: number) => index === last
+    ? shares[`${key}:end`]
+    : shares[key] ?? (index === 0 ? DEFAULT_SHARE : paneKind(registry, panes[index - 1]!.kind, where)?.width ?? DEFAULT_SHARE)
+  const widthFor = (share: number) => Math.min(room, Math.max(MIN_COLUMN, Math.round(share * room)))
+  const widths = keys.map((key, i) => narrow ? rowWidth : widthFor(shareOf(key, i) ?? 0))
+  // Unless dragged, the last column takes the room the others leave.
+  const used = widths.slice(0, last).reduce((sum, w) => sum + w, 0)
+  if (!narrow && shareOf(keys[last]!, last) === undefined) widths[last] = Math.max(MIN_COLUMN, room - used)
   const threadWidth = widths[0]!
   const widthOf = (pane: Pane) => widths[panes.indexOf(pane) + 1]!
   // How much of each column is in view, and on which side the rest are: for the strip.
-  const starts = widths.map((_, i) => widths.slice(0, i).reduce((sum, w) => sum + w + DIVIDER, 0))
+  const starts = widths.map((_, i) => widths.slice(0, i).reduce((sum, w) => sum + w + GAP, 0))
   const shown = widths.map((w, i) => w ? Math.max(0, Math.min(starts[i]! + w, scrolled + rowWidth) - Math.max(starts[i]!, scrolled)) / w : 0)
   const side = (i: number) => shown[i]! >= 0.5 ? undefined : starts[i]! < scrolled ? 'left' : 'right'
 
-  // The room between two columns resizes the one on its left (`index`): its share of the row, kept for next time.
+  // The gap after a column resizes it (`index`): its share of the row, kept for next time. The last one's, dragged out
+  // to the row's end, takes what's left again; a double click puts any back as it was.
+  const keyOf = (index: number) => index === last ? `${keys[index]}:end` : keys[index]!
   const drag = (index: number) => (event: React.PointerEvent) => {
+    if (event.button !== 0) return
     const startX = event.clientX
     const start = widths[index]!
-    const key = columns[index]!.key
+    const key = keyOf(index)
     const move = (e: PointerEvent) => {
-      const next = Math.min(0.85, Math.max(0.15, (start + e.clientX - startX) / Math.max(1, room)))
-      setShares((all) => ({ ...all, [key]: next }))
+      const width = start + e.clientX - startX
+      const fills = index === last && width >= room - used
+      const next = Math.min(index === last ? 1 : 0.85, Math.max(0.15, width / Math.max(1, room)))
+      setShares(({ [key]: _, ...rest }) => fills ? rest : { ...rest, [key]: next })
     }
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
+    const root = document.documentElement
+    const up = () => {
+      root.classList.remove('is-resizing-columns')
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up)
+    }
+    root.classList.add('is-resizing-columns')
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
     event.preventDefault()
     event.stopPropagation()
   }
+  const reset = (index: number) => setShares(({ [keyOf(index)]: _, ...rest }) => rest)
+  const gap = (index: number) => !narrow && (
+    <div className="panes__gap" onPointerDown={drag(index)} onDoubleClick={() => reset(index)} role="separator" aria-orientation="vertical"
+      aria-label={`${index === 0 ? 'Thread' : title(panes[index - 1]!)} width`} title="Drag to resize, double-click to reset" />
+  )
   const onScroll = () => {
     const el = row.current
     if (!el) return
@@ -182,14 +202,15 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
         {/* Focus moving into a column (a click, a key) makes it the focused one: the app and the keyboard agree. */}
         <div data-column="thread" tabIndex={-1} className={`panes__column panes__column--thread ${focused === undefined ? 'is-focused' : ''}`}
           style={{ width: threadWidth }} onPointerDownCapture={() => focus(undefined)} onFocusCapture={() => focus(undefined)}>{main}</div>
+        {/* The gap after each column is its handle: drag it to make that one wider or narrower. */}
+        {gap(0)}
         {panes.map((pane, index) => (
           <Fragment key={pane.id}>
-          {/* The line between two columns is the left one's handle: drag it to make that one wider or narrower. */}
-          {!narrow && <div className="panes__gap" onPointerDown={drag(index)} role="separator" aria-orientation="vertical" aria-label={index === 0 ? 'Thread width' : `${title(panes[index - 1]!)} width`} />}
           <PaneColumn pane={pane} title={title(pane)} focused={pane.id === focused} width={widthOf(pane)}
             onFocus={() => focus(pane.id)} onClick={takeFocus} onClose={() => close(pane)}>
             <TabNote.Provider value={setNoteFor(pane.id)}><PaneBody machine={machine} thread={thread} pane={pane} /></TabNote.Provider>
           </PaneColumn>
+          {gap(index + 1)}
           </Fragment>
         ))}
       </div>

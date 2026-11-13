@@ -386,16 +386,18 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .panes::-webkit-scrollbar { display: none; }
 .diff-file__body::-webkit-scrollbar { height: 0; }
 .diff-file__body:hover::-webkit-scrollbar { height: 8px; }
-/* Wide: cards on the window's colour, with the same room beside them as between them (see GAP in panes.tsx); just
-   under the title bar at the top, with room for a focus ring. */
-
-/* Up at the window's top edge, the room around the cards moves the window; the cards and dividers don't. */
+/* The row's own ground, past the last column, moves the window; the columns and their handles don't. */
 .panes { -webkit-app-region: drag; }
 .panes > * { -webkit-app-region: no-drag; }
 
-.panes__gap { flex: none; width: 1px; background: var(--superego-line); cursor: col-resize; position: relative; z-index: 3; }
-.panes__gap::before { content: ''; position: absolute; top: 0; bottom: 0; left: -4px; right: -4px; }
-.panes__gap:hover::after { content: ''; position: absolute; top: 0; bottom: 0; left: -1px; width: 3px; background: var(--superego-faint); opacity: .5; }
+/* Wide, the columns stand apart on the side's grey, a hairline at each edge; the room after each (see GAP in panes.tsx)
+   is its handle, with a grip that's quiet until it's pointed at or dragged. Past the last column, the row's ground. */
+.panes:not(.panes--narrow) { background: var(--superego-chrome); }
+.panes__gap { flex: none; width: 8px; cursor: col-resize; position: relative; display: grid; place-items: center; box-shadow: inset 1px 0 0 var(--superego-line), inset -1px 0 0 var(--superego-line); }
+.panes__gap::after { content: ''; width: 3px; height: 28px; border-radius: 2px; background: var(--superego-faint); opacity: .45; transition: opacity .12s, height .12s, background-color .12s; }
+.panes__gap:hover::after, .panes__gap:active::after { opacity: 1; height: 40px; background: var(--superego-muted); }
+/* While a column is dragged: the cursor stays, and nothing under it is selected. */
+.is-resizing-columns, .is-resizing-columns * { cursor: col-resize !important; user-select: none !important; }
 .panes__column { flex: none; display: flex; flex-direction: column; min-height: 0; position: relative; background: var(--superego-bg); }
 .panes__column--thread { border-left: 0; overflow: hidden; }
 .panes__column--thread > .thread { flex: 1; min-width: 0; }
