@@ -14,8 +14,8 @@ const isEgo = (thread: ThreadInfo | undefined) => thread?.ext?.ego === true
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    // Before the spaces (threads), at the rail's top.
-    superego.slot('rail', RailButton, { order: 10 })
+    // Before the spaces (threads), at the rail's top; not a space, so what shows when there are none (Unread) still does.
+    superego.slot('rail', RailButton, { order: 10, fills: false })
     superego.slot('thread.header', ClearButton)
     superego.action(defineAction({
       id: OPEN, title: `Ask ${agentName(superego.app)}`,

@@ -93,5 +93,10 @@ describe('fallback slots', () => {
     const spaces = defineUiExtension({ name: 'spaces', setup(superego) { superego.slot('rail', Spaces) } })
     expect(slotEntries(createRegistry(app, [bell], () => {}), 'rail', undefined).map((e) => e.component)).toEqual([Bell])
     expect(slotEntries(createRegistry(app, [bell, spaces], () => {}), 'rail', undefined).map((e) => e.component)).toEqual([Spaces])
+    // A button that's always there doesn't fill it.
+    const Ego = () => null
+    const ego = defineUiExtension({ name: 'ego', setup(superego) { superego.slot('rail', Ego, { order: 10, fills: false }) } })
+    expect(slotEntries(createRegistry(app, [bell, ego], () => {}), 'rail', undefined).map((e) => e.component)).toEqual([Ego, Bell])
+    expect(slotEntries(createRegistry(app, [bell, ego, spaces], () => {}), 'rail', undefined).map((e) => e.component)).toEqual([Ego, Spaces])
   })
 })

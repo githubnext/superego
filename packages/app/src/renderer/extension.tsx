@@ -239,10 +239,11 @@ export type WindowState = {
 export type UiApi = {
   app: AppConfig
   /**
-   * A component in a place in the window, in `order`. `fallback: true` draws it only while nothing else (that isn't a
-   * fallback too) is in that place.
+   * A component in a place in the window, in `order`. `fallback: true` draws it only while nothing else fills that
+   * place: nothing but fallbacks, and entries that say they don't (`fills: false`: a button that's always there, as
+   * Ego's in the rail, beside which the rail is still empty of spaces).
    */
-  slot<S extends SlotName>(slot: S, component: ComponentType<SlotProps[S]>, options?: { order?: number; fallback?: boolean }): void
+  slot<S extends SlotName>(slot: S, component: ComponentType<SlotProps[S]>, options?: { order?: number; fallback?: boolean; fills?: boolean }): void
   /**
    * Hear what happens in the window (see `WindowEvents`): a thread's status changing, the thread shown changing, the
    * window's focus and visibility. Listening stops at teardown, or with the function returned. `window` is how things
@@ -344,7 +345,7 @@ export type Registry = {
   app: AppConfig
   /** What the app's extensions are, as each declares itself: told to every machine, so UI-only ones are known there. */
   extensions: ExtensionAbout[]
-  slots: { [S in SlotName]: Owned<{ component: ComponentType<SlotProps[S]>; order: number; fallback: boolean }>[] }
+  slots: { [S in SlotName]: Owned<{ component: ComponentType<SlotProps[S]>; order: number; fallback: boolean; fills: boolean }>[] }
   /** Drawn by a `component`, or described by a `row`. `fold: false`: its calls show outside the fold of their run of work. */
   tools: Owned<{ name: string; component?: ComponentType<ToolCallProps>; row?: ToolRow; fold: boolean }>[]
   entries: Owned<{ kind: string; component: ComponentType<EntryProps> }>[]
@@ -439,8 +440,8 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       slot(slot, component, options) {
         // A profile's UI draws in its threads' slots; the sidebar, the rail, the footer and the overlay are the app's, with no thread.
         if (profile && (slot === 'sidebar' || slot === 'rail' || slot === 'footer' || slot === 'overlay')) return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
-        const list = registry.slots[slot] as Owned<{ component: ComponentType<SlotProps[typeof slot]>; order: number; fallback: boolean }>[]
-        add(list, { component: component as never, order: options?.order ?? 100, fallback: options?.fallback ?? false })
+        const list = registry.slots[slot] as Owned<{ component: ComponentType<SlotProps[typeof slot]>; order: number; fallback: boolean; fills: boolean }>[]
+        add(list, { component: component as never, order: options?.order ?? 100, fallback: options?.fallback ?? false, fills: options?.fills ?? true })
         list.sort((a, b) => a.order - b.order)
       },
       on(event, listener) {
@@ -556,10 +557,10 @@ function lookUp<T>(list: Owned<T>[], where: Where | undefined, match: (entry: T)
   return found.find((entry) => entry.owner.profile) ?? found[0]
 }
 
-/** What `slot` draws for `where`, in order: fallbacks only while nothing else is there. */
+/** What `slot` draws for `where`, in order: fallbacks only while nothing fills it (see `slot`'s `fills`). */
 export function slotEntries<S extends SlotName>(registry: Registry, slot: S, where: Where | undefined) {
-  const seen = seenIn(registry.slots[slot] as Owned<{ component: ComponentType<SlotProps[S]>; order: number; fallback: boolean }>[], where)
-  const filled = seen.some((entry) => !entry.fallback)
+  const seen = seenIn(registry.slots[slot] as Owned<{ component: ComponentType<SlotProps[S]>; order: number; fallback: boolean; fills: boolean }>[], where)
+  const filled = seen.some((entry) => !entry.fallback && entry.fills)
   return seen.filter((entry) => !entry.fallback || !filled)
 }
 

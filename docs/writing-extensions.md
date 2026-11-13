@@ -104,7 +104,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 
 | UI half (`superego.` in `setup`) | For |
 |---|---|
-| `slot(name, Component, { order, fallback })` | a component in a place in the window (below); `fallback`: only while nothing else is there; `thread.crumb` for a chip where the title bar says where a thread works |
+| `slot(name, Component, { order, fallback, fills })` | a component in a place in the window (below); `fallback`: only while nothing fills it; `fills: false`: always drawn, but doesn't count (Ego's rail button, beside which Unread's bell still shows); `thread.crumb` for a chip where the title bar says where a thread works |
 | `newThreadField({ component, from })` | a field in the New thread dialog: its value goes to `thread.create` as `options.<name>`, for the daemon half's `creating`; `from(thread)` its value for one started like `thread`; bundled only |
 | `on(event, listener)` → off; `window` | hear the window: `thread.status` (`{ machine, thread, before }`; `before` undefined the first time it's seen), `select` (`{ selection, before }`), `focus` (`{ focused }`), `visibility` (`{ visible }`); `window` is `{ focused, visible, selection, thread }` now. In Electron and browsers alike |
 | `appSetting(key)` | one of the app's settings as it is now, outside React |

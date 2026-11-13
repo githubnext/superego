@@ -75,7 +75,7 @@ Then wire it in:
 
 Bundled extensions get more than a profile's:
 
-- **Every slot**, including `sidebar`, `rail` and `footer` (a phone's, beside Settings) (`{ order }`: lower comes first;
+- **Every slot**, including `sidebar`, `rail` and `footer` (a phone's, beside Settings) (`{ order }`: lower comes first; `fallback: true` only while nothing fills it, `fills: false` drawn but not counted;
   Ego's button is 10, the threads' 100), and **`superego.work(divide)`** to group a run of work in the transcript (as
   `tasks` does).
 - **New thread fields**: `superego.newThreadField({ component, from })`. `component` gets `{ machine, cwd, value,
