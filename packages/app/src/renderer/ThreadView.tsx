@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react'
 import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowCounterClockwiseIcon, BroomIcon, ArrowDownIcon, ArrowElbowDownRightIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CaretRightIcon, ChatCircleIcon, ChatsCircleIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, BroomIcon, ArrowDownIcon, ArrowElbowDownRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CaretRightIcon, ChatCircleIcon, ChatsCircleIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, ListIcon, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
 import { completionsIn, divideWork, entryView, fileKind, folderKind, paneMenu, sentWithIn, Slot, shownPanes, toolView, unfoldedTool, urlKind, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
@@ -17,7 +17,7 @@ import { useProfileUi } from './profile-ui.ts'
 import { ThreadPanes } from './panes.tsx'
 import { startRename, stopRename, useRenaming } from './rename.ts'
 
-type Message = { role: string; content: string | Block[]; toolCallId?: string; isError?: boolean; details?: unknown }
+type Message = { role: string; content: string | Block[]; toolCallId?: string; isError?: boolean; details?: unknown; timestamp?: number }
 
 /** The thread a transcript belongs to, for extension renderers. */
 const Here = createContext<{ machine: MachineEntry; thread: ThreadInfo }>(undefined as never)
@@ -305,10 +305,9 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
         }}>
         <div className="thread__column">
           {view ? <Transcript view={view} live={live} /> : <div className="transcript__more">Loading…</div>}
-          {view && <Queued inbox={watched?.docs['pi.inbox'] as InboxState | undefined} />}
         </div>
       </div>
-      <Composer machine={machine} thread={thread} busy={Boolean(live?.run)} onJump={away ? jumpToEnd : undefined} />
+      <Composer machine={machine} thread={thread} busy={Boolean(live?.run)} inbox={watched?.docs['pi.inbox'] as InboxState | undefined} onJump={away ? jumpToEnd : undefined} />
     </div>
     </Images.Provider>
     </Here.Provider>
@@ -338,7 +337,8 @@ function Transcript({ view, live }: { view: ConversationView; live: LiveState | 
   }, [view.entries])
   const running = new Map((live?.tools ?? []).map((slot) => [slot.callId, slot]))
   const partial = live?.generation?.message as Message | undefined
-  const items = useMemo(() => flatten(view.entries, partial), [view.entries, partial])
+  const working = Boolean(live?.run) && here.thread.status.state === 'working'
+  const items = useMemo(() => flatten(view.entries, partial, working), [view.entries, partial, working])
   const result = (id: string) => { const message = results.get(id); return message && { text: textOf(message), isError: Boolean(message.isError) } }
 
   return (
@@ -361,9 +361,9 @@ function Transcript({ view, live }: { view: ConversationView; live: LiveState | 
               : part.blocks.length ? <Work key={`${item.key}:${i}`} blocks={part.blocks} results={results} running={running} active={active && i === parts.length - 1} /> : null)
           }
           case 'end': return <TurnEnd key={item.key} blocks={divideWork(registry, { machine: here.machine.id, thread: here.thread }, { blocks: item.blocks, active: false, result }).flatMap((part) => part.blocks)} results={results} />
+          case 'working': return <Working key={item.key} steps={item.blocks.filter((b) => b.type === 'toolCall').length} since={item.since} />
         }
       })}
-      {live?.run && !partial && here.thread.status.state === 'working' && <div className="transcript__thinking">working…</div>}
       {live?.runFailure && !live.run && live.runFailure.reason !== 'aborted' && (
         <div className="transcript__error">Run failed: {live.runFailure.reason}{live.runFailure.detail ? ` — ${live.runFailure.detail}` : ''}</div>
       )}
@@ -372,20 +372,32 @@ function Transcript({ view, live }: { view: ConversationView; live: LiveState | 
 }
 
 /**
- * What you sent while the agent was busy, waiting its turn: shown as soon as it's sent, faint, and saying when it goes
- * in (a steer after the current step, a follow-up when the agent is done). Placed, it becomes an entry like any other.
+ * What you sent while the agent was busy, waiting its turn: a row each over the composer, shown as soon as it's sent,
+ * saying when it goes in (a steer after the current step, a follow-up when the agent is done), and taken back with ×.
+ * Placed, it becomes an entry in the transcript like any other.
  */
-function Queued({ inbox }: { inbox: InboxState | undefined }) {
+function Queued({ machine, thread, inbox }: { machine: MachineEntry; thread: ThreadInfo; inbox: InboxState | undefined }) {
+  const dispatch = useRegistry().router.dispatch
   const items = (inbox?.items ?? []).filter((item) => item.mode !== 'write')
   if (!items.length) return null
+  const withdraw = (submission: string) => void dispatch('thread.withdraw', { id: thread.id, submission }, { machine: machine.id, source: 'composer' })
+    .catch((error) => console.error(error))
+  const firstFollowUp = items.find((item) => item.mode === 'followUp')
   return (
-    <div className="queued">
+    <div className="dock__queued">
       {items.map((item) => {
         const content = item.content as Message['content']
+        const { text, files } = splitMessage(typeof content === 'string' ? [{ type: 'text', text: content }] : content)
+        const words = text.trim().split('\n')[0] || (files.length === 1 ? files[0]!.name : `${files.length} files`)
         return (
-          <Sent key={String(item.id)} className="msg msg--user msg--queued" blocks={typeof content === 'string' ? [{ type: 'text', text: content }] : content}>
-            <span className="msg__queued">{item.mode === 'steer' ? 'Waiting · steers after this step' : 'Queued · sent when the agent is done'}</span>
-          </Sent>
+          <div key={String(item.id)} className="queued-row">
+            <ListIcon size={13} aria-hidden />
+            <span className="queued-row__text" title={text}>{words}</span>
+            <span className="queued-row__when">{item.mode === 'steer' ? 'Steers after this step' : item === firstFollowUp ? 'Queued · next' : 'Queued'}</span>
+            <IconButton label="Take back" className="queued-row__remove" onClick={() => withdraw(String(item.id))}>
+              <XIcon size={11} aria-hidden />
+            </IconButton>
+          </div>
         )
       })}
     </div>
@@ -445,8 +457,9 @@ type Item =
   | { type: 'text'; key: string; text: string; narration: boolean; streaming?: boolean }
   | { type: 'work'; key: string; blocks: Block[] }
   | { type: 'end'; key: string; blocks: Block[] }
+  | { type: 'working'; key: string; blocks: Block[]; since: number | undefined }
 
-function flatten(entries: readonly EntryRecord[], partial: Message | undefined): Item[] {
+function flatten(entries: readonly EntryRecord[], partial: Message | undefined, working: boolean): Item[] {
   const items: Item[] = []
   const add = (message: Message, key: string, streaming = false) => {
     const list = blocks(message)
@@ -465,6 +478,8 @@ function flatten(entries: readonly EntryRecord[], partial: Message | undefined):
   }
   // A turn that did work ends with a line saying what it did: the anchor between one turn and the next.
   let turn: Block[] = []
+  // When the turn began: the message that started it.
+  let since: number | undefined
   const end = (key: string) => {
     if (turn.some((b) => b.type === 'toolCall')) items.push({ type: 'end', key: `end:${key}`, blocks: turn })
     turn = []
@@ -473,11 +488,33 @@ function flatten(entries: readonly EntryRecord[], partial: Message | undefined):
     const message = entry.model?.[0] as Message | undefined
     if (message?.role === 'assistant') { add(message, String(entry.id)); turn.push(...blocks(message)) }
     else if (message?.role === 'toolResult' || entry.kind === 'pi.system') continue
-    else { if (message?.role === 'user') end(String(entry.id)); items.push({ type: 'entry', key: String(entry.id), entry }) }
+    else {
+      if (message?.role === 'user') { end(String(entry.id)); since = message.timestamp }
+      items.push({ type: 'entry', key: String(entry.id), entry })
+    }
   }
-  if (partial) add(partial, 'live', true)
-  else end('last')
+  if (partial) { add(partial, 'live', true); turn.push(...blocks(partial)) }
+  // While the agent works, the turn so far ends with a line saying so; done, with what it did.
+  if (working) items.push({ type: 'working', key: 'working', blocks: turn, since })
+  else if (!partial) end('last')
   return items
+}
+
+/** "Working · 5 steps · 1m 12s" at the end of the turn going on. */
+function Working({ steps, since }: { steps: number; since: number | undefined }) {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  const seconds = since === undefined ? undefined : Math.max(0, Math.floor((now - since) / 1000))
+  return (
+    <div className="transcript__working" role="status">
+      <span>Working</span>
+      {steps > 0 && <span>{steps === 1 ? '1 step' : `${steps} steps`}</span>}
+      {seconds !== undefined && <span>{seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`}</span>}
+    </div>
+  )
 }
 
 /** "6 steps · +11 −2 · 1 failed" under a finished turn. */
@@ -800,7 +837,7 @@ function Diff({ diff }: { diff: string }) {
   )
 }
 
-function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; thread: ThreadInfo; busy: boolean; onJump?: () => void }) {
+function Composer({ machine, thread, busy, inbox, onJump }: { machine: MachineEntry; thread: ThreadInfo; busy: boolean; inbox: InboxState | undefined; onJump?: () => void }) {
   const { openSettings: onOpenSettings } = useShell()
   const dispatch = useRegistry().router.dispatch
   const [claims, setClaims] = useState<ComposerClaim[]>([])
@@ -955,6 +992,7 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
         </Button>
       )}
     </div>
+    {!archived && <Queued machine={machine} thread={thread} inbox={inbox} />}
     <div className="dock__above"><Slot name="composer.above" props={{ machine, thread }} /></div>
     <div className="dock__box">
     {files.length > 0 && !claim && (
@@ -984,37 +1022,52 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
         ))}
       </div>
     )}
+    {/* The box holds the words and one button at their end: Send, Steer or Answer, one key, ⏎ (Unarchive, archived). */}
     <div className="composer">
       <TextArea ref={input} rows={1} value={text} disabled={disabled} onChange={(e) => { setText(e.target.value); setCaret(e.target.selectionStart) }} onKeyDown={onKeyDown}
         onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
         onPaste={(e) => { if (!claim && e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files) } }}
         placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : suggested ? `${suggested}  ⏎` : 'Reply…'} />
-      <div className="composer__actions">
-        {/* In the box at its end: attach, then (while the agent works) Queue and Stop, then Send, Steer or Answer: one key, ⏎. */}
-        {!claim && !archived && (
-          <>
-            <IconButton label="Attach files" className="composer__icon" disabled={disabled} onClick={() => picker.current?.click()}>
-              <PaperclipIcon size={15} aria-hidden />
+      {archived
+        ? <UnarchiveButton machine={machine} thread={thread} className="composer__unarchive" />
+        : busy && !claim
+          ? sendable && (
+            <Button variant="primary" className="composer__steer" title="Steer (⏎)" disabled={disabled} onClick={() => void send()}>
+              <ArrowElbowDownRightIcon size={13} weight="bold" aria-hidden />Steer
+            </Button>
+          )
+          : (
+            <IconButton label={`${claim ? 'Answer' : 'Send'} (⏎)`} aria-label={claim ? 'Answer' : 'Send'} className="composer__send" disabled={disabled || !sendable} onClick={() => void send()}>
+              <ArrowUpIcon size={15} weight="bold" aria-hidden />
             </IconButton>
+          )}
+    </div>
+    </div>
+    {/* Under the box, quietly: attach at the left; while the agent works, Queue and Stop at the right. */}
+    {!archived && (
+      <div className="dock__footer">
+        {!claim && (
+          <>
+            <Button variant="ghost" className="dock__action composer__attach" disabled={disabled} onClick={() => picker.current?.click()}>
+              <PaperclipIcon size={13} aria-hidden />Attach
+            </Button>
             <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) void attach(e.target.files); e.target.value = '' }} />
           </>
         )}
-        {busy && !claim && sendable && <Button className="composer__pill" disabled={disabled} onClick={() => void send('followUp')}>Queue <kbd>⌃⏎</kbd></Button>}
-        {busy && !claim && (
-          <Button className="composer__pill composer__stop" onClick={() => void abort()}>
-            <span className="composer__stop-mark" aria-hidden />Stop <kbd>esc</kbd>
-          </Button>
-        )}
-        {archived
-          ? <UnarchiveButton machine={machine} thread={thread} className="composer__unarchive" />
-          : (!busy || claim || sendable) && (
-            <IconButton label={`${claim ? 'Answer' : busy ? 'Steer' : 'Send'} (⏎)`} aria-label={claim ? 'Answer' : busy ? 'Steer' : 'Send'} className="composer__send" disabled={disabled || !sendable} onClick={() => void send()}>
-              {busy && !claim ? <ArrowElbowRightIcon size={15} weight="bold" aria-hidden /> : <ArrowUpIcon size={15} weight="bold" aria-hidden />}
-            </IconButton>
+        <span className="dock__footer-end">
+          {busy && !claim && sendable && (
+            <Button variant="ghost" className="dock__action composer__queue" disabled={disabled} onClick={() => void send('followUp')}>
+              <ListIcon size={13} aria-hidden />Queue<kbd>⌃⏎</kbd>
+            </Button>
           )}
+          {busy && (
+            <Button variant="ghost" className="dock__action composer__stop" onClick={() => void abort()}>
+              <span className="composer__stop-mark" aria-hidden />Stop<kbd>esc</kbd>
+            </Button>
+          )}
+        </span>
       </div>
-    </div>
-    </div>
+    )}
     </div>
     </ComposerContext.Provider>
     </ClaimContext.Provider>

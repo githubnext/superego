@@ -121,12 +121,17 @@ if (phase === 'first') {
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('pick a colour'))?.click()`)
   await until(`document.querySelector('.ask-user')?.textContent.includes('Which colour?')`, 'question card above the composer')
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('pick a colour') && li.querySelector('.superego-status--blocked'))`, 'thread marked as needing you')
-  // Sent while it's busy, a follow-up shows at once as waiting, and goes in when the agent is done.
+  // Sent while it's busy, a follow-up shows at once as waiting over the composer, and goes in when the agent is done;
+  // one taken back with its × never does.
   await run(`window.superego.call('local', 'thread.submit', { id: '${asking}', text: 'then paint it', whenBusy: 'followUp' })`)
-  await until(`document.querySelector('.msg--queued')?.textContent.includes('then paint it') && document.querySelector('.msg--queued').textContent.includes('Queued')`, 'follow-up shown as queued')
+  await until(`document.querySelector('.queued-row')?.textContent.includes('then paint it') && document.querySelector('.queued-row').textContent.includes('Queued')`, 'follow-up shown as queued')
+  await run(`window.superego.call('local', 'thread.submit', { id: '${asking}', text: 'never mind this', whenBusy: 'followUp' })`)
+  await until(`document.querySelectorAll('.queued-row').length === 2`, 'second follow-up queued')
+  await run(`[...document.querySelectorAll('.queued-row')].find((row) => row.textContent.includes('never mind this')).querySelector('.queued-row__remove').click()`)
+  await until(`document.querySelectorAll('.queued-row').length === 1`, 'follow-up taken back')
   await run(`[...document.querySelectorAll('.ask-user button')].find((b) => b.querySelector('.ask-user__option-label')?.textContent === 'blue').click()`)
   await until(`!document.querySelector('.ask-user') && document.querySelector('.ask-user-asked')?.textContent.includes('blue') && document.querySelector('.transcript').textContent.includes('Blue it is.')`, 'answered, agent carried on')
-  await until(`!document.querySelector('.msg--queued') && document.querySelector('.transcript').textContent.includes('then paint it') && document.querySelector('.transcript').textContent.includes('Noted for later.')`, 'queued follow-up went in')
+  await until(`!document.querySelector('.queued-row') && document.querySelector('.transcript').textContent.includes('then paint it') && document.querySelector('.transcript').textContent.includes('Noted for later.') && !document.querySelector('.transcript').textContent.includes('never mind this')`, 'queued follow-up went in, the one taken back not')
   // images: a replayed agent shows images (show_images), drawn in the thread: one alone, a grid, a carousel; a file
   // gone by then shows as broken; any opens in the lightbox, which zooms, goes through the set, and closes on Escape.
   const shots = `${process.env.SUPEREGO_HOME}/shots`
@@ -645,9 +650,9 @@ if (phase === 'first') {
   await until(`document.activeElement?.matches('[data-column]:not([data-column="thread"])')`, 'a click on the title, into the pane')
   await run(`window.superego.call('local', 'pane.close', { id: '${shown}', pane: document.activeElement.dataset.column })`)
   await until(`!document.querySelector('.panes__tab')`, 'changes closed')
-  // Attachments: a file picked with the paperclip (in the box) waits above the composer, then goes with the message and shows under it.
+  // Attachments: a file picked with Attach (under the box) waits in the box, then goes with the message and shows under it.
   await run(`(() => {
-    const input = document.querySelector('.composer__actions input[type=file]')
+    const input = document.querySelector('.dock__footer input[type=file]')
     const files = new DataTransfer()
     files.items.add(new File(['# plan\\n'], 'plan.md', { type: 'text/markdown' }))
     input.files = files.files

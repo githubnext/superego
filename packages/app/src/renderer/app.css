@@ -93,11 +93,17 @@
 .thread::before, .thread::after { content: ''; position: absolute; left: 0; right: 12px; pointer-events: none; z-index: 1; }
 .thread::before { top: 0; height: 48px; background: linear-gradient(var(--superego-bg), transparent); opacity: 0; transition: opacity .15s; }
 .thread.is-scrolled::before { opacity: 1; }
-.thread::after { bottom: 0; height: 140px; background: linear-gradient(transparent, var(--superego-bg) 62%); }
+.thread::after { bottom: 0; height: 150px; background: linear-gradient(transparent, var(--superego-bg) 58%); }
 .thread .dock { z-index: 2; }
 
 .transcript { display: flex; flex-direction: column; gap: 14px; font-size: var(--superego-text-body); line-height: var(--superego-leading-body); }
-.transcript__more, .transcript__thinking { color: var(--superego-muted); font-size: var(--superego-text-sm); }
+.transcript__more { color: var(--superego-muted); font-size: var(--superego-text-sm); }
+/* The turn going on: a quiet line at its end, a soft blue dot before it. */
+.transcript__working { display: flex; align-items: center; gap: 6px; color: var(--superego-faint); font-size: var(--superego-text-sm); }
+.transcript__working > span + span::before { content: '·'; margin-right: 6px; }
+.transcript__working::before { content: ''; width: 7px; height: 7px; margin-right: 2px; border-radius: 50%; background: var(--superego-status-working); box-shadow: 0 0 0 3px color-mix(in srgb, var(--superego-status-working) 18%, transparent); animation: working-pulse 1.6s ease-in-out infinite; }
+@keyframes working-pulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--superego-status-working) 8%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .transcript__working::before { animation: none; } }
 .transcript__error { color: var(--superego-status-error); font-size: var(--superego-text-ui); border-left: 2px solid currentColor; padding-left: var(--superego-space-3); }
 .msg, .md { overflow-wrap: anywhere; }
 /* What's read and copied: messages, the agent's thinking and output, diffs, files, errors. */
@@ -232,33 +238,41 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .md th { font-size: var(--superego-text-sm); font-weight: 600; color: var(--superego-muted); border-bottom-color: var(--superego-border); }
 .md tr:last-child td { border-bottom: 0; }
 
-.dock { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: calc(var(--superego-column) + 2 * var(--superego-space-4)); max-width: calc(100% - 2 * var(--superego-space-4)); display: flex; flex-direction: column; }
+.dock { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); width: calc(var(--superego-column) + 2 * var(--superego-space-4)); max-width: calc(100% - 2 * var(--superego-space-4)); display: flex; flex-direction: column; }
 .dock__above:not(:empty) { margin-bottom: 10px; }
-/* The box: the text, what goes with it, and its buttons at the end. */
-.dock__box { position: relative; background: light-dark(#ffffff, #252527); border-radius: 12px; box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .16), rgb(255 255 255 / .1)), 0 4px 14px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); padding: 8px 8px 8px 14px; }
+/* The box: the words, what goes with them, and one button at their end. White on the sheet, a hairline and a soft shadow. */
+.dock__box { position: relative; background: light-dark(#ffffff, #252527); border-radius: 12px; box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .16), rgb(255 255 255 / .1)), 0 4px 16px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); padding: 9px 9px 9px 16px; }
 /* Above the box, something can join it (`dock__join`: an agent's question with its options): one card, a hairline between. */
 .dock:has(.dock__join) .dock__above { margin-bottom: 0; }
 .dock:has(.dock__join) .dock__box { border-radius: 0 0 12px 12px; clip-path: inset(0 -32px -32px -32px); }
-.dock__join { position: relative; background: light-dark(#ffffff, #252527); border-radius: 12px 12px 0 0; border-bottom: 1px solid var(--superego-line); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .16), rgb(255 255 255 / .1)), 0 4px 14px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); clip-path: inset(-32px -32px 0 -32px); }
+.dock__join { position: relative; background: light-dark(#ffffff, #252527); border-radius: 12px 12px 0 0; border-bottom: 1px solid var(--superego-line); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .16), rgb(255 255 255 / .1)), 0 4px 16px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); clip-path: inset(-32px -32px 0 -32px); }
 .composer { display: flex; gap: var(--superego-space-2); align-items: flex-end; font-size: var(--superego-text-body); }
 .composer .superego-textarea { line-height: 22px; padding: 3px 0; min-height: 28px; }
 .composer .superego-textarea::placeholder { color: var(--superego-faint); }
-/* One line of text and the buttons share a 26px line, so they centre together; with more lines the buttons stay on the last. */
-.composer__actions { display: flex; gap: 4px; align-items: center; }
-.composer__icon { width: 28px; height: 28px; min-height: 28px; border-radius: 999px; box-shadow: none; background: none; color: var(--superego-faint); }
-.composer__icon:hover:not(:disabled) { color: var(--superego-text); background: var(--superego-hover); }
-/* Stop and Queue, while the agent works: soft pills in the box. */
-.composer__pill { height: 28px; min-height: 28px; padding: 0 6px 0 10px; gap: 6px; border-radius: 999px; box-shadow: none; background: var(--superego-fill); font-size: var(--superego-text-sm); font-weight: 400; }
-.composer__pill:hover { background: var(--superego-selected); }
-.composer__pill kbd { font: var(--superego-text-xs) var(--superego-font); color: var(--superego-muted); padding: 1px 5px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--superego-line); }
-.composer__stop-mark { width: 8px; height: 8px; border-radius: 2px; background: currentColor; }
-.composer__button { height: 26px; }
-/* Send and Steer: an arrow, in a round button that fills in once there's something to send. */
+/* Send and Answer: an arrow, in a round button that fills in once there's something to send. */
 .composer__send { width: 28px; height: 28px; min-height: 28px; border-radius: 999px; box-shadow: none; background: var(--superego-accent); color: var(--superego-accent-text); }
 .composer__send:active:not(:disabled) { background: color-mix(in srgb, var(--superego-accent) 85%, #000); }
 .composer__send:disabled { opacity: 1; background: var(--superego-fill); color: var(--superego-muted); }
-
-.composer__button kbd { font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-muted); }
+/* Steer, while the agent works: the same button, saying what ⏎ does now. */
+.composer__steer { height: 28px; min-height: 28px; padding: 0 11px 0 9px; gap: 5px; border-radius: 999px; box-shadow: none; font-size: var(--superego-text-sm); font-weight: 500; }
+.composer__unarchive { height: 28px; }
+/* Under the box, outside it: a quiet status bar. Attach at the left; Queue and Stop at the right while the agent works. */
+.dock__footer { display: flex; align-items: center; gap: 2px; min-height: 26px; margin-top: 6px; padding: 0 4px; font-size: var(--superego-text-xs); color: var(--superego-faint); white-space: nowrap; }
+.dock__footer-end { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.dock__action { height: 22px; min-height: 22px; padding: 0 6px; gap: 5px; border-radius: 5px; font-size: inherit; color: inherit; }
+.dock__action:hover:not(:disabled) { color: var(--superego-text); }
+.dock__action kbd { font: inherit; font-size: calc(10.5px * var(--superego-text-scale)); color: var(--superego-faint); opacity: .8; }
+.composer__stop { color: var(--superego-text); }
+.composer__stop kbd { padding: 0 4px; line-height: 15px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--superego-line); opacity: 1; }
+.composer__stop-mark { width: 8px; height: 8px; border-radius: 2px; background: var(--superego-status-error); }
+/* Sent while the agent works, not yet in: a slim row each over the box, saying when it goes in, taken back with ×. */
+.dock__queued { display: flex; flex-direction: column; gap: 4px; margin: 0 6px 8px; }
+.queued-row { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 4px 0 10px; border-radius: var(--superego-radius); box-shadow: inset 0 0 0 1px var(--superego-line); background: var(--superego-bg); font-size: var(--superego-text-sm); color: var(--superego-muted); }
+.queued-row > svg { flex: none; color: var(--superego-faint); }
+.queued-row__text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queued-row__when { flex: none; font-size: var(--superego-text-xs); color: var(--superego-faint); }
+.queued-row__remove { width: 18px; height: 18px; min-height: 18px; padding: 0; border-radius: 4px; box-shadow: none; background: none; color: var(--superego-faint); }
+.queued-row__remove:hover { color: var(--superego-text); background: var(--superego-hover); }
 .composer__error { color: var(--superego-status-error); display: flex; gap: var(--superego-space-2); align-items: center; font-size: var(--superego-text-ui); margin-bottom: var(--superego-space-2); }
 
 .settings__body { display: grid; grid-template-columns: 180px 1fr; height: 100%; }
@@ -375,8 +389,13 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .app.is-narrow .app__main { border-radius: 0; box-shadow: none; }
 .app.is-narrow .app__sidebar { position: fixed; z-index: 21; top: 0; bottom: 0; left: 0; width: min(85vw, 320px); margin: 0; border-radius: 0; background: var(--superego-sidebar-bg); box-shadow: var(--superego-shadow-float); padding-top: env(safe-area-inset-top); }
 .app.is-narrow .app__sidebar .app__drag { height: 12px; }
-.app.is-narrow .thread__column { width: auto; max-width: none; padding: var(--superego-space-4) var(--superego-space-4) 150px; }
-.app.is-narrow .dock { left: var(--superego-space-2); right: var(--superego-space-2); bottom: calc(env(safe-area-inset-bottom) + var(--superego-space-2)); width: auto; max-width: none; transform: none; }
+.app.is-narrow .thread__column { width: auto; max-width: none; padding: var(--superego-space-4) var(--superego-space-4) calc(var(--dock, 100px) + 50px); }
+.app.is-narrow .dock { left: var(--superego-space-2); right: var(--superego-space-2); bottom: calc(env(safe-area-inset-bottom) + var(--superego-space-1)); width: auto; max-width: none; transform: none; }
+/* Under a finger: the status bar's actions and the queued rows' × get room to be hit. */
+.app.is-narrow .dock__footer { margin-top: 2px; }
+.app.is-narrow .dock__action { height: 32px; min-height: 32px; padding: 0 8px; }
+.app.is-narrow .queued-row { height: 32px; }
+.app.is-narrow .queued-row__remove { width: 28px; height: 28px; min-height: 28px; }
 /* 16px keeps iOS from zooming into the field. */
 .app.is-narrow .composer, .app.is-narrow .superego-field, .app.is-narrow .new-thread__prompt { font-size: calc(16px * var(--superego-text-scale)); }
 .app.is-narrow .msg--user { max-width: 88%; }
@@ -563,10 +582,6 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .composer__files { margin: 0 0 8px; }
 .msg__files { margin-top: 6px; justify-content: flex-end; }
 .msg--user:has(.msg__files) { display: flex; flex-direction: column; align-items: flex-end; }
-/* Sent while the agent works, not yet in: faint and dashed, with when it goes in under it. */
-.queued { display: flex; flex-direction: column; gap: var(--superego-space-2); margin-top: 18px; }
-.msg--queued { display: flex; flex-direction: column; align-items: flex-end; margin-top: 0 !important; background: transparent; border: 1px dashed var(--superego-border); color: var(--superego-muted); }
-.msg__queued { margin-top: 4px; font-size: var(--superego-text-xs); color: var(--superego-faint); white-space: nowrap; }
 .attachment { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; padding: 3px 6px 3px 3px; border-radius: 7px; background: color-mix(in srgb, var(--superego-text) 6%, transparent); font-size: var(--superego-text-sm); }
 .attachment img { width: 28px; height: 28px; object-fit: cover; border-radius: 5px; }
 .msg__files .attachment img { width: auto; height: auto; max-width: 220px; max-height: 160px; }
@@ -582,7 +597,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .completions__item.is-active { background: var(--superego-selected); }
 .completions__label { flex: none; font-weight: 500; }
 .completions__detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--superego-muted); }
-/* Over the box: attach at the left, Jump to bottom in the middle, Stop at the right, each floating on its own. */
+/* Over the box: Jump to bottom, floating on its own. */
 .dock__bar { position: absolute; left: 0; right: 0; bottom: calc(100% + 14px); display: flex; justify-content: center; pointer-events: none; }
 .dock__bar > * { pointer-events: auto; }
 .dock:has(.completions) .dock__bar { display: none; }
