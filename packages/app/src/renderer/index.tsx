@@ -68,6 +68,7 @@ export { useComposer, useComposerClaim, type Composer, type ComposerClaim } from
 export type { Completion, CompletionProvider, CompletionWord, ComposerWhere, SentBlock, SentWith } from './composer.ts'
 export { Markdown } from './Markdown.tsx'
 export { ThreadRef } from './thread-ref.tsx'
+export { Picker, type PickerProps, type PickerRow } from './picker.tsx'
 export { useLocalState, type Store } from './local-state.ts'
 export { score } from './score.ts'
 export { PaneHeader, useTabNote } from './panes.tsx'

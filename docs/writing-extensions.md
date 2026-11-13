@@ -120,7 +120,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 Names: everything is `<extension>.<something>`, except tool and pane kind names. In components: `useSelection`,
 `useMachines`, `useSessions`, `useValue`, `useDispatch`, `call`, `has(machine, 'ext:x')` (whether a machine has an
 extension set up and switched on now, kept current; UI-only extensions never appear); in panes `<PaneHeader>` and
-`useTabNote`; in rows `<ThreadRef machine id>`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](../packages/cli/skill/daemon.md), [ui.md](../packages/cli/skill/ui.md).
+`useTabNote`; in rows `<ThreadRef machine id>`; for a list to pick from (quick open, say), `<Picker label placeholder items filter row onPick onClose digits>`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](../packages/cli/skill/daemon.md), [ui.md](../packages/cli/skill/ui.md).
 
 Machines update at different times, so a window can meet an older or newer daemon. A UI half that calls its daemon
 half checks `has(machine, 'ext:x')` first and says so, or offers nothing, when it's missing. A method that's renamed or

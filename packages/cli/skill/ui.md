@@ -111,8 +111,11 @@ dispatch('thread.submit', { id: thread.id, text: 'Ship it' }, { machine: machine
 Components: `Button`, `IconButton`, `TextField`, `TextArea`, `Select`, `Switch`, `List`, `ListItem`, `Panel`,
 `Dialog`, `Menu`, `Popover`, `Tooltip`, `StatusGlyph`, `Markdown` (render Markdown text), `FileEditor` (the file editor,
 Markdown in live preview: `<FileEditor machine={machine} thread={thread} path={path} onLink={…} actions={…} />`), `Diff`
-(a unified diff, file by file: `<Diff diff={text} />`; `parseDiff(text)` for its files and counts), and
-the Phosphor icons the app uses (`ArchiveIcon`, …).
+(a unified diff, file by file: `<Diff diff={text} />`; `parseDiff(text)` for its files and counts), `Picker` (a dialog
+with a list that narrows as you type, as the palette is: `<Picker label placeholder items={list} filter={(items, query) => …}
+row={(item) => ({ key, title, glyph?, detail?, keys? })} onPick={(item, { beside }) => …} onClose digits? empty? footer? />`;
+↑↓ move, ⏎ picks, ⌘⏎ beside, `digits`: ⌃1–⌃9 pick the first nine), `ThreadRef` (a thread named as itself, kept
+current: `<ThreadRef machine={id} id={thread} />`), and the Phosphor icons the app uses (`ArchiveIcon`, …).
 
 Others: `useComposer()` (the message box), `useComposerClaim({ placeholder, submit })` (take the message box over while
 something waits on the user), `useLocalState(key, initial)` (state kept in the window across reloads), `useShortcut(actionId)` (its key's

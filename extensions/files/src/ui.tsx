@@ -3,13 +3,13 @@
 // (⌘P): any file in the selected thread's folder by a few letters of its name, opened beside the thread in the pane
 // kind that takes it. Clicking a file in the tree shows it in that editor; ⌘-click opens it beside. A folder a thread
 // names opens in a pane of its own (`folder`), as a tree to open files from.
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import {
-  call, defineAction, defineUiExtension, fileKind, score, useAllThreads, useDispatch, useMachines, useRegistry, useSelection,
+  call, defineAction, defineUiExtension, fileKind, Picker, score, useAllThreads, useDispatch, useMachines, useRegistry, useSelection,
   type EditorSlotProps, type MachineEntry, type PaneProps, type Store,
 } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
-import { CaretRightIcon, Dialog, FolderSimpleIcon, IconButton } from '@superego/ui'
+import { CaretRightIcon, FolderSimpleIcon, IconButton } from '@superego/ui'
 import './styles.css'
 import { about, FOLDER, LIST, type FileList } from './shared.ts'
 
@@ -178,42 +178,21 @@ function QuickOpenDialog({ machineId, threadId, onClose }: { machineId: string; 
   const machine = useMachines().find((m) => m.id === machineId) as MachineEntry | undefined
   const thread = useAllThreads()[machineId]?.find((t) => t.id === threadId)
   const list = useFiles(machine?.id, thread)
-  const [query, setQuery] = useState('')
-  const [active, setActive] = useState(0)
-  const matches = useMemo(() => {
-    const files = list?.files ?? []
-    if (!query.trim()) return files.slice(0, 50)
-    return files.map((file) => ({ file, r: rank(file, query) })).filter((m) => m.r > 0).sort((a, b) => b.r - a.r || a.file.length - b.file.length).slice(0, 50).map((m) => m.file)
-  }, [list, query])
-  const go = (file: string | undefined) => {
-    if (!file || !thread || !machine) return
+  const files = useMemo(() => list?.files ?? [], [list])
+  const go = (file: string) => {
+    if (!thread || !machine) return
     onClose()
     const kind = fileKind(registry, { machine: machine.id, thread }, file)
     if (kind) void dispatch('pane.open', { id: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'quick open' })
   }
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'ArrowDown') { event.preventDefault(); setActive((i) => Math.min(i + 1, matches.length - 1)) }
-    if (event.key === 'ArrowUp') { event.preventDefault(); setActive((i) => Math.max(i - 1, 0)) }
-    if (event.key === 'Enter') { event.preventDefault(); go(matches[active]) }
-  }
   return (
-    <Dialog onClose={onClose} size="medium" className="palette files-open" label="Open a file">
-      <input className="palette__input" autoFocus placeholder={thread ? `Open a file in ${thread.session?.name ?? 'this thread'}` : 'Open a file'} value={query}
-        onChange={(e) => { setQuery(e.target.value); setActive(0) }} onKeyDown={onKeyDown} />
-      <ul className="palette__list" role="listbox">
-        {matches.map((file, index) => {
-          const slash = file.lastIndexOf('/')
-          return (
-            <li key={file} role="option" aria-selected={index === active} className={index === active ? 'is-active' : ''}
-              onMouseMove={() => setActive(index)} onClick={() => go(file)}>
-              <span className="palette__title">{file.slice(slash + 1)}</span>
-              {slash > 0 && <span className="palette__detail">{file.slice(0, slash)}</span>}
-            </li>
-          )
-        })}
-        {list && matches.length === 0 && <li className="palette__none">Nothing matches</li>}
-        {!list && <li className="palette__none">Reading…</li>}
-      </ul>
-    </Dialog>
+    <Picker label="Open a file" className="files-open" placeholder={thread ? `Open a file in ${thread.session?.name ?? 'this thread'}` : 'Open a file'}
+      items={files} onPick={go} onClose={onClose} empty={list ? 'Nothing matches' : 'Reading…'}
+      filter={(all, query) => !query.trim() ? all.slice(0, 50)
+        : all.map((file) => ({ file, r: rank(file, query) })).filter((m) => m.r > 0).sort((a, b) => b.r - a.r || a.file.length - b.file.length).slice(0, 50).map((m) => m.file)}
+      row={(file) => {
+        const slash = file.lastIndexOf('/')
+        return { key: file, title: file.slice(slash + 1), ...(slash > 0 ? { detail: file.slice(0, slash) } : {}) }
+      }} />
   )
 }
