@@ -1,6 +1,7 @@
 // Separate spike entry: no Electron imports, no dependence on the source checkout at runtime.
 import { openDaemon, listen } from '@superego/daemon'
-import { serveWeb, webToken } from '../../packages/daemon/src/web.ts'
+import { serveWeb } from '../../packages/daemon/src/web.ts'
+import { WebDevices } from '../../packages/daemon/src/web-devices.ts'
 import { writeFile, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import askUser from '@superego/ask-user/daemon'
@@ -23,9 +24,11 @@ const root = join(dirname(process.execPath), '../Resources/renderer')
 const daemon = await openDaemon({ app, dataDir, defaultCwd: process.env.SUPEREGO_CWD ?? dataDir,
   agentsDir: process.env.SUPEREGO_AGENTS, extensions: [worktrees, askUser, ego, files, git, images, skills, tasks, threadTools, threadReports, suggestions, webPanes] })
 const socket = await listen(daemon, join(dataDir, 'superego.sock'))
-const web = await serveWeb({ root, host: '127.0.0.1', port: 0, token: await webToken(dataDir), serve: (peer) => daemon.serve(peer) })
-await writeFile(join(dataDir, 'native-endpoint.json'), JSON.stringify({ pid: process.pid, url: web.url }), { mode: 0o600 })
-console.error(`Native daemon ${process.pid}: ${web.url.split('#')[0]}`)
+const devices = await WebDevices.open(dataDir)
+const web = await serveWeb({ root, port: 0, devices, serve: (peer) => daemon.serve(peer) })
+// The shell's web view pairs itself with a ticket; paired already (it keeps the cookie), it leaves the ticket unspent.
+await writeFile(join(dataDir, 'native-endpoint.json'), JSON.stringify({ pid: process.pid, url: `${web.url}/#pair=${devices.pair().ticket}` }), { mode: 0o600 })
+console.error(`Native daemon ${process.pid}: ${web.url}`)
 async function stop() {
   await rm(join(dataDir, 'native-endpoint.json'), { force: true })
   await web.close()
