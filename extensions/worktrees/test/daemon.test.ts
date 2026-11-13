@@ -235,7 +235,9 @@ it("is removed when the thread tools archive a thread, a thread's own only once 
   ].join('\n') + '\n')
   const { peer, close } = await open(dir, [threadTools], `replay:${join(dir, 'turns.jsonl')}`)
   const self = await peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'Self', worktree: true, prompt: 'tidy up' })
-  await until(async () => (await listed(peer, true)).length === 2 && (await listed(peer, true))[0]!.status.state === 'done')
+  const selfTree = treeOf(self)!
+  // What archiving itself did is said in it, as Superego's note.
+  await until(async () => JSON.stringify((await peer.call<{ value: { entries: unknown[] } }>('thread.watch', { id: self.id })).value.entries).includes(`Archived. Removed the worktree ${selfTree.path}; branch ${selfTree.branch} kept.`))
   const entries = JSON.stringify((await peer.call<{ value: { entries: unknown[] } }>('thread.watch', { id: self.id })).value.entries)
   const childTree = treeOf(child)!
   expect(entries).toContain(`Archived [Child](thread:${child.id}). Removed the worktree ${childTree.path}; branch ${childTree.branch} kept.`)
