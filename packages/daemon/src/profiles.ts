@@ -14,7 +14,7 @@
 // A project's profile replaces the user's of the same name, unless it `extends: 'user:<name>'`. A project's profile is
 // code from that repo, so it runs only once allowed (`superego profile allow`), and again after any of its files change.
 import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -95,11 +95,20 @@ export type LoadedProfile = ProfileRef & {
 
 export const DEFAULT_PROFILE = 'default'
 
-/** The folder holding a project's profiles: the nearest `.superego/profiles` at or above `cwd`. */
-export function projectProfiles(cwd: string): string | undefined {
+/** A path as it really is: symlinks followed, where it exists. */
+const real = (path: string) => { try { return realpathSync(path) } catch { return resolve(path) } }
+
+/** Whether `a` and `b` are the same folder, however they're spelled. */
+const same = (a: string, b: string) => real(a) === real(b)
+
+/**
+ * The folder holding a project's profiles: the nearest `.superego/profiles` at or above `cwd`, that isn't the user's
+ * own (`~/.superego/profiles`, found walking up from any folder under `~`).
+ */
+export function projectProfiles(cwd: string, userRoot: string): string | undefined {
   for (let dir = resolve(cwd); ; dir = dirname(dir)) {
     const candidate = join(dir, '.superego', 'profiles')
-    if (existsSync(candidate) && statSync(candidate).isDirectory()) return candidate
+    if (existsSync(candidate) && statSync(candidate).isDirectory() && !same(candidate, userRoot)) return candidate
     if (dirname(dir) === dir) return undefined
   }
 }
@@ -109,7 +118,7 @@ const names = (root: string | undefined) => !root || !existsSync(root) ? [] :
 
 /** Every profile a thread in `cwd` could start with: the project's, then the user's it doesn't replace. */
 export function listProfiles(cwd: string, userRoot: string): ProfileRef[] {
-  const project = projectProfiles(cwd)
+  const project = projectProfiles(cwd, userRoot)
   const own = names(project).map((name): ProfileRef => ({ scope: 'project', name, dir: join(project!, name) }))
   const user = names(userRoot).filter((name) => !own.some((p) => p.name === name))
     .map((name): ProfileRef => ({ scope: 'user', name, dir: join(userRoot, name) }))
@@ -245,8 +254,17 @@ async function outsideFiles(ref: ProfileRef) {
   return (spec?.extensions ?? []).map((path) => resolve(ref.dir, path)).filter((file) => !within(ref.dir, file) && existsSync(file))
 }
 
+/**
+ * A ref as it should be scoped: one of the user's own profiles, though taken for a project's (as threads started
+ * before the user's profiles were told apart from a project's have it), is the user's.
+ */
+export function scoped(ref: ProfileRef, userRoot: string): ProfileRef {
+  return ref.scope === 'project' && same(dirname(ref.dir), userRoot) ? { ...ref, scope: 'user' } : ref
+}
+
 /** Load a profile (and what it extends) fresh from disk; refuses a project's profile that isn't allowed as it is now. */
-export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trust): Promise<LoadedProfile> {
+export async function loadProfile(given: ProfileRef, userRoot: string, trust: Trust): Promise<LoadedProfile> {
+  const ref = scoped(given, userRoot)
   const hash = hashProfile(ref.dir)
   if (!(await trust.allowed(ref, hash))) {
     throw new RpcError('untrusted_profile', `The profile ${ref.name} in ${dirname(dirname(dirname(ref.dir)))} runs that project's code: allow it first (again, if it changed since)`, {
@@ -311,7 +329,8 @@ function ownerOf(file: string, ref: ProfileRef, userRoot: string) {
 }
 
 /** Whether `dir` is a profile folder at all: under the user's profiles, or a project's `.superego/profiles`. */
-export function isProfileDir(ref: ProfileRef, userRoot: string): boolean {
+export function isProfileDir(given: ProfileRef, userRoot: string): boolean {
+  const ref = scoped(given, userRoot)
   const parent = dirname(ref.dir)
   const ok = ref.scope === 'user' ? resolve(parent) === resolve(userRoot) : parent.endsWith(join('.superego', 'profiles'))
   return ok && ref.name === ref.dir.split(/[\\/]/).at(-1) && existsSync(join(ref.dir, 'profile.ts'))

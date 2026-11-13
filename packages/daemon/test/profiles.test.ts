@@ -1,10 +1,11 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { defineApp, PROTOCOL_VERSION, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, listen, openDaemon } from '../src/index.ts'
+import { loadProfile, Trust, type ProfileRef } from '../src/profiles.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
 
@@ -13,11 +14,11 @@ let dir: string
 let home: string
 let project: string
 
-const open = async () => {
+const open = async (dataDir = home) => {
   process.env.SUPEREGO_MODEL = 'faux'
-  const daemon = await openDaemon({ app: SUPEREGO, dataDir: home, defaultCwd: dir })
-  const server = await listen(daemon, join(home, 'superego.sock'))
-  const { peer, socket } = await connectSocket(join(home, 'superego.sock'))
+  const daemon = await openDaemon({ app: SUPEREGO, dataDir, defaultCwd: dir })
+  const server = await listen(daemon, join(dataDir, 'superego.sock'))
+  const { peer, socket } = await connectSocket(join(dataDir, 'superego.sock'))
   await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
   return { peer, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
 }
@@ -106,6 +107,74 @@ export default defineExtension({
   write(profile, { 'orders.ts': `export default { name: 'orders' }\n` })
   await expect(peer.call('thread.submit', { id: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
   await close()
+})
+
+describe("the user's own profiles, in the default data dir under ~", () => {
+  // A fake ~ with the data dir in it as ~/.superego: walking up from any folder under ~ finds ~/.superego/profiles.
+  let fakeHome: string
+  let dataDir: string
+  const chief = () => join(dataDir, 'profiles', 'chief')
+  beforeEach(() => {
+    fakeHome = join(dir, 'me')
+    dataDir = join(fakeHome, '.superego')
+    write(chief(), {
+      'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ prompt: 'Run my day.', ui: ['./ui.ts'] })\n`,
+      'ui.ts': `export default { name: 'chief' }\n`,
+    })
+    mkdirSync(join(fakeHome, 'notes'), { recursive: true })
+  })
+
+  it('lists them as the user\'s, allowed, from a folder under ~ with no profiles of its own', async () => {
+    const { peer, close } = await open(dataDir)
+    expect(await peer.call<ProfileInfo[]>('profile.list', { cwd: join(fakeHome, 'notes') })).toMatchObject([{ name: 'chief', scope: 'user', allowed: true }])
+    expect(await peer.call<ProfileInfo[]>('profile.list', { cwd: fakeHome })).toMatchObject([{ name: 'chief', scope: 'user', allowed: true }])
+    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: join(fakeHome, 'notes'), profile: 'chief', prompt: 'hi' })
+    expect(thread.profile).toMatchObject({ name: 'chief', scope: 'user' })
+    await done(peer, thread.id)
+    expect((await agentOf(peer, thread.id)).instructions).toBe('Run my day.')
+    await close()
+  })
+
+  it('tells them apart through a symlink to the data dir', async () => {
+    symlinkSync(fakeHome, join(dir, 'link'))
+    const { peer, close } = await open(join(dir, 'link', '.superego'))
+    expect(await peer.call<ProfileInfo[]>('profile.list', { cwd: join(fakeHome, 'notes') })).toMatchObject([{ name: 'chief', scope: 'user', allowed: true }])
+    await close()
+  })
+
+  it("still scopes a project's own profiles under ~ to the project", async () => {
+    write(join(fakeHome, 'acme', '.superego', 'profiles', 'support'), {
+      'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({})\n`,
+    })
+    mkdirSync(join(fakeHome, 'acme', 'src'), { recursive: true })
+    const { peer, close } = await open(dataDir)
+    expect(await peer.call<ProfileInfo[]>('profile.list', { cwd: join(fakeHome, 'acme', 'src') })).toMatchObject([
+      { name: 'support', scope: 'project', allowed: false },
+      { name: 'chief', scope: 'user', allowed: true },
+    ])
+    await close()
+  })
+
+  it('scopes a project inside the data dir to the project, and the folders around it to the user', async () => {
+    const acme = join(dataDir, 'work', 'acme')
+    write(join(acme, '.superego', 'profiles', 'support'), {
+      'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({})\n`,
+    })
+    const { peer, close } = await open(dataDir)
+    expect((await peer.call<ProfileInfo[]>('profile.list', { cwd: acme })).map((p) => `${p.scope}:${p.name}`)).toEqual(['project:support', 'user:chief'])
+    expect((await peer.call<ProfileInfo[]>('profile.list', { cwd: join(dataDir, 'work') })).map((p) => `${p.scope}:${p.name}`)).toEqual(['user:chief'])
+    expect((await peer.call<ProfileInfo[]>('profile.list', { cwd: chief() })).map((p) => `${p.scope}:${p.name}`)).toEqual(['user:chief'])
+    await close()
+  })
+
+  it("loads one taken for a project's (a thread started before they were told apart) as the user's, unallowed", async () => {
+    const ref: ProfileRef = { scope: 'project', name: 'chief', dir: chief() }
+    const loaded = await loadProfile(ref, join(dataDir, 'profiles'), new Trust(dataDir))
+    expect(loaded).toMatchObject({ scope: 'user', name: 'chief', spec: { prompt: 'Run my day.' } })
+    const { peer, close } = await open(dataDir)
+    expect(await peer.call('profile.ui', ref)).toMatchObject({ entries: ['./ui.ts'] })
+    await close()
+  })
 })
 
 it("lets a project's profile replace the user's, or extend it", async () => {
