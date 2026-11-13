@@ -746,8 +746,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (RESERVED.has(extension.name)) throw new Error(`The name ${extension.name} is the core's own`)
     if (claimed.has(extension.name)) throw new Error(`An extension named ${extension.name} is already set up`)
     claimed.add(extension.name)
-    announced.add(extension.name)
-    announce()
     const undo: (() => void)[] = [() => { claimed.delete(extension.name); announced.delete(extension.name); announce() }]
     const ownKey = (key: string) => {
       if (key !== extension.name && !key.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its settings "${extension.name}.<key>", not "${key}"`)
@@ -854,6 +852,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       teardown()
       throw new Error(`Extension ${extension.name} failed to start: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
     }
+    // Offered once it's set up: a client that sees `ext:<name>` finds its methods there, and one that fails never shows.
+    announced.add(extension.name)
+    announce()
     return teardown
   }
   // The core's own, then the bundled ones: for the daemon's life, each giving every thread its agent parts unless the
