@@ -321,6 +321,8 @@ async function authCommand(sub: string | undefined, rest: string[], machineName?
 }
 
 async function daemonCommand(sub: string | undefined, now: boolean) {
+  // The app's own daemon entry (Superego's sets up its bundled extensions); without one, a plain daemon: the core only,
+  // as this package knows no app's extensions.
   if (!sub) return options.daemon ? void await import(pathToFileURL(options.daemon).href) : serveDaemon({ app, dataDir, socket })
   const local: Machine = { id: 'local', label: 'This computer' }
   const running = await isListening(socket)
