@@ -228,6 +228,9 @@ importers:
       '@superego/files':
         specifier: workspace:*
         version: link:../extensions/files
+      '@superego/git':
+        specifier: workspace:*
+        version: link:../extensions/git
       '@superego/images':
         specifier: workspace:*
         version: link:../extensions/images
@@ -286,6 +289,31 @@ importers:
         version: 19.3.1
 
   extensions/files:
+    dependencies:
+      '@earendil-works/pi-schema':
+        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@superego/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@superego/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      react:
+        specifier: ^19
+        version: 19.3.1
+
+  extensions/git:
     dependencies:
       '@earendil-works/pi-schema':
         specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz

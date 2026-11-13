@@ -591,8 +591,9 @@ if (phase === 'first') {
   await front('Preview')
   await run(`window.superego.call('local', 'pane.close', { id: '${shown}', pane: document.querySelector('[data-column]:not([data-column="thread"])').dataset.column })`)
   another.close()
-  await run(`window.superego.call('local', 'pane.open', { id: '${shown}', kind: 'diff' })`)
-  await until(`Boolean(document.querySelector('.panes__tab'))`, 'changes beside the thread')
+  // ⌘⇧D: Changes (git's), beside the thread, its tab in the strip.
+  await key('D', ['meta', 'shift'])
+  await until(`[...document.querySelectorAll('.strip__tab')].some((t) => t.textContent.startsWith('Changes'))`, 'cmd+shift+d: changes beside the thread')
   await run(`document.querySelector('.composer textarea').focus()`)
   await key('Right', ['meta', 'alt'])
   await until(`document.activeElement?.matches('[data-column]:not([data-column="thread"])')`, 'cmd+alt+right to the pane itself')

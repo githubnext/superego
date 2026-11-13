@@ -54,7 +54,9 @@ it("tells the agent the pane kinds extensions describe, beside the core's", asyn
   const { value } = await peer.call<{ value: { entries: { model?: { role?: string; content?: unknown }[] }[]; docs: Record<string, unknown> } }>('thread.watch', { id: thread.id })
   const prompt = JSON.stringify(value)
   expect(prompt).toContain('\\"graph\\": the notes as a graph; no params')
-  expect(prompt).toContain('\\"diff\\": the changes in the working folder')
+  expect(prompt).toContain('\\"editor\\": { path }: a file')
+  // Changes is git's to describe: without it, no "diff".
+  expect(prompt).not.toContain('\\"diff\\"')
   await close()
 })
 

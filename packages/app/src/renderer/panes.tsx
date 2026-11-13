@@ -5,18 +5,17 @@
 // the row's end) is its handle, and the last column takes what's left over until it's dragged. Past the edge the row
 // scrolls, and the focused column scrolls just far enough to show whole. ⌃Tab moves the focus along. On a phone each
 // column is the screen's width, and a swipe moves between them.
-// Built in: diff, editor, preview, artifact, thread. Extensions and profiles add kinds with superego.pane(kind, …).
+// Built in: editor, preview, artifact, thread. Extensions and profiles add kinds with superego.pane(kind, …) (Changes is
+// git's). A pane of a kind only an extension the thread goes without draws isn't shown.
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
-import { ArrowRightIcon, ArrowsLeftRightIcon, ChatTextIcon, FileTextIcon, GlobeIcon, XIcon } from '@superego/ui'
-import { machine as client } from './client.ts'
+import { ArrowRightIcon, ChatTextIcon, FileTextIcon, GlobeIcon, XIcon } from '@superego/ui'
 import { paneKind, paneTitle, shownPanes, useRegistry, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
 import { PaneMenu, ThreadBody } from './ThreadView.tsx'
 import { FileEditor } from './file-editor.tsx'
-import { Diff, parseDiff } from './diff.tsx'
 import { focusRegion } from './focus.ts'
 
 const narrowQuery = '(max-width: 599px)'
@@ -268,7 +267,6 @@ function PaneBody({ machine, thread, pane }: PaneProps) {
 const fileName = (pane: Pane) => (pane.params as { path?: string } | undefined)?.path?.split('/').at(-1)
 
 export function registerBuiltInPanes(superego: UiApi) {
-  superego.pane('diff', { title: 'Changes', icon: ArrowsLeftRightIcon, component: DiffPane, menu: true, width: 0.45 })
   superego.pane('editor', { title: (pane) => fileName(pane) ?? 'Editor', icon: FileTextIcon, file: true, component: EditorPane, opens: () => true })
   superego.pane('preview', { title: 'Preview', icon: GlobeIcon, component: PreviewPane, urls: true, width: 0.6 })
   superego.pane('artifact', { title: (pane) => fileName(pane) ?? 'Artifact', icon: FileTextIcon, file: true, component: ArtifactPane })
@@ -276,41 +274,6 @@ export function registerBuiltInPanes(superego: UiApi) {
 }
 
 const params = <T,>(pane: Pane) => (pane.params ?? {}) as T
-
-/** The folder's changes by git, refreshed as the thread moves on. */
-function DiffPane({ machine, thread }: PaneProps) {
-  const [changes, setChanges] = useState<{ diff: string; untracked: string[]; repo: boolean }>()
-  const [error, setError] = useState<string>()
-  const load = () => client(machine.id).call('thread.diff', { id: thread.id }).then((c) => { setChanges(c); setError(undefined) }, (e: Error) => setError(e.message))
-  useEffect(() => { void load() }, [thread.id, thread.activeAt, thread.status.state])
-  const all = changes?.repo ? parseDiff(changes.diff) : []
-  const added = all.reduce((sum, f) => sum + f.added, 0)
-  const removed = all.reduce((sum, f) => sum + f.removed, 0)
-  useTabNote(added || removed ? <span className="strip__note"><span className="stat--add">+{added}</span> <span className="stat--del">−{removed}</span></span> : null, `${added}/${removed}`)
-  if (error) return <div className="pane-empty">{error}</div>
-  if (!changes) return <div className="pane-empty">Loading…</div>
-  if (!changes.repo) return <div className="pane-empty">{thread.cwd} isn't a git repository.</div>
-  const files = all
-  const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
-  return (
-    <div className="pane-scroll diff-pane">
-      <PaneHeader>
-        <span className="pane-header__note">{count(files.length, 'file')}{changes.untracked.length ? ` · ${changes.untracked.length} new` : ''}</span>
-        <button type="button" className="pane-header__button" onClick={() => void load()}>Refresh</button>
-      </PaneHeader>
-      {!files.length && !changes.untracked.length && <div className="pane-empty">No changes.</div>}
-      <Diff diff={files} />
-      {changes.untracked.length > 0 && (
-        <div className="diff-file"><div className="diff-untracked">New, not tracked yet: {changes.untracked.map((path) => (
-          <button key={path} className="diff-untracked__file" onClick={() => void openPane(machine.id, thread.id, 'editor', { path })}>{path}</button>
-        ))}</div></div>
-      )}
-    </div>
-  )
-}
-
-const openPane = (machine: string, id: string, kind: string, params: Record<string, unknown>) =>
-  window.superego.call(machine, 'pane.open', { id, kind, params })
 
 /** A file in the thread's folder, to read and edit (see FileEditor). */
 function EditorPane({ machine, thread, pane }: PaneProps) {

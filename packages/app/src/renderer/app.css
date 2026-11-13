@@ -441,8 +441,6 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .diff-row--del { background: light-dark(rgb(255 59 48 / .09), rgb(255 69 58 / .12)); color: light-dark(#b3261e, #ffb3ad); }
 :is(.diff-row--add, .diff-row--del) .diff-row__num { color: inherit; opacity: .6; }
 .diff-row--hunk { color: var(--superego-faint); padding-left: 14px; overflow: hidden; text-overflow: ellipsis; }
-.diff-untracked { padding: 8px var(--superego-space-3); font-size: var(--superego-text-sm); color: var(--superego-muted); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.diff-untracked__file { font: var(--superego-text-sm) var(--superego-mono); color: var(--superego-accent); background: none; border: 0; padding: 0; cursor: default; }
 .frame-pane, .thread-pane { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
 /* The file editor: source (monospace, line numbers) or, for Markdown, live preview (as it reads, Obsidian-like). */

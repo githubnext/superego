@@ -1,0 +1,3 @@
+/* Under the diff: the files git doesn't track yet, each a link to open it beside. */
+.diff-untracked { padding: 8px var(--superego-space-3); font-size: var(--superego-text-sm); color: var(--superego-muted); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.diff-untracked__file { font: var(--superego-text-sm) var(--superego-mono); color: var(--superego-accent); background: none; border: 0; padding: 0; cursor: default; }

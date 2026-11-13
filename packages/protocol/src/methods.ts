@@ -124,8 +124,6 @@ export type Methods = {
   'file.find': { params: { id: ThreadId; name: string }; result: { path: string | null; folder?: boolean; line?: number; outside?: boolean } }
   /** The skills on this machine (`~/.agents/skills`), which a message names as `$name` or `/skill:name`. */
   'skill.list': { params: {}; result: { name: string; description: string }[] }
-  /** What changed in a thread's folder, by git: the unified diff against HEAD, and files git doesn't track yet. */
-  'thread.diff': { params: { id: ThreadId }; result: { diff: string; untracked: string[]; repo: boolean } }
   /** A profile's UI extensions: their entry modules, and a hash that changes when any of its files do. */
   'profile.ui': { params: ProfileRef; result: { hash: string; entries: string[] } }
   /** One module of a profile's UI, as JavaScript (types stripped); its own imports are left for the window to load. */

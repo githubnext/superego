@@ -287,7 +287,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * profile's extension's are for that profile's threads only (`profile`: its folder).
    */
   const paneKinds: { kind: string; about: string; owner: string; profile?: string }[] = []
-  // Panes: the agent opens them beside its thread (a diff, a preview, an artifact it wrote, a profile's own), from the
+  // Panes: the agent opens them beside its thread (a file, a preview, an artifact it wrote, an extension's or a profile's own), from the
   // kinds its instructions list.
   const panesPart = defineExtension({
     name: 'panes',
@@ -326,11 +326,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const core: DaemonExtension[] = [
     { name: 'coding-tools', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools()) },
     {
-      name: 'panes', title: 'Panes', description: 'Open panes beside a thread: diffs, previews, files.',
+      name: 'panes', title: 'Panes', description: 'Open panes beside a thread: files, pages, other threads, and the kinds extensions add.',
       setup(s) {
         s.agent(panesPart)
-        // The window's built-in kinds (its panes.tsx).
-        s.pane('diff', 'the changes in the working folder; no params')
+        // The window's built-in kinds (its panes.tsx); extensions describe their own (git's Changes).
         s.pane('preview', '{ url }: a web page, such as a local dev server')
         s.pane('artifact', '{ path }: an HTML file in the working folder, shown as a page; write it first')
         s.pane('editor', '{ path }: a file, for the user to read and edit')
@@ -1195,15 +1194,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         /** The skills a message can name, for completing `$name` as it's typed. */
         'skill.list': async () => (await listSkills(skillsDir)).map(({ name, description }) => ({ name, description })),
         'file.find': async ({ id, name }: { id: string; name: string }) => locate((await get(id)).meta.cwd, name),
-        'thread.diff': async ({ id }: { id: string }) => {
-          const cwd = (await get(id)).meta.cwd
-          const git = (args: string[]) => new Promise<string>((done, fail) => execFile('git', ['-C', cwd, ...args], { maxBuffer: 16 * 1024 * 1024 }, (error, out) => error ? fail(error) : done(out)))
-          const repo = await git(['rev-parse', '--is-inside-work-tree']).then(() => true, () => false)
-          if (!repo) return { diff: '', untracked: [], repo: false }
-          const diff = await git(['diff', 'HEAD', '--no-color', '--no-ext-diff']).catch(() => git(['diff', '--no-color']))
-          const untracked = (await git(['ls-files', '--others', '--exclude-standard'])).split('\n').filter(Boolean)
-          return { diff, untracked, repo: true }
-        },
         // A profile's UI is its code too: served only for a real profile folder, and only once it is allowed.
         'profile.ui': async (ref: ProfileRef) => {
           if (!isProfileDir(ref, userProfiles)) throw new RpcError('not_found', `No profile at ${ref.dir}`)

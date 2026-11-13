@@ -299,22 +299,14 @@ describe('record and replay', () => {
     await close()
   })
 
-  it("reads and writes files in a thread's folder only, and diffs it by git", async () => {
-    const { execFileSync } = await import('node:child_process')
-    execFileSync('git', ['init', '-q', dir]); execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'start'])
-    await writeFile(join(dir, 'notes.md'), 'one\n')
-    execFileSync('git', ['-C', dir, 'add', 'notes.md']); execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'notes'])
+  it("reads and writes files in a thread's folder only", async () => {
     const { peer, close } = await open()
     const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
+    await writeFile(join(dir, 'notes.md'), 'one\n')
     expect((await peer.call<{ content: string }>('file.read', { id: thread.id, path: 'notes.md' })).content).toBe('one\n')
     await expect(peer.call('file.read', { id: thread.id, path: '../../etc/passwd' })).rejects.toMatchObject({ kind: 'invalid' })
     await peer.call('file.write', { id: thread.id, path: 'notes.md', content: 'two\n' })
-    await writeFile(join(dir, 'new.md'), 'new\n')
-    const changes = await peer.call<{ diff: string; untracked: string[]; repo: boolean }>('thread.diff', { id: thread.id })
-    expect(changes.repo).toBe(true)
-    expect(changes.diff).toContain('-one')
-    expect(changes.diff).toContain('+two')
-    expect(changes.untracked).toContain('new.md')
+    expect((await peer.call<{ content: string }>('file.read', { id: thread.id, path: 'notes.md' })).content).toBe('two\n')
     await close()
   })
 

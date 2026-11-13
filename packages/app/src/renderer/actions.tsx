@@ -188,10 +188,6 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
   defineWindowAction({ id: 'app.log', title: 'Show action log', run: (_p, c) => c.showLog() }),
   // Panes of the selected thread.
   defineWindowAction({
-    id: 'panes.changes', title: 'Show changes', keys: 'mod+shift+d',
-    run: async (_p, c) => { if (c.selection) await c.dispatch('pane.open', { id: c.selection.thread, kind: 'diff' }, { machine: c.selection.machine, source: 'panes' }) },
-  }),
-  defineWindowAction({
     // The pane with the focus; the focus moves left, to the pane before it or the thread. The thread itself stays.
     id: 'panes.close', title: 'Close pane', keys: 'mod+w',
     run: async (_p, c) => {
