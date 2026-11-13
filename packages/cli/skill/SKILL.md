@@ -54,6 +54,7 @@ Read only the topics the task needs. A profile with a tool needs `profiles` and 
 
 - A profile and its extensions import from `'superego'` (and UI from `'superego/ui'` and `'react'`). Nothing to
   install: the daemon and the window provide those modules. Other npm packages are not available to profiles.
+- A first extension, end to end, with diagrams and a cheat sheet: [docs/writing-extensions.md](https://github.com/mikker/superego/blob/main/docs/writing-extensions.md) in the Superego repository.
 - Names are namespaced: an extension called `vault` names its actions and live values `vault.<something>`.
 - A project's profile is code from that repo, so it runs only once allowed: `superego profile allow <name>`, again
   after any of its files change. Your own (`~/.superego/profiles`) need no allowing.

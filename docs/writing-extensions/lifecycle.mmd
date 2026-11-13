@@ -1,0 +1,10 @@
+stateDiagram-v2
+  direction LR
+  state "Set up" as SetUp
+  state "Registered, owned by it" as Owned
+  state "Torn down" as Down
+  [*] --> SetUp: daemon starts, profile loads, window opens
+  SetUp --> Owned: name claimed
+  Owned --> Down: profile files change, daemon stops
+  Down --> SetUp: reload
+  Down --> [*]

@@ -1,0 +1,10 @@
+flowchart LR
+  bundled["Bundled: extensions/&lt;name&gt;"]
+  user["~/.superego/profiles/&lt;name&gt;"]
+  project["&lt;project&gt;/.superego/profiles/&lt;name&gt;"]
+  user -->|"profile.ts"| profile["A profile"]
+  project -->|"profile.ts, once allowed"| profile
+  bundled -->|"src/daemon.ts"| dh["Daemon half"]
+  profile -->|extensions| dh
+  bundled -->|"src/ui.tsx"| uh["UI half"]
+  profile -->|ui| uh

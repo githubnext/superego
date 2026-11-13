@@ -1,5 +1,7 @@
 # Daemon extensions
 
+New to this? Start with [docs/writing-extensions.md](https://github.com/mikker/superego/blob/main/docs/writing-extensions.md): the big picture, a first extension end to end, and a cheat sheet.
+
 A daemon extension runs in the machine's daemon, next to the agents. Beyond tools, it can define **actions** (intents
 the UI and the command line run, and Ego lists), **methods** (reads a pane or list calls), publish **live values** (state
 clients watch), describe **pane kinds** to the agent, mark threads **blocked** (needing the user), and reach

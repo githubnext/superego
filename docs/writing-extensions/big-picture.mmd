@@ -1,0 +1,12 @@
+flowchart LR
+  subgraph daemon["Daemon, one per machine"]
+    agent["The agent: tools, prompt"]
+    dh["Daemon half: defineDaemonExtension"]
+  end
+  subgraph win["Window: app, browser, phone"]
+    uh["UI half: defineUiExtension"]
+  end
+  dh -->|agent| agent
+  uh -->|"dispatch: an action (intent)"| dh
+  uh -->|"call: a method (read)"| dh
+  dh -->|"useValue: a live value"| uh

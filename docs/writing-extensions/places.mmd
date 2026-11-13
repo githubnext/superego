@@ -1,0 +1,17 @@
+flowchart LR
+  rail["rail"] --- sidebar["sidebar"]
+  sidebar --- thread
+  subgraph thread["The thread"]
+    header["thread.header: badges, buttons"]
+    transcript["transcript: tool, entry, work"]
+    above["composer.above: what waits on you"]
+    composer["composer"]
+  end
+  thread --- aside["thread.aside: a column beside"]
+  thread --- panes
+  subgraph panes["Panes: pane(kind)"]
+    editor["file editor"]
+    bar["editor.bar: small buttons"]
+    side["editor.side: a tree, an outline"]
+  end
+  overlay["overlay: dialogs, over everything"]

@@ -1,5 +1,7 @@
 # Working on Superego itself
 
+New to this? Start with [docs/writing-extensions.md](https://github.com/mikker/superego/blob/main/docs/writing-extensions.md): the big picture, a first extension end to end, and a cheat sheet.
+
 For changes to the Superego repository (github.com/mikker/superego): the core, or an extension bundled with the app.
 A profile is the way to extend Superego for a project or for yourself; bundle an extension only when every Superego
 user should have it.

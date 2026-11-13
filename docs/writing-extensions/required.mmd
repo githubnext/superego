@@ -1,0 +1,6 @@
+flowchart LR
+  about["about: name, title, description, required"]
+  about -->|"required: true"| req["Always on: not in Settings, no without"]
+  about -->|optional| opt["Settings → Extensions switch per machine"]
+  opt --> off["Off, or the profile's without"]
+  off --> gone["That thread: no tools, no pane kinds, no UI"]

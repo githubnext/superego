@@ -1,5 +1,7 @@
 # UI extensions
 
+New to this? Start with [docs/writing-extensions.md](https://github.com/mikker/superego/blob/main/docs/writing-extensions.md): the big picture, a first extension end to end, and a cheat sheet.
+
 A profile's UI runs in the window, for that profile's threads only (on the machine it came from): panes, things beside
 a thread, and how its tool calls look in the transcript. List modules in the profile's `ui`; each default-exports
 `defineUiExtension`. Everything a module registers belongs to it, and goes when the profile's files change and the
