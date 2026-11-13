@@ -8,13 +8,16 @@ needs. See [PLAN.md](PLAN.md) and [docs/structure.html](docs/structure.html).
 ```sh
 pnpm install
 pnpm test               # unit + daemon/CLI e2e (scripted models)
-pnpm typecheck
+pnpm typecheck          # tsc -b, incremental
 pnpm dev                # the app; its daemon lives in ~/.superego
-pnpm --filter superego smoke  # e2e of the app, headless: nothing reaches the screen
+pnpm smoke              # e2e of the app, headless: nothing reaches the screen
 pnpm --filter superego showcase /tmp/shots   # scripted threads, screenshotted
 pnpm --filter superego package               # superego.app in app/dist
 pnpm link:cli           # `superego` on your PATH (~/.local/bin/superego -> app/bin/superego.ts)
 ```
+
+Tests, typecheck, smoke and showcase take turns across the machine (two at a time; `SUPEREGO_CHECK_SLOTS`), and smoke
+and showcase build the app only when its sources changed. See [AGENTS.md](AGENTS.md) for when to run which.
 
 ## Sessions, threads, panes
 
