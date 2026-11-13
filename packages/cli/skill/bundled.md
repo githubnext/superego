@@ -60,8 +60,8 @@ Optional is the default, and almost always right: a machine can turn it off (Set
 `title` and `description`), a profile can leave it out (`without: ['orders']`), and the app works without it. A thread
 that goes without it gets none of its agent parts or pane kinds, and the window draws none of its UI for that thread
 (`ThreadInfo.without`): its panes already open are kept with the thread but not shown, its actions not offered. `required: true` is for what the app is (the sidebar): never listed, never left out. Nothing
-else decides this. An extension whose work is all in the window still gets a daemon half of its declaration alone
-(`export default defineDaemonExtension(about)`, as `links` has), so machines know it; a required one needn't.
+else decides this. An extension whose work is all in the window needs no daemon half (`links` has none): the window
+declares its `about` to every machine it connects to, so each lists it in Settings and profiles can do without it.
 
 Then wire it in:
 

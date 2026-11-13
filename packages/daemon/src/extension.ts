@@ -13,8 +13,8 @@ import type { DaemonContext } from './daemon.ts'
 
 /**
  * A daemon half: what the extension is (`ExtensionAbout`: its name, title, description, and whether it's required),
- * and its setup. An extension whose work is all in the window has a daemon half of its declaration alone, so the
- * machine knows it: Settings lists it, and a profile can do without it.
+ * and its setup. An extension whose work is all in the window has none: the window declares it to the machine
+ * (`extensions.declare`), which then lists it in Settings and lets a profile do without it.
  */
 export type DaemonExtension = ExtensionAbout & {
   /** Called once when it's set up (the daemon starting, before interrupted work resumes; a profile loading). May return a cleanup. */

@@ -64,7 +64,13 @@ import { call, defineUiExtension, type PaneProps } from 'superego/ui'
 
 function Notes({ machine, thread }: PaneProps) {
   const [text, setText] = useState('')
-  useEffect(() => { void call<{ text: string }>(machine.id, 'notes.read', { id: thread.id }).then((r) => setText(r.text)) }, [thread.activeAt])
+  // Read again as the thread moves on. Until its profile has loaded, `notes.read` isn't there yet: the call fails, and
+  // the next one (the thread's next turn) finds it.
+  useEffect(() => {
+    let live = true
+    call<{ text: string }>(machine.id, 'notes.read', { id: thread.id }).then((r) => { if (live) setText(r.text) }, () => {})
+    return () => { live = false }
+  }, [machine.id, thread.id, thread.activeAt])
   return <pre className="pane-scroll">{text || 'No notes yet.'}</pre>
 }
 
@@ -106,7 +112,8 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `dispatch(id, params, { machine })` | run any action outside React |
 
 Names: everything is `<extension>.<something>`, except tool and pane kind names. In components: `useSelection`,
-`useMachines`, `useSessions`, `useValue`, `useDispatch`, `call`, `has(machine, 'ext:x')`; in panes `<PaneHeader>` and
+`useMachines`, `useSessions`, `useValue`, `useDispatch`, `call`, `has(machine, 'ext:x')` (whether a machine has an
+extension set up and switched on now, kept current); in panes `<PaneHeader>` and
 `useTabNote`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](../packages/cli/skill/daemon.md), [ui.md](../packages/cli/skill/ui.md).
 
 ## Places in the window
@@ -121,16 +128,23 @@ threads, and not in `sidebar` or `rail`.
 <picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/lifecycle-dark.svg"><img src="writing-extensions/lifecycle.svg" alt="Set up, registrations owned by the extension, torn down when its profile changes or the daemon stops, then set up again"></picture>
 
 - `setup` may return a cleanup. Registrations need none: teardown removes them all.
-- A name is claimed while set up: a second extension of the same name is refused.
+- A name is claimed while set up: a second extension of the same name is refused. The core's namespaces (`thread`,
+  `value`, `settings`, …) are never free.
 - A profile's daemon half loads with its first turn, when a window shows one of its threads, or before an interrupted
   run of it resumes. A project's profile runs only once allowed (`superego profile allow`).
+- Profiles that name the same file (one `extends` another, or both list it) share one set-up of it, torn down after
+  the last lets go. Each gets its agent parts.
+- A change loads between runs, never under one: a thread mid-run keeps what it started with. A profile whose folder
+  is gone, or that no longer loads or is allowed, is torn down, and its UI with it. A value torn down reads null.
 
 Bundled extensions also declare whether they're required, once, in `about` (spread into both halves):
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/required-dark.svg"><img src="writing-extensions/required.svg" alt="A required extension is always on; an optional one can be switched off per machine or left out by a profile, and that thread then has none of its tools, pane kinds or UI"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/required-dark.svg"><img src="writing-extensions/required.svg" alt="A required extension is always on; an optional one can be switched off per machine or left out by a profile, and that thread then has none of its agent parts or UI"></picture>
 
 Only the sidebar (`threads`) is required. Everything else is optional, the core's own `coding-tools`, `panes`,
-`agents-md` and `thread-tools` included.
+`agents-md` and `thread-tools` included. The core's `panes` is the agent's `open_pane`: switched off, the agent can't
+open panes, but the window's own pane kinds stay, being the required core's. An extension with a UI half only needs no
+daemon half: the window declares it to each machine, which lists it and lets profiles do without it.
 
 ## Real ones to read
 
@@ -144,7 +158,7 @@ Only the sidebar (`threads`) is required. Everything else is optional, the core'
 | [`web-panes`](../extensions/web-panes/src) | two pane kinds and nothing else; `urls: true` makes web links open in one |
 | [`skills`](../extensions/skills/src) | a prompt section, a `submit` transform, a `method`; `composer.complete` and `composer.sentWith` |
 | [`files`](../extensions/files/src) | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
-| [`links`](../extensions/links/src) | UI only, with a daemon half that only declares it |
+| [`links`](../extensions/links/src) | UI only: the window declares it to the machine |
 | [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings |
 
 Diagram sources are the `.mmd` files in [writing-extensions/](writing-extensions/); re-render with the `diagram` skill
