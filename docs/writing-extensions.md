@@ -103,7 +103,9 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 
 | UI half (`superego.` in `setup`) | For |
 |---|---|
-| `slot(name, Component, { order })` | a component in a place in the window (below) |
+| `slot(name, Component, { order, fallback })` | a component in a place in the window (below); `fallback`: only while nothing else is there |
+| `on(event, listener)` → off; `window` | hear the window: `thread.status` (`{ machine, thread, before }`; `before` undefined the first time it's seen), `select` (`{ selection, before }`), `focus` (`{ focused }`), `visibility` (`{ visible }`); `window` is `{ focused, visible, selection, thread }` now. In Electron and browsers alike |
+| `appSetting(key)` | one of the app's settings as it is now, outside React |
 | `pane(kind, { title, component, icon, file, menu, opens, fallback, folders, urls, width })` | a kind of pane beside the thread; `opens`, `folders`, `urls`: files, folders or web pages a thread names open in it; `fallback`: any file nothing else opens |
 | `tool(name, { icon, verbs, subject, stat, meta, body, phrase, file, weight }, { fold })` | how calls to a tool look, described: `verbs: ['Read', 'Reading', 'Read failed']`, `subject(call)` after the verb, `body(call)` what it opens to, `phrase(count)` in a run's line ("read 2 files"); the rest default. The core's coding tools and `threads`' thread tools are rows too |
 | `tool(name, Component, { fold })` | how calls to a tool look, drawn whole; `fold: false` shows them outside the run's fold (images) |
@@ -132,8 +134,26 @@ keep working.
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/places-dark.svg"><img src="writing-extensions/places.svg" alt="The window: rail, sidebar, the thread with its header, transcript and composer.above, thread.aside, panes with the editor's bar and side, and an overlay over everything"></picture>
 
-Thread slots get `{ machine, thread }`; editor slots also `path` and `open(path)`. A profile's UI draws only in its own
-threads, and not in `sidebar` or `rail`.
+Thread slots get `{ machine, thread }`; editor slots also `path` and `open(path)`. On a phone there's no rail: `footer`,
+under the sidebar beside Settings, takes its place. A profile's UI draws only in its own threads, and not in `sidebar`,
+`rail` or `footer`.
+
+## Hearing the window
+
+`on` tells a UI half what happens in the window, whatever it draws. Listening is owned like everything else, and stops
+at teardown. A thread that goes without the extension isn't heard of; a profile hears only its own threads.
+
+```ts
+// notifications: a thread wants a look while the window is in the background.
+superego.on('thread.status', ({ machine, thread, before }) => {
+  if (before === undefined || (superego.window.focused && superego.window.visible)) return
+  const notice = threadNotice(machine, thread)          // finished, failed or needs you; else nothing
+  if (notice) void call('app', 'app.notify', notice)    // the desktop's notification, or the browser's
+})
+```
+
+`window` is how things are as the event arrives: `focused`, `visible`, the `selection` and the `thread` it shows. The
+core marks a finished thread seen the same way, on `select`, `focus` and `thread.status`.
 
 ## Lifecycle and ownership
 
@@ -220,6 +240,8 @@ to each machine, which lists it and lets profiles do without it.
 | [`skills`](../extensions/skills/src) | a prompt section, a `submit` transform, a `method`; `composer.complete` and `composer.sentWith` |
 | [`files`](../extensions/files/src) | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | [`links`](../extensions/links/src) | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
+| [`unread`](../extensions/unread/src) | UI only: a `rail` slot as a `fallback`, the phone's `footer`, an action with keys reading sessions, an app setting |
+| [`notifications`](../extensions/notifications/src) | UI only: `on('thread.status')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
 | [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings, tool rows and a `link`; its daemon half is another, optional extension (`thread-tools`), on `superego.threads` |
 | [`worktrees`](../packages/daemon/src/worktrees.ts) | the core's, for now: `thread` hooks, `state` and `facts` |
 

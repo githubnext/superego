@@ -72,7 +72,7 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
 | `⌘P` | Open a file in the thread's folder |
 | `⌘N` | New thread |
 | `⌘⇧N` | New window |
-| `⌘.` | Next unread thread (everywhere, or in this session: Settings → Navigation) |
+| `⌘.` | Next unread thread (everywhere, or in this session: Settings → Unread) |
 | `⌘⇧[` `⌘⇧]` | Previous / next thread: up or down the sidebar's rows as shown (threads a thread started sit under it), across sessions and around |
 | `⌘[` `⌘]` | Back / forward through the threads (and Settings) this window has shown, as a browser goes; the arrows in the title bar and the mouse's back and forward buttons too |
 | `⌃Tab` `⌃⇧Tab` | The thread and its panes, in turn |
@@ -109,6 +109,8 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `extensions/web-panes` | Preview, a web page beside the thread (a link it names, opened beside), and Artifact, an HTML file the agent wrote, sandboxed (daemon + UI) |
 | `extensions/files` | the file tree beside the editor and quick open (`⌘P`) (daemon + UI) |
 | `extensions/images` | a `show_images` tool; the images in the thread, as one, a grid or a carousel, and a lightbox to zoom (daemon + UI) |
+| `extensions/unread` | the bell with what agents have for you that you haven't seen (in the rail when the sidebar isn't there, beside Settings on a phone), most pressing first; `⌘.` to the next, everywhere or in this session (UI only) |
+| `extensions/notifications` | a notification when a thread finishes, fails or needs you while the window is in the background; clicking it shows the thread. On the desktop, and in a browser once you allow it (offered over the composer while a thread works). With no window open, the desktop app notifies by itself; the menu bar keeps its count either way (UI only) |
 | `extensions/links` | ⌃O: the links in the thread, newest first, fuzzy filtered; ⏎ follows one, ⌘⏎ opens it in a pane, ⌃1–9 / ⌃⌘1–9 the first nine (UI only) |
 | `extensions/skills` | skills from `~/.agents/skills`: what each is for in the prompt, `$name` completed in the composer and sent with the message, a chip under it (daemon + UI) |
 | `extensions/suggestions` | after each answer, a side call to the thread's model for what you might send next; offered over the composer, numbered; ←/→ pick, ⏎ sends, ⇥ takes it to change, ⌃1–9 send that one (daemon + UI) |
@@ -192,4 +194,5 @@ notes as a graph and as notes edited in place, with search and backlink tools fo
 
 Settings → a machine → Web access: serve the app to this computer or the local network. Open the address it shows (it
 carries a token); on a phone, add it to the home screen. Each pane is a screen wide there, and a swipe moves between
-the thread and its panes.
+the thread and its panes. A browser notifies like the desktop app once allowed: the first time a thread works, a pill
+over the composer offers it. A phone's browser shows them only from a service worker, which there isn't yet.

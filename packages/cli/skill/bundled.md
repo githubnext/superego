@@ -70,12 +70,12 @@ Then wire it in:
 1. `app/package.json`: `"@superego/orders": "workspace:*"`, then `pnpm install`.
 2. `app/src/daemon.ts`: add the daemon half to `extensions: [...]` (and to `app/native/daemon.ts`, the native shell's).
 3. `app/src/renderer/main.tsx`: add the UI half to `mountApp(app, { extensions: [...] })`.
-4. Root `package.json`: add `tsc -p extensions/orders` to `typecheck`.
+4. Root `tsconfig.json`: add `{ "path": "extensions/orders" }` to `references`, or `pnpm typecheck` skips it.
 5. The README's layout table: a line for it.
 
 Bundled extensions get more than a profile's:
 
-- **Every slot**, including `sidebar`, and **`superego.work(divide)`** to group a run of work in the transcript
+- **Every slot**, including `sidebar`, `rail` and `footer` (a phone's, beside Settings), and **`superego.work(divide)`** to group a run of work in the transcript
   (as `tasks` does).
 - **Window actions** with keys: `superego.action(defineAction({ id: 'orders.open', title, keys: 'mod+shift+o', when, run(params, context) { … } }))`;
   ids start with the extension's name. `when(context)` says when keys and the palette offer it (`(c) => Boolean(c.selection)`);
