@@ -8,7 +8,7 @@ import { completionsIn, divideWork, entryView, fileKind, folderKind, paneMenu, s
 import { useShell } from './state.tsx'
 import { useShortcut } from './keys.ts'
 import { ctrlDigit } from './shortcuts.ts'
-import { Markdown, OpenFile, OpenUrl, Scroll, ThreadMachine } from './Markdown.tsx'
+import { Images, imagesIn, Markdown, OpenFile, OpenUrl, Scroll, ThreadMachine } from './Markdown.tsx'
 import { ThreadRef } from './thread-ref.tsx'
 import { useLocalState } from './local-state.ts'
 import { readAttachment, splitMessage } from './attachments.ts'
@@ -263,6 +263,9 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
     if (el && view && !atStart && !older.loading && el.scrollHeight <= el.clientHeight + 200) loadOlder()
   }, [view, atStart, older.loading])
 
+  // Its images, in messages: files of its folder on its machine.
+  const images = useMemo(() => imagesIn(machine, thread.id, thread.cwd), [machine, thread.id, thread.cwd])
+
   // At the end, the transcript stays at its end as anything changes size: a reply streaming in, a step opening, code
   // laid out, the composer floating over the end growing (suggestions, a question, files; the transcript keeps room for
   // it below its end, --dock). Scrolled up past the dead zone (PINNED), it stays where it was put.
@@ -285,6 +288,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
     <OpenUrl.Provider value={webKind ? openUrl : undefined}>
     <ThreadMachine.Provider value={machine.id}>
     <Here.Provider value={{ machine, thread }}>
+    <Images.Provider value={images}>
     <div className="thread">
       {/* The thread itself can hold the focus, to read and scroll from the keyboard; typing there goes on to the prompt (space pages down). */}
       <div className="thread__scroll" ref={scroller} tabIndex={-1}
@@ -306,6 +310,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
       </div>
       <Composer machine={machine} thread={thread} busy={Boolean(live?.run)} onJump={away ? jumpToEnd : undefined} />
     </div>
+    </Images.Provider>
     </Here.Provider>
     </ThreadMachine.Provider>
     </OpenUrl.Provider>

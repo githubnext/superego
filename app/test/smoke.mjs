@@ -144,7 +144,7 @@ if (phase === 'first') {
   picture('wide', 1280, 720, 40)
   picture('a', 640, 480, 200); picture('b', 640, 480, 120); picture('gone', 480, 640, 10)
   for (const n of [1, 2, 3, 4, 5, 6]) picture(String(n), 900 - n * 40, 600, n * 37)
-  const showing = await run(`window.superego.call('local', 'thread.create', {}).then((s) => window.superego.call('local', 'thread.submit', { id: s.id, text: 'show me the screens' }).then(() => s.id))`)
+  const showing = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(shots)} }).then((s) => window.superego.call('local', 'thread.submit', { id: s.id, text: 'show me the screens' }).then(() => s.id))`)
   await until(`window.superego.call('local', 'thread.list', {}).then((list) => list.find((t) => t.id === '${showing}')?.status.state === 'done')`, 'images shown by the agent')
   // One shown file gone from the machine before anyone looks: that one is broken, the rest still show.
   const shownDir = `${process.env.SUPEREGO_HOME}/attachments/${showing}/shown`
@@ -191,6 +191,25 @@ if (phase === 'first') {
   await until(`document.querySelector('.lightbox__broken')?.textContent.includes('gone.png')`, 'the gone one, broken in the lightbox too')
   await key2('Escape')
   await until(`!document.querySelector('.lightbox') && document.activeElement === document.querySelector('.images--grid .images__frame')`, 'lightbox closed by Escape, focus back')
+  // Its answer's own images, inline: read from the thread's folder (by a relative path, file:// or a whole one), fitted
+  // to the column; one outside the folder is refused, quietly, saying why. Any opens in the same lightbox, through the
+  // message's images.
+  const inline = `[...document.querySelectorAll('.msg__text .image-frame--inline')]`
+  await until(`(() => { const m = ${inline}; m[0]?.scrollIntoView({ block: 'center' }); return m.length === 4 })()`, 'inline images in the answer')
+  await until(`${inline}.slice(0, 3).every((f) => f.classList.contains('is-ready') && f.querySelector('img').src.startsWith('blob:'))`, 'inline images read from the thread’s folder')
+  await until(`(() => { const f = ${inline}[3]; return f.classList.contains('is-broken') && f.textContent === 'Elsewhere' && f.title.includes("outside the thread's folder") })()`, 'an image outside the folder, refused')
+  if (!await run(`${inline}.every((f) => f.getBoundingClientRect().right <= f.closest('.msg').getBoundingClientRect().right + 0.5)`)) await fail('inline images overflow the message')
+  await run(`${inline}[3].scrollIntoView({ block: 'center' })`)
+  await new Promise((r) => setTimeout(r, 300))
+  await shot('message-images')
+  await run(`${inline}[0].click()`)
+  await until(`document.querySelector('.lightbox .lightbox__image.is-ready') && document.querySelector('.lightbox__count')?.textContent === '1 / 4'`, 'an inline image in the lightbox')
+  await new Promise((r) => setTimeout(r, 400))
+  await shot('message-images-lightbox')
+  await key2('ArrowRight')
+  await until(`document.querySelector('.lightbox__count')?.textContent === '2 / 4' && Boolean(document.querySelector('.lightbox .lightbox__image.is-ready'))`, 'lightbox → the message’s next image')
+  await key2('Escape')
+  await until(`!document.querySelector('.lightbox')`, 'inline lightbox closed by Escape')
   await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: 'faux/faux-1' })`)
   void asking
   // Unread results elsewhere: a dot on Threads in the rail, and the thread's own in the list, to go to.
