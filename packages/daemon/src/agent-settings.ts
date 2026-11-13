@@ -35,7 +35,7 @@ class FileCredentialStore implements CredentialStore {
   modify(providerId: string, fn: (current: Credential | undefined) => Promise<Credential | undefined>) {
     return this.#serial(async () => {
       const all = await this.#load()
-      const next = await fn(all[providerId])
+      const next = await fn(all[providerId]).catch((error: unknown) => { throw withCause(error) })
       if (!next) return all[providerId]
       all[providerId] = next
       await this.#save(all)
@@ -67,6 +67,17 @@ class FileCredentialStore implements CredentialStore {
     await writeFile(temp, JSON.stringify(all, null, 2), { mode: 0o600 })
     await rename(temp, this.path)
   }
+}
+
+/**
+ * A failed refresh (run under the store's lock) says only "OAuth refresh failed for <provider>": with the token
+ * endpoint's own answer added, a run that fails on it says whether the token was refused or the network failed.
+ */
+function withCause(error: unknown) {
+  if (error instanceof Error && error.cause instanceof Error && /^OAuth refresh failed\b/.test(error.message) && !error.message.includes(': ')) {
+    error.message = `${error.message}: ${error.cause.message}`
+  }
+  return error
 }
 
 /** `provider`, asking every request for OpenAI's priority tier while `fast()` says so. */

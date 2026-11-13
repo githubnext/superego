@@ -103,7 +103,8 @@ it('waits again when the new key is rejected too, without retrying on its own', 
   await until(() => watched.now()?.runFailure?.taskId !== firstTask && !watched.now()?.run)
   await until(() => waiting(peer, ids))
   await until(() => value.now()[0]?.threads.length === 2 && value.now()[0]!.since > firstSince)
-  expect(watched.now()!.runFailure!.detail).toContain('invalid x-api-key')
+  // Rejected by the provider, or, when the other thread's retry was rejected first, refused without asking it.
+  expect(watched.now()!.runFailure!.detail).toMatch(/invalid x-api-key|^Waiting for sign-in: /)
 
   // And it stays so: no retrying until the credentials change again, or someone asks.
   const settled = watched.now()!.runFailure!.taskId

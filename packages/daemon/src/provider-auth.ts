@@ -15,8 +15,15 @@ export const WAITING = 'Waiting for sign-in:'
  */
 export function authFailure(error: string | undefined): boolean {
   if (!error) return false
+  // A refresh that failed counts only when the token endpoint refused the token: one it couldn't reach, that timed
+  // out or failed itself (a 5xx) is the network's, and the run fails as any other error does.
+  if (REFRESH.test(error)) return REFUSED.test(error)
   return AUTH.some((pattern) => pattern.test(error))
 }
+
+const REFRESH = /\b(?:OAuth|token) refresh\b/i
+/** A token endpoint refusing a refresh token: OAuth's invalid_grant (expired, revoked, reused), or a 401. */
+const REFUSED = /\binvalid_grant\b|\b(?:invalid_token|unauthorized_client|refresh_token_(?:reused|expired|invalid|revoked))\b|\bfailed \(401\)|\bstatus=401\b|\brefresh token (?:\w+ )?(?:is |has been |was )?(?:expired|revoked|invalid|not found)\b/i
 
 const AUTH = [
   // Anthropic: 401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}
@@ -32,8 +39,7 @@ const AUTH = [
   // A gateway's: 503 credential validation failed
   /\bcredential validation failed\b/i,
   // pi resolving auth before the request: a refresh that failed, a key it couldn't read, nothing to sign in with.
-  /\bOAuth (?:refresh|auth derivation) failed\b/i,
-  /\btoken refresh failed\b/i,
+  /\bOAuth auth derivation failed\b/i,
   /\bAPI key auth failed for provider\b/i,
   /\bProvider is not configured\b/i,
   // A bare 401, however the provider words the rest.
