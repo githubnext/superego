@@ -3,7 +3,7 @@ import type { Status, ThreadInfo } from '@superego/protocol'
 import { noticeFor } from '../src/notify.ts'
 
 const thread = (state: Status['state'], msg?: string): ThreadInfo =>
-  ({ id: 't', title: 'Fix the build', cwd: '/', createdAt: 0, activeAt: 0, status: { state, ...(msg ? { msg } : {}) } })
+  ({ id: 't', title: 'Fix the build', cwd: '/', createdAt: 0, activeAt: 0, session: { root: '/', name: '/' }, status: { state, ...(msg ? { msg } : {}) } })
 const away = { focused: false, visible: true }
 
 it('says a thread finished, failed or needs you', () => {

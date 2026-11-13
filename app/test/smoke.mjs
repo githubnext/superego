@@ -515,10 +515,16 @@ if (phase === 'first') {
   const { mkdirSync } = await import('node:fs')
   const elsewhere = `${process.env.SUPEREGO_HOME}/elsewhere`
   mkdirSync(elsewhere, { recursive: true })
+  // With the window in the background, a thread finishing is a notification (headless, collected here, not shown).
+  globalThis.superegoNotices = []
+  await run(`window.dispatchEvent(new Event('blur'))`)
   const other = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'elsewhere', prompt: 'hi' }).then((t) => t.id)`)
   await until(`[...document.querySelectorAll('.threads-session__name')].some((n) => n.textContent.startsWith('elsewhere'))`, 'a session per project')
   // ⌘. : the next thread with something unread, here the new one once it has answered.
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('elsewhere') && li.querySelector('.superego-status--done'))`, 'other thread done, in the window')
+  for (let i = 0; i < 50 && !globalThis.superegoNotices.some((n) => n.title === 'elsewhere' && n.body === 'Finished'); i++) await new Promise((r) => setTimeout(r, 100))
+  if (!globalThis.superegoNotices.some((n) => n.title === 'elsewhere' && n.thread === other)) { await fail(`no notification of the thread finishing: ${JSON.stringify(globalThis.superegoNotices)}`); throw new Error('failed') }
+  await run(`window.dispatchEvent(new Event('focus'))`)
   // Each press goes to the next unread one; looking at it marks it seen, so the presses reach the new one.
   for (let press = 0; press < 6 && await run(`document.querySelector('.thread__title')?.textContent`) !== 'elsewhere'; press++) {
     const was = await run(`document.querySelector('.thread__title')?.textContent`)
@@ -839,6 +845,14 @@ if (phase === 'first') {
   if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-drawer.png`, (await browser.webContents.capturePage()).toPNG())
   await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await inBrowser(`!document.querySelector('.app__sidebar')`, 'drawer closes on picking a thread')
+  // A thread finishing while another is shown: Unread, beside Settings in the drawer, has it, and goes there.
+  await browser.webContents.executeJavaScript(`window.superego.call('local', 'thread.create', { title: 'unread on the phone', prompt: 'finish while away' })`)
+  await browser.webContents.executeJavaScript(`document.querySelector('.app__mobilebar button').click()`)
+  await inBrowser(`Boolean(document.querySelector('.app__footer .unread-button'))`, 'Unread beside Settings on a phone')
+  await browser.webContents.executeJavaScript(`document.querySelector('.app__footer .unread-button').click()`)
+  await inBrowser(`[...document.querySelectorAll('.unread-menu .superego-menu__item')].some((i) => i.textContent.includes('unread on the phone'))`, 'the finished thread in Unread')
+  await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.unread-menu .superego-menu__item')].find((i) => i.textContent.includes('unread on the phone')).click()`)
+  await inBrowser(`document.querySelector('.app__mobilebar')?.textContent.includes('unread on the phone') && !document.querySelector('.app__sidebar')`, 'Unread went to the thread')
   // Images over the WebSocket, on a phone: the thread's images load, and the lightbox fills the screen.
   await browser.webContents.executeJavaScript(`document.querySelector('.app__mobilebar button').click()`)
   await inBrowser(`Boolean(document.querySelector('.app.has-drawer .app__sidebar'))`, 'drawer open again')

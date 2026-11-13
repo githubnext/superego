@@ -63,6 +63,10 @@ export function useWindowEvents(registry: Registry, { threads, ego, selection, s
       const visible = document.visibilityState !== 'hidden'
       if (visible !== registry.window.visible) registry.emit('visibility', { visible })
     }
+    // As the window is by now: the registry guessed when it was made, before the page had settled.
+    if (document.hasFocus()) focus()
+    else blur()
+    visibility()
     window.addEventListener('focus', focus)
     window.addEventListener('blur', blur)
     document.addEventListener('visibilitychange', visibility)
