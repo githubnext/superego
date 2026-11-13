@@ -1,4 +1,5 @@
-// The app's own settings: the sort the sidebar kept as `threads.sort` is the window's `app.sort` now, on the desktop.
+// The app's own settings: the sort the sidebar kept as `threads.sort` is the window's `app.sort` now, on the desktop, and
+// a shortcut set for an action that moved is the new action's.
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,5 +17,16 @@ it('reads the sort kept as threads.sort as app.sort, and saves it so', async () 
   const saved = JSON.parse(await readFile(join(dir, 'app-settings.json'), 'utf8'))
   expect(saved['app.sort']).toBe('status')
   expect(saved).not.toHaveProperty('threads.sort')
+  await rm(dir, { recursive: true, force: true })
+})
+
+it("reads a shortcut set for an action's old id as the new one's, and saves it so", async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'superego-app-settings-'))
+  await writeFile(join(dir, 'app-settings.json'), JSON.stringify({ 'app.keys': { 'panes.changes': 'mod+alt+d', 'thread.new': null } }))
+  const settings = createAppSettings(dir, defineApp({ name: 'superego', id: 'superego' }))
+  expect(settings.get('app.keys')).toEqual({ 'git.changes': 'mod+alt+d', 'thread.new': null })
+  await settings.set('app.keys', { ...settings.get('app.keys') as object, 'thread.new': 'mod+n' })
+  const saved = JSON.parse(await readFile(join(dir, 'app-settings.json'), 'utf8'))
+  expect(saved['app.keys']).toEqual({ 'git.changes': 'mod+alt+d', 'thread.new': 'mod+n' })
   await rm(dir, { recursive: true, force: true })
 })

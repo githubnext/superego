@@ -3,6 +3,7 @@
 export type MachineId = string
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected'
 import type { MachineConfig } from '@superego/client/shared'
+import type { SettingsStore } from '@superego/settings'
 
 export type { MachineConfig }
 
@@ -23,6 +24,30 @@ export type MachineEntry = {
 export const APP_MOVED: Record<string, string> = {
   // The order sessions and threads go in is the window's own (the navigator and ⌘⇧[ ] walk it), not the sidebar's.
   'threads.sort': 'app.sort',
+}
+
+/** Actions known by another id now: a shortcut set for the old one (in `app.keys`) is the new one's. */
+export const ACTIONS_MOVED: Record<string, string> = {
+  // Changes moved into the git extension.
+  'panes.changes': 'git.changes',
+}
+
+/** `store` with what `app.keys` holds for an action's old id read as its new one's (and saved so). */
+export function withMovedActions(store: SettingsStore): SettingsStore {
+  return {
+    load() {
+      const values = store.load()
+      const keys = values['app.keys']
+      if (!keys || typeof keys !== 'object' || Array.isArray(keys)) return values
+      const moved = { ...keys }
+      for (const [old, now] of Object.entries(ACTIONS_MOVED)) {
+        if (old in moved && !(now in moved)) moved[now] = moved[old]!
+        delete moved[old]
+      }
+      return { ...values, 'app.keys': moved }
+    },
+    save: (values) => store.save(values),
+  }
 }
 
 /** A notification from a machine's daemon, `$connection` when a link's state changes, or `$machines` with the whole list. */

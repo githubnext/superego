@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { SettingsRegistry, withMovedKeys } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import type { AppConfig } from '@superego/protocol'
-import { APP_MOVED, TEXT_SIZES } from '../shared.ts'
+import { APP_MOVED, TEXT_SIZES, withMovedActions } from '../shared.ts'
 
 export const APP = 'app'
 export const APP_KEYS = {
@@ -13,7 +13,7 @@ export const APP_KEYS = {
 } as const
 
 export function createAppSettings(dataDir: string, app: AppConfig) {
-  const settings = new SettingsRegistry(withMovedKeys(new FileSettingsStore(join(dataDir, 'app-settings.json')), APP_MOVED))
+  const settings = new SettingsRegistry(withMovedActions(withMovedKeys(new FileSettingsStore(join(dataDir, 'app-settings.json')), APP_MOVED)))
   settings.register({
     id: 'appearance', title: 'Appearance', order: 50,
     settings: [
