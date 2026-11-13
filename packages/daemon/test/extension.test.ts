@@ -126,3 +126,11 @@ it('tells clients when what it offers changes: an extension switched off, or set
   expect(told[1]).toContain('ext:links')
   await close()
 })
+
+it("reserves the core's namespaces: every core method and action is in one, and no extension takes one", async () => {
+  const { RESERVED } = await import('../src/daemon.ts')
+  const { hello, close } = await open([])
+  for (const method of hello.methods) expect(RESERVED, method).toContain(method.split('.')[0])
+  await close()
+  await expect(open([defineDaemonExtension({ name: 'thread', setup() {} })])).rejects.toThrow(/core's own/)
+})

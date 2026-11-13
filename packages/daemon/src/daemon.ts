@@ -47,6 +47,15 @@ const MOVED = {
   'extensions.threads': 'extensions.thread-tools',
 }
 
+/**
+ * Names no extension can take: the core's own namespaces (its methods, actions and settings are `<namespace>.<…>`), so
+ * an extension's method can't be shadowed by the core's, nor its settings mixed in with them. A test keeps it in step.
+ */
+export const RESERVED = new Set([
+  'action', 'agent', 'app', 'auth', 'core', 'daemon', 'extensions', 'file', 'hello', 'meta', 'model', 'pane', 'profile', 'profiles',
+  'providers', 'settings', 'skill', 'thread', 'threads', 'unwatch', 'value', 'watch', 'web',
+])
+
 /** What a worktree being deleted is renamed with, between its name and a random suffix (see removeWorktree). */
 const REMOVING = '.removing-'
 
@@ -576,6 +585,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    */
   async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension) => () => void, profiles?: Set<string>): Promise<() => void> {
     if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
+    if (RESERVED.has(extension.name)) throw new Error(`The name ${extension.name} is the core's own`)
     if (claimed.has(extension.name)) throw new Error(`An extension named ${extension.name} is already set up`)
     claimed.add(extension.name)
     announced.add(extension.name)
