@@ -13,7 +13,7 @@ import { mergeSettings, type MergedSetting } from './merge-settings.ts'
 import { Keymap } from './Keymap.tsx'
 import { driftNote, MachineDrift } from './machine-drift.tsx'
 import { settingsView, useApp, useRegistry } from './extension.tsx'
-import { useAllowedUi } from './profile-ui.ts'
+import { useAllowedUi, useDeclinedUi } from './profile-ui.ts'
 import { sizeOf } from './profile-ui-notice.tsx'
 
 const APP = 'app'
@@ -341,6 +341,7 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
   const dispatch = useRegistry().router.dispatch
   const act = (id: string, params: Record<string, unknown>) => { setError(undefined); return dispatch(id, params, { machine: APP, source: 'settings' }).catch((e: Error) => { setError(e.message); throw e }) }
   const allowedUi = useAllowedUi()
+  const declinedUi = useDeclinedUi()
 
   return (
     <section className="settings-section">
@@ -369,6 +370,13 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
               <div key={a.profile.dir} className="settings__note machine-row__ui" title={a.profile.dir}>
                 <span>Profile <b>{a.profile.name}</b>’s UI runs here · {a.files.length === 1 ? '1 file' : `${a.files.length} files`}, {sizeOf(a.files.reduce((sum, f) => sum + f.size, 0))}</span>
                 <Button onClick={() => void act('profiles.revokeUi', { machine: m.id, dir: a.profile.dir }).catch(() => {})}>Revoke</Button>
+              </div>
+            ))}
+            {/* And the ones put off ("Not now"), for the sources they were then: to allow from here too. */}
+            {declinedUi.filter((d) => d.machine === m.id).map((d) => (
+              <div key={d.profile.dir} className="settings__note machine-row__ui" title={d.profile.dir}>
+                <span>Profile <b>{d.profile.name}</b>’s UI isn’t allowed · {d.files.length === 1 ? '1 file' : `${d.files.length} files`}, {sizeOf(d.files.reduce((sum, f) => sum + f.size, 0))}</span>
+                <Button onClick={() => void act('profiles.allowUi', { machine: m.id, profile: d.profile, hash: d.hash, files: d.files }).catch(() => {})}>Allow</Button>
               </div>
             ))}
           </div>

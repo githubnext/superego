@@ -329,6 +329,9 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .profile-ui-notice__files { list-style: none; margin: 6px 0 0; padding: 0; color: var(--superego-muted); }
 .profile-ui-notice__file { font: inherit; font-family: var(--superego-mono); color: var(--superego-text); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--superego-border); text-underline-offset: 2px; }
 .profile-ui-notice__file:hover { text-decoration-color: currentColor; }
+/* Put off ("Not now"): among the header's chips, quiet, asking again when clicked. */
+.profile-ui-marker { flex: none; font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap; }
+.profile-ui-marker:hover { color: var(--superego-text); }
 .profile-source { padding: 12px 16px; overflow: auto; height: 100%; box-sizing: border-box; }
 .profile-source pre { margin-top: 8px; }
 .machine-row__ui { margin-top: 4px; display: flex; align-items: center; gap: 8px; }

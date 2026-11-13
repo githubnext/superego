@@ -1,12 +1,14 @@
 // Over the composer of a thread whose profile, on another machine, has UI not allowed in this window: one quiet notice
-// to allow it or not, and what it is (its files, each to read as it would run, in a pane). See profile-ui.ts.
+// to allow it or not, and what it is (its files, each to read as it would run, in a pane). Put off ("Not now"), it's
+// remembered on this computer for those sources, and the thread's header says so instead, a click from asking again.
+// See profile-ui.ts.
 import { useState } from 'react'
 import { Button, FileTextIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import type { PaneProps, UiApi } from './extension.tsx'
 import type { ThreadInfo } from '@superego/protocol'
 import { Markdown } from './Markdown.tsx'
-import { dismissUi, usePendingUi, useProfileSource } from './profile-ui.ts'
+import { declineUi, reopenUi, usePendingUi, useProfileSource } from './profile-ui.ts'
 import { useRegistry } from './extension.tsx'
 
 /** A size in bytes, as people say it. */
@@ -14,6 +16,7 @@ export const sizeOf = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1
 
 export function registerProfileUi(core: UiApi) {
   core.slot('composer.above', ProfileUiNotice, { order: 50 })
+  core.slot('thread.crumb', ProfileUiMarker)
   core.pane('profile-source', {
     title: (pane) => (pane.params as { path?: string } | undefined)?.path?.split('/').at(-1) ?? 'Profile UI', icon: FileTextIcon, file: true, component: SourcePane,
   })
@@ -24,13 +27,14 @@ function ProfileUiNotice({ machine, thread }: { machine: MachineEntry; thread: T
   const dispatch = useRegistry().router.dispatch
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string>()
-  if (!pending || thread.archived) return null
+  if (!pending || pending.declined || thread.archived) return null
   const total = pending.files.reduce((sum, file) => sum + file.size, 0)
-  const allow = () => {
+  const say = (id: 'profiles.allowUi' | 'profiles.declineUi') => {
     setError(undefined)
-    const { machine: id, profile, hash, files } = pending
-    void dispatch('profiles.allowUi', { machine: id, profile, hash, files }, { machine: 'app', source: 'profile-ui' }).catch((e: Error) => setError(e.message))
+    const { machine, profile, hash, files } = pending
+    return dispatch(id, { machine, profile, hash, files }, { machine: 'app', source: 'profile-ui' }).catch((e: Error) => { setError(e.message); throw e })
   }
+  const notNow = () => void say('profiles.declineUi').then(() => declineUi(pending), () => {})
   const show = (path: string) => void dispatch('pane.open', {
     id: thread.id, kind: 'profile-source', params: { dir: pending.profile.dir, name: pending.profile.name, path },
   }, { machine: machine.id, source: 'profile-ui' })
@@ -45,14 +49,26 @@ function ProfileUiNotice({ machine, thread }: { machine: MachineEntry; thread: T
         </ul>
       )}
       <div className="profile-ui-notice__actions">
-        <Button variant="primary" onClick={allow}>Allow</Button>
-        <Button onClick={() => dismissUi(pending)}>Not now</Button>
+        <Button variant="primary" onClick={() => void say('profiles.allowUi').catch(() => {})}>Allow</Button>
+        <Button onClick={notNow}>Not now</Button>
         <Button variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
           {pending.files.length === 1 ? '1 file' : `${pending.files.length} files`}, {sizeOf(total)}
         </Button>
       </div>
       {error && <div className="setting__error">{error}</div>}
     </div>
+  )
+}
+
+/** Put off for now: a quiet word among the header's chips, that asks again (the notice) when clicked. */
+function ProfileUiMarker({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
+  const pending = usePendingUi(machine.id, thread.profile)
+  if (!pending?.declined || thread.archived) return null
+  return (
+    <button type="button" className="titlebar__chip profile-ui-marker" title={`${machine.label}’s profile ${pending.profile.name} has UI code, not allowed to run here`}
+      onClick={() => reopenUi(pending, true)}>
+      UI not allowed
+    </button>
   )
 }
 

@@ -66,17 +66,24 @@ const loadProfileUi: LoadUi = async (profile, sources) => {
 
 // ── Allowed here ────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** The remote profile UIs this computer allows (the app's ui-allowed.json), kept current as the app says. */
+/**
+ * The remote profile UIs this computer allows (the app's ui-allowed.json), and the ones it put off for now
+ * (ui-declined.json): kept current as the app says.
+ */
 let allowed: AllowedUi[] = []
+let declined: AllowedUi[] = []
 let allowedLoad: Promise<AllowedUi[]> | undefined
 function allowedList() {
   return allowedLoad ??= (async () => {
     window.superego.onEvent((event) => {
-      if (event.machine !== 'app' || event.method !== 'profileUi.allowed') return
-      allowed = event.params as AllowedUi[]
-      void settle()
+      if (event.machine !== 'app') return
+      if (event.method === 'profileUi.allowed') { allowed = event.params as AllowedUi[]; void settle() }
+      if (event.method === 'profileUi.declined') { declined = event.params as AllowedUi[]; changed() }
     })
-    allowed = await window.superego.call('app', 'profileUi.allowed', {}) as AllowedUi[]
+    ;[allowed, declined] = await Promise.all([
+      window.superego.call('app', 'profileUi.allowed', {}) as Promise<AllowedUi[]>,
+      window.superego.call('app', 'profileUi.declined', {}) as Promise<AllowedUi[]>,
+    ])
     changed()
     return allowed
   })()
@@ -86,6 +93,12 @@ function allowedList() {
 export function useAllowedUi(): AllowedUi[] {
   useEffect(() => { void allowedList().catch((error) => console.error(error)) }, [])
   return useSyncExternalStore(subscribe, () => allowed)
+}
+
+/** The ones put off ("Not now"), in a component: Settings lists them too, to allow. */
+export function useDeclinedUi(): AllowedUi[] {
+  useEffect(() => { void allowedList().catch((error) => console.error(error)) }, [])
+  return useSyncExternalStore(subscribe, () => declined)
 }
 
 // ── Each profile's UI in this window ────────────────────────────────────────────────────────────────────────────────
@@ -109,8 +122,8 @@ let version = 0
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } }
 function changed() { version++; for (const listener of listeners) listener() }
 
-/** "Not now", per profile UI and version, until the window reloads. */
-const dismissed = new Set<string>()
+/** Put off ("Not now") but asked about again in this window, from the thread's header: per profile UI and hash. */
+const reopened = new Set<string>()
 
 let load: LoadUi = loadProfileUi
 /** Tests: load sources without a DOM. */
@@ -196,21 +209,30 @@ export function useProfileUi(machine: string, thread: ThreadInfo) {
 /** A remote profile's UI not allowed here for what it is now: what it is, and its files as fetched. */
 export type PendingUi = {
   machine: string; profile: ProfileRef; hash: string; files: { path: string; size: number }[]
+  /**
+   * Put off ("Not now") for these sources, on this computer: the thread's header says so quietly instead of asking.
+   * Until they change, it is allowed or revoked, or the header's marker asks again.
+   */
+  declined: boolean
   /** Each file's code, as it would run. */
   code(path: string): string | undefined
 }
 
+const pendingKey = (pending: Pick<PendingUi, 'machine' | 'profile' | 'hash'>) => `${keyOf(pending.machine, pending.profile.dir)}:${pending.hash}`
+
 export function pendingUi(machine: string, dir: string): PendingUi | undefined {
   const entry = known.get(keyOf(machine, dir))
-  if (!entry?.hash || entry.installed || (dismissed.has(`${keyOf(machine, dir)}:${entry.hash}`))) return undefined
+  if (!entry?.hash || entry.installed) return undefined
   const modules = [...entry.sources.modules.values()]
+  const pending = { machine, profile: entry.profile, hash: entry.hash }
   return {
-    machine, profile: entry.profile, hash: entry.hash, files: filesOf(entry.sources),
+    ...pending, files: filesOf(entry.sources),
+    declined: isAllowed(declined, machine, dir, entry.hash) && !reopened.has(pendingKey(pending)),
     code: (path) => modules.find((m) => m.path === path)?.code,
   }
 }
 
-/** The profile UI of `profile` on `machine` waiting to be allowed, unless put off ("Not now"). */
+/** The profile UI of `profile` on `machine` waiting to be allowed (or put off: see `declined`). */
 export function usePendingUi(machine: string, profile: ProfileRef | undefined): PendingUi | undefined {
   useSyncExternalStore(subscribe, () => version)
   return profile ? pendingUi(machine, profile.dir) : undefined
@@ -223,13 +245,21 @@ export function useProfileSource(machine: string, dir: string, path: string): st
   return entry && [...entry.sources.modules.values()].find((m) => m.path === path)?.code
 }
 
-/** Not now: the thread goes on without it, and the window doesn't ask again for these sources until it reloads. */
-export function dismissUi(pending: PendingUi) {
-  dismissed.add(`${keyOf(pending.machine, pending.profile.dir)}:${pending.hash}`)
+/** Not now, said: as the app will tell every window (it keeps it), and no longer asked again in this one. */
+export function declineUi(pending: PendingUi) {
+  const { machine, profile, hash, files } = pending
+  declined = [...declined.filter((d) => !(d.machine === machine && d.profile.dir === profile.dir)), { machine, profile, hash, files, at: Date.now() }]
+  reopenUi(pending, false)
+}
+
+/** Ask again about a profile UI put off, in this window (the header's marker); or, `false`, stop asking (Not now). */
+export function reopenUi(pending: PendingUi, open: boolean) {
+  if (open) reopened.add(pendingKey(pending))
+  else reopened.delete(pendingKey(pending))
   changed()
 }
 
 /** Tests: forget every profile's UI. */
 export function resetProfileUi() {
-  known.clear(); dismissed.clear(); allowed = []; allowedLoad = undefined; load = loadProfileUi
+  known.clear(); reopened.clear(); allowed = []; declined = []; allowedLoad = undefined; load = loadProfileUi
 }

@@ -5,20 +5,23 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { RpcError } from '@superego/protocol'
 import { collectProfileUi, hashProfileUi, type AllowedUi } from '@superego/client/profile-ui'
 import type { SuperegoBridge, SuperegoEvent } from '../src/shared.ts'
-import { ensureProfileUi, pendingUi, resetProfileUi, setLoader } from '../src/renderer/profile-ui.ts'
+import { declineUi, ensureProfileUi, pendingUi, reopenUi, resetProfileUi, setLoader } from '../src/renderer/profile-ui.ts'
 
 let answer: () => unknown
 let files: Record<string, string>
 let allowed: AllowedUi[]
+let declined: AllowedUi[]
 let listeners: ((event: SuperegoEvent) => void)[]
 beforeEach(() => {
   resetProfileUi()
   files = {}
   allowed = []
+  declined = []
   listeners = []
   const bridge: Partial<SuperegoBridge> = {
     async call(machine, method, params) {
       if (machine === 'app' && method === 'profileUi.allowed') return allowed
+      if (machine === 'app' && method === 'profileUi.declined') return declined
       if (method === 'profile.ui') return answer()
       if (method === 'profile.module') {
         const path = (params as { path: string }).path.replace(/^\.\//, '')
@@ -126,4 +129,33 @@ it('allowed already: runs at once, without asking', async () => {
   answer = () => ({ hash: 'v1', entries: ['./a.ts'] })
   await ensureProfileUi(registry, 'remote', p)
   expect(registry.installProfile).toHaveBeenCalledWith('remote', p, [expect.objectContaining({ name: 'code' })])
+})
+
+it('remembers "Not now" for those sources: asks again when they change, when revoked, or from the header', async () => {
+  const registry = { installProfile: vi.fn() }
+  const p = profile()
+  files = { 'a.ts': 'code' }
+  const hash = await hashOf(['./a.ts'])
+  // Put off on this computer before (in another window, or before a restart): not asked again.
+  declined = [{ machine: 'remote', profile: p, hash, files: [], at: 0 }]
+  answer = () => ({ hash: 'v1', entries: ['./a.ts'] })
+  await ensureProfileUi(registry, 'remote', p)
+  expect(registry.installProfile).not.toHaveBeenCalled()
+  expect(pendingUi('remote', p.dir)).toMatchObject({ hash, declined: true })
+  // The header's marker asks again, in this window; Not now puts it off again.
+  reopenUi(pendingUi('remote', p.dir)!, true)
+  expect(pendingUi('remote', p.dir)?.declined).toBe(false)
+  declineUi(pendingUi('remote', p.dir)!)
+  expect(pendingUi('remote', p.dir)?.declined).toBe(true)
+
+  // Revoked (the app clears it): asked again.
+  for (const listener of listeners) listener({ machine: 'app', method: 'profileUi.declined', params: [] })
+  expect(pendingUi('remote', p.dir)?.declined).toBe(false)
+
+  // Put off again, then the sources change there: asked about the new ones.
+  declineUi(pendingUi('remote', p.dir)!)
+  files['a.ts'] = 'changed'
+  answer = () => ({ hash: 'v2', entries: ['./a.ts'] })
+  await ensureProfileUi(registry, 'remote', p)
+  expect(pendingUi('remote', p.dir)).toMatchObject({ hash: await hashOf(['./a.ts']), declined: false })
 })

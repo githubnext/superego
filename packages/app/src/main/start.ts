@@ -106,6 +106,8 @@ export function startApp(appConfig: AppConfig) {
     },
       /** The profile UIs from other machines allowed to run in this computer's windows (see profile-ui.ts). */
       'profileUi.allowed': async () => uiAllowed.list(),
+      /** The ones put off ("Not now"), for the sources they were then: the window doesn't ask about those again. */
+      'profileUi.declined': async () => uiAllowed.declinedList(),
       'action.list': async () => appRouter.list(),
       'action.log': async () => appRouter.log(),
     }
@@ -195,7 +197,10 @@ export function startApp(appConfig: AppConfig) {
    * window hashes what a machine serves and asks; a machine has no say. The CLI allows too (`profile allow-ui`).
    */
   const uiAllowed = new UiAllowStore(dataDir)
-  uiAllowed.onChange(() => broadcast({ machine: APP, method: 'profileUi.allowed', params: uiAllowed.list() }))
+  uiAllowed.onChange(() => {
+    broadcast({ machine: APP, method: 'profileUi.allowed', params: uiAllowed.list() })
+    broadcast({ machine: APP, method: 'profileUi.declined', params: uiAllowed.declinedList() })
+  })
   uiAllowed.watch()
 
   /**
@@ -400,6 +405,18 @@ export function startApp(appConfig: AppConfig) {
       // This computer's own profiles are its daemon's to allow.
       if (!machineStore.get(machine)) throw new RpcError('not_found', `No machine ${machine}`)
       await uiAllowed.allow({ machine, profile: profile as ProfileRef, hash, files })
+      return null
+    },
+  }))
+  appRouter.register(defineAction({
+    id: 'profiles.declineUi', title: "Not now: don't ask about a machine's profile UI again until it changes", runs: 'app', expose: ['ui'],
+    params: obj({
+      machine: str(), profile: obj({ scope: union([lit('user'), lit('project')]), name: str(), dir: str() }), hash: str(),
+      files: arr(obj({ path: str(), size: int() })),
+    }),
+    async run({ machine, profile, hash, files }) {
+      if (!machineStore.get(machine)) throw new RpcError('not_found', `No machine ${machine}`)
+      await uiAllowed.decline({ machine, profile: profile as ProfileRef, hash, files })
       return null
     },
   }))

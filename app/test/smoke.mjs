@@ -905,6 +905,14 @@ if (phase === 'first') {
   writeFileSync(`${process.env.SUPEREGO_HOME}/second/profiles/default/ui/label.ts`, "export const label: string = 'changed ui'\n")
   await run(`window.superego.call('${secondId}', 'thread.submit', { id: '${onSecond}', text: 'after the change' })`)
   await until(`!document.querySelector('.remote-badge') && Boolean(document.querySelector('.profile-ui-notice'))`, 'a changed profile UI stops until allowed again')
+  // Not now: remembered on this computer for these sources, and the header says so quietly; a click asks again.
+  await run(`[...document.querySelectorAll('.profile-ui-notice button')].find((b) => b.textContent === 'Not now').click()`)
+  await until(`!document.querySelector('.profile-ui-notice') && document.querySelector('.profile-ui-marker')?.textContent === 'UI not allowed'`, 'put off: a marker in the header')
+  if (!readFileSync(`${process.env.SUPEREGO_HOME}/ui-declined.json`, 'utf8').includes('"default"')) { await fail('"Not now" not kept in ui-declined.json'); throw new Error('failed') }
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  await shot('profile-ui-declined')
+  await run(`document.querySelector('.profile-ui-marker').click()`)
+  await until(`Boolean(document.querySelector('.profile-ui-notice')) && !document.querySelector('.profile-ui-marker')`, 'the marker asks again')
   await run(`[...document.querySelectorAll('.profile-ui-notice button')].find((b) => b.textContent === 'Allow').click()`)
   await until(`document.querySelector('.remote-badge')?.textContent === 'changed ui'`, 'the changed UI runs once allowed')
   // Settings lists it under its machine; Revoke stops it at once.
@@ -916,6 +924,7 @@ if (phase === 'first') {
   await until(`!document.querySelector('.machine-row__ui') && !document.querySelector('.remote-badge')`, 'revoked: the remote profile UI stops')
   await escape()
   await until(`!document.querySelector('.superego-dialog.settings')`, 'settings closed')
+  await until(`Boolean(document.querySelector('.profile-ui-notice')) && !document.querySelector('.profile-ui-marker')`, 'revoked: asked again')
   console.log('smoke(first): ok')
 } else {
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread after reopen')

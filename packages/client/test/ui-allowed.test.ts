@@ -63,3 +63,31 @@ it('allows a profile for one hash, forgets it on a change, and revokes', async (
   await store.revoke('m1')
   expect(store.list()).toEqual([])
 })
+
+it('remembers "Not now" for one hash, apart from the allowed list, until allowed or revoked', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ui-declined-'))
+  const store = new UiAllowStore(dir)
+  const ref = { scope: 'user' as const, name: 'default', dir: '/home/me/.superego/profiles/default' }
+  await store.decline({ machine: 'm1', profile: ref, hash: 'h1', files: [{ path: 'ui/a.ts', size: 3 }] })
+  expect(store.declined('m1', ref.dir, 'h1')).toBe(true)
+  // Declined is never allowed, and is kept in a file of its own: nothing reading the allowed list can mistake it.
+  expect(store.allowed('m1', ref.dir, 'h1')).toBe(false)
+  expect(store.list()).toEqual([])
+  expect(JSON.parse(readFileSync(join(dir, 'ui-declined.json'), 'utf8'))).toMatchObject([{ machine: 'm1', hash: 'h1' }])
+  // Kept on disk.
+  expect(new UiAllowStore(dir).declined('m1', ref.dir, 'h1')).toBe(true)
+  // Only for those sources: changed code is asked about again.
+  expect(store.declined('m1', ref.dir, 'h2')).toBe(false)
+  expect(store.declined('m2', ref.dir, 'h1')).toBe(false)
+  // Allowing takes it out of the declined list, and declining again takes it out of the allowed one.
+  await store.allow({ machine: 'm1', profile: ref, hash: 'h1', files: [] })
+  expect(store.declinedList()).toEqual([])
+  expect(store.allowed('m1', ref.dir, 'h1')).toBe(true)
+  await store.decline({ machine: 'm1', profile: ref, hash: 'h2', files: [] })
+  expect(store.list()).toEqual([])
+  expect(store.declinedList()).toHaveLength(1)
+  // Revoke clears it too: the window asks again.
+  await store.revoke('m1', ref.dir)
+  expect(store.declinedList()).toEqual([])
+  expect(new UiAllowStore(dir).declined('m1', ref.dir, 'h2')).toBe(false)
+})
