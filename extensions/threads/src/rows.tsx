@@ -32,7 +32,8 @@ export function registerLinks(superego: UiApi) {
   superego.link({
     scheme: 'thread',
     match: (href, kind, where) => kind === 'link' && Boolean(where.machine) && href.startsWith(THREAD),
-    render: ({ href, children, where }) => <ThreadRef machine={where.machine!} id={href.slice(THREAD.length)}>{children}</ThreadRef>,
+    // Followed as `open` below says, so a click and ⌃O's list agree: beside the thread the link is in.
+    render: ({ href, children, where, open }) => <ThreadRef machine={where.machine!} id={href.slice(THREAD.length)} open={(beside) => void open(beside)}>{children}</ThreadRef>,
     // Shown; or, beside, in a pane beside the thread it's named in.
     open(href, { machine, thread, beside }) {
       const id = href.slice(THREAD.length)
