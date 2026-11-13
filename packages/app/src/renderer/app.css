@@ -321,6 +321,18 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .service-notice__actions { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
 .service-notice__actions .superego-button { padding: 2px 8px; font-size: calc(12px * var(--superego-text-scale)); }
 .service-notice.is-deferred { padding: 0; background: none; box-shadow: none; }
+/* A remote profile's UI waiting for this computer's say, over the composer (profile-ui-notice.tsx). */
+.profile-ui-notice { padding: 8px 10px; border-radius: 10px; background: var(--superego-raised); box-shadow: var(--superego-control-edge); font-size: calc(12px * var(--superego-text-scale)); }
+.profile-ui-notice__actions { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+.profile-ui-notice__actions .superego-button { padding: 2px 8px; font-size: calc(12px * var(--superego-text-scale)); }
+.profile-ui-notice__actions .superego-button--ghost { color: var(--superego-muted); margin-left: auto; }
+.profile-ui-notice__files { list-style: none; margin: 6px 0 0; padding: 0; color: var(--superego-muted); }
+.profile-ui-notice__file { font: inherit; font-family: var(--superego-mono); color: var(--superego-text); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--superego-border); text-underline-offset: 2px; }
+.profile-ui-notice__file:hover { text-decoration-color: currentColor; }
+.profile-source { padding: 12px 16px; overflow: auto; height: 100%; box-sizing: border-box; }
+.profile-source pre { margin-top: 8px; }
+.machine-row__ui { margin-top: 4px; display: flex; align-items: center; gap: 8px; }
+.machine-row__ui .superego-button { padding: 1px 8px; font-size: calc(12px * var(--superego-text-scale)); }
 
 .superego-dialog.palette { top: 12vh; transform: translateX(-50%); }
 .superego-dialog.palette[data-starting-style], .superego-dialog.palette[data-ending-style] { transform: translate(-50%, 6px) scale(.985); }

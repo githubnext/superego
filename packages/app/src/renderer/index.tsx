@@ -17,6 +17,7 @@ import { registerBuiltInPanes } from './panes.tsx'
 import { registerToolRows } from './tool-rows.tsx'
 import { registerLinks } from './links.tsx'
 import { registerSeen } from './seen.ts'
+import { registerProfileUi } from './profile-ui-notice.tsx'
 
 export function mountApp(app: AppConfig, { extensions = [], root = document.getElementById('root')! }: { extensions?: UiExtension[]; root?: HTMLElement } = {}) {
   // In a browser there is no preload: the bridge is a WebSocket to the daemon that served the page.
@@ -38,6 +39,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
     registerToolRows(core)
     registerLinks(core)
     registerSeen(core)
+    registerProfileUi(core)
     for (const action of coreActions(app)) core.action(action)
   })
   void registry.router.load('app')

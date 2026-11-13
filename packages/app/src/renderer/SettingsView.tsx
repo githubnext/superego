@@ -12,6 +12,8 @@ import { mergeSettings, type MergedSetting } from './merge-settings.ts'
 import { Keymap } from './Keymap.tsx'
 import { driftNote, MachineDrift } from './machine-drift.tsx'
 import { settingsView, useApp, useRegistry } from './extension.tsx'
+import { useAllowedUi } from './profile-ui.ts'
+import { sizeOf } from './profile-ui-notice.tsx'
 
 const APP = 'app'
 /** Settings → Machines (also opened by Update: see actions.tsx). */
@@ -336,6 +338,7 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
   const app = client(APP) as unknown as { call(method: string, params: unknown): Promise<unknown> }
   const dispatch = useRegistry().router.dispatch
   const act = (id: string, params: Record<string, unknown>) => { setError(undefined); return dispatch(id, params, { machine: APP, source: 'settings' }).catch((e: Error) => { setError(e.message); throw e }) }
+  const allowedUi = useAllowedUi()
 
   return (
     <section className="settings-section">
@@ -359,6 +362,13 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
             </div>
             {driftNote(m, appConfig.name) && <div className="settings__note machine-row__drift"><MachineDrift machine={m} side="bottom" /> {driftNote(m, appConfig.name)!.text}</div>}
             {m.update && m.update.state !== 'done' && m.update.log && <pre className="machine-row__log">{m.update.log.trimEnd().split('\n').slice(-12).join('\n')}</pre>}
+            {/* Its profiles' UI this computer lets run in its window, each for the sources allowed (see profile-ui.ts). */}
+            {allowedUi.filter((a) => a.machine === m.id).map((a) => (
+              <div key={a.profile.dir} className="settings__note machine-row__ui" title={a.profile.dir}>
+                <span>Profile <b>{a.profile.name}</b>’s UI runs here · {a.files.length === 1 ? '1 file' : `${a.files.length} files`}, {sizeOf(a.files.reduce((sum, f) => sum + f.size, 0))}</span>
+                <Button onClick={() => void act('profiles.revokeUi', { machine: m.id, dir: a.profile.dir }).catch(() => {})}>Revoke</Button>
+              </div>
+            ))}
           </div>
           <div className="provider__actions">
             {m.state === 'connected' && <Button onClick={() => onOpen(m.id)}>Settings</Button>}

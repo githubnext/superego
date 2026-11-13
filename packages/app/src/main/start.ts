@@ -4,13 +4,13 @@ import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, protocol, session, shell, type MenuItemConstructorOptions } from 'electron'
 import { appEnv, daemonStarting, defaultDataDir, readBuild, socketPath } from '@superego/daemon/client'
 import {
-  bool, compareVersions, defineAction, lit, obj, opt, Router, RpcError, str, union, unknown,
-  type AppConfig, type DeclaredSection, type Json, type Notifications, type ThreadInfo, type SettingType,
+  arr, bool, compareVersions, defineAction, int, lit, obj, opt, Router, RpcError, str, union, unknown,
+  type AppConfig, type DeclaredSection, type Json, type Notifications, type ProfileRef, type ThreadInfo, type SettingType,
 } from '@superego/protocol'
 import { serveSettings } from '@superego/settings'
 import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, NOTIFY, threadNotice, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
-import { checkIdentity, MachineStore, openLocal as openLocalSocket, openMachine, routeOf, runUpdate } from '@superego/client'
+import { checkIdentity, MachineStore, openLocal as openLocalSocket, openMachine, routeOf, runUpdate, UiAllowStore } from '@superego/client'
 import { Link } from './link.ts'
 import { MenuBar } from './tray.ts'
 import { ServiceRestart, type ServiceAction } from './restart.ts'
@@ -104,6 +104,8 @@ export function startApp(appConfig: AppConfig) {
       })) })
       return null
     },
+      /** The profile UIs from other machines allowed to run in this computer's windows (see profile-ui.ts). */
+      'profileUi.allowed': async () => uiAllowed.list(),
       'action.list': async () => appRouter.list(),
       'action.log': async () => appRouter.log(),
     }
@@ -187,6 +189,14 @@ export function startApp(appConfig: AppConfig) {
   machineStore.onChange(syncLinks)
   // The CLI edits the same list; pick up its changes.
   machineStore.watch()
+
+  /**
+   * The profile UIs from other machines this computer lets run in its windows, for the exact sources allowed. The
+   * window hashes what a machine serves and asks; a machine has no say. The CLI allows too (`profile allow-ui`).
+   */
+  const uiAllowed = new UiAllowStore(dataDir)
+  uiAllowed.onChange(() => broadcast({ machine: APP, method: 'profileUi.allowed', params: uiAllowed.list() }))
+  uiAllowed.watch()
 
   /**
    * The app keeps its own subscription to each machine's threads, whatever the windows show: for the menu bar, and to
@@ -378,7 +388,25 @@ export function startApp(appConfig: AppConfig) {
   appRouter.register(defineAction({
     id: 'machines.remove', title: 'Remove a machine', runs: 'app', expose: ['ui', 'cli'],
     params: obj({ id: str() }),
-    async run({ id }) { await machineStore.remove(id); return null },
+    async run({ id }) { await machineStore.remove(id); await uiAllowed.revoke(id); return null },
+  }))
+  appRouter.register(defineAction({
+    id: 'profiles.allowUi', title: "Let a machine's profile UI run in this window", runs: 'app', expose: ['ui'],
+    params: obj({
+      machine: str(), profile: obj({ scope: union([lit('user'), lit('project')]), name: str(), dir: str() }), hash: str(),
+      files: arr(obj({ path: str(), size: int() })),
+    }),
+    async run({ machine, profile, hash, files }) {
+      // This computer's own profiles are its daemon's to allow.
+      if (!machineStore.get(machine)) throw new RpcError('not_found', `No machine ${machine}`)
+      await uiAllowed.allow({ machine, profile: profile as ProfileRef, hash, files })
+      return null
+    },
+  }))
+  appRouter.register(defineAction({
+    id: 'profiles.revokeUi', title: "Stop a machine's profile UI running in this window", runs: 'app', expose: ['ui'],
+    params: obj({ machine: str(), dir: str() }),
+    async run({ machine, dir }) { await uiAllowed.revoke(machine, dir); return null },
   }))
   appRouter.register(defineAction({
     id: 'machines.trust', title: 'Trust the machine answering now', runs: 'app', expose: ['ui', 'cli'],

@@ -1,10 +1,21 @@
 // A profile's UI, loaded while the app runs. The daemon serves the profile's modules (types stripped, after checking the
-// profile is allowed); here each one's imports are rewritten and it is loaded from a blob URL:
+// profile is allowed there); here every module its entries need is fetched, then each one's imports are rewritten and
+// it is loaded from a blob URL:
 //   'react', 'react/jsx-runtime', 'superego/ui'  → this window's own copies, so a profile's components share its React
 //   './other.ts'                          → that module of the profile, loaded the same way
 // Their default exports are UI extensions, installed for that profile's threads only (see Registry.installProfile).
+//
+// The window runs with the user's full access to every machine, so a machine other than this computer gets no say in
+// what runs in it: a remote profile's UI runs only once it is allowed on this computer, for that machine, that profile
+// and a hash of exactly the sources the window received (computed here, never the machine's word). Until then the
+// thread works without it, and the window offers to allow it (ProfileUiNotice). This computer's own profiles keep their
+// daemon's rules: they are on this computer already. Once allowed, it runs in the window's own JavaScript with its full
+// reach: a narrower `call` or `dispatch` wouldn't hold, with `window.superego` beside it. Isolating it is a sandbox's job.
 import { useEffect, useSyncExternalStore } from 'react'
 import type { ProfileRef, ThreadInfo } from '@superego/protocol'
+import {
+  collectProfileUi, filesOf, hashProfileUi, importsOf, isAllowed, resolveSpecifier, SPECIFIER, type AllowedUi, type ProfileUiSources,
+} from '@superego/client/profile-ui'
 import { machine as client } from './client.ts'
 import { useRegistry, type Registry, type UiExtension } from './extension.tsx'
 
@@ -26,43 +37,104 @@ function sharedModules() {
   })()
 }
 
-const SPECIFIER = /(\bfrom\s*|\bimport\s*\(?\s*)(['"])([^'"]+)\2/g
+export type LoadUi = (profile: ProfileRef, sources: ProfileUiSources) => Promise<UiExtension[]>
 
-/** Load a profile's UI extensions from `machine`: every module its entries need, each from a blob URL. */
-async function loadProfileUi(machine: string, profile: ProfileRef, entries: string[]): Promise<UiExtension[]> {
+/** Load a profile's UI extensions from the sources fetched: each module from a blob URL, its imports pointed at the others'. */
+const loadProfileUi: LoadUi = async (profile, sources) => {
   const names = await sharedModules()
-  const loaded = new Map<string, Promise<string>>()
-  const load = (path: string): Promise<string> => {
-    const existing = loaded.get(path)
-    if (existing) return existing
-    const url = (async () => {
-      const module = await client(machine).call('profile.module', { ...profile, path })
-      // Rewrite each import: shared names to this window's copies, relative paths to the profile's own modules.
-      const specifiers = [...module.code.matchAll(SPECIFIER)].map((m) => m[3]!)
-      const targets = new Map<string, string>()
-      for (const specifier of new Set(specifiers)) {
-        if (names.has(specifier)) targets.set(specifier, names.get(specifier)!)
-        else if (specifier.startsWith('.')) targets.set(specifier, await load(new URL(specifier, `file:///p/${module.path}`).pathname.slice(3)))
-        else throw new Error(`${module.path} imports ${specifier}: a profile's UI can import 'react', 'react/jsx-runtime', 'superego/ui' and its own files`)
-      }
-      const code = module.code.replace(SPECIFIER, (all, lead: string, quote: string, specifier: string) => `${lead}${quote}${targets.get(specifier) ?? specifier}${quote}`)
-      return URL.createObjectURL(new Blob([`${code}\n//# sourceURL=superego-profile://${profile.scope}/${profile.name}/${module.path}`], { type: 'text/javascript' }))
-    })()
-    loaded.set(path, url)
+  const urls = new Map<string, string>()
+  const urlOf = (asked: string, chain: string[] = []): string => {
+    const done = urls.get(asked)
+    if (done) return done
+    if (chain.includes(asked)) throw new Error(`${[...chain, asked].join(' → ')}: a profile's UI modules can't import each other in a cycle`)
+    const module = sources.modules.get(asked)!
+    const targets = new Map(importsOf(module.code).map((specifier) =>
+      [specifier, names.get(specifier) ?? urlOf(resolveSpecifier(module.path, specifier), [...chain, asked])]))
+    const code = module.code.replace(SPECIFIER, (all, lead: string, quote: string, specifier: string) => `${lead}${quote}${targets.get(specifier) ?? specifier}${quote}`)
+    const url = URL.createObjectURL(new Blob([`${code}\n//# sourceURL=superego-profile://${profile.scope}/${profile.name}/${module.path}`], { type: 'text/javascript' }))
+    urls.set(asked, url)
     return url
   }
   const extensions: UiExtension[] = []
-  for (const entry of entries) {
-    const module = await import(/* @vite-ignore */ await load(entry)) as { default?: UiExtension }
+  for (const entry of sources.entries) {
+    const module = await import(/* @vite-ignore */ urlOf(entry)) as { default?: UiExtension }
     if (!module.default?.name || typeof module.default.setup !== 'function') throw new Error(`${entry} must export default defineUiExtension({ name, setup })`)
     extensions.push(module.default)
   }
   return extensions
 }
 
-/** What each profile's UI was installed at, so it reloads only when its files changed. */
-const installed = new Map<string, string>()
+// ── Allowed here ────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** The remote profile UIs this computer allows (the app's ui-allowed.json), kept current as the app says. */
+let allowed: AllowedUi[] = []
+let allowedLoad: Promise<AllowedUi[]> | undefined
+function allowedList() {
+  return allowedLoad ??= (async () => {
+    window.superego.onEvent((event) => {
+      if (event.machine !== 'app' || event.method !== 'profileUi.allowed') return
+      allowed = event.params as AllowedUi[]
+      void settle()
+    })
+    allowed = await window.superego.call('app', 'profileUi.allowed', {}) as AllowedUi[]
+    changed()
+    return allowed
+  })()
+}
+
+/** The allowed list, in a component: what Settings lists. */
+export function useAllowedUi(): AllowedUi[] {
+  useEffect(() => { void allowedList().catch((error) => console.error(error)) }, [])
+  return useSyncExternalStore(subscribe, () => allowed)
+}
+
+// ── Each profile's UI in this window ────────────────────────────────────────────────────────────────────────────────
+
+/** A profile's UI as this window has it: the daemon's version it last looked at, what it fetched, and whether it runs. */
+type Known = {
+  registry: Pick<Registry, 'installProfile'>; machine: string; profile: ProfileRef
+  /** The daemon's hash of the profile's files: when it changes, the window fetches again. */
+  version: string
+  sources: ProfileUiSources
+  /** This window's hash of `sources`; for this computer's own profiles, none (its daemon decides). */
+  hash?: string
+  installed: boolean
+}
+const known = new Map<string, Known>()
 const loading = new Map<string, Promise<void>>()
+const keyOf = (machine: string, dir: string) => `${machine}:${dir}`
+
+const listeners = new Set<() => void>()
+let version = 0
+const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } }
+function changed() { version++; for (const listener of listeners) listener() }
+
+/** "Not now", per profile UI and version, until the window reloads. */
+const dismissed = new Set<string>()
+
+let load: LoadUi = loadProfileUi
+/** Tests: load sources without a DOM. */
+export const setLoader = (next: LoadUi) => { load = next }
+
+async function install(entry: Known) {
+  // A module that doesn't load here (a bad import, no extension exported, a throw as it runs) is broken.
+  const extensions = entry.sources.entries.length ? await load(entry.profile, entry.sources).catch((error: Error & { kind?: string }) => {
+    throw Object.assign(error, { kind: error.kind ?? 'invalid' })
+  }) : []
+  entry.registry.installProfile(entry.machine, entry.profile, extensions)
+  entry.installed = true
+}
+
+/** Let what runs follow the allowed list: allowed ones that wait start, revoked ones stop at once. */
+async function settle() {
+  for (const entry of known.values()) {
+    if (!entry.hash) continue
+    const ok = isAllowed(allowed, entry.machine, entry.profile.dir, entry.hash)
+    if (ok && !entry.installed) await install(entry).catch((error) => console.error(`The ${entry.profile.name} profile's UI didn't load`, error))
+    else if (!ok && entry.installed) { entry.registry.installProfile(entry.machine, entry.profile, []); entry.installed = false }
+  }
+  changed()
+}
 
 /**
  * Errors that say the profile can't run here (gone, broken, no longer allowed): the window lets go of its UI. Any other
@@ -70,23 +142,35 @@ const loading = new Map<string, Promise<void>>()
  */
 const GONE = new Set(['not_found', 'invalid', 'untrusted_profile'])
 
-/** Install `profile`'s UI on `machine` when its files changed; let go of it when the profile can't run there now. */
+/**
+ * Fetch `profile`'s UI on `machine` when its files changed, and run it if it may: always for this computer's (its daemon
+ * checked), for another machine's once allowed here for exactly these sources. Let go of it when the profile can't run
+ * there now, or its sources changed from what was allowed.
+ */
 export async function ensureProfileUi(registry: Pick<Registry, 'installProfile'>, machine: string, profile: ProfileRef) {
-  const key = `${machine}:${profile.dir}`
+  const key = keyOf(machine, profile.dir)
   try {
-    const { hash, entries } = await client(machine).call('profile.ui', profile)
-    if (installed.get(key) === hash) return
-    // A module that doesn't load here (a bad import, no extension exported, a throw as it runs) is broken too.
-    const extensions = entries.length ? await loadProfileUi(machine, profile, entries).catch((error: Error & { kind?: string }) => {
-      throw Object.assign(error, { kind: error.kind ?? 'invalid' })
-    }) : []
-    registry.installProfile(machine, profile, extensions)
-    // Only once it's in: a load that failed is tried again.
-    installed.set(key, hash)
+    const { hash: daemonHash, entries } = await client(machine).call('profile.ui', profile)
+    if (known.get(key)?.version === daemonHash) return
+    const sources = await collectProfileUi(entries, (path) => client(machine).call('profile.module', { ...profile, path }))
+      .catch((error: Error & { kind?: string }) => { throw Object.assign(error, { kind: error.kind ?? 'invalid' }) })
+    const entry: Known = { registry, machine, profile, version: daemonHash, sources, installed: false }
+    if (machine !== 'local' && entries.length) {
+      entry.hash = await hashProfileUi(sources)
+      await allowedList()
+    }
+    const was = known.get(key)
+    if (!entry.hash || isAllowed(allowed, machine, profile.dir, entry.hash)) await install(entry)
+    else if (was?.installed) registry.installProfile(machine, profile, [])
+    // Only once it's in (or waits to be allowed): a load that failed is tried again.
+    known.set(key, entry)
+    changed()
   } catch (error) {
-    if (GONE.has((error as { kind?: string }).kind ?? '') && installed.has(key)) {
-      installed.delete(key)
-      registry.installProfile(machine, profile, [])
+    const was = known.get(key)
+    if (GONE.has((error as { kind?: string }).kind ?? '') && was) {
+      known.delete(key)
+      if (was.installed) registry.installProfile(machine, profile, [])
+      changed()
     }
     throw error
   }
@@ -99,10 +183,53 @@ export function useProfileUi(machine: string, thread: ThreadInfo) {
   const profile = thread.profile
   useEffect(() => {
     if (!profile) return
-    const key = `${machine}:${profile.dir}`
+    const key = keyOf(machine, profile.dir)
     if (loading.has(key)) return
     const done = ensureProfileUi(registry, machine, profile).catch((error) => console.error(`The ${profile.name} profile's UI didn't load`, error))
       .finally(() => loading.delete(key))
     loading.set(key, done)
   }, [machine, profile?.dir, thread.activeAt])
+}
+
+// ── Waiting for this computer's say ─────────────────────────────────────────────────────────────────────────────────
+
+/** A remote profile's UI not allowed here for what it is now: what it is, and its files as fetched. */
+export type PendingUi = {
+  machine: string; profile: ProfileRef; hash: string; files: { path: string; size: number }[]
+  /** Each file's code, as it would run. */
+  code(path: string): string | undefined
+}
+
+export function pendingUi(machine: string, dir: string): PendingUi | undefined {
+  const entry = known.get(keyOf(machine, dir))
+  if (!entry?.hash || entry.installed || (dismissed.has(`${keyOf(machine, dir)}:${entry.hash}`))) return undefined
+  const modules = [...entry.sources.modules.values()]
+  return {
+    machine, profile: entry.profile, hash: entry.hash, files: filesOf(entry.sources),
+    code: (path) => modules.find((m) => m.path === path)?.code,
+  }
+}
+
+/** The profile UI of `profile` on `machine` waiting to be allowed, unless put off ("Not now"). */
+export function usePendingUi(machine: string, profile: ProfileRef | undefined): PendingUi | undefined {
+  useSyncExternalStore(subscribe, () => version)
+  return profile ? pendingUi(machine, profile.dir) : undefined
+}
+
+/** A file of a profile's UI as this window fetched it: what would run (or runs). */
+export function useProfileSource(machine: string, dir: string, path: string): string | undefined {
+  useSyncExternalStore(subscribe, () => version)
+  const entry = known.get(keyOf(machine, dir))
+  return entry && [...entry.sources.modules.values()].find((m) => m.path === path)?.code
+}
+
+/** Not now: the thread goes on without it, and the window doesn't ask again for these sources until it reloads. */
+export function dismissUi(pending: PendingUi) {
+  dismissed.add(`${keyOf(pending.machine, pending.profile.dir)}:${pending.hash}`)
+  changed()
+}
+
+/** Tests: forget every profile's UI. */
+export function resetProfileUi() {
+  known.clear(); dismissed.clear(); allowed = []; allowedLoad = undefined; load = loadProfileUi
 }
