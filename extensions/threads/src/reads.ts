@@ -21,7 +21,10 @@ export function readLog(): ReadLog {
 }
 
 const logs = new WeakMap<object, ReadLog>()
-/** The log of the daemon whose harness this is. */
+/**
+ * The log of the daemon whose harness this is: keyed by `superego.harness` (pi-durable's, not part of the stable API),
+ * which is fine between two extensions of one package, set up by the same daemon. Nothing else should share it.
+ */
 export const readsOf = (harness: object) => {
   let log = logs.get(harness)
   if (!log) logs.set(harness, log = readLog())

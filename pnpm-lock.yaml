@@ -558,15 +558,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
-      '@superego/ego':
-        specifier: workspace:*
-        version: link:../ego
       '@superego/settings':
         specifier: workspace:*
         version: link:../../packages/settings
-      '@superego/worktrees':
-        specifier: workspace:*
-        version: link:../worktrees
       '@types/react':
         specifier: ^19
         version: 19.3.0
@@ -645,6 +639,9 @@ importers:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
         version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)
+      '@superego/threads':
+        specifier: workspace:*
+        version: link:../threads
       '@types/react':
         specifier: ^19
         version: 19.3.0

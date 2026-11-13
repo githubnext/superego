@@ -6,8 +6,6 @@ import type { ConversationView } from '@earendil-works/pi-durable'
 import { MemorySettingsStore } from '@superego/settings'
 import { defineApp, NOTE_ENTRY, PROTOCOL_VERSION, type Json, type RpcPeer, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '@superego/daemon'
-import egoExtension from '@superego/ego/daemon'
-import worktrees from '@superego/worktrees/daemon'
 import threadTools from '../src/daemon.ts'
 import { linkTo, threadTools as tools, type ThreadsHost } from '../src/tools.ts'
 
@@ -53,62 +51,57 @@ it('lets an agent start a thread of its own: a child, listed with its parent', a
   socket.destroy(); server.close(); await daemon.close()
 })
 
-it('lets an agent archive another thread, and its own once its turn ends; never Ego', async () => {
-  const { execFileSync } = await import('node:child_process')
-  const { existsSync } = await import('node:fs')
-  const git = (...args: string[]) => execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { encoding: 'utf8' }).trim()
-  execFileSync('git', ['init', '-q', dir])
-  await writeFile(join(dir, 'readme.md'), 'hi\n')
-  await writeFile(join(dir, '.gitignore'), '*\n!readme.md\n!.gitignore\n')
-  git('add', '.'); git('commit', '-q', '-m', 'start')
+it("lets an agent archive another thread, and its own once its turn ends; told what archiving did, or that it was refused", async () => {
+  // Refuses to archive the thread titled Kept; says what it did when archiving another.
+  const keeper = defineDaemonExtension({
+    name: 'keeper',
+    setup(superego) {
+      superego.thread({
+        archiving(t) { if (t.title === 'Kept') throw new Error('Kept is kept') },
+        archived: () => ({ note: 'Tidied up.' }),
+      })
+    },
+  })
   const open = async () => {
-    const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [worktrees, threadTools, egoExtension] })
+    const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [threadTools, keeper] })
     const server = await listen(daemon, join(dir, 's.sock'))
     const { peer, socket } = await connectSocket(join(dir, 's.sock'))
     await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
     return { peer, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
   }
-  // Ego and a child first, for their ids; then the thread that archives them.
+  // The other threads first, for their ids; then the thread that archives them.
   const first = await open()
-  const ego = await first.peer.call<ThreadInfo>('ego.ask', {})
-  const child = await first.peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'Child', worktree: true })
-  const childTree = child.ext?.worktrees as { path: string; branch: string }
+  const kept = await first.peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'Kept' })
+  const child = await first.peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'Child' })
   await first.close()
-  // Ego refused, the child archived, then itself; and it carries on to the end of its turn.
+  // Kept refused, the child archived, then itself; and it carries on to the end of its turn.
   await writeFile(join(dir, 'turns.jsonl'), [
-    turn([{ type: 'toolCall', id: 'c1', name: 'thread_archive', arguments: { id: ego.id } }], 'toolUse'),
+    turn([{ type: 'toolCall', id: 'c1', name: 'thread_archive', arguments: { id: kept.id } }], 'toolUse'),
     turn([{ type: 'toolCall', id: 'c2', name: 'thread_archive', arguments: { id: child.id } }], 'toolUse'),
     turn([{ type: 'toolCall', id: 'c3', name: 'thread_archive', arguments: {} }], 'toolUse'),
-    turn([{ type: 'toolCall', id: 'c4', name: 'bash', arguments: { command: 'ls' } }], 'toolUse'),
+    turn([{ type: 'toolCall', id: 'c4', name: 'thread_list', arguments: {} }], 'toolUse'),
     turn([{ type: 'text', text: 'Done.' }], 'stop'),
   ].join('\n') + '\n')
   process.env.THREADSTEST_MODEL = `replay:${join(dir, 'turns.jsonl')}`
   process.env.THREADSTEST_REPLAY_SPEED = '0'
   const { peer, close } = await open()
-  const self = await peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'Self', worktree: true, prompt: 'tidy up' })
+  const self = await peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'Self', prompt: 'tidy up' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', { archived: true })).length === 2)
   const archived = await peer.call<ThreadInfo[]>('thread.list', { archived: true })
   expect(archived.map((t) => t.id)).toEqual([self.id, child.id])
   // Archived once its turn was over: it ran to the end, and isn't left working.
   expect(archived[0]!.status.state).toBe('done')
-  const selfTree = self.ext?.worktrees as { path: string; branch: string }
   // What archiving itself did is said in it, as Superego's note: its turn was over, so the agent wasn't there to say it.
-  await until(async () => JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { id: self.id })).value.entries).includes('Archived. Removed'))
+  await until(async () => JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { id: self.id })).value.entries).includes('Archived. Tidied up.'))
   const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: self.id })
   const entries = JSON.stringify(value.entries)
-  expect(value.entries.find((e) => e.kind === NOTE_ENTRY)?.data).toEqual({ text: `Archived. Removed the worktree ${selfTree.path}; branch ${selfTree.branch} kept.` })
-  expect(entries).toContain("test isn't archived")
-  expect(entries).toContain(`Archived [Child](thread:${child.id}). Removed the worktree ${childTree.path}; branch ${childTree.branch} kept.`)
+  expect(value.entries.find((e) => e.kind === NOTE_ENTRY)?.data).toEqual({ text: 'Archived. Tidied up.' })
+  expect(entries).toContain('Kept is kept')
+  expect(entries).toContain(`Archived [Child](thread:${child.id}). Tidied up.`)
   expect(entries).toContain('This thread will be archived when this turn ends.')
-  expect(entries).toContain('readme.md') // its worktree was still there for the rest of the turn
+  expect(entries).toContain(`[Kept](thread:${kept.id})`) // thread_list, after it asked to be archived
   expect(entries).toContain('Done.')
-  // Both worktrees gone, both branches kept; Ego still there.
-  for (const t of [child, self]) {
-    const tree = t.ext?.worktrees as { path: string; branch: string }
-    expect(existsSync(tree.path)).toBe(false)
-    expect(git('branch', '--list', tree.branch)).toContain(tree.branch)
-  }
-  expect((await peer.call<{ value: ThreadInfo }>('value.watch', { key: 'ego.thread' })).value.archived).toBeUndefined()
+  expect((await peer.call<ThreadInfo[]>('thread.list', {})).map((t) => t.id)).toEqual([kept.id])
   await expect(peer.call('thread.submit', { id: self.id, text: 'hi' })).rejects.toMatchObject({ kind: 'archived' })
   await close()
 })

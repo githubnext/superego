@@ -17,8 +17,9 @@ let dir: string
 beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-worktrees-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
-async function open(dataDir = dir, more: DaemonExtension[] = []) {
-  process.env.SUPEREGO_MODEL = 'faux'
+async function open(dataDir = dir, more: DaemonExtension[] = [], model = 'faux') {
+  process.env.SUPEREGO_MODEL = model
+  process.env.SUPEREGO_REPLAY_SPEED = '0'
   const daemon = await openDaemon({ app: SUPEREGO, dataDir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [worktrees, ...more] })
   const server = await listen(daemon, join(dataDir, 'superego.sock'))
   const { peer, socket } = await connectSocket(join(dataDir, 'superego.sock'))
@@ -209,5 +210,37 @@ it('stops what still runs from a worktree before archiving removes it, but leave
   expect((await archive(peer, thread.id)).worktree).toBe('removed')
   await ended
   expect(existsSync(tree.path)).toBe(false)
+  await close()
+})
+
+it("is removed when the thread tools archive a thread, a thread's own only once its turn ends", async () => {
+  const git = repository()
+  writeFileSync(join(dir, '.gitignore'), '*\n!readme.md\n!.gitignore\n')
+  git('add', '.'); git('commit', '-q', '-m', 'ignore')
+  const { default: threadTools } = await import('@superego/threads/daemon')
+  const turn = (content: Json[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
+  const first = await open(dir, [threadTools])
+  const child = await first.peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'Child', worktree: true })
+  await first.close()
+  // The child archived, then itself; and it carries on in its worktree to the end of its turn.
+  writeFileSync(join(dir, 'turns.jsonl'), [
+    turn([{ type: 'toolCall', id: 'c1', name: 'thread_archive', arguments: { id: child.id } }], 'toolUse'),
+    turn([{ type: 'toolCall', id: 'c2', name: 'thread_archive', arguments: {} }], 'toolUse'),
+    turn([{ type: 'toolCall', id: 'c3', name: 'bash', arguments: { command: 'ls' } }], 'toolUse'),
+    turn([{ type: 'text', text: 'Done.' }], 'stop'),
+  ].join('\n') + '\n')
+  const { peer, close } = await open(dir, [threadTools], `replay:${join(dir, 'turns.jsonl')}`)
+  const self = await peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'Self', worktree: true, prompt: 'tidy up' })
+  await until(async () => (await listed(peer, true)).length === 2 && (await listed(peer, true))[0]!.status.state === 'done')
+  const entries = JSON.stringify((await peer.call<{ value: { entries: unknown[] } }>('thread.watch', { id: self.id })).value.entries)
+  const childTree = treeOf(child)!
+  expect(entries).toContain(`Archived [Child](thread:${child.id}). Removed the worktree ${childTree.path}; branch ${childTree.branch} kept.`)
+  expect(entries).toContain('readme.md') // its worktree was still there for the rest of the turn
+  expect(entries).toContain('Done.')
+  // Both worktrees gone, both branches kept.
+  for (const t of [child, self]) {
+    expect(existsSync(treeOf(t)!.path)).toBe(false)
+    expect(git('branch', '--list', treeOf(t)!.branch)).toContain(treeOf(t)!.branch)
+  }
   await close()
 })

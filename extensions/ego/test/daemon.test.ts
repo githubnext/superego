@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
-import { connectSocket, listen, openDaemon } from '@superego/daemon'
+import { connectSocket, listen, openDaemon, type DaemonExtension } from '@superego/daemon'
 import { defineApp, PROTOCOL_VERSION, type Hello, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { ego as egoExtension } from '../src/daemon.ts'
 
@@ -18,9 +18,10 @@ beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-ego-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 // Without the app's list of machines: no superego_machines tool (see tools.test.ts).
-const open = async () => {
-  process.env.SUPEREGO_MODEL = 'faux'
-  const daemon = await openDaemon({ app: SUPEREGO, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [egoExtension()] })
+const open = async (more: DaemonExtension[] = [], model = 'faux') => {
+  process.env.SUPEREGO_MODEL = model
+  process.env.SUPEREGO_REPLAY_SPEED = '0'
+  const daemon = await openDaemon({ app: SUPEREGO, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [egoExtension(), ...more] })
   const server = await listen(daemon, join(dir, 'superego.sock'))
   const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
   const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
@@ -231,4 +232,23 @@ it('finds its thread again when switched on after starting off, instead of makin
   expect((await second.peer.call<ThreadInfo>('ego.ask', {})).id).toBe(meta.id)
   expect((await second.peer.call<{ value: ThreadInfo[] }>('threads.watch', { hidden: true })).value.map((t) => t.id)).toEqual([meta.id])
   await second.close()
+})
+
+it("isn't archived by another thread's thread_archive either", async () => {
+  const { default: threadTools } = await import('@superego/threads/daemon')
+  const first = await open()
+  const meta = await first.peer.call<ThreadInfo>('ego.ask', {})
+  await first.close()
+  const turn = (content: unknown[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
+  writeFileSync(join(dir, 'turns.jsonl'), [
+    turn([{ type: 'toolCall', id: 'c1', name: 'thread_archive', arguments: { id: meta.id } }], 'toolUse'),
+    turn([{ type: 'text', text: 'Done.' }], 'stop'),
+  ].join('\n') + '\n')
+  const { peer, close } = await open([threadTools], `replay:${join(dir, 'turns.jsonl')}`)
+  const other = await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'tidy up' })
+  await until(async () => (await threads(peer)).find((t) => t.id === other.id)?.status.state === 'done')
+  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: other.id })
+  expect(JSON.stringify(value.entries)).toContain("superego isn't archived")
+  expect((await egoOf(peer))!.archived).toBeUndefined()
+  await close()
 })
