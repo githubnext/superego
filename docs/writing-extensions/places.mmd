@@ -1,17 +1,19 @@
 flowchart LR
-  rail["rail"] --- sidebar["sidebar"]
-  sidebar --- thread
+  rail["rail: Ego's button · each space's button"] --- space["space: the open one, as the sidebar"]
+  space --- thread
   subgraph thread["The thread"]
-    header["thread.header: badges, buttons · thread.crumb: chips"]
+    header["header: badges, buttons · thread.crumb: chips"]
     transcript["transcript: tool, entry, work"]
     above["composer.above: what waits on you"]
     composer["composer"]
   end
-  thread --- aside["thread.aside: a column beside"]
+  thread --- aside["aside: a column beside"]
   thread --- panes
-  subgraph panes["Panes: pane(kind)"]
+  subgraph panes["Panes: the pane menu, pane(kind)"]
     editor["file editor"]
     bar["editor.bar: small buttons"]
     side["editor.side: a tree, an outline"]
   end
+  titlebar["titlebar: what stands in for a space (the picker)"]
+  drawer["drawer (phone): beside Settings"]
   overlay["overlay: dialogs, over everything"]

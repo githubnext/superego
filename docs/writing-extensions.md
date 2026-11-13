@@ -104,7 +104,8 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 
 | UI half (`superego.` in `setup`) | For |
 |---|---|
-| `slot(name, Component, { order, fallback, fills })` | a component in a place in the window (below); `fallback`: only while nothing fills it; `fills: false`: always drawn, but doesn't count (Ego's rail button, beside which Unread's bell still shows); `thread.crumb` for a chip where the title bar says where a thread works |
+| `view('x.y', { title, icon, context, fits, default, narrow, withoutSpaces, order, component, rail, width })` | UI the layout puts in places (below): a space, a rail button, beside the thread, the pane menu, the title bar; `default` where it goes unless the user moves it |
+| `slot(name, Component, { order })` | a component in a slot whose place behaviour decides (below): `thread.crumb` for a chip where the title bar says where a thread works, `composer.above`, `editor.side`, `editor.bar`, `overlay`. The old places (`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) still work: each declares a view of that place, `<extension>.<slot>` |
 | `newThreadField({ component, from })` | a field in the New thread dialog: its value goes to `thread.create` as `options.<name>`, for the daemon half's `creating`; `from(thread)` its value for one started like `thread`; bundled only |
 | `on(event, listener)` → off; `window` | hear the window: `thread.status` (`{ machine, thread, before }`; `before` undefined the first time it's seen), `select` (`{ selection, before }`), `focus` (`{ focused }`), `visibility` (`{ visible }`); `window` is `{ focused, visible, selection, thread }` now. In Electron and browsers alike |
 | `appSetting(key)` | one of the app's settings as it is now, outside React |
@@ -133,13 +134,46 @@ renamed or moved keeps its old name as an alias on the daemon for one release (`
 that became a value, `MOVED_WATCHES`; a feature, `MOVED_FEATURES`), so older windows keep working: Ego's `thread.meta`,
 `thread.meta.clear` and `meta.watch` answer as `ego.ask`, `ego.clear` and the value `ego.thread`.
 
-## Places in the window
+## Views and the layout
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/places-dark.svg"><img src="writing-extensions/places.svg" alt="The window: rail, sidebar, the thread with its header, transcript and composer.above, thread.aside, panes with the editor's bar and side, and an overlay over everything"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/places-dark.svg"><img src="writing-extensions/places.svg" alt="The window: the rail and the open space beside it, the thread with its header, transcript and composer.above, the aside, panes from the pane menu with the editor's bar and side; the title bar's stand-in, a phone's drawer and an overlay over everything"></picture>
 
-Thread slots get `{ machine, thread }`; editor slots also `path` and `open(path)`. On a phone there's no rail: `footer`,
-under the sidebar beside Settings, takes its place. A profile's UI draws only in its own threads, and not in `sidebar`,
-`rail` or `footer`.
+An extension declares **views**: what it offers, and the kinds of place each fits. The shell has **places**, and knows
+no extension. The **layout** decides what goes where: each view's `default`, then the user's changes, kept in the app
+setting `app.layout` as `app.keys` keeps shortcuts.
+
+```ts
+superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: Threads, rail: ThreadsRail })
+superego.view('threads.details', { title: 'Thread details', context: 'thread', fits: ['aside', 'pane'], component: DetailsPane })
+superego.view('ego.button', { title: 'Ask Ego', icon: LifebuoyIcon, context: 'window', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10, component: EgoButton })
+```
+
+| Place | What it is | A view there gets |
+|---|---|---|
+| `space` | a button in the rail (its `icon`, or its own `rail` component), and the sidebar while it's the open one; on a phone, the drawer | `{ place }`; a `thread` view, the thread shown |
+| `rail` | a button in the rail that isn't a space (Ego's) | `{ place }` |
+| `drawer` | on a phone, at the drawer's foot beside Settings, where there's no rail | `{ place }` |
+| `titlebar` | at the title bar's start: what stands in for a space while there's none (the core's thread picker) | `{ place }` |
+| `aside` | a column beside the thread | `{ place, machine, thread }` |
+| `pane` | the thread's pane menu: a `thread` view that fits `pane` is a pane kind of its id | `{ place, machine, thread }` |
+| `header` | right of the thread's title: a button, a badge | `{ place, machine, thread }` |
+
+- `default` is a place, several, or none (offered, not placed: the user puts it somewhere). `narrow` is where it goes
+  on a phone instead. `withoutSpaces` is where it goes while no view is in `space` (Unread's bell in the rail, the core's
+  picker in the title bar).
+- `app.layout` holds only what the user changed: `{ place: { 'threads.details': 'aside', 'ego.button': null }, order:
+  { pane: ['git.changes'] }, narrow: { place: { … } } }`. A view it names that isn't there (an extension removed) is
+  ignored, and a place a view doesn't fit is too. A view can be in two places at once.
+- To put a view in a place or take it out, dispatch `layout.place` with `{ view, place, on? }` (toggled without
+  `on`); in a component, `usePlacement(view, place)` gives `[placed, toggle]`. ⌘I is `threads.details` in the `aside`,
+  or not.
+- `pane(kind, { menu: true })` is a view of the pane menu, of the kind's name, placed there by default.
+- A profile's views fit only the places that show a thread (`aside`, `pane`, `header`), in its own threads.
+
+Slots are places that behaviour decides, so the layout doesn't move them: a question card sits on the composer it asks
+for. They get `{ machine, thread }`; the editor's also `path` and `open(path)`. `superego.slot` in one of the old places
+(`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) declares a view of that place, `<extension>.<slot>`,
+placed there by default: its `sidebar` is a space, its `footer` the `drawer`.
 
 ## Hearing the window
 
@@ -265,11 +299,11 @@ to each machine, which lists it and lets profiles do without it.
 | [`skills`](../extensions/skills/src) | a prompt section, a `submit` transform, a `method`; `composer.complete` and `composer.sentWith` |
 | [`files`](../extensions/files/src) | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | [`links`](../extensions/links/src) | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
-| [`unread`](../extensions/unread/src) | UI only: a `rail` slot as a `fallback`, the phone's `footer`, an action with keys reading sessions, an app setting |
+| [`unread`](../extensions/unread/src) | UI only: a view in the rail `withoutSpaces` and in a phone's `drawer`, an action with keys reading sessions, an app setting |
 | [`notifications`](../extensions/notifications/src) | UI only: `on('thread.status')`, `on('auth.rejected')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
-| [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings, tool rows and a `link`; its daemon half is two other, optional extensions: `thread-tools`, on `superego.threads`, and `thread-reports`, report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by a submit transform's `by`) |
+| [`threads`](../extensions/threads/src) | the required one: views (the list a `space` with a `rail` of its own, details in the `aside` with ⌘I, the model in the `header`), app settings, tool rows and a `link`; its daemon half is two other, optional extensions: `thread-tools`, on `superego.threads`, and `thread-reports`, report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by a submit transform's `by`) |
 | [`worktrees`](../extensions/worktrees/src) | `thread` hooks (`creating` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `thread.crumb` chip and a `newThreadField` |
-| [`ego`](../extensions/ego/src) | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `value` older windows follow (the rail button reads the selection); a `rail` slot |
+| [`ego`](../extensions/ego/src) | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `value` older windows follow (the rail button reads the selection); a view in the `rail`, and in a phone's `drawer` |
 
 Diagram sources are the `.mmd` files in [writing-extensions/](writing-extensions/); re-render with the `diagram` skill
 (`bun <skill>/scripts/render.ts x.mmd x.svg`, and `--dark` for `x-dark.svg`).

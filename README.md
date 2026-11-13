@@ -51,7 +51,7 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
   them: one fits the column, a few sit in a grid, more go one at a time in a carousel (‹ ›, ←/→, a swipe). Click one
   to look closely: zoom by clicking, scrolling or pinching, drag to pan, ←/→ through the set, Esc to close. Each is
   copied to the thread's files on its machine, so every client sees it, on the web too, as it was when shown.
-- **Ego**, Superego's own agent (the lifebuoy in the rail, or *Ask Ego* in ⌘K; the `ego` extension), answers questions about Superego and
+- **Ego**, Superego's own agent (the lifebuoy in the rail, or in a phone's drawer, or *Ask Ego* in ⌘K; the `ego` extension), answers questions about Superego and
   how this computer has it set up: settings, profiles, skills, machines, projects and threads. It changes setup itself
   (this machine's settings, and the machines this computer reaches); any other work (a profile, a skill, code) it hands
   to an ordinary thread it starts in the right project, and links you to it. One thread per machine, in `~/.superego`, kept for good and in no list: it can't be archived, and *Clear* in its
@@ -105,7 +105,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `packages/app` | main process, window, preload, build and packaging; panes, the editor, the navigator; the UI half of the extension API |
 | `extensions/threads` | the sidebar: sessions and their threads; the thread tools' rows and `thread:` links (UI; required). Its daemon half is `thread-tools`, the agent's `thread_*` tools (optional), and `thread-reports`: a thread started by another tells it when what it was asked finishes, fails or waits on a question, until the user takes it over by writing to it (optional) |
 | `extensions/worktrees` | a git worktree of its own for a thread that asks (`-w`, the New thread checkbox, a profile's `worktree: true`): made on a branch, removed when archived clean (what still runs from it stopped first), put back when unarchived; the branch in the title bar (daemon + UI; required) |
-| `extensions/ego` | Ego, Superego's own agent: one hidden thread per machine, its prompt and tools that read and set up; the rail's lifebuoy, *Ask Ego* in ⌘K, *Clear* (daemon + UI) |
+| `extensions/ego` | Ego, Superego's own agent: one hidden thread per machine, its prompt and tools that read and set up; the rail's lifebuoy (a phone's drawer's too), *Ask Ego* in ⌘K, *Clear* (daemon + UI) |
 | `extensions/ask-user` | an `ask_user` tool; the question card and blocked status (daemon + UI) |
 | `extensions/git` | Changes (`⌘⇧D`): the thread's folder's changes by git, file by file, +N −N on its tab; the agent opens it too (daemon + UI) |
 | `extensions/web-panes` | Preview, a web page beside the thread (a link it names, opened beside), and Artifact, an HTML file the agent wrote, sandboxed (daemon + UI) |
