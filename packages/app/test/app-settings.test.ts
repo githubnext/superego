@@ -30,3 +30,11 @@ it("reads a shortcut set for an action's old id as the new one's, and saves it s
   expect(saved['app.keys']).toEqual({ 'git.changes': 'mod+alt+d', 'thread.new': 'mod+n' })
   await rm(dir, { recursive: true, force: true })
 })
+
+it("reads settings that moved into extensions as theirs: whether to notify, and where ⌘. looks", async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'superego-app-settings-'))
+  await writeFile(join(dir, 'app-settings.json'), JSON.stringify({ 'app.notifications': false, 'app.unread': 'session', 'app.keys': { 'thread.unread': 'mod+u' } }))
+  const settings = createAppSettings(dir, defineApp({ name: 'superego', id: 'superego' }))
+  expect([settings.get('notifications.enabled'), settings.get('unread.scope'), settings.get('app.keys')]).toEqual([false, 'session', { 'unread.next': 'mod+u' }])
+  await rm(dir, { recursive: true, force: true })
+})

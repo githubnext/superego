@@ -237,6 +237,9 @@ importers:
       '@superego/links':
         specifier: workspace:*
         version: link:../extensions/links
+      '@superego/notifications':
+        specifier: workspace:*
+        version: link:../extensions/notifications
       '@superego/protocol':
         specifier: workspace:*
         version: link:../packages/protocol
@@ -382,6 +385,25 @@ importers:
         version: 19.3.1(react@19.3.1)
 
   extensions/links:
+    dependencies:
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@superego/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      react:
+        specifier: ^19
+        version: 19.3.1
+
+  extensions/notifications:
     dependencies:
       '@superego/app':
         specifier: workspace:*

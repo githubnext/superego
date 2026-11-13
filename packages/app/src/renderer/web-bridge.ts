@@ -3,7 +3,7 @@
 // keeps in its main process (the app's own settings) is kept in this browser.
 import { FEATURES, PROTOCOL_VERSION, RpcError, RpcPeer, type Hello } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
-import { APP_MOVED, withMovedActions, type MachineEntry, type SuperegoBridge, type SuperegoEvent } from '../shared.ts'
+import { APP_MOVED, withMovedActions, type MachineEntry, type SuperegoBridge, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { askToken } from './token-gate.ts'
 
 const TOKEN = 'superego.webToken'
@@ -123,6 +123,20 @@ export function webBridge(): SuperegoBridge {
     'action.log': async () => [],
     'app.ready': async () => ({}),
     'app.desktop': async () => ({ web: true }),
+    // A thread wants a look: a Web Notification, once permission is granted (the notifications extension asks).
+    // One per thread (its tag), however many tabs show it; clicking it brings this one forward, showing the thread.
+    'app.notify': async ({ machine, thread, title, body }: ThreadNotice) => {
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return null
+      try {
+        const notification = new Notification(title, { body, tag: `${machine}/${thread}` })
+        notification.onclick = () => {
+          window.focus()
+          notification.close()
+          emit({ machine: 'app', method: 'app.select', params: { machine, thread } })
+        }
+      } catch { /* a phone's browser, which shows them only from a service worker */ }
+      return null
+    },
     'service.get': async () => ({ phase: 'current', busy: false }),
   }
 

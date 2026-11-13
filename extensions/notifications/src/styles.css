@@ -1,0 +1,5 @@
+/* The browser's offer to notify: a quiet pill over the composer, as suggestions are, and a way to say no. */
+.notify-offer { display: flex; align-items: center; gap: 2px; padding: 0 2px; }
+.notify-offer__ask { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: var(--superego-text-sm); height: 26px; color: var(--superego-muted); background: var(--superego-bg); border: 0; box-shadow: inset 0 0 0 1px light-dark(rgb(0 0 0 / .12), rgb(255 255 255 / .12)); border-radius: 999px; padding: 0 10px; cursor: default; }
+.notify-offer__ask:hover { color: var(--superego-text); background: var(--superego-hover); }
+.notify-offer__no { width: 22px; height: 22px; min-height: 22px; color: var(--superego-muted); box-shadow: none; background: none; }

@@ -4,7 +4,7 @@ export type MachineId = string
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected'
 import type { MachineConfig } from '@superego/client/shared'
 import type { SettingsStore } from '@superego/settings'
-import type { MachineVersion, VersionDrift } from '@superego/protocol'
+import type { MachineVersion, ThreadInfo, VersionDrift } from '@superego/protocol'
 
 export type { MachineConfig }
 
@@ -27,6 +27,20 @@ export type MachineUpdate = { state: 'running' | 'done' | 'failed'; log: string;
 
 
 /**
+ * What a notification says of a thread that wants a look now (it finished, failed or needs you); nothing for any other
+ * state. `app.notify` shows one: in the desktop app once however many windows ask, in a browser with Web Notifications.
+ */
+export type ThreadNotice = { machine: MachineId; thread: string; title: string; body: string }
+export function threadNotice(machine: MachineId, thread: ThreadInfo): ThreadNotice | undefined {
+  const { state, msg } = thread.status
+  const body = state === 'done' ? 'Finished' : state === 'error' ? `Failed${msg ? `: ${msg}` : ''}` : state === 'blocked' ? 'Needs you' : undefined
+  return body ? { machine, thread: thread.id, title: thread.title, body } : undefined
+}
+
+/** The notifications extension's setting: whether to notify at all (the desktop app reads it with no window open too). */
+export const NOTIFY = 'notifications.enabled'
+
+/**
  * The app's settings kept under another key now: a value stored under the old one is read as the new one's (and saved
  * so), by the desktop app and a browser alike.
  */
@@ -35,6 +49,8 @@ export const APP_MOVED: Record<string, string> = {
   'threads.sort': 'app.sort',
   // Where ⌘. looks is the unread extension's.
   'app.unread': 'unread.scope',
+  // Whether to notify is the notifications extension's.
+  'app.notifications': NOTIFY,
 }
 
 /** Actions known by another id now: a shortcut set for the old one (in `app.keys`) is the new one's. */

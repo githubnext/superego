@@ -21,6 +21,7 @@
     { "path": "extensions/skills" },
     { "path": "extensions/web-panes" },
     { "path": "extensions/unread" },
+    { "path": "extensions/notifications" },
     { "path": "app" },
     { "path": "scripts" }
   ]

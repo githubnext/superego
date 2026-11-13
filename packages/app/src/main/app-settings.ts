@@ -1,5 +1,5 @@
-// The app's own settings, the ones about this client rather than any machine: how it looks, whether it notifies, and
-// how it sits on the desktop.
+// The app's own settings, the ones about this client rather than any machine: how it looks, and how it sits on the
+// desktop. The window's extensions declare theirs (whether to notify, say) here too.
 // They are served under the reserved machine id "app" with the same settings methods a daemon answers.
 import { join } from 'node:path'
 import { SettingsRegistry, withMovedKeys } from '@superego/settings'
@@ -9,7 +9,7 @@ import { APP_MOVED, TEXT_SIZES, withMovedActions } from '../shared.ts'
 
 export const APP = 'app'
 export const APP_KEYS = {
-  keymap: 'app.keys', interfaceFont: 'app.font.interface', textSize: 'app.font.size', monoFont: 'app.font.mono', accent: 'app.accent', notifications: 'app.notifications', menuBar: 'app.menuBar', hideDock: 'app.hideDock',
+  keymap: 'app.keys', interfaceFont: 'app.font.interface', textSize: 'app.font.size', monoFont: 'app.font.mono', accent: 'app.accent', menuBar: 'app.menuBar', hideDock: 'app.hideDock',
 } as const
 
 export function createAppSettings(dataDir: string, app: AppConfig) {
@@ -31,14 +31,6 @@ export function createAppSettings(dataDir: string, app: AppConfig) {
         description: 'Focus rings, primary buttons, links and selection. Any CSS colour.', type: { type: 'color' },
       },
     ],
-  })
-  settings.register({
-    id: 'notifications', title: 'Notifications', order: 60,
-    settings: [{
-      key: APP_KEYS.notifications, title: 'Notify when a thread needs a look', default: true,
-      description: 'A system notification when a thread finishes, fails or needs you while superego is not focused.',
-      type: { type: 'boolean' },
-    }],
   })
   settings.register({
     id: 'keyboard', title: 'Keyboard', order: 65,

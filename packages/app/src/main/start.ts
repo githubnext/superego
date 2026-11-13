@@ -8,7 +8,7 @@ import {
   type AppConfig, type DeclaredSection, type Json, type Notifications, type ThreadInfo, type SettingType,
 } from '@superego/protocol'
 import { serveSettings } from '@superego/settings'
-import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent } from '../shared.ts'
+import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, NOTIFY, threadNotice, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
 import { checkIdentity, MachineStore, openLocal as openLocalSocket, openMachine, routeOf, runUpdate } from '@superego/client'
 import { Link } from './link.ts'
@@ -85,6 +85,8 @@ export function startApp(appConfig: AppConfig) {
         boundKeys.set(contents.id, new Set(keys))
         return null
       },
+      /** A window's notifications extension: a thread wants a look. */
+      async 'app.notify'(notice: ThreadNotice) { notify(notice); return null },
       async 'app.desktop'() { return { menuBar: menuBar.shown, dockHidden: mac && dockHidden() } },
       /** The page is listening for app events: answer with a thread it was asked to show before it was. */
       async 'app.ready'() {
@@ -187,8 +189,9 @@ export function startApp(appConfig: AppConfig) {
   machineStore.watch()
 
   /**
-   * Notify when a thread out of sight starts wanting a look: it finished, failed or needs the user. The app keeps its
-   * own subscription to each machine's threads for this, whatever the windows show.
+   * The app keeps its own subscription to each machine's threads, whatever the windows show: for the menu bar, and to
+   * notify when a thread starts wanting a look while no window is open (with one, the window's notifications extension
+   * decides, and asks through `app.notify`).
    */
   const lastStatus = new Map<string, ThreadInfo['status']['state']>()
   const watchSubs = new Map<string, string>()
@@ -221,14 +224,28 @@ export function startApp(appConfig: AppConfig) {
       const before = lastStatus.get(key)
       const now = thread.status.state
       lastStatus.set(key, now)
-      if (!announce || before === now || !['done', 'error', 'blocked'].includes(now)) continue
-      if (headless || BrowserWindow.getFocusedWindow() || !appSettings.get<boolean>(APP_KEYS.notifications) || !Notification.isSupported()) continue
-      const label = links.get(machine)?.label ?? machine
-      const body = now === 'done' ? 'Finished' : now === 'error' ? `Failed${thread.status.msg ? `: ${thread.status.msg}` : ''}` : 'Needs you'
-      const notification = new Notification({ title: thread.title, subtitle: label, body })
-      notification.on('click', () => show({ open: { machine, thread: thread.id } }))
-      notification.show()
+      if (!announce || before === now || BrowserWindow.getAllWindows().length) continue
+      // Only once a window has declared the setting: an app without the notifications extension never notifies.
+      const notice = threadNotice(machine, thread)
+      if (notice && appSettings.get(NOTIFY) === true && !thread.without?.includes('notifications')) notify(notice)
     }
+  }
+  /** When each notice was last shown: every window asks, and the first asking shows it. */
+  const noticed = new Map<string, number>()
+  /**
+   * Show a notification of a thread that wants a look, unless a window has the focus; clicking it shows the thread.
+   * Headless (tests), nothing shows: a test may collect them in `globalThis.superegoNotices`.
+   */
+  function notify(notice: ThreadNotice) {
+    const key = JSON.stringify(notice)
+    for (const [old, at] of noticed) if (Date.now() - at >= 5_000) noticed.delete(old)
+    if (Date.now() - (noticed.get(key) ?? 0) < 5_000) return
+    noticed.set(key, Date.now())
+    if (headless) return void (globalThis as { superegoNotices?: ThreadNotice[] }).superegoNotices?.push(notice)
+    if (BrowserWindow.getFocusedWindow() || !Notification.isSupported()) return
+    const notification = new Notification({ title: notice.title, subtitle: links.get(notice.machine)?.label ?? notice.machine, body: notice.body })
+    notification.on('click', () => show({ open: { machine: notice.machine, thread: notice.thread } }))
+    notification.show()
   }
 
   ipcMain.handle(CHANNEL.machines, () => machineEntries())
