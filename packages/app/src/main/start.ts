@@ -4,11 +4,11 @@ import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, protocol, session, shell, type MenuItemConstructorOptions } from 'electron'
 import { appEnv, daemonStarting, defaultDataDir, readBuild, socketPath } from '@superego/daemon/client'
 import {
-  arr, bool, compareVersions, defineAction, int, lit, obj, opt, Router, RpcError, str, union, unknown,
+  arr, bool, compareVersions, defineAction, int, lit, obj, opt, Router, RpcError, str, union, unknown, waitingForSignIn,
   type AppConfig, type DeclaredSection, type Json, type Notifications, type ProfileRef, type ThreadInfo, type SettingType,
 } from '@superego/protocol'
 import { serveSettings } from '@superego/settings'
-import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, NOTIFY, threadNotice, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
+import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, NOTIFY, signInNotice, threadNotice, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
 import { checkIdentity, MachineStore, openLocal as openLocalSocket, openMachine, routeOf, runUpdate, UiAllowStore } from '@superego/client'
 import { Link } from './link.ts'
@@ -232,8 +232,16 @@ export function startApp(appConfig: AppConfig) {
   }
   const threadsOf = new Map<string, ThreadInfo[]>()
   function track(machine: string, threads: ThreadInfo[], announce: boolean) {
+    const signingIn = (list: ThreadInfo[] | undefined) => (list ?? []).filter((t) => waitingForSignIn(t.status) && !t.without?.includes('notifications'))
+    // A provider rejecting the credentials: one notice when threads start waiting for sign-in, not one each.
+    const before = signingIn(threadsOf.get(machine)).length
+    const waiting = signingIn(threads)
     threadsOf.set(machine, threads)
     refreshDesktop()
+    if (announce && !before && waiting.length && !BrowserWindow.getAllWindows().length && appSettings.get(NOTIFY) === true) {
+      const notice = signInNotice(machine, { summary: waiting[0]!.status.msg ?? 'Sign in again', threads: waiting.map((t) => t.id) })
+      if (notice) notify(notice)
+    }
     for (const thread of threads) {
       const key = `${machine}/${thread.id}`
       const before = lastStatus.get(key)

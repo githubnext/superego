@@ -1,11 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react'
 import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
-import { NOTE_ENTRY, type Attachment, type ThreadInfo } from '@superego/protocol'
+import { NOTE_ENTRY, waitingForSignIn, type Attachment, type ThreadInfo } from '@superego/protocol'
 import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CheckIcon, FileIcon, type Icon as PhosphorIcon, IconButton, ListIcon, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TextArea, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
 import { completionsIn, divideWork, entryView, fileKind, folderKind, paneMenu, sentWithIn, Slot, shownPanes, toolRow, toolView, unfoldedTool, urlKind, useRegistry, type ToolRowCall, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
-import { useShell } from './state.tsx'
+import { useRejections, useShell } from './state.tsx'
 import { useShortcut } from './keys.ts'
 import { ctrlDigit } from './shortcuts.ts'
 import { Images, imagesIn, Markdown } from './Markdown.tsx'
@@ -366,9 +366,22 @@ function Transcript({ view, live }: { view: ConversationView; live: LiveState | 
           case 'working': return <Working key={item.key} steps={item.blocks.filter((b) => b.type === 'toolCall').length} since={item.since} />
         }
       })}
-      {live?.runFailure && !live.run && live.runFailure.reason !== 'aborted' && (
+      {waitingForSignIn(here.thread.status) ? <WaitingForSignIn /> : live?.runFailure && !live.run && live.runFailure.reason !== 'aborted' && (
         <div className="transcript__error">Run failed: {live.runFailure.reason}{live.runFailure.detail ? ` — ${live.runFailure.detail}` : ''}</div>
       )}
+    </div>
+  )
+}
+
+/** In place of its failure: the provider rejected the credentials, and the thread goes on once they're fixed. */
+function WaitingForSignIn() {
+  const { machine, thread } = useContext(Here)
+  const { signIn } = useShell()
+  const rejection = useRejections()[machine.id]?.find((r) => r.threads.includes(thread.id))
+  return (
+    <div className="transcript__waiting" title={rejection?.detail}>
+      <span>{thread.status.msg}. It goes on once you sign in again.</span>
+      {rejection && <Button onClick={() => signIn(machine.id, rejection.provider)}>Sign in again</Button>}
     </div>
   )
 }

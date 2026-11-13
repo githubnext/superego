@@ -81,7 +81,7 @@ export { FileEditor, type FileEditorProps, type MarkdownLink } from './file-edit
 export { livePreview } from './live-markdown.ts'
 export { call, has, loadFonts, machine, useThreadView, useSettings, useValue, useWatch } from './client.ts'
 export type { MachineEntry, MachineUpdate } from '../shared.ts'
-export { NOTIFY, threadNotice, type ThreadNotice } from '../shared.ts'
+export { NOTIFY, signInNotice, threadNotice, type ThreadNotice } from '../shared.ts'
 export { describeImage, ImageFrame, imageFileName, imageSourceOf, useImageSource, useNear, type ImageItem, type LoadedImage } from './images.tsx'
 export { Lightbox } from './lightbox.tsx'
 export { driftNote, MachineDrift } from './machine-drift.tsx'

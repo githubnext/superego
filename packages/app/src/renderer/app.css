@@ -275,6 +275,7 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .settings__note { color: var(--superego-muted); font-size: calc(12px * var(--superego-text-scale)); margin: 2px 0; }
 .settings-section h2 { font-size: calc(13px * var(--superego-text-scale)); font-weight: 600; margin: 24px 0 4px; }
 .setting, .provider, .profile-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--superego-border); }
+.provider.is-focused { box-shadow: inset 2px 0 0 var(--superego-accent); padding-left: 10px; }
 .setting__label { min-width: 0; }
 .profile-row__scope { margin-left: 4px; padding: 1px 6px; border-radius: 4px; background: var(--superego-hover); color: var(--superego-muted); font-size: var(--superego-text-xs); }
 .setting__control { flex: none; }
@@ -336,6 +337,8 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .profile-source pre { margin-top: 8px; }
 .machine-row__ui { margin-top: 4px; display: flex; align-items: center; gap: 8px; }
 .machine-row__ui .superego-button { padding: 1px 8px; font-size: calc(12px * var(--superego-text-scale)); }
+.auth-notice__detail { color: var(--superego-muted); margin-top: 2px; }
+.transcript__waiting { display: flex; align-items: center; flex-wrap: wrap; gap: var(--superego-space-2) var(--superego-space-3); color: var(--superego-muted); font-size: var(--superego-text-ui); border-left: 2px dashed currentColor; padding-left: var(--superego-space-3); }
 
 .superego-dialog.palette { top: 12vh; transform: translateX(-50%); }
 .superego-dialog.palette[data-starting-style], .superego-dialog.palette[data-ending-style] { transform: translate(-50%, 6px) scale(.985); }

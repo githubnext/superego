@@ -4,7 +4,7 @@
 // isn't sent at all. A message is like thread_send's: "From [child](thread:<id>): …", queued after the parent's run.
 import { defineExtension, section } from '@earendil-works/pi-durable'
 import { defineDaemonExtension } from '@superego/daemon'
-import type { ThreadInfo } from '@superego/protocol'
+import { waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { readsOf } from './reads.ts'
 import { reportsAbout } from './shared.ts'
 import { linkTo } from './tools.ts'
@@ -63,7 +63,8 @@ export function reporter(host: ReportsHost, { quietMs, maxMs }: Batching = BATCH
   return {
     async report(thread: ThreadInfo) {
       const parent = thread.parent
-      if (!parent || thread.status.state === 'working') return
+      // Waiting for sign-in, it hasn't finished: it reports when it goes on and does.
+      if (!parent || thread.status.state === 'working' || waitingForSignIn(thread.status)) return
       // Its answer as it is now, before it moves on.
       const text = await describe(thread, host)
       let batch = batches.get(parent)

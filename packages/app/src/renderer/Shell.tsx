@@ -1,6 +1,6 @@
 // The shell every app gets: the sidebar slot (or, with nothing there, a compact thread picker), the selected thread,
-// the restart notice, Settings, and the app-wide reactions (fonts, ⌘, , threads shown from the command line or a
-// notification).
+// the notices (restart required, a provider rejecting the credentials), Settings, and the app-wide reactions (fonts,
+// ⌘, , threads shown from the command line or a notification).
 import { useEffect, useRef, useState } from 'react'
 import type { SettingsSnapshot } from '@superego/protocol'
 import { ArrowLeftIcon, ArrowRightIcon, Button, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select } from '@superego/ui'
@@ -9,6 +9,7 @@ import { machine as client, useSettings, watched } from './client.ts'
 import { shownPanes, Slot, useRegistry } from './extension.tsx'
 import { ServiceNotice } from './ServiceNotice.tsx'
 import { refreshFontsSoon } from './fonts.ts'
+import { AuthNotice } from './AuthNotice.tsx'
 import { ThreadTitle, ThreadTools, ThreadView } from './ThreadView.tsx'
 import { StripSlot } from './panes.tsx'
 import { SettingsView } from './SettingsView.tsx'
@@ -105,7 +106,7 @@ export function Shell() {
           {!hasSidebar && tools}
           {selection && thread && machine && <ThreadTitle machine={machine} thread={thread} />}
           <span className="app__titlebar-end">
-            {!hasSidebar && <ServiceNotice />}
+            {!hasSidebar && <><AuthNotice /><ServiceNotice /></>}
             <span className="app__strip" ref={setStrip} />
             {selection && thread && machine && <ThreadTools machine={machine} thread={thread} />}
           </span>
@@ -125,7 +126,7 @@ export function Shell() {
           <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) setDrawer(false) } : undefined}>
             {narrow && <div className="app__drag" />}
             <Slot name="sidebar" props={{}} />
-            <div className="app__footer"><ServiceNotice />{narrow && <>{settingsButton}<Slot name="footer" props={{}} /></>}</div>
+            <div className="app__footer"><AuthNotice /><ServiceNotice />{narrow && <>{settingsButton}<Slot name="footer" props={{}} /></>}</div>
           </aside>
         )}
         <main className="app__main">

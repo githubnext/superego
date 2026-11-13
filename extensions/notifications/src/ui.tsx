@@ -1,12 +1,12 @@
 /// <reference path="./env.d.ts" />
 // notifications, UI half: a notification when a thread finishes, fails or needs you while the window is in the
-// background; clicking it shows the thread. The desktop app shows it (once, however many windows ask, and only while
+// background, and one when a provider rejects a machine's credentials (not one per thread it stops); clicking it shows the thread. The desktop app shows it (once, however many windows ask, and only while
 // none has the focus); a browser with Web Notifications, once allowed: offered over the composer when you set a thread
 // to work, never on load. With no window open, the desktop app notifies by itself, by this extension's setting.
 import { useState } from 'react'
 import { call, defineUiExtension, NOTIFY, useAppSetting, type ComposerWhere, type Store } from '@superego/app/ui'
 import { BellIcon, IconButton, XIcon } from '@superego/ui'
-import { noticeFor } from './notify.ts'
+import { noticeFor, rejectionNotice } from './notify.ts'
 import { about } from './shared.ts'
 import './styles.css'
 
@@ -27,6 +27,12 @@ export default defineUiExtension({
     superego.on('thread.status', (event) => {
       if (superego.appSetting<boolean>(NOTIFY) === false) return
       const notice = noticeFor(event, superego.window)
+      if (notice) void call('app', 'app.notify', notice).catch(() => {})
+    })
+    // A provider rejecting the credentials: one notification, not one for each thread it stops (they're quiet).
+    superego.on('auth.rejected', (event) => {
+      if (superego.appSetting<boolean>(NOTIFY) === false) return
+      const notice = rejectionNotice(event, superego.window)
       if (notice) void call('app', 'app.notify', notice).catch(() => {})
     })
     superego.slot('composer.above', Offer, { order: 300 })

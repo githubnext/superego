@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { defineApp, type Status, type ThreadInfo } from '@superego/protocol'
 import { createRegistry, defineUiExtension, slotEntries, type WindowEvents } from '../src/renderer/extension.tsx'
-import { statusChanges, type Statuses } from '../src/renderer/window-events.ts'
+import { rejectionChanges, statusChanges, type Statuses } from '../src/renderer/window-events.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
 const profile = { scope: 'user' as const, name: 'default', dir: '/home/me/.superego/profiles/default' }
@@ -98,5 +98,20 @@ describe('fallback slots', () => {
     const ego = defineUiExtension({ name: 'ego', setup(superego) { superego.slot('rail', Ego, { order: 10, fills: false }) } })
     expect(slotEntries(createRegistry(app, [bell, ego], () => {}), 'rail', undefined).map((e) => e.component)).toEqual([Ego, Bell])
     expect(slotEntries(createRegistry(app, [bell, ego, spaces], () => {}), 'rail', undefined).map((e) => e.component)).toEqual([Ego, Spaces])
+  })
+})
+
+describe('rejectionChanges', () => {
+  const rejection = (provider: string, since: number, threads: string[] = []) => ({ provider, name: provider, summary: `${provider} rejected the API key`, detail: '401', since, threads })
+
+  it('tells of a provider rejected on a machine already heard from, once, and again when it is rejected anew', () => {
+    const before = new Map()
+    // What a machine had when the window first heard isn't news; a machine yet to say is skipped.
+    expect(rejectionChanges(before, { local: [rejection('anthropic', 1)], box: undefined })).toEqual([])
+    expect(rejectionChanges(before, { local: [rejection('anthropic', 1, ['a', 'b'])] })).toEqual([])
+    expect(rejectionChanges(before, { box: [] })).toEqual([])
+    expect(rejectionChanges(before, { box: [rejection('openai', 2, ['c'])] })).toEqual([{ machine: 'box', rejection: rejection('openai', 2, ['c']) }])
+    expect(rejectionChanges(before, { box: [] })).toEqual([])
+    expect(rejectionChanges(before, { local: [rejection('anthropic', 3)] })).toEqual([{ machine: 'local', rejection: rejection('anthropic', 3) }])
   })
 })

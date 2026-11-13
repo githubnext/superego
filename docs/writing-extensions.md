@@ -158,6 +158,11 @@ superego.on('thread.status', ({ machine, thread, before }) => {
 `window` is how things are as the event arrives: `focused`, `visible`, the `selection` and the `thread` it shows. The
 core marks a finished thread seen the same way, on `select`, `focus` and `thread.status`.
 
+`auth.rejected` is a machine's provider rejecting its credentials (`{ machine, rejection }`, a `ProviderRejection`):
+once, however many threads it stops. Those threads are `blocked` with kind `auth` (`waitingForSignIn`), quiet on their
+own, and go on by themselves once the machine is signed in again; `threadNotice` says nothing of them, `signInNotice`
+says it once for all.
+
 ## Lifecycle and ownership
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/lifecycle-dark.svg"><img src="writing-extensions/lifecycle.svg" alt="Set up, registrations owned by the extension, torn down when its profile changes or the daemon stops, then set up again"></picture>
@@ -261,7 +266,7 @@ to each machine, which lists it and lets profiles do without it.
 | [`files`](../extensions/files/src) | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | [`links`](../extensions/links/src) | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
 | [`unread`](../extensions/unread/src) | UI only: a `rail` slot as a `fallback`, the phone's `footer`, an action with keys reading sessions, an app setting |
-| [`notifications`](../extensions/notifications/src) | UI only: `on('thread.status')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
+| [`notifications`](../extensions/notifications/src) | UI only: `on('thread.status')`, `on('auth.rejected')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
 | [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings, tool rows and a `link`; its daemon half is two other, optional extensions: `thread-tools`, on `superego.threads`, and `thread-reports`, report-back through `turnEnd` and `blocked` hooks |
 | [`worktrees`](../extensions/worktrees/src) | `thread` hooks (`creating` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `thread.crumb` chip and a `newThreadField` |
 | [`ego`](../extensions/ego/src) | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `value` the rail follows; a `rail` slot |

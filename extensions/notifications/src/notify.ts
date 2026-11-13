@@ -1,5 +1,6 @@
-// When to notify: a thread starts wanting a look (it finished, failed or needs you) while the window isn't in front.
-import { threadNotice, type ThreadNotice, type WindowEvents, type WindowState } from '@superego/app/ui'
+// When to notify: a thread starts wanting a look (it finished, failed or needs you), or a provider rejects a machine's
+// credentials (once, for all the threads it stops), while the window isn't in front.
+import { signInNotice, threadNotice, type ThreadNotice, type WindowEvents, type WindowState } from '@superego/app/ui'
 
 /**
  * The notice for a status change, if it calls for one: a change the window saw happen (not a thread it sees for the
@@ -8,4 +9,10 @@ import { threadNotice, type ThreadNotice, type WindowEvents, type WindowState } 
 export function noticeFor({ machine, thread, before }: WindowEvents['thread.status'], window: Pick<WindowState, 'focused' | 'visible'>): ThreadNotice | undefined {
   if (before === undefined || (window.focused && window.visible)) return undefined
   return threadNotice(machine, thread)
+}
+
+/** The one notice for a provider rejecting a machine's credentials, while the window hasn't the focus or isn't showing. */
+export function rejectionNotice({ machine, rejection }: WindowEvents['auth.rejected'], window: Pick<WindowState, 'focused' | 'visible'>): ThreadNotice | undefined {
+  if (window.focused && window.visible) return undefined
+  return signInNotice(machine, rejection)
 }

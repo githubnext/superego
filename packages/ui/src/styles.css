@@ -113,6 +113,7 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-status--done { color: var(--superego-status-done); }
 .superego-status--blocked { color: var(--superego-status-blocked); }
 .superego-status--error { color: var(--superego-status-error); }
+.superego-status--signin::before { background: none; border: 1.5px dashed currentColor; }
 @keyframes superego-pulse { 50% { opacity: .35; } }
 
 .superego-list { list-style: none; margin: 0; padding: 0; }

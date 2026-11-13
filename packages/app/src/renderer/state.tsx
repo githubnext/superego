@@ -2,13 +2,14 @@
 // number of components show them), which thread is selected, and the Settings dialog; those two kept in the window
 // across reloads; and where the window has been, to go back and forward.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { Json, ThreadInfo } from '@superego/protocol'
+import { AUTH_REJECTED, type Json, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
-import { has, machine as client, useHiddenThreads, useMachineList, useThreads as useThreadsWatch } from './client.ts'
+import { has, machine as client, useHiddenThreads, useMachineList, useThreads as useThreadsWatch, useValue } from './client.ts'
 import { useRegistry } from './extension.tsx'
 import { useImageRechecks } from './images.tsx'
 import { emptyHistory, step, visit, type History, type Place } from './history.ts'
-import { useLocalState } from './local-state.ts'
+import { setLocalState, useLocalState } from './local-state.ts'
+import { focusProvider } from './provider-focus.ts'
 import { useWindowEvents } from './window-events.ts'
 import { freeze, sessionKey, useSessionList, type Session } from './sessions.ts'
 
@@ -23,6 +24,8 @@ export type NewThreadStart = { machine?: string; cwd?: string; profile?: string;
 type ShellState = {
   machines: MachineEntry[]
   threads: Record<string, ThreadInfo[] | undefined>
+  /** Each connected machine's providers that rejected its credentials (`auth.rejected`); undefined until it says. */
+  rejections: Record<string, ProviderRejection[] | undefined>
   selection: Selection | undefined
   select(selection: Selection | undefined): void
   settingsOpen: boolean
@@ -60,6 +63,8 @@ export const useMachines = () => useShellState().machines
 export const useThreads = (machine: string) => useShellState().threads[machine]
 /** Every machine's threads, by machine id. */
 export const useAllThreads = () => useShellState().threads
+/** Each machine's providers that rejected its credentials, by machine. */
+export const useRejections = () => useShellState().rejections
 /** The selected thread, and a way to select another (or none). */
 export function useSelection() {
   const { selection, select, machines, threads, archived, hidden } = useShellState()
@@ -89,6 +94,12 @@ export function useShell() {
   const { openSettings, openNewThread } = useShellState()
   return {
     openSettings: () => openSettings(true),
+    /** Settings, on a machine's Providers, at `provider`: to sign in to it again. */
+    signIn: (machine: string, provider: string) => {
+      setLocalState('settings.target', machine, 'app')
+      focusProvider(machine, provider)
+      openSettings(true)
+    },
     /** The New thread dialog, optionally starting on a machine or folder. */
     newThread: (start: NewThreadStart = {}) => openNewThread(start),
   }
@@ -104,6 +115,10 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useLocalState('sidebar.open', true)
   const onThreads = useCallback((machine: string, list: ThreadInfo[] | undefined) => {
     setThreads((all) => all[machine] === list ? all : { ...all, [machine]: list })
+  }, [])
+  const [rejections, setRejections] = useState<Record<string, ProviderRejection[] | undefined>>({})
+  const onRejections = useCallback((machine: string, list: ProviderRejection[] | undefined) => {
+    setRejections((all) => all[machine] === list ? all : { ...all, [machine]: list })
   }, [])
   useImageRechecks(threads)
   // One order for the sidebar and everything that walks it (⌘⇧[ ⌘⇧], the navigator): held, a thread changing state
@@ -141,7 +156,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   // What extensions hear of it (`superego.on`): statuses changing, the thread shown, the window's focus.
   const registry = useRegistry()
   useWindowEvents(registry, {
-    threads, selection,
+    threads, rejections, selection,
     ...(selection && hidden ? { hidden: { machine: selection.machine, threads: hidden } } : {}),
     shown: shown ?? (archived?.id === selection?.thread ? archived : undefined) ?? hidden?.find((t) => t.id === selection?.thread),
   })
@@ -151,7 +166,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const exists = (p: Place) => 'settings' in p || (p.thread.machine === selection?.machine && Boolean(hidden?.some((t) => t.id === p.thread.thread)))
     || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread))
   const value = useMemo<ShellState>(() => ({
-    machines, threads, selection, settingsOpen, newThread, sessions, hold, lastThread, sidebarOpen, archived, hidden,
+    machines, threads, rejections, selection, settingsOpen, newThread, sessions, hold, lastThread, sidebarOpen, archived, hidden,
     canBack: Boolean(step(history, -1, place, exists)),
     canForward: Boolean(step(history, 1, place, exists)),
     go: (by) => {
@@ -167,18 +182,23 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     openSettings: (open = true) => setSettingsOpen(open),
     openNewThread: (start = {}) => setNewThread(start === false ? undefined : start),
     toggleSidebar: (open) => setSidebarOpen((was) => open ?? !was),
-  }), [machines, threads, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived, hidden, history])
+  }), [machines, threads, rejections, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived, hidden, history])
   return (
     <Context.Provider value={value}>
-      {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} />)}
+      {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onRejections={onRejections} />)}
       {children}
     </Context.Provider>
   )
 }
 
 /** One threads subscription per machine, kept while it is connected; the last list stays while it isn't. */
-function MachineThreads({ machine, onThreads }: { machine: MachineEntry; onThreads(machine: string, list: ThreadInfo[] | undefined): void }) {
+function MachineThreads({ machine, onThreads, onRejections }: {
+  machine: MachineEntry; onThreads(machine: string, list: ThreadInfo[] | undefined): void; onRejections(machine: string, list: ProviderRejection[] | undefined): void
+}) {
   const threads = useThreadsWatch(machine.id, machine.state === 'connected' && has(machine, 'threads'))
+  // Null from a daemon that doesn't say (one older than the value): as good as none rejected.
+  const rejected = useValue<ProviderRejection[] | null>(machine.id, machine.state === 'connected' && has(machine, 'threads'), AUTH_REJECTED)
+  useEffect(() => { onRejections(machine.id, rejected ?? undefined) }, [rejected])
   // What the machine offers, for the palette and for routing thread actions.
   const { router, extensions } = useRegistry()
   // Again when what it offers changes: a profile's extensions bring actions of their own.

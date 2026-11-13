@@ -9,7 +9,7 @@
 // teardown removes all of it at once. A profile's UI is owned by that profile on its machine too, and draws only in
 // that profile's threads there.
 import { createContext, useContext, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type ReactNode } from 'react'
-import type { AppConfig, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, SectionInfo, SettingsSnapshot, Status, ThreadInfo } from '@superego/protocol'
+import type { AppConfig, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, ProviderRejection, SectionInfo, SettingsSnapshot, Status, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import type { Selection } from './state.tsx'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowContext, type WindowRouter } from './actions.tsx'
@@ -224,6 +224,11 @@ export type WindowEvents = {
   'focus': { focused: boolean }
   /** The window was shown or hidden: another tab in front, minimised, the screen locked. */
   'visibility': { visible: boolean }
+  /**
+   * A machine's provider rejected its credentials: once as it happens (not for one rejected before the window
+   * opened), however many threads it stops. `rejection.threads` are those waiting so far.
+   */
+  'auth.rejected': { machine: string; rejection: ProviderRejection }
 }
 export type WindowEvent = keyof WindowEvents
 

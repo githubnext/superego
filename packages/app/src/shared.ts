@@ -4,7 +4,7 @@ export type MachineId = string
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected'
 import type { MachineConfig } from '@superego/client/shared'
 import type { SettingsStore } from '@superego/settings'
-import type { MachineVersion, ThreadInfo, VersionDrift } from '@superego/protocol'
+import { waitingForSignIn, type MachineVersion, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
 
 export type { MachineConfig }
 
@@ -33,8 +33,23 @@ export type MachineUpdate = { state: 'running' | 'done' | 'failed'; log: string;
 export type ThreadNotice = { machine: MachineId; thread: string; title: string; body: string }
 export function threadNotice(machine: MachineId, thread: ThreadInfo): ThreadNotice | undefined {
   const { state, msg } = thread.status
+  // Waiting for sign-in: one notice for the machine says so (signInNotice), not one per thread.
+  if (waitingForSignIn(thread.status)) return undefined
   const body = state === 'done' ? 'Finished' : state === 'error' ? `Failed${msg ? `: ${msg}` : ''}` : state === 'blocked' ? 'Needs you' : undefined
   return body ? { machine, thread: thread.id, title: thread.title, body } : undefined
+}
+
+/** How many threads wait for sign-in, as the notice says it. */
+export const waitingPhrase = (count: number) =>
+  count === 0 ? 'New turns wait until you sign in again.' : `${count} thread${count === 1 ? ' is' : 's are'} waiting.`
+
+/**
+ * The one notification for a provider rejecting a machine's credentials, however many threads it stops: clicking it
+ * shows the first of them (where the notice says what to do). Nothing while none waits.
+ */
+export function signInNotice(machine: MachineId, rejection: Pick<ProviderRejection, 'summary' | 'threads'>): ThreadNotice | undefined {
+  const first = rejection.threads[0]
+  return first ? { machine, thread: first, title: rejection.summary, body: `${waitingPhrase(rejection.threads.length)} Sign in again to go on.` } : undefined
 }
 
 /** The notifications extension's setting: whether to notify at all (the desktop app reads it with no window open too). */

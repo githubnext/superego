@@ -2,13 +2,15 @@
 // may name a custom component (`ui`) drawn below their settings; the Providers section is one.
 import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from 'react'
 import { useLocalState } from './local-state.ts'
-import type { AuthEvent, AuthPrompt, Json, Notifications, ProviderAuthInfo, SectionInfo, SettingInfo, SettingsSnapshot } from '@superego/protocol'
+import { AUTH_REJECTED, type AuthEvent, type AuthPrompt, type Json, type Notifications, type ProviderAuthInfo, type ProviderRejection, type SectionInfo, type SettingInfo, type SettingsSnapshot } from '@superego/protocol'
 import { Button, Dialog, FontPicker, Select, StatusGlyph, Switch, TextField } from '@superego/ui'
 import { remoteCommand } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 
-import { machine as client, has, loadFonts, useSettings } from './client.ts'
+import { machine as client, has, loadFonts, useSettings, useValue } from './client.ts'
 import { fonts } from './fonts.ts'
+import { takeProviderFocus } from './provider-focus.ts'
+import { waitingPhrase } from '../shared.ts'
 import { mergeSettings, type MergedSetting } from './merge-settings.ts'
 import { Keymap } from './Keymap.tsx'
 import { driftNote, MachineDrift } from './machine-drift.tsx'
@@ -223,7 +225,12 @@ export function Providers({ target, section }: { target: string; section: Sectio
   const dispatch = useRegistry().router.dispatch
   const providers = (section.data ?? []) as ProviderAuthInfo[]
   const [flow, setFlow] = useState<{ provider: string; id?: string; events: AuthEvent[] }>()
-  const [keyFor, setKeyFor] = useState<string>()
+  // Opened to sign in to one again ("Sign in again"): there, with its key's field open when it takes a key.
+  const [focused] = useState(() => takeProviderFocus(target))
+  const [keyFor, setKeyFor] = useState<string | undefined>(() => providers.find((p) => p.id === focused && p.apiKey && !p.oauth)?.id)
+  const focusedRow = useRef<HTMLDivElement>(null)
+  useEffect(() => { focusedRow.current?.scrollIntoView({ block: 'center' }) }, [])
+  const rejected = useValue<ProviderRejection[] | null>(target, true, AUTH_REJECTED)
   const machine = client(target)
 
   useEffect(() => machine.on('auth.event', ({ flow: id, event }: Notifications['auth.event']) => {
@@ -246,11 +253,14 @@ export function Providers({ target, section }: { target: string; section: Sectio
 
   return (
     <div className="providers">
-      {providers.map((provider) => (
-        <div key={provider.id} className="provider">
+      {providers.map((provider) => {
+        const rejection = rejected?.find((r) => r.provider === provider.id)
+        return (
+        <div key={provider.id} className={`provider ${provider.id === focused ? 'is-focused' : ''}`} ref={provider.id === focused ? focusedRow : undefined}>
           <div className="setting__label">
             <div>{provider.name}</div>
             <div className="settings__note">{describe(provider)}</div>
+            {rejection && <div className="setting__error">{rejection.summary}. {waitingPhrase(rejection.threads.length)}</div>}
           </div>
           <div className="provider__actions">
             {keyFor === provider.id ? (
@@ -262,11 +272,13 @@ export function Providers({ target, section }: { target: string; section: Sectio
                 {provider.oauth && <Button onClick={() => void start(provider.id, 'oauth')}>{provider.oauth}</Button>}
                 {provider.apiKey && <Button onClick={() => setKeyFor(provider.id)}>API key…</Button>}
                 {provider.stored && <Button onClick={() => void dispatch('auth.logout', { provider: provider.id }, { machine: target, source: 'settings' })}>Sign out</Button>}
+                {rejection && !rejection.retrying && <Button onClick={() => void dispatch('auth.retry', { provider: provider.id }, { machine: target, source: 'settings' })}>Retry now</Button>}
               </>
             )}
           </div>
         </div>
-      ))}
+        )
+      })}
       {flow && (
         <div className="auth-flow">
           <div className="auth-flow__head">
