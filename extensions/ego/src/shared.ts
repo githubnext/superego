@@ -5,7 +5,7 @@ import type { ExtensionAbout } from '@superego/protocol'
 export const ASK = 'ego.ask'
 /** Start Ego's conversation over: the same thread, empty again. */
 export const CLEAR = 'ego.clear'
-/** Ego's thread on this machine, as a live value: null until it's first opened. */
+/** Ego's thread on this machine, as a live value for older windows: null until it's first opened (see daemon.ts). */
 export const THREAD = 'ego.thread'
 
 /**

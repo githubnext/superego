@@ -45,7 +45,8 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
       // last in use, brought back if archived; else made the first time it's asked for, however many ask. Looked for
       // from the start, and again whenever it's asked for and none was found yet (switched on later, say).
       let id: string | undefined
-      // Followed by the window (and older ones' `meta.watch`): its thread as it is now, after anything that changes it.
+      // Its thread, for older windows (`meta.watch`; this one finds it among the hidden threads it watches). Coarse:
+      // set again as a run starts, ends or waits on the user, and when it's asked or cleared; not as it's read.
       const live = superego.value<ThreadInfo | null>(THREAD, null)
       const refresh = async () => { if (id) live.set(await threads.get(id)) }
       const isEgo = (thread: ThreadInfo) => thread.owner === about.name
@@ -78,6 +79,7 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
       superego.thread({
         turnStart: (t) => ours(t) ? refresh() : undefined,
         turnEnd: (t) => ours(t) ? refresh() : undefined,
+        blocked: (t) => ours(t) ? refresh() : undefined,
         // Kept, not archived: cleared instead.
         archiving(t) {
           if (isEgo(t)) throw new RpcError('invalid', `${name} isn't archived`, { hint: 'Clear it instead.' })
