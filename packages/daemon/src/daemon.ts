@@ -1,7 +1,7 @@
 // The Superego daemon: one per user per machine. It owns a pi-durable Harness on SQLite, the thread catalog, and every
 // live subscription. Clients (the Electron app, the CLI, a remote app over ssh) speak the protocol in @superego/protocol.
 import { execFile } from 'node:child_process'
-import { watch as watchFs } from 'node:fs'
+import { existsSync, watch as watchFs } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { link, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, hostname, platform } from 'node:os'
@@ -26,7 +26,7 @@ import { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveV
 import { serveWeb, webToken, type WebServer } from './web.ts'
 import { agentsInstructions } from './agents-md.ts'
 import { metaExtension, metaPrompt, type MachineDirectory } from './meta.ts'
-import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileRef } from './profiles.ts'
+import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileDaemonExtension, type ProfileRef } from './profiles.ts'
 
 const context = BACKGROUND_CONTEXT
 
@@ -284,9 +284,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /**
    * The kinds of pane the agent can open, and what each shows, as extensions describe them (`superego.pane`; the window
    * draws them, the extension's UI half registering the same kind): the core's own `panes`, and any other's. A
-   * profile's extension's are for that profile's threads only (`profile`: its folder).
+   * profile's extension's are for the threads of the profiles that have it only (`profiles`: their folders).
    */
-  const paneKinds: { kind: string; about: string; owner: string; profile?: string }[] = []
+  const paneKinds: { kind: string; about: string; owner: string; profiles?: Set<string> }[] = []
   // Panes: the agent opens them beside its thread (a file, another thread, an extension's or a profile's own), from the
   // kinds its instructions list.
   const panesPart = defineExtension({
@@ -305,13 +305,20 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       return `Panes you can open beside this conversation with open_pane, by kind:\n${kinds.map(({ kind, about }) => `- "${kind}": ${about}`).join('\n')}`
     })],
   })
-  /** The pane kinds a thread's agent is told of: the core's and those of extensions it has, and its profile's. */
+  /**
+   * The pane kinds a thread's agent is told of: the core's and those of extensions it has, and its profile's. A kind
+   * both describe is told as its profile's, as the window draws it.
+   */
   function panesOf(id: string) {
     const meta = mounted.get(id)?.meta
-    const profile = meta?.profile && profiles.get(meta.profile.dir)
+    const dir = meta?.profile?.dir
+    const profile = dir ? profiles.get(dir) : undefined
     const without = withoutOf(meta, profile)
-    const declared = Object.entries(profile?.spec.panes ?? {}).map(([kind, about]) => ({ kind, about }))
-    return [...paneKinds.filter((p) => !without.has(p.owner) && (!p.profile || p.profile === meta?.profile?.dir)), ...declared]
+    const kinds = new Map<string, string>()
+    for (const p of paneKinds) if (!p.profiles && !without.has(p.owner)) kinds.set(p.kind, p.about)
+    for (const p of paneKinds) if (dir && p.profiles?.has(dir)) kinds.set(p.kind, p.about)
+    for (const [kind, about] of Object.entries(profile?.spec.panes ?? {})) kinds.set(kind, about)
+    return [...kinds].map(([kind, about]) => ({ kind, about }))
   }
   // The folder agents share: standing instructions in AGENTS.md (see agents-md.ts), and the skills extension's skills.
   const agentsDir = options.agentsDir ?? join(homedir(), '.agents')
@@ -519,8 +526,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (entry && !entry.owned && !entry.listeners.size) values.delete(name)
   }
   const contributors: ((threadId: string) => StatusContribution | undefined)[] = []
-  /** Extensions' submit transforms, in the order registered: whose, and (a profile's) for which profile's threads. */
-  const transforms: { transform: SubmitTransform; owner: string; profile?: string }[] = []
+  /** Extensions' submit transforms, in the order registered: whose, and (a profile's) for which profiles' threads (their folders). */
+  const transforms: { transform: SubmitTransform; owner: string; profiles?: Set<string> }[] = []
   const cleanups: (() => void)[] = []
   const blockedOf = (id: string) => {
     for (const contribute of contributors) {
@@ -544,11 +551,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const announced = new Set<string>()
 
   /**
-   * Set up a daemon extension: a bundled one (for the daemon's life), or a profile's (`agent` then adds to that
-   * profile's selection). Everything it registers is its own, and the returned teardown undoes all of it: its agent
-   * parts, actions, values, status, settings and its name.
+   * Set up a daemon extension: a bundled one (for the daemon's life), or a profile's (`agent` then adds to the
+   * selection of the profiles that have it, `profiles`: their folders). Everything it registers is its own, and the
+   * returned teardown undoes all of it: its agent parts, actions, values, status, settings and its name.
    */
-  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension) => () => void, profile?: ProfileRef): Promise<() => void> {
+  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension) => () => void, profiles?: Set<string>): Promise<() => void> {
     if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
     if (claimed.has(extension.name)) throw new Error(`An extension named ${extension.name} is already set up`)
     claimed.add(extension.name)
@@ -580,8 +587,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         undo.push(() => { methods.delete(id) })
       },
       pane(kind, about) {
-        if (paneKinds.some((p) => p.kind === kind && p.profile === profile?.dir)) throw new Error(`Pane kind ${kind} is already described`)
-        const entry = { kind, about, owner: extension.name, ...(profile ? { profile: profile.dir } : {}) }
+        if (paneKinds.some((p) => p.kind === kind && p.profiles === profiles)) throw new Error(`Pane kind ${kind} is already described`)
+        const entry = { kind, about, owner: extension.name, ...(profiles ? { profiles } : {}) }
         paneKinds.push(entry)
         undo.push(() => { paneKinds.splice(paneKinds.indexOf(entry), 1) })
       },
@@ -600,7 +607,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       },
       status: (contribute) => { contributors.push(contribute); undo.push(() => { contributors.splice(contributors.indexOf(contribute), 1) }) },
       submit(transform) {
-        const entry = { transform, owner: extension.name, ...(profile ? { profile: profile.dir } : {}) }
+        const entry = { transform, owner: extension.name, ...(profiles ? { profiles } : {}) }
         transforms.push(entry)
         undo.push(() => { transforms.splice(transforms.indexOf(entry), 1) })
       },
@@ -639,50 +646,125 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   // ── Profiles ────────────────────────────────────────────────────────────────────────────────────────────────────
 
   const profiles = new Map<string, LoadedProfile>()
-  const teardowns = new Map<string, () => void>()
-  const loading = new Map<string, Promise<LoadedProfile>>()
-  /** A profile as its files are now: loaded again (its extensions torn down and set up again) when they changed. */
+  /**
+   * A profile's daemon extension, set up once however many profiles have it (by its file at one version, `key`: see
+   * ProfileDaemonExtension), and torn down when the last of them lets it go. `profiles`: their folders, whose threads
+   * its pane kinds are for; `parts`: the agent parts it gave, which each of them selects.
+   */
+  type Shared = { key: string; file: string; profiles: Set<string>; parts: Extension[]; teardown: () => void }
+  const shared = new Map<string, Shared>()
+  /** What each loaded profile set up or shares, and how to let go of all of it. */
+  const holds = new Map<string, { uses: Shared[]; release: () => void }>()
+  /** Profiles' agent parts, installed once by name however many profiles have them, and uninstalled after the last. */
+  const installs = new Map<string, number>()
+  const install = (part: Extension) => {
+    installs.set(part.name, (installs.get(part.name) ?? 0) + 1)
+    registry.install(part)
+    return () => {
+      const left = installs.get(part.name)! - 1
+      if (left) return void installs.set(part.name, left)
+      installs.delete(part.name)
+      registry.uninstall(part)
+    }
+  }
+  /** Profile `dir`'s use of a daemon extension: the one set up already for another profile, else set up now. */
+  async function share(item: ProfileDaemonExtension, dir: string) {
+    let entry = shared.get(item.key)
+    if (!entry) {
+      const made: Shared = { key: item.key, file: item.file, profiles: new Set(), parts: [], teardown: () => {} }
+      made.teardown = await setUp(item.extension, (part) => {
+        const named = { ...part, name: `${item.prefix}/${part.name}` }
+        made.parts.push(named)
+        const uninstall = install(named)
+        return () => { made.parts.splice(made.parts.indexOf(named), 1); uninstall() }
+      }, made.profiles)
+      shared.set(item.key, entry = made)
+    }
+    const used = entry
+    used.profiles.add(dir)
+    return {
+      entry: used,
+      release() {
+        used.profiles.delete(dir)
+        if (used.profiles.size) return
+        shared.delete(used.key)
+        used.teardown()
+      },
+    }
+  }
+  /** A profile's agent parts: its own agent extensions, and those its daemon extensions give. */
+  const partsOf = (profile: LoadedProfile) => [...profile.extensions, ...(holds.get(profile.dir)?.uses.flatMap((use) => use.parts) ?? [])]
+  /** Whether a profile is still as it was loaded: its files, and those of the one it extends, unchanged. */
+  const current = (profile: LoadedProfile) =>
+    Object.entries(profile.versions).every(([dir, hash]) => { try { return hashProfile(dir) === hash } catch { return false } })
+  /** Whether a thread of one of these profiles is mid-run: its profile isn't loaded again under it. */
+  const running = (dirs: Set<string>) => [...mounted.values()].some((m) => m.live?.run && m.meta.profile && dirs.has(m.meta.profile.dir))
+  /** Let go of everything a profile set up: what it shares stays for the other profiles that have it. */
+  function unload(dir: string) {
+    holds.get(dir)?.release()
+    holds.delete(dir)
+    if (profiles.delete(dir)) changed()
+  }
+  /** Profile loads, one at a time: two never set up the same extension at once, nor an older version last. */
+  let loads: Promise<unknown> = Promise.resolve()
+  /**
+   * A profile as its files are now: loaded again (its extensions torn down and set up again) when they changed, and
+   * nothing of it left set up when it's gone, no longer allowed, or broken. Not under a run, though: a thread mid-run
+   * keeps the profile it started with, and the change is loaded for its next turn.
+   */
   function profileOf(ref: ProfileRef): Promise<LoadedProfile> {
     const cached = profiles.get(ref.dir)
-    const hash = hashProfile(ref.dir)
-    if (cached && cached.hash === hash) return Promise.resolve(cached)
-    const key = `${ref.dir}:${hash}`
-    const pending = loading.get(key) ?? (async () => {
-      const loaded = await loadProfile(ref, userProfiles, trust)
-      teardowns.get(ref.dir)?.()
-      teardowns.delete(ref.dir)
-      profiles.delete(ref.dir)
-      // Everything it sets up is undone together: when a later step fails too, so a fixed profile can load again.
-      const undo: (() => void)[] = []
-      try {
-        for (const extension of loaded.daemon) {
-          undo.push(await setUp(extension, (agentExtension) => {
-            const scoped = { ...agentExtension, name: `${ref.scope}:${ref.name}/${agentExtension.name}` }
-            loaded.extensions.push(scoped)
-            return () => { loaded.extensions.splice(loaded.extensions.indexOf(scoped), 1) }
-          }, ref))
-        }
-        for (const extension of loaded.extensions) {
-          registry.install(extension)
-          undo.push(() => registry.uninstall(extension))
-        }
-      } catch (error) {
-        for (const step of undo.reverse()) step()
-        throw new RpcError('invalid', `Profile ${ref.name}: ${(error as Error).message}`)
+    if (cached && current(cached)) return Promise.resolve(cached)
+    const next = loads.then(() => reload(ref))
+    loads = next.catch(() => {})
+    return next
+  }
+  async function reload(ref: ProfileRef): Promise<LoadedProfile> {
+    const cached = profiles.get(ref.dir)
+    if (cached && (current(cached) || running(new Set([ref.dir])))) return cached
+    let loaded: LoadedProfile
+    try {
+      if (!existsSync(join(ref.dir, 'profile.ts'))) throw new RpcError('not_found', `No profile ${ref.name} at ${ref.dir}`)
+      loaded = await loadProfile(ref, userProfiles, trust)
+    } catch (error) {
+      unload(ref.dir)
+      throw error
+    }
+    // Another version of a file it has, set up for other profiles too: they let go of it, and load this one next time.
+    const others = new Set([...shared.values()]
+      .filter((use) => loaded.daemon.some((d) => d.file === use.file && d.key !== use.key))
+      .flatMap((use) => [...use.profiles]).filter((dir) => dir !== ref.dir))
+    if (running(others)) {
+      if (cached) return cached
+      throw new RpcError('busy', `Profile ${ref.name} has an extension a running thread has another version of`, { hint: 'Try again once it finishes.' })
+    }
+    unload(ref.dir)
+    for (const dir of others) unload(dir)
+    // Everything it sets up is undone together: when a later step fails too, so a fixed profile can load again.
+    const uses: Shared[] = []
+    const undo: (() => void)[] = []
+    const release = () => { for (const step of undo.splice(0).reverse()) step() }
+    try {
+      for (const item of loaded.daemon) {
+        const { entry, release } = await share(item, ref.dir)
+        uses.push(entry)
+        undo.push(release)
       }
-      teardowns.set(ref.dir, () => { for (const step of undo.reverse()) step() })
-      profiles.set(ref.dir, loaded)
-      // What its threads go without may have changed with it.
-      changed()
-      for (const name of loaded.spec.without ?? []) {
-        const known = extensions.get(name)
-        if (!known) console.warn(`Profile ${ref.name}: without ${name}, which isn't an extension here`)
-        else if (known.required) console.warn(`Profile ${ref.name}: ${name} is required, and can't be done without`)
-      }
-      return loaded
-    })().finally(() => loading.delete(key))
-    loading.set(key, pending)
-    return pending
+      for (const extension of loaded.extensions) undo.push(install(extension))
+    } catch (error) {
+      release()
+      throw new RpcError('invalid', `Profile ${ref.name}: ${(error as Error).message}`)
+    }
+    holds.set(ref.dir, { uses, release })
+    profiles.set(ref.dir, loaded)
+    // What its threads go without may have changed with it.
+    changed()
+    for (const name of loaded.spec.without ?? []) {
+      const known = extensions.get(name)
+      if (!known) console.warn(`Profile ${ref.name}: without ${name}, which isn't an extension here`)
+      else if (known.required) console.warn(`Profile ${ref.name}: ${name} is required, and can't be done without`)
+    }
+    return loaded
   }
 
   /** What a turn runs with: the thread's own choices, else its profile's, else this machine's settings. */
@@ -699,7 +781,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       }
     }
     if (!profile) return { model, thinkingLevel, extensions: parts }
-    return { model, thinkingLevel, extensions: [...parts, ...profile.extensions], instructions: profile.spec.prompt || null }
+    return { model, thinkingLevel, extensions: [...parts, ...partsOf(profile)], instructions: profile.spec.prompt || null }
   }
 
   /** Send `text` to a thread, with the model and thinking it chose, else what this machine's settings say now. */
@@ -724,7 +806,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    */
   async function transformed(id: string, m: Mounted, text: string, attachments: Attachment[], content: string | MessageBlock[]) {
     const without = withoutOf(m.meta, m.meta.profile && profiles.get(m.meta.profile.dir))
-    const applying = transforms.filter((t) => !without.has(t.owner) && (!t.profile || t.profile === m.meta.profile?.dir))
+    const applying = transforms.filter((t) => !without.has(t.owner) && (!t.profiles || (m.meta.profile && t.profiles.has(m.meta.profile.dir))))
     if (!applying.length) return content
     const thread = info(id, m)
     let blocks: MessageBlock[] = typeof content === 'string' ? (content ? [{ type: 'text', text: content }] : []) : content
@@ -1198,8 +1280,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         'file.find': async ({ id, name }: { id: string; name: string }) => locate((await get(id)).meta.cwd, name),
         // A profile's UI is its code too: served only for a real profile folder, and only once it is allowed.
         'profile.ui': async (ref: ProfileRef) => {
-          if (!isProfileDir(ref, userProfiles)) throw new RpcError('not_found', `No profile at ${ref.dir}`)
-          const loaded = await profileOf({ scope: ref.scope, name: ref.name, dir: ref.dir })
+          // One that was loaded and is gone now is let go of (profileOf), and the window's UI of it with it.
+          const known = profiles.get(ref.dir)
+          if (!isProfileDir(ref, userProfiles) && !known) throw new RpcError('not_found', `No profile at ${ref.dir}`)
+          const loaded = await profileOf(known ? { scope: known.scope, name: known.name, dir: known.dir } : { scope: ref.scope, name: ref.name, dir: ref.dir })
           return { hash: loaded.hash, entries: loaded.spec.ui ?? [] }
         },
         'profile.module': async ({ path, ...ref }: ProfileRef & { path: string }) => {

@@ -60,14 +60,23 @@ export const defineProfile = (spec: ProfileSpec) => spec
 
 export type ProfileRef = { scope: 'user' | 'project'; name: string; dir: string }
 
+/**
+ * A daemon extension a profile names, and which: `key` is its file at the version loaded (the module's URL), so two
+ * profiles naming the same file (one extending the other, or both listing it) share one set-up of it. `prefix` names
+ * its agent parts: `<prefix>/<part>`, the profile that lists it.
+ */
+export type ProfileDaemonExtension = { extension: DaemonExtension; key: string; file: string; prefix: string }
+
 export type LoadedProfile = ProfileRef & {
   spec: ProfileSpec
   /** Its agent extensions, installed under names of their own: `<scope>:<name>/<extension>`. */
   extensions: Extension[]
-  /** Its daemon extensions, for the daemon to set up. */
-  daemon: DaemonExtension[]
+  /** Its daemon extensions, for the daemon to set up (or share with another profile that has them set up already). */
+  daemon: ProfileDaemonExtension[]
   /** What its files hash to: a change means reloading it, and (for a project's) allowing it again. */
   hash: string
+  /** What it's made of, by folder: its own and what it extends. A change in any means loading it again. */
+  versions: Record<string, string>
 }
 
 export const DEFAULT_PROFILE = 'default'
@@ -193,8 +202,9 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
       hint: `Look it over, then: superego profile allow ${ref.name}`,
     })
   }
-  // A query that changes with the files makes Node load them again rather than reuse the first import.
-  const fresh = (path: string) => `${pathToFileURL(path).href}?v=${hash}`
+  // A query that changes with the file makes Node load it again rather than reuse the first import. Its own contents
+  // version it, wherever it is and whichever profile names it: profiles that name the same file share one module.
+  const fresh = (path: string) => `${pathToFileURL(path).href}?v=${createHash('sha256').update(readFileSync(path)).digest('hex').slice(0, 16)}`
   const spec = (await load(fresh(join(ref.dir, 'profile.ts'))) as { default?: ProfileSpec }).default
   if (!spec || typeof spec !== 'object') throw new RpcError('invalid', `${join(ref.dir, 'profile.ts')} must export default defineProfile({ … })`)
   let base: LoadedProfile | undefined
@@ -205,13 +215,21 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
     base = await loadProfile({ scope: 'user', name, dir: join(userRoot, name) }, userRoot, trust)
   }
   const extensions: Extension[] = [...(base?.extensions ?? [])]
-  const daemon: DaemonExtension[] = [...(base?.daemon ?? [])]
+  const daemon: ProfileDaemonExtension[] = [...(base?.daemon ?? [])]
   for (const path of spec.extensions ?? []) {
-    const module = await load(fresh(resolve(ref.dir, path))) as { default?: Extension | DaemonExtension }
+    const file = resolve(ref.dir, path)
+    if (!existsSync(file)) throw new RpcError('not_found', `${path} in profile ${ref.name} doesn't exist`)
+    const key = fresh(file)
+    const module = await load(key) as { default?: Extension | DaemonExtension }
     const extension = module.default
     if (!extension?.name) throw new RpcError('invalid', `${path} in profile ${ref.name} must export default an extension with a name`)
-    if (typeof (extension as DaemonExtension).setup === 'function') daemon.push(extension as DaemonExtension)
-    else extensions.push({ ...(extension as Extension), name: `${ref.scope}:${ref.name}/${extension.name}` })
+    const prefix = `${ref.scope}:${ref.name}`
+    // Named once, though listed again (by this profile and the one it extends, say).
+    if (typeof (extension as DaemonExtension).setup === 'function') {
+      if (!daemon.some((d) => d.key === key)) daemon.push({ extension: extension as DaemonExtension, key, file, prefix })
+    } else if (!extensions.some((e) => e.name === `${prefix}/${extension.name}`)) {
+      extensions.push({ ...(extension as Extension), name: `${prefix}/${extension.name}` })
+    }
   }
   const merged: ProfileSpec = {
     ...base?.spec, ...spec,
@@ -220,7 +238,7 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
     // UI paths are relative to their own profile's folder: only this profile's are served from here.
     ui: spec.ui,
   }
-  return { ...ref, spec: merged, extensions, daemon, hash }
+  return { ...ref, spec: merged, extensions, daemon, hash, versions: { ...base?.versions, [ref.dir]: hash } }
 }
 
 /** Whether `dir` is a profile folder at all: under the user's profiles, or a project's `.superego/profiles`. */

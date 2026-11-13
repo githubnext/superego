@@ -218,17 +218,8 @@ export default defineDaemonExtension({
   await close()
 })
 
-it("resumes a run interrupted in a profile's tool with that tool, after a restart", async () => {
-  const profile = join(home, 'profiles', 'default')
-  const gate = join(dir, 'gate')
-  const started = join(dir, 'started')
-  write(profile, {
-    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./slow.ts'] })\n`,
-    'slow.ts': `import { defineExtension, defineTool, obj } from 'superego'
-import { existsSync, writeFileSync } from 'node:fs'
-export default defineExtension({
-  name: 'slow',
-  tools: [defineTool({
+/** A tool that waits for the file `gate`, once it wrote `started`: a run that stays in it until let go. */
+const slowTool = (started: string, gate: string) => `defineTool({
     name: 'slow_tool', description: 'Waits.', parameters: obj({}), replay: 'safe',
     async execute(_args, _api, context) {
       writeFileSync(${JSON.stringify(started)}, '')
@@ -238,35 +229,101 @@ export default defineExtension({
       }
       return { output: [{ type: 'text', text: 'slow done' }] }
     },
-  })],
-})
-`,
-  })
+  })`
+
+/** A daemon whose model calls slow_tool, then answers. */
+async function openSlow() {
   const recording = join(dir, 'slow.jsonl')
   const turn = (message: unknown) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message }) + '\n'
   writeFileSync(recording, turn({ role: 'assistant', content: [{ type: 'toolCall', id: 'slow-1', name: 'slow_tool', arguments: {} }], stopReason: 'toolUse' })
     + turn({ role: 'assistant', content: [{ type: 'text', text: 'All done.' }], stopReason: 'stop' }))
-  const openReplay = async () => {
-    process.env.SUPEREGO_MODEL = 'replay:' + recording
-    process.env.SUPEREGO_REPLAY_SPEED = '0'
-    const daemon = await openDaemon({ app: SUPEREGO, dataDir: home, defaultCwd: dir })
-    const server = await listen(daemon, join(home, 'superego.sock'))
-    const { peer, socket } = await connectSocket(join(home, 'superego.sock'))
-    await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
-    return { peer, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
-  }
-  const first = await openReplay()
+  process.env.SUPEREGO_MODEL = 'replay:' + recording
+  process.env.SUPEREGO_REPLAY_SPEED = '0'
+  const daemon = await openDaemon({ app: SUPEREGO, dataDir: home, defaultCwd: dir })
+  const server = await listen(daemon, join(home, 'superego.sock'))
+  const { peer, socket } = await connectSocket(join(home, 'superego.sock'))
+  await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
+  return { peer, close: async () => { socket.destroy(); server.close(); await daemon.close(); delete process.env.SUPEREGO_REPLAY_SPEED } }
+}
+
+/** The tool results in a thread's transcript. */
+async function toolResults(peer: RpcPeer, id: string) {
+  const { value } = await peer.call<{ value: { entries: { model?: { role?: string; content?: { text?: string }[]; isError?: boolean }[] }[] } }>('thread.watch', { id })
+  return value.entries.map((e) => e.model?.[0]).filter((m) => m?.role === 'toolResult')
+}
+
+it("resumes a run interrupted in a profile's tool with that tool, after a restart", async () => {
+  const profile = join(home, 'profiles', 'default')
+  const gate = join(dir, 'gate')
+  const started = join(dir, 'started')
+  write(profile, {
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./slow.ts'] })\n`,
+    'slow.ts': `import { defineExtension, defineTool, obj } from 'superego'
+import { existsSync, writeFileSync } from 'node:fs'
+export default defineExtension({ name: 'slow', tools: [${slowTool(started, gate)}] })
+`,
+  })
+  const first = await openSlow()
   const thread = await first.peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'go' })
   await until(async () => existsSync(started))
   await first.close()
   writeFileSync(gate, '')
-  const second = await openReplay()
+  const second = await openSlow()
   await done(second.peer, thread.id)
-  const { value } = await second.peer.call<{ value: { entries: { model?: { role?: string; content?: { text?: string }[]; isError?: boolean }[] }[] } }>('thread.watch', { id: thread.id })
-  const results = value.entries.map((e) => e.model?.[0]).filter((m) => m?.role === 'toolResult')
-  expect(results[0]).toMatchObject({ isError: false, content: [{ text: 'slow done' }] })
+  expect((await toolResults(second.peer, thread.id))[0]).toMatchObject({ isError: false, content: [{ text: 'slow done' }] })
   await second.close()
-  delete process.env.SUPEREGO_REPLAY_SPEED
+})
+
+it('ends a run interrupted in a profile that no longer loads, rather than not starting', async () => {
+  const profile = join(home, 'profiles', 'default')
+  const gate = join(dir, 'gate')
+  const started = join(dir, 'started')
+  write(profile, {
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./slow.ts'] })\n`,
+    'slow.ts': `import { defineExtension, defineTool, obj } from 'superego'
+import { existsSync, writeFileSync } from 'node:fs'
+export default defineExtension({ name: 'slow', tools: [${slowTool(started, gate)}] })
+`,
+  })
+  const first = await openSlow()
+  const thread = await first.peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'go' })
+  await until(async () => existsSync(started))
+  await first.close()
+  write(profile, { 'slow.ts': `throw new Error('broken')\n` })
+  const second = await openSlow()
+  await until(async () => (await second.peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state !== 'working')
+  expect((await toolResults(second.peer, thread.id)).some((r) => r?.content?.[0]?.text === 'slow done')).toBe(false)
+  await second.close()
+})
+
+it("doesn't load a profile again under a run: a change waits for the run to end", async () => {
+  const profile = join(home, 'profiles', 'default')
+  const gate = join(dir, 'gate')
+  const started = join(dir, 'started')
+  const slow = (version: string) => `import { defineDaemonExtension, defineAction, defineExtension, defineTool, obj } from 'superego'
+import { existsSync, writeFileSync } from 'node:fs'
+export default defineDaemonExtension({
+  name: 'slow',
+  setup(superego) {
+    superego.action(defineAction({ id: 'slow.version', title: 'Version', params: obj({}), async run() { return '${version}' } }))
+    superego.agent(defineExtension({ name: 'slow', tools: [${slowTool(started, gate)}] }))
+  },
+})
+`
+  write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./slow.ts'] })\n`, 'slow.ts': slow('one') })
+  const { peer, close } = await openSlow()
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'go' })
+  await until(async () => existsSync(started))
+  write(profile, { 'slow.ts': slow('two') })
+  const ref = { scope: 'user', name: 'default', dir: profile }
+  await peer.call('profile.ui', ref)
+  expect(await peer.call('action.run', { id: 'slow.version', params: {} })).toBe('one')
+  writeFileSync(gate, '')
+  await done(peer, thread.id)
+  expect((await toolResults(peer, thread.id))[0]).toMatchObject({ isError: false, content: [{ text: 'slow done' }] })
+  await peer.call('profile.ui', ref)
+  expect(await peer.call('action.run', { id: 'slow.version', params: {} })).toBe('two')
+  await close()
 })
 
 it("owns everything a profile's daemon extension registers: settings, values and its name, undone on reload", async () => {
@@ -333,5 +390,110 @@ it("tells clients what a profile's threads go without, and its agent goes withou
   expect(agent.extensions).not.toContain('thread-tools')
   expect(agent.extensions).not.toContain('agents-md')
   expect(agent.extensions).toContain('coding-tools')
+  await close()
+})
+
+/** A daemon extension `vault` whose action answers `answer`, and an agent part `notes` of its own. */
+const vault = (answer: string) => `import { defineDaemonExtension, defineAction, defineExtension, obj, section } from 'superego'
+export default defineDaemonExtension({
+  name: 'vault',
+  setup(superego) {
+    superego.action(defineAction({ id: 'vault.answer', title: 'Answer', params: obj({}), async run() { return '${answer}' } }))
+    superego.agent(defineExtension({ name: 'notes', sections: [section('notes', () => 'notes')] }))
+  },
+})
+`
+
+it("shares a daemon extension between profiles that have it: one extending another, or two naming the same file", async () => {
+  write(join(home, 'profiles', 'default'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': vault('one') })
+  write(join(home, 'profiles', 'work'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extends: 'user:default', prompt: 'Work.' })\n` })
+  write(join(home, 'profiles', 'play'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['../default/vault.ts'] })\n` })
+  const { peer, close } = await open()
+  const first = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  const second = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'work', prompt: 'hi' })
+  const third = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'play', prompt: 'hi' })
+  for (const thread of [first, second, third]) await done(peer, thread.id)
+  expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
+  // Each has its agent parts.
+  for (const thread of [first, second]) expect((await agentOf(peer, thread.id)).extensions).toContain('user:default/notes')
+  expect((await agentOf(peer, third.id)).extensions.some((name) => name.endsWith('/notes'))).toBe(true)
+  // Changed: every profile that has it loads the new version, and they share that.
+  write(join(home, 'profiles', 'default'), { 'vault.ts': vault('two') })
+  await peer.call('thread.submit', { id: second.id, text: 'again' })
+  await done(peer, second.id)
+  expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('two')
+  await peer.call('thread.submit', { id: first.id, text: 'again' })
+  await peer.call('thread.submit', { id: third.id, text: 'again' })
+  for (const thread of [first, third]) await done(peer, thread.id)
+  expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('two')
+  expect((await agentOf(peer, second.id)).extensions).toContain('user:default/notes')
+  await close()
+})
+
+it('loads a profile one version at a time, the newest last', async () => {
+  const profile = join(home, 'profiles', 'default')
+  write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': vault('one') })
+  const { peer, close } = await open()
+  await peer.call<ThreadInfo>('thread.create', { cwd: project })
+  const ref = { scope: 'user', name: 'default', dir: profile }
+  // Saved twice in a row, each save seen by a call while the last still loads.
+  write(profile, { 'vault.ts': vault('two') })
+  const a = peer.call('profile.ui', ref)
+  write(profile, { 'vault.ts': vault('three') })
+  const b = peer.call('profile.ui', ref)
+  await Promise.all([a, b])
+  expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('three')
+  await close()
+})
+
+it("lets go of a profile whose folder is gone: its extensions and its name", async () => {
+  const profile = join(home, 'profiles', 'default')
+  write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': vault('one') })
+  const { peer, close } = await open()
+  await peer.call<ThreadInfo>('thread.create', { cwd: project })
+  expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
+  await rm(profile, { recursive: true })
+  await expect(peer.call('profile.ui', { scope: 'user', name: 'default', dir: profile })).rejects.toMatchObject({ kind: 'not_found' })
+  await expect(peer.call('action.run', { id: 'vault.answer', params: {} })).rejects.toBeDefined()
+  const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
+  expect(hello.features).not.toContain('ext:vault')
+  await close()
+})
+
+it("tears down every part of a profile's daemon extension on reload: actions, methods, status, pane kinds, agent parts", async () => {
+  const profile = join(home, 'profiles', 'default')
+  const full = `import { defineDaemonExtension, defineAction, defineExtension, obj, section, str } from 'superego'
+let blocked = ''
+export default defineDaemonExtension({
+  name: 'vault',
+  setup(superego) {
+    superego.action(defineAction({ id: 'vault.block', title: 'Block', params: obj({ id: str() }), async run({ id }) { blocked = id; superego.invalidate(); return null } }))
+    superego.method('vault.read', async () => 'read')
+    superego.status((id) => id === blocked ? { kind: 'question' } : undefined)
+    superego.pane('vault-pane', 'the vault; no params')
+    superego.agent(defineExtension({ name: 'notes', sections: [section('notes', () => 'notes')] }))
+  },
+})
+`
+  write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': full })
+  const { peer, close } = await open()
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  await done(peer, thread.id)
+  expect(JSON.stringify((await peer.call<{ value: unknown }>('thread.watch', { id: thread.id })).value)).toContain('vault-pane')
+  expect((await agentOf(peer, thread.id)).extensions).toContain('user:default/notes')
+  expect(await peer.call('vault.read', {})).toBe('read')
+  await peer.call('action.run', { id: 'vault.block', params: { id: thread.id } })
+  await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'blocked')
+
+  write(profile, { 'vault.ts': `import { defineDaemonExtension } from 'superego'\nexport default defineDaemonExtension({ name: 'vault', setup() {} })\n` })
+  await peer.call('profile.ui', { scope: 'user', name: 'default', dir: profile })
+  await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state !== 'blocked')
+  expect((await peer.call<{ id: string }[]>('action.list', {})).map((a) => a.id)).not.toContain('vault.block')
+  await expect(peer.call('vault.read', {})).rejects.toMatchObject({ kind: 'unknown_method' })
+  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await done(peer, thread.id)
+  const { value } = await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { id: thread.id })
+  expect(JSON.stringify(value.docs['pi.agent'])).not.toContain('vault-pane')
+  expect((await agentOf(peer, thread.id)).extensions).not.toContain('user:default/notes')
   await close()
 })
