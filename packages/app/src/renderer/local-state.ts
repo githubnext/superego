@@ -19,6 +19,9 @@ function write<T>(key: string, value: T, initial: T) {
   } catch { /* storage full or unavailable: it just won't survive a reload */ }
 }
 
+/** Set what `useLocalState(key, initial)` starts with next time a component shows it. */
+export const setLocalState = <T,>(key: string, value: T, initial: T) => write(key, value, initial)
+
 /** Like useState, kept in this window under `key` (which may change: a draft per thread, say). JSON values only. */
 export function useLocalState<T>(key: string, initial: T): [T, (next: T | ((previous: T) => T)) => void] {
   const [state, setState] = useState(() => ({ key, value: read(key, initial) }))

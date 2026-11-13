@@ -147,7 +147,10 @@ gh repo clone mikker/superego ~/dev/superego && ~/dev/superego/scripts/install-m
 ```
 
 It installs `~/.local/bin/superego`, which a non-interactive ssh shell may not have on its PATH; then add the machine with
-that command: `superego machines add <host> --command '~/.local/bin/superego connect --start'`.
+that command: `superego machines add <host> --command '~/.local/bin/superego connect --start'`. A machine whose Superego is
+older (or newer) than this computer's gets a dot beside its name in the sidebar and in Settings → Machines; Update there
+(⌘K *Update Superego on a machine*, or `superego machines update <host>`) runs its install-machine.sh over the same ssh
+and reconnects, asking first if agents are working there, since the daemon restarts.
 
 The daemon takes model keys from the providers' own variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) when none is
 stored in Settings. A restart keeps the environment it was started with and adds that of the shell asking for it. Where

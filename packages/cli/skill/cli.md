@@ -85,10 +85,11 @@ superego profile allow [name]       # let this project's profile run (again, aft
 ## Machines
 
 ```sh
-superego machines                              # each, and whether it answers
+superego machines                              # each, whether it answers, and if it runs an older or newer Superego
 superego machines add <ssh-target> [--name N] [--command C]
 superego machines add --via '<command>' [--name N]   # any command piping stdio to the far side
 superego machines rm|enable|disable|trust <machine>
+superego machines update <machine> [--now]     # run its install-machine.sh there; --now even while agents work
 ```
 
 A remote machine needs `superego` installed there (`scripts/install-machine.sh` in the Superego repo); the app reaches it

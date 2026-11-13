@@ -14,6 +14,7 @@ import { driftNote, MachineDrift } from './machine-drift.tsx'
 import { settingsView, useApp, useRegistry } from './extension.tsx'
 
 const APP = 'app'
+/** Settings → Machines (also opened by Update: see actions.tsx). */
 const MACHINES = '$machines'
 const ALL = '$all'
 
@@ -357,9 +358,15 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
               {m.machine && m.machine.hostname !== m.label ? ` · ${m.machine.hostname}` : ''} · {m.state}{m.error && m.state !== 'connected' ? ` — ${m.error}` : ''}
             </div>
             {driftNote(m, appConfig.name) && <div className="settings__note machine-row__drift"><MachineDrift machine={m} side="bottom" /> {driftNote(m, appConfig.name)!.text}</div>}
+            {m.update && m.update.state !== 'done' && m.update.log && <pre className="machine-row__log">{m.update.log.trimEnd().split('\n').slice(-12).join('\n')}</pre>}
           </div>
           <div className="provider__actions">
             {m.state === 'connected' && <Button onClick={() => onOpen(m.id)}>Settings</Button>}
+            {m.remote && m.state !== 'disabled' && (
+              <Button variant={m.drift && m.drift.state !== 'current' && m.drift.state !== 'ahead' ? 'primary' : 'default'} disabled={m.update?.state === 'running'}
+                title={`Run scripts/install-machine.sh on ${m.label}: pull, install, and restart ${appConfig.name} there`}
+                onClick={() => void act('machine.update', { machine: m.id }).catch(() => {})}>{m.update?.state === 'running' ? 'Updating…' : 'Update'}</Button>
+            )}
             {m.errorKind === 'wrong_machine' && <Button onClick={() => void act('machines.trust', { id: m.id })} title="Use whichever machine answers there now, e.g. after a reinstall">Trust this machine</Button>}
             {(m.errorKind === 'version_mismatch' || m.errorKind === 'duplicate_machine') && <Button onClick={() => void act('machines.reconnect', { id: m.id })}>Retry</Button>}
             {m.remote && <Switch label={`Connect to ${m.label}`} checked={m.remote.enabled} onChange={(enabled) => void act('machines.update', { id: m.id, enabled })} />}

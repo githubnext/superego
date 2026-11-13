@@ -661,7 +661,11 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .color-field__swatch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: default; }
 .color-field__swatch:has(input:focus-visible) { outline: 2px solid var(--superego-ring); outline-offset: 2px; }
 
-/* A machine running another Superego than this computer's: a quiet dot, why in its tooltip. */
+/* A machine running another Superego than this computer's, or updating: a quiet dot, why in its tooltip. */
 .machine-drift { display: inline-block; flex: none; align-self: center; width: 6px; height: 6px; border-radius: 50%; vertical-align: .1em; background: var(--superego-status-idle); }
 .machine-drift--behind { background: var(--superego-status-blocked); }
+.machine-drift--updating { background: var(--superego-status-working); animation: machine-drift-pulse 1.2s ease-in-out infinite; }
+.machine-drift--failed { background: var(--superego-status-error); }
+@keyframes machine-drift-pulse { 50% { opacity: .35; } }
 .machine-row__drift { display: flex; align-items: baseline; gap: 6px; }
+.machine-row__log { margin: 6px 0 0; padding: 6px 8px; max-height: 14em; overflow: auto; font-family: var(--superego-mono); font-size: var(--superego-text-xs); line-height: 1.45; white-space: pre-wrap; color: var(--superego-muted); background: color-mix(in srgb, var(--superego-text) 4%, transparent); border-radius: 6px; }

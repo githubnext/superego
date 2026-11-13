@@ -113,12 +113,13 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     await expect(superego(['threads', '-m', 'Second'])).rejects.toThrow(/No machine called Second/)
   })
 
-  it('says which Superego each machine runs', async () => {
-    // A machine behind a stub, connecting as `connect --start` does.
+  it('says which Superego each machine runs, and updates one through its own command', async () => {
+    // A machine behind a stub: it connects as `connect --start` does, and for `connect --update` says what an install
+    // would and restarts its daemon, as install-machine.sh ends.
     const third = join(home, 'third')
     const run = `env SUPEREGO_HOME='${third}' SUPEREGO_MODEL=faux '${process.execPath}' '${CLI}'`
     const stub = join(home, 'machine.sh')
-    writeFileSync(stub, `exec ${run} connect --start\n`)
+    writeFileSync(stub, `case "$*" in\n  *--update*) echo "pulling"; ${run} daemon restart; echo "Installed";;\n  *) exec ${run} connect --start;;\nesac\n`)
     await superego(['machines', 'add', '--via', `sh '${stub}' connect --start`, '--name', 'Third'])
     const [here, there] = await superegoJson(['machines'])
     expect(here.version).toMatchObject({ commit: expect.stringMatching(/^[0-9a-f]{40}$/), protocol: 1 })
@@ -135,6 +136,12 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     expect(listed).toMatch(/Old .* runs an older Superego that doesn't say which/)
     await superego(['machines', 'rm', 'Behind'])
     await superego(['machines', 'rm', 'Old'])
+
+    const before = (await superegoJson(['daemon', 'status'])).pid
+    const updated = await superegoJson(['machines', 'update', 'Third'])
+    expect(updated).toMatchObject({ updated: true, from: { commit: here.version.commit }, to: { commit: here.version.commit } })
+    expect((await superegoJson(['daemon', 'status'])).pid).toBe(before)
+    await expect(superego(['machines', 'update', 'local'])).rejects.toThrow(/updated by hand/)
     await superego(['machines', 'rm', 'Third'])
   })
 

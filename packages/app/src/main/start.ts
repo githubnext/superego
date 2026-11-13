@@ -8,9 +8,9 @@ import {
   type AppConfig, type DeclaredSection, type Json, type Notifications, type ThreadInfo, type SettingType,
 } from '@superego/protocol'
 import { serveSettings } from '@superego/settings'
-import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type SuperegoEvent } from '../shared.ts'
+import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
-import { checkIdentity, MachineStore, openLocal as openLocalSocket, openMachine, routeOf } from '@superego/client'
+import { checkIdentity, MachineStore, openLocal as openLocalSocket, openMachine, routeOf, runUpdate } from '@superego/client'
 import { Link } from './link.ts'
 import { MenuBar } from './tray.ts'
 import { ServiceRestart, type ServiceAction } from './restart.ts'
@@ -109,6 +109,8 @@ export function startApp(appConfig: AppConfig) {
   }
 
   const links = new Map<string, Link>()
+  /** Each machine's last Update: running, or how it ended, with what it printed. */
+  const updates = new Map<string, MachineUpdate>()
   function addLink(link: Link) {
     links.set(link.id, link)
     link.start()
@@ -127,7 +129,8 @@ export function startApp(appConfig: AppConfig) {
         const entry: MachineEntry = link ? { ...link.entry(), label: config.label, remote } : { id: config.id, label: config.label, state: 'disabled', remote }
         // Said of a machine that answered once: one never reached runs nothing we know of.
         const drift = entry.version && compareVersions(local?.version, entry.version)
-        return { ...entry, ...(drift ? { drift } : {}) }
+        const update = updates.get(config.id)
+        return { ...entry, ...(drift ? { drift } : {}), ...(update ? { update } : {}) }
       }),
     ]
   }
@@ -369,11 +372,66 @@ export function startApp(appConfig: AppConfig) {
     run({ id }) { if (id === 'local') restartLocal(); else restartLink(id); return null },
   }))
   appRouter.register(defineAction({
+    id: 'machines.install', title: `Update ${appConfig.name} on a machine`, runs: 'app', expose: ['ui'],
+    params: obj({ id: str() }),
+    run: ({ id }) => updateMachine(id),
+  }))
+  appRouter.register(defineAction({
     id: 'service.act', title: 'Restart the background process', runs: 'app', expose: ['ui'],
     params: obj({ action: union([lit('restart'), lit('interrupt'), lit('later'), lit('review')]) }),
     async run({ action }) { await service.act(action as ServiceAction); return service.state },
   }))
   appRouter.register(defineAction({ id: 'app.quit', title: `Quit ${appConfig.name}`, runs: 'app', run: () => app.quit() }))
+
+  // ── Updating another machine's Superego ─────────────────────────────────────────────────────────────────────────────
+
+  /** Tell windows how updates go, a few times a second at most: the install prints a lot. */
+  let updatesQueued = false
+  const publishUpdates = () => {
+    if (updatesQueued) return
+    updatesQueued = true
+    setTimeout(() => { updatesQueued = false; broadcast({ machine: APP, method: '$machines', params: machineEntries() }) }, 150)
+  }
+
+  /**
+   * Run a machine's own install script there (pull, install, build, restart its daemon), its output shown on the
+   * machine's row as it goes, then reconnect to the new daemon. The restart interrupts agents at work there: asked first.
+   */
+  async function updateMachine(id: string): Promise<{ updated: boolean }> {
+    const config = machineStore.get(id)
+    if (!config) throw new RpcError(id === 'local' ? 'invalid' : 'not_found', id === 'local' ? `This computer's ${appConfig.name} is updated by hand.` : `No machine ${id}`)
+    if (updates.get(id)?.state === 'running') throw new RpcError('busy', `${config.label} is updating already.`)
+    const working = (threadsOf.get(id) ?? []).filter((t) => t.status.state === 'working')
+    if (working.length && !headless) {
+      const { response } = await dialog.showMessageBox({
+        type: 'warning', buttons: ['Update and Restart', 'Cancel'], defaultId: 1, cancelId: 1,
+        message: `${working.length === 1 ? 'An agent is' : `${working.length} agents are`} working on ${config.label}`,
+        detail: `Updating restarts ${appConfig.name} there: agents stop mid-turn and pick up again after. Threads and their history are kept.`,
+      })
+      if (response !== 0) return { updated: false }
+    }
+    const pid = links.get(id)?.hello?.machine.pid
+    const update: MachineUpdate = { state: 'running', log: '' }
+    const set = (patch: Partial<MachineUpdate>) => { updates.set(id, Object.assign(update, patch)); publishUpdates() }
+    set({})
+    try {
+      await runUpdate(config, appConfig, { now: working.length > 0, onOutput: (text) => set({ log: (update.log + text).slice(-20_000) }) })
+      // The daemon there restarted: reach the new one now, rather than when the old link notices.
+      restartLink(id)
+      const deadline = Date.now() + 60_000
+      for (;;) {
+        const link = links.get(id)
+        if (link?.state === 'connected' && link.hello && link.hello.machine.pid !== pid) break
+        if (Date.now() > deadline) throw new RpcError('update_failed', `Updated, but ${config.label} did not answer again.`)
+        await new Promise((resolve) => setTimeout(resolve, 200))
+      }
+      set({ state: 'done' })
+      return { updated: true }
+    } catch (error) {
+      set({ state: 'failed', error: error instanceof Error ? error.message : String(error) })
+      throw error
+    }
+  }
 
   // ── Restarting this computer's daemon onto newer code ───────────────────────────────────────────────────────────────
 

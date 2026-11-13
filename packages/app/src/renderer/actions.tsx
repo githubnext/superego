@@ -2,7 +2,7 @@
 // forwarded to where they run (see `dispatch`). Every dispatch from this window is logged, and the log is one action
 // away (Show action log).
 import { useEffect, useState } from 'react'
-import { agentName, obj, Router, str, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
+import { agentName, obj, opt, Router, str, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
 import { Dialog } from '@superego/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
@@ -14,6 +14,7 @@ export const UNREAD = 'app.unread'
 import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
 import { scrollHalfPage } from './scroll.ts'
 import { startRename } from './rename.ts'
+import { setLocalState } from './local-state.ts'
 
 /** What a window action gets besides its parameters. */
 export type WindowContext = {
@@ -185,6 +186,20 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
     },
   })] : []),
   defineWindowAction({ id: 'app.settings', title: 'Settings', keys: 'mod+,', run: (_p, c) => c.openSettings() }),
+  // Another machine's Superego, updated from its own checkout there. Its progress shows in Settings → Machines.
+  defineWindowAction({
+    id: 'machine.update', title: `Update ${app.name} on a machine`,
+    params: obj({ machine: opt(str()) }),
+    when: (c) => c.machines.some((m) => m.remote && m.state === 'connected'),
+    run: async ({ machine }, c) => {
+      const id = machine ?? updatable(c)
+      // Settings, at Machines (SettingsView's own section key), where the update's output shows.
+      setLocalState('settings.target', '$machines', 'app')
+      c.openSettings()
+      if (!id) return
+      await c.dispatch('machines.install', { id }, { machine: 'app', source: 'machine.update' })
+    },
+  }),
   defineWindowAction({ id: 'app.log', title: 'Show action log', run: (_p, c) => c.showLog() }),
   // Panes of the selected thread.
   defineWindowAction({
@@ -213,6 +228,17 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
     run: ({ machine, thread }, c) => c.select({ machine, thread }),
   }),
 ]
+
+/**
+ * The machine Update means without one named: the selected thread's, when it's another machine; else the one machine
+ * running an older Superego than this computer. None when that's not one machine: Settings → Machines lists them all.
+ */
+function updatable(c: WindowContext): string | undefined {
+  const selected = c.machines.find((m) => m.id === c.selection?.machine && m.remote && m.state === 'connected')
+  if (selected) return selected.id
+  const behind = c.machines.filter((m) => m.remote && m.state === 'connected' && (m.drift?.state === 'behind' || m.drift?.state === 'unknown'))
+  return behind.length === 1 ? behind[0]!.id : undefined
+}
 
 /** The session the selected thread is in, and where it is in the order. */
 function current(c: WindowContext) {

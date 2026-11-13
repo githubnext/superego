@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { devApp } from './dev-app.ts'
-import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, type MachineConfig, type Transport } from '@superego/client'
+import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, runUpdate, updateScript, type MachineConfig, type Transport } from '@superego/client'
 import { appEnv, daemonStarting, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@superego/daemon'
 import {
   compareVersions, driftPhrase, FEATURES, PROTOCOL_VERSION, RpcError, versionOf, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
@@ -56,6 +56,9 @@ Usage:
   ${app.id} machines add --via '<cmd>' [--name N]
                                 Add a machine reached by any command piping stdio to it
   ${app.id} machines rm|enable|disable|trust <machine>
+  ${app.id} machines update <machine> [--now]
+                                Update ${app.name} there (its scripts/install-machine.sh) and restart its daemon;
+                                --now even while agents work there (they resume after)
 
   ${app.id} settings                   List settings and their values
   ${app.id} settings set <key> <value> Change a setting (value is JSON, or plain text)
@@ -222,7 +225,7 @@ const withTimeout = <T>(promise: Promise<T>, ms: number) => Promise.race([
   promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`no answer in ${ms / 1000}s`)), ms).unref()),
 ])
 
-async function machinesCommand(sub: string | undefined, rest: string[], options: { name?: string; command?: string; via?: string }) {
+async function machinesCommand(sub: string | undefined, rest: string[], options: { name?: string; command?: string; via?: string; now?: boolean }) {
   if (!sub || sub === 'ls' || sub === 'list') return listMachines()
   if (sub === 'add') {
     const added = await machines.add({ target: rest[0], label: options.name, command: options.command, via: options.via })
@@ -237,12 +240,42 @@ async function machinesCommand(sub: string | undefined, rest: string[], options:
     }
   }
   const machine = resolveMachine(rest[0])
+  if (sub === 'update' && rest[0] && !machine.config) {
+    throw new RpcError('invalid', `This computer's ${app.name} is updated by hand: pull its checkout, then ${app.id} daemon restart.`)
+  }
   if (!machine.config) throw new RpcError('invalid', rest[0] ? 'This computer is always there.' : `Which machine? ${app.id} machines ${sub} <machine>`)
+  if (sub === 'update') return updateMachine(machine as Machine & { config: MachineConfig }, Boolean(options.now))
   if (sub === 'rm' || sub === 'remove') await machines.remove(machine.id)
   else if (sub === 'enable' || sub === 'disable') await machines.update(machine.id, { enabled: sub === 'enable' })
   else if (sub === 'trust') await machines.forgetIdentity(machine.id)
   else throw new RpcError('usage', `Unknown: ${app.id} machines ${sub}`)
   print({ ok: true }, () => console.log(`${sub === 'rm' ? 'Removed' : sub === 'trust' ? 'Will trust whoever answers at' : `${sub[0]!.toUpperCase()}${sub.slice(1)}d`} ${machine.label}.`))
+}
+
+/**
+ * Update the Superego on a machine: its own install script, reached as the machine is, its output passed on as it
+ * goes. The script restarts the daemon there, which interrupts agents at work: only with `now`.
+ */
+async function updateMachine(machine: Machine & { config: MachineConfig }, now: boolean) {
+  // One that doesn't answer may still update (a daemon that won't start, say): then there's no work to interrupt.
+  const before = await withTimeout(on(machine, async (call, hello) => ({ hello, threads: await call('thread.list', {}) })), 15_000).catch(() => undefined)
+  const working = before?.threads.filter((t) => t.status.state === 'working') ?? []
+  if (working.length && !now) {
+    throw new RpcError('busy', `${working.length === 1 ? 'An agent is' : `${working.length} agents are`} working on ${machine.label}, and updating restarts its daemon.`, {
+      hint: `Wait for them, or: ${app.id} machines update ${machine.label} --now (they resume after the restart).`,
+    })
+  }
+  await runUpdate(machine.config, app, { now, onOutput: (text) => process.stderr.write(text) })
+  const after = await withTimeout(on(machine, async (_call, hello) => hello), 30_000)
+  const short = (commit?: string) => commit?.slice(0, 7) ?? 'unknown'
+  print({ updated: true, from: before && versionOf(before.hello), to: versionOf(after) }, () =>
+    console.log(`Updated ${machine.label}: ${short(before?.hello.machine.commit)} → ${short(after.machine.commit)}, daemon ${after.machine.pid}.`))
+}
+
+/** Run this checkout's install script, as `<id> machines update` asks through a machine's `via` command. */
+function updateHere(now: boolean) {
+  const child = spawn('/bin/sh', ['-c', updateScript({ dir: resolve(options.appDir, '..') }, now)], { stdio: 'inherit' })
+  child.once('close', (code) => process.exit(code ?? 1))
 }
 
 /** A value from the command line: JSON when it parses, else the text itself. */
@@ -526,7 +559,7 @@ async function main() {
       machine: { type: 'string', short: 'm' }, prompt: { type: 'string', short: 'p' }, json: { type: 'boolean' }, profile: { type: 'string', short: 'P' }, worktree: { type: 'boolean', short: 'w' },
       user: { type: 'boolean' }, archived: { type: 'boolean' },
       all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
-      start: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, skill: { type: 'boolean' },
+      start: { type: 'boolean' }, update: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, skill: { type: 'boolean' },
     },
   })
   json = Boolean(values.json)
@@ -557,7 +590,7 @@ async function main() {
     case 'settings': return settingsCommand(rest[0], rest.slice(1), values)
     case 'auth': return authCommand(rest[0], rest.slice(1), values.machine)
     case 'daemon': return daemonCommand(rest[0], Boolean(values.now))
-    case 'connect': return bridge(Boolean(values.start))
+    case 'connect': return values.update ? updateHere(Boolean(values.now)) : bridge(Boolean(values.start))
     case 'actions': return actionsCommand(rest[0], values)
   }
 }

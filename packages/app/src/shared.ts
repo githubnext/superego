@@ -19,7 +19,11 @@ export type MachineEntry = {
   version?: MachineVersion
   /** A remote machine's Superego next to this computer's; absent when this computer can't tell. */
   drift?: VersionDrift
+  /** Its Superego being updated (Update), or how that last went: the script's output so far. */
+  update?: MachineUpdate
 }
+
+export type MachineUpdate = { state: 'running' | 'done' | 'failed'; log: string; error?: string }
 
 
 /**
