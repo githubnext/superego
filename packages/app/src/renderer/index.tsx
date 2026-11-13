@@ -16,6 +16,7 @@ import { webBridge } from './web-bridge.ts'
 import { registerBuiltInPanes } from './panes.tsx'
 import { registerToolRows } from './tool-rows.tsx'
 import { registerLinks } from './links.tsx'
+import { registerSeen } from './seen.ts'
 
 export function mountApp(app: AppConfig, { extensions = [], root = document.getElementById('root')! }: { extensions?: UiExtension[]; root?: HTMLElement } = {}) {
   // In a browser there is no preload: the bridge is a WebSocket to the daemon that served the page.
@@ -39,6 +40,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
     registerBuiltInPanes(core)
     registerToolRows(core)
     registerLinks(core)
+    registerSeen(core)
     for (const action of coreActions(app)) core.action(action)
   })
   void registry.router.load('app')
@@ -55,7 +57,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
 
 export {
   defineUiExtension, fileKind, Slot, urlKind, useApp, useRegistry,
-  type EditorSlotProps, type EntryProps, type LinkAttributes, type LinkHandler, type LinkProps, type LinkWhere, type PaneKind, type PaneProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type ToolRow, type ToolRowCall, type ToolState, type UiApi, type UiExtension,
+  type EditorSlotProps, type EntryProps, type WindowEvent, type WindowEvents, type WindowState, type LinkAttributes, type LinkHandler, type LinkProps, type LinkWhere, type PaneKind, type PaneProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type ToolRow, type ToolRowCall, type ToolState, type UiApi, type UiExtension,
   type WorkBlock, type WorkPart, type WorkRun, type WorkStatus,
 } from './extension.tsx'
 export { useAppSetting } from './client.ts'

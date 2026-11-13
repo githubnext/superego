@@ -1,6 +1,6 @@
 // The shell every app gets: the sidebar slot (or, with nothing there, a compact thread picker), the selected thread,
 // the restart notice, Settings, and the app-wide reactions (fonts, ⌘, , threads shown from the command line or a
-// notification, marking finished threads seen).
+// notification).
 import { useEffect, useRef, useState } from 'react'
 import { agentName, type SettingsSnapshot } from '@superego/protocol'
 import { ArrowLeftIcon, ArrowRightIcon, Button, LifebuoyIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select } from '@superego/ui'
@@ -75,13 +75,6 @@ export function Shell() {
     back: history.back, forward: history.forward,
   })
   useAppEffects()
-
-  // Looking at a finished or failed thread marks it seen.
-  useEffect(() => {
-    if (!selection || !thread || (thread.status.state !== 'done' && thread.status.state !== 'error') || !document.hasFocus()) return
-    void registry.router.dispatch('thread.seen', { id: selection.thread }, { machine: selection.machine, source: 'auto' }).catch(() => {})
-  }, [selection?.machine, selection?.thread, thread?.status.state])
-
 
   const settingsButton = (
     <IconButton label="Settings" className="app__settings" onClick={openSettings}>

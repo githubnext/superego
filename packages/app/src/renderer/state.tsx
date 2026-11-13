@@ -9,6 +9,7 @@ import { useRegistry } from './extension.tsx'
 import { useImageRechecks } from './images.tsx'
 import { emptyHistory, step, visit, type History, type Place } from './history.ts'
 import { useLocalState } from './local-state.ts'
+import { useWindowEvents } from './window-events.ts'
 import { freeze, sessionKey, useSessionList, type Session } from './sessions.ts'
 
 export type Selection = { machine: string; thread: string }
@@ -138,6 +139,9 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   // History: every place shown is visited, whoever showed it; back and forward move along it first, so showing what
   // they went to is where history already is. Threads no longer listed (archived, deleted; Ego's is listed apart) are
   // stepped over.
+  // What extensions hear of it (`superego.on`): statuses changing, the thread shown, the window's focus.
+  const registry = useRegistry()
+  useWindowEvents(registry, { threads, ego, selection, shown: shown ?? (archived?.id === selection?.thread ? archived : undefined) ?? (isEgo ? ego : undefined) })
   const [history, setHistory] = useState<History>(emptyHistory)
   const place: Place | undefined = settingsOpen ? { settings: true } : selection ? { thread: { machine: selection.machine, thread: selection.thread } } : undefined
   useEffect(() => { if (place) setHistory((h) => visit(h, place)) }, [settingsOpen, selection?.machine, selection?.thread])

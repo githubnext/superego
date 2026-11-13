@@ -1,6 +1,7 @@
 // The UI half of an extension: `<pkg>/ui`, listed in the app's renderer entry. It fills named slots in the shell, draws
 // tool calls and entries in the transcript, adds pane kinds, custom settings components and actions (with keys), and
-// completions and what's drawn with a sent message to the composer.
+// completions and what's drawn with a sent message to the composer. It hears what happens in the window (a thread's
+// status changing, the thread shown changing, the window's focus) through `on`.
 // Components reach everything else (machines, threads, selection, live values, calls) through the hooks this package
 // exports.
 //
@@ -8,9 +9,11 @@
 // teardown removes all of it at once. A profile's UI is owned by that profile on its machine too, and draws only in
 // that profile's threads there.
 import { createContext, useContext, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type ReactNode } from 'react'
-import type { AppConfig, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, SectionInfo, ThreadInfo } from '@superego/protocol'
+import type { AppConfig, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, SectionInfo, SettingsSnapshot, Status, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
+import type { Selection } from './state.tsx'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowContext, type WindowRouter } from './actions.tsx'
+import { watched } from './client.ts'
 import { createStore, type Store } from './local-state.ts'
 import type { CompletionProvider, CompletionWord, SentWith } from './composer.ts'
 
@@ -18,8 +21,10 @@ import type { CompletionProvider, CompletionWord, SentWith } from './composer.ts
 export type SlotName =
   /** The column left of the thread: thread lists, machine trees. With nothing here, the shell shows a compact picker. */
   | 'sidebar'
-  /** The rail down the window's left edge: a space's button (and, folded, its list as dots). Without one, the rail shows what's unread. */
+  /** The rail down the window's left edge: a space's button (and, folded, its list as dots). */
   | 'rail'
+  /** At the foot of the sidebar on a phone, beside Settings, where there's no rail. */
+  | 'footer'
   /** Right of a thread's title: badges, small actions. */
   | 'thread.header'
   /** Above the composer: things waiting on the user, suggestions. */
@@ -39,6 +44,7 @@ export type EditorSlotProps = { machine: MachineEntry; thread: ThreadInfo; path:
 export type SlotProps = {
   'sidebar': Record<string, never>
   'rail': Record<string, never>
+  'footer': Record<string, never>
   'thread.header': { machine: MachineEntry; thread: ThreadInfo }
   'composer.above': { machine: MachineEntry; thread: ThreadInfo }
   'thread.aside': { machine: MachineEntry; thread: ThreadInfo }
@@ -190,9 +196,47 @@ export type WorkStatus = 'running' | 'success' | 'failure' | 'inconclusive' | 'i
  */
 export type WorkPart = { blocks: WorkBlock[]; title?: string; status?: WorkStatus; outcome?: string }
 
+/** What the window tells extensions as it happens (`superego.on`). */
+export type WindowEvents = {
+  /**
+   * A thread's status changed: it was `before`, it's `thread.status` now. `before` is undefined the first time the
+   * window sees the thread (as it loads, or a new one). Not for threads that go without the extension listening.
+   */
+  'thread.status': { machine: string; thread: ThreadInfo; before: Status['state'] | undefined }
+  /** The thread shown changed; `selection` undefined when none is. */
+  'select': { selection: Selection | undefined; before: Selection | undefined }
+  /** The window got or lost the keyboard focus. */
+  'focus': { focused: boolean }
+  /** The window was shown or hidden: another tab in front, minimised, the screen locked. */
+  'visibility': { visible: boolean }
+}
+export type WindowEvent = keyof WindowEvents
+
+/** The window as it is now, for listeners: whether it has the focus and shows, and the thread it shows. */
+export type WindowState = {
+  focused: boolean
+  visible: boolean
+  selection: Selection | undefined
+  /** The thread shown, as the window has it (archived and Ego's too). */
+  thread: ThreadInfo | undefined
+}
+
 export type UiApi = {
   app: AppConfig
-  slot<S extends SlotName>(slot: S, component: ComponentType<SlotProps[S]>, options?: { order?: number }): void
+  /**
+   * A component in a place in the window, in `order`. `fallback: true` draws it only while nothing else (that isn't a
+   * fallback too) is in that place.
+   */
+  slot<S extends SlotName>(slot: S, component: ComponentType<SlotProps[S]>, options?: { order?: number; fallback?: boolean }): void
+  /**
+   * Hear what happens in the window (see `WindowEvents`): a thread's status changing, the thread shown changing, the
+   * window's focus and visibility. Listening stops at teardown, or with the function returned. `window` is how things
+   * are now.
+   */
+  on<E extends WindowEvent>(event: E, listener: (event: WindowEvents[E]) => void): () => void
+  window: Readonly<WindowState>
+  /** One of the app's settings as it is now (`useAppSetting` in components). */
+  appSetting<T extends Json>(key: string): T | undefined
   /**
    * How calls to the tool `name` look (of the extension's daemon half, or any other): described (a `ToolRow`: icon,
    * verbs, subject, body), or drawn whole by a component of its own. `fold: false` keeps them out of the fold a run of
@@ -280,7 +324,7 @@ export type Registry = {
   app: AppConfig
   /** What the app's extensions are, as each declares itself: told to every machine, so UI-only ones are known there. */
   extensions: ExtensionAbout[]
-  slots: { [S in SlotName]: Owned<{ component: ComponentType<SlotProps[S]>; order: number }>[] }
+  slots: { [S in SlotName]: Owned<{ component: ComponentType<SlotProps[S]>; order: number; fallback: boolean }>[] }
   /** Drawn by a `component`, or described by a `row`. `fold: false`: its calls show outside the fold of their run of work. */
   tools: Owned<{ name: string; component?: ComponentType<ToolCallProps>; row?: ToolRow; fold: boolean }>[]
   entries: Owned<{ kind: string; component: ComponentType<EntryProps> }>[]
@@ -292,6 +336,14 @@ export type Registry = {
   appSettings: Owned<DeclaredSection>[]
   completions: Owned<CompletionProvider<any>>[]
   sentWith: Owned<SentWith>[]
+  listeners: Owned<{ event: WindowEvent; listener: (event: never) => void }>[]
+  /** The window as it is now: the shell keeps it, through `emit`. */
+  window: WindowState
+  /**
+   * Tell listeners what happened, after updating `window` to match. `thread.status` reaches only listeners whose
+   * extension the thread has (and a profile's, only its own threads); a listener that throws is logged and skipped.
+   */
+  emit<E extends WindowEvent>(event: E, payload: WindowEvents[E]): void
   /** Set up a profile's UI extensions on `machine`, after tearing down what that profile set up before. */
   installProfile(machine: string, profile: ProfileRef, extensions: UiExtension[]): void
   /** Changes whenever extensions are added or removed at runtime; `subscribe` to hear it. */
@@ -306,8 +358,23 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   const ownerKey = (owner: Owner) => `${owner.profile ?? ''}/${owner.extension}`
   const registry: Registry = {
     app, extensions: extensions.map(({ name, title, description, required }) => ({ name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}) })),
-    slots: { 'sidebar': [], 'rail': [], 'thread.header': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
-    tools: [], entries: [], links: [], panes: [], work: [], settings: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [],
+    slots: { 'sidebar': [], 'rail': [], 'footer': [], 'thread.header': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
+    tools: [], entries: [], links: [], panes: [], work: [], settings: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
+    window: {
+      focused: typeof document === 'undefined' || document.hasFocus(),
+      visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
+      selection: undefined, thread: undefined,
+    },
+    emit(event, payload) {
+      if (event === 'focus') registry.window.focused = (payload as WindowEvents['focus']).focused
+      if (event === 'visibility') registry.window.visible = (payload as WindowEvents['visibility']).visible
+      if (event === 'select') registry.window.selection = (payload as WindowEvents['select']).selection
+      const where = event === 'thread.status' ? payload as WindowEvents['thread.status'] : undefined
+      const hearing = registry.listeners.filter((l) => l.event === event)
+      for (const { listener } of where ? seenIn(hearing, where) : hearing) {
+        try { (listener as (payload: unknown) => void)(payload) } catch (error) { console.error(`A ${event} listener failed`, error) }
+      }
+    },
     version: 0,
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
     installProfile(machine, profile, list) {
@@ -348,12 +415,18 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     const api: UiApi = {
       app,
       slot(slot, component, options) {
-        // A profile's UI draws in its threads' slots; the sidebar, the rail and the overlay are the app's, with no thread.
-        if (profile && (slot === 'sidebar' || slot === 'rail' || slot === 'overlay')) return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
-        const list = registry.slots[slot] as Owned<{ component: ComponentType<SlotProps[typeof slot]>; order: number }>[]
-        add(list, { component: component as never, order: options?.order ?? 100 })
+        // A profile's UI draws in its threads' slots; the sidebar, the rail, the footer and the overlay are the app's, with no thread.
+        if (profile && (slot === 'sidebar' || slot === 'rail' || slot === 'footer' || slot === 'overlay')) return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
+        const list = registry.slots[slot] as Owned<{ component: ComponentType<SlotProps[typeof slot]>; order: number; fallback: boolean }>[]
+        add(list, { component: component as never, order: options?.order ?? 100, fallback: options?.fallback ?? false })
         list.sort((a, b) => a.order - b.order)
       },
+      on(event, listener) {
+        const entry = add(registry.listeners, { event, listener: listener as (event: never) => void })
+        return () => { const at = registry.listeners.indexOf(entry); if (at >= 0) registry.listeners.splice(at, 1) }
+      },
+      get window() { return registry.window },
+      appSetting: (key) => watched<SettingsSnapshot>('app', 'settings.watch', {})?.values[key] as never,
       tool: (name, view, options) => unique(registry.tools, 'name', { name, ...(isComponent(view) ? { component: view } : { row: view }), fold: options?.fold !== false }, 'tool'),
       entry(kind, component) {
         own(kind, 'entry kinds')
@@ -456,12 +529,19 @@ function lookUp<T>(list: Owned<T>[], where: Where | undefined, match: (entry: T)
   return found.find((entry) => entry.owner.profile) ?? found[0]
 }
 
+/** What `slot` draws for `where`, in order: fallbacks only while nothing else is there. */
+export function slotEntries<S extends SlotName>(registry: Registry, slot: S, where: Where | undefined) {
+  const seen = seenIn(registry.slots[slot] as Owned<{ component: ComponentType<SlotProps[S]>; order: number; fallback: boolean }>[], where)
+  const filled = seen.some((entry) => !entry.fallback)
+  return seen.filter((entry) => !entry.fallback || !filled)
+}
+
 /** Draw every component in `slot`, with `props`. */
 export function Slot<S extends SlotName>({ name, props }: { name: S; props: SlotProps[S] }) {
   const registry = useRegistry()
   useSyncExternalStore(registry.subscribe, () => registry.version)
   const { machine, thread } = props as { machine?: MachineEntry; thread?: ThreadInfo }
-  const entries = seenIn(registry.slots[name] as Owned<{ component: ComponentType<SlotProps[S]>; order: number }>[], machine && thread ? { machine: machine.id, thread } : undefined)
+  const entries = slotEntries(registry, name, machine && thread ? { machine: machine.id, thread } : undefined)
   return <>{entries.map(({ component: Component, owner }, index) => <Component key={`${owner.profile ?? ''}/${owner.extension}-${index}`} {...props} />)}</>
 }
 
