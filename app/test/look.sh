@@ -1,6 +1,7 @@
 #!/bin/sh
 # The window's layout in the states the design covers, screenshotted: `test/look.sh <dir> [focus|composer]`;
-# `focus`: each region holding the focus; `composer`: the composer and what's around it.
+# `focus`: each region holding the focus; `composer`: the composer and what's around it; `web`: Settings → Web access,
+# pairing and devices and each Tailscale state (a stub `tailscale` on PATH: the machine's own is never touched).
 set -e
 cd "$(dirname "$0")/.."
 # A heavy check: it waits for a slot (../scripts/check.ts), is stopped after 8 minutes (SUPEREGO_SHOWCASE_TIMEOUT, in
@@ -15,6 +16,13 @@ export SUPEREGO_SHOWCASE_PROJECT="$SUPEREGO_HOME/ledger"
 node test/showcase/setup.mjs "$SUPEREGO_SHOWCASE_PROJECT" "$SUPEREGO_HOME/turns.jsonl"
 (cd "$SUPEREGO_SHOWCASE_PROJECT" && git init -q && git add -A && git -c user.name=x -c user.email=x@x commit -qm init)
 export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/turns.jsonl"
+if [ "$2" = web ]; then
+  mkdir -p "$SUPEREGO_HOME/bin"
+  cp test/showcase/tailscale.sh "$SUPEREGO_HOME/bin/tailscale"
+  chmod +x "$SUPEREGO_HOME/bin/tailscale"
+  # Only the stub: no folder with a real one stays on PATH (web.mjs takes the stub away to show "not installed").
+  export PATH="$SUPEREGO_HOME/bin:$(printf %s "$PATH" | tr ':' '\n' | while read -r d; do [ -e "$d/tailscale" ] || printf '%s:' "$d"; done)"
+fi
 . test/run-app.sh
 cleanup() {
   stop_started

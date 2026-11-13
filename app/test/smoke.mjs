@@ -821,18 +821,37 @@ if (phase === 'first') {
   await until(`!document.querySelector('.superego-font-picker__popover') && Boolean(document.querySelector('.superego-dialog.settings'))`, 'picker closed, dialog open')
   await escape()
   await until(`!document.querySelector('.superego-dialog.settings')`, 'dialog closed by Escape')
-  // Web access: the daemon serves the same window to a browser. A window without the preload is just a web page.
+  // Web access: the daemon serves the same window to a browser, to devices paired from Settings → Web access.
   const port = 20000 + Math.floor(Math.random() * 20000)
   await run(`window.superego.call('local', 'settings.set', { key: 'web.port', value: ${port} })`)
   await run(`window.superego.call('local', 'settings.set', { key: 'web.access', value: 'local' })`)
-  const url = await until(`window.superego.call('local', 'settings.watch', {}).then((r) => r.value.sections.find((s) => s.id === 'web')?.data?.url)`, 'web address')
+  await run(`document.querySelector('.app__settings').click()`)
+  await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent.includes('This computer')).click()`)
+  await until(`[...document.querySelectorAll('.web-access button')].some((b) => b.textContent === 'Pair a device')`, 'Pair a device')
+  await run(`[...document.querySelectorAll('.web-access button')].find((b) => b.textContent === 'Pair a device').click()`)
+  await until(`Boolean(document.querySelector('.web-pair__qr svg'))`, 'a pairing link and its QR code')
+  await run(`document.querySelector('.web-access').scrollIntoView({ block: 'center' })`)
+  await shot('web-pair')
+  const url = await run(`document.querySelector('.web-pair__link').textContent`)
+  if (!new RegExp(`^http://127\\.0\\.0\\.1:${port}/#pair=`).test(url)) { await fail(`pairing link ${url}`); throw new Error('failed') }
+  const main = BrowserWindow.getAllWindows()[0]
   const browser = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } })
   await browser.loadURL(url)
   const inBrowser = async (js, label) => {
     for (let i = 0; i < 150; i++) { if (await browser.webContents.executeJavaScript(js).catch(() => false)) return; await new Promise((r) => setTimeout(r, 100)) }
     await fail(`web: waiting for ${label}`); throw new Error('failed')
   }
-  await inBrowser(`window.superego.web === true && location.hash === ''`, 'web bridge, token out of the address bar')
+  await inBrowser(`window.superego.web === true && location.href === 'http://127.0.0.1:${port}/'`, 'web bridge, the ticket out of the address bar')
+  // Paired: the device is listed, and the ticket is spent. (The browser is a window too: the app's is the one before it.)
+  const inDesktop = async (js, label) => {
+    for (let i = 0; i < 150; i++) { if (await main.webContents.executeJavaScript(js).catch(() => false)) return; await new Promise((r) => setTimeout(r, 100)) }
+    await fail(`web: waiting for ${label}`); throw new Error('failed')
+  }
+  await inDesktop(`!document.querySelector('.web-pair') && document.querySelectorAll('.web-device').length === 1`, 'the paired device listed')
+  if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/web-devices.png`, (await main.webContents.capturePage()).toPNG())
+  main.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' })
+  main.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' })
+  await inDesktop(`!document.querySelector('.superego-dialog.settings')`, 'Settings closed')
   await inBrowser(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'threads in the browser')
   await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await inBrowser(`document.querySelector('.transcript')?.textContent.includes('echo: hello from smoke')`, 'a transcript in the browser')
@@ -868,20 +887,45 @@ if (phase === 'first') {
   if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-lightbox.png`, (await browser.webContents.capturePage()).toPNG())
   await browser.webContents.executeJavaScript(`document.querySelector('.lightbox__bar button[aria-label="Close"]').click()`)
   await inBrowser(`!document.querySelector('.lightbox')`, 'lightbox closed on a phone')
-  const wrongToken = await browser.webContents.executeJavaScript(`new Promise((resolve) => { const ws = new WebSocket('ws://' + location.host + '/rpc?token=wrong'); ws.onopen = () => resolve('open'); ws.onerror = () => resolve('refused') })`)
-  if (wrongToken !== 'refused') { await fail(`a wrong token got in: ${wrongToken}`); throw new Error('failed') }
-  // Without the token (a page on the home screen keeps its own storage): it asks, refuses a wrong one, takes the address.
-  await browser.webContents.executeJavaScript(`localStorage.clear()`)
+  // An artifact over the web, by the device's cookie: the page, and a file it links to (from its sandbox's own origin).
+  await main.webContents.executeJavaScript(`window.superego.call('local', 'file.write', { id: '${paned}', path: 'pic.html', content: '<img src="dot.svg" onload="parent.postMessage(\\'loaded\\', \\'*\\')" onerror="parent.postMessage(\\'failed\\', \\'*\\')">' })`)
+  await main.webContents.executeJavaScript(`window.superego.call('local', 'file.write', { id: '${paned}', path: 'dot.svg', content: '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>' })`)
+  const artifact = await browser.webContents.executeJavaScript(`new Promise((resolve) => {
+    addEventListener('message', (event) => resolve(event.data), { once: true })
+    const frame = document.createElement('iframe')
+    frame.sandbox = 'allow-scripts'
+    frame.src = window.superego.artifactUrl('local', '${paned}', 'pic.html')
+    document.body.append(frame)
+    setTimeout(() => resolve('timed out'), 5000)
+  })`)
+  if (artifact !== 'loaded') { await fail(`an artifact's file over the web: ${artifact}`); throw new Error('failed') }
+  // Another origin's WebSocket is refused, cookie or not (localhost is this computer, but not this page's origin).
+  const crossSite = await browser.webContents.executeJavaScript(`new Promise((resolve) => { const ws = new WebSocket('ws://localhost:' + location.port + '/rpc'); ws.onopen = () => resolve('open'); ws.onerror = () => resolve('refused') })`)
+  if (crossSite !== 'refused') { await fail(`a WebSocket from another origin got in: ${crossSite}`); throw new Error('failed') }
+  // A page on the home screen keeps its own cookies: a browser of its own. The link again is spent; it asks for a code.
   browser.setContentSize(1100, 760)
-  await browser.loadURL(url.replace(/#.*/, ''))
-  await inBrowser(`document.activeElement?.classList.contains('token-gate__input')`, 'the token form, focused')
-  const submitToken = (value) => browser.webContents.executeJavaScript(`(() => { document.querySelector('.token-gate__input').value = ${JSON.stringify(value)}; document.querySelector('.token-gate').requestSubmit() })()`)
-  await submitToken('wrong')
-  await inBrowser(`document.querySelector('.token-gate__error')?.textContent.includes('isn’t this machine’s')`, 'a wrong token refused')
-  await submitToken(url)
-  await inBrowser(`!document.querySelector('.token-gate')`, 'the token form gone')
-  await inBrowser(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'threads after typing the token')
-  await inBrowser(`localStorage.getItem('superego.webToken') === ${JSON.stringify(new URL(url).hash.slice('#token='.length))}`, 'the token kept')
+  const phone = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, partition: 'smoke-phone' } })
+  const inPhone = async (js, label) => {
+    for (let i = 0; i < 150; i++) { if (await phone.webContents.executeJavaScript(js).catch(() => false)) return; await new Promise((r) => setTimeout(r, 100)) }
+    await fail(`web: waiting for ${label}`); throw new Error('failed')
+  }
+  await phone.loadURL(url)
+  await inPhone(`document.activeElement?.classList.contains('pair-gate__input') && document.querySelector('.pair-gate__error')?.textContent.includes('used already') && location.hash === ''`, 'a spent link refused, the code form focused')
+  const submitCode = (value) => phone.webContents.executeJavaScript(`(() => { document.querySelector('.pair-gate__input').value = ${JSON.stringify(value)}; document.querySelector('.pair-gate').requestSubmit() })()`)
+  await submitCode('AAAA-AAAA')
+  await inPhone(`document.querySelector('.pair-gate__error')?.textContent.includes('isn’t right')`, 'a wrong code refused')
+  const { code } = await main.webContents.executeJavaScript(`window.superego.call('local', 'web.pair', {})`)
+  await submitCode(code.toLowerCase())
+  await inPhone(`!document.querySelector('.pair-gate')`, 'the code form gone')
+  await inPhone(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'threads after typing the code')
+  // Revoked: its connection closes at once, and it asks to be paired again; the other browser stays.
+  const devices = await main.webContents.executeJavaScript(`window.superego.call('local', 'web.devices', {})`)
+  if (devices.length !== 2) { await fail(`devices: ${JSON.stringify(devices)}`); throw new Error('failed') }
+  const newest = devices.reduce((a, b) => a.created > b.created ? a : b)
+  await main.webContents.executeJavaScript(`window.superego.call('local', 'web.revoke', { id: ${JSON.stringify(newest.id)} })`)
+  await inPhone(`Boolean(document.querySelector('.pair-gate'))`, 'a revoked device asked to pair again')
+  await inBrowser(`!document.querySelector('.pair-gate') && [...document.querySelectorAll('.superego-list-item')].length > 0`, 'the other device still in')
+  phone.destroy()
   browser.destroy()
   await run(`window.superego.call('local', 'settings.set', { key: 'web.access', value: 'off' })`)
   // The second machine's profile UI: the thread works without it, and the window asks; it runs once allowed here, stops
