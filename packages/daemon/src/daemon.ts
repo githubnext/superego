@@ -1063,7 +1063,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     let blocks: MessageBlock[] = typeof content === 'string' ? (content ? [{ type: 'text', text: content }] : []) : content
     let touched = false
     for (const { transform } of applying) {
-      const next = await transform({ thread, text, attachments, content: blocks })
+      // A copy: only what it returns counts, whether the message came as text or as blocks.
+      const next = await transform({ thread, text, attachments, content: [...blocks] })
       if (next) { blocks = next; touched = true }
     }
     return touched ? blocks : content

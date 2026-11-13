@@ -111,6 +111,20 @@ it('transforms what a message gives the agent, in order, but not for a thread th
   await close()
 })
 
+it("counts only what a transform returns, not what it changes in place, with attachments or without", async () => {
+  const meddle = defineDaemonExtension({
+    name: 'meddle',
+    setup(superego) { superego.submit(({ content }) => { content.push({ type: 'text', text: 'meddled' }) }) },
+  })
+  const { peer, close } = await open([meddle])
+  const thread = await peer.call<ThreadInfo>('thread.create', {})
+  await peer.call('thread.submit', { id: thread.id, text: 'look', attachments: [{ name: 'a.txt', mimeType: 'text/plain', data: Buffer.from('a').toString('base64') }] })
+  await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
+  const { value } = await peer.call<{ value: { entries: { kind: string; model?: { content: unknown }[] }[] } }>('thread.watch', { id: thread.id })
+  expect(JSON.stringify(value.entries.find((e) => e.kind === 'pi.user')!.model![0]!.content)).not.toContain('meddled')
+  await close()
+})
+
 it('tells clients when what it offers changes: an extension switched off, or set up', async () => {
   const links = defineDaemonExtension({ name: 'links', title: 'Links' })
   const { peer, hello, close } = await open([links])
