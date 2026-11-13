@@ -640,7 +640,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
   }
   /** Tell the hooks what happened, in order: one that throws is logged, and the rest are told all the same. */
-  async function tell(hook: 'created' | 'turnStart' | 'turnEnd' | 'archived' | 'unarchived', id: string, as?: Partial<ThreadInfo>) {
+  async function tell(hook: 'created' | 'turnStart' | 'turnEnd' | 'blocked' | 'archived' | 'unarchived', id: string, as?: Partial<ThreadInfo>) {
     const m = await get(id)
     for (const { value, owner } of hooksOf(id, m)) {
       try {
@@ -653,11 +653,23 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
   /** Turns as the hooks hear them: in order for each thread, one after another, never holding up the run. */
   const told = new Map<string, Promise<void>>()
-  function tellLater(hook: 'turnStart' | 'turnEnd', id: string) {
+  function tellLater(hook: 'turnStart' | 'turnEnd' | 'blocked', id: string) {
     if (!threadHooks.some((h) => h.value[hook])) return
     const next = (told.get(id) ?? Promise.resolve()).then(() => tell(hook, id)).catch(() => {})
     told.set(id, next)
     void next.then(() => { if (told.get(id) === next) told.delete(id) })
+  }
+  /**
+   * The threads that need the user now (an extension's `status`), so `blocked` is told once each time one comes to.
+   * Status changes only when an extension says so (`invalidate`), so that's when it's looked at.
+   */
+  const needing = new Set<string>()
+  function heedStatus() {
+    for (const [id, m] of mounted) {
+      const blocked = !m.meta.archived && Boolean(blockedOf(id).blocked)
+      if (blocked === needing.has(id)) continue
+      if (blocked) { needing.add(id); tellLater('blocked', id) } else needing.delete(id)
+    }
   }
 
   // ── Extensions ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -800,7 +812,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         transforms.push(entry)
         undo.push(() => { transforms.splice(transforms.indexOf(entry), 1) })
       },
-      invalidate: changed,
+      invalidate() { changed(); heedStatus() },
       thread(hooks) { own(threadHooks, hooks) },
       state<T extends Json>() {
         const name = extension.name

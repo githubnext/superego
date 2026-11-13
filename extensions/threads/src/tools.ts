@@ -18,6 +18,8 @@ export type ThreadsHost = {
   archive(id: string): Promise<{ worktree: 'removed' | 'kept' | null }>
   /** Put it away once its run ends: how a thread archives itself, mid-turn. */
   archiveWhenDone(id: string): Promise<void>
+  /** `reader` read `thread` (thread_read), as it stood: so a report of it isn't relayed again (reads.ts). */
+  read?(reader: string, thread: ThreadInfo): void
 }
 
 /** A thread as a link in a message: what the window shows as one, and what the agent is told to write. */
@@ -31,7 +33,7 @@ const clip = (value: string) => value.length > LIMIT ? `${value.slice(0, LIMIT)}
 export const lineOf = (thread: ThreadInfo) => `${linkTo(thread)}: ${thread.status.state}${thread.status.msg ? ` (${thread.status.msg})` : ''}, in ${thread.cwd}`
 
 /** `thread_read`: where a thread stands, who started it, its threads and its last answer, waiting for it if asked. */
-export function readTool(host: Pick<ThreadsHost, 'info' | 'list' | 'answer'>) {
+export function readTool(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'read'>) {
   return defineTool({
     name: 'thread_read',
     description: 'Read another thread: where it stands, its parent and children, and its last answer. wait: true waits until it is ' +
@@ -50,6 +52,7 @@ export function readTool(host: Pick<ThreadsHost, 'info' | 'list' | 'answer'>) {
       const parent = thread.parent ? all.find((t) => t.id === thread!.parent) : undefined
       const children = all.filter((t) => t.parent === id)
       const answer = await host.answer(id)
+      host.read?.(String(api.conversationId), thread)
       return text([
         lineOf(thread),
         parent && `Started by ${linkTo(parent)}.`,
@@ -142,7 +145,7 @@ export function threadTools(host: ThreadsHost) {
         `This thread is ${linkTo(self)}${parent ? `, started by ${linkTo(parent)}` : ''}.`,
         'Name a thread in a message as a link, [its title](thread:<id>): it shows as one, to open.',
         'For separate work that can go on alongside this (another part of a change, a question to look into), start a thread ' +
-          'of its own with thread_start, and give it everything it needs; thread_read with wait: true gets its answer.',
+          'of its own with thread_start, and give it everything it needs; thread_read gets its answer (wait: true waits for it).',
         'thread_archive puts a thread away once it\'s finished with, such as a child of this one whose work is done, or this ' +
           'thread itself when the user asks.',
       ].join('\n')

@@ -83,6 +83,11 @@ export type ThreadHooks = {
   turnStart?(thread: ThreadInfo): void | Promise<void>
   /** Its run ended: answered, failed or stopped. Not for one that ended while the daemon was down. */
   turnEnd?(thread: ThreadInfo): void | Promise<void>
+  /**
+   * It came to need the user (an extension's `status` says so: a question), mid-run: once each time, as the extension
+   * whose status it is calls `invalidate()`.
+   */
+  blocked?(thread: ThreadInfo): void | Promise<void>
   /** About to be archived: may refuse. Nothing is done yet; do cleanup in `archived`. */
   archiving?(thread: ThreadInfo): void | Promise<void>
   /** Being archived, past refusing: clean up (remove a worktree, say). Done before clients see it archived. */

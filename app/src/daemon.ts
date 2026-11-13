@@ -13,6 +13,7 @@ import images from '@superego/images/daemon'
 import skills from '@superego/skills/daemon'
 import suggestions from '@superego/suggestions/daemon'
 import tasks from '@superego/tasks/daemon'
+import threadReports from '@superego/threads/reports'
 import threadTools from '@superego/threads/daemon'
 import webPanes from '@superego/web-panes/daemon'
 import app from '../superego.config.ts'
@@ -21,7 +22,7 @@ import app from '../superego.config.ts'
 const webRoot = [join(import.meta.dirname, '../renderer'), join(import.meta.dirname, '../out/renderer')].find((dir) => existsSync(join(dir, 'index.html')))
 
 // The meta agent sets up the machines this computer reaches: the same list the app and `superego machines` keep.
-serveDaemon({ app, defaultCwd: homedir(), extensions: [askUser, files, git, images, skills, suggestions, tasks, threadTools, webPanes], machines: (dataDir) => new MachineStore(dataDir), ...(webRoot ? { webRoot } : {}) }).catch((error) => {
+serveDaemon({ app, defaultCwd: homedir(), extensions: [askUser, files, git, images, skills, suggestions, tasks, threadTools, threadReports, webPanes], machines: (dataDir) => new MachineStore(dataDir), ...(webRoot ? { webRoot } : {}) }).catch((error) => {
   console.error(error)
   process.exit(1)
 })

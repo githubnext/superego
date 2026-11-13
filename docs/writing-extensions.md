@@ -92,7 +92,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
 | `submit(({ thread, text, attachments, content }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it |
 | `settings.register({ id: 'x', settings })`, `settings.get`, `settings.onChange` | machine settings of its own (`x.…`); read any |
-| `thread({ creating, created, turnStart, turnEnd, archiving, archived, unarchiving, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it |
+| `thread({ creating, created, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
 | `state()` → `get(id)`, `set(id, next)`, `update(id, edit)` | state of its own kept with each thread, across restarts; `creating` gives a new one its first |
 | `facts(({ id, state }) => …)` | what clients are told of a thread, as `thread.ext.<name>`: worked out from its state |
 | `agentFor(({ id, state, profile }) => ({ instructions, model, extensions, without }))` | choose a thread's agent; the first to answer wins. `agent(part, { always: false })` gives a part only through this |
@@ -203,6 +203,8 @@ superego.thread({
 - `turnStart` and `turnEnd` are per run, not per message: a message steered or queued into a run that's going is part
   of it. A run resumed after a restart had started already, so it ends with a `turnEnd` alone; one that ended while
   the daemon was down gets neither.
+- `blocked` is told when a thread comes to need the user mid-run (an extension's `status`: `ask-user`'s question), once
+  each time: when the extension whose status it is calls `invalidate()`.
 - A thread archiving itself mid-turn is `threads.archive(id, { whenIdle: true })`: archived once its run ends, even
   across a restart.
 - State is kept in the thread's document under the extension's name, so it persists, and goes with the thread.
@@ -242,7 +244,7 @@ to each machine, which lists it and lets profiles do without it.
 | [`links`](../extensions/links/src) | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
 | [`unread`](../extensions/unread/src) | UI only: a `rail` slot as a `fallback`, the phone's `footer`, an action with keys reading sessions, an app setting |
 | [`notifications`](../extensions/notifications/src) | UI only: `on('thread.status')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
-| [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings, tool rows and a `link`; its daemon half is another, optional extension (`thread-tools`), on `superego.threads` |
+| [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings, tool rows and a `link`; its daemon half is two other, optional extensions: `thread-tools`, on `superego.threads`, and `thread-reports`, report-back through `turnEnd` and `blocked` hooks |
 | [`worktrees`](../packages/daemon/src/worktrees.ts) | the core's, for now: `thread` hooks, `state` and `facts` |
 
 Diagram sources are the `.mmd` files in [writing-extensions/](writing-extensions/); re-render with the `diagram` skill

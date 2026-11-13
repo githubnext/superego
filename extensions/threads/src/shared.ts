@@ -17,3 +17,12 @@ export const about = {
 export const toolsAbout = {
   name: 'thread-tools', title: 'Thread tools', description: 'Start threads of their own, read, message and archive others.',
 } satisfies ExtensionAbout
+
+/**
+ * Report-back, optional: a thread started by another tells it when a run ends or it waits on a question. Its own
+ * extension, so a profile turns it off (`without: ['thread-reports']`: its threads neither report nor are reported to)
+ * while keeping the tools, and a thread without the tools still reports.
+ */
+export const reportsAbout = {
+  name: 'thread-reports', title: 'Thread reports', description: 'Tell the thread that started one when it finishes, fails or waits on a question.',
+} satisfies ExtensionAbout

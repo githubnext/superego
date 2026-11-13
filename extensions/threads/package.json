@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { "./daemon": "./src/daemon.ts", "./tools": "./src/tools.ts", "./ui": "./src/ui.tsx" },
+  "exports": { "./daemon": "./src/daemon.ts", "./reports": "./src/reports.ts", "./tools": "./src/tools.ts", "./ui": "./src/ui.tsx" },
   "dependencies": {
     "@earendil-works/pi-durable": "1.5.0",
     "@superego/app": "workspace:*",

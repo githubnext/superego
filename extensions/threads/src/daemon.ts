@@ -1,6 +1,7 @@
 // threads, daemon half: the agent's thread tools (tools.ts), on `superego.threads`. An extension of its own name,
 // `thread-tools`, so a machine can switch them off and a profile go without them while the sidebar stays.
 import { defineDaemonExtension } from '@superego/daemon'
+import { readsOf } from './reads.ts'
 import { toolsAbout } from './shared.ts'
 import { threadTools } from './tools.ts'
 
@@ -19,5 +20,6 @@ export default defineDaemonExtension({
       return { worktree: worktree ? (worktree.removed ? 'removed' : 'kept') : null }
     },
     archiveWhenDone: (id) => s.threads.archive(id, { whenIdle: true }),
+    read: (reader, thread) => readsOf(s.harness).note(reader, thread),
   })),
 })

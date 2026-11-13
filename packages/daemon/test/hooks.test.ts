@@ -106,6 +106,33 @@ it("takes part in a thread's life, in order: creating moves it and gives it stat
   await close()
 })
 
+it('tells blocked once each time a thread comes to need the user, as the status says', async () => {
+  const heard: string[] = []
+  let asking: string | undefined
+  let api!: DaemonApi
+  const asker = defineDaemonExtension({
+    name: 'asker',
+    setup(superego) {
+      api = superego
+      superego.status((id) => id === asking ? { kind: 'question', msg: 'Which?' } : undefined)
+      superego.thread({ blocked: (t) => { heard.push(`${t.id} ${t.status.state} ${t.status.msg}`) } })
+    },
+  })
+  const { peer, close } = await open([asker])
+  const thread = await peer.call<ThreadInfo>('thread.create', {})
+  asking = thread.id
+  api.invalidate()
+  api.invalidate()
+  await until(() => heard.length === 1)
+  asking = undefined
+  api.invalidate()
+  asking = thread.id
+  api.invalidate()
+  await until(() => heard.length === 2)
+  expect(heard).toEqual([`${thread.id} blocked Which?`, `${thread.id} blocked Which?`])
+  await close()
+})
+
 it('refuses when an -ing hook says no; a hook that throws otherwise is logged, and wedges nothing', async () => {
   let refuse = true
   const guard = defineDaemonExtension({
