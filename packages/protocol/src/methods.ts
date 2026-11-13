@@ -180,6 +180,8 @@ export type Notifications = {
   'value.changed': { sub: string; key: string; value: Json }
   /** A watched file, as it is on disk now (`content: null`: gone). */
   'file.changed': { sub: string; content: string | null }
+  /** What the daemon offers now, as `hello` said it: sent to every client whenever it changes (an extension set up, torn down, switched off). */
+  'features.changed': { features: string[] }
 }
 
 /** The methods every settings endpoint (a daemon, or the app itself) answers. */

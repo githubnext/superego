@@ -75,7 +75,14 @@ export class Link {
       try {
         const transport = await this.#options.open()
         this.#transport = transport
-        transport.peer.onAny((method, params) => this.#options.onEvent(method, params))
+        transport.peer.onAny((method, params) => {
+          // What it offers changed since hello (an extension set up, torn down, switched off): `has` follows.
+          if (method === 'features.changed' && this.hello) {
+            this.hello = { ...this.hello, features: (params as { features: string[] }).features }
+            this.#set(this.state)
+          }
+          this.#options.onEvent(method, params)
+        })
         const hello = await transport.peer.call<Hello>('hello', { client: 'superego-app', version: PROTOCOL_VERSION, features: [...FEATURES] })
         this.#options.verify?.(hello)
         this.hello = hello

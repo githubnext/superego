@@ -18,7 +18,11 @@ export function machine(id: MachineId): Client {
   }
 }
 
-/** Whether a machine's daemon offers `feature` (from its hello); unknown until it has connected once. */
+/**
+ * Whether a machine's daemon offers `feature`: a protocol feature, or `ext:<name>` for an extension set up there now
+ * and not switched off (a profile's from when the profile loads). Kept current as the daemon says (`features.changed`);
+ * false until it has connected once.
+ */
 export const has = (machine: MachineEntry | undefined, feature: Feature | `ext:${string}`) => machine?.features?.includes(feature) ?? false
 
 /** The machines from the main process, live. The shell holds one subscription; extensions use `useMachines`. */

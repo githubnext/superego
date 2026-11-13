@@ -172,7 +172,8 @@ function MachineThreads({ machine, onThreads }: { machine: MachineEntry; onThrea
   const threads = useThreadsWatch(machine.id, machine.state === 'connected' && has(machine, 'threads'))
   // What the machine offers, for the palette and for routing thread actions.
   const { router } = useRegistry()
-  useEffect(() => { if (machine.state === 'connected' && has(machine, 'actions')) void router.load(machine.id) }, [machine.state, machine.machine?.id])
+  // Again when what it offers changes: a profile's extensions bring actions of their own.
+  useEffect(() => { if (machine.state === 'connected' && has(machine, 'actions')) void router.load(machine.id) }, [machine.state, machine.machine?.id, machine.features?.join()])
   useEffect(() => { if (threads) onThreads(machine.id, threads) }, [threads])
   return null
 }

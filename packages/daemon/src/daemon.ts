@@ -549,6 +549,25 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const claimed = new Set<string>()
   /** Names announced as `ext:<name>`: the extensions set up now, bundled and profiles' alike. */
   const announced = new Set<string>()
+  /**
+   * What this daemon offers, as `hello` says and `features.changed` keeps current: the protocol's features, and every
+   * extension set up now but those switched off on this machine.
+   */
+  const features = () => [...FEATURES, ...[...announced].filter((name) => extensions.get(name)?.required || settings.get(`extensions.${name}`) !== false).map((name) => `ext:${name}`)]
+  let announcedFeatures = ''
+  let announcing = false
+  /** Tell every client what this daemon offers, once it changed (after whatever changed it settles). */
+  function announce() {
+    if (announcing) return
+    announcing = true
+    queueMicrotask(() => {
+      announcing = false
+      const now = features()
+      if (JSON.stringify(now) === announcedFeatures) return
+      announcedFeatures = JSON.stringify(now)
+      for (const peer of connections) peer.notify('features.changed', { features: now })
+    })
+  }
 
   /**
    * Set up a daemon extension: a bundled one (for the daemon's life), or a profile's (`agent` then adds to the
@@ -560,7 +579,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (claimed.has(extension.name)) throw new Error(`An extension named ${extension.name} is already set up`)
     claimed.add(extension.name)
     announced.add(extension.name)
-    const undo: (() => void)[] = [() => { claimed.delete(extension.name); announced.delete(extension.name) }]
+    announce()
+    const undo: (() => void)[] = [() => { claimed.delete(extension.name); announced.delete(extension.name); announce() }]
     const ownKey = (key: string) => {
       if (key !== extension.name && !key.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its settings "${extension.name}.<key>", not "${key}"`)
     }
@@ -638,10 +658,15 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     extensions.set(name, { name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}) })
   }
   registerExtensionSettings(settings, [...extensions.values()])
-  // Turning one off changes what threads go without, which clients are told.
-  settings.onChange(changed)
-  /** What this daemon offers, as `hello` says: the protocol's features, and every extension set up now. */
-  const features = () => [...FEATURES, ...[...announced].map((name) => `ext:${name}`)]
+  // Turning one off changes what threads go without, and what this machine offers: clients are told both.
+  let switches = ''
+  settings.onChange(() => {
+    const now = JSON.stringify([...extensions.keys()].map((name) => settings.get(`extensions.${name}`)))
+    if (now === switches) return
+    switches = now
+    changed()
+    announce()
+  })
 
   // ── Profiles ────────────────────────────────────────────────────────────────────────────────────────────────────
 

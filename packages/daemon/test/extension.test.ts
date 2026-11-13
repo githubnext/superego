@@ -110,3 +110,19 @@ it('transforms what a message gives the agent, in order, but not for a thread th
   expect(await send('plain')).toBe('plain')
   await close()
 })
+
+it('tells clients when what it offers changes: an extension switched off, or set up', async () => {
+  const links = defineDaemonExtension({ name: 'links', title: 'Links' })
+  const { peer, hello, close } = await open([links])
+  expect(hello.features).toContain('ext:links')
+  const told: string[][] = []
+  peer.on('features.changed', (params: { features: string[] }) => { told.push(params.features) })
+  await peer.call('settings.set', { key: 'extensions.links', value: false })
+  await until(async () => told.length === 1)
+  expect(told[0]).not.toContain('ext:links')
+  expect((await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })).features).not.toContain('ext:links')
+  await peer.call('settings.set', { key: 'extensions.links', value: true })
+  await until(async () => told.length === 2)
+  expect(told[1]).toContain('ext:links')
+  await close()
+})

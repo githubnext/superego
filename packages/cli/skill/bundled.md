@@ -84,8 +84,9 @@ Bundled extensions get more than a profile's:
 - **App settings** (per user, in Settings → General): `superego.appSettings({ id, title, settings: [{ key: 'orders.x', … }] })`,
   read with `useAppSetting('orders.x')`, or `context.appSetting('orders.x')` in an action.
 - **Machine settings** from the daemon half: `superego.settings.register({ id: 'orders', title, settings: [{ key: 'orders.x', title, default, type }] })`.
-- A feature flag: the daemon announces `ext:<name>`, so a UI half checks `has(machine, 'ext:orders')` before
-  watching a value an older or different daemon doesn't have.
+- A feature flag: the daemon announces `ext:<name>` for each extension set up and switched on there, and tells clients
+  again whenever that changes, so `has(machine, 'ext:orders')` says whether a machine has it now (a profile's once the
+  profile loads). Watching a value needs no check: it's null until the extension publishes it.
 
 ## Tests
 

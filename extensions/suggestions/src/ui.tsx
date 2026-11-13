@@ -3,7 +3,7 @@
 // puts it in the composer to change; in the empty composer ←/→ pick one, ⏎ sends it and ⇥ puts it in the box. ⌃1–⌃9
 // send the one with that number, wherever the focus is in the thread.
 import { useEffect } from 'react'
-import { defineUiExtension, has, keyLabel, useComposer, useValue, type MachineEntry } from '@superego/app/ui'
+import { defineUiExtension, keyLabel, useComposer, useValue, type MachineEntry } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import { about, NEXT, type Suggested } from './shared.ts'
 import './styles.css'
@@ -16,7 +16,7 @@ export default defineUiExtension({
 })
 
 function Suggestions({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
-  const all = useValue<Record<string, Suggested>>(machine.id, machine.state === 'connected' && has(machine, 'ext:suggestions'), NEXT)
+  const all = useValue<Record<string, Suggested>>(machine.id, machine.state === 'connected', NEXT)
   const composer = useComposer()
   const shown = !thread.archived && thread.status.state !== 'working' && !composer.text ? all?.[thread.id]?.prompts ?? [] : []
   const offered = shown.join('\n')

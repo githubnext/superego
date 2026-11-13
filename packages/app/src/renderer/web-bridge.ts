@@ -64,7 +64,11 @@ export function webBridge(): SuperegoBridge {
       const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/rpc?token=${encodeURIComponent(token)}`)
       const next = new RpcPeer((line) => { if (ws.readyState === WebSocket.OPEN) ws.send(line.trimEnd()) })
       ws.onmessage = (message) => next.receive(String(message.data))
-      next.onAny((method, params) => emit({ machine: 'local', method, params }))
+      next.onAny((method, params) => {
+        // What it offers changed since hello: `has` follows.
+        if (method === 'features.changed') setEntry({ features: (params as { features: string[] }).features })
+        emit({ machine: 'local', method, params })
+      })
       ws.onopen = async () => {
         opened = true
         try {

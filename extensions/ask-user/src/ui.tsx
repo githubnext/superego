@@ -3,7 +3,7 @@
 // the composer with the question and its numbered options (a free answer is typed below them); in the transcript, the
 // question and the answer it got.
 import { useState } from 'react'
-import { defineUiExtension, useDispatch, has, keyLabel, Markdown, useComposer, useComposerClaim, useValue, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
+import { defineUiExtension, useDispatch, keyLabel, Markdown, useComposer, useComposerClaim, useValue, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import { about, ANSWER, PENDING, TOOL, type AskDetails, type Option, type Question } from './shared.ts'
 import { answerOf, keyMove, partsOf } from './question.ts'
@@ -17,9 +17,9 @@ export default defineUiExtension({
   },
 })
 
-/** The questions this machine's agents wait on; none where the daemon half isn't installed. */
+/** The questions this machine's agents wait on; none where the daemon half isn't set up (its value stays null). */
 function usePending(machine: MachineEntry) {
-  return useValue<Question[]>(machine.id, machine.state === 'connected' && has(machine, 'ext:ask-user'), PENDING) ?? []
+  return useValue<Question[]>(machine.id, machine.state === 'connected', PENDING) ?? []
 }
 
 function Waiting({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
