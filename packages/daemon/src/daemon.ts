@@ -21,7 +21,7 @@ import { FileSettingsStore } from '@superego/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import {
-  defineDaemonExtension, type AgentChoice, type ArchiveNote, type ArchiveNotes, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type StatusContribution, type SubmitTransform,
+  defineDaemonExtension, type AgentChoice, type ArchiveNote, type ArchiveNotes, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type OutgoingMessage, type StatusContribution, type SubmitTransform,
   type ThreadCreating, type ThreadDraft, type ThreadHooks,
 } from './extension.ts'
 import { titleOf } from './names.ts'
@@ -889,8 +889,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         conversation: async (id) => (await get(id)).conversation,
         of: (conversationId) => mounted.has(String(conversationId)) ? String(conversationId) : undefined,
         attachments: attachmentsOf,
-        create: ({ hidden, ...params }) => startThread({ ...params, ...(hidden ? { hidden: extension.name } : {}) }),
-        async submit(id, text, { whenBusy = 'followUp' } = {}) { await submit(id, text, randomUUID(), whenBusy) },
+        create: ({ hidden, ...params }) => startThread({ ...params, ...(hidden ? { hidden: extension.name } : {}), by: extension.name }),
+        async submit(id, text, { whenBusy = 'followUp' } = {}) { await submit(id, text, randomUUID(), whenBusy, [], extension.name) },
         lastAnswer: (id) => answerOf(id),
         async entries(id, limit = 20) { return (await (await get(id)).conversation.entries({ order: 'descending' }, limit, undefined, context)).items },
         async archive(id, { whenIdle = false } = {}) {
@@ -1114,8 +1114,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return { model, thinkingLevel, extensions, instructions, without }
   }
 
-  /** Send `text` to a thread, with the model and thinking it chose, else what this machine's settings say now. */
-  async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp', attachments: Attachment[] = []) {
+  /**
+   * Send `text` to a thread, with the model and thinking it chose, else what this machine's settings say now. `by`: the
+   * extension sending it (`threads.submit`, `threads.create`'s prompt); none for a client's (a window, the command line).
+   */
+  async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp', attachments: Attachment[] = [], by?: string) {
     if (!text.trim() && !attachments.length) throw new RpcError('invalid', 'Nothing to send')
     const m = await get(id)
     // Put away: it can be read, not written to, until it's brought back.
@@ -1128,7 +1131,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
     await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null, ...rest }, context)
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
-    const content = await transformed(id, m, text, attachments, await contentOf(id, text, attachments))
+    const content = await transformed(id, m, { text, attachments, ...(by ? { by } : {}) }, await contentOf(id, text, attachments))
     const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}) }, context)
     return String(submission.id)
   }
@@ -1138,7 +1141,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * those of extensions the thread goes without skipped, and a profile's for its own threads only. Untouched, it's sent
    * as it came.
    */
-  async function transformed(id: string, m: Mounted, text: string, attachments: Attachment[], content: string | MessageBlock[]) {
+  async function transformed(id: string, m: Mounted, message: Pick<OutgoingMessage, 'text' | 'attachments' | 'by'>, content: string | MessageBlock[]) {
     const without = withoutOf(id, m.meta, m.meta.profile && profiles.get(m.meta.profile.dir))
     const applying = transforms.filter((t) => !without.has(t.owner) && (!t.profiles || (m.meta.profile && t.profiles.has(m.meta.profile.dir))))
     if (!applying.length) return content
@@ -1147,7 +1150,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     let touched = false
     for (const { transform } of applying) {
       // A copy: only what it returns counts, whether the message came as text or as blocks.
-      const next = await transform({ thread, text, attachments, content: [...blocks] })
+      const next = await transform({ thread, ...message, content: [...blocks] })
       if (next) { blocks = next; touched = true }
     }
     return touched ? blocks : content
@@ -1234,7 +1237,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * hidden, an extension's own); `hidden`, in no list and the extension's of that name. Extensions' `creating` hooks
    * may move it (a worktree) and give it state.
    */
-  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree, parent, options: asked, hidden }: NewThread & { hidden?: string }) {
+  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree, parent, options: asked, hidden, by }: NewThread & { hidden?: string; by?: string }) {
     const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
     if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${machine.hostname}`)
     if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
@@ -1289,7 +1292,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       throw error
     }
     // Made: a first message that fails (no model yet) leaves it made, and says why.
-    if (prompt?.trim() || attachments?.length) await submit(id, prompt ?? '', randomUUID(), undefined, attachments)
+    if (prompt?.trim() || attachments?.length) await submit(id, prompt ?? '', randomUUID(), undefined, attachments, by)
     return info(id, await get(id))
   }
   /** A new thread with `meta`: its id, once extensions were told it's there (`created`). */

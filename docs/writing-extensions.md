@@ -90,7 +90,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `value('x.y', initial)` → `get`, `set`, `update` | live state the UI watches; in memory |
 | `pane(kind, about)` | tell the agent about a pane kind, for `open_pane` |
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
-| `submit(({ thread, text, attachments, content }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it |
+| `submit(({ thread, text, attachments, content, by }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it. `by`: the extension that sent it (`threads.submit`, `threads.create`'s prompt), absent for the user's |
 | `settings.register({ id: 'x', settings })`, `settings.get`, `settings.snapshot`, `settings.onChange` | machine settings of its own (`x.…`); read any |
 | `dispatch(id, params)`, `actions(exposure)` | run any action on the machine as this extension (`settings.set`); list them |
 | `thread({ creating, created, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
@@ -267,7 +267,7 @@ to each machine, which lists it and lets profiles do without it.
 | [`links`](../extensions/links/src) | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
 | [`unread`](../extensions/unread/src) | UI only: a `rail` slot as a `fallback`, the phone's `footer`, an action with keys reading sessions, an app setting |
 | [`notifications`](../extensions/notifications/src) | UI only: `on('thread.status')`, `on('auth.rejected')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
-| [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings, tool rows and a `link`; its daemon half is two other, optional extensions: `thread-tools`, on `superego.threads`, and `thread-reports`, report-back through `turnEnd` and `blocked` hooks |
+| [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings, tool rows and a `link`; its daemon half is two other, optional extensions: `thread-tools`, on `superego.threads`, and `thread-reports`, report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by a submit transform's `by`) |
 | [`worktrees`](../extensions/worktrees/src) | `thread` hooks (`creating` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `thread.crumb` chip and a `newThreadField` |
 | [`ego`](../extensions/ego/src) | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `value` the rail follows; a `rail` slot |
 

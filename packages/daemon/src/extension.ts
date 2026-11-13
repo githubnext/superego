@@ -38,7 +38,11 @@ export type MessageBlock = { type: 'text'; text: string } | { type: 'image'; dat
  * A message on its way to a thread's agent, as submit transforms see it: what was typed, the files sent with it, and
  * the blocks the model will be given so far (the text first, then each file as the core names it).
  */
-export type OutgoingMessage = { thread: ThreadInfo; text: string; attachments: Attachment[]; content: MessageBlock[] }
+export type OutgoingMessage = {
+  thread: ThreadInfo; text: string; attachments: Attachment[]; content: MessageBlock[]
+  /** The extension that sent it (`threads.submit`, or `threads.create`'s prompt): absent for a client's, the user's. */
+  by?: string
+}
 
 /** Changes what a message gives the model: returns the blocks to send instead, or nothing to leave them. */
 export type SubmitTransform = (message: OutgoingMessage) => MessageBlock[] | void | Promise<MessageBlock[] | void>

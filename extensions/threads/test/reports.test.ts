@@ -8,7 +8,7 @@ import { connectSocket, listen, openDaemon } from '@superego/daemon'
 import { defineApp, PROTOCOL_VERSION, type Json, type ThreadInfo } from '@superego/protocol'
 import threadTools from '../src/daemon.ts'
 import { readLog } from '../src/reads.ts'
-import threadReports, { excerpt, reporter, type ReportsHost } from '../src/reports.ts'
+import threadReports, { excerpt, reporter, threadReports as withBatching, type ReportsHost } from '../src/reports.ts'
 import { threadTools as tools } from '../src/tools.ts'
 
 const thread = (id: string, title: string, extra: Partial<ThreadInfo> = {}): ThreadInfo =>
@@ -172,6 +172,52 @@ it("relays a child's answer to the parent that started it, as a message from it"
     expect(JSON.stringify(value)).toContain('relayed to [Lead]')
   } finally {
     socket.destroy(); server.close(); await daemon.close()
+    delete process.env.REPORTSTEST_MODEL
+    await rm(dir, { recursive: true, force: true })
+  }
+}, 40_000)
+
+it("reports only what the parent asked for: not the user's own conversation in the child, until the parent sends it again", async () => {
+  vi.useRealTimers()
+  const dir = await mkdtemp(join(tmpdir(), 'superego-reports-'))
+  const turn = (content: Json[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
+  const say = (text: string) => turn([{ type: 'text', text }], 'stop')
+  const turns = (...lines: string[]) => writeFile(join(dir, 'turns.jsonl'), lines.join('\n') + '\n')
+  process.env.REPORTSTEST_MODEL = `replay:${join(dir, 'turns.jsonl')}`
+  process.env.REPORTSTEST_REPLAY_SPEED = '0'
+  const app = defineApp({ name: 'test', id: 'reportstest' })
+  async function open() {
+    const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [threadTools, withBatching({ quietMs: 50, maxMs: 200 })] })
+    const server = await listen(daemon, join(dir, 's.sock'))
+    const { peer, socket } = await connectSocket(join(dir, 's.sock'))
+    await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
+    return { peer, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
+  }
+  // The parent starts a child, which reports; then the user talks to the child.
+  await turns(turn([{ type: 'toolCall', id: 'c1', name: 'thread_start', arguments: { prompt: 'Look into the dates', title: 'Dates' } }], 'toolUse'), say('zz-one'), say('zz-two'), say('zz-noted'), say('zz-icons'))
+  let { peer, close } = await open()
+  const entries = async (id: string) => JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { id })).value.entries)
+  const idle = async (id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)?.status.state === 'done'
+  const until = async (check: () => Promise<boolean>) => { for (let i = 0; i < 400 && !(await check()); i++) await new Promise((r) => setTimeout(r, 25)); expect(await check()).toBe(true) }
+  try {
+    const parent = await peer.call<ThreadInfo>('thread.create', { prompt: 'split the work', title: 'Lead' })
+    await until(async () => (await entries(parent.id)).includes('zz-noted'))
+    const child = (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.parent === parent.id)!
+    const reports = async () => (await entries(parent.id)).split(`From [Dates](thread:${child.id})`).length - 1
+    expect(await reports()).toBe(1)
+    // The user's own message to the child, and its answer: not the parent's business.
+    await peer.call('thread.submit', { id: child.id, text: 'and the icons?' })
+    await until(async () => (await entries(child.id)).includes('zz-icons') && await idle(child.id))
+    await new Promise((r) => setTimeout(r, 300))
+    expect(await reports()).toBe(1)
+    // The parent sends it more, after a restart (what the child does is kept): reported again.
+    await close()
+    await turns(turn([{ type: 'toolCall', id: 'c2', name: 'thread_send', arguments: { id: child.id, text: 'More?' } }], 'toolUse'), say('zz-three'), say('zz-four'), say('zz-thanks'))
+    ;({ peer, close } = await open())
+    await peer.call('thread.submit', { id: parent.id, text: 'ask it for more' })
+    await until(async () => await reports() === 2)
+  } finally {
+    await close()
     delete process.env.REPORTSTEST_MODEL
     await rm(dir, { recursive: true, force: true })
   }

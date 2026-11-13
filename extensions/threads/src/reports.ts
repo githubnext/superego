@@ -2,12 +2,21 @@
 // stopped) or comes to wait on a question, its parent gets a message saying so, from it, with the first lines of its
 // answer. Reports close together go as one message; one the parent has read already (thread_read, waiting on it, say)
 // isn't sent at all. A message is like thread_send's: "From [child](thread:<id>): …", queued after the parent's run.
+//
+// Only while the child works for its parent: from its first message (thread_start's prompt), and from each the parent
+// sends it (thread_send), until the user writes to it themselves (from a window or the command line), which hands it to
+// them: their own conversation with it isn't reported. Runs in between (the child's own children reporting, say) are
+// reported, so a grandchild's result makes its way up. Kept with the child (this extension's state: false, the
+// user's), so it holds across restarts; a child from before this was kept is reported as before.
+//
+// The read log and reports waiting to go are in memory (reads.ts): after a restart, a report that was waiting is lost,
+// and a run resumed then may report what the parent had read already.
 import { defineExtension, section } from '@earendil-works/pi-durable'
 import { defineDaemonExtension } from '@superego/daemon'
 import { waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { readsOf } from './reads.ts'
-import { reportsAbout } from './shared.ts'
-import { linkTo } from './tools.ts'
+import { fromLine, linkTo, senderOf } from './tools.ts'
+import { reportsAbout, toolsAbout } from './shared.ts'
 
 /** What reporting needs of the daemon. */
 export type ReportsHost = {
@@ -37,7 +46,7 @@ type Report = { thread: ThreadInfo; text: string }
 
 /** A thread's run ended, or it waits on a question, as its parent hears it. */
 async function describe(thread: ThreadInfo, host: ReportsHost): Promise<string> {
-  const from = `From ${linkTo(thread)}:`
+  const from = fromLine(thread)
   const { state, msg } = thread.status
   if (state === 'blocked') return `${from} is waiting on a question${msg ? `:\n\n${excerpt(msg)}` : '.'}`
   if (state === 'error') return `${from} errored${msg ? ` (${msg.split('\n')[0]!.slice(0, 200)})` : ''}.`
@@ -82,7 +91,8 @@ export function reporter(host: ReportsHost, { quietMs, maxMs }: Batching = BATCH
   }
 }
 
-export default defineDaemonExtension({
+/** The extension, with reports batched as `batching` says. */
+export const threadReports = (batching: Batching = BATCHING) => defineDaemonExtension({
   ...reportsAbout,
   setup(s) {
     const reads = readsOf(s.harness)
@@ -90,8 +100,19 @@ export default defineDaemonExtension({
     const reports = reporter({
       info, answer: (id) => s.threads.lastAnswer(id), read: (thread) => reads.read(thread),
       send: (id, text) => s.threads.submit(id, text, { whenBusy: 'followUp' }),
+    }, batching)
+    // Whether a child works for its parent (see the top): set by the messages it's sent, false once the user writes.
+    const working = s.state<boolean>()
+    s.submit(async ({ thread, text, by }) => {
+      if (!thread.parent) return
+      if (by === undefined) await working.set(thread.id, false)
+      // thread_start's prompt, or the parent's thread_send; not another thread's.
+      else if (by === toolsAbout.name && (senderOf(text) ?? thread.parent) === thread.parent) await working.set(thread.id, true)
     })
-    s.thread({ turnEnd: (thread) => reports.report(thread), blocked: (thread) => reports.report(thread) })
+    const report = async (thread: ThreadInfo) => {
+      if (thread.parent && await working.get(thread.id) !== false) await reports.report(thread)
+    }
+    s.thread({ turnEnd: report, blocked: report })
     s.agent(defineExtension({
       name: 'thread-reports',
       sections: [section('thread_reports', async ({ conversationId }) => {
@@ -99,13 +120,15 @@ export default defineDaemonExtension({
         if (!self) return undefined
         const parent = self.parent ? await info(self.parent) : undefined
         return [
-          !self.without?.includes('thread-tools') && 'Threads you start report back on their own: a message from each when it finishes, ' +
-            'fails or waits on a question. You needn\'t wait on them with thread_read: carry on, or end your turn.',
-          parent && !parent.without?.includes(reportsAbout.name) && `When a turn of yours ends, its answer (the first lines) is ` +
-            `relayed to ${linkTo(parent)} for you: you needn't thread_send it your result. Put the outcome first.`,
+          !self.without?.includes('thread-tools') && 'Threads you start usually report back on their own: a message from each when it ' +
+            'finishes, fails or waits on a question. You needn\'t wait on them with thread_read: carry on, or end your turn.',
+          parent && !parent.without?.includes(reportsAbout.name) && await working.get(self.id) !== false && `When a turn of yours ` +
+            `ends, its answer (the first lines) is relayed to ${linkTo(parent)} for you: you needn't thread_send it your result. Put the outcome first.`,
         ].filter(Boolean).join('\n') || undefined
       })],
     }))
     return () => reports.stop()
   },
 })
+
+export default threadReports()

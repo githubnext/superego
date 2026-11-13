@@ -25,6 +25,11 @@ export type ThreadsHost = {
 /** A thread as a link in a message: what the window shows as one, and what the agent is told to write. */
 export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.title.replace(/[[\]]/g, '')}](thread:${thread.id})`
 
+/** A message from another thread, as thread_send sends it (and thread-reports relays a report): from whom. */
+export const fromLine = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `From ${linkTo(thread)}:`
+/** The thread a message says it's from (`fromLine`), if it does. */
+export const senderOf = (message: string) => /^From \[[^\]]*\]\(thread:([^)\s]+)\):/.exec(message)?.[1]
+
 const text = (value: string) => ({ output: [{ type: 'text' as const, text: value }] })
 const LIMIT = 6_000
 const clip = (value: string) => value.length > LIMIT ? `${value.slice(0, LIMIT)}\n… (${value.length - LIMIT} more characters)` : value
@@ -97,7 +102,7 @@ export function threadTools(host: ThreadsHost) {
           const from = await here(api.conversationId)
           const to = await host.info(id)
           if (!to) throw new Error(`No thread ${id}`)
-          await host.send(id, `From ${linkTo(from)}:\n\n${message}`)
+          await host.send(id, `${fromLine(from)}\n\n${message}`)
           return text(`Sent to ${linkTo(to)}.`)
         },
       }),
