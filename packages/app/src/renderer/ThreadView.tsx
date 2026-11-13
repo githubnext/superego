@@ -510,27 +510,44 @@ const steps = (blocks: Block[], results: Map<string, Message>, running: Slots) =
  * Rows share one anatomy: a chevron hung in the gutter, then an icon at the text's edge, then the label. What a row
  * opens to sits under its icon; inside a run, rows sit under the run's label.
  */
-function Work({ blocks, results, running, active }: { blocks: Block[]; results: Map<string, Message>; running: Slots; active: boolean }) {
+function Work({ blocks: all, results, running, active }: { blocks: Block[]; results: Map<string, Message>; running: Slots; active: boolean }) {
   const [open, setOpen] = useState<boolean>()
+  const { blocks, shown } = useUnfolded(all, results, running)
+  if (!blocks.length) return shown
   const rows = steps(blocks, results, running)
-  if (blocks.length === 1 && blocks[0]!.type !== 'text') return <div className="steps">{rows}</div>
+  // One step, or only what the agent said beside what it shows: as itself.
+  if ((blocks.length === 1 && blocks[0]!.type !== 'text') || (shown && blocks.every((b) => b.type === 'text'))) return <><div className="steps">{rows}</div>{shown}</>
   const calls = blocks.filter((b) => b.type === 'toolCall')
   const failed = calls.filter((b) => results.get(b.id!)?.isError).length
   const stats = sumStats(calls, results)
   // Folded, while it works too; opened only by hand.
-  const shown = open ?? false
+  const folded = open ?? false
   return (
-    <details className="steps steps--run" open={shown} onToggle={(e) => { const next = e.currentTarget.open; if (next !== shown) setOpen(next) }}>
-      <summary className="row">
-        <Chevron />
-        {active ? <StatusGlyph status={{ state: 'working' }} /> : <Icon name={mainKind(blocks)} />}
-        <span className="row__label row__summary" title={describe(blocks).join('')}>{describe(blocks).map((part, i) => i % 2 ? <code key={i} className="row__path">{part}</code> : part)}</span>
-        {(stats.added > 0 || stats.removed > 0) && <span className="row__meta"><Stat {...stats} /></span>}
-        {failed > 0 && <span className="row__failed">{failed} failed</span>}
-      </summary>
-      <div className="run__steps">{rows}</div>
-    </details>
+    <>
+      <details className="steps steps--run" open={folded} onToggle={(e) => { const next = e.currentTarget.open; if (next !== folded) setOpen(next) }}>
+        <summary className="row">
+          <Chevron />
+          {active ? <StatusGlyph status={{ state: 'working' }} /> : <Icon name={mainKind(blocks)} />}
+          <span className="row__label row__summary" title={describe(blocks).join('')}>{describe(blocks).map((part, i) => i % 2 ? <code key={i} className="row__path">{part}</code> : part)}</span>
+          {(stats.added > 0 || stats.removed > 0) && <span className="row__meta"><Stat {...stats} /></span>}
+          {failed > 0 && <span className="row__failed">{failed} failed</span>}
+        </summary>
+        <div className="run__steps">{rows}</div>
+      </details>
+      {shown}
+    </>
   )
+}
+
+/**
+ * A run's blocks without the calls an extension shows unfolded (`tool(name, component, { fold: false })`: images the
+ * agent showed, say), and those calls drawn on their own, to go under the fold.
+ */
+function useUnfolded(all: Block[], results: Map<string, Message>, running: Slots) {
+  const { unfolded } = useRegistry()
+  const out = all.filter((b) => b.type === 'toolCall' && unfolded.has(b.name ?? ''))
+  if (!out.length) return { blocks: all, shown: null }
+  return { blocks: all.filter((b) => !out.includes(b)), shown: <div className="steps steps--unfolded">{steps(out, results, running)}</div> }
 }
 
 /**
@@ -540,9 +557,10 @@ function Work({ blocks, results, running, active }: { blocks: Block[]; results: 
 function Task({ part, results, running }: { part: WorkPart; results: Map<string, Message>; running: Slots }) {
   const [open, setOpen] = useState(false)
   const status = part.status ?? 'success'
-  const calls = part.blocks.filter((b) => b.type === 'toolCall')
+  const { blocks, shown } = useUnfolded(part.blocks, results, running)
+  const calls = blocks.filter((b) => b.type === 'toolCall')
   const stats = sumStats(calls, results)
-  const rows = steps(part.blocks, results, running)
+  const rows = steps(blocks, results, running)
   const summary = (
     <>
       {status === 'running' ? <StatusGlyph status={{ state: 'working' }} /> : <TaskIcon status={status} />}
@@ -555,12 +573,15 @@ function Task({ part, results, running }: { part: WorkPart; results: Map<string,
       </span>
     </>
   )
-  if (!rows.length) return <div className={`steps task task--${status}`}><div className="row task__row">{summary}</div></div>
+  if (!rows.length) return <><div className={`steps task task--${status}`}><div className="row task__row">{summary}</div></div>{shown}</>
   return (
-    <details className={`steps steps--run task task--${status}`} open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary className="row task__row" aria-label={`${part.title} — ${TASK_LABELS[status]}`}><Chevron />{summary}</summary>
-      <div className="run__steps">{rows}</div>
-    </details>
+    <>
+      <details className={`steps steps--run task task--${status}`} open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+        <summary className="row task__row" aria-label={`${part.title} — ${TASK_LABELS[status]}`}><Chevron />{summary}</summary>
+        <div className="run__steps">{rows}</div>
+      </details>
+      {shown}
+    </>
   )
 }
 

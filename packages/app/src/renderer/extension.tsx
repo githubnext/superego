@@ -92,8 +92,11 @@ export type WorkPart = { blocks: WorkBlock[]; title?: string; status?: WorkStatu
 export type UiApi = {
   app: AppConfig
   slot<S extends SlotName>(slot: S, component: ComponentType<SlotProps[S]>, options?: { order?: number }): void
-  /** Draw calls to the tool `name` (of the extension's daemon half, or any other). */
-  tool(name: string, component: ComponentType<ToolCallProps>): void
+  /**
+   * Draw calls to the tool `name` (of the extension's daemon half, or any other). `fold: false` keeps them out of the
+   * fold a run of work closes into: they show under it, open, as what the agent showed you (images, say).
+   */
+  tool(name: string, component: ComponentType<ToolCallProps>, options?: { fold?: boolean }): void
   entry(kind: string, component: ComponentType<EntryProps>): void
   /**
    * Divide runs of work into parts: the tasks an agent reported, say. The first divider to return parts for a run
@@ -137,6 +140,8 @@ export type Registry = {
   /** `profile`: the folder of the profile whose UI added it; it draws only for that profile's threads. */
   slots: { [S in SlotName]: { component: ComponentType<SlotProps[S]>; order: number; extension: string; profile?: string }[] }
   tools: Map<string, ComponentType<ToolCallProps>>
+  /** Tools whose calls show outside the fold of their run of work (`tool(name, component, { fold: false })`). */
+  unfolded: Set<string>
   /** Pane kinds; `profile`: the folder of the profile that added it. */
   panes: Map<string, (PaneKind & { profile?: string })[]>
   entries: Map<string, ComponentType<EntryProps>>
@@ -155,7 +160,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   const registry: Registry = {
     app, extensions: extensions.map((e) => e.name),
     slots: { 'sidebar': [], 'rail': [], 'thread.header': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
-    tools: new Map(), panes: new Map(), entries: new Map(), work: [], settings: new Map(), router: createWindowRouter(), appSettings: [],
+    tools: new Map(), unfolded: new Set(), panes: new Map(), entries: new Map(), work: [], settings: new Map(), router: createWindowRouter(), appSettings: [],
     version: 0,
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
     installProfile(profile, list) {
@@ -180,7 +185,11 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       list.push({ component: component as never, order: options?.order ?? 100, extension, ...(profile ? { profile } : {}) })
       list.sort((a, b) => a.order - b.order)
     },
-    tool: (name, component) => { registry.tools.set(name, component) },
+    tool: (name, component, options) => {
+      registry.tools.set(name, component)
+      if (options?.fold === false) registry.unfolded.add(name)
+      else registry.unfolded.delete(name)
+    },
     entry: (kind, component) => { registry.entries.set(kind, component) },
     work(divide) {
       if (profile) return console.warn(`Profile extension ${extension}: dividing work from a profile's UI isn't supported yet`)

@@ -54,7 +54,7 @@ there is no type checking.
 | | |
 |---|---|
 | `superego.pane(kind, { title, component, menu?, opens?, folders?, width? })` | a kind of pane. `title`: a string, or `(pane) => string`. `component` gets `{ machine, thread, pane }`; `pane.params` is what it was opened with. `menu: true` offers it in the thread's pane menu (it needs no params). `opens: (path) => boolean` makes files named in the thread open in it (`/\.csv$/.test(path)`); `folders: true`, folders (`params.path`, `''` for the thread's own). `width`: share of the row, 0.5 by default |
-| `superego.tool(name, component)` | draw calls to a tool in the transcript. Gets `{ machine, thread, call: { id, name, arguments }, result?: { text, isError, details }, live?: { status, output, details } }` |
+| `superego.tool(name, component, { fold? })` | draw calls to a tool in the transcript. Gets `{ machine, thread, call: { id, name, arguments }, result?: { text, isError, details }, live?: { status, output, details } }`. `fold: false` shows them under their run of work, open, instead of folded into it: for what the agent shows you (as `images` does) |
 | `superego.slot(slot, component, { order? })` | put a component in a place in the shell (below) |
 | `superego.entry(kind, component)` | draw transcript entries of a kind an extension writes |
 | `superego.dispatch(id, params, { machine })` | run an action outside React |
