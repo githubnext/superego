@@ -145,6 +145,8 @@ export type Methods = {
   'thread.rename': { params: { id: ThreadId; title: string }; result: null }
   'thread.submit': { params: { id: ThreadId; text: string; attachments?: Attachment[]; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
   'thread.abort': { params: { id: ThreadId }; result: null }
+  /** Take back a message sent while the agent was busy, still waiting its turn (an item of the thread's `pi.inbox`). */
+  'thread.withdraw': { params: { id: ThreadId; submission: string }; result: null }
   /** The user looked at the thread: its done/error status clears. */
   'thread.seen': { params: { id: ThreadId }; result: null }
   /** Entries older than `before` (an entry id), oldest first: scrolling back past a watch's window. */

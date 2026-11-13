@@ -7,7 +7,7 @@ import { homedir, hostname, platform } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
 import {
-  type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, defineExtension, defineTool, type EntryId, type Extension, Harness, hook,
+  type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, defineExtension, defineTool, type EntryId, type Extension, Harness, hook, type SubmissionId,
   type LiveState, section, type Storage, wrapSection, wrapTool,
 } from '@earendil-works/pi-durable'
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
@@ -1302,6 +1302,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     id: 'thread.abort', title: 'Stop the agent', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str() }),
     async run({ id }) { await (await get(id)).conversation.abort(context); return null },
+  }))
+  router.register(defineAction({
+    id: 'thread.withdraw', title: 'Take back a message waiting its turn', runs: 'machine', expose: ['ui', 'cli'], ...thread,
+    params: obj({ id: str(), submission: str() }),
+    // Gone in already (or settled), it stays: only what still waits can be taken back.
+    async run({ id, submission }) {
+      await get(id)
+      await harness.abortSubmission(Number(submission) as SubmissionId, context, Number(id) as ConversationId)
+      return null
+    },
   }))
   router.register(defineAction({
     id: 'thread.archive', title: 'Archive the thread', runs: 'machine', expose: ['ui', 'cli'], keys: 'mod+shift+e', ...thread,
