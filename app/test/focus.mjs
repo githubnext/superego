@@ -103,5 +103,6 @@ void (async () => {
   await both('narrow-sidebar', '.app__sidebar .superego-list-item.is-selected')
   console.log(`focus: done in ${out}`)
   server.close()
+  writeFileSync(`${process.env.SUPEREGO_HOME}/passed`, '')
   app.exit(0)
 })()

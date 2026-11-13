@@ -140,5 +140,6 @@ void (async () => {
   await phone('archived-narrow')
 
   console.log(`composer: done in ${out}`)
+  writeFileSync(`${process.env.SUPEREGO_HOME}/passed`, '')
   app.exit(0)
 })()

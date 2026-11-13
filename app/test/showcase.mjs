@@ -83,5 +83,6 @@ void (async () => {
   }
   nativeTheme.themeSource = 'system'
   console.log(`showcase: ${ids.length} threads in ${out}`)
+  writeFileSync(`${process.env.SUPEREGO_HOME}/passed`, '')
   app.exit(0)
 })()

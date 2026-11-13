@@ -23,7 +23,7 @@ app.on('web-contents-created', (_e, contents) => contents.on('console-message', 
 const FONTS = ['Arial', 'Courier', 'Georgia', 'Helvetica', 'Menlo', 'Monaco', 'Times']
 app.on('web-contents-created', (_e, contents) => contents.on('dom-ready', () => void contents.executeJavaScript(
   `if (window.queryLocalFonts) window.queryLocalFonts = async () => ${JSON.stringify(FONTS)}.map((family) => ({ family }))`).catch(() => {})))
-setTimeout(() => fail('timed out'), 90_000)
+const deadline = setTimeout(() => fail('timed out'), 90_000)
 
 await import('../out/main/main.js')
 // Top-level awaits on readiness would hold up Electron's ready event, so the test runs in a function.
@@ -886,5 +886,8 @@ if (phase === 'first') {
   await until(`document.documentElement.style.getPropertyValue('--superego-mono').includes('Menlo')`, 'font after reopen')
   console.log('smoke(reopen): ok')
 }
+// Passed: smoke.sh stops the app if it hangs on its way out (see run-app.sh).
+clearTimeout(deadline)
+writeFileSync(`${process.env.SUPEREGO_HOME}/passed`, '')
 app.exit(0)
 })().catch((error) => { if (error.message !== 'failed') void fail(error.stack ?? String(error)) })

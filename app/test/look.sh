@@ -15,9 +15,10 @@ export SUPEREGO_SHOWCASE_PROJECT="$SUPEREGO_HOME/ledger"
 node test/showcase/setup.mjs "$SUPEREGO_SHOWCASE_PROJECT" "$SUPEREGO_HOME/turns.jsonl"
 (cd "$SUPEREGO_SHOWCASE_PROJECT" && git init -q && git add -A && git -c user.name=x -c user.email=x@x commit -qm init)
 export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/turns.jsonl"
+. test/run-app.sh
 cleanup() {
-  for pid in $(cat "$SUPEREGO_HOME/daemon.pid" 2>/dev/null) $(lsof -t "$SUPEREGO_HOME"/*.sock 2>/dev/null); do kill "$pid" 2>/dev/null || true; done
+  stop_started
   rm -rf "$SUPEREGO_HOME"
 }
 trap cleanup EXIT
-node_modules/.bin/electron "test/${2:-look}.mjs"
+run_app node_modules/.bin/electron "test/${2:-look}.mjs"

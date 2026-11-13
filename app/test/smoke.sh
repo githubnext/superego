@@ -44,13 +44,13 @@ cat >> "$SUPEREGO_REPLAY" <<TURNS
 {"at":0,"provider":"x","model":"x","message":{"role":"assistant","content":[{"type":"toolCall","id":"img-1","name":"show_images","arguments":{"images":[{"path":"$S/wide.png","caption":"The home page, at full width"}]}},{"type":"toolCall","id":"img-2","name":"show_images","arguments":{"title":"Before and after","images":[{"path":"$S/a.png","caption":"Before"},{"path":"$S/b.png","caption":"After"},{"path":"$S/gone.png","caption":"Gone"}]}},{"type":"toolCall","id":"img-3","name":"show_images","arguments":{"images":[{"path":"$S/1.png","caption":"First"},{"path":"$S/2.png","caption":"Second"},{"path":"$S/3.png","caption":"Third"},{"path":"$S/4.png"},{"path":"$S/5.png"},{"path":"$S/6.png","caption":"Last"}]}}],"stopReason":"toolUse"}}
 {"at":0,"provider":"x","model":"x","message":{"role":"assistant","content":[{"type":"text","text":"Those are the screens.\\n\\n![The wide one](wide.png)\\n\\n![Before](file:$S/a.png) and ![Before, by its whole path]($S/a.png)\\n\\n![Elsewhere](/etc/elsewhere.png)"}],"stopReason":"stop"}}
 TURNS
+. test/run-app.sh
 cleanup() {
-  # The daemons by their pid files, and anything still holding their sockets.
-  for pid in $(cat "$SUPEREGO_HOME/daemon.pid" "$SUPEREGO_HOME/second/daemon.pid" 2>/dev/null) $(lsof -t "$SUPEREGO_HOME"/*.sock "$SUPEREGO_HOME"/second/*.sock 2>/dev/null); do kill "$pid" 2>/dev/null || true; done
+  stop_started
   rm -rf "$SUPEREGO_HOME" out/main/zz-smoke-restart.js
 }
 trap cleanup EXIT
 ELECTRON=node_modules/.bin/electron
-SUPEREGO_SMOKE_PHASE=first $ELECTRON test/smoke.mjs
+run_app env SUPEREGO_SMOKE_PHASE=first $ELECTRON test/smoke.mjs
 kill -0 "$(cat "$SUPEREGO_HOME/daemon.pid" 2>/dev/null)" 2>/dev/null || { echo "daemon did not outlive the app"; exit 1; }
-SUPEREGO_SMOKE_PHASE=reopen $ELECTRON test/smoke.mjs
+run_app env SUPEREGO_SMOKE_PHASE=reopen $ELECTRON test/smoke.mjs

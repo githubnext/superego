@@ -125,5 +125,6 @@ void (async () => {
   await until(`!!document.querySelector('.thread__unarchive')`, 'archived')
   await tight('long-archived')
   console.log(`look: done in ${out}`)
+  writeFileSync(`${process.env.SUPEREGO_HOME}/passed`, '')
   app.exit(0)
 })()
