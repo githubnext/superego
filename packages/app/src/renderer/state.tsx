@@ -141,7 +141,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const list = selection ? threads[selection.machine] : undefined
   const selectedMachine = machines.find((m) => m.id === selection?.machine)
   // The selected machine's hidden threads, followed live: one is shown while it's selected, and back and forward reach it.
-  const hidden = useHiddenThreads(selection?.machine ?? 'local', selectedMachine?.state === 'connected' && has(selectedMachine, 'threads'))
+  const hidden = useHiddenThreads(selection?.machine ?? 'local', selectedMachine?.state === 'connected' && has(selectedMachine, 'hidden-threads'))
   const isHidden = Boolean(selection && hidden?.some((t) => t.id === selection.thread))
   useEffect(() => {
     if (!selection || !list || shown || isHidden || selectedMachine?.state !== 'connected') return setArchived(undefined)

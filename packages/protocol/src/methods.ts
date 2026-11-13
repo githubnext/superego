@@ -19,7 +19,7 @@ export const PROTOCOL_VERSION = 1
 /** A line Superego writes in a thread's transcript itself, for the user, not the model: an entry of this kind, `{ text }`. */
 export const NOTE_ENTRY = 'superego.note'
 
-export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions'] as const
+export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'hidden-threads'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
