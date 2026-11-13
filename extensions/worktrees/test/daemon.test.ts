@@ -191,3 +191,21 @@ it("brings an old thread back without its worktree when there's no checkout to r
   expect(treeOf(await find(peer, id))).toMatchObject({ removed: true })
   await close()
 })
+
+it('stops what still runs from a worktree before archiving removes it, but leaves the daemon be', async () => {
+  repository()
+  const { spawn } = await import('node:child_process')
+  const { peer, close } = await open()
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'Busy', worktree: true })
+  const tree = treeOf(thread)!
+  // One working in it (a shell left there), one run from a file in it (a dev server), each in a group of its own.
+  const working = spawn('sleep', ['60'], { cwd: tree.path, detached: true, stdio: 'ignore' })
+  const serving = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', join(tree.path, 'server.js')], { cwd: dir, detached: true, stdio: 'ignore' })
+  const exited = (child: typeof working) => new Promise<void>((resolve) => child.once('exit', () => resolve()))
+  const ended = Promise.all([exited(working), exited(serving)])
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  expect((await archive(peer, thread.id)).worktree).toBe('removed')
+  await ended
+  expect(existsSync(tree.path)).toBe(false)
+  await close()
+})

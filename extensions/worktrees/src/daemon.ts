@@ -19,11 +19,44 @@ function git(cwd: string, args: string[]): Promise<string> {
     error ? fail(new Error(String(err).trim() || error.message)) : done(String(out).trim())))
 }
 
+/** A command's output, or '' when it fails or takes longer than `ms`. */
+function run(command: string, args: string[], ms = 10_000): Promise<string> {
+  return new Promise((done) => execFile(command, args, { timeout: ms, maxBuffer: 16 * 1024 * 1024 }, (_error, out) => done(String(out ?? ''))))
+}
+
+/**
+ * The processes still running from a worktree about to go (a dev server, a test daemon, an app started there), stopped
+ * first: once its folder is gone they'd run on for good, parented to launchd. Those whose command names a file in it,
+ * and those working in it (lsof, scoped to the folder). Never this daemon or its process group: an agent's own shell
+ * there is the daemon's. Asked to end (SIGTERM), then made to after a few seconds (SIGKILL).
+ */
+async function stopProcessesIn(path: string) {
+  if (process.platform === 'win32') return
+  const table = (await run('ps', ['-A', '-o', 'pid=,pgid=,command='])).split('\n')
+    .map((line) => line.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/)).filter((m): m is RegExpMatchArray => Boolean(m))
+    .map(([, pid, pgid, command]) => ({ pid: Number(pid), pgid: Number(pgid), command: command! }))
+  const own = table.find((p) => p.pid === process.pid)?.pgid
+  // By the path it's known by, and the real one (a temporary folder on macOS is under /private).
+  const real = await realpath(path).catch(() => path)
+  const pids = new Set(table.filter((p) => p.command.includes(`${path}/`) || p.command.includes(`${real}/`)).map((p) => p.pid))
+  for (const line of (await run('lsof', ['-a', '-d', 'cwd', '+D', path, '-Fp'])).split('\n')) {
+    if (line.startsWith('p')) pids.add(Number(line.slice(1)))
+  }
+  const ours = (pid: number) => pid === process.pid || (own !== undefined && table.find((p) => p.pid === pid)?.pgid === own)
+  const doomed = [...pids].filter((pid) => pid > 1 && !ours(pid))
+  const alive = (pid: number) => { try { process.kill(pid, 0); return true } catch { return false } }
+  const signal = (pid: number, name: NodeJS.Signals) => { try { process.kill(pid, name) } catch {} }
+  for (const pid of doomed) signal(pid, 'SIGTERM')
+  for (let waited = 0; waited < 5000 && doomed.some(alive); waited += 100) await new Promise((resolve) => setTimeout(resolve, 100))
+  for (const pid of doomed.filter(alive)) signal(pid, 'SIGKILL')
+}
+
 /**
  * A clean worktree, gone at once: moved aside and let go of by git, then deleted in the background. Deleting it in
  * place (`git worktree remove`) takes as long as its files do, many seconds with a node_modules in it.
  */
 async function removeWorktree(path: string, root: string) {
+  await stopProcessesIn(path)
   const aside = join(dirname(path), `.${basename(path)}${REMOVING}${randomUUID().slice(0, 8)}`)
   if (!await rename(path, aside).then(() => true, () => false)) return false
   await git(root, ['worktree', 'prune']).catch(() => {})
