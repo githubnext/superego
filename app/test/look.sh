@@ -1,6 +1,6 @@
 #!/bin/sh
-# The window's layout in the states the design covers, screenshotted: `test/look.sh <dir> [focus]` (after electron-vite
-# build); `focus`: each region holding the focus.
+# The window's layout in the states the design covers, screenshotted: `test/look.sh <dir> [focus|composer]` (after electron-vite
+# build); `focus`: each region holding the focus; `composer`: the composer and what's around it.
 set -e
 cd "$(dirname "$0")/.."
 OUT="$(cd "$(dirname "${1:?usage: look.sh <dir>}")" && pwd)/$(basename "$1")"
