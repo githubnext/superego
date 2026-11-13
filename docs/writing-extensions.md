@@ -97,7 +97,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `facts(({ id, state }) => …)` | what clients are told of a thread, as `thread.ext.<name>`: worked out from its state |
 | `agentFor(({ id, state, profile }) => ({ instructions, model, extensions, without }))` | choose a thread's agent; the first to answer wins. `agent(part, { always: false })` gives a part only through this |
 | `threads.list({ archived, hidden })`, `get(id)`, `of(conversationId)`, `conversation(id)`, `attachments(id)` | reach threads, and the folder a thread keeps files in |
-| `threads.create({ …, parent, hidden, options })`, `submit(id, text)`, `lastAnswer(id)`, `archive(id, { whenIdle })`, `unarchive(id)` | start and run threads as the thread tools do; `hidden`: in no list (an agent of its own) |
+| `threads.create({ …, parent, hidden, options })`, `submit(id, text)`, `lastAnswer(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)` | start and run threads as the thread tools do; `hidden`: in no list (an agent of its own) |
 | `agentsDir` | the folder agents share (`~/.agents`): skills, `AGENTS.md` |
 | `harness` | pi-durable itself; unstable |
 

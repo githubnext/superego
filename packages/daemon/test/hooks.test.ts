@@ -280,7 +280,7 @@ it("lets an extension choose a thread's agent: instructions, tools and what it g
   await close()
 })
 
-it('gives extensions the thread operations: create (hidden, as a child), submit, its last answer, archive (now or when idle), unarchive', async () => {
+it('gives extensions the thread operations: create (hidden, as a child), submit, its last answer and entries, archive (now or when idle), unarchive', async () => {
   let api!: DaemonApi
   const { peer, close } = await open([defineDaemonExtension({ name: 'ops', setup(superego) { api = superego } })])
   const own = await api.threads.create({ title: 'Own', hidden: true })
@@ -297,6 +297,11 @@ it('gives extensions the thread operations: create (hidden, as a child), submit,
   await done(peer, top.id)
   expect(await api.threads.lastAnswer(top.id)).toEqual(expect.any(String))
   expect(await api.threads.lastAnswer(child.id)).toBeUndefined()
+  // Its newest entries first: the answer, then the message.
+  const entries = await api.threads.entries(top.id, 50)
+  expect(entries[0]!.kind).toBe('pi.assistant')
+  expect(entries.find((e) => e.kind === 'pi.user')?.model?.[0]).toMatchObject({ content: 'hello' })
+  expect(await api.threads.entries(top.id, 1)).toHaveLength(1)
   await api.threads.archive(child.id, { whenIdle: true })
   await until(async () => (await api.threads.get(child.id)).archived === true)
   await api.threads.unarchive(child.id)

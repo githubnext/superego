@@ -7,7 +7,7 @@
 //
 // Everything it registers is its own, named `<name>.<something>`, and undone when it's torn down: when the daemon
 // stops, or (a profile's) when the profile's files change.
-import type { Conversation, Extension, Harness } from '@earendil-works/pi-durable'
+import type { Conversation, EntryRecord, Extension, Harness } from '@earendil-works/pi-durable'
 import type { ActionDef, AppConfig, Attachment, BlockedKind, ExtensionAbout, Json, JsonSchema, NewThread, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
 import type { DaemonContext } from './daemon.ts'
@@ -213,6 +213,8 @@ export type DaemonApi = {
     submit(id: string, text: string, options?: { whenBusy?: 'steer' | 'followUp' }): Promise<void>
     /** Its last answer, as text, if it has one. */
     lastAnswer(id: string): Promise<string | undefined>
+    /** Its newest transcript entries, newest first (`limit`, default 20): what it's doing now, say. */
+    entries(id: string, limit?: number): Promise<readonly EntryRecord[]>
     /** Put it away (its `archiving` hooks may refuse); `whenIdle`: once its run ends, kept across restarts (a thread archiving itself). */
     archive(id: string, options?: { whenIdle?: boolean }): Promise<void>
     unarchive(id: string): Promise<void>

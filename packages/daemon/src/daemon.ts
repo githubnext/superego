@@ -837,6 +837,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         create: (params) => startThread(params),
         async submit(id, text, { whenBusy = 'followUp' } = {}) { await submit(id, text, randomUUID(), whenBusy) },
         lastAnswer: (id) => answerOf(id),
+        async entries(id, limit = 20) { return (await (await get(id)).conversation.entries({ order: 'descending' }, limit, undefined, context)).items },
         async archive(id, { whenIdle = false } = {}) { await (whenIdle ? archiveWhenDone(id) : archive(id)) },
         async unarchive(id) { await unarchive(id) },
       },
