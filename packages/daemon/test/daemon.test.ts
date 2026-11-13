@@ -321,6 +321,25 @@ describe('record and replay', () => {
     await close()
   })
 
+  it("says which version of a thread's files there is, by the same rules as reading them", async () => {
+    const { utimes } = await import('node:fs/promises')
+    const { peer, close } = await open()
+    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
+    await writeFile(join(dir, 'shot.png'), 'one')
+    await utimes(join(dir, 'shot.png'), 1000, 1000)
+    const read = await peer.call<{ mtimeMs: number; size: number }>('file.read', { id: thread.id, path: 'shot.png', base64: true })
+    expect(read).toMatchObject({ mtimeMs: 1_000_000, size: 3 })
+    const stat = (...paths: string[]) => peer.call<{ files: unknown[] }>('file.stat', { id: thread.id, paths })
+    expect(await stat('shot.png')).toEqual({ files: [{ mtimeMs: 1_000_000, size: 3 }] })
+    await writeFile(join(dir, 'shot.png'), 'three')
+    await utimes(join(dir, 'shot.png'), 2000, 2000)
+    // Outside its folder, missing, or a folder: none, without failing the rest.
+    expect(await stat('shot.png', '../../etc/passwd', '/etc/hosts', 'gone.png', '.')).toEqual({
+      files: [{ mtimeMs: 2_000_000, size: 5 }, null, null, null, null],
+    })
+    await close()
+  })
+
   it('gives a thread in a repository a worktree of its own when asked, in the same session, removed when archived clean', async () => {
     const { execFileSync } = await import('node:child_process')
     const { mkdir, realpath } = await import('node:fs/promises')

@@ -1083,6 +1083,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    */
   /** Where a thread's files are kept on this machine: its attachments, and the images it showed. */
   function attachmentsOf(id: string) { return join(options.dataDir, 'attachments', id) }
+  /** A file of a thread's that clients may read: in its folder, or among the files it keeps (attachments, images it showed). */
+  function threadFile(cwd: string, id: string, path: string) {
+    const kept = isAbsolute(path) && resolvePath(path).startsWith(`${attachmentsOf(id)}/`)
+    return kept ? resolvePath(path) : inFolder(cwd, path)
+  }
 
   async function contentOf(id: string, text: string, attachments: Attachment[]) {
     if (!attachments.length) return text
@@ -1511,14 +1516,22 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         'thread.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),
         'file.read': async ({ id, path, base64 }: { id: string; path: string; base64?: boolean }) => {
-          // In the thread's folder, or among the files it keeps (attachments, images it showed).
-          const { cwd } = (await get(id)).meta
-          const kept = isAbsolute(path) && resolvePath(path).startsWith(`${attachmentsOf(id)}/`)
-          const file = kept ? resolvePath(path) : inFolder(cwd, path)
+          const file = threadFile((await get(id)).meta.cwd, id, path)
           const info = await stat(file).catch(() => undefined)
           if (!info?.isFile()) throw new RpcError('not_found', `No file ${path}`)
           if (info.size > 16 * 1024 * 1024) throw new RpcError('too_large', `${path} is larger than 16 MB`)
-          return { path: file, content: await readFile(file, base64 ? 'base64' : 'utf8') }
+          return { path: file, content: await readFile(file, base64 ? 'base64' : 'utf8'), mtimeMs: info.mtimeMs, size: info.size }
+        },
+        // Which version of each file there is, without its bytes: what the window checks its images against. A path
+        // file.read wouldn't read, or no file, is null.
+        'file.stat': async ({ id, paths }: { id: string; paths: string[] }) => {
+          const { cwd } = (await get(id)).meta
+          return {
+            files: await Promise.all(paths.map(async (path) => {
+              const info = await Promise.resolve().then(() => stat(threadFile(cwd, id, path))).catch(() => undefined)
+              return info?.isFile() ? { mtimeMs: info.mtimeMs, size: info.size } : null
+            })),
+          }
         },
         'file.find': async ({ id, name }: { id: string; name: string }) => locate((await get(id)).meta.cwd, name),
         // A profile's UI is its code too: served only for a real profile folder, and only once it is allowed.

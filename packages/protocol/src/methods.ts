@@ -21,6 +21,9 @@ export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
 
+/** A file's version, as the daemon sees it: when it last changed, and its size in bytes. */
+export type FileVersion = { mtimeMs: number; size: number }
+
 export type ThreadInfo = {
   id: ThreadId
   title: string
@@ -130,7 +133,10 @@ export type Methods = {
   'thread.create': { params: NewThread; result: ThreadInfo }
   'agent.models': { params: {}; result: ModelCatalog }
   /** A file in a thread's folder (not outside it), as text. */
-  'file.read': { params: { id: ThreadId; path: string; base64?: boolean }; result: { path: string; content: string } }
+  /** `mtimeMs` and `size`: its version, as `file.stat` says it (absent from older daemons). */
+  'file.read': { params: { id: ThreadId; path: string; base64?: boolean }; result: { path: string; content: string; mtimeMs?: number; size?: number } }
+  /** Which version of each file there is, without reading them (null: none, or not the thread's). Absent from older daemons. */
+  'file.stat': { params: { id: ThreadId; paths: string[] }; result: { files: (FileVersion | null)[] } }
   /** A file in a thread's folder, then `file.changed` whenever it changes on disk (by anyone), until unwatched. */
   'file.watch': { params: { id: ThreadId; path: string }; result: { sub: string; content: string | null } }
   /**
