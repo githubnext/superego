@@ -11,7 +11,7 @@ import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef
 import { createPortal } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
 import { ArrowRightIcon, ChatTextIcon, FileTextIcon, XIcon } from '@superego/ui'
-import { paneKind, paneTitle, shownPanes, useRegistry, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
+import { fileKind, paneKind, paneTitle, shownPanes, useRegistry, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
 import { PaneMenu, ThreadBody } from './ThreadView.tsx'
@@ -276,12 +276,17 @@ const params = <T,>(pane: Pane) => (pane.params ?? {}) as T
 /** A file in the thread's folder, to read and edit (see FileEditor). */
 function EditorPane({ machine, thread, pane }: PaneProps) {
   const { path, line } = params<{ path?: string; line?: number }>(pane)
-  const dispatch = useRegistry().router.dispatch
+  const registry = useRegistry()
+  const dispatch = registry.router.dispatch
   if (!path) return <div className="pane-empty">No file given.</div>
-  // Another file from beside it (the file tree): shown here instead, or in a pane of its own beside.
-  const open = (file: string, { beside }: { beside: boolean }) => beside
-    ? void dispatch('pane.open', { id: thread.id, kind: 'editor', params: { path: file } }, { machine: machine.id, source: 'editor' })
-    : void dispatch('pane.update', { id: thread.id, pane: pane.id, params: { path: file } }, { machine: machine.id, source: 'editor' })
+  // Another file from beside it (the file tree): shown here instead, or in a pane of its own beside (always, when another
+  // kind takes that file).
+  const open = (file: string, { beside }: { beside: boolean }) => {
+    const kind = fileKind(registry, { machine: machine.id, thread }, file)
+    if (!kind) return
+    if (beside || kind !== pane.kind) void dispatch('pane.open', { id: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'editor' })
+    else void dispatch('pane.update', { id: thread.id, pane: pane.id, params: { path: file } }, { machine: machine.id, source: 'editor' })
+  }
   return <FileEditor key={path} machine={machine} thread={thread} path={path} {...(line ? { line } : {})} onOpenFile={open} />
 }
 

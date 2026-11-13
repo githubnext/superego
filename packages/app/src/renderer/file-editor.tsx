@@ -194,7 +194,9 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
       const target = link.kind === 'url' ? `${base}${decodeURI(link.target.split('#')[0]!)}` : link.target
       const { path: found, folder } = await client(machine.id).call('file.find', { id: thread.id, name: target })
       if (found === null || folder) return setNote({ text: `No file ${link.target}`, error: true })
-      await dispatch('pane.open', { id: thread.id, kind: 'editor', params: { path: found } }, { machine: machine.id, source: 'editor' })
+      const kind = fileKind(registry, { machine: machine.id, thread }, found)
+      if (!kind) return setNote({ text: `Nothing here shows ${link.target}`, error: true })
+      await dispatch('pane.open', { id: thread.id, kind, params: { path: found } }, { machine: machine.id, source: 'editor' })
     })()
   }
   const openRef = useRef(open)
