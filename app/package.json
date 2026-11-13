@@ -14,6 +14,7 @@
     "@superego/protocol": "workspace:*",
     "@superego/ask-user": "workspace:*",
     "@superego/files": "workspace:*",
+    "@superego/images": "workspace:*",
     "@superego/links": "workspace:*",
     "@superego/suggestions": "workspace:*",
     "@superego/tasks": "workspace:*",

@@ -1,0 +1,25 @@
+// What both halves agree on: the tool's name, its layouts, and what a call keeps of each image it showed.
+
+export const TOOL = 'show_images'
+
+export const LAYOUTS = ['single', 'grid', 'carousel'] as const
+export type Layout = (typeof LAYOUTS)[number]
+
+/** One image as shown: a file kept on the thread's machine (`path`, read with `file.read`), or a web address (`url`). */
+export type Shown = {
+  /** Where it came from, as the agent named it: a path or an address. */
+  name: string
+  path?: string
+  url?: string
+  mimeType?: string
+  /** Its size in pixels, when known, so a placeholder takes its place before it loads. */
+  width?: number
+  height?: number
+  caption?: string
+  alt?: string
+}
+
+export type ShowDetails = { title?: string; layout: Layout; images: Shown[] }
+
+/** One image alone; two to four side by side; more, one at a time. */
+export const layoutFor = (count: number): Layout => count <= 1 ? 'single' : count <= 4 ? 'grid' : 'carousel'
