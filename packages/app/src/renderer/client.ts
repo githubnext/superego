@@ -1,6 +1,6 @@
 // The renderer's view of the daemons: typed calls per machine, and hooks that subscribe to live state and resubscribe
 // whenever a machine reconnects.
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import type { Client, Feature, Json, MethodName, Notifications, Params, Result, ThreadInfo, SettingsSnapshot } from '@superego/protocol'
@@ -47,14 +47,17 @@ export function loadFonts(): Promise<string[]> {
  * A watch shared by everyone who wants it: one subscription per (machine, method, params), however many components
  * show it, held while any of them is mounted. It takes the snapshot, then folds notifications in; notifications that
  * arrive before the snapshot's response are folded in after it. Stale data stays while the machine is disconnected, and
- * it watches again when the machine is back, or when the daemon stopped the watch itself (it cleared the thread).
+ * it watches again when the machine is back, when the daemon stopped the watch itself (it cleared the thread), or after
+ * a failed call, once something changes (a subscriber, the connection).
  */
-class SharedWatch<T> {
+export class SharedWatch<T> {
   value: T | undefined
   readonly listeners = new Set<() => void>()
-  #connected = false
+  /** Whether each of its users wants it running now (connected, say): it runs while any of them does. */
+  readonly #wanted = new Map<object, boolean>()
   #stop: (() => void) | undefined
   #release: ReturnType<typeof setTimeout> | undefined
+  #ended = false
   readonly id: string
   readonly machineId: MachineId
   readonly method: string
@@ -69,6 +72,11 @@ class SharedWatch<T> {
 
   subscribe = (listener: () => void) => {
     clearTimeout(this.#release)
+    // Ended before it was subscribed (a render that took long to commit): it's the watch again, unless another is.
+    if (this.#ended) {
+      this.#ended = false
+      if (!watches.has(this.id)) watches.set(this.id, this)
+    }
     this.listeners.add(listener)
     this.#run()
     return () => {
@@ -78,11 +86,23 @@ class SharedWatch<T> {
     }
   }
 
-  connect(connected: boolean) {
-    if (connected === this.#connected) return
-    this.#connected = connected
-    if (connected) this.#run()
-    else { this.#stop?.(); this.#stop = undefined }
+  /** Whether `user` wants it running now. */
+  want(user: object, wanted: boolean) {
+    this.#wanted.set(user, wanted)
+    this.#update()
+  }
+
+  /** `user` no longer has a say: it stops if nobody left wants it (after a moment, so a user changing its mind in one commit doesn't restart it). */
+  unwant(user: object) {
+    this.#wanted.delete(user)
+    queueMicrotask(() => this.#update())
+  }
+
+  get #on() { return [...this.#wanted.values()].some(Boolean) }
+
+  #update() {
+    if (this.#on) this.#run()
+    else this.#stop?.()
   }
 
   #set(value: T | undefined) {
@@ -91,7 +111,7 @@ class SharedWatch<T> {
   }
 
   #run() {
-    if (this.#stop || !this.#connected || !this.listeners.size) return
+    if (this.#stop || !this.#on || !this.listeners.size) return
     const client = machine(this.machineId)
     let sub: string | undefined
     let stopped = false
@@ -106,8 +126,9 @@ class SharedWatch<T> {
       this.#run()
     }))
     const stop = () => {
+      if (stopped) return
       stopped = true
-      this.#stop = undefined
+      if (this.#stop === stop) this.#stop = undefined
       for (const off of offs) off()
       if (sub) void client.call('unwatch', { sub }).catch(() => {})
     }
@@ -118,19 +139,24 @@ class SharedWatch<T> {
       let next = result.value
       for (const { method, params } of early) if (params.sub === sub) next = this.fold(next, method, params)
       this.#set(next)
-    }).catch((error) => console.error(`${this.method} failed`, error))
+    }).catch((error) => {
+      // Not watching: the next change (a subscriber, the connection) tries again.
+      stop()
+      console.error(`${this.method} failed`, error)
+    })
   }
 
   #end() {
     this.#stop?.()
-    this.#stop = undefined
-    watches.delete(this.id)
+    this.#ended = true
+    // Only itself: a watch made since, for the same thing, stays.
+    if (watches.get(this.id) === this) watches.delete(this.id)
   }
 }
 
 const watches = new Map<string, SharedWatch<any>>()
 
-function sharedWatch<T>(machineId: MachineId, method: string, params: unknown, fold: (value: T, method: string, params: any) => T, events: (keyof Notifications)[]): SharedWatch<T> {
+export function sharedWatch<T>(machineId: MachineId, method: string, params: unknown, fold: (value: T, method: string, params: any) => T, events: (keyof Notifications)[]): SharedWatch<T> {
   const id = `${machineId}\u0000${method}\u0000${JSON.stringify(params)}`
   let watch = watches.get(id) as SharedWatch<T> | undefined
   if (!watch) watches.set(id, watch = new SharedWatch(id, machineId, method, params, fold, events))
@@ -139,7 +165,8 @@ function sharedWatch<T>(machineId: MachineId, method: string, params: unknown, f
 
 /**
  * Watch `method` with `params` on a machine while `connected` (undefined params: nothing to watch), folding in its
- * notifications (`events`) with `fold`. Every component watching the same thing shares one subscription.
+ * notifications (`events`) with `fold`. Every component watching the same thing shares one subscription, which runs
+ * while any of them has it connected.
  */
 export function useWatch<T>(
   machineId: MachineId, connected: boolean, method: string, params: object | undefined,
@@ -147,7 +174,12 @@ export function useWatch<T>(
   events: (keyof Notifications)[],
 ): T | undefined {
   const watch = params === undefined ? undefined : sharedWatch(machineId, method, params, fold, events)
-  useEffect(() => { watch?.connect(connected) }, [watch, connected])
+  const user = useRef({}).current
+  useEffect(() => {
+    if (!watch) return
+    watch.want(user, connected)
+    return () => watch.unwant(user)
+  }, [watch, connected])
   return useSyncExternalStore(watch?.subscribe ?? noSubscription, () => watch?.value)
 }
 const noSubscription = () => () => {}
