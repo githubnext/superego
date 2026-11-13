@@ -105,10 +105,10 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 |---|---|
 | `slot(name, Component, { order })` | a component in a place in the window (below) |
 | `pane(kind, { title, component, icon, file, menu, opens, fallback, folders, urls, width })` | a kind of pane beside the thread; `opens`, `folders`, `urls`: files, folders or web pages a thread names open in it; `fallback`: any file nothing else opens |
-| `tool(name, { icon, verbs, subject, stat, meta, body, phrase, file, weight }, { fold })` | how calls to a tool look, described: `verbs: ['Read', 'Reading', 'Read failed']`, `subject(call)` after the verb, `body(call)` what it opens to, `phrase(count)` in a run's line ("read 2 files"); the rest default. The core's coding and thread tools are rows too |
+| `tool(name, { icon, verbs, subject, stat, meta, body, phrase, file, weight }, { fold })` | how calls to a tool look, described: `verbs: ['Read', 'Reading', 'Read failed']`, `subject(call)` after the verb, `body(call)` what it opens to, `phrase(count)` in a run's line ("read 2 files"); the rest default. The core's coding tools and `threads`' thread tools are rows too |
 | `tool(name, Component, { fold })` | how calls to a tool look, drawn whole; `fold: false` shows them outside the run's fold (images) |
 | `entry(kind, Component)` | transcript entries of a kind it writes |
-| `link({ match, open, render, target })` | claim links: `match` a scheme (`'ticket:'`), a pattern, or `(href, kind, where) => boolean` that sees inline code too (`kind: 'code'`); `open(href, { machine, thread, beside, openFile, openUrl })` follows one (a click, ⌃O); `render` draws it. A profile's are asked first, the core's (threads, files, `[[wikilinks]]` as `wikilink:`, web pages) last |
+| `link({ match, open, render, target })` | claim links: `match` a scheme (`'ticket:'`), a pattern, or `(href, kind, where) => boolean` that sees inline code too (`kind: 'code'`); `open(href, { machine, thread, beside, openFile, openUrl })` follows one (a click, ⌃O); `render` draws it. A profile's are asked first, then the bundled ones' (`threads`' `thread:`), the core's (files, `[[wikilinks]]` as `wikilink:`, web pages) last |
 | `composer.complete({ title, word(text, caret), items(word, { machine, thread }) })` | complete the word being typed: `word` finds it (`{ start, query }`), `items` offers `{ label, detail, insert }` |
 | `composer.sentWith({ read(blocks), component })` | draw what its `submit` put in sent messages under them (a chip): `read` returns `{ items, blocks }`, and those blocks leave the text |
 | `work(divide)` | split a run of work into titled parts (tasks); bundled only |
@@ -192,9 +192,12 @@ Bundled extensions also declare whether they're required, once, in `about` (spre
 <picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/required-dark.svg"><img src="writing-extensions/required.svg" alt="A required extension is always on; an optional one can be switched off per machine or left out by a profile, and that thread then has none of its agent parts or UI"></picture>
 
 Only the sidebar (`threads`) is required, and the core's `markdown`, `worktrees` and `ego`. Everything else is
-optional, the core's own `coding-tools`, `panes`, `agents-md` and `thread-tools` included. The core's `panes` is the agent's `open_pane`: switched off, the agent can't
-open panes, but the window's own pane kinds stay, being the required core's. An extension with a UI half only needs no
-daemon half: the window declares it to each machine, which lists it and lets profiles do without it.
+optional, the core's own `coding-tools`, `panes` and `agents-md` included. A package may be two extensions, one per half,
+where the halves differ: `extensions/threads` is the required sidebar in the window, and `thread-tools`, the agent's
+thread tools, on the machine, so switching the tools off leaves the sidebar (and the rows and links naming threads).
+The core's `panes` is the agent's `open_pane`: switched off, the agent can't open panes, but the window's own pane
+kinds stay, being the required core's. An extension with a UI half only needs no daemon half: the window declares it
+to each machine, which lists it and lets profiles do without it.
 
 ## Real ones to read
 
@@ -209,7 +212,7 @@ daemon half: the window declares it to each machine, which lists it and lets pro
 | [`skills`](../extensions/skills/src) | a prompt section, a `submit` transform, a `method`; `composer.complete` and `composer.sentWith` |
 | [`files`](../extensions/files/src) | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | [`links`](../extensions/links/src) | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
-| [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings |
+| [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings, tool rows and a `link`; its daemon half is another, optional extension (`thread-tools`), on `superego.threads` |
 | [`worktrees`](../packages/daemon/src/worktrees.ts) | the core's, for now: `thread` hooks, `state` and `facts` |
 
 Diagram sources are the `.mmd` files in [writing-extensions/](writing-extensions/); re-render with the `diagram` skill

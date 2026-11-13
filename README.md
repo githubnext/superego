@@ -103,7 +103,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `packages/cli` | the command line |
 | `packages/ui` | component kit and design tokens |
 | `packages/app` | main process, window, preload, build and packaging; panes, the editor, the navigator; the UI half of the extension API |
-| `extensions/threads` | the sidebar: sessions and their threads (UI; required) |
+| `extensions/threads` | the sidebar: sessions and their threads; the thread tools' rows and `thread:` links (UI; required). Its daemon half is `thread-tools`, the agent's `thread_*` tools (optional) |
 | `extensions/ask-user` | an `ask_user` tool; the question card and blocked status (daemon + UI) |
 | `extensions/git` | Changes (`⌘⇧D`): the thread's folder's changes by git, file by file, +N −N on its tab; the agent opens it too (daemon + UI) |
 | `extensions/web-panes` | Preview, a web page beside the thread (a link it names, opened beside), and Artifact, an HTML file the agent wrote, sandboxed (daemon + UI) |
@@ -118,8 +118,8 @@ An extension has a daemon half (`defineDaemonExtension`: agent tools and hooks, 
 values, pane kinds described to the agent, thread status) and a UI half (`defineUiExtension`: slots, pane kinds, tool
 and entry renderers, work dividers, settings sections, window actions with `when`, window state). Everything a half
 registers is its own and goes with it. Each extension declares once what it is, both halves alike: **required** (part
-of what Superego is: the sidebar) or **optional** (everything else, and the core's own agent parts `coding-tools`,
-`panes`, `agents-md`, `thread-tools`): an optional one can be turned off per machine in Settings → Extensions
+of what Superego is: the sidebar) or **optional** (everything else, the thread tools `thread-tools` included, and the
+core's own agent parts `coding-tools`, `panes`, `agents-md`): an optional one can be turned off per machine in Settings → Extensions
 and left out by a profile (`without`), and its tools, pane kinds and UI are then absent from those threads.
 
 ## Environment
