@@ -872,14 +872,25 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /**
    * Extensions a window has whose work is all there (no daemon half): known here as the window declares them, so an
    * optional one has its switch in Settings and a profile can do without it, as with any other. Until a window
-   * connects (after a restart), threads aren't told they go without one.
+   * connects (after a restart), threads aren't told they go without one. Its name is claimed, so no profile's
+   * extension takes it; and a later window's word on it (a new title, now required) is taken.
    */
+  const declared = new Set<string>()
   function declare(abouts: ExtensionAbout[]) {
-    const known = abouts.filter((about) => typeof about?.name === 'string' && /^[a-z][a-z0-9-]*$/.test(about.name) && !RESERVED.has(about.name) && !extensions.has(about.name))
-    if (!known.length) return
-    for (const { name, title, description, required } of known) {
-      extensions.set(name, { name, ...(typeof title === 'string' ? { title } : {}), ...(typeof description === 'string' ? { description } : {}), ...(required === true ? { required } : {}) })
+    let news = false
+    for (const about of abouts) {
+      const name = about?.name
+      if (typeof name !== 'string' || !/^[a-z][a-z0-9-]*$/.test(name) || RESERVED.has(name)) continue
+      if (!declared.has(name) && (extensions.has(name) || claimed.has(name))) continue
+      const { title, description, required } = about
+      const next: ExtensionAbout = { name, ...(typeof title === 'string' ? { title } : {}), ...(typeof description === 'string' ? { description } : {}), ...(required === true ? { required } : {}) }
+      if (JSON.stringify(extensions.get(name)) === JSON.stringify(next)) continue
+      extensions.set(name, next)
+      declared.add(name)
+      claimed.add(name)
+      news = true
     }
+    if (!news) return
     unregisterSwitches()
     unregisterSwitches = registerExtensionSettings(settings, [...extensions.values()])
     changed()

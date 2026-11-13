@@ -475,6 +475,17 @@ export default defineDaemonExtension({ name: 'stamp', setup(superego) { superego
   await close()
 })
 
+it("doesn't let a profile's extension take the name of one a window declared", async () => {
+  write(join(home, 'profiles', 'default'), {
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./links.ts'] })\n`,
+    'links.ts': `import { defineDaemonExtension } from 'superego'\nexport default defineDaemonExtension({ name: 'links', setup() {} })\n`,
+  })
+  const { peer, close } = await open()
+  await peer.call('extensions.declare', { extensions: [{ name: 'links', title: 'Links' }] })
+  await expect(peer.call('thread.create', { cwd: project })).rejects.toThrow(/links is already set up/)
+  await close()
+})
+
 it('loads a profile one version at a time, the newest last', async () => {
   const profile = join(home, 'profiles', 'default')
   write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': vault('one') })
