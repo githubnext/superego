@@ -16,7 +16,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import * as nodeModule from 'node:module'
 import { transform } from 'sucrase'
@@ -63,7 +63,7 @@ export type ProfileRef = { scope: 'user' | 'project'; name: string; dir: string 
 /**
  * A daemon extension a profile names, and which: `key` is its file at the version loaded (the module's URL), so two
  * profiles naming the same file (one extending the other, or both listing it) share one set-up of it. `prefix` names
- * its agent parts: `<prefix>/<part>`, the profile that lists it.
+ * its agent parts: `<prefix>/<part>`, the profile whose folder holds the file (else `file:<hash of its path>`).
  */
 export type ProfileDaemonExtension = { extension: DaemonExtension; key: string; file: string; prefix: string }
 
@@ -223,7 +223,7 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
     const module = await load(key) as { default?: Extension | DaemonExtension }
     const extension = module.default
     if (!extension?.name) throw new RpcError('invalid', `${path} in profile ${ref.name} must export default an extension with a name`)
-    const prefix = `${ref.scope}:${ref.name}`
+    const prefix = ownerOf(file, ref, userRoot)
     // Named once, though listed again (by this profile and the one it extends, say).
     if (typeof (extension as DaemonExtension).setup === 'function') {
       if (!daemon.some((d) => d.key === key)) daemon.push({ extension: extension as DaemonExtension, key, file, prefix })
@@ -239,6 +239,19 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
     ui: spec.ui,
   }
   return { ...ref, spec: merged, extensions, daemon, hash, versions: { ...base?.versions, [ref.dir]: hash } }
+}
+
+/**
+ * Whose a listed file is, to name its agent parts by, whichever profile lists it: the profile whose folder holds it
+ * (this one, or a user profile it shares with), else the file itself. The same file is named the same however the
+ * profiles that list it load, and after a restart.
+ */
+function ownerOf(file: string, ref: ProfileRef, userRoot: string) {
+  const within = (dir: string) => { const path = relative(resolve(dir), file); return path && !path.startsWith('..') && !isAbsolute(path) ? path : undefined }
+  if (within(ref.dir)) return `${ref.scope}:${ref.name}`
+  const name = within(userRoot)?.split(/[\\/]/)[0]
+  if (name && existsSync(join(userRoot, name, 'profile.ts'))) return `user:${name}`
+  return `file:${createHash('sha256').update(file).digest('hex').slice(0, 12)}`
 }
 
 /** Whether `dir` is a profile folder at all: under the user's profiles, or a project's `.superego/profiles`. */

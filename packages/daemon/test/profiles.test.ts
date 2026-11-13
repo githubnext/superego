@@ -416,7 +416,8 @@ it("shares a daemon extension between profiles that have it: one extending anoth
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
   // Each has its agent parts.
   for (const thread of [first, second]) expect((await agentOf(peer, thread.id)).extensions).toContain('user:default/notes')
-  expect((await agentOf(peer, third.id)).extensions.some((name) => name.endsWith('/notes'))).toBe(true)
+  // Named for the profile whose folder holds the file, not the one that loaded it first.
+  expect((await agentOf(peer, third.id)).extensions).toContain('user:default/notes')
   // Changed: every profile that has it loads the new version, and they share that.
   write(join(home, 'profiles', 'default'), { 'vault.ts': vault('two') })
   await peer.call('thread.submit', { id: second.id, text: 'again' })
@@ -428,6 +429,27 @@ it("shares a daemon extension between profiles that have it: one extending anoth
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('two')
   expect((await agentOf(peer, second.id)).extensions).toContain('user:default/notes')
   await close()
+})
+
+it("names a shared file's agent parts the same whichever profile loads it first", async () => {
+  write(dir, { 'shared/vault.ts': vault('one') })
+  for (const name of ['a', 'b']) write(join(home, 'profiles', name), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['../../../shared/vault.ts'] })\n` })
+  const notes = async (order: string[]) => {
+    const { peer, close } = await open()
+    const names: string[] = []
+    for (const profile of order) {
+      const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile, prompt: 'hi' })
+      await done(peer, thread.id)
+      names.push(...(await agentOf(peer, thread.id)).extensions.filter((name) => name.endsWith('/notes')))
+    }
+    await close()
+    return names
+  }
+  const first = await notes(['a', 'b'])
+  expect(first).toHaveLength(2)
+  expect(first[0]).toMatch(/^file:[0-9a-f]+\/notes$/)
+  expect(first[1]).toBe(first[0])
+  expect(await notes(['b', 'a'])).toEqual(first)
 })
 
 it('loads a profile one version at a time, the newest last', async () => {
