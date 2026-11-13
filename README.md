@@ -37,8 +37,9 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
   `parent` too.
 - **Panes** sit beside the thread as a row of columns that scrolls sideways (Dinky's scrolling layout); the thread
   and its panes are kept with the thread, so every client sees the same. The agent opens them too (`open_pane`).
-  Built in: Changes (git diff), the file editor (Markdown rendered, in live preview as Obsidian shows it, or as source), Preview (a web page),
-  Artifact (an HTML file the agent wrote, sandboxed) and another thread.
+  Built in: the file editor (Markdown rendered, in live preview as Obsidian shows it, or as source) and another thread.
+  Bundled extensions add Changes (git's diff, `git`), Preview (a web page) and Artifact (an HTML file the agent wrote,
+  sandboxed) (`web-panes`); a pane of an extension a thread goes without isn't shown.
 - **Files** named in a thread (`[[Note]]`, a relative link, `` `src/app.ts` ``) open beside it; the `files` extension
   adds a tree beside the editor and quick open.
 - **Messages** take files: attach, drop or paste them into the composer. Images go to the model as images; every file
@@ -100,6 +101,8 @@ Focus is always visible: whatever has it wears one solid ring, and the region ho
 | `packages/app` | main process, window, preload, build and packaging; panes, the editor, the navigator; the UI half of the extension API |
 | `extensions/threads` | the sidebar: sessions and their threads (UI; required) |
 | `extensions/ask-user` | an `ask_user` tool; the question card and blocked status (daemon + UI) |
+| `extensions/git` | Changes (`⌘⇧D`): the thread's folder's changes by git, file by file, +N −N on its tab; the agent opens it too (daemon + UI) |
+| `extensions/web-panes` | Preview, a web page beside the thread (a link it names, opened beside), and Artifact, an HTML file the agent wrote, sandboxed (daemon + UI) |
 | `extensions/files` | the file tree beside the editor and quick open (`⌘P`) (daemon + UI) |
 | `extensions/images` | a `show_images` tool; the images in the thread, as one, a grid or a carousel, and a lightbox to zoom (daemon + UI) |
 | `extensions/links` | ⌃O: the links in the thread, newest first, fuzzy filtered; ⏎ follows one, ⌘⏎ opens it in a pane, ⌃1–9 / ⌃⌘1–9 the first nine (UI, and a daemon half that only declares it) |

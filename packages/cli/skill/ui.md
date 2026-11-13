@@ -57,7 +57,7 @@ there is no type checking.
 
 | | |
 |---|---|
-| `superego.pane(kind, { title, component, icon?, file?, menu?, opens?, folders?, width? })` | a kind of pane. `title`: a string, or `(pane) => string`. `component` gets `{ machine, thread, pane }`; `pane.params` is what it was opened with. `icon`: its glyph on the pane's tab (a Phosphor icon from `superego/ui`). `file: true`: its title is a file name, and the tab shows it as one. `menu: true` offers it in the thread's pane menu (it needs no params). `opens: (path) => boolean` makes files named in the thread open in it (`/\.csv$/.test(path)`); `folders: true`, folders (`params.path`, `''` for the thread's own). `width`: share of the row, 0.5 by default |
+| `superego.pane(kind, { title, component, icon?, file?, menu?, opens?, folders?, urls?, width? })` | a kind of pane. `title`: a string, or `(pane) => string`. `component` gets `{ machine, thread, pane }`; `pane.params` is what it was opened with. `icon`: its glyph on the pane's tab (a Phosphor icon from `superego/ui`). `file: true`: its title is a file name, and the tab shows it as one. `menu: true` offers it in the thread's pane menu (it needs no params). `opens: (path) => boolean` makes files named in the thread open in it (`/\.csv$/.test(path)`); `folders: true`, folders (`params.path`, `''` for the thread's own); `urls: true`, web pages a thread links to, when opened beside (`params.url`). `width`: share of the row, 0.5 by default |
 | `superego.tool(name, component, { fold? })` | draw calls to a tool in the transcript. Gets `{ machine, thread, call: { id, name, arguments }, result?: { text, isError, details }, live?: { status, output, details } }`. `fold: false` shows them under their run of work, open, instead of folded into it: for what the agent shows you (as `images` does) |
 | `superego.slot(slot, component, { order? })` | put a component in a place in the shell (below) |
 | `superego.entry(kind, component)` | draw transcript entries of a kind an extension writes |
@@ -106,7 +106,8 @@ dispatch('thread.submit', { id: thread.id, text: 'Ship it' }, { machine: machine
 
 Components: `Button`, `IconButton`, `TextField`, `TextArea`, `Select`, `Switch`, `List`, `ListItem`, `Panel`,
 `Dialog`, `Menu`, `Popover`, `Tooltip`, `StatusGlyph`, `Markdown` (render Markdown text), `FileEditor` (the file editor,
-Markdown in live preview: `<FileEditor machine={machine} thread={thread} path={path} onLink={…} actions={…} />`), and
+Markdown in live preview: `<FileEditor machine={machine} thread={thread} path={path} onLink={…} actions={…} />`), `Diff`
+(a unified diff, file by file: `<Diff diff={text} />`; `parseDiff(text)` for its files and counts), and
 the Phosphor icons the app uses (`ArchiveIcon`, …).
 
 Others: `useComposer()` (the message box), `useComposerClaim({ placeholder, submit })` (take the message box over while

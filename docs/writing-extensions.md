@@ -91,7 +91,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | UI half (`superego.` in `setup`) | For |
 |---|---|
 | `slot(name, Component, { order })` | a component in a place in the window (below) |
-| `pane(kind, { title, component, icon, file, menu, opens, folders, width })` | a kind of pane beside the thread |
+| `pane(kind, { title, component, icon, file, menu, opens, folders, urls, width })` | a kind of pane beside the thread; `opens`, `folders`, `urls`: files, folders or web pages a thread names open in it |
 | `tool(name, Component, { fold })` | how calls to a tool look; `fold: false` shows them outside the run's fold (images) |
 | `entry(kind, Component)` | transcript entries of a kind it writes |
 | `work(divide)` | split a run of work into titled parts (tasks); bundled only |
@@ -103,7 +103,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 
 Names: everything is `<extension>.<something>`, except tool and pane kind names. In components: `useSelection`,
 `useMachines`, `useSessions`, `useValue`, `useDispatch`, `call`, `has(machine, 'ext:x')`; in panes `<PaneHeader>` and
-`useTabNote`. Full tables: [daemon.md](../packages/cli/skill/daemon.md), [ui.md](../packages/cli/skill/ui.md).
+`useTabNote`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](../packages/cli/skill/daemon.md), [ui.md](../packages/cli/skill/ui.md).
 
 ## Places in the window
 
@@ -136,6 +136,8 @@ Only the sidebar (`threads`) is required. Everything else is optional, the core'
 | [`suggestions`](../extensions/suggestions/src) | a hook, a side call, a live value, a `composer.above` slot |
 | [`ask-user`](../extensions/ask-user/src) | a tool that waits on you: `status`, an action to answer, a `tool` view |
 | [`images`](../extensions/images/src) | a tool with `{ fold: false }`, files kept with `threads.attachments` |
+| [`git`](../extensions/git/src) | Changes: a `method` (a read), a `pane` the agent is told of, built on the kit's `Diff`, an `action` with keys |
+| [`web-panes`](../extensions/web-panes/src) | two pane kinds and nothing else; `urls: true` makes web links open in one |
 | [`files`](../extensions/files/src) | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | [`links`](../extensions/links/src) | UI only, with a daemon half that only declares it |
 | [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings |

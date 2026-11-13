@@ -57,7 +57,7 @@ Useful ones:
 | `thread.submit` `id text whenBusy?=steer\|followUp` | send a message |
 | `thread.abort` `id` | stop the agent |
 | `thread.rename` `id title`, `thread.archive` `id`, `thread.unarchive` `id` | (Ego is never archived) |
-| `pane.open` `id kind title? params?` | open a pane beside a thread (`diff`, `editor`, `preview`, `artifact`, `thread`, a profile's own) |
+| `pane.open` `id kind title? params?` | open a pane beside a thread (`editor`, `thread`; `diff` from git, `preview` and `artifact` from web-panes; a profile's own) |
 | `pane.close` `id pane`, `pane.focus` `id pane?` | |
 | `profile.list` `cwd?`, `profile.allow` `cwd? name?` | |
 | `thread.meta` `prompt?` | ask Ego, Superego's own agent (one hidden thread per machine): it answers, changes settings and machines, and starts threads for any other work |

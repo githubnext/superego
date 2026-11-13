@@ -89,7 +89,7 @@ hello {client, version, features}         → {version, features, machine{id, bu
 thread.list {archived?}                   agent.models
 thread.watch {id}                         → snapshot + watch.ops (Chord delta ops)
 threads.watch                             → snapshot + threads.changed (status, model, cost, activeAt, session, worktree, panes)
-file.read / file.find / file.watch {id, path} → file.changed      thread.diff {id}
+file.read / file.find / file.watch {id, path} → file.changed      git.diff {id} (git)
 profile.ui / profile.module               settings.watch          value.watch {key} → value.changed
 action.list / action.run {id, params, exposure} / action.log            unwatch {sub}
 
