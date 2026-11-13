@@ -45,7 +45,7 @@ const Catalog = defineDoc<{ ids: number[]; ego?: number }>({
 
 /**
  * Methods moved into an extension, by their old names: a window older than this daemon still calls those, and is
- * answered by the extension's while it's set up. Kept one release after the move, then dropped.
+ * answered by the extension's while it's set up. Kept one release after the move: remove with PROTOCOL_VERSION 2.
  */
 const MOVED_METHODS: Record<string, string> = {
   'thread.diff': 'git.diff',
@@ -56,16 +56,16 @@ const MOVED_METHODS: Record<string, string> = {
 }
 /**
  * Watches moved into an extension's live value: the old watch method, the value it follows now, and the notification
- * older windows listen for (`{ sub, value }`). Kept one release, as MOVED_METHODS are.
+ * older windows listen for (`{ sub, value }`). Remove with PROTOCOL_VERSION 2, as MOVED_METHODS.
  */
 const MOVED_WATCHES: Record<string, { value: string; event: string }> = {
   'meta.watch': { value: 'ego.thread', event: 'meta.changed' },
 }
-/** Features that became an extension's: announced by their old names too, while it is, for older windows. */
+/** Features that became an extension's: announced by their old names too, while it is, for older windows. Remove with PROTOCOL_VERSION 2. */
 const MOVED_FEATURES: Record<string, string> = { ego: 'ext:ego' }
 /**
  * Thread fields that became an extension's fact: given by their old names too, for older windows (the branch chip,
- * Ego's Clear). Remove with the next protocol version.
+ * Ego's Clear). Remove with PROTOCOL_VERSION 2.
  */
 const MOVED_FACTS = (ext: Record<string, Json> | undefined) => ({
   ...(ext?.worktrees !== undefined ? { worktree: ext.worktrees } : {}),
@@ -122,7 +122,9 @@ const ThreadDoc = defineDoc<ThreadMeta>({
 
 /**
  * Extensions' state from before extensions kept their own: read from the field the core kept it in, until the extension
- * first writes its state, which moves it. So a thread from before reads the same, and nothing needs copying.
+ * first writes its state, which moves it. So a thread from before reads the same, and nothing needs copying. A
+ * migration of data, not of clients: remove only once databases from before extensions kept state (2026-11) are no
+ * longer opened, with migrateHidden.
  */
 const LEGACY: Record<string, { read(meta: ThreadMeta): Json | undefined; drop(meta: ThreadMeta): void }> = {
   worktrees: { read: (meta) => meta.worktree, drop: (meta) => { delete meta.worktree } },
@@ -1345,7 +1347,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
   /**
    * Hidden threads from before extensions made them: Ego's, kept apart in the catalog (`ego`), or older, listed and
-   * marked `meta`. Each becomes a hidden thread of the ego extension, which takes one up and leaves the rest.
+   * marked `meta`. Each becomes a hidden thread of the ego extension, which takes one up and leaves the rest. Remove
+   * with LEGACY (and the catalog's `ego`), once databases from before (2026-11) are no longer opened.
    */
   async function migrateHidden() {
     const catalog = await harness.snapshot(Catalog, context)
@@ -1420,8 +1423,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     params: obj({ id: str() }),
     async run({ id }) {
       const { notes } = await archive(id)
-      // `worktree`: what a window older than `notes` reads, from the worktrees extension's facts. Remove with the next
-      // protocol version.
+      // `worktree`: what a window older than `notes` reads, from the worktrees extension's facts. Remove with
+      // PROTOCOL_VERSION 2.
       const worktree = info(id, await get(id)).ext?.worktrees as { removed?: boolean } | undefined
       return { notes, worktree: worktree ? (worktree.removed ? 'removed' as const : 'kept' as const) : null }
     },

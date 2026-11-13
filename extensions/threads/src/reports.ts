@@ -122,7 +122,7 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
         return [
           !self.without?.includes('thread-tools') && 'Threads you start usually report back on their own: a message from each when it ' +
             'finishes, fails or waits on a question. You needn\'t wait on them with thread_read: carry on, or end your turn.',
-          parent && !parent.without?.includes(reportsAbout.name) && await working.get(self.id) !== false && `When a turn of yours ` +
+          parent && !parent.archived && !parent.without?.includes(reportsAbout.name) && await working.get(self.id) !== false && `When a turn of yours ` +
             `ends, its answer (the first lines) is relayed to ${linkTo(parent)} for you: you needn't thread_send it your result. Put the outcome first.`,
         ].filter(Boolean).join('\n') || undefined
       })],
