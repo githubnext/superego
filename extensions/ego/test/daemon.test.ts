@@ -1,6 +1,7 @@
 // ego against a real daemon: one hidden thread per machine, its agent chosen for it alone, kept across restarts,
 // cleared rather than archived; Ego threads from before taken up; and the old names (`thread.meta`, `meta.watch`) still
 // answering older windows.
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -185,5 +186,31 @@ it('takes no messages while switched off: its thread is never run as an ordinary
   await peer.call('settings.set', { key: 'extensions.ego', value: false })
   await until(async () => !(await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })).features.includes('ext:ego'))
   await expect(peer.call('thread.submit', { id: meta.id, text: 'hi' })).rejects.toMatchObject({ kind: 'invalid' })
+  await close()
+})
+
+it("runs as itself whatever the user's default profile says: none of its prompt, tools or without", async () => {
+  const profile = join(dir, 'profiles', 'default')
+  mkdirSync(profile, { recursive: true })
+  writeFileSync(join(profile, 'profile.ts'), `import { defineProfile } from 'superego'\nexport default defineProfile({ prompt: 'Answer in haiku.', extensions: ['./tool.ts'], without: ['ego'] })\n`)
+  writeFileSync(join(profile, 'tool.ts'), `import { defineExtension, defineTool } from 'superego'
+export default defineExtension({ name: 'haiku', tools: [defineTool({ name: 'haiku_tool', description: 'x', parameters: { type: 'object', properties: {} }, execute: async () => ({ content: [] }) })] })
+`)
+  const { peer, close } = await open()
+  const meta = await peer.call<ThreadInfo>('ego.ask', { prompt: 'hi' })
+  expect(meta.profile).toBeUndefined()
+  expect(meta.without ?? []).not.toContain('ego')
+  expect(meta.ext).toEqual({ ego: true })
+  await until(async () => (await egoOf(peer))!.status.state === 'done')
+  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: meta.id })
+  const all = JSON.stringify(value.entries)
+  expect(all).toContain("You are superego's own agent")
+  expect(all).not.toContain('Answer in haiku.')
+  const tools = (value.entries.find((e) => e.kind === 'pi.system')!.model![0] as { toolsAdded: { name: string }[] }).toolsAdded.map((t) => t.name)
+  for (const tool of ['write', 'edit', 'bash', 'haiku_tool']) expect(tools).not.toContain(tool)
+  // An ordinary thread still has the profile, and goes without Ego as it says.
+  const plain = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
+  expect(plain.profile).toMatchObject({ name: 'default' })
+  expect(plain.without).toContain('ego')
   await close()
 })

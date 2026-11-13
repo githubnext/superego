@@ -1049,7 +1049,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const extensions = [...partsFor(without), ...chosen, ...(profile ? partsOf(profile) : [])]
     // Always said, never left as it was: instructions a chooser gave go when it no longer answers.
     const instructions = choice?.instructions ?? (profile?.spec.prompt || null)
-    return { model, thinkingLevel, extensions, instructions }
+    return { model, thinkingLevel, extensions, instructions, without }
   }
 
   /** Send `text` to a thread, with the model and thinking it chose, else what this machine's settings say now. */
@@ -1058,9 +1058,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const m = await get(id)
     // Put away: it can be read, not written to, until it's brought back.
     if (m.meta.archived) throw new RpcError('archived', 'This thread is archived', { hint: 'Unarchive it to send to it.' })
-    // An extension's own thread runs as that extension makes it, or not at all.
-    if (m.meta.owner && !features().includes(`ext:${m.meta.owner}`)) throw new RpcError('invalid', `This thread is the ${m.meta.owner} extension's, which is off here`)
-    const { model, thinkingLevel, ...rest } = await agentOf(id, m.meta)
+    // Its profile loaded first, for what the thread goes without.
+    const { model, thinkingLevel, without, ...rest } = await agentOf(id, m.meta)
+    // An extension's own thread runs as that extension makes it, or not at all: not while it's off here, or the thread
+    // goes without it.
+    if (m.meta.owner && (!features().includes(`ext:${m.meta.owner}`) || without.has(m.meta.owner))) throw new RpcError('invalid', `This thread is the ${m.meta.owner} extension's, which is off here`)
     if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
     await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null, ...rest }, context)
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
@@ -1176,7 +1178,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
     if (parent && (await get(parent)).meta.hidden) parent = undefined
     // The project's profile (or the user's) of that name, else the default one there is; checked (and allowed) now.
-    const ref = findProfile(dir, userProfiles, profileName?.trim() || undefined)
+    // None for an extension's own thread: it runs as that extension makes it, whatever profiles say.
+    const ref = hidden ? undefined : findProfile(dir, userProfiles, profileName?.trim() || undefined)
     const loaded = ref ? await profileOf(ref) : undefined
     // Its session is the project; where in it it works is the folder given, unless a hook moves it.
     const checkout = await checkoutOf(dir)
@@ -1271,6 +1274,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     for (const id of catalog?.ids ?? []) {
       const meta = await harness.snapshot(ThreadDoc, id as ConversationId, context)
       if (meta?.meta && !meta.hidden) marked.push(id)
+      // An extension's own thread made with the user's default profile, as one was for a while: it has none now.
+      if (meta?.owner && meta.profile) {
+        await (await harness.conversation(id as ConversationId, context))?.commit(async (tx) => { delete (await tx.doc(ThreadDoc, id as ConversationId)).profile }, context)
+      }
     }
     const kept = catalog?.ego
     if (kept === undefined && !marked.length) return

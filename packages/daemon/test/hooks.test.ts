@@ -242,6 +242,22 @@ it("lets an extension choose a thread's agent: instructions, tools and what it g
   await close()
 })
 
+it("runs an extension's own thread only as that extension's: refused while the thread goes without it", async () => {
+  let api!: DaemonApi
+  let target: string | undefined
+  // Chosen first, and leaving out the owner for its thread.
+  const picky = defineDaemonExtension({ name: 'picky', setup(superego) { superego.agentFor(({ id }) => id && id === target ? { without: ['own'] } : undefined) } })
+  const own = defineDaemonExtension({ name: 'own', setup(superego) { api = superego } })
+  const { peer, close } = await open([picky, own])
+  const thread = await api.threads.create({ hidden: true })
+  expect(thread.owner).toBe('own')
+  await api.threads.submit(thread.id, 'hello')
+  await until(async () => (await api.threads.get(thread.id)).status.state === 'done')
+  target = thread.id
+  await expect(peer.call('thread.submit', { id: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'invalid' })
+  await close()
+})
+
 it('gives extensions the thread operations: create (hidden, as a child), submit, its last answer and entries, archive (now or when idle), unarchive', async () => {
   let api!: DaemonApi
   const { peer, close } = await open([defineDaemonExtension({ name: 'ops', setup(superego) { api = superego } })])
