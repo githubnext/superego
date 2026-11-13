@@ -64,20 +64,27 @@ async function loadProfileUi(machine: string, profile: ProfileRef, entries: stri
 const installed = new Map<string, string>()
 const loading = new Map<string, Promise<void>>()
 
-/** Errors that say the machine is away, not that the profile can't run (gone, no longer allowed, broken). */
-const AWAY = new Set(['disconnected', 'closed', 'restarting'])
+/**
+ * Errors that say the profile can't run here (gone, broken, no longer allowed): the window lets go of its UI. Any other
+ * (the machine away or restarting, busy with another profile's run, a timeout, an older daemon) may pass, and keeps it.
+ */
+const GONE = new Set(['not_found', 'invalid', 'untrusted_profile'])
 
-async function ensureProfileUi(registry: Registry, machine: string, profile: ProfileRef) {
+/** Install `profile`'s UI on `machine` when its files changed; let go of it when the profile can't run there now. */
+export async function ensureProfileUi(registry: Pick<Registry, 'installProfile'>, machine: string, profile: ProfileRef) {
   const key = `${machine}:${profile.dir}`
   try {
     const { hash, entries } = await client(machine).call('profile.ui', profile)
     if (installed.get(key) === hash) return
-    registry.installProfile(machine, profile, entries.length ? await loadProfileUi(machine, profile, entries) : [])
+    // A module that doesn't load here (a bad import, no extension exported, a throw as it runs) is broken too.
+    const extensions = entries.length ? await loadProfileUi(machine, profile, entries).catch((error: Error & { kind?: string }) => {
+      throw Object.assign(error, { kind: error.kind ?? 'invalid' })
+    }) : []
+    registry.installProfile(machine, profile, extensions)
     // Only once it's in: a load that failed is tried again.
     installed.set(key, hash)
   } catch (error) {
-    // The daemon let go of it, or its UI no longer loads: the window lets go of what it had.
-    if (!AWAY.has((error as { kind?: string }).kind ?? '') && installed.has(key)) {
+    if (GONE.has((error as { kind?: string }).kind ?? '') && installed.has(key)) {
       installed.delete(key)
       registry.installProfile(machine, profile, [])
     }
