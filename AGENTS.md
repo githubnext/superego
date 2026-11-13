@@ -22,5 +22,10 @@ Many agents work on this repo at once, each in a git worktree of its own, all on
 
 `pnpm test`, `pnpm typecheck`, smoke, showcase and `app/test/look.sh` share a few slots across the whole machine
 (`scripts/check.ts`; `SUPEREGO_CHECK_SLOTS`, default 2), so "waiting for a check slot…" and a short wait are normal.
-Smoke, showcase and look build the app first only when its sources changed. A new package or extension also goes in
-the root `tsconfig.json`'s references, or `pnpm typecheck` skips it.
+Each is stopped if it runs too long: smoke, showcase and look after 8 minutes (`SUPEREGO_SMOKE_TIMEOUT`,
+`SUPEREGO_SHOWCASE_TIMEOUT`, in seconds), the rest after 20 (`SUPEREGO_CHECK_TIMEOUT`). Smoke, showcase and look build
+the app first only when its sources changed. A new package or extension also goes in the root `tsconfig.json`'s
+references, or `pnpm typecheck` skips it.
+
+Give any other long-running command a timeout of its own. Never use ImageMagick's `compare -subimage-search` on
+screenshots: it can run for hours.
