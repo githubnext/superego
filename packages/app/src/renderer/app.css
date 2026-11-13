@@ -6,7 +6,6 @@
 .app__body { flex: 1; display: flex; min-height: 0; background: var(--superego-chrome); }
 .app__rail { flex: none; width: var(--superego-rail); display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 9px 0 12px; background: var(--superego-rail-bg); box-shadow: inset -1px 0 0 var(--superego-line); -webkit-app-region: drag; }
 .app__rail-group { display: flex; flex-direction: column; align-items: center; gap: 4px; -webkit-app-region: no-drag; }
-.app__rail .unread-button { padding: 3px 5px; }
 .app__meta { position: relative; width: 34px; height: 34px; min-height: 34px; border-radius: 8px; color: var(--superego-muted); box-shadow: none; background: none; }
 .app__meta:hover { color: var(--superego-text); background: var(--superego-hover); }
 .app__meta.is-on { color: var(--superego-text); background: var(--superego-selected); }
@@ -72,16 +71,6 @@
 .app__footer > .service-notice { flex: 1 0 100%; }
 .app__settings { width: 34px; height: 34px; min-height: 34px; border-radius: 8px; box-shadow: none; background: none; color: var(--superego-muted); }
 .app__settings:hover { background: var(--superego-hover); }
-/* Unread results beside Settings: a bell and a count, in the most pressing one's colour. */
-.unread-button { padding: 3px 8px 3px 7px; gap: 4px; font-variant-numeric: tabular-nums; }
-.unread-button--done { color: var(--superego-accent); }
-.unread-button--blocked { color: var(--superego-status-blocked); }
-.unread-button--error { color: var(--superego-status-error); }
-.unread-menu { max-width: 360px; }
-.unread-menu .superego-menu__item > span:first-child { min-width: 0; }
-.unread-menu__row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.unread-menu__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.superego-menu__item[data-highlighted] .unread-menu__row .superego-status { color: inherit; }
 .app__settings:hover { color: var(--superego-text); }
 
 /* The thread: a crumb, a title and a reading column; the composer floats at the bottom. */

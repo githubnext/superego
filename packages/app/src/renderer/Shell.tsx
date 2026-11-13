@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from 'react'
 import { agentName, type SettingsSnapshot } from '@superego/protocol'
 import { ArrowLeftIcon, ArrowRightIcon, Button, LifebuoyIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select } from '@superego/ui'
 import { textScale } from '../shared.ts'
-import { UnreadButton } from './Unread.tsx'
 import { machine as client, useSettings, watched } from './client.ts'
 import { shownPanes, Slot, useRegistry } from './extension.tsx'
 import { ServiceNotice } from './ServiceNotice.tsx'
@@ -92,7 +91,6 @@ export function Shell() {
     </span>
   )
   const sideOpen = hasSidebar && (narrow ? drawer : sidebar.open)
-  const hasRail = registry.slots.rail.length > 0
   // Wide: across the top a title bar (the window's buttons, then where you are, the thread's columns and what the thread
   // says about itself); down the left a rail (Ego, the spaces, Settings) and the sidebar beside it; the rest holds the
   // thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.
@@ -118,7 +116,7 @@ export function Shell() {
               <IconButton label={`Ask ${agentName(registry.app)}`} className={`app__meta ${thread?.meta ? 'is-on' : ''}`} onClick={() => void dispatch('app.meta', {}, { source: 'rail' }).catch((error) => console.error(error))}>
                 <LifebuoyIcon size={18} aria-hidden />
               </IconButton>
-              {hasRail ? <Slot name="rail" props={{}} /> : <UnreadButton side="right" />}
+              <Slot name="rail" props={{}} />
             </div>
             <div className="app__rail-group">{settingsButton}</div>
           </nav>
@@ -128,7 +126,7 @@ export function Shell() {
           <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) setDrawer(false) } : undefined}>
             {narrow && <div className="app__drag" />}
             <Slot name="sidebar" props={{}} />
-            <div className="app__footer"><ServiceNotice />{narrow && <>{settingsButton}<UnreadButton /></>}</div>
+            <div className="app__footer"><ServiceNotice />{narrow && <>{settingsButton}<Slot name="footer" props={{}} /></>}</div>
           </aside>
         )}
         <main className="app__main">

@@ -7,10 +7,7 @@ import { Dialog } from '@superego/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
-import { threadBeside, unread, type Session } from './sessions.ts'
-
-/** App setting: whether ⌘. looks for the next unread thread everywhere, or only in the session you're in. */
-export const UNREAD = 'app.unread'
+import { threadBeside, type Session } from './sessions.ts'
 import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
 import { scrollHalfPage } from './scroll.ts'
 import { startRename } from './rename.ts'
@@ -151,7 +148,6 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
   // Where this window has been, as a browser goes back and forward.
   defineWindowAction({ id: 'app.back', title: 'Back', keys: 'mod+[', run: (_p, c) => c.back() }),
   defineWindowAction({ id: 'app.forward', title: 'Forward', keys: 'mod+]', run: (_p, c) => c.forward() }),
-  defineWindowAction({ id: 'thread.unread', title: 'Next unread thread', keys: 'mod+.', run: (_p, c) => nextUnread(c) }),
   // Focus: the region beside (sidebar, thread, each pane), and the prompt.
   defineWindowAction({ id: 'focus.left', title: 'Focus the region to the left', keys: 'mod+alt+arrowleft', run: () => focusBeside(-1) }),
   defineWindowAction({ id: 'focus.right', title: 'Focus the region to the right', keys: 'mod+alt+arrowright', run: () => focusBeside(1) }),
@@ -262,19 +258,6 @@ function stepSession(c: WindowContext, by: number) {
 function stepThread(c: WindowContext, by: number) {
   const next = threadBeside(c.sessions, c.selection, by)
   if (next) c.select(next)
-}
-
-/** The next thread after this one, in order, with something unread; around to the start, but never this one. */
-function nextUnread(c: WindowContext) {
-  const { session } = current(c)
-  const scope = c.appSetting<'all' | 'session'>(UNREAD) === 'session' && session ? [session] : c.sessions
-  const order = scope.flatMap((s) => s.threads.map((thread) => ({ machine: s.machine.id, thread })))
-  const at = order.findIndex((o) => o.machine === c.selection?.machine && o.thread.id === c.selection.thread)
-  for (let step = 1; step <= order.length; step++) {
-    const next = order[(at + step + order.length) % order.length]!
-    if (next.thread.id === c.selection?.thread && next.machine === c.selection.machine) continue
-    if (unread(next.thread)) return c.select({ machine: next.machine, thread: next.thread.id })
-  }
 }
 
 /**

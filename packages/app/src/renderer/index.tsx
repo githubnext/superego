@@ -11,7 +11,7 @@ import { Profiles, Providers, WebAccess } from './SettingsView.tsx'
 import { Shell } from './Shell.tsx'
 import { SORT } from './sessions.ts'
 import { ShellStateProvider } from './state.tsx'
-import { coreActions, UNREAD } from './actions.tsx'
+import { coreActions } from './actions.tsx'
 import { webBridge } from './web-bridge.ts'
 import { registerBuiltInPanes } from './panes.tsx'
 import { registerToolRows } from './tool-rows.tsx'
@@ -31,9 +31,6 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
       settings: [
         { key: SORT, title: 'Sort sessions and threads', default: 'recent', type: 'choice', options: [
           { value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' },
-        ] },
-        { key: UNREAD, title: 'Next unread thread (⌘.)', default: 'all', type: 'choice', options: [
-          { value: 'all', label: 'In every session' }, { value: 'session', label: 'In the current session' },
         ] },
       ],
     })

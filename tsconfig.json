@@ -20,6 +20,7 @@
     { "path": "extensions/images" },
     { "path": "extensions/skills" },
     { "path": "extensions/web-panes" },
+    { "path": "extensions/unread" },
     { "path": "app" },
     { "path": "scripts" }
   ]

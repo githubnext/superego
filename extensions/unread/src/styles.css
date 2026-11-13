@@ -1,0 +1,11 @@
+/* Unread results: a bell and a count, in the most pressing one's colour, in the rail or beside Settings on a phone. */
+.unread-button { padding: 3px 8px 3px 7px; gap: 4px; font-variant-numeric: tabular-nums; }
+.unread-button--done { color: var(--superego-accent); }
+.unread-button--blocked { color: var(--superego-status-blocked); }
+.unread-button--error { color: var(--superego-status-error); }
+.unread-menu { max-width: 360px; }
+.unread-menu .superego-menu__item > span:first-child { min-width: 0; }
+.unread-menu__row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.unread-menu__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.superego-menu__item[data-highlighted] .unread-menu__row .superego-status { color: inherit; }
+.app__rail .unread-button { padding: 3px 5px; }

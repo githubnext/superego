@@ -33,12 +33,16 @@ export type MachineUpdate = { state: 'running' | 'done' | 'failed'; log: string;
 export const APP_MOVED: Record<string, string> = {
   // The order sessions and threads go in is the window's own (the navigator and ⌘⇧[ ] walk it), not the sidebar's.
   'threads.sort': 'app.sort',
+  // Where ⌘. looks is the unread extension's.
+  'app.unread': 'unread.scope',
 }
 
 /** Actions known by another id now: a shortcut set for the old one (in `app.keys`) is the new one's. */
 export const ACTIONS_MOVED: Record<string, string> = {
   // Changes moved into the git extension.
   'panes.changes': 'git.changes',
+  // ⌘. moved into the unread extension.
+  'thread.unread': 'unread.next',
 }
 
 /** `store` with what `app.keys` holds for an action's old id read as its new one's (and saved so). */

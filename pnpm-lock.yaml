@@ -252,6 +252,9 @@ importers:
       '@superego/threads':
         specifier: workspace:*
         version: link:../extensions/threads
+      '@superego/unread':
+        specifier: workspace:*
+        version: link:../extensions/unread
       '@superego/web-panes':
         specifier: workspace:*
         version: link:../extensions/web-panes
@@ -505,6 +508,25 @@ importers:
       react-dom:
         specifier: ^19.2.0
         version: 19.3.1(react@19.3.1)
+
+  extensions/unread:
+    dependencies:
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@superego/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      react:
+        specifier: ^19
+        version: 19.3.1
 
   extensions/web-panes:
     dependencies:
