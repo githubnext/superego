@@ -13,13 +13,14 @@ import images from '@superego/images/daemon'
 import links from '@superego/links/daemon'
 import suggestions from '@superego/suggestions/daemon'
 import tasks from '@superego/tasks/daemon'
+import webPanes from '@superego/web-panes/daemon'
 import app from '../superego.config.ts'
 
 // The window's build, for Web access: next to this file once built (out/main → out/renderer); from source, the last build.
 const webRoot = [join(import.meta.dirname, '../renderer'), join(import.meta.dirname, '../out/renderer')].find((dir) => existsSync(join(dir, 'index.html')))
 
 // The meta agent sets up the machines this computer reaches: the same list the app and `superego machines` keep.
-serveDaemon({ app, defaultCwd: homedir(), extensions: [askUser, files, git, images, links, suggestions, tasks], machines: (dataDir) => new MachineStore(dataDir), ...(webRoot ? { webRoot } : {}) }).catch((error) => {
+serveDaemon({ app, defaultCwd: homedir(), extensions: [askUser, files, git, images, links, suggestions, tasks, webPanes], machines: (dataDir) => new MachineStore(dataDir), ...(webRoot ? { webRoot } : {}) }).catch((error) => {
   console.error(error)
   process.exit(1)
 })

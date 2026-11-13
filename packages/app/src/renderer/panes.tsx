@@ -5,12 +5,12 @@
 // the row's end) is its handle, and the last column takes what's left over until it's dragged. Past the edge the row
 // scrolls, and the focused column scrolls just far enough to show whole. ⌃Tab moves the focus along. On a phone each
 // column is the screen's width, and a swipe moves between them.
-// Built in: editor, preview, artifact, thread. Extensions and profiles add kinds with superego.pane(kind, …) (Changes is
-// git's). A pane of a kind only an extension the thread goes without draws isn't shown.
+// Built in: editor and thread. Extensions and profiles add kinds with superego.pane(kind, …) (Changes is git's; a web
+// page and an artifact, web-panes'). A pane of a kind only an extension the thread goes without draws isn't shown.
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
-import { ArrowRightIcon, ChatTextIcon, FileTextIcon, GlobeIcon, XIcon } from '@superego/ui'
+import { ArrowRightIcon, ChatTextIcon, FileTextIcon, XIcon } from '@superego/ui'
 import { paneKind, paneTitle, shownPanes, useRegistry, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
@@ -268,8 +268,6 @@ const fileName = (pane: Pane) => (pane.params as { path?: string } | undefined)?
 
 export function registerBuiltInPanes(superego: UiApi) {
   superego.pane('editor', { title: (pane) => fileName(pane) ?? 'Editor', icon: FileTextIcon, file: true, component: EditorPane, opens: () => true })
-  superego.pane('preview', { title: 'Preview', icon: GlobeIcon, component: PreviewPane, urls: true, width: 0.6 })
-  superego.pane('artifact', { title: (pane) => fileName(pane) ?? 'Artifact', icon: FileTextIcon, file: true, component: ArtifactPane })
   superego.pane('thread', { title: 'Thread', icon: ChatTextIcon, component: ThreadPane })
 }
 
@@ -285,35 +283,6 @@ function EditorPane({ machine, thread, pane }: PaneProps) {
     ? void dispatch('pane.open', { id: thread.id, kind: 'editor', params: { path: file } }, { machine: machine.id, source: 'editor' })
     : void dispatch('pane.update', { id: thread.id, pane: pane.id, params: { path: file } }, { machine: machine.id, source: 'editor' })
   return <FileEditor key={path} machine={machine} thread={thread} path={path} {...(line ? { line } : {})} onOpenFile={open} />
-}
-
-/** A web page: a local dev server, docs. */
-function PreviewPane({ pane }: PaneProps) {
-  const { url } = params<{ url?: string }>(pane)
-  const [key, setKey] = useState(0)
-  if (!url || !/^https?:\/\//.test(url)) return <div className="pane-empty">No address (an http or https URL) given.</div>
-  return (
-    <div className="frame-pane">
-      <PaneHeader><a className="pane-header__note pane-header__url" title={url} href={url} target="_blank" rel="noreferrer">{url}</a><button type="button" className="pane-header__button" onClick={() => setKey((k) => k + 1)}>Reload</button></PaneHeader>
-      <iframe key={key} src={url} title={url} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
-    </div>
-  )
-}
-
-/** An HTML file the agent wrote, shown as a page: sandboxed, from its own origin, with its relative files beside it. */
-function ArtifactPane({ machine, thread, pane }: PaneProps) {
-  const { path } = params<{ path?: string }>(pane)
-  const [key, setKey] = useState(0)
-  useEffect(() => { setKey((k) => k + 1) }, [thread.activeAt])
-  if (!path) return <div className="pane-empty">No file given.</div>
-  const url = window.superego.artifactUrl?.(machine.id, thread.id, path)
-  if (!url) return <div className="pane-empty">Artifacts aren't shown here.</div>
-  return (
-    <div className="frame-pane">
-      <PaneHeader><code className="pane-header__note" title={path}>{path}</code><button type="button" className="pane-header__button" onClick={() => setKey((k) => k + 1)}>Reload</button></PaneHeader>
-      <iframe key={key} src={url} title={path} sandbox="allow-scripts allow-forms allow-popups" />
-    </div>
-  )
 }
 
 /** Another thread, beside this one. */

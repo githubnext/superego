@@ -19,7 +19,8 @@
     "@superego/links": "workspace:*",
     "@superego/suggestions": "workspace:*",
     "@superego/tasks": "workspace:*",
-    "@superego/threads": "workspace:*"
+    "@superego/threads": "workspace:*",
+    "@superego/web-panes": "workspace:*"
   },
   "devDependencies": { "electron": "45.2.1", "electron-vite": "6.0.0", "@types/node": "^24" }
 }

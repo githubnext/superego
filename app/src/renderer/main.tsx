@@ -9,6 +9,7 @@ import links from '@superego/links/ui'
 import suggestions from '@superego/suggestions/ui'
 import tasks from '@superego/tasks/ui'
 import threads from '@superego/threads/ui'
+import webPanes from '@superego/web-panes/ui'
 import app from '../../superego.config.ts'
 
-mountApp(app, { extensions: [threads, askUser, files, git, images, links, suggestions, tasks] })
+mountApp(app, { extensions: [threads, askUser, files, git, images, links, suggestions, tasks, webPanes] })

@@ -287,7 +287,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * profile's extension's are for that profile's threads only (`profile`: its folder).
    */
   const paneKinds: { kind: string; about: string; owner: string; profile?: string }[] = []
-  // Panes: the agent opens them beside its thread (a file, a preview, an artifact it wrote, an extension's or a profile's own), from the
+  // Panes: the agent opens them beside its thread (a file, another thread, an extension's or a profile's own), from the
   // kinds its instructions list.
   const panesPart = defineExtension({
     name: 'panes',
@@ -326,12 +326,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const core: DaemonExtension[] = [
     { name: 'coding-tools', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools()) },
     {
-      name: 'panes', title: 'Panes', description: 'Open panes beside a thread: files, pages, other threads, and the kinds extensions add.',
+      name: 'panes', title: 'Panes', description: 'Open panes beside a thread: files, other threads, and the kinds extensions add.',
       setup(s) {
         s.agent(panesPart)
-        // The window's built-in kinds (its panes.tsx); extensions describe their own (git's Changes).
-        s.pane('preview', '{ url }: a web page, such as a local dev server')
-        s.pane('artifact', '{ path }: an HTML file in the working folder, shown as a page; write it first')
+        // The window's built-in kinds (its panes.tsx); extensions describe their own (git's Changes, web-panes').
         s.pane('editor', '{ path }: a file, for the user to read and edit')
         s.pane('thread', '{ thread }: another conversation')
       },

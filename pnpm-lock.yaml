@@ -249,6 +249,9 @@ importers:
       '@superego/threads':
         specifier: workspace:*
         version: link:../extensions/threads
+      '@superego/web-panes':
+        specifier: workspace:*
+        version: link:../extensions/web-panes
     devDependencies:
       '@types/node':
         specifier: ^24
@@ -449,6 +452,28 @@ importers:
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@superego/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      react:
+        specifier: ^19
+        version: 19.3.1
+
+  extensions/web-panes:
+    dependencies:
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@superego/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
       '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

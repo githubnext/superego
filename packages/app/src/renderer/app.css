@@ -441,7 +441,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .diff-row--del { background: light-dark(rgb(255 59 48 / .09), rgb(255 69 58 / .12)); color: light-dark(#b3261e, #ffb3ad); }
 :is(.diff-row--add, .diff-row--del) .diff-row__num { color: inherit; opacity: .6; }
 .diff-row--hunk { color: var(--superego-faint); padding-left: 14px; overflow: hidden; text-overflow: ellipsis; }
-.frame-pane, .thread-pane { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.thread-pane { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
 /* The file editor: source (monospace, line numbers) or, for Markdown, live preview (as it reads, Obsidian-like). */
 .file-editor { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -494,7 +494,6 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .cm-lp-fence--quiet { font-size: 0.7em; line-height: 1.2; }
 .cm-lp-front { font-family: var(--superego-mono); font-size: 0.8em; color: var(--superego-muted); background: color-mix(in srgb, var(--superego-text) 4%, transparent); padding: 0 12px !important; }
 .cm-lp-front--first { border-top-left-radius: 6px; border-top-right-radius: 6px; }
-.frame-pane iframe { flex: 1; border: 0; width: 100%; background: #fff; }
 .thread-pane > .thread { flex: 1; }
 
 /* Files a thread names, opened beside it. */
