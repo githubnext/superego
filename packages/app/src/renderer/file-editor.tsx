@@ -364,7 +364,7 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
       if (found.outside) return "outside this thread's folder"
       if (found.path === null) return "not in this thread's folder"
       const kind = found.folder ? folderKind(registry, { machine: machine.id, thread }) : fileKind(registry, { machine: machine.id, thread }, found.path)
-      if (!kind) return 'a folder, and nothing here shows folders'
+      if (!kind) return found.folder ? 'a folder, and nothing here shows folders' : 'a file, and nothing here shows files'
       await dispatch('pane.open', { id: thread.id, kind, params: { path: found.path, ...(found.line ? { line: found.line } : {}) } }, { machine: machine.id, source: 'editor' })
       return undefined
     } catch (error) { return (error as Error).message }
@@ -382,11 +382,12 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
     void dispatch('pane.open', { id: thread.id, kind: webKind, ...(host ? { title: host } : {}), params: { url } }, { machine: machine.id, source: 'editor' })
       .catch((error) => console.error(error))
   }, [machine.id, thread.id, webKind])
+  const openIn = (kind: string | undefined, file: string) => kind && dispatch('pane.open', { id: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'editor' })
   const slot: EditorSlotProps = {
     machine, thread, path,
     open: (file, { beside = false } = {}) => onOpenFile
       ? onOpenFile(file, { beside })
-      : void dispatch('pane.open', { id: thread.id, kind: fileKind(registry, { machine: machine.id, thread }, file), params: { path: file } }, { machine: machine.id, source: 'editor' }),
+      : void openIn(fileKind(registry, { machine: machine.id, thread }, file), file),
   }
   return (
     <div className={`file-editor ${rendered ? 'file-editor--rendered' : live ? 'file-editor--live' : ''}`}>

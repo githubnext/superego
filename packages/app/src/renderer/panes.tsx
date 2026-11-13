@@ -267,7 +267,7 @@ function PaneBody({ machine, thread, pane }: PaneProps) {
 const fileName = (pane: Pane) => (pane.params as { path?: string } | undefined)?.path?.split('/').at(-1)
 
 export function registerBuiltInPanes(superego: UiApi) {
-  superego.pane('editor', { title: (pane) => fileName(pane) ?? 'Editor', icon: FileTextIcon, file: true, component: EditorPane, opens: () => true })
+  superego.pane('editor', { title: (pane) => fileName(pane) ?? 'Editor', icon: FileTextIcon, file: true, component: EditorPane, fallback: true })
   superego.pane('thread', { title: 'Thread', icon: ChatTextIcon, component: ThreadPane })
 }
 

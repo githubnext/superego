@@ -56,7 +56,7 @@ What ${name} is:
 - A session is a project on a machine: a git repository (with its worktrees) or a folder. A thread is one conversation with
   an agent, in a folder, or in a git worktree of its own (${dataDir}/worktrees/<repo>/<slug>, branch ${id}/<slug>).
   Archived threads stay readable and take no messages until unarchived.
-- Panes sit beside a thread: changes (git diff), the file editor, a web preview, an HTML artifact, another thread. You
+- Panes sit beside a thread: the file editor, another thread, and the kinds extensions add (changes, web pages…). You
   can open them with open_pane, say to show the user a file ({ kind: "editor", params: { path } }).
 - Profiles are what an agent is, as files: a folder with a profile.ts, in ${dataDir}/profiles/<name> (the user's) or in a
   project's .${id}/profiles/<name>. The one called "default" is what new threads in that place start with.

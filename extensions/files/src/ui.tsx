@@ -146,8 +146,10 @@ function FolderPane({ machine, thread, pane }: PaneProps) {
   const folder = useMemo(() => path.split('/').filter(Boolean).reduce<Folder | undefined>((at, part) => at?.folders.get(part), treeOf(list?.files ?? [])), [list, path])
   const [open, setOpen] = useState<Set<string>>(() => new Set())
   const toggle = (child: string) => setOpen((was) => { const next = new Set(was); if (!next.delete(child)) next.add(child); return next })
-  const show = (file: string) =>
-    void dispatch('pane.open', { id: thread.id, kind: fileKind(registry, { machine: machine.id, thread }, file), params: { path: file } }, { machine: machine.id, source: 'folder' })
+  const show = (file: string) => {
+    const kind = fileKind(registry, { machine: machine.id, thread }, file)
+    if (kind) void dispatch('pane.open', { id: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'folder' })
+  }
   return (
     <div className="files-folder" aria-label={path || 'Files'}>
       {!list ? <div className="files-tree__note">Reading…</div>
@@ -186,7 +188,8 @@ function QuickOpenDialog({ machineId, threadId, onClose }: { machineId: string; 
   const go = (file: string | undefined) => {
     if (!file || !thread || !machine) return
     onClose()
-    void dispatch('pane.open', { id: thread.id, kind: fileKind(registry, { machine: machine.id, thread }, file), params: { path: file } }, { machine: machine.id, source: 'quick open' })
+    const kind = fileKind(registry, { machine: machine.id, thread }, file)
+    if (kind) void dispatch('pane.open', { id: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'quick open' })
   }
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'ArrowDown') { event.preventDefault(); setActive((i) => Math.min(i + 1, matches.length - 1)) }

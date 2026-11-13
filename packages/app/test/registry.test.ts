@@ -2,7 +2,7 @@
 // installing a profile again replaces everything it registered before.
 import { describe, expect, it } from 'vitest'
 import { defineApp, type ThreadInfo } from '@superego/protocol'
-import { createRegistry, defineUiExtension, entryView, paneKind, seenIn, settingsView, shownPanes, toolView, urlKind, type UiExtension } from '../src/renderer/extension.tsx'
+import { createRegistry, defineUiExtension, entryView, paneKind, fileKind, seenIn, settingsView, shownPanes, toolView, urlKind, type UiExtension } from '../src/renderer/extension.tsx'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
 const profile = { scope: 'user' as const, name: 'default', dir: '/home/me/.superego/profiles/default' }
@@ -92,5 +92,15 @@ describe('optional and required extensions', () => {
     // Web links open in the kind that shows web pages, while there is one.
     expect(urlKind(registry, with_)).toBe('preview')
     expect(urlKind(registry, without)).toBeUndefined()
+  })
+
+  it('opens a file in the kind that takes it, else in the one that takes any file, else nowhere', () => {
+    const View = () => null
+    const csv = defineUiExtension({ name: 'csv', setup(superego) { superego.pane('table', { title: 'Table', component: View, opens: (path) => path.endsWith('.csv') }) } })
+    const registry = createRegistry(app, [csv], (core) => core.pane('editor', { title: 'Editor', component: View, fallback: true }))
+    const where = { machine: 'local', thread: thread(false) }
+    expect(fileKind(registry, where, 'a.csv')).toBe('table')
+    expect(fileKind(registry, where, 'a.md')).toBe('editor')
+    expect(fileKind(createRegistry(app, [csv], () => {}), where, 'a.md')).toBeUndefined()
   })
 })

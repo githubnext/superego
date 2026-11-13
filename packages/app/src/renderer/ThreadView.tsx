@@ -198,7 +198,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
       if (found.path === null) return `not in ${folder}`
       const where = { machine: machine.id, thread: threadRef.current }
       const kind = found.folder ? folderKind(registry, where) : fileKind(registry, where, found.path)
-      if (!kind) return 'a folder, and nothing here shows folders'
+      if (!kind) return found.folder ? 'a folder, and nothing here shows folders' : 'a file, and nothing here shows files'
       await dispatch('pane.open', { id: thread.id, kind, params: { path: found.path, ...(found.line ? { line: found.line } : {}) } }, { machine: machine.id, source: 'thread' })
       return undefined
     } catch (error) { return (error as Error).message }

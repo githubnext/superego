@@ -62,6 +62,8 @@ export type PaneKind = {
   menu?: boolean
   /** Files it shows, given `{ path }`: a file opened from the thread opens in the first kind that takes it. */
   opens?: (path: string) => boolean
+  /** It shows any file, given `{ path }`: a file no other kind `opens` opens in it (the core's editor). */
+  fallback?: boolean
   /** It shows folders, given `{ path }` (in the thread's folder; `''` for the folder itself): a folder a thread names opens in it. */
   folders?: boolean
   /** It shows web pages, given `{ url }`: a web link a thread names opens in it, when asked to open beside. */
@@ -384,12 +386,13 @@ export function paneTitle(registry: Registry, pane: Pane, where: Where): string 
 }
 
 /**
- * The pane kind a file opens in, for a thread: its profile's kind that takes the file, else any other that does
- * besides the editor, else the editor, which takes anything.
+ * The pane kind a file opens in, for a thread: its profile's kind that takes the file, else any other that does, else
+ * one that takes any file (`fallback`, its profile's first); none, if nothing here shows files.
  */
-export function fileKind(registry: Registry, where: Where, path: string): string {
-  const found = seenIn(registry.panes, where).filter((p) => p.opens?.(path))
-  return (found.find((p) => p.owner.profile) ?? found.find((p) => p.kind !== 'editor'))?.kind ?? 'editor'
+export function fileKind(registry: Registry, where: Where, path: string): string | undefined {
+  const seen = seenIn(registry.panes, where)
+  const first = (list: typeof seen) => (list.find((p) => p.owner.profile) ?? list[0])?.kind
+  return first(seen.filter((p) => !p.fallback && p.opens?.(path))) ?? first(seen.filter((p) => p.fallback))
 }
 
 /** The pane kind a folder opens in, for a thread: its profile's that shows folders, else any other; none, if none does. */

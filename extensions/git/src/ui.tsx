@@ -35,7 +35,10 @@ function ChangesPane({ machine, thread }: PaneProps) {
   if (!changes) return <div className="pane-empty">Loading…</div>
   if (!changes.repo) return <div className="pane-empty">{thread.cwd} isn't a git repository.</div>
   const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
-  const open = (path: string) => void dispatch('pane.open', { id: thread.id, kind: fileKind(registry, { machine: machine.id, thread }, path), params: { path } }, { machine: machine.id, source: 'git' })
+  const open = (path: string) => {
+    const kind = fileKind(registry, { machine: machine.id, thread }, path)
+    if (kind) void dispatch('pane.open', { id: thread.id, kind, params: { path } }, { machine: machine.id, source: 'git' })
+  }
   return (
     <div className="pane-scroll diff-pane">
       <PaneHeader>

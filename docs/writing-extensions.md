@@ -93,7 +93,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | UI half (`superego.` in `setup`) | For |
 |---|---|
 | `slot(name, Component, { order })` | a component in a place in the window (below) |
-| `pane(kind, { title, component, icon, file, menu, opens, folders, urls, width })` | a kind of pane beside the thread; `opens`, `folders`, `urls`: files, folders or web pages a thread names open in it |
+| `pane(kind, { title, component, icon, file, menu, opens, fallback, folders, urls, width })` | a kind of pane beside the thread; `opens`, `folders`, `urls`: files, folders or web pages a thread names open in it; `fallback`: any file nothing else opens |
 | `tool(name, Component, { fold })` | how calls to a tool look; `fold: false` shows them outside the run's fold (images) |
 | `entry(kind, Component)` | transcript entries of a kind it writes |
 | `composer.complete({ title, word(text, caret), items(word, { machine, thread }) })` | complete the word being typed: `word` finds it (`{ start, query }`), `items` offers `{ label, detail, insert }` |
