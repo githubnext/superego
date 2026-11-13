@@ -186,7 +186,8 @@ const scopeOf = (where: Where | undefined) => where?.thread.profile ? profileSco
 /** Everything the app's extensions registered, in the order they were listed, each with its owner. */
 export type Registry = {
   app: AppConfig
-  extensions: string[]
+  /** What the app's extensions are, as each declares itself: told to every machine, so UI-only ones are known there. */
+  extensions: ExtensionAbout[]
   slots: { [S in SlotName]: Owned<{ component: ComponentType<SlotProps[S]>; order: number }>[] }
   /** `fold: false`: its calls show outside the fold of their run of work. */
   tools: Owned<{ name: string; component: ComponentType<ToolCallProps>; fold: boolean }>[]
@@ -211,7 +212,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   const teardowns = new Map<string, () => void>()
   const ownerKey = (owner: Owner) => `${owner.profile ?? ''}/${owner.extension}`
   const registry: Registry = {
-    app, extensions: extensions.map((e) => e.name),
+    app, extensions: extensions.map(({ name, title, description, required }) => ({ name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}) })),
     slots: { 'sidebar': [], 'rail': [], 'thread.header': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
     tools: [], entries: [], panes: [], work: [], settings: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [],
     version: 0,
@@ -241,6 +242,10 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       undo.push(() => { const at = list.indexOf(entry); if (at >= 0) list.splice(at, 1) })
       return entry
     }
+    /** A name of its own: `<extension>` or `<extension>.<more>` (the core's are any). */
+    const own = (name: string, what: string) => {
+      if (extension.name !== 'core' && name !== extension.name && !name.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its ${what} "${extension.name}.<name>", not "${name}"`)
+    }
     /** One of a kind per scope: a second registration of the same name is refused (the first stays), with a warning. */
     const unique = <T extends Record<K, string>, K extends keyof T>(list: Owned<T>[], key: K, item: T, what: string) => {
       const taken = list.find((e) => e[key] === item[key] && e.owner.profile === profile)
@@ -250,19 +255,25 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     const api: UiApi = {
       app,
       slot(slot, component, options) {
-        // A profile's UI draws in its threads' slots; the sidebar and rail are the app's.
-        if (profile && (slot === 'sidebar' || slot === 'rail')) return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
+        // A profile's UI draws in its threads' slots; the sidebar, the rail and the overlay are the app's, with no thread.
+        if (profile && (slot === 'sidebar' || slot === 'rail' || slot === 'overlay')) return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
         const list = registry.slots[slot] as Owned<{ component: ComponentType<SlotProps[typeof slot]>; order: number }>[]
         add(list, { component: component as never, order: options?.order ?? 100 })
         list.sort((a, b) => a.order - b.order)
       },
       tool: (name, component, options) => unique(registry.tools, 'name', { name, component, fold: options?.fold !== false }, 'tool'),
-      entry: (kind, component) => unique(registry.entries, 'kind', { kind, component }, 'entry kind'),
+      entry(kind, component) {
+        own(kind, 'entry kinds')
+        unique(registry.entries, 'kind', { kind, component }, 'entry kind')
+      },
       work(divide) {
         if (profile) return console.warn(`Profile extension ${extension.name}: dividing work from a profile's UI isn't supported yet`)
         add(registry.work, { divide })
       },
-      settings: (ui, component) => unique(registry.settings, 'ui', { ui, component }, 'settings section'),
+      settings(ui, component) {
+        own(ui, 'settings sections')
+        unique(registry.settings, 'ui', { ui, component }, 'settings section')
+      },
       pane: (kind, pane) => unique(registry.panes, 'kind', { ...pane, kind }, 'pane kind'),
       dispatch: (id, params, options) => registry.router.dispatch(id, params, { source: extension.name, ...options }),
       action(action) {
@@ -282,7 +293,8 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       },
       store(key, initial, options) {
         if (!key.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its state "${extension.name}.<key>", not "${key}"`)
-        return createStore(key, initial, options)
+        // A profile's is kept apart for each profile on each machine: the same profile folder elsewhere is another.
+        return createStore(profile ? `profile.${encodeURIComponent(profile)}.${key}` : key, initial, options)
       },
       composer: {
         complete: (provider) => { add(registry.completions, provider as CompletionProvider<any>) },
@@ -361,9 +373,11 @@ export const unfoldedTool = (registry: Registry, name: string, where: Where) => 
 /** How entries of `kind` are drawn for `where`, if an extension draws them. */
 export const entryView = (registry: Registry, kind: string, where: Where) => lookUp(registry.entries, where, (e) => e.kind === kind)?.component
 
-/** The component under the settings section that names `ui`, on `target` (a machine, or 'app'). */
-export const settingsView = (registry: Registry, ui: string, target: string) =>
-  registry.settings.find((s) => s.ui === ui && (!s.owner.profile || s.owner.profile.startsWith(`${target}\u0000`)))?.component
+/** The component under the settings section that names `ui`, on `target` (a machine, or 'app'): a profile's there first, as lookups take it. */
+export function settingsView(registry: Registry, ui: string, target: string) {
+  const found = registry.settings.filter((s) => s.ui === ui && (!s.owner.profile || s.owner.profile.startsWith(`${target}\u0000`)))
+  return (found.find((s) => s.owner.profile) ?? found[0])?.component
+}
 
 /** A run of work in parts, as the first extension (that `where` has) that divides it says; else whole. */
 export function divideWork(registry: Registry, where: Where, run: WorkRun): WorkPart[] {

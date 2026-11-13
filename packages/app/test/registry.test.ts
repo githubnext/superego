@@ -2,6 +2,7 @@
 // installing a profile again replaces everything it registered before.
 import { describe, expect, it } from 'vitest'
 import { defineApp, type ThreadInfo } from '@superego/protocol'
+import { defineWindowAction } from '../src/renderer/actions.tsx'
 import { createRegistry, defineUiExtension, entryView, paneKind, fileKind, seenIn, settingsView, shownPanes, toolView, urlKind, type UiExtension } from '../src/renderer/extension.tsx'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
@@ -102,5 +103,42 @@ describe('optional and required extensions', () => {
     expect(fileKind(registry, where, 'a.csv')).toBe('table')
     expect(fileKind(registry, where, 'a.md')).toBe('editor')
     expect(fileKind(createRegistry(app, [csv], () => {}), where, 'a.md')).toBeUndefined()
+  })
+})
+
+describe('actions of optional extensions', () => {
+  it("aren't offered while a thread that goes without the extension is shown, and keep their own when", () => {
+    let open = true
+    const files = defineUiExtension({
+      name: 'files',
+      setup(superego) {
+        superego.action(defineWindowAction({ id: 'files.open', title: 'Open', run: () => null }))
+        superego.action(defineWindowAction({ id: 'files.close', title: 'Close', when: () => open, run: () => null }))
+      },
+    })
+    const registry = createRegistry(app, [files], () => {})
+    const shown = (t: ThreadInfo) => registry.router.setContext({ selection: { machine: 'local', thread: t.id }, threadOf: () => t } as never)
+    shown(thread(false))
+    expect([registry.router.offered('files.open'), registry.router.offered('files.close')]).toEqual([true, true])
+    open = false
+    expect(registry.router.offered('files.close')).toBe(false)
+    open = true
+    shown({ ...thread(false), without: ['files'] })
+    expect([registry.router.offered('files.open'), registry.router.offered('files.close')]).toEqual([false, false])
+  })
+})
+
+describe('names', () => {
+  it("takes a profile's settings component over the app's, as other lookups do", () => {
+    const App = () => null
+    const registry = createRegistry(app, [], (core) => core.settings('orders', App))
+    registry.installProfile('box', profile, [orders(Other)])
+    expect(settingsView(registry, 'orders', 'box')).toBe(Other)
+    expect(settingsView(registry, 'orders', 'local')).toBe(App)
+  })
+
+  it("refuses entry kinds and settings sections outside the extension's name", () => {
+    expect(() => createRegistry(app, [defineUiExtension({ name: 'a', setup(superego) { superego.entry('b.note', Order) } })], () => {})).toThrow(/must name its entry kinds/)
+    expect(() => createRegistry(app, [defineUiExtension({ name: 'a', setup(superego) { superego.settings('b', Order) } })], () => {})).toThrow(/must name its settings sections/)
   })
 })
