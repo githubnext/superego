@@ -790,9 +790,6 @@ importers:
       '@superego/settings':
         specifier: workspace:*
         version: link:../settings
-      '@superego/threads':
-        specifier: workspace:*
-        version: link:../../extensions/threads
       sucrase:
         specifier: ^3.35.1
         version: 3.35.1
