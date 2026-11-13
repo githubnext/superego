@@ -8,7 +8,8 @@
     "test": "node scripts/check.ts vitest run",
     "dev": "pnpm --filter superego dev",
     "build": "pnpm --filter superego build",
-    "link:cli": "ln -sf \"$PWD/app/bin/superego.ts\" \"$HOME/.local/bin/superego\" && echo \"Linked $HOME/.local/bin/superego\""
+    "link:cli": "ln -sf \"$PWD/app/bin/superego.ts\" \"$HOME/.local/bin/superego\" && echo \"Linked $HOME/.local/bin/superego\"",
+    "smoke": "pnpm --filter superego smoke"
   },
   "devDependencies": {
     "@types/node": "^24",

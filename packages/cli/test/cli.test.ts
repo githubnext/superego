@@ -9,7 +9,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const CLI = fileURLToPath(new URL('../../../app/bin/superego.ts', import.meta.url))
 let home: string
-const env = () => ({ ...process.env, SUPEREGO_HOME: home, SUPEREGO_HEADLESS: '1', SUPEREGO_MODEL: 'faux', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '' })
+// SUPEREGO_APP: no app here, so daemons run from this checkout's source, never from whatever app/out last built.
+const env = () => ({ ...process.env, SUPEREGO_HOME: home, SUPEREGO_APP: home, SUPEREGO_HEADLESS: '1', SUPEREGO_MODEL: 'faux', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '' })
 
 /** Run `superego` with `args`; resolves with stdout, rejects with stderr. */
 function superego(args: string[], input?: string, cwd?: string, extraEnv: Record<string, string> = {}): Promise<string> {

@@ -5,7 +5,7 @@
   "type": "module",
   "main": "out/main/main.js",
   "bin": { "superego": "./bin/superego.ts" },
-  "scripts": { "dev": "node scripts/dev.ts", "build": "electron-vite build", "start": "electron-vite preview", "smoke": "electron-vite build && test/smoke.sh", "showcase": "electron-vite build && test/showcase.sh", "package": "electron-vite build && node scripts/package.ts" },
+  "scripts": { "dev": "node scripts/dev.ts", "build": "electron-vite build", "start": "electron-vite preview", "smoke": "test/smoke.sh", "showcase": "test/showcase.sh", "package": "electron-vite build && node scripts/package.ts" },
   "dependencies": {
     "@superego/app": "workspace:*",
     "@superego/cli": "workspace:*",

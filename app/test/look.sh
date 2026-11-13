@@ -3,8 +3,9 @@
 # `focus`: each region holding the focus; `composer`: the composer and what's around it.
 set -e
 cd "$(dirname "$0")/.."
-# A heavy check: it waits for a slot (../scripts/check.ts).
+# A heavy check: it waits for a slot (../scripts/check.ts), then builds the app if its sources changed.
 [ -n "$SUPEREGO_CHECK_SLOT" ] || exec node ../scripts/check.ts test/look.sh "$@"
+node scripts/build.ts
 OUT="$(cd "$(dirname "${1:?usage: look.sh <dir>}")" && pwd)/$(basename "$1")"
 mkdir -p "$OUT"
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
