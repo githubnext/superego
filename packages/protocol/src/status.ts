@@ -13,12 +13,12 @@ const PRIORITY: Record<StatusState, number> = { blocked: 4, error: 3, done: 2, w
  */
 export const waitingForSignIn = (status: Status) => status.state === 'blocked' && status.kind === 'auth'
 
-/** Waiting for sign-in ranks with idle: the machine's notice speaks for it. */
-const priorityOf = (status: Status) => waitingForSignIn(status) ? 0.5 : PRIORITY[status.state]
+/** How pressing a status is, the higher the more. Waiting for sign-in ranks just above idle: the machine's notice speaks for it. */
+export const statusRank = (status: Status) => waitingForSignIn(status) ? 0.5 : PRIORITY[status.state]
 
 export function rollup(statuses: Iterable<Status>): Status {
   let best: Status = { state: 'idle' }
-  for (const status of statuses) if (priorityOf(status) > priorityOf(best)) best = status
+  for (const status of statuses) if (statusRank(status) > statusRank(best)) best = status
   return best
 }
 

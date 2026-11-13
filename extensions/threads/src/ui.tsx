@@ -10,7 +10,7 @@ import {
   call, defineAction, defineUiExtension, MachineDrift, showSession, SORT, unread, useAppSetting, useLocalState, useMachines, useSelection, useSessions, useSidebar, useThreadView, useShell, useShortcut,
   type MachineEntry, type Session, type Sort, type Store, type WindowContext,
 } from '@superego/app/ui'
-import { rollup, type ThreadInfo } from '@superego/protocol'
+import { rollup, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, ChatsIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
 import { activity, ago } from './groups.ts'
@@ -119,7 +119,7 @@ function Threads() {
               return (
                 <ListItem key={thread.id} selected={isOn(session, thread)} leading={<StatusGlyph status={thread.status} />}
                   {...(level ? { className: 'threads-child', style: { '--depth': level } as CSSProperties } : {})}
-                  trailing={thread.status.state === 'blocked' ? <span className="threads__why">needs you</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">failed</span> : ago(activity(thread))} onClick={() => select({ machine: session.machine.id, thread: thread.id })}>
+                  trailing={waitingForSignIn(thread.status) ? <span className="threads__why threads__why--quiet">waiting</span> : thread.status.state === 'blocked' ? <span className="threads__why">needs you</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">failed</span> : ago(activity(thread))} onClick={() => select({ machine: session.machine.id, thread: thread.id })}>
                   {thread.title}
                 </ListItem>
               )
@@ -258,7 +258,7 @@ function ThreadsRail() {
             <div key={session.key} className="threads-rail__group">
               {index > 0 && <div className="threads-rail__sep" />}
               {session.threads.map((thread) => (
-                <Tooltip key={thread.id} side="right" content={<>{thread.title}<small className="threads-rail__tipnote">{thread.status.state === 'blocked' ? 'needs you' : ago(activity(thread))}</small></>}>
+                <Tooltip key={thread.id} side="right" content={<>{thread.title}<small className="threads-rail__tipnote">{waitingForSignIn(thread.status) ? 'waiting for sign-in' : thread.status.state === 'blocked' ? 'needs you' : ago(activity(thread))}</small></>}>
                   <button className={`threads-rail__dot ${isOn(session, thread) ? 'is-on' : ''} ${session.machine.state !== 'connected' ? 'is-stale' : ''}`}
                     aria-label={`${thread.title}, ${thread.status.state}`} onClick={() => select({ machine: session.machine.id, thread: thread.id })}>
                     <StatusGlyph status={thread.status} />

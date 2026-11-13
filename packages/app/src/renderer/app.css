@@ -337,6 +337,8 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .profile-source pre { margin-top: 8px; }
 .machine-row__ui { margin-top: 4px; display: flex; align-items: center; gap: 8px; }
 .machine-row__ui .superego-button { padding: 1px 8px; font-size: calc(12px * var(--superego-text-scale)); }
+.auth-notice__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+.auth-notice__dismiss { flex: none; width: 20px; height: 20px; min-height: 20px; margin: -2px -4px 0 0; color: var(--superego-muted); box-shadow: none; background: none; }
 .auth-notice__detail { color: var(--superego-muted); margin-top: 2px; }
 .transcript__waiting { display: flex; align-items: center; flex-wrap: wrap; gap: var(--superego-space-2) var(--superego-space-3); color: var(--superego-muted); font-size: var(--superego-text-ui); border-left: 2px dashed currentColor; padding-left: var(--superego-space-3); }
 

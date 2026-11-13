@@ -18,6 +18,7 @@
 .threads-session.is-stale .superego-list-item, .threads-session.is-stale .threads-session__name { color: var(--superego-muted); }
 .threads__why { color: var(--superego-status-blocked-text); font-weight: 500; }
 .threads__why--error { color: var(--superego-status-error-text); }
+.threads__why--quiet { color: var(--superego-muted); font-weight: 400; }
 
 /* In the rail: Threads, with a dot when something unread is out of sight; folded, the threads as dots under it. */
 .threads-rail__button { position: relative; }

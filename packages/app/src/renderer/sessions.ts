@@ -4,7 +4,7 @@
 // shows, top to bottom, whether it's open or not. The sort (the window's own setting, `app.sort`, which the sidebar's
 // menu changes) sets it; a thread another started sits right under it.
 import { useMemo } from 'react'
-import { rollup, waitingForSignIn, type Status, type ThreadInfo } from '@superego/protocol'
+import { rollup, statusRank, waitingForSignIn, type Status, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { useAppSetting } from './client.ts'
 
@@ -30,13 +30,12 @@ export type Session = {
 export const sessionKey = (machine: string, root: string) => `${machine}:${root}`
 
 const activity = (thread: ThreadInfo) => thread.activeAt ?? thread.createdAt
-const PRIORITY: Record<Status['state'], number> = { blocked: 4, error: 3, done: 2, working: 1, idle: 0 }
 
 /** Every machine's threads, as sessions, in `sort`'s order: sessions and the threads in each. */
 export function groupSessions(machines: MachineEntry[], threads: Record<string, ThreadInfo[] | undefined>, sort: Sort = 'recent'): Session[] {
   const byThread = (a: ThreadInfo, b: ThreadInfo) =>
     sort === 'created' ? b.createdAt - a.createdAt
-      : sort === 'status' ? PRIORITY[b.status.state] - PRIORITY[a.status.state] || activity(b) - activity(a)
+      : sort === 'status' ? statusRank(b.status) - statusRank(a.status) || activity(b) - activity(a)
         : activity(b) - activity(a)
   const sessions = new Map<string, Session>()
   for (const machine of machines) {
@@ -57,7 +56,7 @@ export function groupSessions(machines: MachineEntry[], threads: Record<string, 
   const newest = (s: Session) => Math.max(...s.threads.map((t) => t.createdAt))
   return list.sort((a, b) =>
     sort === 'created' ? newest(b) - newest(a)
-      : sort === 'status' ? PRIORITY[b.status.state] - PRIORITY[a.status.state] || b.activeAt - a.activeAt
+      : sort === 'status' ? statusRank(b.status) - statusRank(a.status) || b.activeAt - a.activeAt
         : b.activeAt - a.activeAt)
 }
 
