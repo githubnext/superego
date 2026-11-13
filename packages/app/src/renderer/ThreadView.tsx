@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react'
 import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
-import type { Attachment, ThreadInfo } from '@superego/protocol'
+import { NOTE_ENTRY, type Attachment, type ThreadInfo } from '@superego/protocol'
 import { ArchiveIcon, ArrowCounterClockwiseIcon, BroomIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CheckIcon, FileIcon, type Icon as PhosphorIcon, IconButton, ListIcon, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TextArea, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
@@ -559,7 +559,9 @@ function Entry({ entry }: { entry: EntryRecord }) {
   if (message?.role === 'user') {
     return <Sent className="msg msg--user" blocks={blocks(message)} />
   }
-  return <div className="msg msg--note">{entry.kind}</div>
+  // Superego's own lines (a self-archive that couldn't be done); else the kind, for an entry nothing draws.
+  const said = entry.kind === NOTE_ENTRY ? (entry.data as { text?: unknown } | undefined)?.text : undefined
+  return <div className="msg msg--note">{typeof said === 'string' ? said : entry.kind}</div>
 }
 
 /** A run's blocks as rows: thinking, what the agent said along the way, tool calls. */

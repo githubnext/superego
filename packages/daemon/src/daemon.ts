@@ -14,7 +14,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  agentName, arr, type Attachment, paramsParser, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type RpcPeer, type ThreadInfo,
+  agentName, arr, type Attachment, paramsParser, bool, defineAction, deriveStatus, FEATURES, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
@@ -1365,7 +1365,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   function archiveIfDone(id: string, m: Mounted) {
     if (!m.meta.archiveWhenDone || m.meta.archived || m.live?.run || archiving.has(id)) return
     archiving.add(id)
-    void archive(id).catch((error) => console.error(`Couldn't archive thread ${id}:`, error)).finally(() => archiving.delete(id))
+    // Refused (an extension's `archiving`) or failed: given up, and said in the thread, where the agent said it would be
+    // archived. Its turn is over, so there's no one else to tell.
+    void archive(id).catch(async (error) => {
+      await updateMeta(id, (meta) => { delete meta.archiveWhenDone })
+      await note(id, `Couldn't archive this thread: ${error instanceof Error ? error.message : String(error)}`)
+    }).catch((error) => console.error(`Couldn't archive thread ${id}:`, error)).finally(() => archiving.delete(id))
+  }
+  /** A line in a thread's transcript from Superego itself, not the agent's (`superego.note`): for the user, not the model. */
+  async function note(id: string, text: string) {
+    await (await get(id)).conversation.submit({ type: 'write', entry: { kind: NOTE_ENTRY, data: { text } } }, context)
   }
   router.register(defineAction({
     id: 'thread.unarchive', title: 'Unarchive the thread', runs: 'machine', expose: ['ui', 'cli'], ...thread,

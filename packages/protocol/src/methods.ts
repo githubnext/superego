@@ -16,6 +16,9 @@ export const PROTOCOL_VERSION = 1
  * What a daemon of this build offers, announced in `hello`. Clients check a feature before using it, so an older
  * daemon on another machine keeps working with a newer app (and the other way round) for whatever both know.
  */
+/** A line Superego writes in a thread's transcript itself, for the user, not the model: an entry of this kind, `{ text }`. */
+export const NOTE_ENTRY = 'superego.note'
+
 export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'ego'] as const
 export type Feature = (typeof FEATURES)[number]
 

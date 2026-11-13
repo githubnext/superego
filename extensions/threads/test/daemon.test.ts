@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { MemorySettingsStore } from '@superego/settings'
-import { defineApp, PROTOCOL_VERSION, type Json, type RpcPeer, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
-import { connectSocket, listen, openDaemon } from '@superego/daemon'
+import { defineApp, NOTE_ENTRY, PROTOCOL_VERSION, type Json, type RpcPeer, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
+import { connectSocket, defineDaemonExtension, listen, openDaemon } from '@superego/daemon'
 import threadTools from '../src/daemon.ts'
 import { linkTo, threadTools as tools, type ThreadsHost } from '../src/tools.ts'
 
@@ -103,6 +103,31 @@ it('lets an agent archive another thread, and its own once its turn ends; never 
   expect((await peer.call<{ value: ThreadInfo }>('meta.watch', {})).value.archived).toBeUndefined()
   await expect(peer.call('thread.submit', { id: self.id, text: 'hi' })).rejects.toMatchObject({ kind: 'archived' })
   await close()
+})
+
+it("says in the thread when it couldn't archive itself, and doesn't try again", async () => {
+  // An extension that keeps every thread: its own self-archive, at the end of its turn, is refused.
+  const keeper = defineDaemonExtension({ name: 'keeper', setup: (s) => s.thread({ archiving() { throw new Error('Kept for the record') } }) })
+  await writeFile(join(dir, 'turns.jsonl'), [
+    turn([{ type: 'toolCall', id: 'c1', name: 'thread_archive', arguments: {} }], 'toolUse'),
+    turn([{ type: 'text', text: 'Done.' }], 'stop'),
+  ].join('\n') + '\n')
+  process.env.THREADSTEST_MODEL = `replay:${join(dir, 'turns.jsonl')}`
+  process.env.THREADSTEST_REPLAY_SPEED = '0'
+  const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [threadTools, keeper] })
+  const server = await listen(daemon, join(dir, 's.sock'))
+  const { peer, socket } = await connectSocket(join(dir, 's.sock'))
+  await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'tidy up' })
+  const notes = async () => (await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })).value.entries.filter((e) => e.kind === NOTE_ENTRY)
+  await until(async () => (await notes()).length > 0)
+  expect((await notes()).map((e) => e.data)).toEqual([{ text: "Couldn't archive this thread: keeper: Kept for the record" }])
+  // Given up: the thread stays, and seeing it (a new watch value) doesn't try, and say so, again.
+  await peer.call('thread.seen', { id: thread.id })
+  await new Promise((r) => setTimeout(r, 200))
+  expect(await notes()).toHaveLength(1)
+  expect((await peer.call<ThreadInfo[]>('thread.list', {})).map((t) => t.id)).toEqual([thread.id])
+  socket.destroy(); server.close(); await daemon.close()
 })
 
 /** A daemon with the thread tools, its model faux; `settings` stored before it opens. */
