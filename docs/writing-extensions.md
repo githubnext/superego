@@ -141,7 +141,8 @@ threads, and not in `sidebar` or `rail`.
 - A name is claimed while set up: a second extension of the same name is refused. The core's namespaces (`thread`,
   `value`, `settings`, …) are never free.
 - A profile's daemon half loads with its first turn, when a window shows one of its threads, or before an interrupted
-  run of it resumes. A project's profile runs only once allowed (`superego profile allow`).
+  run of it resumes. A project's profile runs only once allowed (`superego profile allow`). Profiles load one at a
+  time: keep `setup` quick, and never await work that loads a profile (starting or reading a thread) in it.
 - Profiles that name the same file (one `extends` another, or both list it) share one set-up of it, torn down after
   the last lets go. Each gets its agent parts.
 - A change loads between runs, never under one: a thread mid-run keeps what it started with. A profile whose folder

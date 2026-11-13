@@ -47,7 +47,9 @@ export default defineDaemonExtension({
 the daemon starting while one of its threads was working) and again after its files change, with the previous setup's
 cleanup run first. Everything it registered (tools, actions, methods, values, settings, pane kinds, status) is its own
 and removed on reload, so register freely. Its name is the prefix of everything it registers; a second extension of
-the same name is refused.
+the same name is refused. Profiles load one at a time, so keep `setup` quick, and don't await anything that loads a
+profile in it (starting a thread, reading one): that waits on the load in progress, which is waiting on `setup`. Start
+such work without awaiting it, or do it in a tool, action or hook.
 
 ## The API
 
