@@ -4,7 +4,7 @@ import type { Attachment, ThreadInfo } from '@superego/protocol'
 import { ArchiveIcon, ArrowCounterClockwiseIcon, BroomIcon, ArrowDownIcon, ArrowElbowDownRightIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CaretRightIcon, ChatCircleIcon, ChatsCircleIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
-import { divideWork, entryView, fileKind, folderKind, paneMenu, Slot, toolView, unfoldedTool, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
+import { divideWork, entryView, fileKind, folderKind, paneMenu, Slot, shownPanes, toolView, unfoldedTool, urlKind, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useShell } from './state.tsx'
 import { useShortcut } from './keys.ts'
 import { ctrlDigit } from './shortcuts.ts'
@@ -135,7 +135,8 @@ function TitleField({ machine, thread }: { machine: MachineEntry; thread: Thread
  * project, its worktree's branch, its profile), its profile's own header, panes to open, and archiving it.
  */
 export function ThreadTools({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
-  const dispatch = useRegistry().router.dispatch
+  const registry = useRegistry()
+  const dispatch = registry.router.dispatch
   return (
     <span className="thread__tools">
       <span className="thread__crumb">
@@ -145,7 +146,8 @@ export function ThreadTools({ machine, thread }: { machine: MachineEntry; thread
       </span>
       <Slot name="thread.header" props={{ machine, thread }} />
       {thread.cost !== undefined && thread.cost > 0 && <span className="thread__cost" title="Spent on this thread">${thread.cost.toFixed(2)}</span>}
-      {!thread.panes?.length && <PaneMenu machine={machine} thread={thread} />}
+      {/* Without a pane shown, there's no strip to open one from: here instead. */}
+      {!shownPanes(registry, { machine: machine.id, thread }).length && <PaneMenu machine={machine} thread={thread} />}
       {thread.meta
         ? (
           // Ego is kept, not archived: cleared, it starts empty again.
@@ -201,12 +203,15 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
       return undefined
     } catch (error) { return (error as Error).message }
   }, [machine.id, thread.id, registry])
-  // A web page the thread links to, opened beside it.
+  // A web page the thread links to, opened beside it in the pane kind that shows web pages; with none here, links open in
+  // the browser only.
+  const webKind = urlKind(registry, { machine: machine.id, thread })
   const openUrl = useCallback((url: string) => {
+    if (!webKind) return
     const host = URL.parse(url)?.host
-    void dispatch('pane.open', { id: thread.id, kind: 'preview', ...(host ? { title: host } : {}), params: { url } }, { machine: machine.id, source: 'thread' })
+    void dispatch('pane.open', { id: thread.id, kind: webKind, ...(host ? { title: host } : {}), params: { url } }, { machine: machine.id, source: 'thread' })
       .catch((error) => console.error(error))
-  }, [machine.id, thread.id])
+  }, [machine.id, thread.id, webKind])
   const watched = useThreadView(machine.id, machine.state === 'connected', thread.id)
   const live = watched?.docs['pi.live'] as LiveState | undefined
   const scroller = useRef<HTMLDivElement>(null)
@@ -277,7 +282,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
 
   return (
     <OpenFile.Provider value={openFile}>
-    <OpenUrl.Provider value={openUrl}>
+    <OpenUrl.Provider value={webKind ? openUrl : undefined}>
     <ThreadMachine.Provider value={machine.id}>
     <Here.Provider value={{ machine, thread }}>
     <div className="thread">

@@ -9,13 +9,14 @@
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
-import { ArrowRightIcon, ArrowsLeftRightIcon, CaretDownIcon, ChatTextIcon, FileTextIcon, GlobeIcon, XIcon } from '@superego/ui'
+import { ArrowRightIcon, ArrowsLeftRightIcon, ChatTextIcon, FileTextIcon, GlobeIcon, XIcon } from '@superego/ui'
 import { machine as client } from './client.ts'
-import { paneKind, paneTitle, useRegistry, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
+import { paneKind, paneTitle, shownPanes, useRegistry, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
 import { PaneMenu, ThreadBody } from './ThreadView.tsx'
 import { FileEditor } from './file-editor.tsx'
+import { Diff, parseDiff } from './diff.tsx'
 import { focusRegion } from './focus.ts'
 
 const narrowQuery = '(max-width: 599px)'
@@ -32,7 +33,7 @@ export const StripSlot = createContext<HTMLElement | null>(null)
 export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['machine']; thread: ThreadInfo; main: ReactNode }) {
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
-  const panes = thread.panes ?? []
+  const panes = shownPanes(registry, { machine: machine.id, thread })
   const [narrow, setNarrow] = useState(() => matchMedia(narrowQuery).matches)
   useEffect(() => {
     const list = matchMedia(narrowQuery)
@@ -269,7 +270,7 @@ const fileName = (pane: Pane) => (pane.params as { path?: string } | undefined)?
 export function registerBuiltInPanes(superego: UiApi) {
   superego.pane('diff', { title: 'Changes', icon: ArrowsLeftRightIcon, component: DiffPane, menu: true, width: 0.45 })
   superego.pane('editor', { title: (pane) => fileName(pane) ?? 'Editor', icon: FileTextIcon, file: true, component: EditorPane, opens: () => true })
-  superego.pane('preview', { title: 'Preview', icon: GlobeIcon, component: PreviewPane, width: 0.6 })
+  superego.pane('preview', { title: 'Preview', icon: GlobeIcon, component: PreviewPane, urls: true, width: 0.6 })
   superego.pane('artifact', { title: (pane) => fileName(pane) ?? 'Artifact', icon: FileTextIcon, file: true, component: ArtifactPane })
   superego.pane('thread', { title: 'Thread', icon: ChatTextIcon, component: ThreadPane })
 }
@@ -298,23 +299,7 @@ function DiffPane({ machine, thread }: PaneProps) {
         <button type="button" className="pane-header__button" onClick={() => void load()}>Refresh</button>
       </PaneHeader>
       {!files.length && !changes.untracked.length && <div className="pane-empty">No changes.</div>}
-      {files.map((file) => {
-        const slash = file.path.lastIndexOf('/') + 1
-        return (
-          <details key={file.path} className="diff-file" open>
-            <summary>
-              <CaretDownIcon className="diff-file__caret" size={11} weight="bold" aria-hidden />
-              <span className="diff-file__path" title={file.path}><span className="diff-file__dir">{file.path.slice(0, slash)}</span>{file.path.slice(slash)}</span>
-              <span className="diff-file__stat"><span className="stat--add">+{file.added}</span> <span className="stat--del">−{file.removed}</span></span>
-            </summary>
-            <pre className="diff-file__body">{numbered(file.lines).map(({ line, number }, i) => (
-              <span key={i} className={`diff-row diff-row--${line[0] === '+' ? 'add' : line[0] === '-' ? 'del' : line.startsWith('@@') ? 'hunk' : 'ctx'}`}>
-                {!line.startsWith('@@') && <span className="diff-row__num">{number ?? ''}</span>}{line || ' '}
-              </span>
-            ))}</pre>
-          </details>
-        )
-      })}
+      <Diff diff={files} />
       {changes.untracked.length > 0 && (
         <div className="diff-file"><div className="diff-untracked">New, not tracked yet: {changes.untracked.map((path) => (
           <button key={path} className="diff-untracked__file" onClick={() => void openPane(machine.id, thread.id, 'editor', { path })}>{path}</button>
@@ -322,39 +307,6 @@ function DiffPane({ machine, thread }: PaneProps) {
       )}
     </div>
   )
-}
-
-/** A file's diff lines, each with its line number: the new file's, or the old one's for a removed line. */
-function numbered(lines: string[]) {
-  let old = 0
-  let now = 0
-  return lines.map((line) => {
-    const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line)
-    if (hunk) { old = Number(hunk[1]); now = Number(hunk[2]); return { line, number: undefined } }
-    if (line.startsWith('-')) return { line, number: old++ }
-    if (line.startsWith('+')) return { line, number: now++ }
-    if (line.startsWith('\\')) return { line, number: undefined }
-    old++
-    return { line, number: now++ }
-  })
-}
-
-type DiffFile = { path: string; added: number; removed: number; lines: string[] }
-export function parseDiff(diff: string): DiffFile[] {
-  const files: DiffFile[] = []
-  let file: DiffFile | undefined
-  for (const line of diff.split('\n')) {
-    if (line.startsWith('diff --git ')) {
-      file = { path: line.replace(/^diff --git a\/(.*) b\/.*$/, '$1'), added: 0, removed: 0, lines: [] }
-      files.push(file)
-    } else if (!file || /^(index |--- |\+\+\+ |new file|deleted file|similarity|rename |old mode|new mode)/.test(line)) continue
-    else {
-      file.lines.push(line)
-      if (line.startsWith('+')) file.added++
-      else if (line.startsWith('-')) file.removed++
-    }
-  }
-  return files
 }
 
 const openPane = (machine: string, id: string, kind: string, params: Record<string, unknown>) =>

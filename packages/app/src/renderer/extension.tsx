@@ -62,6 +62,8 @@ export type PaneKind = {
   opens?: (path: string) => boolean
   /** It shows folders, given `{ path }` (in the thread's folder; `''` for the folder itself): a folder a thread names opens in it. */
   folders?: boolean
+  /** It shows web pages, given `{ url }`: a web link a thread names opens in it, when asked to open beside. */
+  urls?: boolean
   /** Its width to start with, as a share of the row (0.5 when unset); dragging its edge changes it for that pane. */
   width?: number
 }
@@ -361,6 +363,21 @@ export function fileKind(registry: Registry, where: Where, path: string): string
 export function folderKind(registry: Registry, where: Where): string | undefined {
   const found = seenIn(registry.panes, where).filter((p) => p.folders)
   return (found.find((p) => p.owner.profile) ?? found[0])?.kind
+}
+
+/** The pane kind a web page opens in, for a thread: its profile's that shows web pages, else any other; none, if none does. */
+export function urlKind(registry: Registry, where: Where): string | undefined {
+  const found = seenIn(registry.panes, where).filter((p) => p.urls)
+  return (found.find((p) => p.owner.profile) ?? found[0])?.kind
+}
+
+/**
+ * The panes a thread shows: all it has open but those of a kind only an extension it goes without draws. They're kept
+ * with the thread, and show again once it has that extension back.
+ */
+export function shownPanes(registry: Registry, where: Where): Pane[] {
+  const gone = (kind: string) => !paneKind(registry, kind, where) && registry.panes.some((p) => p.kind === kind && p.owner.optional && where.thread.without?.includes(p.owner.extension))
+  return (where.thread.panes ?? []).filter((pane) => !gone(pane.kind))
 }
 
 /** The panes a thread's menu offers: the app's and its profile's that open without params. */

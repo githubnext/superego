@@ -16,7 +16,7 @@ import type { ThreadInfo } from '@superego/protocol'
 import { Button } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { machine as client } from './client.ts'
-import { fileKind, folderKind, Slot, useRegistry, type EditorSlotProps } from './extension.tsx'
+import { fileKind, folderKind, Slot, urlKind, useRegistry, type EditorSlotProps } from './extension.tsx'
 import { Markdown, OpenFile, OpenUrl, ThreadMachine } from './Markdown.tsx'
 import { linkAt, livePreview, type MarkdownLink } from './live-markdown.ts'
 import { arrivals } from './arrivals.ts'
@@ -373,12 +373,15 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
   findAndOpenRef.current = findAndOpen
   // Kept the same, so the rendered text isn't laid out again on each render here.
   const openFile = useCallback((name: string) => findAndOpenRef.current(name), [])
-  // A web page it links to, opened beside the thread.
+  // A web page it links to, opened beside the thread in the pane kind that shows web pages; with none here, links open in
+  // the browser only.
+  const webKind = urlKind(registry, { machine: machine.id, thread })
   const openUrl = useCallback((url: string) => {
+    if (!webKind) return
     const host = URL.parse(url)?.host
-    void dispatch('pane.open', { id: thread.id, kind: 'preview', ...(host ? { title: host } : {}), params: { url } }, { machine: machine.id, source: 'editor' })
+    void dispatch('pane.open', { id: thread.id, kind: webKind, ...(host ? { title: host } : {}), params: { url } }, { machine: machine.id, source: 'editor' })
       .catch((error) => console.error(error))
-  }, [machine.id, thread.id])
+  }, [machine.id, thread.id, webKind])
   const slot: EditorSlotProps = {
     machine, thread, path,
     open: (file, { beside = false } = {}) => onOpenFile
@@ -415,7 +418,7 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
           {rendered && text !== undefined && (
             <div className="file-editor__rendered" tabIndex={-1}>
               <OpenFile.Provider value={openFile}>
-                <OpenUrl.Provider value={openUrl}>
+                <OpenUrl.Provider value={webKind ? openUrl : undefined}>
                   <ThreadMachine.Provider value={machine.id}>
                     <Markdown text={text} />
                   </ThreadMachine.Provider>

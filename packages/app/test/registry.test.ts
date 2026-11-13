@@ -2,7 +2,7 @@
 // installing a profile again replaces everything it registered before.
 import { describe, expect, it } from 'vitest'
 import { defineApp, type ThreadInfo } from '@superego/protocol'
-import { createRegistry, defineUiExtension, entryView, paneKind, seenIn, settingsView, toolView, type UiExtension } from '../src/renderer/extension.tsx'
+import { createRegistry, defineUiExtension, entryView, paneKind, seenIn, settingsView, shownPanes, toolView, urlKind, type UiExtension } from '../src/renderer/extension.tsx'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
 const profile = { scope: 'user' as const, name: 'default', dir: '/home/me/.superego/profiles/default' }
@@ -78,5 +78,19 @@ describe('optional and required extensions', () => {
     expect(toolView(registry, 'ask_user', without)).toBeUndefined()
     expect(seenIn(registry.slots['composer.above'], without)).toHaveLength(0)
     expect(seenIn(registry.slots['thread.aside'], without).map((e) => e.component)).toEqual([Sidebar])
+  })
+
+  it("hides the open panes of an optional extension a thread goes without, keeping the core's and unknown kinds", () => {
+    const Page = () => null
+    const web = defineUiExtension({ name: 'web-panes', setup(superego) { superego.pane('preview', { title: 'Preview', component: Page, urls: true }) } })
+    const registry = createRegistry(app, [web], (core) => core.pane('editor', { title: 'Editor', component: Page }))
+    const panes = [{ id: 'a', kind: 'preview' }, { id: 'b', kind: 'editor' }, { id: 'c', kind: 'order' }]
+    const with_ = { machine: 'local', thread: { ...thread(false), panes } }
+    const without = { machine: 'local', thread: { ...thread(false), panes, without: ['web-panes'] } }
+    expect(shownPanes(registry, with_).map((p) => p.id)).toEqual(['a', 'b', 'c'])
+    expect(shownPanes(registry, without).map((p) => p.id)).toEqual(['b', 'c'])
+    // Web links open in the kind that shows web pages, while there is one.
+    expect(urlKind(registry, with_)).toBe('preview')
+    expect(urlKind(registry, without)).toBeUndefined()
   })
 })

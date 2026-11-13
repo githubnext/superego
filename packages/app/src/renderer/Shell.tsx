@@ -7,7 +7,7 @@ import { ArrowLeftIcon, ArrowRightIcon, Button, LifebuoyIcon, GearSixIcon, IconB
 import { textScale } from '../shared.ts'
 import { UnreadButton } from './Unread.tsx'
 import { machine as client, useSettings, watched } from './client.ts'
-import { Slot, useRegistry } from './extension.tsx'
+import { shownPanes, Slot, useRegistry } from './extension.tsx'
 import { ServiceNotice } from './ServiceNotice.tsx'
 import { ThreadTitle, ThreadTools, ThreadView } from './ThreadView.tsx'
 import { StripSlot } from './panes.tsx'
@@ -65,7 +65,11 @@ export function Shell() {
     togglePalette: () => { setNavigator(false); setPalette((open) => !open) },
     toggleNavigator: () => { setPalette(false); setNavigator((open) => !open) },
     showLog: () => setLog(true),
-    threadOf: (s) => allThreads[s.machine]?.find((x) => x.id === s.thread),
+    // With the panes it shows (not those of an extension it goes without), as the window has it.
+    threadOf: (s) => {
+      const thread = allThreads[s.machine]?.find((x) => x.id === s.thread)
+      return thread?.panes ? { ...thread, panes: shownPanes(registry, { machine: s.machine, thread }) } : thread
+    },
     sessions, lastThread, appSetting: (key) => watched<SettingsSnapshot>('app', 'settings.watch', {})?.values[key] as never,
     toggleSidebar: () => narrow ? setDrawer((open) => !open) : sidebar.toggle(),
     back: history.back, forward: history.forward,

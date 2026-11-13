@@ -50,7 +50,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
 }
 
 export {
-  defineUiExtension, fileKind, Slot, useApp, useRegistry,
+  defineUiExtension, fileKind, Slot, urlKind, useApp, useRegistry,
   type EditorSlotProps, type EntryProps, type PaneKind, type PaneProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type UiApi, type UiExtension,
   type WorkBlock, type WorkPart, type WorkRun, type WorkStatus,
 } from './extension.tsx'
@@ -67,6 +67,7 @@ export { Markdown } from './Markdown.tsx'
 export { useLocalState, type Store } from './local-state.ts'
 export { score } from './score.ts'
 export { PaneHeader, useTabNote } from './panes.tsx'
+export { Diff, parseDiff, type DiffFile } from './diff.tsx'
 export { FileEditor, type FileEditorProps, type MarkdownLink } from './file-editor.tsx'
 export { livePreview } from './live-markdown.ts'
 export { call, has, loadFonts, machine, useThreadView, useSettings, useValue, useWatch } from './client.ts'

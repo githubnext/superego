@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Dialog, StatusGlyph } from '@superego/ui'
 import type { Pane, Status, ThreadInfo } from '@superego/protocol'
 import { score } from './score.ts'
-import { paneTitle, useRegistry } from './extension.tsx'
+import { paneTitle, shownPanes, useRegistry } from './extension.tsx'
 import { useMachines, useSelection, useSessions } from './state.tsx'
 import { showSession } from './actions.tsx'
 import type { Session } from './sessions.ts'
@@ -62,7 +62,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
                 if (thread.pane) void dispatch('pane.focus', { id: thread.id }, { machine: session.machine.id, source: 'navigator' })
               }),
             },
-            ...(thread.panes ?? []).map((pane): Row => ({
+            ...shownPanes(registry, { machine: session.machine.id, thread }).map((pane): Row => ({
               key: `${session.key}/${thread.id}/${pane.id}`, kind: 'pane', depth: 2, title: paneTitle(registry, pane, { machine: session.machine.id, thread }),
               path: `${session.name} ${thread.title} ${paneTitle(registry, pane, { machine: session.machine.id, thread })}`, current: isOn && thread.pane === pane.id,
               go: go(() => {
