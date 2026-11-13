@@ -1382,9 +1382,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   function archiveIfDone(id: string, m: Mounted) {
     if (!m.meta.archiveWhenDone || m.meta.archived || m.live?.run || archiving.has(id)) return
     archiving.add(id)
-    // Refused (an extension's `archiving`) or failed: given up, and said in the thread, where the agent said it would be
-    // archived. Its turn is over, so there's no one else to tell.
-    void archive(id).catch(async (error) => {
+    // What it did, or that it was refused (an extension's `archiving`) or failed and given up: said in the thread, where
+    // the agent said it would be archived. Its turn is over, so there's no one else to tell.
+    void archive(id).then(async ({ notes }) => {
+      const said = Object.values(notes)
+      if (said.length) await note(id, `Archived. ${said.join(' ')}`)
+    }, async (error) => {
       await updateMeta(id, (meta) => { delete meta.archiveWhenDone })
       await note(id, `Couldn't archive this thread: ${error instanceof Error ? error.message : String(error)}`)
     }).catch((error) => console.error(`Couldn't archive thread ${id}:`, error)).finally(() => archiving.delete(id))

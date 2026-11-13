@@ -91,8 +91,12 @@ it('lets an agent archive another thread, and its own once its turn ends; never 
   expect(archived.map((t) => t.id)).toEqual([self.id, child.id])
   // Archived once its turn was over: it ran to the end, and isn't left working.
   expect(archived[0]!.status.state).toBe('done')
+  const selfTree = self.ext?.worktrees as { path: string; branch: string }
+  // What archiving itself did is said in it, as Superego's note: its turn was over, so the agent wasn't there to say it.
+  await until(async () => JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { id: self.id })).value.entries).includes('Archived. Removed'))
   const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: self.id })
   const entries = JSON.stringify(value.entries)
+  expect(value.entries.find((e) => e.kind === NOTE_ENTRY)?.data).toEqual({ text: `Archived. Removed the worktree ${selfTree.path}; branch ${selfTree.branch} kept.` })
   expect(entries).toContain("test isn't archived")
   expect(entries).toContain(`Archived [Child](thread:${child.id}). Removed the worktree ${childTree.path}; branch ${childTree.branch} kept.`)
   expect(entries).toContain('This thread will be archived when this turn ends.')

@@ -221,7 +221,8 @@ superego.thread({
 - `blocked` is told when a thread comes to need the user mid-run (an extension's `status`: `ask-user`'s question), once
   each time: when the extension whose status it is calls `invalidate()`.
 - A thread archiving itself mid-turn is `threads.archive(id, { whenIdle: true })`: archived once its run ends, even
-  across a restart.
+  across a restart. What its hooks said they did (or why it couldn't be) is then said in the thread, as Superego's
+  own note (`superego.note`).
 - State is kept in the thread's document under the extension's name, so it persists, and goes with the thread.
   `ThreadMeta.worktree` and `meta`, from before, read as the `worktrees` and `ego` extensions' state until those write
   it (`LEGACY` in daemon.ts), which moves it: a daemon downgraded after that no longer sees it. Ego's thread from before (kept apart, or listed and marked `meta`) is a hidden one now.

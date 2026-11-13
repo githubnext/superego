@@ -115,8 +115,8 @@ export function threadTools(host: ThreadsHost) {
       }),
       defineTool({
         name: 'thread_archive',
-        description: 'Archive a thread: out of the thread list, taking no messages until it\'s unarchived. Its worktree is removed ' +
-          'if nothing in it is uncommitted; its branch stays. Without an id, this thread, once this turn ends. Says what archiving did.',
+        description: 'Archive a thread: out of the thread list, taking no messages until it\'s unarchived. Without an id, this ' +
+          'thread, once this turn ends. Says what archiving did (extensions clean up after it: a worktree removed, say).',
         parameters: obj({ id: opt(str({ description: 'The thread to archive; this one if left out.' })) }),
         async execute({ id }, api) {
           const self = await here(api.conversationId)

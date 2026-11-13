@@ -240,7 +240,10 @@ export type DaemonApi = {
     lastAnswer(id: string): Promise<string | undefined>
     /** Its newest transcript entries, newest first (`limit`, default 20): what it's doing now, say. */
     entries(id: string, limit?: number): Promise<readonly EntryRecord[]>
-    /** Put it away (its `archiving` hooks may refuse); `whenIdle`: once its run ends, kept across restarts (a thread archiving itself). */
+    /**
+     * Put it away (its `archiving` hooks may refuse); `whenIdle`: once its run ends, kept across restarts (a thread
+     * archiving itself), its notes then said in the thread as Superego's own note (`superego.note`).
+     */
     archive(id: string, options?: { whenIdle?: boolean }): Promise<{ notes: ArchiveNotes }>
     unarchive(id: string): Promise<void>
     /**
