@@ -1,5 +1,5 @@
 // Screenshots of the window's layout (run by test/look.sh): the sidebar open, folded to dots and closed; the thread
-// alone and with Changes beside it (and a file past it); a long title, parent and branch; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
+// alone (and dragged narrower) and with Changes beside it (and a file past it); a long title, parent and branch; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { threads } from './showcase/threads.mjs'
@@ -60,6 +60,19 @@ void (async () => {
     }
   }
   await both('open')
+  // The thread alone, dragged narrower from its handle at the row's end, then put back with a double click.
+  const handle = `[...document.querySelectorAll('.panes__gap')].at(-1)`
+  const dragBy = (dx) => run(`(() => { const h = ${handle}; const r = h.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2
+    h.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: x, clientY: y }))
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: x + ${dx}, clientY: y }))
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: x + ${dx}, clientY: y })) })()`)
+  await dragBy(-360)
+  await sleep(300)
+  console.log('dragged:', await run(`document.querySelector('.panes__column--thread').offsetWidth`))
+  await both('open-dragged')
+  await run(`${handle}.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`)
+  await sleep(300)
+  console.log('reset:', await run(`document.querySelector('.panes__column--thread').offsetWidth`))
   console.log('open:', await run(`window.superego.call('local', 'pane.open', { id: '${id}', kind: 'diff' }).then((r) => JSON.stringify(r), (e) => 'ERR ' + e.message)`))
   await until(`!!document.querySelector('.diff-pane, .diff-file')`, 'changes')
   console.log('pane:', await run(`document.querySelector('.panes__column:last-child')?.innerText.slice(0, 200)`))
