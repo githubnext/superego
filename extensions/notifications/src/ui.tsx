@@ -39,7 +39,23 @@ export default defineUiExtension({
   },
 })
 
-const asking = () => window.superego.web && typeof Notification !== 'undefined' && Notification.permission === 'default'
+/**
+ * Whether this browser shows notifications from a page: a phone's (Android Chrome, say) has `Notification` but shows
+ * them only from a service worker, which the window has none of, and throws when one is made. Tried once, while it's
+ * not allowed yet, so the try never shows anything.
+ */
+let pageNotifications: boolean | undefined
+function showsPageNotifications() {
+  if ((navigator as { userAgentData?: { mobile?: boolean } }).userAgentData?.mobile) return false
+  try {
+    new Notification('', { silent: true }).close()
+    return true
+  } catch {
+    return false
+  }
+}
+const asking = () => window.superego.web && typeof Notification !== 'undefined' && Notification.permission === 'default' &&
+  (pageNotifications ??= showsPageNotifications())
 
 /** In a browser that hasn't been asked: offered while the thread works, so you hear when it's done. */
 function Offer({ thread }: ComposerWhere) {
