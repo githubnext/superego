@@ -51,11 +51,11 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
   them: one fits the column, a few sit in a grid, more go one at a time in a carousel (‹ ›, ←/→, a swipe). Click one
   to look closely: zoom by clicking, scrolling or pinching, drag to pan, ←/→ through the set, Esc to close. Each is
   copied to the thread's files on its machine, so every client sees it, on the web too, as it was when shown.
-- **Ego**, Superego's own agent (the lifebuoy in the rail, or *Ask Ego* in ⌘K), answers questions about Superego and
+- **Ego**, Superego's own agent (the lifebuoy in the rail, or *Ask Ego* in ⌘K; the `ego` extension), answers questions about Superego and
   how this computer has it set up: settings, profiles, skills, machines, projects and threads. It changes setup itself
   (this machine's settings, and the machines this computer reaches); any other work (a profile, a skill, code) it hands
   to an ordinary thread it starts in the right project, and links you to it. One thread per machine, in `~/.superego`, kept for good and in no list: it can't be archived, and *Clear* in its
-  title bar (or `superego do thread.meta.clear`) empties it. From a shell, `superego do thread.meta --prompt "…"`.
+  title bar (or `superego do ego.clear`) empties it. From a shell, `superego do ego.ask --prompt "…"`.
 - **Skills** are the ones in `~/.agents/skills` on the thread's machine (a folder each, with a `SKILL.md`). The agent is
   told each one's name and description and reads one when it fits; `$name` or `/skill:name` in a message (completed
   as you type) sends that skill's instructions with it. `disable-model-invocation: true` keeps a skill to being named.
@@ -98,12 +98,14 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `app` | the Superego app: Electron main, window, daemon entry, the `superego` command, icons |
 | `packages/protocol` | the contract: methods, JSON-RPC peer, actions, status |
 | `packages/settings` | settings registry, used by daemons (per machine) and the app |
-| `packages/daemon` | the daemon: pi-durable harness, threads, worktrees, files, profiles, models and sign-in; the daemon half of the extension API |
+| `packages/daemon` | the daemon: pi-durable harness, threads, files, profiles, models and sign-in; the daemon half of the extension API |
 | `packages/client` | reaching daemons: local socket, ssh, any stdio command; the machine list |
 | `packages/cli` | the command line |
 | `packages/ui` | component kit and design tokens |
 | `packages/app` | main process, window, preload, build and packaging; panes, the editor, the navigator; the UI half of the extension API |
 | `extensions/threads` | the sidebar: sessions and their threads; the thread tools' rows and `thread:` links (UI; required). Its daemon half is `thread-tools`, the agent's `thread_*` tools (optional), and `thread-reports`: a thread started by another tells it when it finishes, fails or waits on a question (optional) |
+| `extensions/worktrees` | a git worktree of its own for a thread that asks (`-w`, the New thread checkbox, a profile's `worktree: true`): made on a branch, removed when archived clean, put back when unarchived; the branch in the title bar (daemon + UI; required) |
+| `extensions/ego` | Ego, Superego's own agent: one hidden thread per machine, its prompt and tools that read and set up; the rail's lifebuoy, *Ask Ego* in ⌘K, *Clear* (daemon + UI) |
 | `extensions/ask-user` | an `ask_user` tool; the question card and blocked status (daemon + UI) |
 | `extensions/git` | Changes (`⌘⇧D`): the thread's folder's changes by git, file by file, +N −N on its tab; the agent opens it too (daemon + UI) |
 | `extensions/web-panes` | Preview, a web page beside the thread (a link it names, opened beside), and Artifact, an HTML file the agent wrote, sandboxed (daemon + UI) |
@@ -120,8 +122,8 @@ An extension has a daemon half (`defineDaemonExtension`: agent tools and hooks, 
 values, pane kinds described to the agent, thread status) and a UI half (`defineUiExtension`: slots, pane kinds, tool
 and entry renderers, work dividers, settings sections, window actions with `when`, window state). Everything a half
 registers is its own and goes with it. Each extension declares once what it is, both halves alike: **required** (part
-of what Superego is: the sidebar) or **optional** (everything else, the thread tools `thread-tools` included, and the
-core's own agent parts `coding-tools`, `panes`, `agents-md`): an optional one can be turned off per machine in Settings → Extensions
+of what Superego is: the sidebar, worktrees) or **optional** (everything else, the thread tools `thread-tools` and Ego
+included, and the core's own agent parts `coding-tools`, `panes`, `agents-md`): an optional one can be turned off per machine in Settings → Extensions
 and left out by a profile (`without`), and its tools, pane kinds and UI are then absent from those threads.
 
 ## Environment

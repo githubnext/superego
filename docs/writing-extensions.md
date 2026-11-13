@@ -91,19 +91,21 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `pane(kind, about)` | tell the agent about a pane kind, for `open_pane` |
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
 | `submit(({ thread, text, attachments, content }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it |
-| `settings.register({ id: 'x', settings })`, `settings.get`, `settings.onChange` | machine settings of its own (`x.…`); read any |
+| `settings.register({ id: 'x', settings })`, `settings.get`, `settings.snapshot`, `settings.onChange` | machine settings of its own (`x.…`); read any |
+| `dispatch(id, params)`, `actions(exposure)` | run any action on the machine as this extension (`settings.set`); list them |
 | `thread({ creating, created, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
 | `state()` → `get(id)`, `set(id, next)`, `update(id, edit)` | state of its own kept with each thread, across restarts; `creating` gives a new one its first |
 | `facts(({ id, state }) => …)` | what clients are told of a thread, as `thread.ext.<name>`: worked out from its state |
 | `agentFor(({ id, state, profile }) => ({ instructions, model, extensions, without }))` | choose a thread's agent; the first to answer wins. `agent(part, { always: false })` gives a part only through this |
 | `threads.list({ archived, hidden })`, `get(id)`, `of(conversationId)`, `conversation(id)`, `attachments(id)` | reach threads, and the folder a thread keeps files in |
-| `threads.create({ …, parent, hidden, options })`, `submit(id, text)`, `lastAnswer(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)` | start and run threads as the thread tools do; `hidden`: in no list (an agent of its own) |
-| `agentsDir` | the folder agents share (`~/.agents`): skills, `AGENTS.md` |
+| `threads.create({ …, parent, hidden, options })`, `submit(id, text)`, `lastAnswer(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)`, `clear(id)` | start and run threads as the thread tools do; `hidden`: in no list, an agent of its own that takes no messages while the extension is off (find it with `list({ hidden: true })`); `clear`: start it over |
+| `agentsDir`, `dataDir` | the folder agents share (`~/.agents`): skills, `AGENTS.md`; this machine's data folder (`~/.superego`) |
 | `harness` | pi-durable itself; unstable |
 
 | UI half (`superego.` in `setup`) | For |
 |---|---|
-| `slot(name, Component, { order, fallback })` | a component in a place in the window (below); `fallback`: only while nothing else is there |
+| `slot(name, Component, { order, fallback })` | a component in a place in the window (below); `fallback`: only while nothing else is there; `thread.crumb` for a chip where the title bar says where a thread works |
+| `newThreadField({ component, from })` | a field in the New thread dialog: its value goes to `thread.create` as `options.<name>`, for the daemon half's `creating`; `from(thread)` its value for one started like `thread`; bundled only |
 | `on(event, listener)` → off; `window` | hear the window: `thread.status` (`{ machine, thread, before }`; `before` undefined the first time it's seen), `select` (`{ selection, before }`), `focus` (`{ focused }`), `visibility` (`{ visible }`); `window` is `{ focused, visible, selection, thread }` now. In Electron and browsers alike |
 | `appSetting(key)` | one of the app's settings as it is now, outside React |
 | `pane(kind, { title, component, icon, file, menu, opens, fallback, folders, urls, width })` | a kind of pane beside the thread; `opens`, `folders`, `urls`: files, folders or web pages a thread names open in it; `fallback`: any file nothing else opens |
@@ -126,9 +128,10 @@ extension set up and switched on now, kept current; UI-only extensions never app
 `useTabNote`; in rows `<ThreadRef machine id>`; `transcriptLinks(machine, thread)`, the links a transcript shows; for a list to pick from (quick open, say), `<Picker label placeholder items filter row onPick onClose digits>`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](../packages/cli/skill/daemon.md), [ui.md](../packages/cli/skill/ui.md).
 
 Machines update at different times, so a window can meet an older or newer daemon. A UI half that calls its daemon
-half checks `has(machine, 'ext:x')` first and says so, or offers nothing, when it's missing. A method that's renamed or
-moved keeps its old name as an alias on the daemon for one release (`MOVED_METHODS` in daemon.ts), so older windows
-keep working.
+half checks `has(machine, 'ext:x')` first and says so, or offers nothing, when it's missing. A method or action that's
+renamed or moved keeps its old name as an alias on the daemon for one release (`MOVED_METHODS` in daemon.ts; a watch
+that became a value, `MOVED_WATCHES`; a feature, `MOVED_FEATURES`), so older windows keep working: Ego's `thread.meta`,
+`thread.meta.clear` and `meta.watch` answer as `ego.ask`, `ego.clear` and the value `ego.thread`.
 
 ## Places in the window
 
@@ -209,7 +212,8 @@ superego.thread({
   across a restart.
 - State is kept in the thread's document under the extension's name, so it persists, and goes with the thread.
   `ThreadMeta.worktree` and `meta`, from before, read as the `worktrees` and `ego` extensions' state until those write
-  it. Facts are recomputed whenever the thread's info is; `invalidate()` when something else they read changed. A
+  it (`LEGACY` in daemon.ts); Ego's thread from before (kept apart, or listed and marked `meta`) is a hidden one now.
+  Facts are recomputed whenever the thread's info is; `invalidate()` when something else they read changed. A
   profile's show once its profile has loaded: at startup for the threads in use, else when one of its threads is.
 - `agentFor` is called often: quick, and without side effects. The thread's own model wins over its answer, its answer
   over the profile's, and the profile's over the machine's settings. Its instructions last only while it gives them:
@@ -221,8 +225,9 @@ Bundled extensions also declare whether they're required, once, in `about` (spre
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/required-dark.svg"><img src="writing-extensions/required.svg" alt="A required extension is always on; an optional one can be switched off per machine or left out by a profile, and that thread then has none of its agent parts or UI"></picture>
 
-Only the sidebar (`threads`) is required, and the core's `markdown`, `worktrees` and `ego`. Everything else is
-optional, the core's own `coding-tools`, `panes` and `agents-md` included. A package may be two extensions, one per half,
+Only the sidebar (`threads`), `worktrees` (archiving removes a folder and unarchiving puts it back: never switched off
+between the two) and the core's `markdown` are required. Everything else is optional, `ego` too, and the core's own
+`coding-tools`, `panes` and `agents-md`. A package may be two extensions, one per half,
 where the halves differ: `extensions/threads` is the required sidebar in the window, and `thread-tools`, the agent's
 thread tools, on the machine, so switching the tools off leaves the sidebar (and the rows and links naming threads).
 The core's `panes` is the agent's `open_pane`: switched off, the agent can't open panes, but the window's own pane
@@ -245,7 +250,8 @@ to each machine, which lists it and lets profiles do without it.
 | [`unread`](../extensions/unread/src) | UI only: a `rail` slot as a `fallback`, the phone's `footer`, an action with keys reading sessions, an app setting |
 | [`notifications`](../extensions/notifications/src) | UI only: `on('thread.status')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
 | [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings, tool rows and a `link`; its daemon half is two other, optional extensions: `thread-tools`, on `superego.threads`, and `thread-reports`, report-back through `turnEnd` and `blocked` hooks |
-| [`worktrees`](../packages/daemon/src/worktrees.ts) | the core's, for now: `thread` hooks, `state` and `facts` |
+| [`worktrees`](../extensions/worktrees/src) | `thread` hooks (`creating` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `thread.crumb` chip and a `newThreadField` |
+| [`ego`](../extensions/ego/src) | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `value` the rail follows; a `rail` slot |
 
 Diagram sources are the `.mmd` files in [writing-extensions/](writing-extensions/); re-render with the `diagram` skill
 (`bun <skill>/scripts/render.ts x.mmd x.svg`, and `--dark` for `x-dark.svg`).

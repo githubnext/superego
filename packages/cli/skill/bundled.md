@@ -75,8 +75,13 @@ Then wire it in:
 
 Bundled extensions get more than a profile's:
 
-- **Every slot**, including `sidebar`, `rail` and `footer` (a phone's, beside Settings), and **`superego.work(divide)`** to group a run of work in the transcript
-  (as `tasks` does).
+- **Every slot**, including `sidebar`, `rail` and `footer` (a phone's, beside Settings) (`{ order }`: lower comes first;
+  Ego's button is 10, the threads' 100), and **`superego.work(divide)`** to group a run of work in the transcript (as
+  `tasks` does).
+- **New thread fields**: `superego.newThreadField({ component, from })`. `component` gets `{ machine, cwd, value,
+  onChange }` and draws a field in the dialog (a checkbox: `<label className="new-thread__check">`); its value goes to
+  `thread.create` as `options.<name>`, for the daemon half's `creating` hook. `from(thread)` is its value for a thread
+  started like that one (⌘N). Shown while the machine picked has the extension. `worktrees` has one.
 - **Window actions** with keys: `superego.action(defineAction({ id: 'orders.open', title, keys: 'mod+shift+o', when, run(params, context) { … } }))`;
   ids start with the extension's name. `when(context)` says when keys and the palette offer it (`(c) => Boolean(c.selection)`);
   `context` has the selection, sessions, `appSetting(key)` and `dispatch`.
@@ -89,8 +94,9 @@ Bundled extensions get more than a profile's:
 - A feature flag: the daemon announces `ext:<name>` for each extension set up and switched on there, and tells clients
   again whenever that changes, so `has(machine, 'ext:orders')` says whether a machine has it now (a profile's once the
   profile loads). Watching a value needs no check: it's null until the extension publishes it. Check it before calling the
-  daemon half's methods: a machine running an older Superego may not have them. Renaming a method keeps the old name as
-  an alias for a release (`MOVED_METHODS` in daemon.ts).
+  daemon half's methods: a machine running an older Superego may not have them. Renaming a method or action keeps the old name as
+  an alias for a release (`MOVED_METHODS` in daemon.ts; a watch that became a value, `MOVED_WATCHES`; a feature,
+  `MOVED_FEATURES`).
 
 ## Tests
 

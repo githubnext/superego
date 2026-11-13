@@ -80,12 +80,14 @@ Slots a profile can fill, each given `{ machine, thread }` (and for the editor o
 | Slot | |
 |---|---|
 | `thread.header` | right of the thread's title: badges, small buttons |
+| `thread.crumb` | among the chips that say where a thread works (a branch): draw a `<span className="titlebar__chip">` |
 | `composer.above` | above the message box: something waiting on the user |
 | `thread.aside` | a column beside the thread |
 | `editor.side`, `editor.bar` | beside a file in the editor, and in its bar |
 | `overlay` | over everything: a dialog of your own, drawn while you want it |
 
-The sidebar, work dividers, window actions and app settings are for bundled extensions (`superego --skill bundled`).
+The sidebar, the rail, work dividers, window actions, app settings and New thread fields are for bundled extensions
+(`superego --skill bundled`).
 
 Inside a pane: `<PaneHeader>` puts small things (a count, Refresh) in the pane's header beside its title, and
 `useTabNote(note, key)` shows a note on its tab in the strip (Changes shows +3 −1).
