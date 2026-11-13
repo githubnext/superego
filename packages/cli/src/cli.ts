@@ -10,11 +10,13 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { devApp } from './dev-app.ts'
-import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, runUpdate, updateScript, type MachineConfig, type Transport } from '@superego/client'
+import {
+  checkIdentity, collectProfileUi, filesOf, hashProfileUi, MachineStore, openLocal, openMachine, routeOf, runUpdate, UiAllowStore, updateScript, type MachineConfig, type Transport,
+} from '@superego/client'
 import { appEnv, daemonStarting, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@superego/daemon'
 import {
   compareVersions, driftPhrase, FEATURES, PROTOCOL_VERSION, RpcError, versionOf, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
-  type ProfileInfo, type ThreadInfo, type SettingsSnapshot,
+  type ProfileInfo, type ProfileRef, type ThreadInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
 export type CliOptions = {
@@ -50,6 +52,10 @@ Usage:
   ${app.id} profile                    List the profiles a thread here could start with
   ${app.id} profile new [name] [--user] Make a profile in this project's .superego/profiles (or yours, ~/.${app.id}/profiles)
   ${app.id} profile allow [name]       Let this project's profile run (again, after it changed)
+  ${app.id} profile allow-ui <name|dir> -m <machine>
+                                Let that machine's profile UI run in this computer's window, as it is now
+  ${app.id} profile revoke-ui <name|dir> -m <machine>
+                                Stop it running here
 
   ${app.id} machines                   List machines and whether they answer
   ${app.id} machines add <ssh-target> [--name N] [--command C]
@@ -247,7 +253,8 @@ async function machinesCommand(sub: string | undefined, rest: string[], options:
   }
   if (!machine.config) throw new RpcError('invalid', rest[0] ? 'This computer is always there.' : `Which machine? ${app.id} machines ${sub} <machine>`)
   if (sub === 'update') return updateMachine(machine as Machine & { config: MachineConfig }, Boolean(options.now))
-  if (sub === 'rm' || sub === 'remove') await machines.remove(machine.id)
+  // Its profiles' UI allowed here goes with it: a machine added again is asked again.
+  if (sub === 'rm' || sub === 'remove') { await machines.remove(machine.id); await new UiAllowStore(dataDir).revoke(machine.id) }
   else if (sub === 'enable' || sub === 'disable') await machines.update(machine.id, { enabled: sub === 'enable' })
   else if (sub === 'trust') await machines.forgetIdentity(machine.id)
   else throw new RpcError('usage', `Unknown: ${app.id} machines ${sub}`)
@@ -472,7 +479,41 @@ async function profileCommand(sub: string | undefined, rest: string[], values: {
     const allowed = await run('profile.allow', { ...(cwd ? { cwd } : {}), ...(rest[0] ? { name: rest[0] } : {}) }) as ProfileInfo
     return print(allowed, () => console.log(`Allowed ${allowed.name} (${allowed.dir}) as it is now`))
   }
+  if (sub === 'allow-ui' || sub === 'revoke-ui') return profileUiCommand(sub, machine, rest[0])
   throw new RpcError('usage', `Unknown: ${app.id} profile ${sub}`)
+}
+
+/**
+ * Let another machine's profile UI run in this computer's window, or stop it: allowed for a hash of exactly the
+ * sources fetched here now, as the app does (ui-allowed.json, shared with it). This computer's own run on its daemon's say.
+ */
+async function profileUiCommand(sub: 'allow-ui' | 'revoke-ui', machine: Machine, which: string | undefined) {
+  if (!machine.config) throw new RpcError('usage', `This computer's profiles run on its daemon's say: ${app.id} profile allow. Name another machine: -m <machine>`)
+  if (!which) throw new RpcError('usage', `${app.id} profile ${sub} <name|dir> -m <machine>`)
+  const store = new UiAllowStore(dataDir)
+  if (sub === 'revoke-ui') {
+    const found = store.list().filter((a) => a.machine === machine.id && (a.profile.name === which || a.profile.dir === which))
+    if (!found.length) throw new RpcError('not_found', `No UI of a profile ${which} from ${machine.label} is allowed here`)
+    for (const a of found) await store.revoke(machine.id, a.profile.dir)
+    return print({ revoked: found.map((a) => a.profile) }, () => console.log(`${found.map((a) => a.profile.name).join(', ')}'s UI from ${machine.label} no longer runs here`))
+  }
+  const allowed = await on(machine, async (call) => {
+    // Its profiles: yours there, and any its threads started with (a project's).
+    const refs = new Map<string, ProfileRef>()
+    for (const p of await call('action.run', { id: 'profile.list', params: {}, exposure: 'cli' }) as ProfileInfo[]) refs.set(p.dir, { scope: p.scope, name: p.name, dir: p.dir })
+    for (const t of await call('thread.list', {})) if (t.profile) refs.set(t.profile.dir, t.profile)
+    const matches = [...refs.values()].filter((p) => p.name === which || p.dir === which)
+    if (matches.length > 1) throw new RpcError('ambiguous', `More than one profile ${which} on ${machine.label}; name its folder:\n${matches.map((p) => `  ${p.dir}`).join('\n')}`)
+    const profile = matches[0]
+    if (!profile) throw new RpcError('not_found', `No profile ${which} on ${machine.label}`)
+    const { entries } = await call('profile.ui', profile)
+    if (!entries.length) throw new RpcError('invalid', `${profile.name} on ${machine.label} has no UI`)
+    const sources = await collectProfileUi(entries, (path) => call('profile.module', { ...profile, path }))
+    return { machine: machine.id, profile, hash: await hashProfileUi(sources), files: filesOf(sources) }
+  })
+  await store.allow(allowed)
+  const size = allowed.files.reduce((sum, f) => sum + f.size, 0)
+  print(allowed, () => console.log(`Allowed ${allowed.profile.name}'s UI from ${machine.label} (${allowed.files.length} file${allowed.files.length === 1 ? '' : 's'}, ${size} bytes) as it is now`))
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────────────
