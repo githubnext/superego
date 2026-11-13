@@ -8,7 +8,8 @@ import { completionsIn, divideWork, entryView, fileKind, folderKind, paneMenu, s
 import { useShell } from './state.tsx'
 import { useShortcut } from './keys.ts'
 import { ctrlDigit } from './shortcuts.ts'
-import { Images, imagesIn, Markdown, OpenFile, OpenUrl, ThreadMachine } from './Markdown.tsx'
+import { Images, imagesIn, Markdown } from './Markdown.tsx'
+import { collector, LinkPlace, type LinkPlaceValue } from './links.tsx'
 import { ThreadRef } from './thread-ref.tsx'
 import { Chevron, DescribedCall, describeRun, mainKind, RowIcon, Stat, statOf } from './tool-rows.tsx'
 import { useLocalState } from './local-state.ts'
@@ -284,10 +285,14 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
     return () => observer.disconnect()
   }, [])
 
+  // Where its Markdown's links are: this thread, kept the same while what links care about is (so messages aren't drawn
+  // again as the thread moves on). The transcript's are kept for ⌃O's list.
+  const linkThread = useMemo(() => thread, [thread.id, thread.profile?.dir, String(thread.without)])
+  const links = useMemo<LinkPlaceValue>(() => ({ machine: machine.id, thread: linkThread, openFile, ...(webKind ? { openUrl } : {}) }), [machine.id, linkThread, openFile, webKind, openUrl])
+  const transcriptLinks = useMemo<LinkPlaceValue>(() => ({ ...links, collect: collector(machine.id, thread.id) }), [links])
+
   return (
-    <OpenFile.Provider value={openFile}>
-    <OpenUrl.Provider value={webKind ? openUrl : undefined}>
-    <ThreadMachine.Provider value={machine.id}>
+    <LinkPlace.Provider value={links}>
     <Here.Provider value={{ machine, thread }}>
     <Images.Provider value={images}>
     <div className="thread">
@@ -305,16 +310,16 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
           if (el.scrollTop < el.clientHeight) loadOlder()
         }}>
         <div className="thread__column">
-          {view ? <Transcript view={view} live={live} /> : <div className="transcript__more">Loading…</div>}
+          <LinkPlace.Provider value={transcriptLinks}>
+            {view ? <Transcript view={view} live={live} /> : <div className="transcript__more">Loading…</div>}
+          </LinkPlace.Provider>
         </div>
       </div>
       <Composer machine={machine} thread={thread} busy={Boolean(live?.run)} inbox={watched?.docs['pi.inbox'] as InboxState | undefined} onJump={away ? jumpToEnd : undefined} />
     </div>
     </Images.Provider>
     </Here.Provider>
-    </ThreadMachine.Provider>
-    </OpenUrl.Provider>
-    </OpenFile.Provider>
+    </LinkPlace.Provider>
   )
 }
 

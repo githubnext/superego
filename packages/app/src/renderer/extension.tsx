@@ -113,6 +113,50 @@ export type ToolRow = {
   weight?: number
 }
 
+/**
+ * Where a link is: the thread it's in (on its machine), and what that place can open. In a thread's messages and a file
+ * shown beside one; elsewhere (a settings page, say) nothing but `{}`.
+ */
+export type LinkWhere = {
+  machine?: string
+  thread?: ThreadInfo
+  /** Open a file or folder by the name the text gives it (from the thread's folder, or beside the file it's in); resolves to why it couldn't. */
+  openFile?(name: string): Promise<string | undefined>
+  /** Open a web page in a pane beside the thread; there only where some pane kind shows web pages. */
+  openUrl?(url: string): void
+}
+
+/** A link a handler draws: where it goes, what it says (inline code, for `code`), and a way to follow it. */
+export type LinkProps = {
+  href: string
+  children: ReactNode
+  /** It's inline code that reads as something (a path), not a Markdown link. */
+  code: boolean
+  /** The link's own title, if it gave one. */
+  title?: string
+  where: LinkWhere
+  /** Follow it, as a click does (`beside`: ⌘-click); resolves to why it couldn't, if it couldn't. */
+  open(beside: boolean): Promise<string | undefined>
+}
+
+/**
+ * Links of a kind, claimed: what they look like in Markdown and what following one does (a click, or ⌃O's list).
+ * `[[wikilinks]]` come as `wikilink:<target, URI-encoded>`.
+ */
+export type LinkHandler = {
+  /**
+   * Which: a scheme (`'thread:'`), a pattern of the href, or a test that sees inline code too (`kind: 'code'`, its text
+   * as `href`) and where the link is.
+   */
+  match: string | RegExp | ((href: string, kind: 'link' | 'code', where: LinkWhere) => boolean)
+  /** Following one: resolves to why it couldn't, if it couldn't. `beside`: ⌘-click, or ⌘⏎ in the list. */
+  open(href: string, how: LinkWhere & { beside: boolean; kind: 'link' | 'code' }): void | string | undefined | Promise<string | void | undefined>
+  /** How it's drawn. Default: a link that follows it, struck through with why when it couldn't. */
+  render?: ComponentType<LinkProps>
+  /** Where it goes, in a line (⌃O's list). Default: the href. */
+  target?(href: string, kind: 'link' | 'code'): string
+}
+
 /** An entry of a kind an extension writes (`kind` is its own, like `git.commit`). */
 export type EntryProps = { machine: MachineEntry; thread: ThreadInfo; entry: { id: number; kind: string; data?: unknown } }
 
@@ -146,6 +190,11 @@ export type UiApi = {
    */
   tool(name: string, view: ComponentType<ToolCallProps> | ToolRow, options?: { fold?: boolean }): void
   entry(kind: string, component: ComponentType<EntryProps>): void
+  /**
+   * Claim links of a kind (`thread:`, files, web pages): how they look in Markdown and what following one does. A
+   * profile's are asked first, then the app's extensions', then the core's (threads, files, web pages).
+   */
+  link(handler: LinkHandler): void
   /**
    * Divide runs of work into parts: the tasks an agent reported, say. The first divider to return parts for a run
    * draws it; `undefined` leaves it to the next, then to the core.
@@ -225,6 +274,7 @@ export type Registry = {
   /** Drawn by a `component`, or described by a `row`. `fold: false`: its calls show outside the fold of their run of work. */
   tools: Owned<{ name: string; component?: ComponentType<ToolCallProps>; row?: ToolRow; fold: boolean }>[]
   entries: Owned<{ kind: string; component: ComponentType<EntryProps> }>[]
+  links: Owned<LinkHandler>[]
   panes: Owned<PaneKind & { kind: string }>[]
   work: Owned<{ divide: (run: WorkRun) => WorkPart[] | undefined }>[]
   settings: Owned<{ ui: string; component: ComponentType<SettingsComponentProps> }>[]
@@ -247,7 +297,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   const registry: Registry = {
     app, extensions: extensions.map(({ name, title, description, required }) => ({ name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}) })),
     slots: { 'sidebar': [], 'rail': [], 'thread.header': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
-    tools: [], entries: [], panes: [], work: [], settings: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [],
+    tools: [], entries: [], links: [], panes: [], work: [], settings: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [],
     version: 0,
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
     installProfile(machine, profile, list) {
@@ -299,6 +349,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         own(kind, 'entry kinds')
         unique(registry.entries, 'kind', { kind, component }, 'entry kind')
       },
+      link: (handler) => { add(registry.links, handler) },
       work(divide) {
         if (profile) return console.warn(`Profile extension ${extension.name}: dividing work from a profile's UI isn't supported yet`)
         add(registry.work, { divide })
@@ -361,6 +412,9 @@ export function useRegistry(): Registry {
   return registry
 }
 
+/** The registry, where there is one (Markdown drawn outside the app has none). */
+export const useOptionalRegistry = () => useContext(RegistryContext)
+
 /** The app this UI belongs to. */
 export const useApp = () => useRegistry().app
 
@@ -409,6 +463,19 @@ export const toolRow = (registry: Registry, name: string, where: Where): ToolRow
 
 /** Whether calls to the tool `name` show outside the fold of their run, for `where` (an extension said `fold: false`). */
 export const unfoldedTool = (registry: Registry, name: string, where: Where) => lookUp(registry.tools, where, (t) => t.name === name)?.fold === false
+
+/**
+ * The handler that claims `href` (a link's, or inline code's text) for `where`: its profile's first, then the app's
+ * extensions' in order, then the core's.
+ */
+export function linkHandler(registry: Registry, href: string, kind: 'link' | 'code', where: LinkWhere): LinkHandler | undefined {
+  const seen = seenIn(registry.links, where.machine && where.thread ? { machine: where.machine, thread: where.thread } : undefined)
+  const claims = ({ match }: LinkHandler) => typeof match === 'string' ? kind === 'link' && href.toLowerCase().startsWith(match.toLowerCase())
+    : match instanceof RegExp ? kind === 'link' && match.test(href)
+    : match(href, kind, where)
+  const rank = (owner: Owner) => owner.profile ? 0 : owner.extension === 'core' ? 2 : 1
+  return [...seen].sort((a, b) => rank(a.owner) - rank(b.owner)).find(claims)
+}
 
 /** How entries of `kind` are drawn for `where`, if an extension draws them. */
 export const entryView = (registry: Registry, kind: string, where: Where) => lookUp(registry.entries, where, (e) => e.kind === kind)?.component

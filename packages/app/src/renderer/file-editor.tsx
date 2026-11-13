@@ -17,7 +17,8 @@ import { Button } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { machine as client } from './client.ts'
 import { fileKind, folderKind, Slot, urlKind, useRegistry, type EditorSlotProps } from './extension.tsx'
-import { Images, imagesIn, Markdown, OpenFile, OpenUrl, ThreadMachine } from './Markdown.tsx'
+import { Images, imagesIn, Markdown } from './Markdown.tsx'
+import { LinkPlace, type LinkPlaceValue } from './links.tsx'
 import { codeHighlight } from './code-highlight.ts'
 import { folderOf, resolve } from './markdown-html.ts'
 import { linkAt, livePreview, type MarkdownLink } from './live-markdown.ts'
@@ -355,6 +356,8 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
     void dispatch('pane.open', { id: thread.id, kind: webKind, ...(host ? { title: host } : {}), params: { url } }, { machine: machine.id, source: 'editor' })
       .catch((error) => console.error(error))
   }, [machine.id, thread.id, webKind])
+  const linkThread = useMemo(() => thread, [thread.id, thread.profile?.dir, String(thread.without)])
+  const links = useMemo<LinkPlaceValue>(() => ({ machine: machine.id, thread: linkThread, openFile, ...(webKind ? { openUrl } : {}) }), [machine.id, linkThread, openFile, webKind, openUrl])
   const openIn = (kind: string | undefined, file: string) => kind && dispatch('pane.open', { id: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'editor' })
   // Its images, read from beside it on the thread's machine.
   const images = useMemo(() => imagesIn(machine, thread.id, thread.cwd, folderOf(path)), [machine, thread.id, thread.cwd, path])
@@ -393,15 +396,11 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
           <div className="file-editor__host" ref={host} hidden={rendered} />
           {rendered && text !== undefined && (
             <div className="file-editor__rendered" tabIndex={-1}>
-              <OpenFile.Provider value={openFile}>
-                <OpenUrl.Provider value={webKind ? openUrl : undefined}>
-                  <ThreadMachine.Provider value={machine.id}>
-                    <Images.Provider value={images}>
-                      <Markdown text={text} html />
-                    </Images.Provider>
-                  </ThreadMachine.Provider>
-                </OpenUrl.Provider>
-              </OpenFile.Provider>
+              <LinkPlace.Provider value={links}>
+                <Images.Provider value={images}>
+                  <Markdown text={text} html />
+                </Images.Provider>
+              </LinkPlace.Provider>
             </div>
           )}
           {children && <div className="file-editor__after">{children}</div>}

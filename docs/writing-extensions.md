@@ -108,6 +108,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `tool(name, { icon, verbs, subject, stat, meta, body, phrase, file, weight }, { fold })` | how calls to a tool look, described: `verbs: ['Read', 'Reading', 'Read failed']`, `subject(call)` after the verb, `body(call)` what it opens to, `phrase(count)` in a run's line ("read 2 files"); the rest default. The core's coding and thread tools are rows too |
 | `tool(name, Component, { fold })` | how calls to a tool look, drawn whole; `fold: false` shows them outside the run's fold (images) |
 | `entry(kind, Component)` | transcript entries of a kind it writes |
+| `link({ match, open, render, target })` | claim links: `match` a scheme (`'ticket:'`), a pattern, or `(href, kind, where) => boolean` that sees inline code too (`kind: 'code'`); `open(href, { machine, thread, beside, openFile, openUrl })` follows one (a click, ⌃O); `render` draws it. A profile's are asked first, the core's (threads, files, `[[wikilinks]]` as `wikilink:`, web pages) last |
 | `composer.complete({ title, word(text, caret), items(word, { machine, thread }) })` | complete the word being typed: `word` finds it (`{ start, query }`), `items` offers `{ label, detail, insert }` |
 | `composer.sentWith({ read(blocks), component })` | draw what its `submit` put in sent messages under them (a chip): `read` returns `{ items, blocks }`, and those blocks leave the text |
 | `work(divide)` | split a run of work into titled parts (tasks); bundled only |
@@ -120,7 +121,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 Names: everything is `<extension>.<something>`, except tool and pane kind names. In components: `useSelection`,
 `useMachines`, `useSessions`, `useValue`, `useDispatch`, `call`, `has(machine, 'ext:x')` (whether a machine has an
 extension set up and switched on now, kept current; UI-only extensions never appear); in panes `<PaneHeader>` and
-`useTabNote`; in rows `<ThreadRef machine id>`; for a list to pick from (quick open, say), `<Picker label placeholder items filter row onPick onClose digits>`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](../packages/cli/skill/daemon.md), [ui.md](../packages/cli/skill/ui.md).
+`useTabNote`; in rows `<ThreadRef machine id>`; `transcriptLinks(machine, thread)`, the links a transcript shows; for a list to pick from (quick open, say), `<Picker label placeholder items filter row onPick onClose digits>`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](../packages/cli/skill/daemon.md), [ui.md](../packages/cli/skill/ui.md).
 
 Machines update at different times, so a window can meet an older or newer daemon. A UI half that calls its daemon
 half checks `has(machine, 'ext:x')` first and says so, or offers nothing, when it's missing. A method that's renamed or
@@ -207,7 +208,7 @@ daemon half: the window declares it to each machine, which lists it and lets pro
 | [`web-panes`](../extensions/web-panes/src) | two pane kinds and nothing else; `urls: true` makes web links open in one |
 | [`skills`](../extensions/skills/src) | a prompt section, a `submit` transform, a `method`; `composer.complete` and `composer.sentWith` |
 | [`files`](../extensions/files/src) | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
-| [`links`](../extensions/links/src) | UI only: the window declares it to the machine |
+| [`links`](../extensions/links/src) | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
 | [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings |
 | [`worktrees`](../packages/daemon/src/worktrees.ts) | the core's, for now: `thread` hooks, `state` and `facts` |
 

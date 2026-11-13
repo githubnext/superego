@@ -17,14 +17,19 @@ export const schema: Schema = {
   protocols: {
     ...defaultSchema.protocols,
     // A message's own links: to files ([[wikilinks]]) and threads.
-    href: [...(defaultSchema.protocols?.href ?? []), 'superego-file', 'thread'],
+    href: [...(defaultSchema.protocols?.href ?? []), 'wikilink', 'thread'],
     // Images inline and in files of the thread's, as Markdown's own may be.
     src: [...(defaultSchema.protocols?.src ?? []), 'data', 'blob', 'file'],
   },
 }
 
-/** After remark: HTML parsed, then sanitized. */
-export const htmlPlugins: NonNullable<Options['rehypePlugins']> = [rehypeRaw, [rehypeSanitize, schema]]
+/** After remark: HTML parsed, then sanitized. Links of the `schemes` handlers claim (`x` for `x:`) are kept too. */
+export function htmlPlugins(schemes: readonly string[] = []): NonNullable<Options['rehypePlugins']> {
+  if (!schemes.length) return plugins
+  const href = [...new Set([...schema.protocols!.href!, ...schemes])]
+  return [rehypeRaw, [rehypeSanitize, { ...schema, protocols: { ...schema.protocols, href } }]]
+}
+const plugins: NonNullable<Options['rehypePlugins']> = [rehypeRaw, [rehypeSanitize, schema]]
 
 /** `name` from the folder `dir` (`a/b/`, or '' at the top), as a path in the thread's folder; undefined if outside it. */
 export function resolve(dir: string, name: string) {

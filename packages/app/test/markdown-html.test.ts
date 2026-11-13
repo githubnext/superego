@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm'
 import { describe, expect, it } from 'vitest'
 import { folderOf, htmlPlugins, imageSource, imageType, OUTSIDE, looksLikePath, mediaMatches, parseSrcset, resolve } from '../src/renderer/markdown-html.ts'
 
-const render = (text: string) => renderToStaticMarkup(createElement(ReactMarkdown, { remarkPlugins: [remarkGfm], rehypePlugins: htmlPlugins, urlTransform: (url: string) => url }, text))
+const render = (text: string) => renderToStaticMarkup(createElement(ReactMarkdown, { remarkPlugins: [remarkGfm], rehypePlugins: htmlPlugins(['ticket']), urlTransform: (url: string) => url }, text))
 
 describe('HTML in a rendered file', () => {
   it('keeps a picture with its sources and image', () => {
@@ -29,8 +29,9 @@ describe('HTML in a rendered file', () => {
   })
 
   it("keeps a message's own links, to files and threads, and GFM's tables and task lists", () => {
-    const html = render('[note](<superego-file:a.md>) and [t](thread:abc)\n\n| a | b |\n|:-|-:|\n| 1 | 2 |\n\n- [x] done')
-    expect(html).toContain('href="superego-file:a.md"')
+    const html = render('[note](<wikilink:a.md>) and [t](thread:abc) and <a href="ticket:12">a ticket</a>\n\n| a | b |\n|:-|-:|\n| 1 | 2 |\n\n- [x] done')
+    expect(html).toContain('href="wikilink:a.md"')
+    expect(html).toContain('href="ticket:12"')
     expect(html).toContain('href="thread:abc"')
     expect(html).toContain('<table>')
     expect(html).toContain('type="checkbox"')

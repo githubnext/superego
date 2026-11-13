@@ -2,20 +2,21 @@
 // coloured by the language it names. No raw HTML in a message: agents write `<T>` and `<div>` loosely, and those would
 // vanish. A file (`html`) has it as GitHub shows it, sanitized. In a thread (Images), images that are its files are read
 // from its machine (a message's from its folder, a file's from beside it), and open in the lightbox.
-// Web links open in the browser, not in the window; in a thread (OpenUrl) a button beside each opens it in a pane. Where a file can be opened (a thread: OpenFile), the files it
-// names open beside it: [[wikilinks]], relative links, and code that reads as a path (`notes/plan.md`). A thread it
-// names ([title](thread:<id>)) shows as that thread, to open (ThreadMachine).
+// Links are drawn by the handler that claims them (links.tsx: threads, files, web pages, and extensions' own), for the
+// place they're in (LinkPlace: a thread, a file beside one); any other opens in the browser. [[wikilinks]] are links
+// where something claims them.
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from 'react'
 import ReactMarkdown, { defaultUrlTransform, type Components, type ExtraProps } from 'react-markdown'
 import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import { highlight, languageNamed } from './code-highlight.ts'
-import { htmlPlugins, imageSource, looksLikePath, mediaMatches, parseSrcset } from './markdown-html.ts'
+import { htmlPlugins, imageSource, mediaMatches, parseSrcset } from './markdown-html.ts'
 import type { MachineEntry } from '../shared.ts'
 import { ImageFrame, imageSourceOf, onImageChange, type ImageItem } from './images.tsx'
 import { Lightbox } from './lightbox.tsx'
-import { CheckIcon, CopyIcon, SquareSplitHorizontalIcon } from '@superego/ui'
-import { ThreadRef } from './thread-ref.tsx'
+import { CheckIcon, CopyIcon } from '@superego/ui'
+import { linkHandler, useOptionalRegistry, type Registry } from './extension.tsx'
+import { Claimed, LinkPlace, WIKILINK, wikilinks } from './links.tsx'
 
 /** Code scrolls sideways, never wraps; it fades at the right edge only while a line runs past it. */
 export function Scroll({ node: _node, ...props }: ComponentProps<'pre'> & { node?: unknown }) {
@@ -90,18 +91,6 @@ function CodeBlock(props: ComponentProps<'pre'> & { node?: unknown }) {
 }
 
 /**
- * Opens a file (or folder) by the name the text gives it; resolves to why it couldn't, if it couldn't. Provided where
- * there's a folder to look in: a thread.
- */
-export const OpenFile = createContext<((name: string) => Promise<string | undefined>) | undefined>(undefined)
-
-/** The machine whose threads a message names ([title](thread:<id>)). Provided in a thread. */
-export const ThreadMachine = createContext<string | undefined>(undefined)
-
-/** Opens a web page in a pane beside the thread. Provided where there's a thread to open it beside. */
-export const OpenUrl = createContext<((url: string) => void) | undefined>(undefined)
-
-/**
  * Where images come from: the thread's machine, the thread, and an image's address as it is to be read there (`src`
  * from a message, or from beside a rendered file). Without it, images are left as they are.
  */
@@ -139,36 +128,6 @@ function GalleryOf({ images, children }: { images: ImagesIn; children: ReactNode
       {children}
       {open && <Lightbox machine={images.machine} thread={images.thread} images={open.images} start={open.start} onClose={() => setOpen(undefined)} />}
     </Gallery.Provider>
-  )
-}
-
-const FILE = 'superego-file:'
-const THREAD = 'thread:'
-
-/** [[target|alias]] and ![[embeds]] as links to the file, outside code. */
-function wikilinks(text: string) {
-  return text.split(/(```[\s\S]*?```|`[^`\n]*`)/).map((part, i) => i % 2 ? part : part.replace(/!?\[\[([^\]|#^\n]+)(?:[#^][^\]|\n]*)?(?:\|([^\]\n]*))?\]\]/g,
-    (_all, target: string, alias?: string) => `[${(alias ?? target).trim().replace(/[[\]]/g, '')}](<${FILE}${encodeURIComponent(target.trim())}>)`)).join('')
-}
-
-/** A file or folder a message names. One that can't be opened says why, and looks it. */
-function FileLink({ name, children, className }: { name: string; children: React.ReactNode; className?: string }) {
-  const open = useContext(OpenFile)!
-  const [problem, setProblem] = useState<string>()
-  return (
-    <a href="#" className={['md__file', className, problem && 'md__file--missing'].filter(Boolean).join(' ')} title={problem ? `${name}: ${problem}` : name}
-      onClick={(e) => { e.preventDefault(); void open(name).then(setProblem) }}>{children}</a>
-  )
-}
-
-/** Beside a web link: open it in a pane instead of the browser. */
-function PaneLinkButton({ url }: { url: string }) {
-  const open = useContext(OpenUrl)
-  if (!open) return null
-  return (
-    <button type="button" className="md__pane-link" aria-label="Open in a pane" title="Open in a pane" onClick={() => open(url)}>
-      <SquareSplitHorizontalIcon aria-hidden />
-    </button>
   )
 }
 
@@ -260,7 +219,9 @@ function useSrcset(images: ImagesIn, candidates: { url: string; descriptor: stri
   return set?.key === key && set.value ? set.value : undefined
 }
 
-type HastNode = { type: string; tagName?: string; properties?: Record<string, unknown>; children?: HastNode[] }
+type HastNode = { type: string; tagName?: string; value?: string; properties?: Record<string, unknown>; children?: HastNode[] }
+/** The text in a node, all of it. */
+const textOf = (node: HastNode | undefined): string => !node ? '' : node.type === 'text' ? node.value ?? '' : (node.children ?? []).map(textOf).join('')
 const text = (value: unknown) => typeof value === 'string' ? value : Array.isArray(value) ? value.join(' ') : undefined
 
 /**
@@ -283,19 +244,20 @@ function Picture({ node, children }: ExtraProps & { children?: ReactNode }) {
 }
 
 const components: Components = {
-  a: ({ node: _node, href = '', ...props }) => {
-    const open = useContext(OpenFile)
-    const machine = useContext(ThreadMachine)
-    if (machine && href.startsWith(THREAD)) return <ThreadRef machine={machine} id={href.slice(THREAD.length)}>{props.children}</ThreadRef>
-    if (open && href.startsWith(FILE)) return <FileLink name={decodeURIComponent(href.slice(FILE.length))}>{props.children}</FileLink>
-    if (open && href && !/^([a-z][\w+.-]*:|#|\/\/)/i.test(href)) return <FileLink name={decodeURI(href.split('#')[0]!)}>{props.children}</FileLink>
-    const web = <a {...props} href={href} target="_blank" rel="noreferrer" />
-    return /^https?:\/\//i.test(href) ? <>{web}<PaneLinkButton url={href} /></> : web
+  // A link some handler claims (a thread, a file, a web page) is drawn its way; any other opens in the browser.
+  a: ({ node, href = '', ...props }) => {
+    const registry = useOptionalRegistry()
+    const where = useContext(LinkPlace)
+    const handler = registry && linkHandler(registry, href, 'link', where)
+    if (handler) return <Claimed handler={handler} href={href} kind="link" text={textOf(node as HastNode | undefined).trim()} {...(props.title ? { title: props.title } : {})}>{props.children}</Claimed>
+    return <a {...props} href={href} target="_blank" rel="noreferrer" />
   },
   code: ({ node: _node, className, children, ...props }) => {
-    const open = useContext(OpenFile)
+    const registry = useOptionalRegistry()
+    const where = useContext(LinkPlace)
     const text = typeof children === 'string' ? children : undefined
-    if (open && !className && text && looksLikePath(text)) return <FileLink name={text} className="md__file--code"><code {...props}>{text}</code></FileLink>
+    const handler = registry && !className && text ? linkHandler(registry, text, 'code', where) : undefined
+    if (handler) return <Claimed handler={handler} href={text!} kind="code" text={text!}><code {...props}>{text}</code></Claimed>
     const language = /(?:^|\s)language-(\S+)/.exec(className ?? '')?.[1]
     if (language && text !== undefined) return <Highlighted code={text} name={language} className={className!} />
     return <code className={className} {...props}>{children}</code>
@@ -310,9 +272,11 @@ const components: Components = {
   pre: CodeBlock,
 }
 
-/** Links to files and threads kept; an image's data, blob or file:// address too (read as the others, in a thread). */
-const urlTransform = (url: string, key: string) => url.startsWith(FILE) || url.startsWith(THREAD) || (key === 'src' && /^(data:image\/|blob:|file:)/i.test(url))
-  ? url : defaultUrlTransform(url)
+/** An image's data, blob or file:// address kept (read as the others, in a thread). */
+const imageUrl = (url: string, key: string) => key === 'src' && /^(data:image\/|blob:|file:)/i.test(url)
+
+/** The schemes handlers claim by name (`ticket:` → `ticket`), for HTML's links to keep. */
+const schemesOf = (registry: Registry) => registry.links.flatMap(({ match }) => typeof match === 'string' && /^[a-z][\w+.-]*:$/i.test(match) ? [match.slice(0, -1).toLowerCase()] : [])
 
 /** Footnotes' ids are prefixed once, by the sanitizing, not again before it. */
 const noPrefix = { clobberPrefix: '' }
@@ -325,12 +289,16 @@ const gfmWithBreaks = [remarkGfm, remarkBreaks]
  * as a person typed it.
  */
 export const Markdown = memo(function Markdown({ text, html = false, breaks = false }: { text: string; html?: boolean; breaks?: boolean }) {
-  const files = useContext(OpenFile)
+  const registry = useOptionalRegistry()
+  const where = useContext(LinkPlace)
   const images = useContext(Images)
+  // Links a handler claims keep their scheme (thread:, wikilink:); [[wikilinks]] are links where one claims them.
+  const claimed = (url: string) => Boolean(registry && linkHandler(registry, url, 'link', where))
+  const urlTransform = (url: string, key: string) => imageUrl(url, key) || (key === 'href' && claimed(url)) ? url : defaultUrlTransform(url)
   const rendered = (
     <div className="md">
-      <ReactMarkdown remarkPlugins={breaks ? gfmWithBreaks : gfm} {...(html ? { rehypePlugins: htmlPlugins, remarkRehypeOptions: noPrefix } : {})} components={components} urlTransform={urlTransform}>
-        {files ? wikilinks(text) : text}
+      <ReactMarkdown remarkPlugins={breaks ? gfmWithBreaks : gfm} {...(html ? { rehypePlugins: htmlPlugins(registry ? schemesOf(registry) : []), remarkRehypeOptions: noPrefix } : {})} components={components} urlTransform={urlTransform}>
+        {claimed(`${WIKILINK}x`) ? wikilinks(text) : text}
       </ReactMarkdown>
     </div>
   )
