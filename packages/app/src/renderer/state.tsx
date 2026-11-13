@@ -4,7 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
-import { has, useEgo, useMachineList, useThreads as useThreadsWatch } from './client.ts'
+import { call, has, useEgo, useMachineList, useThreads as useThreadsWatch } from './client.ts'
 import { useRegistry } from './extension.tsx'
 import { emptyHistory, step, visit, type History, type Place } from './history.ts'
 import { useLocalState } from './local-state.ts'
@@ -171,10 +171,14 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
 function MachineThreads({ machine, onThreads }: { machine: MachineEntry; onThreads(machine: string, list: ThreadInfo[] | undefined): void }) {
   const threads = useThreadsWatch(machine.id, machine.state === 'connected' && has(machine, 'threads'))
   // What the machine offers, for the palette and for routing thread actions.
-  const { router } = useRegistry()
+  const { router, extensions } = useRegistry()
   // Again when what it offers changes: a profile's extensions bring actions of their own.
   useEffect(() => { if (machine.state === 'connected' && has(machine, 'actions')) void router.load(machine.id) }, [machine.state, machine.machine?.id, machine.features?.join()])
   useEffect(() => { if (threads) onThreads(machine.id, threads) }, [threads])
+  // The window's extensions, told to the machine: one whose work is all here is known there too (Settings, `without`).
+  useEffect(() => {
+    if (machine.state === 'connected') void call(machine.id, 'extensions.declare', { extensions }).catch(() => { /* an older daemon */ })
+  }, [machine.state, machine.machine?.id])
   return null
 }
 

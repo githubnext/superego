@@ -383,9 +383,6 @@ importers:
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
-      '@superego/daemon':
-        specifier: workspace:*
-        version: link:../../packages/daemon
       '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

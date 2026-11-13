@@ -4,12 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./daemon": "./src/daemon.ts",
     "./ui": "./src/ui.tsx"
   },
   "dependencies": {
     "@superego/app": "workspace:*",
-    "@superego/daemon": "workspace:*",
     "@superego/protocol": "workspace:*",
     "@superego/ui": "workspace:*"
   },

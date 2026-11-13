@@ -678,7 +678,22 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const { name, title, description, required } = extension
     extensions.set(name, { name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}) })
   }
-  registerExtensionSettings(settings, [...extensions.values()])
+  let unregisterSwitches = registerExtensionSettings(settings, [...extensions.values()])
+  /**
+   * Extensions a window has whose work is all there (no daemon half): known here as the window declares them, so an
+   * optional one has its switch in Settings and a profile can do without it, as with any other. Until a window
+   * connects (after a restart), threads aren't told they go without one.
+   */
+  function declare(abouts: ExtensionAbout[]) {
+    const known = abouts.filter((about) => typeof about?.name === 'string' && /^[a-z][a-z0-9-]*$/.test(about.name) && !RESERVED.has(about.name) && !extensions.has(about.name))
+    if (!known.length) return
+    for (const { name, title, description, required } of known) {
+      extensions.set(name, { name, ...(typeof title === 'string' ? { title } : {}), ...(typeof description === 'string' ? { description } : {}), ...(required === true ? { required } : {}) })
+    }
+    unregisterSwitches()
+    unregisterSwitches = registerExtensionSettings(settings, [...extensions.values()])
+    changed()
+  }
   // Turning one off changes what threads go without, and what this machine offers: clients are told both.
   let switches = ''
   settings.onChange(() => {
@@ -1436,6 +1451,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           router.dispatch(id, params, { notify, source: client }, { source: exposure ?? client, ...(exposure ? { exposure } : {}) }),
         /** The newest dispatches on this machine, oldest first. */
         'action.log': async () => router.log(),
+        /** The window's extensions, as each declares itself: those without a daemon half become known here (see declare). */
+        'extensions.declare': async ({ extensions: abouts }: { extensions: ExtensionAbout[] }) => { declare(Array.isArray(abouts) ? abouts : []); return null },
       }
       const ctx = (): DaemonContext => ({ notify: (event, params) => notify(event as keyof Notifications, params as never), source: client })
       const open = (method: string, handler: (params: unknown) => unknown) => (params: unknown) => {

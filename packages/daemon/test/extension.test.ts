@@ -142,3 +142,17 @@ it('keeps a switch stored under an extension\'s old name: the thread tools were 
   expect(daemon.settings.get('extensions.thread-tools')).toBe(false)
   await daemon.close()
 })
+
+it("knows the extensions a window declares that have no daemon half: a switch for each optional one, and threads go without one off", async () => {
+  const { peer, close } = await open([])
+  await peer.call('extensions.declare', { extensions: [{ name: 'links', title: 'Links' }, { name: 'threads', required: true }, { name: 'coding-tools', title: 'Mine' }] })
+  const { value } = await peer.call<{ value: { sections: { id: string; settings: { key: string; title: string }[] }[] } }>('settings.watch', {})
+  const switches = value.sections.find((s) => s.id === 'extensions')!.settings
+  expect(switches.map((s) => s.key)).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.thread-tools', 'extensions.links'])
+  // One the daemon sets up keeps its own declaration.
+  expect(switches[0]!.title).toBe('Coding tools')
+  await peer.call<ThreadInfo>('thread.create', {})
+  await peer.call('settings.set', { key: 'extensions.links', value: false })
+  await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.without?.join() === 'links')
+  await close()
+})
