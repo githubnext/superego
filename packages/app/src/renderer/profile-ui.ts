@@ -64,12 +64,25 @@ async function loadProfileUi(machine: string, profile: ProfileRef, entries: stri
 const installed = new Map<string, string>()
 const loading = new Map<string, Promise<void>>()
 
+/** Errors that say the machine is away, not that the profile can't run (gone, no longer allowed, broken). */
+const AWAY = new Set(['disconnected', 'closed', 'restarting'])
+
 async function ensureProfileUi(registry: Registry, machine: string, profile: ProfileRef) {
   const key = `${machine}:${profile.dir}`
-  const { hash, entries } = await client(machine).call('profile.ui', profile)
-  if (installed.get(key) === hash) return
-  installed.set(key, hash)
-  registry.installProfile(machine, profile, entries.length ? await loadProfileUi(machine, profile, entries) : [])
+  try {
+    const { hash, entries } = await client(machine).call('profile.ui', profile)
+    if (installed.get(key) === hash) return
+    registry.installProfile(machine, profile, entries.length ? await loadProfileUi(machine, profile, entries) : [])
+    // Only once it's in: a load that failed is tried again.
+    installed.set(key, hash)
+  } catch (error) {
+    // The daemon let go of it, or its UI no longer loads: the window lets go of what it had.
+    if (!AWAY.has((error as { kind?: string }).kind ?? '') && installed.has(key)) {
+      installed.delete(key)
+      registry.installProfile(machine, profile, [])
+    }
+    throw error
+  }
 }
 
 /** Load the UI of `thread`'s profile into the registry (once per version of its files), and redraw when it lands. */
