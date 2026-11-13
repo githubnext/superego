@@ -3,7 +3,7 @@
 // or as source; anything else as source. It saves as you type, and follows the file when the agent changes it: your
 // view updates, or, with edits of yours not yet saved, it asks which to keep.
 // The editor pane is this; a profile's own panes use it too (the obsidian profile's notes), with their own links.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { history, historyKeymap, standardKeymap } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { foldGutter, HighlightStyle, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
@@ -17,7 +17,9 @@ import { Button } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { machine as client } from './client.ts'
 import { fileKind, folderKind, Slot, urlKind, useRegistry, type EditorSlotProps } from './extension.tsx'
-import { Markdown, OpenFile, OpenUrl, ThreadMachine } from './Markdown.tsx'
+import { Images, Markdown, OpenFile, OpenUrl, ThreadMachine } from './Markdown.tsx'
+import { codeHighlight } from './code-highlight.ts'
+import { folderOf, imageType, resolve } from './markdown-html.ts'
 import { linkAt, livePreview, type MarkdownLink } from './live-markdown.ts'
 import { arrivals } from './arrivals.ts'
 
@@ -73,38 +75,33 @@ const liveHighlight = HighlightStyle.define([
   { tag: tags.meta, color: 'var(--superego-muted)' },
 ])
 
-/**
- * Code, coloured: quiet, a few hues on the page's own colours, in light and dark. What it doesn't name stays the text's
- * colour. Headings and emphasis are left to the markdown styles.
- */
-const c = (light: string, dark: string) => `light-dark(${light}, ${dark})`
-const codeHighlight = HighlightStyle.define([
-  { tag: [tags.keyword, tags.operatorKeyword, tags.modifier, tags.controlKeyword, tags.definitionKeyword, tags.moduleKeyword], color: c('#a626a4', '#c792ea') },
-  { tag: [tags.string, tags.special(tags.string), tags.regexp, tags.character], color: c('#50a14f', '#a5d68a') },
-  { tag: [tags.number, tags.bool, tags.null, tags.atom, tags.unit], color: c('#b76b01', '#f2b46d') },
-  { tag: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment], color: 'var(--superego-faint)', fontStyle: 'italic' },
-  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName), tags.function(tags.definition(tags.variableName))], color: c('#2f6fdb', '#82aaff') },
-  { tag: [tags.typeName, tags.className, tags.namespace, tags.standard(tags.typeName)], color: c('#c18401', '#ffcb6b') },
-  { tag: [tags.tagName, tags.angleBracket], color: c('#e45649', '#f07178') },
-  { tag: [tags.attributeName, tags.propertyName, tags.labelName], color: c('#986801', '#e0c08a') },
-  { tag: [tags.definition(tags.variableName), tags.definition(tags.propertyName)], color: c('#0f6e8a', '#89ddff') },
-  { tag: [tags.meta, tags.processingInstruction, tags.documentMeta, tags.annotation], color: 'var(--superego-muted)' },
-  { tag: [tags.invalid], color: 'var(--superego-status-error)' },
-  { tag: tags.link, textDecoration: 'underline' },
-])
-
 /** The file's language by its name (or none): loaded on demand, as most files need only one. */
 const languageOf = (path: string) => LanguageDescription.matchFilename(languages, path.split('/').at(-1) ?? path)
 
-/** `name` from the folder `dir` (`a/b/`, or '' at the top), as a path in the thread's folder; undefined if outside it. */
-function resolve(dir: string, name: string) {
-  if (/^([/~]|[a-z][\w+.-]*:)/i.test(name)) return undefined
-  const parts: string[] = []
-  for (const part of `${dir}${name}`.split('/')) {
-    if (part === '..') { if (!parts.pop()) return undefined }
-    else if (part !== '.' && part !== '') parts.push(part)
+const decode = (base64: string): Uint8Array<ArrayBuffer> => {
+  const typed = Uint8Array as unknown as { fromBase64?(s: string): Uint8Array<ArrayBuffer> }
+  return typed.fromBase64 ? typed.fromBase64(base64) : Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+}
+
+/**
+ * The images a rendered file shows, read from its thread's machine as any file of the thread's is (`file.read`, over
+ * the socket or the WebSocket) into blob URLs: each once while the file is open, let go when it closes.
+ */
+function fileImages(machine: string, thread: string, path: string) {
+  const read = new Map<string, Promise<string>>()
+  const load = (file: string) => {
+    let url = read.get(file)
+    if (!url) {
+      url = client(machine).call('file.read', { id: thread, path: file, base64: true })
+        .then(({ content }) => URL.createObjectURL(new Blob([decode(content)], { type: imageType(file) })))
+      // Tried again when next wanted.
+      url.catch(() => { if (read.get(file) === url) read.delete(file) })
+      read.set(file, url)
+    }
+    return url
   }
-  return parts.join('/')
+  const release = () => { for (const url of read.values()) url.then(URL.revokeObjectURL, () => {}); read.clear() }
+  return { dir: folderOf(path), load, release }
 }
 
 /** The text as it is on disk, after `next` changed it there: only the part that differs, so the cursor stays put. */
@@ -193,7 +190,7 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
     if (linkRef.current) return linkRef.current(link)
     if (link.kind === 'url' && /^[a-z][\w+.-]*:/i.test(link.target)) return void window.open(link.target, '_blank')
     void (async () => {
-      const base = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
+      const base = folderOf(path)
       const target = link.kind === 'url' ? `${base}${decodeURI(link.target.split('#')[0]!)}` : link.target
       const { path: found, folder } = await client(machine.id).call('file.find', { id: thread.id, name: target })
       if (found === null || folder) return setNote({ text: `No file ${link.target}`, error: true })
@@ -358,7 +355,7 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
     try {
       const peer = client(machine.id)
       const at = /^(.+?)((?::\d+)+|#L\d+.*)$/.exec(name)
-      const near = resolve(path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : '', at?.[1] ?? name)
+      const near = resolve(folderOf(path), at?.[1] ?? name)
       const beside = near ? await peer.call('file.find', { id: thread.id, name: `${near}${at?.[2] ?? ''}` }) : undefined
       const found = beside && (beside.path === near || beside.path === `${near}.md`) ? beside : await peer.call('file.find', { id: thread.id, name })
       if (found.outside) return "outside this thread's folder"
@@ -383,6 +380,8 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
       .catch((error) => console.error(error))
   }, [machine.id, thread.id, webKind])
   const openIn = (kind: string | undefined, file: string) => kind && dispatch('pane.open', { id: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'editor' })
+  const images = useMemo(() => fileImages(machine.id, thread.id, path), [machine.id, thread.id, path])
+  useEffect(() => images.release, [images])
   const slot: EditorSlotProps = {
     machine, thread, path,
     open: (file, { beside = false } = {}) => onOpenFile
@@ -421,7 +420,9 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
               <OpenFile.Provider value={openFile}>
                 <OpenUrl.Provider value={webKind ? openUrl : undefined}>
                   <ThreadMachine.Provider value={machine.id}>
-                    <Markdown text={text} />
+                    <Images.Provider value={images}>
+                      <Markdown text={text} html />
+                    </Images.Provider>
                   </ThreadMachine.Provider>
                 </OpenUrl.Provider>
               </OpenFile.Provider>

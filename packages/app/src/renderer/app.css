@@ -202,6 +202,18 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 :is(.md, .step__output) pre:hover::-webkit-scrollbar { height: 8px; }
 .md pre.is-overflowing, .step__output:not(.is-cut) pre.is-overflowing { mask-image: linear-gradient(to left, transparent, #000 32px); }
 .md pre code { font: inherit; background: none; padding: 0; white-space: pre; }
+/* A diff's added and removed lines, tinted across the block. */
+.md pre code.is-highlighted { display: block; min-width: max-content; }
+.md pre code .md__line--add, .md pre code .md__line--del { display: block; margin: 0 calc(-1 * var(--superego-space-3)); padding: 0 var(--superego-space-3); }
+.md pre code .md__line--add { background: light-dark(rgb(46 160 67 / .12), rgb(46 160 67 / .18)); }
+.md pre code .md__line--del { background: light-dark(rgb(207 34 46 / .1), rgb(248 81 73 / .16)); }
+/* A document's images (HTML or Markdown): no wider than the text. */
+.md img { max-width: 100%; height: auto; vertical-align: middle; }
+.md picture { display: inline; }
+.md__image-missing { color: var(--superego-muted); text-decoration: line-through; }
+.md details { margin: 0 0 var(--superego-space-3); }
+.md summary { cursor: default; }
+.md kbd { font: 0.82em var(--superego-mono); padding: 1px 5px; border-radius: 4px; background: var(--superego-code-chip); box-shadow: inset 0 -1px 0 var(--superego-border); }
 /* Code scrolls sideways; its scrollbar shows only while the pointer is over it. */
 
 .md blockquote { padding: 0 0 0 var(--superego-space-3); border-left: 3px solid var(--superego-border); }

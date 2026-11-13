@@ -302,6 +302,22 @@ if (phase === 'first') {
   const plan = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${paned}').panes.find((p) => p.params?.path === 'docs/plan.md').id)`)
   await run(`window.superego.call('local', 'pane.close', { id: '${paned}', pane: '${plan}' })`)
   await until(`![...document.querySelectorAll('.panes__tab')].some((t) => t.textContent.startsWith('plan.md'))`, 'and closed')
+  // Its HTML (sanitized) and images, read from beside it: a <picture> shows the source for the app's theme.
+  const svg = (width) => `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="10"><rect width="${width}" height="10" fill="teal"/></svg>`
+  git('mkdir', ['-p', `${repo}/docs/img`])
+  writeFileSync(`${repo}/docs/img/light.svg`, svg(40)); writeFileSync(`${repo}/docs/img/dark.svg`, svg(30)); writeFileSync(`${repo}/docs/img/plain.svg`, svg(20))
+  writeFileSync(`${repo}/docs/guide.md`, '# Guide\n\ntwo, and **three**\n\n<picture><source media="(prefers-color-scheme: dark)" srcset="img/dark.svg"><img src="img/light.svg" alt="diagram" onerror="document.body.dataset.pwned = 1"></picture>\n\n![plain](img/plain.svg)\n\n<script>document.body.dataset.pwned = 1</script>\n')
+  const editorPaneId = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${paned}').panes.find((p) => p.kind === 'editor').id)`)
+  await run(`window.superego.call('local', 'pane.update', { id: '${paned}', pane: '${editorPaneId}', params: { path: 'docs/guide.md' } })`)
+  const imageWidths = `[...document.querySelectorAll('.file-editor__rendered img')].map((i) => i.src.startsWith('blob:') && i.complete ? i.naturalWidth : 0).join(',')`
+  nativeTheme.themeSource = 'light'
+  await until(`${imageWidths} === '40,20'`, 'rendered images, the light source')
+  nativeTheme.themeSource = 'dark'
+  await until(`${imageWidths} === '30,20'`, 'rendered images, the dark source')
+  nativeTheme.themeSource = 'system'
+  if (await run(`Boolean(document.body.dataset.pwned || document.querySelector('.file-editor__rendered script, .file-editor__rendered [onerror]'))`)) { await fail('rendered HTML kept a script or handler'); throw new Error('failed') }
+  await run(`window.superego.call('local', 'pane.update', { id: '${paned}', pane: '${editorPaneId}', params: { path: 'notes.md' } })`)
+  await until(`document.querySelector('.file-editor__rendered h1')?.textContent === 'Notes'`, 'back to the notes')
   await run(`[...document.querySelectorAll('.file-editor__mode button')].find((b) => b.textContent === 'Live').click()`)
   await until(`!document.querySelector('.file-editor__rendered') && !document.querySelector('.file-editor__host').hidden && document.querySelector('.cm-content')?.textContent.includes('three')`, 'live again, with the change')
   await run(`window.superego.call('local', 'pane.open', { id: '${paned}', kind: 'artifact', params: { path: 'page.html' } })`)
