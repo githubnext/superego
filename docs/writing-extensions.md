@@ -105,7 +105,8 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 |---|---|
 | `slot(name, Component, { order })` | a component in a place in the window (below) |
 | `pane(kind, { title, component, icon, file, menu, opens, fallback, folders, urls, width })` | a kind of pane beside the thread; `opens`, `folders`, `urls`: files, folders or web pages a thread names open in it; `fallback`: any file nothing else opens |
-| `tool(name, Component, { fold })` | how calls to a tool look; `fold: false` shows them outside the run's fold (images) |
+| `tool(name, { icon, verbs, subject, stat, meta, body, phrase, file, weight }, { fold })` | how calls to a tool look, described: `verbs: ['Read', 'Reading', 'Read failed']`, `subject(call)` after the verb, `body(call)` what it opens to, `phrase(count)` in a run's line ("read 2 files"); the rest default. The core's coding and thread tools are rows too |
+| `tool(name, Component, { fold })` | how calls to a tool look, drawn whole; `fold: false` shows them outside the run's fold (images) |
 | `entry(kind, Component)` | transcript entries of a kind it writes |
 | `composer.complete({ title, word(text, caret), items(word, { machine, thread }) })` | complete the word being typed: `word` finds it (`{ start, query }`), `items` offers `{ label, detail, insert }` |
 | `composer.sentWith({ read(blocks), component })` | draw what its `submit` put in sent messages under them (a chip): `read` returns `{ items, blocks }`, and those blocks leave the text |
@@ -119,7 +120,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 Names: everything is `<extension>.<something>`, except tool and pane kind names. In components: `useSelection`,
 `useMachines`, `useSessions`, `useValue`, `useDispatch`, `call`, `has(machine, 'ext:x')` (whether a machine has an
 extension set up and switched on now, kept current; UI-only extensions never appear); in panes `<PaneHeader>` and
-`useTabNote`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](../packages/cli/skill/daemon.md), [ui.md](../packages/cli/skill/ui.md).
+`useTabNote`; in rows `<ThreadRef machine id>`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](../packages/cli/skill/daemon.md), [ui.md](../packages/cli/skill/ui.md).
 
 Machines update at different times, so a window can meet an older or newer daemon. A UI half that calls its daemon
 half checks `has(machine, 'ext:x')` first and says so, or offers nothing, when it's missing. A method that's renamed or

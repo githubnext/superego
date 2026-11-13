@@ -10,7 +10,7 @@ window loads them again.
 ```tsx
 // .superego/profiles/support/ui/order.tsx
 import { useEffect, useState } from 'react'
-import { call, defineUiExtension, PaneHeader, FileTextIcon, type PaneProps, type ToolCallProps } from 'superego/ui'
+import { call, defineUiExtension, PaneHeader, FileTextIcon, type PaneProps } from 'superego/ui'
 
 function OrderPane({ machine, thread, pane }: PaneProps) {
   const { id } = (pane.params ?? {}) as { id?: string }
@@ -26,16 +26,17 @@ function OrderPane({ machine, thread, pane }: PaneProps) {
   return <div className="order-pane"><PaneHeader><span>{order.status}</span></PaneHeader><h2>Order {id}</h2>…</div>
 }
 
-function FoundOrder({ call, result, live }: ToolCallProps) {
-  const details = (result?.details ?? live?.details) as { status?: string } | undefined
-  return <div>Order {String(call.arguments.number)}: {details?.status ?? 'looking…'}</div>
-}
-
 export default defineUiExtension({
   name: 'support-ui',
   setup(superego) {
     superego.pane('order', { title: (pane) => `Order ${(pane.params as any)?.id ?? ''}`, icon: FileTextIcon, component: OrderPane })
-    superego.tool('find_order', FoundOrder)
+    // A row: "Found order 1234 · shipped", folded open to what the tool said.
+    superego.tool('find_order', {
+      icon: FileTextIcon, verbs: ['Found', 'Finding', 'Couldn’t find'],
+      subject: ({ call }) => `order ${call.arguments.number}`,
+      meta: ({ result }) => (result?.details as { status?: string } | undefined)?.status,
+      phrase: (count) => count === 1 ? 'found an order' : `found ${count} orders`,
+    })
   },
 })
 ```
@@ -58,7 +59,8 @@ there is no type checking.
 | | |
 |---|---|
 | `superego.pane(kind, { title, component, icon?, file?, menu?, opens?, fallback?, folders?, urls?, width? })` | a kind of pane. `title`: a string, or `(pane) => string`. `component` gets `{ machine, thread, pane }`; `pane.params` is what it was opened with. `icon`: its glyph on the pane's tab (a Phosphor icon from `superego/ui`). `file: true`: its title is a file name, and the tab shows it as one. `menu: true` offers it in the thread's pane menu (it needs no params). `opens: (path) => boolean` makes files named in the thread open in it (`/\.csv$/.test(path)`), ahead of the editor (`fallback: true`: any file no kind `opens`); `folders: true`, folders (`params.path`, `''` for the thread's own); `urls: true`, web pages a thread links to, when opened beside (`params.url`). `width`: share of the row, 0.5 by default |
-| `superego.tool(name, component, { fold? })` | draw calls to a tool in the transcript. Gets `{ machine, thread, call: { id, name, arguments }, result?: { text, isError, details }, live?: { status, output, details } }`. `fold: false` shows them under their run of work, open, instead of folded into it: for what the agent shows you (as `images` does) |
+| `superego.tool(name, row, { fold? })` | how calls to a tool look in the transcript, described: `{ icon?, verbs?, subject?, stat?, meta?, body?, phrase?, file?, weight? }`. `verbs`: done, working, failed (`['Read', 'Reading', 'Read failed']`). The functions get the call (below) and its `state` (`idle`, `working`, `done`, `error`): `subject` is what it acted on, after the verb (text in mono, or a node such as `<ThreadRef machine id />`); `stat` its lines `{ added, removed }`; `meta` a little more at the row's end; `body` what it opens to. `phrase(count)` says what `count` calls did in a run's line (`read 2 files`); `file(args)` names the one file a lone call was about there; `weight` decides which kind leads that line. Anything left out (or returning `undefined`) is the default: its name, its `command`/`path`/`pattern`, its output; `null` from `subject` or `body` is nothing. `fold: false` shows them under their run of work, open, instead of folded into it: for what the agent shows you (as `images` does) |
+| `superego.tool(name, component, { fold? })` | draw calls to a tool whole, yourself. Gets `{ machine, thread, call: { id, name, arguments }, result?: { text, isError, details }, live?: { status, output, details } }` |
 | `superego.slot(slot, component, { order? })` | put a component in a place in the shell (below) |
 | `superego.entry(kind, component)` | draw transcript entries of a kind an extension writes |
 | `superego.settings(ui, component)` | draw below the settings section (of its daemon half) that names `ui` |

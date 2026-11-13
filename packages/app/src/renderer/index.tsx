@@ -14,6 +14,7 @@ import { ShellStateProvider } from './state.tsx'
 import { coreActions, UNREAD } from './actions.tsx'
 import { webBridge } from './web-bridge.ts'
 import { registerBuiltInPanes } from './panes.tsx'
+import { registerToolRows } from './tool-rows.tsx'
 
 export function mountApp(app: AppConfig, { extensions = [], root = document.getElementById('root')! }: { extensions?: UiExtension[]; root?: HTMLElement } = {}) {
   // In a browser there is no preload: the bridge is a WebSocket to the daemon that served the page.
@@ -35,6 +36,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
       ],
     })
     registerBuiltInPanes(core)
+    registerToolRows(core)
     for (const action of coreActions(app)) core.action(action)
   })
   void registry.router.load('app')
@@ -51,7 +53,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
 
 export {
   defineUiExtension, fileKind, Slot, urlKind, useApp, useRegistry,
-  type EditorSlotProps, type EntryProps, type PaneKind, type PaneProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type UiApi, type UiExtension,
+  type EditorSlotProps, type EntryProps, type PaneKind, type PaneProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type ToolRow, type ToolRowCall, type ToolState, type UiApi, type UiExtension,
   type WorkBlock, type WorkPart, type WorkRun, type WorkStatus,
 } from './extension.tsx'
 export { useAppSetting } from './client.ts'
@@ -65,6 +67,7 @@ export { showSession } from './actions.tsx'
 export { useComposer, useComposerClaim, type Composer, type ComposerClaim } from './ThreadView.tsx'
 export type { Completion, CompletionProvider, CompletionWord, ComposerWhere, SentBlock, SentWith } from './composer.ts'
 export { Markdown } from './Markdown.tsx'
+export { ThreadRef } from './thread-ref.tsx'
 export { useLocalState, type Store } from './local-state.ts'
 export { score } from './score.ts'
 export { PaneHeader, useTabNote } from './panes.tsx'

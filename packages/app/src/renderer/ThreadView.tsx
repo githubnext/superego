@@ -1,15 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react'
 import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowCounterClockwiseIcon, BroomIcon, ArrowDownIcon, ArrowElbowDownRightIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CaretRightIcon, ChatCircleIcon, ChatsCircleIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, ListIcon, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, BroomIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CheckIcon, FileIcon, type Icon as PhosphorIcon, IconButton, ListIcon, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TextArea, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
-import { completionsIn, divideWork, entryView, fileKind, folderKind, paneMenu, sentWithIn, Slot, shownPanes, toolView, unfoldedTool, urlKind, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
+import { completionsIn, divideWork, entryView, fileKind, folderKind, paneMenu, sentWithIn, Slot, shownPanes, toolRow, toolView, unfoldedTool, urlKind, useRegistry, type ToolRowCall, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useShell } from './state.tsx'
 import { useShortcut } from './keys.ts'
 import { ctrlDigit } from './shortcuts.ts'
-import { Images, imagesIn, Markdown, OpenFile, OpenUrl, Scroll, ThreadMachine } from './Markdown.tsx'
+import { Images, imagesIn, Markdown, OpenFile, OpenUrl, ThreadMachine } from './Markdown.tsx'
 import { ThreadRef } from './thread-ref.tsx'
+import { Chevron, DescribedCall, describeRun, mainKind, RowIcon, Stat, statOf } from './tool-rows.tsx'
 import { useLocalState } from './local-state.ts'
 import { readAttachment, splitMessage } from './attachments.ts'
 import { askFor, complete, completing, menuFor, readSent, type Completion, type Offered, type SentBlock } from './composer.ts'
@@ -519,9 +520,10 @@ function Working({ steps, since }: { steps: number; since: number | undefined })
 
 /** "6 steps · +11 −2 · 1 failed" under a finished turn. */
 function TurnEnd({ blocks, results }: { blocks: Block[]; results: Map<string, Message> }) {
+  const rows = useRows()
   const calls = blocks.filter((b) => b.type === 'toolCall')
   const failed = calls.filter((b) => results.get(b.id!)?.isError).length
-  const stats = sumStats(calls, results)
+  const stats = rows.stats(calls, results)
   return (
     <div className="turn-end">
       <span>{calls.length === 1 ? '1 step' : `${calls.length} steps`}</span>
@@ -531,13 +533,17 @@ function TurnEnd({ blocks, results }: { blocks: Block[]; results: Map<string, Me
   )
 }
 
-function sumStats(calls: Block[], results: Map<string, Message>) {
-  return calls.reduce((sum, b) => {
-    const diff = diffOf(results.get(b.id!)?.details)
-    if (!diff) return sum
-    const stat = diffStat(diff)
-    return { added: sum.added + stat.added, removed: sum.removed + stat.removed }
+/** The rows of this thread's tools: each tool's, and the lines a run of calls added and removed, summed. */
+function useRows() {
+  const here = useContext(Here)
+  const registry = useRegistry()
+  const where = { machine: here.machine.id, thread: here.thread }
+  const rowOf = (name: string) => toolRow(registry, name, where)
+  const stats = (calls: Block[], results: Map<string, Message>) => calls.reduce((sum, b) => {
+    const stat = statOf(rowOf(b.name ?? ''), callOf(here, b, results.get(b.id!)))
+    return stat ? { added: sum.added + stat.added, removed: sum.removed + stat.removed } : sum
   }, { added: 0, removed: 0 })
+  return { rowOf, stats }
 }
 
 function Entry({ entry }: { entry: EntryRecord }) {
@@ -567,6 +573,7 @@ const steps = (blocks: Block[], results: Map<string, Message>, running: Slots) =
  */
 function Work({ blocks: all, results, running, active }: { blocks: Block[]; results: Map<string, Message>; running: Slots; active: boolean }) {
   const [open, setOpen] = useState<boolean>()
+  const { rowOf, stats: sum } = useRows()
   const { blocks, shown } = useUnfolded(all, results, running)
   if (!blocks.length) return shown
   const rows = steps(blocks, results, running)
@@ -574,7 +581,9 @@ function Work({ blocks: all, results, running, active }: { blocks: Block[]; resu
   if ((blocks.length === 1 && blocks[0]!.type !== 'text') || (shown && blocks.every((b) => b.type === 'text'))) return <><div className="steps">{rows}</div>{shown}</>
   const calls = blocks.filter((b) => b.type === 'toolCall')
   const failed = calls.filter((b) => results.get(b.id!)?.isError).length
-  const stats = sumStats(calls, results)
+  const stats = sum(calls, results)
+  const main = mainKind(blocks, rowOf)
+  const said = describeRun(blocks, rowOf)
   // Folded, while it works too; opened only by hand.
   const folded = open ?? false
   return (
@@ -582,8 +591,8 @@ function Work({ blocks: all, results, running, active }: { blocks: Block[]; resu
       <details className="steps steps--run" open={folded} onToggle={(e) => { const next = e.currentTarget.open; if (next !== folded) setOpen(next) }}>
         <summary className="row">
           <Chevron />
-          {active ? <StatusGlyph status={{ state: 'working' }} /> : <Icon name={mainKind(blocks)} />}
-          <span className="row__label row__summary" title={describe(blocks).join('')}>{describe(blocks).map((part, i) => i % 2 ? <code key={i} className="row__path">{part}</code> : part)}</span>
+          {active ? <StatusGlyph status={{ state: 'working' }} /> : <RowIcon row={rowOf(main)} thinking={!calls.length} />}
+          <span className="row__label row__summary" title={said.join('')}>{said.map((part, i) => i % 2 ? <code key={i} className="row__path">{part}</code> : part)}</span>
           {(stats.added > 0 || stats.removed > 0) && <span className="row__meta"><Stat {...stats} /></span>}
           {failed > 0 && <span className="row__failed">{failed} failed</span>}
         </summary>
@@ -614,9 +623,10 @@ function useUnfolded(all: Block[], results: Map<string, Message>, running: Slots
 function Task({ part, results, running }: { part: WorkPart; results: Map<string, Message>; running: Slots }) {
   const [open, setOpen] = useState(false)
   const status = part.status ?? 'success'
+  const { stats: sum } = useRows()
   const { blocks, shown } = useUnfolded(part.blocks, results, running)
   const calls = blocks.filter((b) => b.type === 'toolCall')
-  const stats = sumStats(calls, results)
+  const stats = sum(calls, results)
   const rows = steps(blocks, results, running)
   const summary = (
     <>
@@ -649,192 +659,35 @@ function TaskIcon({ status }: { status: Exclude<WorkStatus, 'running'> }) {
   return <Glyph className="row__icon task__icon" size={14} weight="bold" aria-label={TASK_LABELS[status]} />
 }
 
-/** What a run mostly did, by weight: an edit matters more than a command, a command more than a read. */
-const WEIGHT = ['edit', 'write', 'bash', 'read']
-function mainKind(blocks: Block[]): string {
-  const names = blocks.filter((b) => b.type === 'toolCall').map((b) => b.name ?? '')
-  return WEIGHT.find((kind) => names.includes(kind)) ?? names[0] ?? 'thinking'
-}
-
-/** "Read 2 files, ran 3 commands and edited a file", as text and paths in turn: ['Edited ', 'src/a.ts', ' and ran a command']. */
-function describe(blocks: Block[]): string[] {
-  const count = new Map<string, number>()
-  // Thinking between steps is part of the work; it's named only when that's all there is.
-  const tools = blocks.filter((b) => b.type === 'toolCall')
-  for (const b of tools.length ? tools : blocks.filter((b) => b.type === 'thinking')) { const kind = b.type === 'thinking' ? 'thinking' : b.name ?? 'tool'; count.set(kind, (count.get(kind) ?? 0) + 1) }
-  const n = (k: number, one: string, many: string) => k === 1 ? one : `${k} ${many}`
-  // The weightiest kind leads, naming its file when there's one.
-  const main = mainKind(blocks)
-  const paths = tools.filter((b) => b.name === main).map((b) => (b.arguments as { path?: unknown } | undefined)?.path)
-  const only = paths.length === 1 && typeof paths[0] === 'string' ? paths[0] : undefined
-  const ordered = [...count].sort((a, b) => (a[0] === main ? -1 : b[0] === main ? 1 : 0))
-  const phrases = ordered.map(([kind, k]) => {
-    if (kind === main && only) return `${{ read: 'read', edit: 'edited', write: 'wrote' }[kind] ?? kind} \u0000${only}\u0000`
-    switch (kind) {
-      case 'thinking': return 'thought'
-      case 'read': return `read ${n(k, 'a file', 'files')}`
-      case 'bash': return `ran ${n(k, 'a command', 'commands')}`
-      case 'edit': return `edited ${n(k, 'a file', 'files')}`
-      case 'write': return `wrote ${n(k, 'a file', 'files')}`
-      case 'thread_start': return `started ${n(k, 'a thread', 'threads')}`
-      case 'thread_read': return `read ${n(k, 'a thread', 'threads')}`
-      case 'thread_send': return `messaged ${n(k, 'a thread', 'threads')}`
-      case 'thread_list': return 'listed threads'
-      case 'thread_archive': return `archived ${n(k, 'a thread', 'threads')}`
-      default: return `used ${kind}${k > 1 ? ` ${k}×` : ''}`
-    }
-  })
-  const text = phrases.length > 1 ? `${phrases.slice(0, -1).join(', ')} and ${phrases.at(-1)}` : phrases[0] ?? ''
-  return (text.charAt(0).toUpperCase() + text.slice(1)).split('\u0000')
-}
-
-const Chevron = () => <CaretRightIcon className="row__chevron" size={12} aria-hidden />
-
 function Thinking({ text }: { text: string }) {
   return (
     <details className="step step--thinking">
-      <summary className="row"><Chevron /><Icon name="thinking" /><span className="row__label">Thinking</span></summary>
+      <summary className="row"><Chevron /><RowIcon thinking /><span className="row__label">Thinking</span></summary>
       <div className="step__thinking">{text}</div>
     </details>
   )
 }
 
-/** Tool output, up to a dozen whole lines; the rest behind "Show all". */
-function Output({ text, className = '' }: { text: string; className?: string }) {
-  const [all, setAll] = useState(false)
-  const lines = text.replace(/\n+$/, '').split('\n')
-  const long = lines.length > CAP + 3
-  return (
-    <div className={`step__output ${long && !all ? 'is-cut' : ''} ${className}`}>
-      <Scroll>{long && !all ? lines.slice(0, CAP).join('\n') : lines.join('\n')}</Scroll>
-      {long && <button type="button" className="step__more" onClick={() => setAll(!all)}>{all ? 'Show less' : `Show all ${lines.length} lines`}</button>}
-    </div>
-  )
-}
-const CAP = 12
-
-const Stat = ({ added, removed }: { added: number; removed: number }) => (
-  <>{added > 0 && <span className="stat--add">+{added}</span>}{added > 0 && removed > 0 && ' '}{removed > 0 && <span className="stat--del">−{removed}</span>}</>
-)
-
-/** What a step did, as a verb: "Read", "Ran", "Edited"; "Running" while it runs, "Edit failed" when it failed. */
-function verbOf(name: string, state: string): string {
-  const verbs: Record<string, [string, string, string]> = {
-    read: ['Read', 'Reading', 'Read failed'], bash: ['Ran', 'Running', 'Command failed'],
-    edit: ['Edited', 'Editing', 'Edit failed'], write: ['Wrote', 'Writing', 'Write failed'],
-    thread_start: ['Started', 'Starting', 'Couldn’t start a thread'], thread_read: ['Read', 'Waiting on', 'Couldn’t read'],
-    thread_send: ['Messaged', 'Messaging', 'Couldn’t message'], thread_list: ['Listed threads', 'Listing threads', 'Couldn’t list threads'],
-    thread_archive: ['Archived', 'Archiving', 'Couldn’t archive'],
-  }
-  const verb = verbs[name]
-  if (!verb) return state === 'error' ? `${name} failed` : name
-  return state === 'error' ? verb[2] : state === 'working' ? verb[1] : verb[0]
-}
-
+/** A call as its tool's row describes it, or as an extension draws it whole. */
 function ToolCall({ block, result, slot }: { block: Block; result: Message | undefined; slot: ReturnType<Slots['get']> }) {
   const here = useContext(Here)
-  const custom = toolView(useRegistry(), block.name ?? '', { machine: here.machine.id, thread: here.thread })
-  if (custom) {
-    const Custom = custom
-    const props: ToolCallProps = {
-      ...here,
-      call: { id: block.id ?? '', name: block.name ?? '', arguments: (block.arguments ?? {}) as Record<string, unknown> },
-      ...(result ? { result: { text: textOf(result), isError: Boolean(result.isError), details: result.details } } : {}),
-      ...(slot ? { live: { status: slot.status, ...(slot.output !== undefined ? { output: slot.output } : {}), details: slot.details } } : {}),
-    }
-    return <Custom {...props} />
+  const registry = useRegistry()
+  const where = { machine: here.machine.id, thread: here.thread }
+  const call = callOf(here, block, result, slot)
+  const Custom = toolView(registry, call.call.name, where)
+  if (Custom) { const { state: _state, ...props } = call; return <Custom {...props} /> }
+  return <DescribedCall row={toolRow(registry, call.call.name, where)} call={call} />
+}
+
+/** A call, its result and how it runs, as tool rows (and an extension's view of the call) see them. */
+function callOf(here: { machine: MachineEntry; thread: ThreadInfo }, block: Block, result: Message | undefined, slot?: ReturnType<Slots['get']>): ToolRowCall {
+  return {
+    ...here,
+    call: { id: block.id ?? '', name: block.name ?? '', arguments: (block.arguments ?? {}) as Record<string, unknown> },
+    ...(result ? { result: { text: textOf(result), isError: Boolean(result.isError), details: result.details } } : {}),
+    ...(slot ? { live: { status: slot.status, ...(slot.output !== undefined ? { output: slot.output } : {}), details: slot.details } } : {}),
+    state: result ? (result.isError ? 'error' : 'done') : slot?.status === 'running' ? 'working' : 'idle',
   }
-  const args = (block.arguments ?? {}) as Record<string, unknown>
-  const output = result ? unwrap(textOf(result)) : slot?.output
-  const state = result ? (result.isError ? 'error' : 'done') : slot?.status === 'running' ? 'working' : 'idle'
-  const diff = !result?.isError ? diffOf(result?.details) : undefined
-  const written = block.name === 'write' && typeof args.content === 'string' ? args.content : undefined
-  const stat = diff ? diffStat(diff) : undefined
-  // A thread the call is about: the one it started, read or messaged, named as itself.
-  const other = block.name === 'thread_start' ? (result?.details as { id?: string } | undefined)?.id : block.name?.startsWith('thread_') && typeof args.id === 'string' ? args.id : undefined
-  return (
-    <details className={`step step--${state}`}>
-      <summary className="row">
-        <Chevron />
-        {state === 'working' ? <StatusGlyph status={{ state }} /> : <Icon name={block.name ?? ''} />}
-        <span className="row__label">{verbOf(block.name ?? '', state)}</span>
-        {other ? <ThreadRef machine={here.machine.id} id={other} className="row__thread" />
-          : block.name === 'thread_start' ? <span className="row__arg">{String(args.title ?? 'a thread')}</span>
-          : block.name === 'thread_archive' ? <span className="row__arg">this thread</span>
-          : block.name !== 'thread_list' && <span className="row__arg" title={summaryOf(block.name ?? '', args)}>{summaryOf(block.name ?? '', args)}</span>}
-        {stat && <span className="row__meta"><Stat {...stat} /></span>}
-        {written !== undefined && <span className="row__meta">{lineCount(written)} lines</span>}
-      </summary>
-      {diff ? <Diff diff={diff} />
-        : written !== undefined ? <Output text={written} />
-        // A thread started or messaged is named in the row; what the call said back only repeats it.
-        : other && state === 'done' && block.name !== 'thread_read' ? null
-        : output ? <Output text={output} className={state === 'error' ? 'is-error' : ''} /> : null}
-    </details>
-  )
-}
-
-/** A tool's error as the harness wraps it (`<harness>[error] …</harness>`), as just the message. */
-const unwrap = (text: string) => text.replace(/^\s*<harness>\s*(?:\[error\]\s*)?([\s\S]*?)\s*<\/harness>\s*$/, '$1')
-
-/** What a call is about, in a line: the command, the path, else its arguments. */
-function summaryOf(name: string, args: Record<string, unknown>): string {
-  if (typeof args.command === 'string') return args.command
-  if (typeof args.path === 'string') return args.path
-  if (typeof args.pattern === 'string') return args.pattern
-  return name ? JSON.stringify(args) : ''
-}
-
-const lineCount = (text: string) => text.replace(/\n$/, '').split('\n').length
-const diffOf = (details: unknown) => typeof (details as { diff?: unknown } | undefined)?.diff === 'string' ? (details as { diff: string }).diff : undefined
-function diffStat(diff: string) {
-  const lines = diff.split('\n')
-  return { added: lines.filter((l) => l.startsWith('+')).length, removed: lines.filter((l) => l.startsWith('-')).length }
-}
-
-/** A small, static glyph per kind of row: thinking, a page to read, a prompt to run, a pencil, a new page. */
-const ROW_ICONS: Record<string, PhosphorIcon> = {
-  thinking: SparkleIcon, read: FileTextIcon, bash: TerminalIcon, edit: PencilSimpleIcon, write: FilePlusIcon,
-  thread_start: ArrowElbowDownRightIcon, thread_read: ChatCircleIcon, thread_send: ChatCircleIcon, thread_list: ChatsCircleIcon,
-  thread_archive: ArchiveIcon,
-}
-function Icon({ name }: { name: string }) {
-  const Glyph = ROW_ICONS[name] ?? WrenchIcon
-  return <Glyph className="row__icon" size={14} aria-hidden />
-}
-
-/** An edit's diff, as the edit tool reports it: `+12 added`, `-12 removed`, ` 12 context`, and `...` between hunks. */
-function Diff({ diff }: { diff: string }) {
-  // The tool numbers context and removed lines by the old file, added lines by the new one. Both columns show:
-  // the old number (context, removed) and the new one (context shifted by what changed above it, added).
-  const [all, setAll] = useState(false)
-  let shift = 0
-  const lines = diff.split('\n').map((line) => {
-    const kind = line.startsWith('+') ? 'add' : line.startsWith('-') ? 'del' : /^\s*\.\.\.\s*$/.test(line) ? 'gap' : 'ctx'
-    const match = /^[+\- ](\s*\d+) (.*)$/.exec(line)
-    const n = match ? Number(match[1]) : undefined
-    const old = n === undefined || kind === 'add' ? '' : String(n)
-    const next = n === undefined || kind === 'del' ? '' : kind === 'add' ? String(n) : String(n + shift)
-    if (kind === 'add') shift++
-    if (kind === 'del') shift--
-    return { kind, old, next, text: match ? match[2]! : kind === 'gap' ? '⋯' : line }
-  })
-  const long = lines.length > CAP * 2
-  return (
-    <div className="step__output step__diff">
-      <Scroll>
-        {(long && !all ? lines.slice(0, CAP * 2) : lines).map((line, index) => (
-          <span key={index} className={`diff__line diff__line--${line.kind}`}>
-            <span className="diff__num">{line.old}</span>
-            <span className="diff__num">{line.next}</span>
-            <span className="diff__sign">{line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ''}</span>
-            <span className="diff__text">{line.text}</span>
-          </span>
-        ))}
-      </Scroll>
-      {long && <button type="button" className="step__more" onClick={() => setAll(!all)}>{all ? 'Show less' : `Show all ${lines.length} lines`}</button>}
-    </div>
-  )
 }
 
 function Composer({ machine, thread, busy, inbox, onJump }: { machine: MachineEntry; thread: ThreadInfo; busy: boolean; inbox: InboxState | undefined; onJump?: () => void }) {

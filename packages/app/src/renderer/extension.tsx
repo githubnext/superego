@@ -81,6 +81,38 @@ export type ToolCallProps = {
   live?: { status: 'pending' | 'running' | 'done'; output?: string; details?: unknown }
 }
 
+/** How a tool call stands: not started, running, finished, or failed. */
+export type ToolState = 'idle' | 'working' | 'done' | 'error'
+
+/** A tool call as a row's parts see it: the call, and how it stands. */
+export type ToolRowCall = ToolCallProps & { state: ToolState }
+
+/**
+ * How calls to a tool look, described rather than drawn: the core draws the row (a chevron, the icon, the verb, the
+ * subject, its meta) and what it opens to. Each part left out, or returning `undefined`, is the core's default; `null`
+ * from `subject` or `body` is nothing.
+ */
+export type ToolRow = {
+  /** Its glyph (a wrench when unset); a spinner replaces it while it runs. */
+  icon?: ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>
+  /** Done, working, failed: "Read", "Reading", "Read failed". Unset: the tool's name, and "<name> failed". */
+  verbs?: [done: string, working: string, failed: string]
+  /** What it acted on, after the verb. Text shows in the mono face (a path, a command); a node as itself (a thread). Default: its `command`, `path` or `pattern`, else its arguments. */
+  subject?: (call: ToolRowCall) => ReactNode
+  /** Lines it added and removed: shown in the row, and summed in its run's line and its turn's. */
+  stat?: (call: ToolRowCall) => { added: number; removed: number } | undefined
+  /** A little more at the row's end: "12 lines". */
+  meta?: (call: ToolRowCall) => ReactNode
+  /** What the row opens to. Default: its output (cut to a dozen lines, or the error it ended with). */
+  body?: (call: ToolRowCall) => ReactNode
+  /** Said of `count` calls in a run's line ("Read 2 files and ran a command"): "read 2 files". Default: "used <name>". */
+  phrase?: (count: number) => string
+  /** The file a call was about: a run whose weightiest kind is one such call names it ("Edited src/a.ts", its done verb). */
+  file?: (args: Record<string, unknown>) => string | undefined
+  /** Which kind a run's line leads with, and whose icon it shows: the heaviest (edits 4, writes 3, commands 2, reads 1; 0 when unset). */
+  weight?: number
+}
+
 /** An entry of a kind an extension writes (`kind` is its own, like `git.commit`). */
 export type EntryProps = { machine: MachineEntry; thread: ThreadInfo; entry: { id: number; kind: string; data?: unknown } }
 
@@ -108,10 +140,11 @@ export type UiApi = {
   app: AppConfig
   slot<S extends SlotName>(slot: S, component: ComponentType<SlotProps[S]>, options?: { order?: number }): void
   /**
-   * Draw calls to the tool `name` (of the extension's daemon half, or any other). `fold: false` keeps them out of the
-   * fold a run of work closes into: they show under it, open, as what the agent showed you (images, say).
+   * How calls to the tool `name` look (of the extension's daemon half, or any other): described (a `ToolRow`: icon,
+   * verbs, subject, body), or drawn whole by a component of its own. `fold: false` keeps them out of the fold a run of
+   * work closes into: they show under it, open, as what the agent showed you (images, say).
    */
-  tool(name: string, component: ComponentType<ToolCallProps>, options?: { fold?: boolean }): void
+  tool(name: string, view: ComponentType<ToolCallProps> | ToolRow, options?: { fold?: boolean }): void
   entry(kind: string, component: ComponentType<EntryProps>): void
   /**
    * Divide runs of work into parts: the tasks an agent reported, say. The first divider to return parts for a run
@@ -189,8 +222,8 @@ export type Registry = {
   /** What the app's extensions are, as each declares itself: told to every machine, so UI-only ones are known there. */
   extensions: ExtensionAbout[]
   slots: { [S in SlotName]: Owned<{ component: ComponentType<SlotProps[S]>; order: number }>[] }
-  /** `fold: false`: its calls show outside the fold of their run of work. */
-  tools: Owned<{ name: string; component: ComponentType<ToolCallProps>; fold: boolean }>[]
+  /** Drawn by a `component`, or described by a `row`. `fold: false`: its calls show outside the fold of their run of work. */
+  tools: Owned<{ name: string; component?: ComponentType<ToolCallProps>; row?: ToolRow; fold: boolean }>[]
   entries: Owned<{ kind: string; component: ComponentType<EntryProps> }>[]
   panes: Owned<PaneKind & { kind: string }>[]
   work: Owned<{ divide: (run: WorkRun) => WorkPart[] | undefined }>[]
@@ -261,7 +294,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         add(list, { component: component as never, order: options?.order ?? 100 })
         list.sort((a, b) => a.order - b.order)
       },
-      tool: (name, component, options) => unique(registry.tools, 'name', { name, component, fold: options?.fold !== false }, 'tool'),
+      tool: (name, view, options) => unique(registry.tools, 'name', { name, ...(isComponent(view) ? { component: view } : { row: view }), fold: options?.fold !== false }, 'tool'),
       entry(kind, component) {
         own(kind, 'entry kinds')
         unique(registry.entries, 'kind', { kind, component }, 'entry kind')
@@ -314,6 +347,10 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   return registry
 }
 
+/** A component (a function, or `memo`/`forwardRef`'s object) rather than a `ToolRow`. */
+const isComponent = (view: ComponentType<ToolCallProps> | ToolRow): view is ComponentType<ToolCallProps> =>
+  typeof view === 'function' || '$$typeof' in view
+
 const RegistryContext = createContext<Registry | undefined>(undefined)
 export const RegistryProvider = ({ registry, children }: { registry: Registry; children: ReactNode }) =>
   <RegistryContext.Provider value={registry}>{children}</RegistryContext.Provider>
@@ -364,8 +401,11 @@ export function Slot<S extends SlotName>({ name, props }: { name: S; props: Slot
   return <>{entries.map(({ component: Component, owner }, index) => <Component key={`${owner.profile ?? ''}/${owner.extension}-${index}`} {...props} />)}</>
 }
 
-/** How calls to the tool `name` are drawn for `where`, if an extension draws them. */
+/** How calls to the tool `name` are drawn for `where`, if an extension draws them whole. */
 export const toolView = (registry: Registry, name: string, where: Where) => lookUp(registry.tools, where, (t) => t.name === name)?.component
+
+/** How calls to the tool `name` are described for `where`: what an extension (or the core) said, else nothing (the defaults). */
+export const toolRow = (registry: Registry, name: string, where: Where): ToolRow => lookUp(registry.tools, where, (t) => t.name === name)?.row ?? {}
 
 /** Whether calls to the tool `name` show outside the fold of their run, for `where` (an extension said `fold: false`). */
 export const unfoldedTool = (registry: Registry, name: string, where: Where) => lookUp(registry.tools, where, (t) => t.name === name)?.fold === false
