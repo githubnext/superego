@@ -29,22 +29,38 @@ export type PickerProps<T> = {
   footer?: ReactNode
 }
 
-/** ⌃1–⌃9 and ⌃⌘1–⌃⌘9: a digit with ⌃, by the key's place (⌃ may change what the key types). */
-const digitOf = (event: KeyboardEvent) => event.ctrlKey && !event.altKey && /^Digit[1-9]$/.test(event.code) ? Number(event.code.slice(5)) : undefined
+/** A key pressed in the box, as far as the picker cares. */
+export type PickerKey = Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'altKey'>
+
+/**
+ * What a key does, with `active` the row lit of `count` listed: light another (`move`), pick one (`pick`, `beside`
+ * with ⌘), or nothing of the picker's. ⌃1–⌃9 (⌃⌘ beside) go by the key's place, as ⌃ may change what it types.
+ */
+export function pickerKey(event: PickerKey, { active, count, digits = false }: { active: number; count: number; digits?: boolean }):
+  { move: number } | { pick: number; beside: boolean } | undefined {
+  if (digits && event.ctrlKey && !event.altKey && /^Digit[1-9]$/.test(event.code)) return { pick: Number(event.code.slice(5)) - 1, beside: event.metaKey }
+  const last = Math.max(count - 1, 0)
+  if (event.key === 'ArrowDown' || (event.ctrlKey && event.key === 'n')) return { move: Math.min(active + 1, last) }
+  if (event.key === 'ArrowUp' || (event.ctrlKey && event.key === 'p')) return { move: Math.max(active - 1, 0) }
+  if (event.key === 'Enter') return { pick: active, beside: event.metaKey }
+  return undefined
+}
 
 export function Picker<T>({ label, placeholder, className = '', items, filter, row, onPick, onClose, digits, empty = 'Nothing matches', footer }: PickerProps<T>) {
   const [query, setQuery] = useState('')
-  const [active, setActive] = useState(0)
-  const shown = useMemo(() => filter ? filter(items, query) : items, [items, query])
+  const [lit, setActive] = useState(0)
+  const shown = useMemo(() => filter ? filter(items, query) : items, [items, query, filter])
+  // Within the list as it is now: it may have shrunk since (the palette's actions changing, say).
+  const active = Math.min(lit, Math.max(shown.length - 1, 0))
   const list = useRef<HTMLUListElement>(null)
   useEffect(() => { list.current?.querySelector('.is-active')?.scrollIntoView?.({ block: 'nearest' }) }, [active])
   const pick = (item: T | undefined, beside: boolean) => { if (item !== undefined) onPick(item, { beside }) }
   const onKeyDown = (event: KeyboardEvent) => {
-    const digit = digits ? digitOf(event) : undefined
-    if (digit !== undefined) { event.preventDefault(); pick(shown[digit - 1], event.metaKey); return }
-    if (event.key === 'ArrowDown' || (event.ctrlKey && event.key === 'n')) { event.preventDefault(); setActive((i) => Math.min(i + 1, shown.length - 1)) }
-    if (event.key === 'ArrowUp' || (event.ctrlKey && event.key === 'p')) { event.preventDefault(); setActive((i) => Math.max(i - 1, 0)) }
-    if (event.key === 'Enter') { event.preventDefault(); pick(shown[active], event.metaKey) }
+    const does = pickerKey(event, { active, count: shown.length, digits })
+    if (!does) return
+    event.preventDefault()
+    if ('move' in does) setActive(does.move)
+    else pick(shown[does.pick], does.beside)
   }
   return (
     <Dialog onClose={onClose} size="medium" className={`palette ${className}`} label={label}>
