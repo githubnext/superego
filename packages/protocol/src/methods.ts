@@ -116,6 +116,9 @@ export type MachineInfo = {
   id: string; hostname: string; platform: string; pid: number; dataDir: string
   /** The build of the code this daemon runs (see `readBuild`); clients compare it with what is on disk now. */
   build: string
+  /** The git commit of the checkout it runs from, and when it was made (ms); absent from older daemons and outside git. */
+  commit?: string
+  committedAt?: number
 }
 
 export type Hello = { version: number; features: string[]; machine: MachineInfo; methods: string[] }

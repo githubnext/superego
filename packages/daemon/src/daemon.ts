@@ -26,6 +26,7 @@ import {
   type ThreadDraft, type ThreadHooks,
 } from './extension.ts'
 import { titleOf } from './names.ts'
+import { readCommit } from './build.ts'
 import { git, worktrees, type Worktree } from './worktrees.ts'
 import { serveWeb, webToken, type WebServer } from './web.ts'
 import { agentsInstructions } from './agents-md.ts'
@@ -130,6 +131,8 @@ export type DaemonOptions = {
   defaultCwd?: string
   /** The build of the code running, reported in `hello`. */
   build?: string
+  /** The git commit of the code running, reported in `hello`; defaults to this checkout's (none outside git). */
+  commit?: { commit: string; committedAt: number } | null
   /** Called once a restart was accepted and answered, with what to add to the successor's environment; the host closes the daemon and exits. */
   onRestart?: (env: Record<string, string>) => void
   /** The app's window build (index.html and assets), served to browsers when Web access is on. */
@@ -473,6 +476,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const machine: MachineInfo = {
     id: await machineId(options.dataDir), hostname: hostname(), platform: platform(), pid: process.pid, dataDir: options.dataDir,
     build: options.build ?? 'dev',
+    ...(options.commit === undefined ? readCommit(import.meta.dirname) : options.commit ?? {}),
   }
   /** Set once a restart is accepted: no new work starts, so nothing is cut off that wasn't agreed to. */
   let restarting = false

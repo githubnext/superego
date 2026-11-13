@@ -1,5 +1,6 @@
 // Which build of the daemon's code something is, as a short hash of that code on disk. The daemon records it when it
 // starts; a client hashes what is on disk now; when they differ, the running daemon is out of date and wants a restart.
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -27,4 +28,15 @@ function walk(dir: string): string[] {
     const path = join(dir, name)
     return statSync(path).isDirectory() ? walk(path) : name.endsWith('.ts') ? [path] : []
   })
+}
+
+/**
+ * The git commit the code in `dir` was checked out at, and when it was made (ms): what tells one machine's Superego
+ * from another's. Undefined outside a git checkout (a packaged app).
+ */
+export function readCommit(dir: string): { commit: string; committedAt: number } | undefined {
+  try {
+    const [commit, seconds] = execFileSync('git', ['-C', dir, 'log', '-1', '--format=%H %ct'], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).trim().split(' ')
+    return commit && seconds ? { commit, committedAt: Number(seconds) * 1000 } : undefined
+  } catch { return undefined }
 }

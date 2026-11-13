@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { existsSync } from 'node:fs'
@@ -53,6 +54,15 @@ describe('daemon', () => {
     const second = await open()
     expect((await second.peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })).machine.id).toBe(hello.machine.id)
     await second.close()
+  })
+
+  it('says which Superego it runs: build, protocol, and the commit it was checked out at', async () => {
+    const { peer, close } = await open()
+    const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
+    const [commit, seconds] = execFileSync('git', ['log', '-1', '--format=%H %ct'], { cwd: import.meta.dirname, encoding: 'utf8' }).trim().split(' ')
+    expect(hello.version).toBe(PROTOCOL_VERSION)
+    expect(hello.machine).toMatchObject({ build: 'dev', commit, committedAt: Number(seconds) * 1000 })
+    await close()
   })
 
   it('runs a thread, streams its view as ops, and derives status', async () => {
