@@ -174,6 +174,8 @@ it('answers older windows by the old names: thread.meta, thread.meta.clear, meta
   expect((await peer.call<{ value: ThreadInfo | null }>('meta.watch', {})).value).toBeNull()
   const meta = await peer.call<ThreadInfo>('thread.meta', { prompt: 'hi' })
   expect(meta.ext).toEqual({ ego: true })
+  // What they tell Ego's thread by: Clear, not Archive.
+  expect((meta as { meta?: boolean }).meta).toBe(true)
   await until(async () => (await peer.call<{ value: ThreadInfo | null }>('meta.watch', {})).value?.status.state === 'done')
   expect((await peer.call<ThreadInfo>('action.run', { id: 'thread.meta.clear', params: {}, exposure: 'cli' })).id).toBe(meta.id)
   await close()

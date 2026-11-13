@@ -63,6 +63,14 @@ const MOVED_WATCHES: Record<string, { value: string; event: string }> = {
 }
 /** Features that became an extension's: announced by their old names too, while it is, for older windows. */
 const MOVED_FEATURES: Record<string, string> = { ego: 'ext:ego' }
+/**
+ * Thread fields that became an extension's fact: given by their old names too, for older windows (the branch chip,
+ * Ego's Clear). Remove with the next protocol version.
+ */
+const MOVED_FACTS = (ext: Record<string, Json> | undefined) => ({
+  ...(ext?.worktrees !== undefined ? { worktree: ext.worktrees } : {}),
+  ...(ext?.ego === true ? { meta: true } : {}),
+})
 /** Settings kept under another key now: a value stored under the old one is read as the new one's. */
 const MOVED = Object.fromEntries(Object.entries(RENAMED).map(([old, now]) => [`extensions.${old}`, `extensions.${now}`]))
 
@@ -527,7 +535,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     ...(m.meta.profile ? { profile: m.meta.profile } : {}),
     ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),
     session: { root: rootOf(m), name: basename(rootOf(m)) },
-    ...factsInfo(id, m.meta, without),
+    ...withMovedFacts(factsInfo(id, m.meta, without)),
     ...(m.meta.archived ? { archived: true } : {}),
     ...(m.meta.hidden ? { hidden: true, ...(m.meta.owner ? { owner: m.meta.owner } : {}) } : {}),
     ...(m.meta.parent ? { parent: m.meta.parent } : {}),
@@ -592,6 +600,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     return Object.keys(ext).length ? { ext } : {}
   }
+  const withMovedFacts = (facts: Pick<ThreadInfo, 'ext'>) => ({ ...facts, ...MOVED_FACTS(facts.ext) })
   /** A thread's session: kept since it started; for older threads, found from its folder once (else the folder). */
   const rootOf = (m: Mounted) => m.meta.root ?? m.root ?? m.meta.cwd
   /** Only an assistant answer makes a thread "done"; the user's own message does not. */

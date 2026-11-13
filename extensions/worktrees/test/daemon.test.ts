@@ -68,6 +68,8 @@ it('gives a thread in a repository a worktree of its own when asked, in the same
   expect(thread.cwd).toBe(join(tree.path, 'app'))
   expect(thread.session).toEqual({ root, name: basename(root) })
   expect(git('branch', '--list', tree.branch)).toContain(tree.branch)
+  // Under its old name too, for older windows' branch chip.
+  expect((thread as { worktree?: unknown }).worktree).toEqual(tree)
   // Otherwise in place: the same session.
   const here = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
   expect(treeOf(here)).toBeUndefined()
