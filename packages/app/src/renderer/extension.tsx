@@ -149,6 +149,11 @@ export type LinkHandler = {
    * as `href`) and where the link is.
    */
   match: string | RegExp | ((href: string, kind: 'link' | 'code', where: LinkWhere) => boolean)
+  /**
+   * The scheme its links are of (`'thread'`), when `match` is a pattern or a test: HTML files keep links of the schemes
+   * handlers claim, and drop others they don't know. A `match` of `'scheme:'` says it already.
+   */
+  scheme?: string
   /** Following one: resolves to why it couldn't, if it couldn't. `beside`: ⌘-click, or ⌘⏎ in the list. */
   open(href: string, how: LinkWhere & { beside: boolean; kind: 'link' | 'code' }): void | string | undefined | Promise<string | void | undefined>
   /** How it's drawn. Default: a link that follows it, struck through with why when it couldn't. */

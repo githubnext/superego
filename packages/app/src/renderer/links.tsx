@@ -57,6 +57,7 @@ export const shortUrl = (url: string) => url.replace(/^https?:\/\/(www\.)?/i, ''
 /** The core's: files and web pages. */
 export function registerLinks(core: UiApi) {
   core.link({
+    scheme: 'wikilink',
     match: (href, kind, where) => Boolean(where.openFile) && (kind === 'code' ? looksLikePath(href)
       : href.toLowerCase().startsWith(WIKILINK) || (href !== '' && !/^([a-z][\w+.-]*:|#|\/\/)/i.test(href))),
     render: FileLink,

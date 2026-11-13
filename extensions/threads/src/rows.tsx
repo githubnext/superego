@@ -30,6 +30,7 @@ export function registerRows(superego: UiApi) {
 
 export function registerLinks(superego: UiApi) {
   superego.link({
+    scheme: 'thread',
     match: (href, kind, where) => kind === 'link' && Boolean(where.machine) && href.startsWith(THREAD),
     render: ({ href, children, where }) => <ThreadRef machine={where.machine!} id={href.slice(THREAD.length)}>{children}</ThreadRef>,
     // Shown; or, beside, in a pane beside the thread it's named in.

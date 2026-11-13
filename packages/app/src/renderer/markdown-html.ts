@@ -16,8 +16,8 @@ export const schema: Schema = {
   },
   protocols: {
     ...defaultSchema.protocols,
-    // A message's own links: to files ([[wikilinks]]) and threads.
-    href: [...(defaultSchema.protocols?.href ?? []), 'wikilink', 'thread'],
+    // Web pages and mail; the schemes link handlers claim (`thread:`, `wikilink:`) are added where they're drawn.
+    href: defaultSchema.protocols?.href ?? [],
     // Images inline and in files of the thread's, as Markdown's own may be.
     src: [...(defaultSchema.protocols?.src ?? []), 'data', 'blob', 'file'],
   },

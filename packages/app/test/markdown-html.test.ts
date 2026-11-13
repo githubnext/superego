@@ -28,11 +28,12 @@ describe('HTML in a rendered file', () => {
     expect(html).toContain('<img src="x.png"/>')
   })
 
-  it("keeps a message's own links, to files and threads, and GFM's tables and task lists", () => {
+  it("keeps links of the schemes handlers claim, and only those, and GFM's tables and task lists", () => {
     const html = render('[note](<wikilink:a.md>) and [t](thread:abc) and <a href="ticket:12">a ticket</a>\n\n| a | b |\n|:-|-:|\n| 1 | 2 |\n\n- [x] done')
-    expect(html).toContain('href="wikilink:a.md"')
     expect(html).toContain('href="ticket:12"')
-    expect(html).toContain('href="thread:abc"')
+    // Nothing here claims files or threads.
+    expect(html).not.toContain('wikilink:a.md')
+    expect(html).not.toContain('thread:abc')
     expect(html).toContain('<table>')
     expect(html).toContain('type="checkbox"')
   })

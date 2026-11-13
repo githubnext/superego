@@ -276,7 +276,10 @@ const components: Components = {
 const imageUrl = (url: string, key: string) => key === 'src' && /^(data:image\/|blob:|file:)/i.test(url)
 
 /** The schemes handlers claim by name (`ticket:` → `ticket`), for HTML's links to keep. */
-const schemesOf = (registry: Registry) => registry.links.flatMap(({ match }) => typeof match === 'string' && /^[a-z][\w+.-]*:$/i.test(match) ? [match.slice(0, -1).toLowerCase()] : [])
+const schemesOf = (registry: Registry) => registry.links.flatMap(({ match, scheme }) => [
+  ...scheme ? [scheme.toLowerCase()] : [],
+  ...typeof match === 'string' && /^[a-z][\w+.-]*:$/i.test(match) ? [match.slice(0, -1).toLowerCase()] : [],
+])
 
 /** Footnotes' ids are prefixed once, by the sanitizing, not again before it. */
 const noPrefix = { clobberPrefix: '' }

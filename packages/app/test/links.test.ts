@@ -57,6 +57,16 @@ describe('link handlers', () => {
     expect(wikilinks('see [[notes/plan|the plan]] and `[[not]]`')).toBe('see [the plan](<wikilink:notes%2Fplan>) and `[[not]]`')
   })
 
+  it('keeps, in HTML files, links of the schemes handlers claim: by their match, or the scheme a test says', () => {
+    const Ticket = ({ href, children }: LinkProps) => h('a', { className: 'ticket', 'data-href': href }, children)
+    const claims = defineUiExtension({ name: 'claims', setup(superego) { superego.link({ scheme: 'ticket', match: (href, kind) => kind === 'link' && /^ticket:\d+$/.test(href), render: Ticket, open: () => {} }) } })
+    const registry = createRegistry(app, [claims], registerLinks)
+    const html = renderToStaticMarkup(h(RegistryProvider, { registry, children: h(LinkPlace.Provider, { value: inThread() }, h(Markdown, { text: '<a href="ticket:12">t</a> <a href="wikilink:a.md">a</a> <a href="other:1">o</a>', html: true })) }))
+    expect(html).toContain('class="ticket" data-href="ticket:12"')
+    expect(html).toContain('class="md__file"')
+    expect(html).not.toContain('other:1')
+  })
+
   it("draws a claimed link its handler's way in Markdown, and others as web links", () => {
     const registry = createRegistry(app, [], registerLinks)
     registry.installProfile('local', profile, [notes])
