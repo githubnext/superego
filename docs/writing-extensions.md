@@ -172,20 +172,28 @@ superego.thread({
 ```
 
 - Hooks run in the order extensions were set up (the core's, the bundled ones, then profiles'), one at a time. Not
-  for a thread that goes without the extension; a profile's only for that profile's threads.
+  for a thread that goes without the extension; a profile's only for that profile's threads (its profile is loaded
+  first, so they run after a restart too). Facts and `agentFor` go by the same rule.
+- Archiving an archived thread, or unarchiving one in use, does nothing: the hooks see only real changes.
 - `creating`, `archiving` and `unarchiving` may refuse by throwing (an `RpcError` says it cleanly): nothing more
   happens, and the hooks after don't run. `creating` may also move where the thread works and give it state, each
   hook seeing the draft as the one before left it.
 - The others are told, and awaited in turn. A throw there is logged, and the thread carries on. `archived` runs
   before clients see the thread archived, so it's where cleanup goes. `turnStart` and `turnEnd` never hold up a run.
+- `turnStart` and `turnEnd` are per run, not per message: a message steered or queued into a run that's going is part
+  of it. A run resumed after a restart had started already, so it ends with a `turnEnd` alone; one that ended while
+  the daemon was down gets neither.
 - A thread archiving itself mid-turn is `threads.archive(id, { whenIdle: true })`: archived once its run ends, even
   across a restart.
 - State is kept in the thread's document under the extension's name, so it persists, and goes with the thread.
   `ThreadMeta.worktree` and `meta`, from before, read as the `worktrees` and `ego` extensions' state until those write
-  it. Facts are recomputed whenever the thread's info is; `invalidate()` when something else they read changed.
+  it. Facts are recomputed whenever the thread's info is; `invalidate()` when something else they read changed. A
+  profile's show once its profile has loaded: at startup for the threads in use, else when one of its threads is.
 - `agentFor` is called often: quick, and without side effects. The thread's own model wins over its answer, its answer
-  over the profile's, and the profile's over the machine's settings. Its `without` is what the thread goes without,
-  its agent's parts, panes and UI alike.
+  over the profile's, and the profile's over the machine's settings. Its instructions last only while it gives them:
+  when it no longer answers, the thread's agent has its profile's prompt again, or none. The parts it picks are its own
+  extension's, given with `agent(part, { always: false })`. Its `without` is what the thread goes without, its
+  agent's parts, panes and UI alike.
 
 Bundled extensions also declare whether they're required, once, in `about` (spread into both halves):
 
