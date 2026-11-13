@@ -869,6 +869,7 @@ if (phase === 'first') {
   await browser.webContents.executeJavaScript(`window.superego.call('local', 'thread.create', { title: 'unread on the phone', prompt: 'finish while away' })`)
   await browser.webContents.executeJavaScript(`document.querySelector('.app__mobilebar button').click()`)
   await inBrowser(`Boolean(document.querySelector('.app__footer .unread-button'))`, 'Unread beside Settings on a phone')
+  await inBrowser(`Boolean(document.querySelector('.app__footer .ego__button'))`, 'Ego beside Settings on a phone')
   await browser.webContents.executeJavaScript(`document.querySelector('.app__footer .unread-button').click()`)
   await inBrowser(`[...document.querySelectorAll('.unread-menu .superego-menu__item')].some((i) => i.textContent.includes('unread on the phone'))`, 'the finished thread in Unread')
   await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.unread-menu .superego-menu__item')].find((i) => i.textContent.includes('unread on the phone')).click()`)
