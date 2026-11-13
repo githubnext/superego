@@ -884,6 +884,38 @@ if (phase === 'first') {
   await inBrowser(`localStorage.getItem('superego.webToken') === ${JSON.stringify(new URL(url).hash.slice('#token='.length))}`, 'the token kept')
   browser.destroy()
   await run(`window.superego.call('local', 'settings.set', { key: 'web.access', value: 'off' })`)
+  // The second machine's profile UI: the thread works without it, and the window asks; it runs once allowed here, stops
+  // when its sources change, and stops at once when revoked.
+  const onSecond = await run(`window.superego.call('${secondId}', 'thread.create', { title: '' }).then((t) => t.id)`)
+  await run(`window.superego.call('${secondId}', 'thread.submit', { id: '${onSecond}', text: 'over on second' })`)
+  await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('over on second'))`, 'the remote thread in the sidebar', 30_000)
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('over on second')).click()`)
+  await until(`document.querySelector('.transcript')?.textContent.includes('echo: over on second')`, 'the remote thread works')
+  await until(`document.querySelector('.profile-ui-notice')?.textContent.includes('Second’s profile default has UI code')`, 'asked to allow the remote profile UI')
+  if (await run(`Boolean(document.querySelector('.remote-badge'))`)) { await fail('remote profile UI ran before it was allowed'); throw new Error('failed') }
+  await run(`[...document.querySelectorAll('.profile-ui-notice button')].find((b) => /files?,/.test(b.textContent)).click()`)
+  await until(`document.querySelector('.profile-ui-notice__files')?.textContent.includes('ui/label.ts')`, 'its files listed')
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  await shot('profile-ui-notice')
+  await run(`[...document.querySelectorAll('.profile-ui-notice__file')].find((b) => b.textContent === 'ui/label.ts').click()`)
+  await until(`document.querySelector('.profile-source')?.textContent.includes("remote ui")`, 'its source shown, read-only, in a pane')
+  await run(`[...document.querySelectorAll('.profile-ui-notice button')].find((b) => b.textContent === 'Allow').click()`)
+  await until(`document.querySelector('.remote-badge')?.textContent === 'remote ui' && !document.querySelector('.profile-ui-notice')`, 'the remote profile UI runs once allowed')
+  // Changed there: it stops, and the window asks again.
+  writeFileSync(`${process.env.SUPEREGO_HOME}/second/profiles/default/ui/label.ts`, "export const label: string = 'changed ui'\n")
+  await run(`window.superego.call('${secondId}', 'thread.submit', { id: '${onSecond}', text: 'after the change' })`)
+  await until(`!document.querySelector('.remote-badge') && Boolean(document.querySelector('.profile-ui-notice'))`, 'a changed profile UI stops until allowed again')
+  await run(`[...document.querySelectorAll('.profile-ui-notice button')].find((b) => b.textContent === 'Allow').click()`)
+  await until(`document.querySelector('.remote-badge')?.textContent === 'changed ui'`, 'the changed UI runs once allowed')
+  // Settings lists it under its machine; Revoke stops it at once.
+  await run(`document.querySelector('.app__settings').click()`)
+  await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent === 'Machines').click()`)
+  await until(`document.querySelector('.machine-row__ui')?.textContent.includes('default')`, 'allowed profile UI listed in Settings')
+  await shot('profile-ui-settings')
+  await run(`[...document.querySelectorAll('.machine-row__ui button')].find((b) => b.textContent === 'Revoke').click()`)
+  await until(`!document.querySelector('.machine-row__ui') && !document.querySelector('.remote-badge')`, 'revoked: the remote profile UI stops')
+  await escape()
+  await until(`!document.querySelector('.superego-dialog.settings')`, 'settings closed')
   console.log('smoke(first): ok')
 } else {
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread after reopen')

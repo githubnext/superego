@@ -30,6 +30,21 @@ export default defineUiExtension({
 })
 UI
 printf "export const label: string = 'profile ui'\n" > "$SUPEREGO_HOME/profiles/default/ui/label.ts"
+# The second machine's own default profile, with UI too: it runs in this window only once allowed here.
+mkdir -p "$SUPEREGO_HOME/second/profiles/default/ui"
+cat > "$SUPEREGO_HOME/second/profiles/default/profile.ts" <<'PROFILE'
+import { defineProfile } from 'superego'
+export default defineProfile({ description: 'remote', ui: ['./ui/badge.ts'] })
+PROFILE
+cat > "$SUPEREGO_HOME/second/profiles/default/ui/badge.ts" <<'UI'
+import { defineUiExtension, h } from 'superego/ui'
+import { label } from './label.ts'
+export default defineUiExtension({
+  name: 'remote-badge',
+  setup(superego) { superego.slot('thread.header', () => h('span', { className: 'remote-badge' }, label)) },
+})
+UI
+printf "export const label: string = 'remote ui'\n" > "$SUPEREGO_HOME/second/profiles/default/ui/label.ts"
 
 cat > "$SUPEREGO_REPLAY" <<'TURNS'
 {"at":0,"provider":"x","model":"x","message":{"role":"assistant","content":[{"type":"toolCall","id":"ask-1","name":"ask_user","arguments":{"question":"Which colour?","options":["red","blue"]}}],"stopReason":"toolUse"}}
