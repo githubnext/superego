@@ -1,7 +1,7 @@
 // Everything about which model the agents use and how Superego is signed in to its providers, as settings: the Model and
 // Providers sections, the credential store, and sign-in flows. Nothing else in the daemon knows about auth.
 import { createHash, randomUUID } from 'node:crypto'
-import { watch as watchFs } from 'node:fs'
+import { readFileSync, watch as watchFs } from 'node:fs'
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AuthPrompt as PiAuthPrompt, Credential, CredentialStore, ModelThinkingLevel } from '@earendil-works/pi-ai'
@@ -288,7 +288,13 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
     seen = now
     if (!changed.length) return
     await refreshAuth()
-    for (const provider of changed) credentialsChanged(provider)
+    // Not one rejected since the change: the turn that was rejected ran with what's there now (written just before it,
+    // and heard of after), so retrying it would only be rejected again, and start another rejection.
+    for (const provider of changed) if (rejections.get(provider)?.credential !== (now.get(provider) ?? '')) credentialsChanged(provider)
+  }
+  /** A provider's credentials as stored now (a hash), read at once: what a turn rejected just now ran with. */
+  const storedNow = (provider: string) => {
+    try { return hashOf((JSON.parse(readFileSync(credentials.path, 'utf8')) as Record<string, Credential>)[provider]) } catch { return '' }
   }
   // auth.json, whoever writes it: a sign-in here, the CLI, an editor. Its folder, as it's replaced, not written in place.
   let reread: ReturnType<typeof setTimeout> | undefined
@@ -395,7 +401,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
       // A turn refused here keeps the rejection it was refused for; only the provider's own word starts one.
       const known = rejections.get(provider)
       const detail = error!.startsWith(WAITING) && known ? known.detail : error!
-      rejections.fail(provider, thread, task, { name, summary: rejectionSummary(name, authed.get(provider)?.type, detail), detail, credential: seen.get(provider) ?? '' })
+      rejections.fail(provider, thread, task, { name, summary: rejectionSummary(name, authed.get(provider)?.type, detail), detail, credential: storedNow(provider) })
       return true
     },
     changedSinceRejected: () => rejections.all().filter((r) => r.credential !== (seen.get(r.provider) ?? '')).map((r) => r.provider),

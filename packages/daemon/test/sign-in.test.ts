@@ -137,3 +137,21 @@ it('keeps waiting across a restart, and retries what changed meanwhile', async (
   await until(async () => (await statusOf(daemon.peer, id)).state === 'done')
   await daemon.close()
 })
+
+it('takes a bad key written just before the turns it stops as the one rejected: no retry, one rejection', async () => {
+  await storeKey('good')
+  const { peer, close } = await open()
+  const value = await rejected(peer)
+  // The turns run, and are rejected, before the daemon hears auth.json change.
+  await storeKey('reject-new')
+  const ids = [(await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'one' })).id, (await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'two' })).id]
+  await until(() => waiting(peer, ids))
+  await until(() => value.now()[0]?.threads.length === 2)
+  const { since } = value.now()[0]!
+  await new Promise((resolve) => setTimeout(resolve, 600))
+  expect(value.now()).toHaveLength(1)
+  expect(value.now()[0]).toMatchObject({ since, threads: expect.arrayContaining(ids) })
+  expect(value.now()[0]!.retrying).toBeUndefined()
+  await value.stop()
+  await close()
+})
