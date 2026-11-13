@@ -660,3 +660,8 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .color-field__swatch { position: relative; width: 24px; height: 24px; flex: none; border-radius: 6px; box-shadow: var(--superego-control-edge); overflow: hidden; }
 .color-field__swatch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: default; }
 .color-field__swatch:has(input:focus-visible) { outline: 2px solid var(--superego-ring); outline-offset: 2px; }
+
+/* A machine running another Superego than this computer's: a quiet dot, why in its tooltip. */
+.machine-drift { display: inline-block; flex: none; align-self: center; width: 6px; height: 6px; border-radius: 50%; vertical-align: .1em; background: var(--superego-status-idle); }
+.machine-drift--behind { background: var(--superego-status-blocked); }
+.machine-row__drift { display: flex; align-items: baseline; gap: 6px; }

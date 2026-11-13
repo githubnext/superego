@@ -4,6 +4,7 @@ export type MachineId = string
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected'
 import type { MachineConfig } from '@superego/client/shared'
 import type { SettingsStore } from '@superego/settings'
+import type { MachineVersion, VersionDrift } from '@superego/protocol'
 
 export type { MachineConfig }
 
@@ -14,6 +15,10 @@ export type MachineEntry = {
   features?: string[]
   /** Absent for this computer, which can't be removed. */
   remote?: { route: string; enabled: boolean }
+  /** Which Superego it runs, from the last hello. */
+  version?: MachineVersion
+  /** A remote machine's Superego next to this computer's; absent when this computer can't tell. */
+  drift?: VersionDrift
 }
 
 

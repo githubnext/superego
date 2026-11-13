@@ -75,3 +75,4 @@ export { call, has, loadFonts, machine, useThreadView, useSettings, useValue, us
 export type { MachineEntry } from '../shared.ts'
 export { describeImage, ImageFrame, imageFileName, imageSourceOf, useImageSource, useNear, type ImageItem, type LoadedImage } from './images.tsx'
 export { Lightbox } from './lightbox.tsx'
+export { driftNote, MachineDrift } from './machine-drift.tsx'

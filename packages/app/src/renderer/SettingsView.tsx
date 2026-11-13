@@ -10,6 +10,7 @@ import type { MachineEntry } from '../shared.ts'
 import { machine as client, has, loadFonts, useSettings } from './client.ts'
 import { mergeSettings, type MergedSetting } from './merge-settings.ts'
 import { Keymap } from './Keymap.tsx'
+import { driftNote, MachineDrift } from './machine-drift.tsx'
 import { settingsView, useApp, useRegistry } from './extension.tsx'
 
 const APP = 'app'
@@ -355,6 +356,7 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
               {m.remote ? <code>{m.remote.route}</code> : 'Local daemon'}
               {m.machine && m.machine.hostname !== m.label ? ` · ${m.machine.hostname}` : ''} · {m.state}{m.error && m.state !== 'connected' ? ` — ${m.error}` : ''}
             </div>
+            {driftNote(m, appConfig.name) && <div className="settings__note machine-row__drift"><MachineDrift machine={m} side="bottom" /> {driftNote(m, appConfig.name)!.text}</div>}
           </div>
           <div className="provider__actions">
             {m.state === 'connected' && <Button onClick={() => onOpen(m.id)}>Settings</Button>}

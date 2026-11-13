@@ -7,7 +7,7 @@
 // UI only: it uses the core's thread methods and facts.
 import { Fragment, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import {
-  call, defineAction, defineUiExtension, showSession, SORT, unread, useAppSetting, useLocalState, useMachines, useSelection, useSessions, useSidebar, useThreadView, useShell, useShortcut,
+  call, defineAction, defineUiExtension, MachineDrift, showSession, SORT, unread, useAppSetting, useLocalState, useMachines, useSelection, useSessions, useSidebar, useThreadView, useShell, useShortcut,
   type MachineEntry, type Session, type Sort, type Store, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, type ExtensionAbout, type ThreadInfo } from '@superego/protocol'
@@ -113,6 +113,7 @@ function Threads() {
             <button className="threads-session__name" title={session.root} onClick={() => showSession({ select, lastThread }, session)}>
               {session.name}
               {where(session) && <em>{where(session)}</em>}
+              {session.machine.remote && <MachineDrift machine={session.machine} />}
             </button>
             <NewThreadButton label={`New thread in ${session.name}`} machine={session.machine} cwd={session.root} />
           </div>

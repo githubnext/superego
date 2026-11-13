@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, protocol, session, shell, type MenuItemConstructorOptions } from 'electron'
 import { appEnv, daemonStarting, defaultDataDir, readBuild, socketPath } from '@superego/daemon/client'
 import {
-  bool, defineAction, lit, obj, opt, Router, RpcError, str, union, unknown,
+  bool, compareVersions, defineAction, lit, obj, opt, Router, RpcError, str, union, unknown,
   type AppConfig, type DeclaredSection, type Json, type Notifications, type ThreadInfo, type SettingType,
 } from '@superego/protocol'
 import { serveSettings } from '@superego/settings'
@@ -118,13 +118,16 @@ export function startApp(appConfig: AppConfig) {
   const machineStore = new MachineStore(dataDir)
   const linkConfig = new Map<string, string>()
   function machineEntries(): MachineEntry[] {
-    const local = links.get('local')
+    const local = links.get('local')?.entry()
     return [
-      ...(local ? [local.entry()] : []),
+      ...(local ? [local] : []),
       ...machineStore.list().map((config): MachineEntry => {
         const remote = { route: routeOf(config, appConfig), enabled: config.enabled }
         const link = links.get(config.id)
-        return link ? { ...link.entry(), label: config.label, remote } : { id: config.id, label: config.label, state: 'disabled', remote }
+        const entry: MachineEntry = link ? { ...link.entry(), label: config.label, remote } : { id: config.id, label: config.label, state: 'disabled', remote }
+        // Said of a machine that answered once: one never reached runs nothing we know of.
+        const drift = entry.version && compareVersions(local?.version, entry.version)
+        return { ...entry, ...(drift ? { drift } : {}) }
       }),
     ]
   }

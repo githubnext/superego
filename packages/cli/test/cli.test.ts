@@ -29,7 +29,7 @@ const until = async (check: () => Promise<boolean>) => {
 
 beforeAll(async () => { home = await mkdtemp(join(tmpdir(), 'superego-cli-')) })
 afterAll(async () => {
-  for (const dir of [home, join(home, 'second')]) {
+  for (const dir of [home, join(home, 'second'), join(home, 'third')]) {
     const pid = Number(await readFile(join(dir, 'daemon.pid'), 'utf8').catch(() => '0'))
     if (pid) try { process.kill(pid) } catch {}
   }
@@ -111,6 +111,31 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     await superego(['machines', 'rm', 'Second'])
     expect(await superegoJson(['machines'])).toHaveLength(1)
     await expect(superego(['threads', '-m', 'Second'])).rejects.toThrow(/No machine called Second/)
+  })
+
+  it('says which Superego each machine runs', async () => {
+    // A machine behind a stub, connecting as `connect --start` does.
+    const third = join(home, 'third')
+    const run = `env SUPEREGO_HOME='${third}' SUPEREGO_MODEL=faux '${process.execPath}' '${CLI}'`
+    const stub = join(home, 'machine.sh')
+    writeFileSync(stub, `exec ${run} connect --start\n`)
+    await superego(['machines', 'add', '--via', `sh '${stub}' connect --start`, '--name', 'Third'])
+    const [here, there] = await superegoJson(['machines'])
+    expect(here.version).toMatchObject({ commit: expect.stringMatching(/^[0-9a-f]{40}$/), protocol: 1 })
+    expect(there).toMatchObject({ drift: { state: 'current' } })
+    expect(await superego(['machines'])).not.toContain('runs an')
+
+    // One that says an older commit, and one too old to say any.
+    const older = fileURLToPath(new URL('./fixtures/older.mjs', import.meta.url))
+    const behind = here.version.committedAt - 2 * 86_400_000
+    await superego(['machines', 'add', '--via', `'${process.execPath}' '${older}' 5e9684c0ffee ${behind} sh '${stub}' connect --start`, '--name', 'Behind'])
+    await superego(['machines', 'add', '--via', `'${process.execPath}' '${older}' none 0 sh '${stub}' connect --start`, '--name', 'Old'])
+    const listed = await superego(['machines'])
+    expect(listed).toMatch(/Behind .* runs an older Superego \(5e9684c, 2 days behind\)/)
+    expect(listed).toMatch(/Old .* runs an older Superego that doesn't say which/)
+    await superego(['machines', 'rm', 'Behind'])
+    await superego(['machines', 'rm', 'Old'])
+    await superego(['machines', 'rm', 'Third'])
   })
 
   it('restarts the daemon onto the installed code, keeping threads and its environment', async () => {

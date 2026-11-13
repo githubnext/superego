@@ -13,7 +13,7 @@ import { devApp } from './dev-app.ts'
 import { checkIdentity, MachineStore, openLocal, openMachine, routeOf, type MachineConfig, type Transport } from '@superego/client'
 import { appEnv, daemonStarting, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@superego/daemon'
 import {
-  FEATURES, PROTOCOL_VERSION, RpcError, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
+  compareVersions, driftPhrase, FEATURES, PROTOCOL_VERSION, RpcError, versionOf, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ThreadInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
@@ -200,14 +200,21 @@ async function listMachines() {
     try {
       const { transport, hello } = await withTimeout(connect(machine), 15_000)
       transport.close()
-      return { ...machine, state: 'answers', hostname: hello.machine.hostname, features: hello.features }
+      return { ...machine, state: 'answers', hostname: hello.machine.hostname, features: hello.features, version: versionOf(hello) }
     } catch (error) {
       return { ...machine, state: 'error', error: error instanceof Error ? error.message : String(error) }
     }
   }))
-  print(rows, () => table(rows.map((row) => [
+  // Each machine's Superego next to this computer's.
+  const here = rows[0] && 'version' in rows[0] ? rows[0].version : undefined
+  const described = rows.map((row) => {
+    const drift = row.config && 'version' in row ? compareVersions(here, row.version) : undefined
+    return { ...row, ...(drift ? { drift } : {}) }
+  })
+  print(described, () => table(described.map((row) => [
     row.id === 'local' ? 'local' : row.id.slice(0, 8), row.label, row.config ? routeOf(row.config, app) : 'this computer',
-    'error' in row ? `error: ${row.error}` : 'hostname' in row ? `${row.state} (${row.hostname})` : row.state,
+    ('error' in row ? `error: ${row.error}` : 'hostname' in row ? `${row.state} (${row.hostname})` : row.state)
+      + ('drift' in row && driftPhrase(row.drift, app.name) ? ` · runs ${driftPhrase(row.drift, app.name)}` : ''),
   ])))
 }
 

@@ -6,7 +6,7 @@ import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
-import { defineApp, PROTOCOL_VERSION, type ActionInfo, type ActionLogEntry, type AuthEvent, type Hello, type ModelCatalog, type Notifications, type ProviderAuthInfo, type RpcPeer, type ThreadInfo, type SettingsSnapshot } from '@superego/protocol'
+import { defineApp, PROTOCOL_VERSION, versionOf, type ActionInfo, type ActionLogEntry, type AuthEvent, type Hello, type ModelCatalog, type Notifications, type ProviderAuthInfo, type RpcPeer, type ThreadInfo, type SettingsSnapshot } from '@superego/protocol'
 import { connectSocket, listen, openDaemon, type Daemon } from '../src/index.ts'
 
 // Only the scripted model, whatever keys the machine running the tests has.
@@ -62,6 +62,7 @@ describe('daemon', () => {
     const [commit, seconds] = execFileSync('git', ['log', '-1', '--format=%H %ct'], { cwd: import.meta.dirname, encoding: 'utf8' }).trim().split(' ')
     expect(hello.version).toBe(PROTOCOL_VERSION)
     expect(hello.machine).toMatchObject({ build: 'dev', commit, committedAt: Number(seconds) * 1000 })
+    expect(versionOf(hello)).toEqual({ build: 'dev', protocol: PROTOCOL_VERSION, commit, committedAt: Number(seconds) * 1000 })
     await close()
   })
 
