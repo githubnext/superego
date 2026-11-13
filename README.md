@@ -57,7 +57,8 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
   told each one's name and description and reads one when it fits; `$name` or `/skill:name` in a message (completed
   as you type) sends that skill's instructions with it. `disable-model-invocation: true` keeps a skill to being named.
   `~/.agents/AGENTS.md`, and any `AGENTS.md` from the root down to the thread's folder, are standing instructions.
-  A profile can do without either (`without: ['skills', 'agents-md']`), and a machine can turn either off.
+  A profile can do without either (`without: ['skills', 'agents-md']`), and a machine can turn either off. Skills are
+  the `skills` extension; `AGENTS.md` is the core's.
 
 ## Keys
 
@@ -106,6 +107,7 @@ Focus is always visible: whatever has it wears one solid ring, and the region ho
 | `extensions/files` | the file tree beside the editor and quick open (`⌘P`) (daemon + UI) |
 | `extensions/images` | a `show_images` tool; the images in the thread, as one, a grid or a carousel, and a lightbox to zoom (daemon + UI) |
 | `extensions/links` | ⌃O: the links in the thread, newest first, fuzzy filtered; ⏎ follows one, ⌘⏎ opens it in a pane, ⌃1–9 / ⌃⌘1–9 the first nine (UI, and a daemon half that only declares it) |
+| `extensions/skills` | skills from `~/.agents/skills`: what each is for in the prompt, `$name` completed in the composer and sent with the message, a chip under it (daemon + UI) |
 | `extensions/suggestions` | after each answer, a side call to the thread's model for what you might send next; offered over the composer, numbered; ←/→ pick, ⏎ sends, ⇥ takes it to change, ⌃1–9 send that one (daemon + UI) |
 | `extensions/tasks` | `task_start`/`task_finish` tools and a prompt asking the agent to report its work as tasks; the transcript folds work under each task's title, status and outcome (daemon + UI) |
 
@@ -114,7 +116,7 @@ values, pane kinds described to the agent, thread status) and a UI half (`define
 and entry renderers, work dividers, settings sections, window actions with `when`, window state). Everything a half
 registers is its own and goes with it. Each extension declares once what it is, both halves alike: **required** (part
 of what Superego is: the sidebar) or **optional** (everything else, and the core's own agent parts `coding-tools`,
-`panes`, `skills`, `agents-md`, `thread-tools`): an optional one can be turned off per machine in Settings → Extensions
+`panes`, `agents-md`, `thread-tools`): an optional one can be turned off per machine in Settings → Extensions
 and left out by a profile (`without`), and its tools, pane kinds and UI are then absent from those threads.
 
 ## Environment

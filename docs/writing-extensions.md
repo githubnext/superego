@@ -84,8 +84,10 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `value('x.y', initial)` → `get`, `set`, `update` | live state the UI watches; in memory |
 | `pane(kind, about)` | tell the agent about a pane kind, for `open_pane` |
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
+| `submit(({ thread, text, attachments, content }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it |
 | `settings.register({ id: 'x', settings })`, `settings.get`, `settings.onChange` | machine settings of its own (`x.…`); read any |
 | `threads.list()`, `get(id)`, `of(conversationId)`, `conversation(id)`, `attachments(id)` | reach threads, and the folder a thread keeps files in |
+| `agentsDir` | the folder agents share (`~/.agents`): skills, `AGENTS.md` |
 | `harness` | pi-durable itself; unstable |
 
 | UI half (`superego.` in `setup`) | For |
@@ -94,6 +96,8 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `pane(kind, { title, component, icon, file, menu, opens, folders, urls, width })` | a kind of pane beside the thread; `opens`, `folders`, `urls`: files, folders or web pages a thread names open in it |
 | `tool(name, Component, { fold })` | how calls to a tool look; `fold: false` shows them outside the run's fold (images) |
 | `entry(kind, Component)` | transcript entries of a kind it writes |
+| `composer.complete({ title, word(text, caret), items(word, { machine, thread }) })` | complete the word being typed: `word` finds it (`{ start, query }`), `items` offers `{ label, detail, insert }` |
+| `composer.sentWith({ read(blocks), component })` | draw what its `submit` put in sent messages under them (a chip): `read` returns `{ items, blocks }`, and those blocks leave the text |
 | `work(divide)` | split a run of work into titled parts (tasks); bundled only |
 | `action(defineAction({ id, keys, when, run }))` | a window action with keys, in ⌘K while `when(context)` holds; bundled only |
 | `store('x.y', initial, { persist })` → `get`, `set`, `use()` | window state its actions and components share |
@@ -126,7 +130,7 @@ Bundled extensions also declare whether they're required, once, in `about` (spre
 <picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/required-dark.svg"><img src="writing-extensions/required.svg" alt="A required extension is always on; an optional one can be switched off per machine or left out by a profile, and that thread then has none of its tools, pane kinds or UI"></picture>
 
 Only the sidebar (`threads`) is required. Everything else is optional, the core's own `coding-tools`, `panes`,
-`skills`, `agents-md` and `thread-tools` included.
+`agents-md` and `thread-tools` included.
 
 ## Real ones to read
 
@@ -138,6 +142,7 @@ Only the sidebar (`threads`) is required. Everything else is optional, the core'
 | [`images`](../extensions/images/src) | a tool with `{ fold: false }`, files kept with `threads.attachments` |
 | [`git`](../extensions/git/src) | Changes: a `method` (a read), a `pane` the agent is told of, built on the kit's `Diff`, an `action` with keys |
 | [`web-panes`](../extensions/web-panes/src) | two pane kinds and nothing else; `urls: true` makes web links open in one |
+| [`skills`](../extensions/skills/src) | a prompt section, a `submit` transform, a `method`; `composer.complete` and `composer.sentWith` |
 | [`files`](../extensions/files/src) | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | [`links`](../extensions/links/src) | UI only, with a daemon half that only declares it |
 | [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings |

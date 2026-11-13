@@ -50,9 +50,9 @@ Every field is optional.
 - **`ui`** are modules for the window (`superego --skill ui`). They draw only in this profile's threads.
 - **`panes`** describes each pane kind the UI registers, so the agent knows it can open one and with which params.
 - **`without`** takes the names of optional extensions, the ones Settings → Extensions lists: the core's
-  `coding-tools` (read, write, edit, bash), `panes` (open_pane), `skills`, `agents-md`, `thread-tools` (thread_start,
+  `coding-tools` (read, write, edit, bash), `panes` (open_pane), `agents-md`, `thread-tools` (thread_start,
   thread_read, thread_send, thread_list, thread_archive), and the bundled `ask-user`, `files`, `images`, `links`,
-  `suggestions`, `tasks`. Its
+  `skills`, `suggestions`, `tasks`. Its
   threads get none of their tools or prompt sections, and the window shows none of their UI there. Required ones (the
   sidebar) can't be left out.
 

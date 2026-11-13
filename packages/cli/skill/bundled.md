@@ -66,7 +66,7 @@ else decides this. An extension whose work is all in the window still gets a dae
 Then wire it in:
 
 1. `app/package.json`: `"@superego/orders": "workspace:*"`, then `pnpm install`.
-2. `app/src/daemon.ts`: add the daemon half to `extensions: [...]`.
+2. `app/src/daemon.ts`: add the daemon half to `extensions: [...]` (and to `app/native/daemon.ts`, the native shell's).
 3. `app/src/renderer/main.tsx`: add the UI half to `mountApp(app, { extensions: [...] })`.
 4. Root `package.json`: add `tsc -p extensions/orders` to `typecheck`.
 5. The README's layout table: a line for it.
@@ -95,7 +95,8 @@ Daemon halves are tested against a real daemon with a scripted model. See `exten
 - `openDaemon({ app, dataDir, defaultCwd, extensions: [yours] })`, `listen(daemon, socket)`, connect, call methods;
 - wait for the thread's status and assert on the transcript, live values or action results.
 
-Pure logic (parsing, dividing work) gets plain unit tests. `pnpm test` runs everything under `packages/*/test` and
+Pure logic (parsing, dividing work, a composer provider's `word`, a `sentWith` reader) gets plain unit tests; see
+`extensions/skills/test/names.test.ts`. `pnpm test` runs everything under `packages/*/test` and
 `extensions/*/test`.
 
 ## Conventions

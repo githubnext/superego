@@ -59,6 +59,7 @@ the same name is refused.
 | `superego.value(key, initial)` | a live value named `<name>.<key>`: `get()`, `set(next)`, `update(fn)`. In memory only; a UI reads it with `useValue` (null until it's published) |
 | `superego.pane(kind, about)` | tell the agent about a pane kind the UI draws, and its params: open_pane lists it |
 | `superego.settings.register({ id, title, settings })` | a settings section of its own: id `<name>`, keys `<name>.<key>`. `settings.get(key)` reads any setting, `settings.onChange(fn)` hears changes |
+| `superego.submit(({ thread, text, attachments, content }) => …)` | change what each message sent to a thread gives its agent, before the turn starts: `content` is its blocks so far (`{ type: 'text', text }`, `{ type: 'image', data, mimeType }`), the text first; return the blocks to send instead, or nothing. Transforms run in order, each given the last one's; not for threads that go without the extension, a profile's only for its own threads. A throw fails the send |
 | `superego.status((threadId) => …)` | return `{ kind: 'question' \| 'permission' \| 'auth', msg? }` while a thread needs the user; it shows as blocked. Call `superego.invalidate()` when what it depends on changes |
 | `superego.threads.list()` | every thread: `{ id, title, cwd, status, profile, … }` |
 | `superego.threads.get(id)` | one thread, archived too; `not_found` if there's none |
@@ -66,6 +67,7 @@ the same name is refused.
 | `superego.threads.conversation(id)` | a thread's pi-durable conversation, to submit to or watch |
 | `superego.threads.attachments(id)` | the folder on this machine where a thread keeps its files (attachments, images it showed); clients read a file there with `file.read` by its absolute path |
 | `superego.app` | `{ name, id }` of the app |
+| `superego.agentsDir` | the folder agents share on this machine (`~/.agents`, or `SUPEREGO_AGENTS`): `skills/`, `AGENTS.md` |
 
 ## Common patterns
 
