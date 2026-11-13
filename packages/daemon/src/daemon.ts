@@ -282,17 +282,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** The agent parts a thread has: every built-in but those of the extensions it goes without. */
   const partsFor = (without: Set<string>) => builtins.filter((b) => !without.has(b.owner)).map((b) => b.part)
   /**
-   * The kinds of pane the agent can open, and what each shows: the core's, and those extensions describe (the window
-   * draws them; the extension's UI half registers the same kind). A profile's extension's are for that profile's threads
-   * only (`profile`: its folder).
+   * The kinds of pane the agent can open, and what each shows, as extensions describe them (`superego.pane`; the window
+   * draws them, the extension's UI half registering the same kind): the core's own `panes`, and any other's. A
+   * profile's extension's are for that profile's threads only (`profile`: its folder).
    */
-  const paneKinds: { kind: string; about: string; owner: string; profile?: string }[] = [
-    { kind: 'diff', about: 'the changes in the working folder; no params', owner: 'panes' },
-    { kind: 'preview', about: '{ url }: a web page, such as a local dev server', owner: 'panes' },
-    { kind: 'artifact', about: '{ path }: an HTML file in the working folder, shown as a page; write it first', owner: 'panes' },
-    { kind: 'editor', about: '{ path }: a file, for the user to read and edit', owner: 'panes' },
-    { kind: 'thread', about: '{ thread }: another conversation', owner: 'panes' },
-  ]
+  const paneKinds: { kind: string; about: string; owner: string; profile?: string }[] = []
   // Panes: the agent opens them beside its thread (a diff, a preview, an artifact it wrote, a profile's own), from the
   // kinds its instructions list.
   const panesPart = defineExtension({
@@ -331,7 +325,18 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    */
   const core: DaemonExtension[] = [
     { name: 'coding-tools', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools()) },
-    { name: 'panes', title: 'Panes', description: 'Open panes beside a thread: diffs, previews, files.', setup: (s) => s.agent(panesPart) },
+    {
+      name: 'panes', title: 'Panes', description: 'Open panes beside a thread: diffs, previews, files.',
+      setup(s) {
+        s.agent(panesPart)
+        // The window's built-in kinds (its panes.tsx).
+        s.pane('diff', 'the changes in the working folder; no params')
+        s.pane('preview', '{ url }: a web page, such as a local dev server')
+        s.pane('artifact', '{ path }: an HTML file in the working folder, shown as a page; write it first')
+        s.pane('editor', '{ path }: a file, for the user to read and edit')
+        s.pane('thread', '{ thread }: another conversation')
+      },
+    },
     {
       name: 'skills', title: 'Skills', description: 'Know the shared skills, and use them when they fit.',
       setup: (s) => s.agent(defineExtension({ name: 'skills', sections: [section('skills', async () => skillsPrompt(await listSkills(skillsDir)))] })),

@@ -58,14 +58,12 @@ export type ThreadInfo = {
   status: Status
 }
 
-/** `id` is the machine's identity: stable across restarts and routes, so a client can tell it is the same machine. */
 /** The models a machine can run, and the default a new thread gets there. */
 export type ModelCatalog = {
   models: { value: string; label: string; group: string; thinking: string[] }[]
   default: { model?: string; thinking: string | null }
 }
 
-/** What a new thread starts with. Unset: this machine's defaults. */
 /**
  * A pane: a view beside a thread (a diff, an editor, a preview, a profile's graph, another thread). `kind` names what
  * draws it; `params` are its own. Kept with the thread, so it follows the thread to every client.
@@ -80,6 +78,7 @@ export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean 
 /** A file sent with a message: images go to the model as images; any file is saved on the thread's machine. */
 export type Attachment = { name: string; mimeType: string; /** Base64. */ data: string }
 
+/** What a new thread starts with. Unset: this machine's defaults. */
 export type NewThread = {
   cwd?: string
   title?: string
@@ -99,6 +98,7 @@ export type NewThread = {
   parent?: string
 }
 
+/** `id` is the machine's identity: stable across restarts and routes, so a client can tell it is the same machine. */
 export type MachineInfo = {
   id: string; hostname: string; platform: string; pid: number; dataDir: string
   /** The build of the code this daemon runs (see `readBuild`); clients compare it with what is on disk now. */
@@ -117,7 +117,6 @@ export type Methods = {
   'file.read': { params: { id: ThreadId; path: string; base64?: boolean }; result: { path: string; content: string } }
   /** A file in a thread's folder, then `file.changed` whenever it changes on disk (by anyone), until unwatched. */
   'file.watch': { params: { id: ThreadId; path: string }; result: { sub: string; content: string | null } }
-  /** A file in a thread's folder by the name a link gives it ([[Note]], Note.md, path/Note): its path, or null. */
   /**
    * What a path a message names points at in a thread's folder: a file (or a note by its name), or a `folder` (`''` the
    * folder itself), with the `line` it names. `path` is null when there's nothing, `outside` when it's past the folder.
@@ -136,9 +135,9 @@ export type Methods = {
   'thread.abort': { params: { id: ThreadId }; result: null }
   /** The user looked at the thread: its done/error status clears. */
   'thread.seen': { params: { id: ThreadId }; result: null }
-  /** Snapshot of the conversation view, then `watch.ops` notifications with Chord delta ops against it. */
   /** Entries older than `before` (an entry id), oldest first: scrolling back past a watch's window. */
   'thread.history': { params: { id: ThreadId; before: number; limit?: number }; result: { entries: unknown[]; more: boolean } }
+  /** Snapshot of the conversation view, then `watch.ops` notifications with Chord delta ops against it. */
   'thread.watch': { params: { id: ThreadId }; result: { sub: string; value: ConversationView } }
   /** Snapshot of the thread list, then `threads.changed` notifications with the whole list. */
   'threads.watch': { params: {}; result: { sub: string; value: ThreadInfo[] } }
@@ -156,11 +155,9 @@ export type Methods = {
   'auth.logout': { params: { provider: string }; result: null }
 
   /**
-   * Restart onto newer code: the daemon exits and the client starts the new one. Refused (`restarted: false`) while a
-   * thread is working, unless `interrupt`; interrupted runs resume after the restart. `build` must be the running
-   * build, so a client never restarts a daemon it didn't inspect.
+   * Snapshot of an extension's live value, then `value.changed` with each new one. Watched by name: null until an
+   * extension publishes it, then its value.
    */
-  /** Snapshot of an extension's live value, then `value.changed` with each new one. */
   'value.watch': { params: { key: string }; result: { sub: string; value: Json } }
   /** Every action on this machine, as data. */
   'action.list': { params: {}; result: ActionInfo[] }
@@ -168,7 +165,12 @@ export type Methods = {
   'action.run': { params: { id: string; params?: unknown; exposure?: Exposure }; result: unknown }
   /** This machine's newest dispatches. */
   'action.log': { params: {}; result: ActionLogEntry[] }
-  /** `env` is laid over the daemon's own environment for its successor: `box run superego daemon restart` adds its keys. */
+  /**
+   * Restart onto newer code: the daemon exits and the client starts the new one. Refused (`restarted: false`) while a
+   * thread is working, unless `interrupt`; interrupted runs resume after the restart. `build` must be the running
+   * build, so a client never restarts a daemon it didn't inspect. `env` is laid over the daemon's own environment for
+   * its successor: `box run superego daemon restart` adds its keys.
+   */
   'daemon.restart': { params: { build: string; interrupt?: boolean; env?: Record<string, string> }; result: { restarted: boolean; busy: boolean } }
 }
 
