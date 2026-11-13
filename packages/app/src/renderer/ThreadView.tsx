@@ -348,12 +348,12 @@ function Transcript({ view, live }: { view: ConversationView; live: LiveState | 
             // Extensions may divide a run into parts (an agent's reported tasks); the last part is the one going on, and a
             // task still running is only ever that one (one left open when its run ends is interrupted).
             const active = last && Boolean(live?.run)
-            const parts = divideWork(registry, { blocks: item.blocks, active, result })
+            const parts = divideWork(registry, { machine: here.machine.id, thread: here.thread }, { blocks: item.blocks, active, result })
             return parts.map((part, i) => part.title !== undefined
               ? <Task key={`${item.key}:${i}`} part={part} results={results} running={running} />
               : part.blocks.length ? <Work key={`${item.key}:${i}`} blocks={part.blocks} results={results} running={running} active={active && i === parts.length - 1} /> : null)
           }
-          case 'end': return <TurnEnd key={item.key} blocks={divideWork(registry, { blocks: item.blocks, active: false, result }).flatMap((part) => part.blocks)} results={results} />
+          case 'end': return <TurnEnd key={item.key} blocks={divideWork(registry, { machine: here.machine.id, thread: here.thread }, { blocks: item.blocks, active: false, result }).flatMap((part) => part.blocks)} results={results} />
         }
       })}
       {live?.run && !partial && here.thread.status.state === 'working' && <div className="transcript__thinking">working…</div>}

@@ -5,13 +5,14 @@ import { useMemo, useState, type KeyboardEvent } from 'react'
 import { defineAction, defineUiExtension, keyLabel, useSelection, type Store } from '@superego/app/ui'
 import { Dialog } from '@superego/ui'
 import { filter, linksIn, newestFirst, short, type Link } from './links.ts'
+import { about } from './shared.ts'
 import './styles.css'
 
 /** Whether the list is open (set in setup). */
 let shown: Store<boolean>
 
 export default defineUiExtension({
-  name: 'links',
+  ...about,
   setup(superego) {
     shown = superego.store<boolean>('links.shown', false)
     superego.slot('overlay', Links)

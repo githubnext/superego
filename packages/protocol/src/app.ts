@@ -32,3 +32,17 @@ export const agentName = (app: AppConfig) => app.agent ?? app.name
 
 /** What `ssh <host>` runs to reach this app's daemon there, unless a machine says otherwise. */
 export const remoteCommand = (app: AppConfig) => `${app.id} connect --start`
+
+/**
+ * What an extension is, as both its halves declare it (spread into `defineDaemonExtension` and `defineUiExtension`).
+ * `required`: part of what the app is. It can't be turned off on a machine (Settings → Extensions lists only the
+ * others), a profile can't do without it, and nothing else decides that. Unset: optional.
+ */
+export type ExtensionAbout = {
+  /** Lowercase, unique in the app: `ask-user`, `files`. Everything it registers is named `<name>.<something>`. */
+  name: string
+  /** How Settings names it, and what it does there; the name, and nothing, when unset. */
+  title?: string
+  description?: string
+  required?: boolean
+}

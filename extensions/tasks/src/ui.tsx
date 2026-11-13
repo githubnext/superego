@@ -2,9 +2,10 @@
 // outcome, its steps folded under it.
 import { defineUiExtension } from '@superego/app/ui'
 import { divide } from './divide.ts'
+import { about } from './shared.ts'
 
 export default defineUiExtension({
-  name: 'tasks',
+  ...about,
   setup(superego) {
     superego.work(divide)
   },

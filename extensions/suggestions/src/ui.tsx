@@ -5,11 +5,11 @@
 import { useEffect } from 'react'
 import { defineUiExtension, has, keyLabel, useComposer, useValue, type MachineEntry } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
-import { NEXT, type Suggested } from './shared.ts'
+import { about, NEXT, type Suggested } from './shared.ts'
 import './styles.css'
 
 export default defineUiExtension({
-  name: 'suggestions',
+  ...about,
   setup(superego) {
     superego.slot('composer.above', Suggestions, { order: 200 })
   },

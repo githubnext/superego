@@ -4,9 +4,12 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { serveDaemon } from '@superego/daemon'
 import { MachineStore } from '@superego/client'
+// Every bundled extension's daemon half, in the order the window lists their UI halves. Whether each is required or
+// optional is its own declaration (`about`), not decided here.
 import askUser from '@superego/ask-user/daemon'
 import files from '@superego/files/daemon'
 import images from '@superego/images/daemon'
+import links from '@superego/links/daemon'
 import suggestions from '@superego/suggestions/daemon'
 import tasks from '@superego/tasks/daemon'
 import app from '../superego.config.ts'
@@ -15,7 +18,7 @@ import app from '../superego.config.ts'
 const webRoot = [join(import.meta.dirname, '../renderer'), join(import.meta.dirname, '../out/renderer')].find((dir) => existsSync(join(dir, 'index.html')))
 
 // The meta agent sets up the machines this computer reaches: the same list the app and `superego machines` keep.
-serveDaemon({ app, defaultCwd: homedir(), extensions: [askUser, files, images, tasks, suggestions], machines: (dataDir) => new MachineStore(dataDir), ...(webRoot ? { webRoot } : {}) }).catch((error) => {
+serveDaemon({ app, defaultCwd: homedir(), extensions: [askUser, files, images, links, suggestions, tasks], machines: (dataDir) => new MachineStore(dataDir), ...(webRoot ? { webRoot } : {}) }).catch((error) => {
   console.error(error)
   process.exit(1)
 })

@@ -2,7 +2,7 @@
 // installing a profile again replaces everything it registered before.
 import { describe, expect, it } from 'vitest'
 import { defineApp, type ThreadInfo } from '@superego/protocol'
-import { createRegistry, defineUiExtension, entryView, paneKind, settingsView, toolView, type UiExtension } from '../src/renderer/extension.tsx'
+import { createRegistry, defineUiExtension, entryView, paneKind, seenIn, settingsView, toolView, type UiExtension } from '../src/renderer/extension.tsx'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
 const profile = { scope: 'user' as const, name: 'default', dir: '/home/me/.superego/profiles/default' }
@@ -55,5 +55,28 @@ describe('the UI registry', () => {
     const twice = defineUiExtension({ name: 'more', setup(superego) { superego.tool('find_order', Other) } })
     const registry = createRegistry(app, [orders(), twice], () => {})
     expect(toolView(registry, 'find_order', { machine: 'local', thread: thread(false) })).toBe(Order)
+  })
+})
+
+describe('optional and required extensions', () => {
+  const Card = () => null
+  const Sidebar = () => null
+  const optional = defineUiExtension({
+    name: 'ask-user',
+    setup(superego) {
+      superego.slot('composer.above', Card)
+      superego.tool('ask_user', Card)
+    },
+  })
+  const required = defineUiExtension({ name: 'threads', required: true, setup(superego) { superego.slot('thread.aside', Sidebar) } })
+
+  it("draws nothing of an optional extension for a thread that goes without it, and all of a required one's", () => {
+    const registry = createRegistry(app, [optional, required], () => {})
+    const without = { machine: 'local', thread: { ...thread(false), without: ['ask-user', 'threads'] } }
+    const with_ = { machine: 'local', thread: thread(false) }
+    expect(toolView(registry, 'ask_user', with_)).toBe(Card)
+    expect(toolView(registry, 'ask_user', without)).toBeUndefined()
+    expect(seenIn(registry.slots['composer.above'], without)).toHaveLength(0)
+    expect(seenIn(registry.slots['thread.aside'], without).map((e) => e.component)).toEqual([Sidebar])
   })
 })

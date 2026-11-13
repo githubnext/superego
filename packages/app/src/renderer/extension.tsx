@@ -7,9 +7,9 @@
 // teardown removes all of it at once. A profile's UI is owned by that profile on its machine too, and draws only in
 // that profile's threads there.
 import { createContext, useContext, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
-import type { AppConfig, DeclaredSection, Json, Pane, ProfileRef, SectionInfo, ThreadInfo } from '@superego/protocol'
+import type { AppConfig, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, SectionInfo, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
-import { createWindowRouter, type Dispatch, type WindowAction, type WindowRouter } from './actions.tsx'
+import { createWindowRouter, type Dispatch, type WindowAction, type WindowContext, type WindowRouter } from './actions.tsx'
 import { createStore, type Store } from './local-state.ts'
 
 /** Where an extension can put UI. */
@@ -138,17 +138,23 @@ export type UiApi = {
   store<T extends Json>(key: string, initial: T, options?: { persist?: boolean }): Store<T>
 }
 
-export type UiExtension = {
-  /** The same name as the daemon half, if there is one; the UI uses it to tell whether a machine has that half. */
-  name: string
+/**
+ * A UI half: what the extension is (`ExtensionAbout`, the same as its daemon half's: spread one declaration into both),
+ * and its setup. An optional extension's UI draws nothing for a thread that goes without it (`ThreadInfo.without`),
+ * and its actions aren't offered while one is shown.
+ */
+export type UiExtension = ExtensionAbout & {
   setup(superego: UiApi): void
 }
 
 /** Identity for type inference: `export default defineUiExtension({ name, setup(superego) { … } })`. */
 export const defineUiExtension = (extension: UiExtension) => extension
 
-/** Who registered something: an extension, and for a profile's UI, that profile on its machine (`profileScope`). */
-type Owner = { extension: string; profile?: string }
+/**
+ * Who registered something: an extension, whether it's optional (a thread can go without it), and for a profile's UI,
+ * that profile on its machine (`profileScope`).
+ */
+type Owner = { extension: string; optional: boolean; profile?: string }
 type Owned<T> = T & { owner: Owner }
 
 /** A thread as lookups see it: on a machine, maybe with a profile. */
@@ -203,7 +209,8 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   /** Set up one extension: everything it adds is owned by it, and its teardown takes all of it away again. */
   function setUp(extension: UiExtension, profile?: string) {
     if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
-    const owner: Owner = { extension: extension.name, ...(profile ? { profile } : {}) }
+    // The core's and a profile's own aren't the machine's to turn off; a bundled extension is, unless it's required.
+    const owner: Owner = { extension: extension.name, optional: !profile && extension.name !== 'core' && !extension.required, ...(profile ? { profile } : {}) }
     // A name is the extension's prefix: one of each among the app's, and a profile's can't take one of theirs.
     if (teardowns.has(ownerKey(owner)) || (profile && teardowns.has(`/${extension.name}`))) throw new Error(`An extension named ${extension.name} is already set up`)
     const undo: (() => void)[] = []
@@ -240,7 +247,10 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       action(action) {
         if (profile) return console.warn(`Profile extension ${extension.name}: actions from a profile's UI aren't supported yet`)
         if (extension.name !== 'core' && !action.id.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its actions "${extension.name}.<name>", not "${action.id}"`)
-        undo.push(registry.router.register(action))
+        // Not offered while a thread that goes without this extension is shown.
+        const { when } = action
+        const has = (c: WindowContext) => !(owner.optional && c.selection && c.threadOf(c.selection)?.without?.includes(owner.extension))
+        undo.push(registry.router.register(owner.optional ? { ...action, when: (c) => has(c) && (when?.(c) ?? true) } : action))
       },
       appSettings(section) {
         if (profile) return console.warn(`Profile extension ${extension.name}: app settings from a profile's UI aren't supported yet`)
@@ -262,7 +272,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     try { extension.setup(api) } catch (error) { teardown(); throw error }
   }
 
-  setUp({ name: 'core', setup: core })
+  setUp({ name: 'core', required: true, setup: core })
   for (const extension of extensions) setUp(extension)
   return registry
 }
@@ -280,15 +290,19 @@ export function useRegistry(): Registry {
 /** The app this UI belongs to. */
 export const useApp = () => useRegistry().app
 
-/** What `where` sees of `list`: the app's, and its own profile's (only that profile's, on that machine). */
-const seen = <T,>(list: Owned<T>[], where: Where | undefined) => {
+/**
+ * What `where` sees of `list`: the app's, but not those of optional extensions its thread goes without; and its own
+ * profile's (only that profile's, on that machine).
+ */
+export const seenIn = <T,>(list: Owned<T>[], where: Where | undefined) => {
   const scope = scopeOf(where)
-  return list.filter((entry) => !entry.owner.profile || entry.owner.profile === scope)
+  const without = where?.thread.without
+  return list.filter(({ owner }) => owner.profile ? owner.profile === scope : !(owner.optional && without?.includes(owner.extension)))
 }
 
 /** The one of `list` that `where` sees by `match`: its profile's own first, else the app's. */
 function lookUp<T>(list: Owned<T>[], where: Where | undefined, match: (entry: T) => boolean): Owned<T> | undefined {
-  const found = seen(list, where).filter(match)
+  const found = seenIn(list, where).filter(match)
   return found.find((entry) => entry.owner.profile) ?? found[0]
 }
 
@@ -297,7 +311,7 @@ export function Slot<S extends SlotName>({ name, props }: { name: S; props: Slot
   const registry = useRegistry()
   useSyncExternalStore(registry.subscribe, () => registry.version)
   const { machine, thread } = props as { machine?: MachineEntry; thread?: ThreadInfo }
-  const entries = seen(registry.slots[name] as Owned<{ component: ComponentType<SlotProps[S]>; order: number }>[], machine && thread ? { machine: machine.id, thread } : undefined)
+  const entries = seenIn(registry.slots[name] as Owned<{ component: ComponentType<SlotProps[S]>; order: number }>[], machine && thread ? { machine: machine.id, thread } : undefined)
   return <>{entries.map(({ component: Component, owner }, index) => <Component key={`${owner.profile ?? ''}/${owner.extension}-${index}`} {...props} />)}</>
 }
 
@@ -314,9 +328,9 @@ export const entryView = (registry: Registry, kind: string, where: Where) => loo
 export const settingsView = (registry: Registry, ui: string, target: string) =>
   registry.settings.find((s) => s.ui === ui && (!s.owner.profile || s.owner.profile.startsWith(`${target}\u0000`)))?.component
 
-/** A run of work in parts, as the first extension that divides it says; else whole. */
-export function divideWork(registry: Registry, run: WorkRun): WorkPart[] {
-  for (const { divide } of registry.work) {
+/** A run of work in parts, as the first extension (that `where` has) that divides it says; else whole. */
+export function divideWork(registry: Registry, where: Where, run: WorkRun): WorkPart[] {
+  for (const { divide } of seenIn(registry.work, where)) {
     try {
       const parts = divide(run)
       if (parts) return parts
@@ -339,19 +353,19 @@ export function paneTitle(registry: Registry, pane: Pane, where: Where): string 
  * besides the editor, else the editor, which takes anything.
  */
 export function fileKind(registry: Registry, where: Where, path: string): string {
-  const found = seen(registry.panes, where).filter((p) => p.opens?.(path))
+  const found = seenIn(registry.panes, where).filter((p) => p.opens?.(path))
   return (found.find((p) => p.owner.profile) ?? found.find((p) => p.kind !== 'editor'))?.kind ?? 'editor'
 }
 
 /** The pane kind a folder opens in, for a thread: its profile's that shows folders, else any other; none, if none does. */
 export function folderKind(registry: Registry, where: Where): string | undefined {
-  const found = seen(registry.panes, where).filter((p) => p.folders)
+  const found = seenIn(registry.panes, where).filter((p) => p.folders)
   return (found.find((p) => p.owner.profile) ?? found[0])?.kind
 }
 
 /** The panes a thread's menu offers: the app's and its profile's that open without params. */
 export function paneMenu(registry: Registry, where: Where): { kind: string; title: string }[] {
-  const kinds = [...new Set(seen(registry.panes, where).map((p) => p.kind))]
+  const kinds = [...new Set(seenIn(registry.panes, where).map((p) => p.kind))]
   return kinds.flatMap((kind) => {
     const found = paneKind(registry, kind, where)
     if (!found?.menu) return []

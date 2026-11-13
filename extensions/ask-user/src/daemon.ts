@@ -4,16 +4,14 @@ import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { arr, obj, opt, str, union } from '@earendil-works/pi-schema'
 import { defineDaemonExtension } from '@superego/daemon'
 import { defineAction, RpcError } from '@superego/protocol'
-import { ANSWER, PENDING, TOOL, type AskDetails, type Option, type Question } from './shared.ts'
+import { about, ANSWER, PENDING, TOOL, type AskDetails, type Option, type Question } from './shared.ts'
 
 /** An option as given (a label, or a label and a description), as the UI shows it. */
 const optionOf = (option: string | Option): Option =>
   typeof option === 'string' ? { label: option } : { label: option.label, ...(option.description ? { description: option.description } : {}) }
 
 export default defineDaemonExtension({
-  name: 'ask-user',
-  title: 'Ask the user',
-  description: 'Put a question to you and wait for the answer.',
+  ...about,
   setup(superego) {
     const pending = superego.value<Question[]>(PENDING, [])
     const answers = new Map<string, (answer: string) => void>()

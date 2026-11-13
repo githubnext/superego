@@ -41,7 +41,7 @@ it('lets an agent start a thread of its own: a child, listed with its parent', a
   expect(JSON.stringify(value.entries)).toContain(`Started [Dates](thread:${child.id})`)
   // What the agents are given has threads, and it can be switched off like the rest.
   const { value: settings } = await peer.call<{ value: SettingsSnapshot }>('settings.watch', {})
-  expect(settings.sections.find((s) => s.id === 'extensions')!.settings.map((s) => s.key)).toContain('extensions.threads')
+  expect(settings.sections.find((s) => s.id === 'extensions')!.settings.map((s) => s.key)).toContain('extensions.thread-tools')
   // A thread can be started as another's child directly, too; not of one that isn't there.
   expect(await peer.call<ThreadInfo>('thread.create', { parent: child.id })).toMatchObject({ parent: child.id })
   await expect(peer.call('thread.create', { parent: '999' })).rejects.toMatchObject({ kind: 'not_found' })

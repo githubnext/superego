@@ -15,9 +15,9 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  agentName, arr, type Attachment, paramsParser, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type RpcPeer, type ThreadInfo,
+  agentName, arr, type Attachment, paramsParser, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
-import { serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
+import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
 import { threadTools } from './thread-tools.ts'
@@ -39,7 +39,13 @@ const Catalog = defineDoc<{ ids: number[]; ego?: number }>({
 })
 
 /** What Ego goes without, of what every thread has: it changes nothing itself, and starts threads its own way (see meta.ts). */
-const EGO_WITHOUT = new Set(['coding-tools', 'threads'])
+const EGO_WITHOUT = new Set(['coding-tools', 'thread-tools'])
+
+/** Settings kept under another key now: a value stored under the old one is read as the new one's. */
+const MOVED = {
+  // The thread tools were "threads", the sidebar's name.
+  'extensions.threads': 'extensions.thread-tools',
+}
 
 /** What a worktree being deleted is renamed with, between its name and a random suffix (see removeWorktree). */
 const REMOVING = '.removing-'
@@ -245,29 +251,36 @@ export async function locate(root: string, name: string): Promise<{ path: string
 
 export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
-  const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')))
+  const settings = new SettingsRegistry(withMovedKeys(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')), MOVED))
   const agent = await createAgentSettings(settings, options.dataDir, options.app)
   const registry = createRegistry()
   /**
-   * What every thread has unless this machine's settings turn it off or its profile does without: coding tools and the
-   * bundled extensions' agent parts, each by who gave it (`owners`: a bundled extension may give several).
+   * The agent parts every thread has unless it goes without the extension that gave them (see `withoutOf`): the core's
+   * own and the bundled extensions', each with its extension (one may give several).
    */
-  const builtins: Extension[] = []
-  const owners = new Map<Extension, string>()
-  const installBuiltin = (extension: Extension, owner = extension.name) => {
-    registry.install(extension)
-    builtins.push(extension)
-    owners.set(extension, owner)
-    return () => {
-      registry.uninstall(extension)
-      builtins.splice(builtins.indexOf(extension), 1)
-      owners.delete(extension)
-    }
+  const builtins: { part: Extension; owner: string }[] = []
+  const installBuiltin = (part: Extension, owner: string) => {
+    const entry = { part, owner }
+    registry.install(part)
+    builtins.push(entry)
+    return () => { registry.uninstall(part); builtins.splice(builtins.indexOf(entry), 1) }
   }
-  const ownerOf = (extension: Extension) => owners.get(extension)!
-  /** The built-ins this machine's settings leave on (see the Extensions section). */
-  const enabled = () => builtins.filter((e) => settings.get(`extensions.${ownerOf(e)}`) !== false)
-  installBuiltin(createCodingTools())
+  /** Every extension set up for the daemon's life, the core's own and the bundled ones, by name: what can be gone without. */
+  const extensions = new Map<string, ExtensionAbout>()
+  /**
+   * The optional extensions a thread goes without: turned off on this machine, left out by its profile, or (Ego) not
+   * for its kind. One answer for its agent's parts, the pane kinds it's told of, and the UI the window draws for it.
+   */
+  function withoutOf(meta?: ThreadMeta, profile?: LoadedProfile): Set<string> {
+    const without = new Set<string>()
+    for (const { name, required } of extensions.values()) {
+      if (required) continue
+      if (settings.get(`extensions.${name}`) === false || profile?.spec.without?.includes(name) || (meta?.meta && EGO_WITHOUT.has(name))) without.add(name)
+    }
+    return without
+  }
+  /** The agent parts a thread has: every built-in but those of the extensions it goes without. */
+  const partsFor = (without: Set<string>) => builtins.filter((b) => !without.has(b.owner)).map((b) => b.part)
   /**
    * The kinds of pane the agent can open, and what each shows: the core's, and those extensions describe (the window
    * draws them; the extension's UI half registers the same kind). A profile's extension's are for that profile's threads
@@ -282,7 +295,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   ]
   // Panes: the agent opens them beside its thread (a diff, a preview, an artifact it wrote, a profile's own), from the
   // kinds its instructions list.
-  installBuiltin(defineExtension({
+  const panesPart = defineExtension({
     name: 'panes',
     tools: [defineTool({
       name: 'open_pane',
@@ -297,31 +310,49 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       const kinds = panesOf(String(conversationId))
       return `Panes you can open beside this conversation with open_pane, by kind:\n${kinds.map(({ kind, about }) => `- "${kind}": ${about}`).join('\n')}`
     })],
-  }))
-  /** The pane kinds a thread's agent is told of: the core's and extensions', and its profile's. */
+  })
+  /** The pane kinds a thread's agent is told of: the core's and those of extensions it has, and its profile's. */
   function panesOf(id: string) {
     const meta = mounted.get(id)?.meta
     const profile = meta?.profile && profiles.get(meta.profile.dir)
+    const without = withoutOf(meta, profile)
     const declared = Object.entries(profile?.spec.panes ?? {}).map(([kind, about]) => ({ kind, about }))
-    return [...paneKinds.filter((p) => !p.profile || p.profile === meta?.profile?.dir), ...declared]
+    return [...paneKinds.filter((p) => !without.has(p.owner) && (!p.profile || p.profile === meta?.profile?.dir)), ...declared]
   }
   // Skills and standing instructions from the folder agents share (see skills.ts). Each is its own extension, so a
   // profile can do without either.
   const agentsDir = options.agentsDir ?? join(homedir(), '.agents')
   const skillsDir = join(agentsDir, 'skills')
-  installBuiltin(defineExtension({ name: 'skills', sections: [section('skills', async () => skillsPrompt(await listSkills(skillsDir)))] }))
-  installBuiltin(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] }))
   // Threads starting, reading, messaging and archiving threads (see thread-tools.ts).
   const threadInfo = async (id: string) => { const m = await get(id).catch(() => undefined); return m && info(id, m) }
-  installBuiltin(threadTools({
-    info: threadInfo,
-    list: () => list(),
-    start: (parent, params) => startThread({ ...params, parent }),
-    send: async (id, text) => { await submit(id, text, randomUUID(), 'followUp') },
-    answer: (id) => answerOf(id),
-    archive,
-    archiveWhenDone,
-  }))
+  /**
+   * The core's own agent parts, as extensions like any other: each optional, so a machine can turn it off and a profile
+   * can do without it. Set up first, through the same API as the bundled ones.
+   */
+  const core: DaemonExtension[] = [
+    { name: 'coding-tools', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools()) },
+    { name: 'panes', title: 'Panes', description: 'Open panes beside a thread: diffs, previews, files.', setup: (s) => s.agent(panesPart) },
+    {
+      name: 'skills', title: 'Skills', description: 'Know the shared skills, and use them when they fit.',
+      setup: (s) => s.agent(defineExtension({ name: 'skills', sections: [section('skills', async () => skillsPrompt(await listSkills(skillsDir)))] })),
+    },
+    {
+      name: 'agents-md', title: 'AGENTS.md', description: 'Follow the standing instructions in AGENTS.md files.',
+      setup: (s) => s.agent(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] })),
+    },
+    {
+      name: 'thread-tools', title: 'Thread tools', description: 'Start threads of their own, read, message and archive others.',
+      setup: (s) => s.agent(threadTools({
+        info: threadInfo,
+        list: () => list(),
+        start: (parent, params) => startThread({ ...params, parent }),
+        send: async (id, text) => { await submit(id, text, randomUUID(), 'followUp') },
+        answer: (id) => answerOf(id),
+        archive,
+        archiveWhenDone,
+      })),
+    },
+  ]
   /** A thread's last answer, as text. */
   async function answerOf(id: string) {
     const page = await (await get(id)).conversation.entries({ order: 'descending' }, 50, undefined, context)
@@ -350,7 +381,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     identity: { attribution: options.app.url ? { name: options.app.name, url: options.app.url } : null },
     env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? defaultCwd }),
     // A thread without a profile selects the built-ins only: profiles' extensions are installed too, but are theirs.
-    settings: () => ({ extensions: enabled() }),
+    settings: () => ({ extensions: partsFor(withoutOf()) }),
   }, context)
 
   const machine: MachineInfo = {
@@ -422,8 +453,14 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     ...(m.meta.archived ? { archived: true } : {}),
     ...(id === egoId ? { meta: true } : {}),
     ...(m.meta.parent ? { parent: m.meta.parent } : {}),
+    ...withoutInfo(m.meta),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
+  /** What a thread goes without, for clients: by its profile once loaded (until then, by this machine's settings). */
+  const withoutInfo = (meta: ThreadMeta) => {
+    const without = [...withoutOf(meta, meta.profile && profiles.get(meta.profile.dir))].sort()
+    return without.length ? { without } : {}
+  }
   /** A thread's session: kept since it started; for older threads, found from its folder once (else the folder). */
   const rootOf = (m: Mounted) => m.meta.root ?? m.root ?? m.meta.cwd
   /** Only an assistant answer makes a thread "done"; the user's own message does not. */
@@ -574,7 +611,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     const teardown = () => { for (const step of undo.splice(0).reverse()) step() }
     try {
-      const cleanup = await extension.setup(api)
+      const cleanup = await extension.setup?.(api)
       if (cleanup) undo.push(cleanup)
     } catch (error) {
       teardown()
@@ -582,13 +619,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     return teardown
   }
-  // The core's own agent parts are named too: Settings and profiles' `without` know them by those names.
-  for (const extension of builtins) claimed.add(ownerOf(extension))
-  for (const extension of options.extensions ?? []) cleanups.push(await setUp(extension, (agentExtension) => installBuiltin(agentExtension, extension.name)))
-  registerExtensionSettings(settings, [...new Set(builtins.map(ownerOf))].map((name) => {
-    const bundled = options.extensions?.find((e) => e.name === name)
-    return { name, title: bundled?.title, description: bundled?.description }
-  }))
+  // The core's own, then the bundled ones: for the daemon's life, each giving every thread its agent parts unless the
+  // thread goes without it.
+  for (const extension of [...core, ...options.extensions ?? []]) {
+    cleanups.push(await setUp(extension, (part) => installBuiltin(part, extension.name)))
+    const { name, title, description, required } = extension
+    extensions.set(name, { name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}) })
+  }
+  registerExtensionSettings(settings, [...extensions.values()])
+  // Turning one off changes what threads go without, which clients are told.
+  settings.onChange(changed)
   /** What this daemon offers, as `hello` says: the protocol's features, and every extension set up now. */
   const features = () => [...FEATURES, ...[...announced].map((name) => `ext:${name}`)]
 
@@ -628,6 +668,13 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       }
       teardowns.set(ref.dir, () => { for (const step of undo.reverse()) step() })
       profiles.set(ref.dir, loaded)
+      // What its threads go without may have changed with it.
+      changed()
+      for (const name of loaded.spec.without ?? []) {
+        const known = extensions.get(name)
+        if (!known) console.warn(`Profile ${ref.name}: without ${name}, which isn't an extension here`)
+        else if (known.required) console.warn(`Profile ${ref.name}: ${name} is required, and can't be done without`)
+      }
       return loaded
     })().finally(() => loading.delete(key))
     loading.set(key, pending)
@@ -638,21 +685,17 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   async function agentOf(meta: ThreadMeta) {
     const profile = meta.profile ? await profileOf(meta.profile) : undefined
     const { model, thinkingLevel } = agent.resolve({ model: meta.model ?? profile?.spec.model, thinking: meta.thinking ?? profile?.spec.thinking })
+    const parts = partsFor(withoutOf(meta, profile))
     // Ego: what Superego is, and its own tools, which only read and start threads, instead of the coding tools and
-    // the threads' own.
+    // the threads' own (it goes without those, see EGO_WITHOUT).
     if (meta.meta) {
       return {
-        model, thinkingLevel, extensions: [...enabled().filter((e) => !EGO_WITHOUT.has(ownerOf(e))), metaAgent],
+        model, thinkingLevel, extensions: [...parts, metaAgent],
         instructions: metaPrompt({ name: options.app.name, agent: options.app.agent, id: options.app.id, dataDir: options.dataDir, agentsDir, hostname: machine.hostname }),
       }
     }
-    if (!profile) return { model, thinkingLevel, extensions: enabled() }
-    const without = new Set(profile.spec.without ?? [])
-    return {
-      model, thinkingLevel,
-      extensions: [...enabled().filter((e) => !without.has(e.name) && !without.has(ownerOf(e))), ...profile.extensions],
-      instructions: profile.spec.prompt || null,
-    }
+    if (!profile) return { model, thinkingLevel, extensions: parts }
+    return { model, thinkingLevel, extensions: [...parts, ...profile.extensions], instructions: profile.spec.prompt || null }
   }
 
   /** Send `text` to a thread, with the model and thinking it chose, else what this machine's settings say now. */
@@ -677,7 +720,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   async function withSkills(meta: ThreadMeta, text: string, content: Awaited<ReturnType<typeof contentOf>>) {
     if (!/[$/]/.test(text)) return content
     const profile = meta.profile ? await profileOf(meta.profile) : undefined
-    if (profile?.spec.without?.includes('skills')) return content
+    if (withoutOf(meta, profile).has('skills')) return content
     const named = mentionedSkills(text, await listSkills(skillsDir))
     if (!named.length) return content
     const blocks = typeof content === 'string' ? (content ? [{ type: 'text' as const, text: content }] : []) : content

@@ -11,7 +11,7 @@ import {
 import type { ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, Dialog, FolderSimpleIcon, IconButton } from '@superego/ui'
 import './styles.css'
-import { FOLDER, LIST, type FileList } from './shared.ts'
+import { about, FOLDER, LIST, type FileList } from './shared.ts'
 
 // The tree, its button and quick open share what's shown, kept in the window (set in setup).
 /** The tree beside the editor: closed until asked for, then as last left. */
@@ -33,7 +33,7 @@ function useFiles(machine: string | undefined, thread: ThreadInfo | undefined) {
 }
 
 export default defineUiExtension({
-  name: 'files',
+  ...about,
   setup(superego) {
     treeShown = superego.store<boolean>('files.tree', false, { persist: true })
     quickOpen = superego.store<boolean>('files.open', false)

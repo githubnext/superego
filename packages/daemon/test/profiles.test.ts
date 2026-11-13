@@ -320,3 +320,18 @@ it("refuses a profile's extension that takes a name already in use, or settings 
   await expect(peer.call('thread.create', { cwd: project })).rejects.toThrow(/must name its settings/)
   await close()
 })
+
+it("tells clients what a profile's threads go without, and its agent goes without their parts", async () => {
+  write(join(home, 'profiles', 'default'), {
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ without: ['thread-tools', 'skills'] })\n`,
+  })
+  const { peer, close } = await open()
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  await done(peer, thread.id)
+  expect((await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === thread.id)?.without).toEqual(['skills', 'thread-tools'])
+  const agent = await agentOf(peer, thread.id)
+  expect(agent.extensions).not.toContain('thread-tools')
+  expect(agent.extensions).not.toContain('skills')
+  expect(agent.extensions).toContain('coding-tools')
+  await close()
+})

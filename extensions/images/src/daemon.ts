@@ -10,7 +10,7 @@ import { defineExtension, defineTool, section } from '@earendil-works/pi-durable
 import { arr, obj, oneOf, opt, str } from '@earendil-works/pi-schema'
 import { defineDaemonExtension } from '@superego/daemon'
 import { sniff } from './image.ts'
-import { LAYOUTS, TOOL, layoutFor, type Layout, type ShowDetails, type Shown } from './shared.ts'
+import { about, LAYOUTS, TOOL, layoutFor, type Layout, type ShowDetails, type Shown } from './shared.ts'
 
 /** How big one image may be, and how many one call shows. */
 export const MAX_BYTES = 10 * 1024 * 1024
@@ -48,9 +48,7 @@ export async function check(asked: Asked, cwd: string): Promise<{ shown: Shown; 
 }
 
 export default defineDaemonExtension({
-  name: 'images',
-  title: 'Images',
-  description: 'Show images and screenshots in the thread.',
+  ...about,
   setup(superego) {
     superego.agent(defineExtension({
       name: 'images',
@@ -74,7 +72,7 @@ export default defineDaemonExtension({
         replay: 'safe',
         async execute({ images, layout, title }, api) {
           const thread = superego.threads.of(api.conversationId) ?? String(api.conversationId)
-          const cwd = api.env?.cwd ?? (await superego.threads.list()).find((t) => t.id === thread)?.cwd ?? homedir()
+          const cwd = api.env?.cwd ?? (await superego.threads.get(thread).catch(() => undefined))?.cwd ?? homedir()
           const checked = await Promise.all(images.map((image) => check(image, cwd)))
           const errors = checked.flatMap((c) => 'error' in c ? [c.error] : [])
           if (errors.length) throw new Error(errors.length === 1 ? `Couldn’t show it: ${errors[0]}` : `Couldn’t show ${errors.length} of ${images.length}:\n- ${errors.join('\n- ')}`)

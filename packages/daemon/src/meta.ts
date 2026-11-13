@@ -67,7 +67,7 @@ What ${name} is:
       prompt: 'You answer customer email for Acme.', // instructions for its agent
       extensions: ['./tools.ts'],                    // agent tools, prompt sections, hooks (defineExtension from '${id}')
       ui: ['./ui/badge.tsx'],                        // window extensions (defineUiExtension from '${id}/ui')
-      without: ['ask-user'],                         // built-ins it does without: coding-tools, ask-user, panes, skills, agents-md
+      without: ['ask-user'],                         // optional extensions it does without: coding-tools, panes, skills, agents-md, thread-tools, ask-user, files, links, suggestions, tasks
       worktree: true,                                // its threads get worktrees
       extends: 'user:default',                       // a project's profile building on the user's
     })

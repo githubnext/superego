@@ -5,12 +5,12 @@
 import { useState } from 'react'
 import { defineUiExtension, useDispatch, has, keyLabel, Markdown, useComposer, useComposerClaim, useValue, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
-import { ANSWER, PENDING, TOOL, type AskDetails, type Option, type Question } from './shared.ts'
+import { about, ANSWER, PENDING, TOOL, type AskDetails, type Option, type Question } from './shared.ts'
 import { answerOf, keyMove, partsOf } from './question.ts'
 import './styles.css'
 
 export default defineUiExtension({
-  name: 'ask-user',
+  ...about,
   setup(superego) {
     superego.slot('composer.above', Waiting)
     superego.tool(TOOL, Asked)

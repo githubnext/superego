@@ -175,3 +175,18 @@ export class SettingsRegistry {
     })
   }
 }
+
+/** `store`, with values kept under keys that have moved (`{ old: new }`) read as their new keys (and saved so). */
+export function withMovedKeys(store: SettingsStore, moved: Record<string, string>): SettingsStore {
+  return {
+    load() {
+      const values = store.load()
+      for (const [old, now] of Object.entries(moved)) {
+        if (old in values && !(now in values)) values[now] = values[old]!
+        delete values[old]
+      }
+      return values
+    },
+    save: (values) => store.save(values),
+  }
+}

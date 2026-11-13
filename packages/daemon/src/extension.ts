@@ -6,18 +6,18 @@
 // Everything it registers is its own, named `<name>.<something>`, and undone when it's torn down: when the daemon
 // stops, or (a profile's) when the profile's files change.
 import type { Conversation, Extension, Harness } from '@earendil-works/pi-durable'
-import type { ActionDef, AppConfig, BlockedKind, Json, JsonSchema, Static, ThreadInfo } from '@superego/protocol'
+import type { ActionDef, AppConfig, BlockedKind, ExtensionAbout, Json, JsonSchema, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
 import type { DaemonContext } from './daemon.ts'
 
-export type DaemonExtension = {
-  /** Lowercase, unique in the app: `ask-user`, `git`. Its actions, methods, values and settings are `<name>.<something>`. */
-  name: string
-  /** How Settings names it, and what it gives the agents there; the name, and nothing, when unset. */
-  title?: string
-  description?: string
+/**
+ * A daemon half: what the extension is (`ExtensionAbout`: its name, title, description, and whether it's required),
+ * and its setup. An extension whose work is all in the window has a daemon half of its declaration alone, so the
+ * machine knows it: Settings lists it, and a profile can do without it.
+ */
+export type DaemonExtension = ExtensionAbout & {
   /** Called once when it's set up (the daemon starting, before interrupted work resumes; a profile loading). May return a cleanup. */
-  setup(superego: DaemonApi): void | (() => void) | Promise<void | (() => void)>
+  setup?(superego: DaemonApi): void | (() => void) | Promise<void | (() => void)>
 }
 
 /** Identity for type inference: `export default defineDaemonExtension({ name, setup(superego) { … } })`. */

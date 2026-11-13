@@ -2,13 +2,11 @@
 // next, published for the UI to offer. Anything the thread does next takes the suggestions away.
 import { defineExtension, GenerationTask, hook } from '@earendil-works/pi-durable'
 import { defineDaemonExtension } from '@superego/daemon'
-import { NEXT, type Suggested } from './shared.ts'
+import { about, NEXT, type Suggested } from './shared.ts'
 import { promptsOf, SYSTEM, transcriptOf } from './suggest.ts'
 
 export default defineDaemonExtension({
-  name: 'suggestions',
-  title: 'Prompt suggestions',
-  description: 'After each answer, suggest what you might send next.',
+  ...about,
   setup(superego) {
     const next = superego.value<Record<string, Suggested>>(NEXT, {})
     // Each thread's latest ask: an answer that comes back after the thread moved on is dropped.

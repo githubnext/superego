@@ -5,7 +5,7 @@ import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { obj, str } from '@earendil-works/pi-schema'
 import { defineDaemonExtension } from '@superego/daemon'
-import { FOLDER, LIST, type FileList } from './shared.ts'
+import { about, FOLDER, LIST, type FileList } from './shared.ts'
 
 /** Past this many, the list stops: a folder that big (a home directory) isn't browsed file by file. */
 export const LIMIT = 20_000
@@ -39,7 +39,7 @@ export async function listFiles(dir: string): Promise<FileList> {
 }
 
 export default defineDaemonExtension({
-  name: 'files',
+  ...about,
   setup(superego) {
     // A short cache: the tree and quick open ask often, and a folder changes slowly.
     const cache = new Map<string, { at: number; list: Promise<FileList> }>()

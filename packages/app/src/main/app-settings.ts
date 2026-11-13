@@ -2,7 +2,7 @@
 // how it sits on the desktop.
 // They are served under the reserved machine id "app" with the same settings methods a daemon answers.
 import { join } from 'node:path'
-import { SettingsRegistry, type SettingsStore } from '@superego/settings'
+import { SettingsRegistry, withMovedKeys } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import type { AppConfig } from '@superego/protocol'
 import { TEXT_SIZES } from '../shared.ts'
@@ -18,22 +18,8 @@ const MOVED: Record<string, string> = {
   'threads.sort': 'app.sort',
 }
 
-function movedSettings(store: SettingsStore): SettingsStore {
-  return {
-    load() {
-      const values = store.load()
-      for (const [old, now] of Object.entries(MOVED)) {
-        if (old in values && !(now in values)) values[now] = values[old]!
-        delete values[old]
-      }
-      return values
-    },
-    save: (values) => store.save(values),
-  }
-}
-
 export function createAppSettings(dataDir: string, app: AppConfig) {
-  const settings = new SettingsRegistry(movedSettings(new FileSettingsStore(join(dataDir, 'app-settings.json'))))
+  const settings = new SettingsRegistry(withMovedKeys(new FileSettingsStore(join(dataDir, 'app-settings.json')), MOVED))
   settings.register({
     id: 'appearance', title: 'Appearance', order: 50,
     settings: [

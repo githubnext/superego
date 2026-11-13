@@ -1,31 +1,18 @@
-// What Settings shows about a machine's extensions and profiles. Extensions: a switch for each that gives the agents
-// something (the core's own parts and the bundled extensions'), off for every thread here. Profiles: each one threads
-// here can start as, what it is and what it changes.
-import type { Json } from '@superego/protocol'
+// What Settings shows about a machine's extensions and profiles. Extensions: a switch for each optional one (the
+// core's own agent parts and the bundled extensions), off for every thread here. Required ones aren't listed: they're
+// part of what the app is. Profiles: each one threads here can start as, what it is and what it changes.
+import type { ExtensionAbout, Json } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
 import { hashProfile, loadProfile, type ProfileRef, type Trust } from './profiles.ts'
 
-/** The core's own agent parts, named for people. */
-const CORE: Record<string, { title: string; description: string }> = {
-  'coding-tools': { title: 'Coding tools', description: 'Read, write and edit files, and run commands.' },
-  panes: { title: 'Panes', description: 'Open panes beside a thread: diffs, previews, files.' },
-  skills: { title: 'Skills', description: 'Know the shared skills, and use them when they fit.' },
-  'agents-md': { title: 'AGENTS.md', description: 'Follow the standing instructions in AGENTS.md files.' },
-  threads: { title: 'Threads', description: 'Start threads of their own, and read and message others.' },
-}
-
-export type ExtensionAbout = { name: string; title?: string | undefined; description?: string | undefined }
-
-/** One switch per extension, `extensions.<name>`, on unless turned off. Turning one off applies from a thread's next message. */
+/** One switch per optional extension, `extensions.<name>`, on unless turned off. It applies from a thread's next message. */
 export function registerExtensionSettings(settings: SettingsRegistry, extensions: ExtensionAbout[]) {
   return settings.register({
     id: 'extensions', title: 'Extensions', order: 70,
-    description: 'What agents here are given. A profile can do without more.',
-    settings: extensions.map(({ name, title, description }) => {
-      const about = CORE[name]
-      const text = description ?? about?.description
-      return { key: `extensions.${name}`, title: title ?? about?.title ?? name, ...(text ? { description: text } : {}), default: true, type: { type: 'boolean' as const } }
-    }),
+    description: 'What threads here are given. A profile can do without more.',
+    settings: extensions.filter((e) => !e.required).map(({ name, title, description }) => ({
+      key: `extensions.${name}`, title: title ?? name, ...(description ? { description } : {}), default: true, type: { type: 'boolean' as const },
+    })),
   })
 }
 

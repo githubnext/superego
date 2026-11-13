@@ -67,7 +67,7 @@ export function threadTools(host: ThreadsHost) {
   }
 
   return defineExtension({
-    name: 'threads',
+    name: 'thread-tools',
     tools: [
       defineTool({
         name: 'thread_start',

@@ -4,7 +4,7 @@
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { obj, oneOf, str } from '@earendil-works/pi-schema'
 import { defineDaemonExtension } from '@superego/daemon'
-import { ENDINGS, FINISH, START } from './shared.ts'
+import { about, ENDINGS, FINISH, START } from './shared.ts'
 
 const PROMPT = `Report your work as short, human-scale tasks using ${START} and ${FINISH}.
 Before investigating, reading, editing, or testing, call ${START} with a concise action-oriented title such as "Reading up on billing", "Investigating duplicate charges", or "Improving authentication". Wait for its returned task_id before working.
@@ -15,9 +15,7 @@ Finish the current task before starting the next. Finish all tasks before ending
 The task's outcome IS the completion recap. Do not repeat it in your final message, restate the changes, or repeat build/test results. Only write a final message when it adds something new: an answer to a separate question, a decision, a tradeoff, a question for the user, or an important caveat.`
 
 export default defineDaemonExtension({
-  name: 'tasks',
-  title: 'Task reporting',
-  description: 'Report work as a few titled tasks, each with how it went.',
+  ...about,
   setup(superego) {
     superego.agent(defineExtension({
       name: 'tasks',

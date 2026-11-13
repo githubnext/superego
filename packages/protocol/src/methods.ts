@@ -50,6 +50,11 @@ export type ThreadInfo = {
   archived?: boolean
   /** Ego, the machine's own agent, about Superego itself (see `thread.meta`): one thread, in no list, never archived. */
   meta?: boolean
+  /**
+   * The optional extensions it goes without: turned off on its machine, or left out by its profile. The window draws
+   * none of their UI for it either. Absent: it has them all.
+   */
+  without?: string[]
   status: Status
 }
 

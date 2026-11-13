@@ -10,7 +10,7 @@ import {
   call, defineAction, defineUiExtension, showSession, SORT, unread, useAppSetting, useLocalState, useMachines, useSelection, useSessions, useSidebar, useThreadView, useShell, useShortcut,
   type MachineEntry, type Session, type Sort, type Store, type WindowContext,
 } from '@superego/app/ui'
-import { rollup, type ThreadInfo } from '@superego/protocol'
+import { rollup, type ExtensionAbout, type ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, ChatsIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
 import { activity, ago } from './groups.ts'
@@ -29,8 +29,16 @@ let unfolded: Store<boolean>
 const set = (c: Pick<WindowContext, 'dispatch'>, key: string, value: string | boolean) =>
   c.dispatch('app.settings.set', { key, value }, { machine: 'app', source: 'threads' })
 
+/**
+ * What this extension is: required. The sidebar is how the window goes between sessions and threads, for every thread
+ * on every machine at once, so neither a machine's switch nor a profile's `without` could mean anything for it.
+ */
+export const about = {
+  name: 'threads', title: 'Sidebar', description: 'Sessions and their threads, sorted, as a list or a rail, with thread details.', required: true,
+} satisfies ExtensionAbout
+
 export default defineUiExtension({
-  name: 'threads',
+  ...about,
   setup(superego) {
     unfolded = superego.store<boolean>('threads.unfolded', false)
     superego.appSettings({

@@ -9,11 +9,11 @@ import { CaretLeftIcon, CaretRightIcon, ImageBrokenIcon } from '@superego/ui'
 import { Lightbox } from './lightbox.tsx'
 import { useNear, useSource } from './load.ts'
 import { describe, fileName } from './names.ts'
-import { TOOL, type ShowDetails, type Shown } from './shared.ts'
+import { about, TOOL, type ShowDetails, type Shown } from './shared.ts'
 import './styles.css'
 
 export default defineUiExtension({
-  name: 'images',
+  ...about,
   setup(superego) {
     superego.tool(TOOL, ShownImages, { fold: false })
   },
