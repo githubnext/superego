@@ -430,9 +430,14 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   ]
   /** A thread's last answer, as text. */
+  /** A thread's newest transcript entries, newest first: none from before it was last cleared. */
+  async function newest(id: string, limit: number) {
+    const m = await get(id)
+    const { items } = await m.conversation.entries({ order: 'descending' }, limit, undefined, context)
+    return items.filter((entry) => Number(entry.id) >= (m.meta.cleared ?? 0))
+  }
   async function answerOf(id: string) {
-    const page = await (await get(id)).conversation.entries({ order: 'descending' }, 50, undefined, context)
-    for (const entry of page.items) {
+    for (const entry of await newest(id, 50)) {
       const message = entry.model?.[0] as { role?: string; content?: unknown } | undefined
       if (message?.role !== 'assistant' || !Array.isArray(message.content)) continue
       const said = (message.content as { type: string; text?: string }[]).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim()
@@ -901,7 +906,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         create: ({ hidden, ...params }) => startThread({ ...params, ...(hidden ? { hidden: extension.name } : {}), by: extension.name }),
         async submit(id, text, { whenBusy = 'followUp' } = {}) { await submit(id, text, randomUUID(), whenBusy, [], extension.name) },
         lastAnswer: (id) => answerOf(id),
-        async entries(id, limit = 20) { return (await (await get(id)).conversation.entries({ order: 'descending' }, limit, undefined, context)).items },
+        entries: (id, limit = 20) => newest(id, limit),
         async archive(id, { whenIdle = false } = {}) {
           if (!whenIdle) return archive(id)
           await archiveWhenDone(id)

@@ -242,7 +242,10 @@ export type DaemonApi = {
     submit(id: string, text: string, options?: { whenBusy?: 'steer' | 'followUp' }): Promise<void>
     /** Its last answer, as text, if it has one. */
     lastAnswer(id: string): Promise<string | undefined>
-    /** Its newest transcript entries, newest first (`limit`, default 20): what it's doing now, say. */
+    /**
+     * Its newest transcript entries, newest first (`limit`, default 20), none from before it was cleared: what it's doing
+     * now, say. pi-durable's `EntryRecord`, which isn't part of the stable API: its shape may change with pi-durable.
+     */
     entries(id: string, limit?: number): Promise<readonly EntryRecord[]>
     /**
      * Put it away (its `archiving` hooks may refuse); `whenIdle`: once its run ends, kept across restarts (a thread
