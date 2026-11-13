@@ -301,6 +301,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * profile's extension's are for the threads of the profiles that have it only (`profiles`: their folders).
    */
   const paneKinds: { kind: string; about: string; owner: string; profiles?: Set<string> }[] = []
+  /** How the window shows an agent's messages (Markdown.tsx), so it writes for that. */
+  const MARKDOWN_PROMPT = [
+    'The thread shows your messages as GitHub-flavoured Markdown: tables, task lists and strikethrough render; raw HTML does not.',
+    'Fenced code blocks are syntax-highlighted by their language tag (```ts, ```bash, ```diff, …), so always tag the language.',
+  ].join('\n')
   // Panes: the agent opens them beside its thread (a file, another thread, an extension's or a profile's own), from the
   // kinds its instructions list.
   const panesPart = defineExtension({
@@ -344,6 +349,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    */
   const core: DaemonExtension[] = [
     { name: 'coding-tools', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools()) },
+    {
+      // How messages show is the window's, not something to turn off.
+      name: 'markdown', title: 'Markdown', description: 'Know how the thread shows messages, and write for it.', required: true,
+      setup: (s) => s.agent(defineExtension({ name: 'markdown', sections: [section('markdown', () => MARKDOWN_PROMPT)] })),
+    },
     {
       name: 'panes', title: 'Panes', description: 'Open panes beside a thread: files, other threads, and the kinds extensions add.',
       setup(s) {
