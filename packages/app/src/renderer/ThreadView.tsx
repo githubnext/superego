@@ -85,7 +85,7 @@ export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread
   const navigate = () => void dispatch('app.navigator', {}, { source: 'titlebar' }).catch((error) => console.error(error))
   return (
     <span className="titlebar__crumb">
-      <span className="titlebar__seg titlebar__session" title={thread.cwd}>
+      <span className="titlebar__seg titlebar__session" title={`${thread.session?.name ?? folderName(thread.cwd)}\n${thread.cwd}`}>
         {machine.id !== 'local' && <>{machine.label}<span className="titlebar__dot">·</span></>}
         {thread.session?.name ?? folderName(thread.cwd)}
       </span>
@@ -143,7 +143,7 @@ export function ThreadTools({ machine, thread }: { machine: MachineEntry; thread
     <span className="thread__tools">
       <span className="thread__crumb">
         {thread.parent && <span className="titlebar__chip thread__parent">from <ThreadRef machine={machine.id} id={thread.parent} /></span>}
-        {thread.worktree && <span className="titlebar__chip thread__branch" title={thread.worktree.path}>{thread.worktree.branch}</span>}
+        {thread.worktree && <span className="titlebar__chip thread__branch" title={`${thread.worktree.branch}\n${thread.worktree.path}`}>{thread.worktree.branch}</span>}
         {thread.profile && <span className="titlebar__chip thread__profile" title={thread.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{thread.profile.name}</span>}
       </span>
       <Slot name="thread.header" props={{ machine, thread }} />

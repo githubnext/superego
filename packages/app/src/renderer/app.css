@@ -1,6 +1,6 @@
 /* The window: the side (the rail and the sidebar) down the left on the window's greys, the thread and its panes white
    beside it. Across the top, one hairline: under the window's buttons over the side, and under the title bar beside. */
-.app { display: flex; flex-direction: column; height: 100%; background: var(--superego-bg); }
+.app { display: flex; flex-direction: column; height: 100%; background: var(--superego-bg); overflow: hidden; }
 .app__drag { height: 38px; -webkit-app-region: drag; flex: none; }
 .app__drag :is(button, a, input, select, textarea, summary, [role="button"], [contenteditable]) { -webkit-app-region: no-drag; }
 .app__body { flex: 1; display: flex; min-height: 0; background: var(--superego-chrome); }
@@ -23,9 +23,13 @@
 /* The title bar: past the window's buttons (or, with the list open, past the side), where you are; the thread's
    columns and what it says about itself at the right. Over the list, the side's grey runs up behind the window's
    buttons, with back and forward at its right edge. */
-.app__titlebar { position: relative; height: var(--superego-titlebar); display: flex; align-items: center; gap: var(--superego-space-3); min-width: 0; padding: 0 12px 0 84px; border-bottom: 1px solid var(--superego-line); }
+.app__titlebar { position: relative; height: var(--superego-titlebar); display: flex; align-items: center; gap: var(--superego-space-3); min-width: 0; padding: 0 12px 0 84px; border-bottom: 1px solid var(--superego-line); container-type: inline-size; overflow: hidden; }
 .app.has-sidebar:has(.app__sidebar > :not(.app__footer):first-child) .app__titlebar { padding-left: calc(var(--superego-rail) + var(--superego-sidebar) + 1px + var(--superego-space-3)); }
 .app.has-sidebar:has(.app__sidebar > :not(.app__footer):first-child) .app__titlebar::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: calc(var(--superego-rail) + var(--superego-sidebar)); background: var(--superego-chrome); border-right: 1px solid var(--superego-line); pointer-events: none; }
+/* Short of room, the bar gives way in turn. Its end takes up to 55% of it: in there, where the thread came from and
+   its branch give way first (gone when tight), then the tabs and the model; buttons keep their size. The title takes
+   the rest, the project kept short beside it. Nothing makes the window wider: the bar is as wide as the window,
+   whatever it holds. */
 .titlebar__crumb { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 0 1 auto; font-weight: 500; }
 .titlebar__seg { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border-radius: 6px; white-space: nowrap; min-width: 0; }
 .titlebar__session { color: var(--superego-muted); flex: none; max-width: 30%; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 26px; }
@@ -52,9 +56,13 @@
 .app.has-sidebar:has(.app__sidebar > :not(.app__footer):first-child) .app__history { position: absolute; top: 0; bottom: 0; margin: 0; right: calc(100% - var(--superego-rail) - var(--superego-sidebar) + 10px); }
 .app__history .superego-icon-button { width: 26px; height: 26px; min-height: 26px; border-radius: 6px; box-shadow: none; background: none; color: var(--superego-muted); }
 .app__history .superego-icon-button:hover:not(:disabled) { background: var(--superego-hover); color: var(--superego-text); }
-.app__titlebar-end { margin-left: auto; display: flex; align-items: center; gap: var(--superego-space-2); min-width: 0; }
-.thread__crumb { display: flex; align-items: center; min-width: 0; overflow: hidden; font-size: var(--superego-text-sm); color: var(--superego-faint); white-space: nowrap; }
-.titlebar__chip { overflow: hidden; text-overflow: ellipsis; }
+.app__titlebar-end { margin-left: auto; display: flex; align-items: center; gap: var(--superego-space-2); min-width: 0; flex: none; max-width: 55cqi; }
+.thread__crumb { display: flex; align-items: center; min-width: 0; max-width: 26cqi; overflow: hidden; font-size: var(--superego-text-sm); color: var(--superego-faint); white-space: nowrap; }
+/* Tight, the title keeps the room: where it came from, its branch and the keycap (the chevron does the same) go. */
+@container (max-width: 720px) { .thread__crumb, .titlebar__go { display: none; } }
+@container (max-width: 520px) { .titlebar__archived { display: none; } }
+.titlebar__chip { flex: 0 1 auto; min-width: 4em; overflow: hidden; text-overflow: ellipsis; }
+.thread__parent { display: flex; align-items: baseline; gap: 4px; min-width: 6em; }
 .titlebar__chip + .titlebar__chip::before { content: '·'; margin: 0 6px; }
 .thread__cost { font-size: var(--superego-text-sm); color: var(--superego-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .app__aside { width: 280px; flex: none; min-height: 0; overflow: auto; background: var(--superego-bg); box-shadow: inset .5px 0 0 var(--superego-line); }
@@ -366,7 +374,9 @@ code { font-family: var(--superego-mono); font-size: .92em; }
   .setting, .provider, .profile-row, .machine-row { flex-wrap: wrap; }
 }
 
-.thread__tools { display: inline-flex; align-items: center; gap: var(--superego-space-2); flex: none; }
+.thread__tools { display: inline-flex; align-items: center; gap: var(--superego-space-2); flex: 0 1 auto; min-width: 0; }
+.thread__tools > * { flex: none; }
+.thread__tools > .thread__crumb { flex: 0 1000 auto; }
 .thread__archive, .app__titlebar .thread__panes { width: 28px; height: 28px; min-height: 28px; border-radius: 6px; box-shadow: none; background: none; color: var(--superego-muted); }
 .thread__archive:hover, .app__titlebar .thread__panes:hover { background: var(--superego-hover); color: var(--superego-text); }
 /* Archiving is ⌘⇧E; its button shows while the title bar is pointed at. */

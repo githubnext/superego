@@ -146,9 +146,13 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
         {tabs.map((tab, i) => {
           const Icon = KIND_ICONS[tab.kind]
           const away = side(i)
+          // The whole of what the tab may cut short: a file's path, a page's address, or its title.
+          const { path, url } = (tab.pane?.params ?? {}) as { path?: string; url?: string }
+          const full = path ?? url ?? tab.label
           return (
             <button key={tab.id ?? 'thread'} type="button" role="tab" aria-selected={tab.id === focused}
               className={`strip__tab ${tab.id === focused ? 'is-focused' : away ? 'is-away' : 'is-shown'}`}
+              title={full}
               onClick={() => show(tab.pane)}>
               {Icon && <Icon size={14} aria-hidden />}
               <span className={`strip__label ${tab.kind === 'editor' || tab.kind === 'artifact' ? 'strip__label--file' : ''}`}>{tab.label}</span>
@@ -222,7 +226,7 @@ function PaneColumn({ pane, title, focused, width, onFocus, onClick, onClose, ch
     <div data-column={pane.id} tabIndex={-1} className={`panes__column ${focused ? 'is-focused' : ''}`}
       style={{ width }} onPointerDownCapture={onFocus} onFocusCapture={onFocus} onClick={onClick}>
       <div className={`panes__tab ${focused ? 'is-active' : ''}`}>
-        <button className="panes__label">{title}</button>
+        <button className="panes__label" title={title}>{title}</button>
         <span className="panes__tools" ref={setSlot} />
         <button className="panes__close" aria-label={`Close ${title}`} onClick={onClose}><XIcon size={12} aria-hidden /></button>
       </div>
@@ -282,7 +286,7 @@ function DiffPane({ machine, thread }: PaneProps) {
           <details key={file.path} className="diff-file" open>
             <summary>
               <CaretDownIcon className="diff-file__caret" size={11} weight="bold" aria-hidden />
-              <span className="diff-file__path"><span className="diff-file__dir">{file.path.slice(0, slash)}</span>{file.path.slice(slash)}</span>
+              <span className="diff-file__path" title={file.path}><span className="diff-file__dir">{file.path.slice(0, slash)}</span>{file.path.slice(slash)}</span>
               <span className="diff-file__stat"><span className="stat--add">+{file.added}</span> <span className="stat--del">−{file.removed}</span></span>
             </summary>
             <pre className="diff-file__body">{numbered(file.lines).map(({ line, number }, i) => (
@@ -357,7 +361,7 @@ function PreviewPane({ pane }: PaneProps) {
   if (!url || !/^https?:\/\//.test(url)) return <div className="pane-empty">No address (an http or https URL) given.</div>
   return (
     <div className="frame-pane">
-      <PaneHeader><a className="pane-header__note pane-header__url" href={url} target="_blank" rel="noreferrer">{url}</a><button type="button" className="pane-header__button" onClick={() => setKey((k) => k + 1)}>Reload</button></PaneHeader>
+      <PaneHeader><a className="pane-header__note pane-header__url" title={url} href={url} target="_blank" rel="noreferrer">{url}</a><button type="button" className="pane-header__button" onClick={() => setKey((k) => k + 1)}>Reload</button></PaneHeader>
       <iframe key={key} src={url} title={url} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
     </div>
   )
@@ -373,7 +377,7 @@ function ArtifactPane({ machine, thread, pane }: PaneProps) {
   if (!url) return <div className="pane-empty">Artifacts aren't shown here.</div>
   return (
     <div className="frame-pane">
-      <PaneHeader><code className="pane-header__note">{path}</code><button type="button" className="pane-header__button" onClick={() => setKey((k) => k + 1)}>Reload</button></PaneHeader>
+      <PaneHeader><code className="pane-header__note" title={path}>{path}</code><button type="button" className="pane-header__button" onClick={() => setKey((k) => k + 1)}>Reload</button></PaneHeader>
       <iframe key={key} src={url} title={path} sandbox="allow-scripts allow-forms allow-popups" />
     </div>
   )

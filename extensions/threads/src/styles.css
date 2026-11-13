@@ -52,7 +52,8 @@
 .threads-archived .superego-list-item { color: var(--superego-muted); }
 .threads-archived__where { font-style: normal; margin-left: 6px; color: var(--superego-faint); font-size: var(--superego-text-sm); }
 
-/* The thread's model in the title bar: a quiet button that shows its details. */
+/* The thread's model in the title bar: a quiet button that shows its details., truncated last. */
 .threads-model { max-width: 220px; height: 24px; padding: 0 6px; border: 0; border-radius: var(--superego-radius); background: none; font: inherit; font-size: var(--superego-text-sm); color: var(--superego-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
+.thread__tools > .threads-model { flex: 0 1 auto; min-width: 48px; }
 .threads-model:hover { background: var(--superego-hover); color: var(--superego-text); }
 .threads-model.is-on { background: var(--superego-selected); color: var(--superego-text); }
