@@ -2,8 +2,8 @@
 // page (its Web access setting), instead of Electron's preload. That daemon is the one machine, "local". What the desktop
 // keeps in its main process (the app's own settings) is kept in this browser.
 import { FEATURES, PROTOCOL_VERSION, RpcError, RpcPeer, type Hello } from '@superego/protocol'
-import { serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
-import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '../shared.ts'
+import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
+import { APP_MOVED, type MachineEntry, type SuperegoBridge, type SuperegoEvent } from '../shared.ts'
 import { askToken } from './token-gate.ts'
 
 const TOKEN = 'superego.webToken'
@@ -20,11 +20,11 @@ function takeToken(): string | undefined {
   return given ?? localStorage.getItem(TOKEN) ?? undefined
 }
 
-/** App settings, kept in localStorage. */
-const store: SettingsStore = {
+/** App settings, kept in localStorage; those kept under an old key read as their new one's, as the desktop app's are. */
+const store: SettingsStore = withMovedKeys({
   load: () => { try { return JSON.parse(localStorage.getItem(SETTINGS) ?? '{}') } catch { return {} } },
   save: async (values) => localStorage.setItem(SETTINGS, JSON.stringify(values)),
-}
+}, APP_MOVED)
 
 export function webBridge(): SuperegoBridge {
   const listeners = new Set<(event: SuperegoEvent) => void>()

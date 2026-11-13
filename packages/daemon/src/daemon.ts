@@ -41,11 +41,16 @@ const Catalog = defineDoc<{ ids: number[]; ego?: number }>({
 /** What Ego goes without, of what every thread has: it changes nothing itself, and starts threads its own way (see meta.ts). */
 const EGO_WITHOUT = new Set(['coding-tools', 'thread-tools'])
 
-/** Settings kept under another key now: a value stored under the old one is read as the new one's. */
-const MOVED = {
+/**
+ * Extensions known by another name now: a profile's `without` of the old name goes without the new one, and its switch
+ * in Settings keeps what was stored under the old name.
+ */
+const RENAMED: Record<string, string> = {
   // The thread tools were "threads", the sidebar's name.
-  'extensions.threads': 'extensions.thread-tools',
+  threads: 'thread-tools',
 }
+/** Settings kept under another key now: a value stored under the old one is read as the new one's. */
+const MOVED = Object.fromEntries(Object.entries(RENAMED).map(([old, now]) => [`extensions.${old}`, `extensions.${now}`]))
 
 /**
  * Names no extension can take: the core's own namespaces (its methods, actions and settings are `<namespace>.<…>`), so
@@ -767,6 +772,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     try {
       if (!existsSync(join(ref.dir, 'profile.ts'))) throw new RpcError('not_found', `No profile ${ref.name} at ${ref.dir}`)
       loaded = await loadProfile(ref, userProfiles, trust)
+      if (loaded.spec.without) loaded.spec.without = [...new Set(loaded.spec.without.map((name) => RENAMED[name] ?? name))]
     } catch (error) {
       unload(ref.dir)
       throw error

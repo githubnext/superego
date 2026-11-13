@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MemorySettingsStore, SettingsRegistry } from '../src/index.ts'
+import { MemorySettingsStore, SettingsRegistry, withMovedKeys } from '../src/index.ts'
 
 const flush = () => new Promise((resolve) => setTimeout(resolve))
 
@@ -80,3 +80,19 @@ describe('upsert', () => {
   })
 })
 
+
+describe('withMovedKeys', () => {
+  it('reads a value kept under an old key as its new key, and saves it so', async () => {
+    const store = new MemorySettingsStore({ 'threads.sort': 'status', other: 1 })
+    const settings = new SettingsRegistry(withMovedKeys(store, { 'threads.sort': 'app.sort' }))
+    settings.register({ id: 'app', title: 'App', settings: [{ key: 'app.sort', title: 'Sort', default: 'recent', type: { type: 'string' } }] })
+    expect(settings.get('app.sort')).toBe('status')
+    await settings.set('app.sort', 'name')
+    expect(store.load()).toEqual({ 'app.sort': 'name', other: 1 })
+  })
+
+  it('keeps the new key over the old when both are stored', () => {
+    const store = withMovedKeys(new MemorySettingsStore({ 'threads.sort': 'old', 'app.sort': 'new' }), { 'threads.sort': 'app.sort' })
+    expect(store.load()).toEqual({ 'app.sort': 'new' })
+  })
+})

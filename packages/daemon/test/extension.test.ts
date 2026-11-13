@@ -134,3 +134,11 @@ it("reserves the core's namespaces: every core method and action is in one, and 
   await close()
   await expect(open([defineDaemonExtension({ name: 'thread', setup() {} })])).rejects.toThrow(/core's own/)
 })
+
+it('keeps a switch stored under an extension\'s old name: the thread tools were "threads"', async () => {
+  const { MemorySettingsStore } = await import('@superego/settings')
+  process.env.SUPEREGO_MODEL = 'faux'
+  const daemon = await openDaemon({ app: SUPEREGO, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), settingsStore: new MemorySettingsStore({ 'extensions.threads': false }) })
+  expect(daemon.settings.get('extensions.thread-tools')).toBe(false)
+  await daemon.close()
+})

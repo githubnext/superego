@@ -5,21 +5,15 @@ import { join } from 'node:path'
 import { SettingsRegistry, withMovedKeys } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import type { AppConfig } from '@superego/protocol'
-import { TEXT_SIZES } from '../shared.ts'
+import { APP_MOVED, TEXT_SIZES } from '../shared.ts'
 
 export const APP = 'app'
 export const APP_KEYS = {
   keymap: 'app.keys', interfaceFont: 'app.font.interface', textSize: 'app.font.size', monoFont: 'app.font.mono', accent: 'app.accent', notifications: 'app.notifications', menuBar: 'app.menuBar', hideDock: 'app.hideDock',
 } as const
 
-/** Settings kept under another key now: a value stored under the old one is read as the new one's (and saved so). */
-const MOVED: Record<string, string> = {
-  // The order sessions and threads go in is the window's own (the navigator and ⌘⇧[ ] walk it), not the sidebar's.
-  'threads.sort': 'app.sort',
-}
-
 export function createAppSettings(dataDir: string, app: AppConfig) {
-  const settings = new SettingsRegistry(withMovedKeys(new FileSettingsStore(join(dataDir, 'app-settings.json')), MOVED))
+  const settings = new SettingsRegistry(withMovedKeys(new FileSettingsStore(join(dataDir, 'app-settings.json')), APP_MOVED))
   settings.register({
     id: 'appearance', title: 'Appearance', order: 50,
     settings: [

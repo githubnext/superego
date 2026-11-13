@@ -16,6 +16,15 @@ export type MachineEntry = {
 }
 
 
+/**
+ * The app's settings kept under another key now: a value stored under the old one is read as the new one's (and saved
+ * so), by the desktop app and a browser alike.
+ */
+export const APP_MOVED: Record<string, string> = {
+  // The order sessions and threads go in is the window's own (the navigator and ⌘⇧[ ] walk it), not the sidebar's.
+  'threads.sort': 'app.sort',
+}
+
 /** A notification from a machine's daemon, `$connection` when a link's state changes, or `$machines` with the whole list. */
 export type SuperegoEvent = { machine: MachineId; method: string; params: unknown }
 

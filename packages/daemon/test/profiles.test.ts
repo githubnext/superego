@@ -516,3 +516,15 @@ export default defineDaemonExtension({ name: 'vault', setup(superego) { ${publis
   expect((await peer.call<{ value: unknown }>('value.watch', { key: 'vault.status' })).value).toBeNull()
   await close()
 })
+
+it("maps a profile's `without` of an extension's old name to its new one", async () => {
+  write(join(home, 'profiles', 'default'), {
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ without: ['threads'] })\n`,
+  })
+  const { peer, close } = await open()
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  await done(peer, thread.id)
+  expect((await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.without).toEqual(['thread-tools'])
+  expect((await agentOf(peer, thread.id)).extensions).not.toContain('thread-tools')
+  await close()
+})
