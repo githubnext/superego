@@ -1,12 +1,12 @@
 // Links in Markdown, claimed by handlers (`superego.link`): what a link of a kind looks like and what following it does.
-// The core claims threads (`thread:<id>`), the files a thread names (`[[wikilinks]]`, relative links, code that reads as
-// a path) and web pages; an extension or a profile can claim others, or these its own way, ahead of the core.
+// The core claims the files a thread names (`[[wikilinks]]`, relative links, code that reads as a path) and web pages;
+// the threads extension claims threads (`thread:<id>`); an extension or a profile can claim others, or these its own
+// way, ahead of the core.
 // A thread's transcript keeps the links it draws, in order, for ⌃O's list (`transcriptLinks`).
 import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { SquareSplitHorizontalIcon } from '@superego/ui'
 import type { LinkHandler, LinkProps, LinkWhere, UiApi } from './extension.tsx'
 import { looksLikePath } from './markdown-html.ts'
-import { ThreadRef } from './thread-ref.tsx'
 
 /** A link drawn in a transcript: what it says, where it goes, and a way to follow it. */
 export type TranscriptLink = { text: string; href: string; target: string; open(beside: boolean): Promise<string | undefined> }
@@ -36,7 +36,6 @@ export function transcriptLinks(machine: string, thread: string): TranscriptLink
 }
 
 export const WIKILINK = 'wikilink:'
-const THREAD = 'thread:'
 
 /** [[target|alias]] and ![[embeds]] as `wikilink:` links, outside code. */
 export function wikilinks(text: string) {
@@ -55,19 +54,8 @@ function fileName(href: string, kind: 'link' | 'code') {
 /** A web address as a list shows it: host and path, no scheme. */
 export const shortUrl = (url: string) => url.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')
 
-/** The core's: threads, files and web pages. */
+/** The core's: files and web pages. */
 export function registerLinks(core: UiApi) {
-  core.link({
-    match: (href, kind, where) => kind === 'link' && Boolean(where.machine) && href.startsWith(THREAD),
-    render: ({ href, children, where }) => <ThreadRef machine={where.machine!} id={href.slice(THREAD.length)}>{children}</ThreadRef>,
-    // Shown; or, beside, in a pane beside the thread it's named in.
-    open(href, { machine, thread, beside }) {
-      const id = href.slice(THREAD.length)
-      return beside && thread && thread.id !== id
-        ? core.dispatch('pane.open', { id: thread.id, kind: 'thread', params: { thread: id } }, { machine: machine!, source: 'thread link' }).then(() => {})
-        : core.dispatch('thread.select', { machine: machine!, thread: id }, { source: 'thread link' }).then(() => {})
-    },
-  })
   core.link({
     match: (href, kind, where) => Boolean(where.openFile) && (kind === 'code' ? looksLikePath(href)
       : href.toLowerCase().startsWith(WIKILINK) || (href !== '' && !/^([a-z][\w+.-]*:|#|\/\/)/i.test(href))),

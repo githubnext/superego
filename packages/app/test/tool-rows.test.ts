@@ -42,10 +42,10 @@ describe('tool rows', () => {
   it('says what a run did, the weightiest first, naming the file of a lone one', () => {
     expect(describeRun([tool('read', { path: 'a' }), tool('read', { path: 'b' }), tool('bash', { command: 'ls' })], rowOf)).toEqual(['Ran a command and read 2 files'])
     expect(describeRun([tool('read', { path: 'a' }), tool('edit', { path: 'src/a.ts' })], rowOf)).toEqual(['Edited ', 'src/a.ts', ' and read a file'])
-    expect(describeRun([tool('thread_start'), tool('find_order'), tool('find_order')], rowOf)).toEqual(['Started a thread and used find_order 2×'])
+    expect(describeRun([tool('bash'), tool('find_order'), tool('find_order')], rowOf)).toEqual(['Ran a command and used find_order 2×'])
     expect(describeRun([{ type: 'thinking', thinking: 'hm' }], rowOf)).toEqual(['Thought'])
     expect(mainKind([tool('read'), tool('write'), tool('bash')], rowOf)).toBe('write')
-    expect(mainKind([tool('find_order'), tool('thread_list')], rowOf)).toBe('find_order')
+    expect(mainKind([tool('find_order'), tool('read')], rowOf)).toBe('read')
   })
 
   it('draws a row from its parts, and the defaults for the rest', () => {
@@ -59,7 +59,7 @@ describe('tool rows', () => {
     expect(failed).toContain('>gone<')
     const written = renderToStaticMarkup(createElement(DescribedCall, { row: rowOf('write'), call: call('write', { path: 'a', content: 'x\ny\n' }) }))
     expect(written).toContain('2 lines')
-    const listed = renderToStaticMarkup(createElement(DescribedCall, { row: rowOf('thread_list'), call: call('thread_list', {}) }))
+    const listed = renderToStaticMarkup(createElement(DescribedCall, { row: { subject: () => null }, call: call('list_orders', {}) }))
     expect(listed).not.toContain('row__arg')
   })
 

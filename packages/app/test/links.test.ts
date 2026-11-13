@@ -33,10 +33,9 @@ describe('link handlers', () => {
     expect(linkHandler(registry, 'src/a.ts', 'code', where)).toBe(linkHandler(registry, 'notes/plan.md', 'link', where))
   })
 
-  it('claims threads, files and web pages only where they can be opened', () => {
+  it('claims files and web pages only where they can be opened, and threads not at all (the threads extension does)', () => {
     const registry = createRegistry(app, [], registerLinks)
-    expect(linkHandler(registry, 'thread:42', 'link', {})).toBeUndefined()
-    expect(linkHandler(registry, 'thread:42', 'link', inThread())).toBeDefined()
+    expect(linkHandler(registry, 'thread:42', 'link', inThread())).toBeUndefined()
     expect(linkHandler(registry, 'notes/plan.md', 'link', {})).toBeUndefined()
     expect(linkHandler(registry, '#top', 'link', inThread())).toBeUndefined()
     expect(linkHandler(registry, 'https://a.dev', 'link', {})?.target?.('https://www.a.dev/x/', 'link')).toBe('a.dev/x')
@@ -68,9 +67,7 @@ describe('link handlers', () => {
     expect(mine).toContain('href="https://a.dev" target="_blank"')
     const theirs = draw(inThread(), 'see [[plan]]')
     expect(theirs).toContain('class="md__file"')
-    // Nowhere to open files: [[wikilinks]] stay text, a thread: link isn't one.
-    const nowhere = draw({}, 'see [[plan]] and [it](thread:4)')
-    expect(nowhere).toContain('[[plan]]')
-    expect(nowhere).not.toContain('thread:4')
+    // Nowhere to open files: [[wikilinks]] stay text.
+    expect(draw({}, 'see [[plan]]')).toContain('[[plan]]')
   })
 })

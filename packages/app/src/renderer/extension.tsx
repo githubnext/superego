@@ -192,7 +192,7 @@ export type UiApi = {
   entry(kind: string, component: ComponentType<EntryProps>): void
   /**
    * Claim links of a kind (`thread:`, files, web pages): how they look in Markdown and what following one does. A
-   * profile's are asked first, then the app's extensions', then the core's (threads, files, web pages).
+   * profile's are asked first, then the app's extensions' (threads'), then the core's (files, web pages).
    */
   link(handler: LinkHandler): void
   /**

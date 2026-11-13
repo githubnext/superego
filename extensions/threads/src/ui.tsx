@@ -4,16 +4,18 @@
 // - sort: recently active, newest first, or needs you first: sessions, and the threads in each
 // - show as: a list, or a rail of status glyphs
 // - details: a pane beside the thread with what it runs with, spent and touched
-// UI only: it uses the core's thread methods and facts.
+// It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are its daemon half's.
 import { Fragment, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import {
   call, defineAction, defineUiExtension, MachineDrift, showSession, SORT, unread, useAppSetting, useLocalState, useMachines, useSelection, useSessions, useSidebar, useThreadView, useShell, useShortcut,
   type MachineEntry, type Session, type Sort, type Store, type WindowContext,
 } from '@superego/app/ui'
-import { rollup, type ExtensionAbout, type ThreadInfo } from '@superego/protocol'
+import { rollup, type ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, ChatsIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
 import { activity, ago } from './groups.ts'
+import { registerLinks, registerRows } from './rows.tsx'
+import { about } from './shared.ts'
 
 export const VIEW = 'threads.view'
 export const DETAILS = 'threads.details'
@@ -28,14 +30,6 @@ let unfolded: Store<boolean>
 /** Settings and commands act through the app's settings, so every window and the menu agree. */
 const set = (c: Pick<WindowContext, 'dispatch'>, key: string, value: string | boolean) =>
   c.dispatch('app.settings.set', { key, value }, { machine: 'app', source: 'threads' })
-
-/**
- * What this extension is: required. The sidebar is how the window goes between sessions and threads, for every thread
- * on every machine at once, so neither a machine's switch nor a profile's `without` could mean anything for it.
- */
-export const about = {
-  name: 'threads', title: 'Sidebar', description: 'Sessions and their threads, sorted, as a list or a rail, with thread details.', required: true,
-} satisfies ExtensionAbout
 
 export default defineUiExtension({
   ...about,
@@ -52,6 +46,8 @@ export default defineUiExtension({
     superego.slot('rail', ThreadsRail)
     superego.slot('thread.aside', Details)
     superego.slot('thread.header', ModelButton)
+    registerRows(superego)
+    registerLinks(superego)
     const action = (id: string, title: string, run: (c: WindowContext) => void, keys?: string) =>
       superego.action(defineAction({ id, title, ...(keys ? { keys } : {}), run: (_params, c) => run(c) }))
     action('threads.rail', 'Toggle sidebar rail', (c) => void set(c, VIEW, c.appSetting<View>(VIEW) === 'rail' ? 'list' : 'rail'), 'mod+\\')

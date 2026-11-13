@@ -1,13 +1,12 @@
 // Tool calls in the transcript, as rows: an icon, a verb, what the call acted on, and what it opens to. Tools describe
 // their rows (`superego.tool(name, row)`, a `ToolRow`); the core draws them, and says what a run of them did in a line.
-// The core is the first to describe its own: the coding tools (read, bash, edit, write) and the thread tools.
+// The core is the first to describe its own: the coding tools (read, bash, edit, write).
 import { useState, type ReactNode } from 'react'
-import { ArchiveIcon, ArrowElbowDownRightIcon, CaretRightIcon, ChatCircleIcon, ChatsCircleIcon, FilePlusIcon, FileTextIcon, PencilSimpleIcon, SparkleIcon, StatusGlyph, TerminalIcon, WrenchIcon } from '@superego/ui'
+import { CaretRightIcon, FilePlusIcon, FileTextIcon, PencilSimpleIcon, SparkleIcon, StatusGlyph, TerminalIcon, WrenchIcon } from '@superego/ui'
 import type { ToolRow, ToolRowCall, UiApi, WorkBlock } from './extension.tsx'
 import { Scroll } from './Markdown.tsx'
-import { ThreadRef } from './thread-ref.tsx'
 
-/** The coding tools' rows and the thread tools'. */
+/** The coding tools' rows. */
 export function registerToolRows(core: UiApi) {
   const path = (args: Record<string, unknown>) => typeof args.path === 'string' ? args.path : undefined
   core.tool('read', { icon: FileTextIcon, verbs: ['Read', 'Reading', 'Read failed'], phrase: (k) => `read ${n(k, 'a file', 'files')}`, file: path, weight: 1 })
@@ -18,25 +17,6 @@ export function registerToolRows(core: UiApi) {
     icon: FilePlusIcon, verbs: ['Wrote', 'Writing', 'Write failed'], phrase: (k) => `wrote ${n(k, 'a file', 'files')}`, file: path, weight: 3,
     meta: (c) => { const text = written(c); return text === undefined ? undefined : `${lineCount(text)} lines` },
     body: (c) => { const text = written(c); return text === undefined ? undefined : <Output text={text} /> },
-  })
-
-  // A thread the call is about (the one it started, read or messaged) is named as itself. A thread started or messaged
-  // is named in the row, so what the call said back would only repeat it.
-  const other = ({ call, result }: ToolRowCall) => call.name === 'thread_start'
-    ? (result?.details as { id?: string } | undefined)?.id
-    : typeof call.arguments.id === 'string' ? call.arguments.id : undefined
-  const thread = (c: ToolRowCall) => { const id = other(c); return id ? <ThreadRef machine={c.machine.id} id={id} className="row__thread" /> : undefined }
-  const quiet = (c: ToolRowCall) => other(c) && c.state === 'done' ? null : undefined
-  core.tool('thread_start', {
-    icon: ArrowElbowDownRightIcon, verbs: ['Started', 'Starting', 'Couldn’t start a thread'], phrase: (k) => `started ${n(k, 'a thread', 'threads')}`,
-    subject: (c) => thread(c) ?? String(c.call.arguments.title ?? 'a thread'), body: quiet,
-  })
-  core.tool('thread_read', { icon: ChatCircleIcon, verbs: ['Read', 'Waiting on', 'Couldn’t read'], phrase: (k) => `read ${n(k, 'a thread', 'threads')}`, subject: thread })
-  core.tool('thread_send', { icon: ChatCircleIcon, verbs: ['Messaged', 'Messaging', 'Couldn’t message'], phrase: (k) => `messaged ${n(k, 'a thread', 'threads')}`, subject: thread, body: quiet })
-  core.tool('thread_list', { icon: ChatsCircleIcon, verbs: ['Listed threads', 'Listing threads', 'Couldn’t list threads'], phrase: () => 'listed threads', subject: () => null })
-  core.tool('thread_archive', {
-    icon: ArchiveIcon, verbs: ['Archived', 'Archiving', 'Couldn’t archive'], phrase: (k) => `archived ${n(k, 'a thread', 'threads')}`,
-    subject: (c) => thread(c) ?? 'this thread', body: quiet,
   })
 }
 
