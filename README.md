@@ -43,6 +43,10 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
   adds a tree beside the editor and quick open.
 - **Messages** take files: attach, drop or paste them into the composer. Images go to the model as images; every file
   is saved on the thread's machine and named to the agent by its path.
+- **Images** an agent shows (`show_images`: a screenshot it took, a chart it drew) appear in the thread where it showed
+  them: one fits the column, a few sit in a grid, more go one at a time in a carousel (‹ ›, ←/→, a swipe). Click one
+  to look closely: zoom by clicking, scrolling or pinching, drag to pan, ←/→ through the set, Esc to close. Each is
+  copied to the thread's files on its machine, so every client sees it, on the web too, as it was when shown.
 - **Ego**, Superego's own agent (the lifebuoy in the rail, or *Ask Ego* in ⌘K), answers questions about Superego and
   how this computer has it set up: settings, profiles, skills, machines, projects and threads. It changes setup itself
   (this machine's settings, and the machines this computer reaches); any other work (a profile, a skill, code) it hands
@@ -97,6 +101,7 @@ Focus is always visible: whatever has it wears one solid ring, and the region ho
 | `extensions/threads` | the sidebar: sessions and their threads (UI) |
 | `extensions/ask-user` | an `ask_user` tool; the question card and blocked status (daemon + UI) |
 | `extensions/files` | the file tree beside the editor and quick open (`⌘P`) (daemon + UI) |
+| `extensions/images` | a `show_images` tool; the images in the thread, as one, a grid or a carousel, and a lightbox to zoom (daemon + UI) |
 | `extensions/links` | ⌃O: the links in the thread, newest first, fuzzy filtered; ⏎ follows one, ⌘⏎ opens it in a pane, ⌃1–9 / ⌃⌘1–9 the first nine (UI) |
 | `extensions/suggestions` | after each answer, a side call to the thread's model for what you might send next; offered over the composer, numbered; ←/→ pick, ⏎ sends, ⇥ takes it to change, ⌃1–9 send that one (daemon + UI) |
 | `extensions/tasks` | `task_start`/`task_finish` tools and a prompt asking the agent to report its work as tasks; the transcript folds work under each task's title, status and outcome (daemon + UI) |

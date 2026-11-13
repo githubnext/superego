@@ -21,6 +21,7 @@ declare module '@phosphor-icons/react' {
   export const BellIcon: Icon
   export const BroomIcon: Icon
   export const CaretDownIcon: Icon
+  export const CaretLeftIcon: Icon
   export const CaretUpDownIcon: Icon
   export const CaretRightIcon: Icon
   export const ChatCircleIcon: Icon
@@ -43,7 +44,10 @@ declare module '@phosphor-icons/react' {
   export const GearSixIcon: Icon
   export const LifebuoyIcon: Icon
   export const ListIcon: Icon
+  export const ImageBrokenIcon: Icon
   export const MagnifyingGlassIcon: Icon
+  export const MagnifyingGlassMinusIcon: Icon
+  export const MagnifyingGlassPlusIcon: Icon
   export const MinusIcon: Icon
   export const NotePencilIcon: Icon
   export const PaperclipIcon: Icon
