@@ -4,7 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
-import { call, has, useEgo, useMachineList, useThreads as useThreadsWatch } from './client.ts'
+import { has, machine as client, useEgo, useMachineList, useThreads as useThreadsWatch } from './client.ts'
 import { useRegistry } from './extension.tsx'
 import { emptyHistory, step, visit, type History, type Place } from './history.ts'
 import { useLocalState } from './local-state.ts'
@@ -177,7 +177,7 @@ function MachineThreads({ machine, onThreads }: { machine: MachineEntry; onThrea
   useEffect(() => { if (threads) onThreads(machine.id, threads) }, [threads])
   // The window's extensions, told to the machine: one whose work is all here is known there too (Settings, `without`).
   useEffect(() => {
-    if (machine.state === 'connected') void call(machine.id, 'extensions.declare', { extensions }).catch(() => { /* an older daemon */ })
+    if (machine.state === 'connected') void client(machine.id).call('extensions.declare', { extensions }).catch(() => { /* an older daemon */ })
   }, [machine.state, machine.machine?.id])
   return null
 }

@@ -2,6 +2,7 @@
 // the typed client and (later) the CLI and schema are derived from it.
 import type { ConversationView } from '@earendil-works/pi-durable'
 import type { ActionInfo, ActionLogEntry, Exposure } from './actions.ts'
+import type { ExtensionAbout } from './app.ts'
 import type { AuthEvent, Json, SettingsSnapshot } from './settings.ts'
 import type { Status } from './status.ts'
 
@@ -173,6 +174,8 @@ export type Methods = {
   'action.run': { params: { id: string; params?: unknown; exposure?: Exposure }; result: unknown }
   /** This machine's newest dispatches. */
   'action.log': { params: {}; result: ActionLogEntry[] }
+  /** The window's extensions, as each declares itself: those without a daemon half become known to the machine too. */
+  'extensions.declare': { params: { extensions: ExtensionAbout[] }; result: null }
   /**
    * Restart onto newer code: the daemon exits and the client starts the new one. Refused (`restarted: false`) while a
    * thread is working, unless `interrupt`; interrupted runs resume after the restart. `build` must be the running

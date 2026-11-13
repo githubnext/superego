@@ -1628,7 +1628,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         /** The newest dispatches on this machine, oldest first. */
         'action.log': async () => router.log(),
         /** The window's extensions, as each declares itself: those without a daemon half become known here (see declare). */
-        'extensions.declare': async ({ extensions: abouts }: { extensions: ExtensionAbout[] }) => { declare(Array.isArray(abouts) ? abouts : []); return null },
+        'extensions.declare': async ({ extensions: abouts }: Methods['extensions.declare']['params']) => { declare(Array.isArray(abouts) ? abouts : []); return null },
       }
       const ctx = (): DaemonContext => ({ notify: (event, params) => notify(event as keyof Notifications, params as never), source: client })
       const open = (method: string, handler: (params: unknown) => unknown) => (params: unknown) => {
