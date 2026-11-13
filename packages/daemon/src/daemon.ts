@@ -1,9 +1,8 @@
 // The Superego daemon: one per user per machine. It owns a pi-durable Harness on SQLite, the thread catalog, and every
 // live subscription. Clients (the Electron app, the CLI, a remote app over ssh) speak the protocol in @superego/protocol.
-import { execFile } from 'node:child_process'
 import { existsSync, watch as watchFs } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { link, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { link, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, hostname, platform } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
@@ -22,7 +21,12 @@ import { FileSettingsStore } from '@superego/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
 import { threadTools } from './thread-tools.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
-import { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type StatusContribution, type SubmitTransform } from './extension.ts'
+import {
+  defineDaemonExtension, type AgentChoice, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type StatusContribution, type SubmitTransform,
+  type ThreadDraft, type ThreadHooks,
+} from './extension.ts'
+import { titleOf } from './names.ts'
+import { git, worktrees, type Worktree } from './worktrees.ts'
 import { serveWeb, webToken, type WebServer } from './web.ts'
 import { agentsInstructions } from './agents-md.ts'
 import { metaExtension, metaPrompt, type MachineDirectory } from './meta.ts'
@@ -39,7 +43,7 @@ const Catalog = defineDoc<{ ids: number[]; ego?: number }>({
 })
 
 /** What Ego goes without, of what every thread has: it changes nothing itself, and starts threads its own way (see meta.ts). */
-const EGO_WITHOUT = new Set(['coding-tools', 'thread-tools'])
+const EGO_WITHOUT = ['coding-tools', 'thread-tools']
 
 /**
  * Extensions known by another name now: a profile's `without` of the old name goes without the new one, and its switch
@@ -61,9 +65,6 @@ export const RESERVED = new Set([
   'providers', 'settings', 'skill', 'thread', 'threads', 'unwatch', 'value', 'watch', 'web',
 ])
 
-/** What a worktree being deleted is renamed with, between its name and a random suffix (see removeWorktree). */
-const REMOVING = '.removing-'
-
 /** A thread's own metadata, next to its transcript. */
 type ThreadMeta = {
   title: string; cwd: string; createdAt: number; seen?: { entryId?: number; failureTaskId?: number }
@@ -80,10 +81,14 @@ type ThreadMeta = {
   pane?: string
   /** Its session: the project folder it belongs to (a repository's main checkout, or where it started). */
   root?: string
-  /** Its own git worktree: where, on which branch, and whether archiving removed it. */
-  worktree?: { path: string; branch: string; removed?: boolean }
-  /** The machine's own agent, about Superego itself (see meta.ts). */
+  /** Its own git worktree: where, on which branch, and whether archiving removed it. Read as the worktrees extension's state now (see LEGACY). */
+  worktree?: Worktree
+  /** The machine's own agent, about Superego itself (see meta.ts). Read as the ego extension's state too (see LEGACY). */
   meta?: boolean
+  /** In no list: an extension's own thread, opened by id. */
+  hidden?: boolean
+  /** Extensions' state with it, by extension name (see `superego.state`). */
+  ext?: Record<string, Json>
   /** Where its transcript starts now: the entry after the reset that last cleared it (Ego's only). */
   cleared?: number
   /** The thread that started it (by thread_start, or thread.create's `parent`). */
@@ -93,6 +98,20 @@ const ThreadDoc = defineDoc<ThreadMeta>({
   kind: 'superego.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current',
   initial: () => ({ title: '', cwd: '', createdAt: 0 }), checkpointWhen: () => true,
 })
+
+/**
+ * Extensions' state from before extensions kept their own: read from the field the core kept it in, until the extension
+ * first writes its state, which moves it. So a thread from before reads the same, and nothing needs copying.
+ */
+const LEGACY: Record<string, { read(meta: ThreadMeta): Json | undefined; drop(meta: ThreadMeta): void }> = {
+  worktrees: { read: (meta) => meta.worktree, drop: (meta) => { delete meta.worktree } },
+  // Still the core's own marker too (the catalog's Ego, adoptEgo), so it stays.
+  ego: { read: (meta) => meta.meta ? true : undefined, drop: () => {} },
+}
+/** An extension's state with a thread. */
+const stateOf = (meta: ThreadMeta, name: string): Json | undefined =>
+  meta.ext && Object.hasOwn(meta.ext, name) ? meta.ext[name] : LEGACY[name]?.read(meta)
+const clone = <T>(value: T): T => value === undefined ? value : JSON.parse(JSON.stringify(value)) as T
 
 /** What a daemon action gets besides its params: who called, and a way to tell that connection something. */
 export type DaemonContext = { source: string; notify(event: string, params: unknown): void }
@@ -158,26 +177,8 @@ async function machineId(dataDir: string) {
   return (await readFile(path, 'utf8')).trim()
 }
 
-/**
- * A thread's title from its first message: the first sentence, up to 72 characters, cut at a word with an ellipsis
- * when longer. The rest of the message stays in the transcript.
- */
-export function titleOf(text: string): string {
-  const flat = text.replace(/\s+/g, ' ').trim()
-  const sentence = flat.match(/^.+?[.?!](?=\s|$)/)?.[0] ?? flat
-  if (sentence.length <= 72) return sentence
-  // A long sentence's first clause, when it says enough on its own: "Add a --dry-run flag to the import command".
-  const clause = sentence.match(/^(.{24,72}?)[:;—]\s/)?.[1]
-  if (clause) return clause
-  const cut = sentence.slice(0, 72)
-  return `${cut.slice(0, cut.lastIndexOf(' ') > 40 ? cut.lastIndexOf(' ') : 72).replace(/[,;:]$/, '')}…`
-}
-
-/** git in `cwd`: its output, trimmed; its own message when it fails. */
-function git(cwd: string, args: string[]): Promise<string> {
-  return new Promise((done, fail) => execFile('git', ['-C', cwd, ...args], { maxBuffer: 16 * 1024 * 1024 }, (error, out, err) =>
-    error ? fail(new Error(String(err).trim() || error.message)) : done(String(out).trim())))
-}
+/** Threads are titled from their first message (see names.ts). */
+export { titleOf }
 
 /** The repository `dir` is in: its checkout's top, and the project it belongs to (the main checkout, for a worktree). */
 async function checkoutOf(dir: string): Promise<{ top: string; root: string } | undefined> {
@@ -185,11 +186,6 @@ async function checkoutOf(dir: string): Promise<{ top: string; root: string } | 
   if (!top) return undefined
   const common = await git(dir, ['rev-parse', '--path-format=absolute', '--git-common-dir']).catch(() => '')
   return { top, root: basename(common) === '.git' ? dirname(common) : top }
-}
-
-/** A branch- and folder-friendly name for a thread: "Fix the login flow" → "fix-the-login-flow". */
-export function slugOf(text: string): string {
-  return text.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '') || 'thread'
 }
 
 /** `path` in `folder`, refusing anything that resolves outside it. */
@@ -282,14 +278,50 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** Every extension set up for the daemon's life, the core's own and the bundled ones, by name: what can be gone without. */
   const extensions = new Map<string, ExtensionAbout>()
   /**
-   * The optional extensions a thread goes without: turned off on this machine, left out by its profile, or (Ego) not
-   * for its kind. One answer for its agent's parts, the pane kinds it's told of, and the UI the window draws for it.
+   * What extensions registered about threads, in the order they were set up: whose, and (a profile's) for which
+   * profiles' threads (their folders).
    */
-  function withoutOf(meta?: ThreadMeta, profile?: LoadedProfile): Set<string> {
+  type Owned<T> = { value: T; owner: string; profiles?: Set<string> }
+  const threadHooks: Owned<ThreadHooks>[] = []
+  const factSources: Owned<(thread: { id: string; state: Json | undefined }) => Json | undefined>[] = []
+  const choosers: Owned<(thread: { id?: string; state: Json | undefined; profile?: ProfileRef }) => AgentChoice | undefined>[] = []
+  /** Agent parts given to no thread but those an `agentFor` chooses them for: as given, to as installed. */
+  const chosenParts = new Map<Extension, Extension>()
+  /** Whether what an extension registered is for a thread: one it doesn't go without, and of its profile if a profile's. */
+  const appliesTo = (entry: Owned<unknown>, without: Set<string>, meta?: ThreadMeta) =>
+    !without.has(entry.owner) && (!entry.profiles || Boolean(meta?.profile && entry.profiles.has(meta.profile.dir)))
+  /** The optional extensions turned off on this machine or left out by a profile. */
+  function switchedOff(profile?: LoadedProfile): Set<string> {
     const without = new Set<string>()
     for (const { name, required } of extensions.values()) {
-      if (required) continue
-      if (settings.get(`extensions.${name}`) === false || profile?.spec.without?.includes(name) || (meta?.meta && EGO_WITHOUT.has(name))) without.add(name)
+      if (!required && (settings.get(`extensions.${name}`) === false || profile?.spec.without?.includes(name))) without.add(name)
+    }
+    return without
+  }
+  /** A thread's agent as extensions choose it (`agentFor`): the first answer, if any. */
+  function choiceOf(id: string | undefined, meta: ThreadMeta, profile?: LoadedProfile): AgentChoice | undefined {
+    const off = switchedOff(profile)
+    for (const chooser of choosers) {
+      if (!appliesTo(chooser, off, meta)) continue
+      try {
+        const choice = chooser.value({ ...(id ? { id } : {}), state: stateOf(meta, chooser.owner), ...(meta.profile ? { profile: meta.profile } : {}) })
+        if (choice) return choice
+      } catch (error) {
+        console.error(`Extension ${chooser.owner}: agentFor failed:`, error)
+      }
+    }
+    return undefined
+  }
+  /**
+   * The optional extensions a thread goes without: turned off on this machine, left out by its profile, or left out
+   * by the extension that chose its agent (Ego's). One answer for its agent's parts, the pane kinds it's told of, and
+   * the UI the window draws for it.
+   */
+  function withoutOf(id?: string, meta?: ThreadMeta, profile?: LoadedProfile): Set<string> {
+    const without = switchedOff(profile)
+    for (const name of (meta && choiceOf(id, meta, profile)?.without) ?? []) {
+      const known = extensions.get(RENAMED[name] ?? name)
+      if (known && !known.required) without.add(known.name)
     }
     return without
   }
@@ -332,7 +364,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const meta = mounted.get(id)?.meta
     const dir = meta?.profile?.dir
     const profile = dir ? profiles.get(dir) : undefined
-    const without = withoutOf(meta, profile)
+    const without = withoutOf(id, meta, profile)
     const kinds = new Map<string, string>()
     for (const p of paneKinds) if (!p.profiles && !without.has(p.owner)) kinds.set(p.kind, p.about)
     for (const p of paneKinds) if (dir && p.profiles?.has(dir)) kinds.set(p.kind, p.about)
@@ -341,8 +373,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
   // The folder agents share: standing instructions in AGENTS.md (see agents-md.ts), and the skills extension's skills.
   const agentsDir = options.agentsDir ?? join(homedir(), '.agents')
-  // Threads starting, reading, messaging and archiving threads (see thread-tools.ts).
-  const threadInfo = async (id: string) => { const m = await get(id).catch(() => undefined); return m && info(id, m) }
   /**
    * The core's own agent parts, as extensions like any other: each optional, so a machine can turn it off and a profile
    * can do without it. Set up first, through the same API as the bundled ones.
@@ -368,16 +398,41 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       setup: (s) => s.agent(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] })),
     },
     {
+      // Threads starting, reading, messaging and archiving threads (see thread-tools.ts), through `superego.threads`.
       name: 'thread-tools', title: 'Thread tools', description: 'Start threads of their own, read, message and archive others.',
       setup: (s) => s.agent(threadTools({
-        info: threadInfo,
-        list: () => list(),
-        start: (parent, params) => startThread({ ...params, parent }),
-        send: async (id, text) => { await submit(id, text, randomUUID(), 'followUp') },
-        answer: (id) => answerOf(id),
-        archive,
-        archiveWhenDone,
+        info: (id) => s.threads.get(id).catch(() => undefined),
+        list: () => s.threads.list(),
+        start: (parent, params) => s.threads.create({ ...params, parent }),
+        send: (id, text) => s.threads.submit(id, text),
+        answer: (id) => s.threads.lastAnswer(id),
+        async archive(id) {
+          await s.threads.archive(id)
+          const { worktree } = await s.threads.get(id)
+          return { worktree: worktree ? (worktree.removed ? 'removed' : 'kept') : null }
+        },
+        archiveWhenDone: (id) => s.threads.archive(id, { whenIdle: true }),
       })),
+    },
+    worktrees({ dataDir: options.dataDir, appId: options.app.id }),
+    {
+      // Ego (see meta.ts): its agent chosen for its thread, through `agentFor`. Its thread is still the core's: made,
+      // kept apart from the lists and cleared by `thread.meta`; its state here is the thread's old `meta` (see LEGACY).
+      name: 'ego', title: agentName(options.app), description: `${options.app.name}'s own agent.`, required: true,
+      setup(s) {
+        // Its tools: only for its thread. The threads it starts are top-level, not its children.
+        const tools = metaExtension({
+          dir: options.dataDir, router, snapshot: () => settings.snapshot(), ...(options.machines ? { machines: options.machines } : {}),
+          threads: { info: (id) => s.threads.get(id).catch(() => undefined), list: () => s.threads.list(), answer: (id) => s.threads.lastAnswer(id), start: (params) => s.threads.create(params) },
+        })
+        s.agent(tools, { always: false })
+        // What Superego is, and its own tools, which only read and start threads, instead of the coding tools and the
+        // threads' own.
+        s.agentFor(({ state }) => state === true ? {
+          instructions: metaPrompt({ name: options.app.name, agent: options.app.agent, id: options.app.id, dataDir: options.dataDir, agentsDir, hostname: machine.hostname }),
+          extensions: [tools], without: EGO_WITHOUT,
+        } : undefined)
+      },
     },
   ]
   /** A thread's last answer, as text. */
@@ -462,7 +517,15 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       changed()
     }
     absorb(watch.value)
-    watch.start(async (call) => { if (call.kind === 'value') { absorb(call.value); archiveIfDone(key, entry) } })
+    watch.start(async (call) => {
+      if (call.kind !== 'value') return
+      const wasRunning = Boolean(entry.live?.run)
+      absorb(call.value)
+      // A run starting or ending, as the extensions' hooks hear it (one resumed after a restart was running already).
+      const running = Boolean(entry.live?.run)
+      if (running !== wasRunning) tellLater(running ? 'turnStart' : 'turnEnd', key)
+      archiveIfDone(key, entry)
+    })
     mounted.set(key, entry)
     archiveIfDone(key, entry)
     return entry
@@ -476,30 +539,49 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     ...(m.meta.profile ? { profile: m.meta.profile } : {}),
     ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),
     session: { root: rootOf(m), name: id === egoId ? options.app.name : basename(rootOf(m)) },
-    ...(m.meta.worktree ? { worktree: m.meta.worktree } : {}),
+    ...factsInfo(id, m.meta),
     ...(m.meta.archived ? { archived: true } : {}),
     ...(id === egoId ? { meta: true } : {}),
+    ...(m.meta.hidden ? { hidden: true } : {}),
     ...(m.meta.parent ? { parent: m.meta.parent } : {}),
-    ...withoutInfo(m.meta),
+    ...withoutInfo(id, m.meta),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
   /** What a thread goes without, for clients: by its profile once loaded (until then, by this machine's settings). */
-  const withoutInfo = (meta: ThreadMeta) => {
-    const without = [...withoutOf(meta, meta.profile && profiles.get(meta.profile.dir))].sort()
+  const withoutInfo = (id: string, meta: ThreadMeta) => {
+    const without = [...withoutOf(id, meta, meta.profile && profiles.get(meta.profile.dir))].sort()
     return without.length ? { without } : {}
+  }
+  /**
+   * What extensions say about a thread (`facts`), by extension. The worktrees extension's is `worktree` too, as
+   * clients read it until they read `ext.worktrees`.
+   */
+  const factsInfo = (id: string, meta: ThreadMeta): Pick<ThreadInfo, 'ext' | 'worktree'> => {
+    const ext: Record<string, Json> = {}
+    for (const source of factSources) {
+      if (source.profiles && !(meta.profile && source.profiles.has(meta.profile.dir))) continue
+      try {
+        const fact = source.value({ id, state: stateOf(meta, source.owner) })
+        if (fact !== undefined) ext[source.owner] = fact
+      } catch (error) {
+        console.error(`Extension ${source.owner}: facts of thread ${id} failed:`, error)
+      }
+    }
+    if (!Object.keys(ext).length) return {}
+    return { ext, ...(ext.worktrees ? { worktree: ext.worktrees as Worktree } : {}) }
   }
   /** A thread's session: kept since it started; for older threads, found from its folder once (else the folder). */
   const rootOf = (m: Mounted) => m.meta.root ?? m.root ?? m.meta.cwd
   /** Only an assistant answer makes a thread "done"; the user's own message does not. */
   const lastAnswer = (m: Mounted) => m.live?.run ? undefined : m.lastEntryId
 
-  /** The threads, newest first: the ones in use, or (`archived`) the ones put away. */
-  async function list({ archived = false } = {}): Promise<ThreadInfo[]> {
+  /** The threads, newest first: the ones in use, or (`archived`) the ones put away; (`hidden`) those in no list instead. */
+  async function list({ archived = false, hidden = false } = {}): Promise<ThreadInfo[]> {
     const catalog = await harness.snapshot(Catalog, context)
     const items: ThreadInfo[] = []
     for (const id of [...(catalog?.ids ?? [])].reverse()) {
       const m = await mount(id as ConversationId)
-      if (Boolean(m.meta.archived) === archived) items.push(info(String(id), m))
+      if (Boolean(m.meta.archived) === archived && Boolean(m.meta.hidden) === hidden) items.push(info(String(id), m))
     }
     return items
   }
@@ -522,18 +604,65 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     changed()
   }
 
+  /** Change an extension's state with a thread: `undefined` forgets it (and anything the core kept of it before, LEGACY). */
+  function editState(id: string, name: string, edit: (current: Json | undefined) => Json | undefined) {
+    return updateMeta(id, (meta) => {
+      const next = clone(edit(clone(stateOf(meta, name))))
+      LEGACY[name]?.drop(meta)
+      if (next !== undefined) meta.ext = { ...meta.ext, [name]: next }
+      else if (meta.ext && Object.hasOwn(meta.ext, name)) {
+        const { [name]: _gone, ...rest } = meta.ext
+        if (Object.keys(rest).length) meta.ext = rest
+        else delete meta.ext
+      }
+    })
+  }
+
+  // ── Thread hooks ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  /** The extensions' hooks for a thread, in order: those it doesn't go without, a profile's for its own threads only. */
+  const hooksOf = (id: string, m: Mounted) => {
+    const without = withoutOf(id, m.meta, m.meta.profile && profiles.get(m.meta.profile.dir))
+    return threadHooks.filter((h) => appliesTo(h, without, m.meta))
+  }
+  /** Ask the hooks that may refuse (`archiving`, `unarchiving`): the first to throw stops it, with its error. */
+  async function ask(hook: 'archiving' | 'unarchiving', id: string) {
+    const m = await get(id)
+    for (const { value, owner } of hooksOf(id, m)) {
+      try {
+        await value[hook]?.(info(id, m))
+      } catch (error) {
+        if (error instanceof RpcError) throw error
+        throw new RpcError('refused', `${owner}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+  }
+  /** Tell the hooks what happened, in order: one that throws is logged, and the rest are told all the same. */
+  async function tell(hook: 'created' | 'turnStart' | 'turnEnd' | 'archived' | 'unarchived', id: string, as?: Partial<ThreadInfo>) {
+    const m = await get(id)
+    for (const { value, owner } of hooksOf(id, m)) {
+      try {
+        // Each sees what the ones before it did (a worktree removed).
+        await value[hook]?.({ ...info(id, m), ...as })
+      } catch (error) {
+        console.error(`Extension ${owner}: ${hook} of thread ${id} failed:`, error)
+      }
+    }
+  }
+  /** Turns as the hooks hear them: in order for each thread, one after another, never holding up the run. */
+  const told = new Map<string, Promise<void>>()
+  function tellLater(hook: 'turnStart' | 'turnEnd', id: string) {
+    if (!threadHooks.some((h) => h.value[hook])) return
+    const next = (told.get(id) ?? Promise.resolve()).then(() => tell(hook, id)).catch(() => {})
+    told.set(id, next)
+    void next.then(() => { if (told.get(id) === next) told.delete(id) })
+  }
+
   // ── Extensions ──────────────────────────────────────────────────────────────────────────────────────────────────
 
   const connections = new Set<RpcPeer>()
   /** Every intent this daemon answers, its own and its extensions'. Reads and watches are plain methods. */
   const router = new Router<DaemonContext>()
-  // Ego's tools: selected for its thread only (see agentOf), so installed but not a built-in. The threads it starts are
-  // top-level, not its children (startThread).
-  const metaAgent = metaExtension({
-    dir: options.dataDir, router, snapshot: () => settings.snapshot(), ...(options.machines ? { machines: options.machines } : {}),
-    threads: { info: threadInfo, list: () => list(), answer: (id) => answerOf(id), start: (params) => startThread(params) },
-  })
-  registry.install(metaAgent)
   /**
    * Live values by name. A name is watched, not a value: a watch on one no extension has set up yet (a profile's, before
    * the profile loads) waits on null, and takes the value when it comes. `owned` while an extension publishes it.
@@ -596,9 +725,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /**
    * Set up a daemon extension: a bundled one (for the daemon's life), or a profile's (`agent` then adds to the
    * selection of the profiles that have it, `profiles`: their folders). Everything it registers is its own, and the
-   * returned teardown undoes all of it: its agent parts, actions, values, status, settings and its name.
+   * returned teardown undoes all of it: its agent parts, actions, values, status, settings, hooks and its name.
+   * `agentExtension` installs an agent part, and gives it to every thread it's for when `always`: the installed part
+   * (a profile's are renamed), and how to undo it.
    */
-  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension) => () => void, profiles?: Set<string>): Promise<() => void> {
+  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension, always: boolean) => { installed: Extension; undo: () => void }, profiles?: Set<string>): Promise<() => void> {
     if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
     if (RESERVED.has(extension.name)) throw new Error(`The name ${extension.name} is the core's own`)
     if (claimed.has(extension.name)) throw new Error(`An extension named ${extension.name} is already set up`)
@@ -613,7 +744,13 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       app: options.app,
       agentsDir,
       harness,
-      agent: (agentPart) => { undo.push(agentExtension(agentPart)) },
+      agent(agentPart, { always = true } = {}) {
+        const { installed, undo: uninstall } = agentExtension(agentPart, always)
+        undo.push(uninstall)
+        if (always) return
+        chosenParts.set(agentPart, installed)
+        undo.push(() => { chosenParts.delete(agentPart) })
+      },
       settings: {
         register(section) {
           ownKey(section.id)
@@ -663,13 +800,39 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         undo.push(() => { transforms.splice(transforms.indexOf(entry), 1) })
       },
       invalidate: changed,
+      thread(hooks) { own(threadHooks, hooks) },
+      state<T extends Json>() {
+        const name = extension.name
+        return {
+          get: async (id: string) => stateOf((await get(id)).meta, name) as T | undefined,
+          set: (id: string, next: T | undefined) => editState(id, name, () => next),
+          update: (id: string, edit: (current: T | undefined) => T | undefined) => editState(id, name, (current) => edit(current as T | undefined)),
+        }
+      },
+      facts(describe) {
+        if (factSources.some((f) => f.owner === extension.name)) throw new Error(`Extension ${extension.name} already says its facts`)
+        own(factSources, describe as (typeof factSources)[number]['value'])
+        changed()
+      },
+      agentFor(choose) { own(choosers, choose as (typeof choosers)[number]['value']); changed() },
       threads: {
-        list: () => list(),
+        list: (options) => list(options),
         get: async (id) => info(id, await get(id)),
         conversation: async (id) => (await get(id)).conversation,
         of: (conversationId) => mounted.has(String(conversationId)) ? String(conversationId) : undefined,
         attachments: attachmentsOf,
+        create: (params) => startThread(params),
+        async submit(id, text, { whenBusy = 'followUp' } = {}) { await submit(id, text, randomUUID(), whenBusy) },
+        lastAnswer: (id) => answerOf(id),
+        async archive(id, { whenIdle = false } = {}) { await (whenIdle ? archiveWhenDone(id) : archive(id)) },
+        async unarchive(id) { await unarchive(id) },
       },
+    }
+    /** Keep something it registered about threads in `list`, as its own, until it's torn down. */
+    function own<T>(list: Owned<T>[], value: T) {
+      const entry: Owned<T> = { value, owner: extension.name, ...(profiles ? { profiles } : {}) }
+      list.push(entry)
+      undo.push(() => { list.splice(list.indexOf(entry), 1); changed() })
     }
     const teardown = () => { for (const step of undo.splice(0).reverse()) step() }
     try {
@@ -684,7 +847,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   // The core's own, then the bundled ones: for the daemon's life, each giving every thread its agent parts unless the
   // thread goes without it.
   for (const extension of [...core, ...options.extensions ?? []]) {
-    cleanups.push(await setUp(extension, (part) => installBuiltin(part, extension.name)))
+    cleanups.push(await setUp(extension, (part, always) => {
+      if (always) return { installed: part, undo: installBuiltin(part, extension.name) }
+      registry.install(part)
+      return { installed: part, undo: () => registry.uninstall(part) }
+    }))
     const { name, title, description, required } = extension
     extensions.set(name, { name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}) })
   }
@@ -743,11 +910,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     let entry = shared.get(item.key)
     if (!entry) {
       const made: Shared = { key: item.key, file: item.file, profiles: new Set(), parts: [], teardown: () => {} }
-      made.teardown = await setUp(item.extension, (part) => {
+      made.teardown = await setUp(item.extension, (part, always) => {
         const named = { ...part, name: `${item.prefix}/${part.name}` }
-        made.parts.push(named)
         const uninstall = install(named)
-        return () => { made.parts.splice(made.parts.indexOf(named), 1); uninstall() }
+        if (!always) return { installed: named, undo: uninstall }
+        made.parts.push(named)
+        return { installed: named, undo: () => { made.parts.splice(made.parts.indexOf(named), 1); uninstall() } }
       }, made.profiles)
       shared.set(item.key, entry = made)
     }
@@ -839,21 +1007,20 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return loaded
   }
 
-  /** What a turn runs with: the thread's own choices, else its profile's, else this machine's settings. */
-  async function agentOf(meta: ThreadMeta) {
+  /**
+   * What a turn runs with: the thread's own choices, else what an extension chose for it (`agentFor`: Ego's), else its
+   * profile's, else this machine's settings. `id` is unset for a thread being made.
+   */
+  async function agentOf(id: string | undefined, meta: ThreadMeta) {
     const profile = meta.profile ? await profileOf(meta.profile) : undefined
-    const { model, thinkingLevel } = agent.resolve({ model: meta.model ?? profile?.spec.model, thinking: meta.thinking ?? profile?.spec.thinking })
-    const parts = partsFor(withoutOf(meta, profile))
-    // Ego: what Superego is, and its own tools, which only read and start threads, instead of the coding tools and
-    // the threads' own (it goes without those, see EGO_WITHOUT).
-    if (meta.meta) {
-      return {
-        model, thinkingLevel, extensions: [...parts, metaAgent],
-        instructions: metaPrompt({ name: options.app.name, agent: options.app.agent, id: options.app.id, dataDir: options.dataDir, agentsDir, hostname: machine.hostname }),
-      }
-    }
-    if (!profile) return { model, thinkingLevel, extensions: parts }
-    return { model, thinkingLevel, extensions: [...parts, ...partsOf(profile)], instructions: profile.spec.prompt || null }
+    const choice = choiceOf(id, meta, profile)
+    const { model, thinkingLevel } = agent.resolve({
+      model: meta.model ?? choice?.model ?? profile?.spec.model, thinking: meta.thinking ?? choice?.thinking ?? profile?.spec.thinking,
+    })
+    const chosen = (choice?.extensions ?? []).map((part) => chosenParts.get(part) ?? console.warn(`agentFor chose ${part.name}, which isn't given with agent(part, { always: false })`)).filter((part) => part !== undefined)
+    const extensions = [...partsFor(withoutOf(id, meta, profile)), ...chosen, ...(profile ? partsOf(profile) : [])]
+    const instructions = choice?.instructions ?? (profile ? profile.spec.prompt || null : undefined)
+    return { model, thinkingLevel, extensions, ...(instructions !== undefined ? { instructions } : {}) }
   }
 
   /** Send `text` to a thread, with the model and thinking it chose, else what this machine's settings say now. */
@@ -862,7 +1029,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const m = await get(id)
     // Put away: it can be read, not written to, until it's brought back.
     if (m.meta.archived) throw new RpcError('archived', 'This thread is archived', { hint: 'Unarchive it to send to it.' })
-    const { model, thinkingLevel, ...rest } = await agentOf(m.meta)
+    const { model, thinkingLevel, ...rest } = await agentOf(id, m.meta)
     if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
     await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null, ...rest }, context)
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
@@ -877,7 +1044,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * as it came.
    */
   async function transformed(id: string, m: Mounted, text: string, attachments: Attachment[], content: string | MessageBlock[]) {
-    const without = withoutOf(m.meta, m.meta.profile && profiles.get(m.meta.profile.dir))
+    const without = withoutOf(id, m.meta, m.meta.profile && profiles.get(m.meta.profile.dir))
     const applying = transforms.filter((t) => !without.has(t.owner) && (!t.profiles || (m.meta.profile && t.profiles.has(m.meta.profile.dir))))
     if (!applying.length) return content
     const thread = info(id, m)
@@ -955,46 +1122,49 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const thread = { thread: true as const }
   router.register(defineAction({
     id: 'thread.create', title: 'Start a thread (no dialog)', runs: 'machine', expose: ['ui', 'cli'],
-    params: obj({ cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), attachments: opt(arr(ATTACHMENT)), profile: opt(str()), worktree: opt(bool()), parent: opt(str()) }),
-    run: (params) => startThread(params),
+    params: obj({
+      cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), attachments: opt(arr(ATTACHMENT)), profile: opt(str()),
+      worktree: opt(bool()), parent: opt(str()), options: opt(obj({}, { open: true })),
+    }),
+    run: (params) => startThread(params as NewThread),
   }))
-  /** A new thread as asked for: where, with what, in a worktree or not; a child of `parent` when a thread starts it. */
-  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree: wantsWorktree, parent }: NewThread) {
+  /**
+   * A new thread as asked for: where, with what; a child of `parent` when a thread starts it (top-level when that one is
+   * hidden, Ego say); `hidden` in no list. Extensions' `creating` hooks may move it (a worktree) and give it state.
+   */
+  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree, parent, options: asked, hidden }: NewThread & { hidden?: boolean }) {
     const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
     if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${machine.hostname}`)
     if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
-    // Ego hands work to threads of their own: top-level in their project, not hidden under it.
-    if (parent === egoId) parent = undefined
-    if (parent) await get(parent)
+    if (parent === egoId || (parent && (await get(parent)).meta.hidden)) parent = undefined
     // The project's profile (or the user's) of that name, else the default one there is; checked (and allowed) now.
     const ref = findProfile(dir, userProfiles, profileName?.trim() || undefined)
     const loaded = ref ? await profileOf(ref) : undefined
-    // Its session is the project. It works in the folder given, or, asked to (or its profile says so), in a worktree
-    // of its own: in a repository that has a commit to start from.
+    // Its session is the project; where in it it works is the folder given, unless a hook moves it.
     const checkout = await checkoutOf(dir)
-    let workdir = dir
-    let worktree: ThreadMeta['worktree']
-    if (checkout && (wantsWorktree ?? loaded?.spec.worktree ?? false)) {
-      const name = `${slugOf(title?.trim() || (prompt ? titleOf(prompt) : ''))}-${randomUUID().slice(0, 6)}`
-      const path = join(options.dataDir, 'worktrees', basename(checkout.root), name)
-      const branch = `${options.app.id}/${name}`
-      await mkdir(dirname(path), { recursive: true })
-      const made = await git(checkout.top, ['worktree', 'add', '-q', '-b', branch, path, 'HEAD']).then(() => true, () => false)
-      if (made) {
-        // git gives real paths; so must the folder be, to find where in the checkout it is.
-        const below = relative(checkout.top, await realpath(dir))
-        workdir = below ? join(path, below) : path
-        worktree = { path, branch }
-      }
+    const draft: ThreadDraft = {
+      cwd: dir, root: checkout?.root ?? dir, ...(checkout ? { checkout } : {}), title: title?.trim() ?? '',
+      ...(prompt ? { prompt } : {}), ...(parent ? { parent } : {}), ...(ref && loaded ? { profile: { ref, spec: loaded.spec } } : {}),
+      options: { ...(worktree !== undefined ? { worktrees: worktree } : {}), ...clone(asked) },
+    }
+    const ext: Record<string, Json> = {}
+    const meta = { ...(ref ? { profile: ref } : {}) } as ThreadMeta
+    const off = switchedOff(loaded)
+    for (const hook of threadHooks) {
+      if (!hook.value.creating || !appliesTo(hook, off, meta)) continue
+      const made = await hook.value.creating(clone(draft))
+      if (made?.cwd) draft.cwd = made.cwd
+      if (made?.state !== undefined) ext[hook.owner] = clone(made.state)
     }
     return createThread({
-      title: title?.trim() ?? '', cwd: workdir, createdAt: Date.now(), root: checkout?.root ?? dir, ...(worktree ? { worktree } : {}),
+      title: draft.title, cwd: draft.cwd, createdAt: Date.now(), root: draft.root, ...(Object.keys(ext).length ? { ext } : {}),
       ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}), ...(ref ? { profile: ref } : {}), ...(parent ? { parent } : {}),
+      ...(hidden ? { hidden: true } : {}),
     }, prompt, attachments)
   }
   /** A new thread with `meta`, and its first message when there is one. */
   async function createThread(meta: ThreadMeta, prompt?: string, attachments?: Attachment[]) {
-    const { model, thinkingLevel } = await agentOf(meta)
+    const { model, thinkingLevel } = await agentOf(undefined, meta)
     const conversation = await harness.createConversation({
       ownership: { kind: 'ownerless' },
       agent: { ...(model ? { model } : {}), ...(thinkingLevel ? { thinkingLevel } : {}), cwd: meta.cwd },
@@ -1008,6 +1178,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (meta.meta) egoId = String(conversation.id)
     const m = await mount(conversation.id)
     changed()
+    await tell('created', String(conversation.id))
     if (prompt?.trim() || attachments?.length) await submit(String(conversation.id), prompt ?? '', randomUUID(), undefined, attachments)
     return info(String(conversation.id), m)
   }
@@ -1120,40 +1291,24 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const notEgo = (id: string) => {
     if (id === egoId) throw new RpcError('invalid', `${agentName(options.app)} isn't archived`, { hint: 'Clear it instead.' })
   }
-  /** Put a thread away. Its worktree goes with it when nothing in it is uncommitted; its branch stays, to come back to. */
+  /**
+   * Put a thread away, unless an extension's `archiving` refuses; then its `archived` hooks clean up (its worktree goes
+   * when nothing in it is uncommitted). Says what became of its worktree, as `thread.archive` always has.
+   */
   async function archive(id: string) {
     notEgo(id)
-    const { meta } = await get(id)
-    const tree = meta.worktree
-    let removed = tree?.removed
-    if (tree && !tree.removed) {
-      const exists = await stat(tree.path).then(() => true, () => false)
-      const clean = exists && (await git(tree.path, ['status', '--porcelain']).catch(() => 'unknown')) === ''
-      if (!exists) removed = true
-      else if (clean) removed = await removeWorktree(tree.path, meta.root)
-    }
-    await updateMeta(id, (m) => { m.archived = true; delete m.archiveWhenDone; if (m.worktree && removed) m.worktree.removed = true })
-    return { worktree: tree ? (removed ? 'removed' as const : 'kept' as const) : null }
+    await ask('archiving', id)
+    // Cleaned up before clients see it archived: never shown put away with its worktree still there.
+    await tell('archived', id, { archived: true })
+    await updateMeta(id, (m) => { m.archived = true; delete m.archiveWhenDone })
+    const { worktree } = info(id, await get(id))
+    return { worktree: worktree ? (worktree.removed ? 'removed' as const : 'kept' as const) : null }
   }
-  /**
-   * A clean worktree, gone at once: moved aside and let go of by git, then deleted in the background. Deleting it in
-   * place (`git worktree remove`) takes as long as its files do, many seconds with a node_modules in it.
-   */
-  async function removeWorktree(path: string, root: string | undefined) {
-    const aside = join(dirname(path), `.${basename(path)}${REMOVING}${randomUUID().slice(0, 8)}`)
-    if (!await rename(path, aside).then(() => true, () => false)) return false
-    await git(root ?? aside, ['worktree', 'prune']).catch(() => {})
-    void rm(aside, { recursive: true, force: true }).catch(() => {})
-    return true
-  }
-  /** The worktrees a previous process moved aside and didn't get to delete (see removeWorktree), deleted now. */
-  async function sweepRemoved() {
-    const root = join(options.dataDir, 'worktrees')
-    for (const repo of await readdir(root).catch(() => [])) {
-      for (const name of await readdir(join(root, repo)).catch(() => [])) {
-        if (name.startsWith('.') && name.includes(REMOVING)) await rm(join(root, repo, name), { recursive: true, force: true }).catch(() => {})
-      }
-    }
+  /** Bring a thread back, unless an extension's `unarchiving` refuses (or can't put back its worktree). */
+  async function unarchive(id: string) {
+    await ask('unarchiving', id)
+    await updateMeta(id, (m) => { delete m.archived; delete m.archiveWhenDone })
+    await tell('unarchived', id)
   }
   /**
    * Archive a thread once its run ends: how a thread archives itself, mid-turn, without its worktree going from under
@@ -1172,20 +1327,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   router.register(defineAction({
     id: 'thread.unarchive', title: 'Unarchive the thread', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str() }),
-    async run({ id }) {
-      const { meta } = await get(id)
-      // Its worktree back, on the branch it left.
-      const tree = meta.worktree
-      if (tree?.removed && meta.root) {
-        await mkdir(dirname(tree.path), { recursive: true })
-        // Pruned first, in case a process ended before letting go of it (see removeWorktree).
-        await git(meta.root, ['worktree', 'prune']).catch(() => {})
-        await git(meta.root, ['worktree', 'add', '-q', tree.path, tree.branch])
-          .catch((error: Error) => { throw new RpcError('invalid', `Couldn't restore its worktree: ${error.message}`) })
-      }
-      await updateMeta(id, (m) => { delete m.archived; delete m.archiveWhenDone; if (m.worktree) delete m.worktree.removed })
-      return null
-    },
+    async run({ id }) { await unarchive(id); return null },
   }))
   router.register(defineAction({
     id: 'pane.open', title: 'Open a pane', runs: 'machine', expose: ['ui', 'cli'], ...thread,
@@ -1318,7 +1460,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (m.live?.run && m.meta.profile) await profileOf(m.meta.profile).catch((error: Error) => console.error(`Profile ${m.meta.profile!.name}: ${error.message}`))
   }
   harness.resume()
-  void sweepRemoved()
 
 
   const daemon: Daemon = {

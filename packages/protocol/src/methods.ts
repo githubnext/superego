@@ -44,7 +44,10 @@ export type ThreadInfo = {
   session: { root: string; name: string }
   /** The thread that started it, if one did (an agent's thread_start, say): it shows nested under that one. */
   parent?: ThreadId
-  /** Its own git worktree, when it has one; `removed` once archiving took it away (its branch stays). */
+  /**
+   * Its own git worktree, when it has one; `removed` once archiving took it away (its branch stays). The `worktrees`
+   * extension's fact (`ext.worktrees`), here too until clients read it there.
+   */
   worktree?: { path: string; branch: string; removed?: boolean }
   /** Put away: listed only with `archived`, readable, and taking no messages until unarchived. */
   archived?: boolean
@@ -55,6 +58,10 @@ export type ThreadInfo = {
    * none of their UI for it either. Absent: it has them all.
    */
   without?: string[]
+  /** Left out of every list: an extension's own thread (an agent of its own), opened by id. */
+  hidden?: boolean
+  /** What extensions say about it (their facts), by extension name: `ext.worktrees`, say. Absent: nothing. */
+  ext?: Record<string, Json>
   status: Status
 }
 
@@ -96,6 +103,11 @@ export type NewThread = {
   profile?: string
   /** The thread starting it, on the same machine. */
   parent?: string
+  /**
+   * What extensions are asked for, by name, as their `creating` hooks read it: `{ worktrees: true }`. `worktree` is
+   * the shorthand for `worktrees`.
+   */
+  options?: Record<string, Json>
 }
 
 /** `id` is the machine's identity: stable across restarts and routes, so a client can tell it is the same machine. */
