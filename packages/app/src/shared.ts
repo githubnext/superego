@@ -74,6 +74,8 @@ export const ACTIONS_MOVED: Record<string, string> = {
   'panes.changes': 'git.changes',
   // ⌘. moved into the unread extension.
   'thread.unread': 'unread.next',
+  // Opening Ego moved into the ego extension.
+  'app.meta': 'ego.open',
 }
 
 /** `store` with what `app.keys` holds for an action's old id read as its new one's (and saved so). */

@@ -31,10 +31,10 @@ it("reads a shortcut set for an action's old id as the new one's, and saves it s
   await rm(dir, { recursive: true, force: true })
 })
 
-it("reads settings that moved into extensions as theirs: whether to notify, and where ⌘. looks", async () => {
+it("reads settings that moved into extensions as theirs: whether to notify, where ⌘. looks, and the keys for ⌘. and Ego", async () => {
   const dir = await mkdtemp(join(tmpdir(), 'superego-app-settings-'))
-  await writeFile(join(dir, 'app-settings.json'), JSON.stringify({ 'app.notifications': false, 'app.unread': 'session', 'app.keys': { 'thread.unread': 'mod+u' } }))
+  await writeFile(join(dir, 'app-settings.json'), JSON.stringify({ 'app.notifications': false, 'app.unread': 'session', 'app.keys': { 'thread.unread': 'mod+u', 'app.meta': 'mod+shift+m' } }))
   const settings = createAppSettings(dir, defineApp({ name: 'superego', id: 'superego' }))
-  expect([settings.get('notifications.enabled'), settings.get('unread.scope'), settings.get('app.keys')]).toEqual([false, 'session', { 'unread.next': 'mod+u' }])
+  expect([settings.get('notifications.enabled'), settings.get('unread.scope'), settings.get('app.keys')]).toEqual([false, 'session', { 'unread.next': 'mod+u', 'ego.open': 'mod+shift+m' }])
   await rm(dir, { recursive: true, force: true })
 })
