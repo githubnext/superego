@@ -34,6 +34,7 @@ export default defineProfile({
   },
   without: ['ask-user'],                             // built-ins to leave out
   worktree: true,                                    // its threads get a worktree each (in a git repository)
+  options: { worktrees: true },                      // what its threads ask extensions for, by name (the same, longhand)
   extends: 'user:default',                           // start from your profile of that name, and add to it
 })
 ```

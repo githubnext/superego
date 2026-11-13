@@ -185,6 +185,7 @@ export default defineProfile({
   panes: { order: 'an order, with its lines and status. Params: { id }' },  // told to the agent, for open_pane
   without: ['ask-user'],           // optional extensions its threads go without
   worktree: false,                 // its threads work in place (the default); true: each in a worktree of its own
+  options: { worktrees: false },   // what its threads ask extensions for, by name (`worktree` is the shorthand for this one)
 })
 ```
 

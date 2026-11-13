@@ -6,8 +6,8 @@ import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { connectSocket, listen, openDaemon } from '@superego/daemon'
-import { defineApp, PROTOCOL_VERSION, type Hello, type Json, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonExtension } from '@superego/daemon'
+import { defineApp, PROTOCOL_VERSION, RpcError, type Hello, type Json, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import worktrees from '../src/daemon.ts'
 import type { Worktree } from '../src/shared.ts'
 
@@ -17,9 +17,9 @@ let dir: string
 beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-worktrees-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
-async function open(dataDir = dir) {
+async function open(dataDir = dir, more: DaemonExtension[] = []) {
   process.env.SUPEREGO_MODEL = 'faux'
-  const daemon = await openDaemon({ app: SUPEREGO, dataDir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [worktrees] })
+  const daemon = await openDaemon({ app: SUPEREGO, dataDir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [worktrees, ...more] })
   const server = await listen(daemon, join(dataDir, 'superego.sock'))
   const { peer, socket } = await connectSocket(join(dataDir, 'superego.sock'))
   const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
@@ -38,6 +38,14 @@ const find = async (peer: RpcPeer, id: string) => [...await listed(peer), ...awa
 const treeOf = (thread: ThreadInfo | undefined) => thread?.ext?.worktrees as Worktree | undefined
 /** Archive a thread: what `thread.archive` says (`notes`, and `worktree` for older windows). */
 const archive = (peer: RpcPeer, id: string) => peer.call<{ notes: Record<string, string>; worktree: string | null }>('thread.archive', { id })
+/** A repository in the test's folder, with a first commit. */
+function repository() {
+  const git = (...args: string[]) => execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { encoding: 'utf8' }).trim()
+  execFileSync('git', ['init', '-q', dir])
+  writeFileSync(join(dir, 'readme.md'), 'hi\n')
+  git('add', '.'); git('commit', '-q', '-m', 'start')
+  return git
+}
 
 it('is required, and announced', async () => {
   const { hello, close } = await open()
@@ -125,5 +133,61 @@ it('reads the worktree a thread kept before extensions had state, as its own, an
   await peer.call('thread.unarchive', { id })
   expect(existsSync(join(tree.path, 'readme.md'))).toBe(true)
   expect(treeOf(await find(peer, id))).toEqual(tree)
+  await close()
+})
+
+it("takes its worktree and branch back when a later extension refuses the thread", async () => {
+  const git = repository()
+  const refuses = defineDaemonExtension({ name: 'refuses', setup(superego) { superego.thread({ creating() { throw new RpcError('refused', 'Not today') } }) } })
+  const { peer, close } = await open(dir, [refuses])
+  await expect(peer.call('thread.create', { cwd: dir, title: 'Doomed', worktree: true })).rejects.toThrow(/Not today/)
+  expect(await peer.call('thread.list', {})).toEqual([])
+  expect(git('branch', '--list', 'superego/*')).toBe('')
+  expect(git('worktree', 'list').split('\n')).toHaveLength(1)
+  await close()
+})
+
+it("gives a profile's threads worktrees through its options, unless a thread is started otherwise", async () => {
+  repository()
+  mkdirSync(join(dir, '.superego', 'profiles', 'default'), { recursive: true })
+  writeFileSync(join(dir, '.superego', 'profiles', 'default', 'profile.ts'), "export default { options: { worktrees: true } }\n")
+  await mkdir(join(dir, 'data'), { recursive: true })
+  const { peer, close } = await open(join(dir, 'data'))
+  await peer.call('profile.allow', { cwd: dir })
+  expect(treeOf(await peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'From the profile' }))?.branch).toMatch(/^superego\/from-the-profile-/)
+  expect(treeOf(await peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'In place', worktree: false }))).toBeUndefined()
+  await close()
+})
+
+it("brings an old thread back without its worktree when there's no checkout to restore it from", async () => {
+  // A thread from before threads kept their session: its session is found from its folder, its worktree's, gone once
+  // archived. There's nothing to put it back from, so it comes back without, as it always did, rather than refusing.
+  const git = repository()
+  const tree = { path: join(dir, 'data', 'worktrees', 'repo', 'old-abc123'), branch: 'superego/old-abc123' }
+  mkdirSync(dirname(tree.path), { recursive: true })
+  git('worktree', 'add', '-q', '-b', tree.branch, tree.path, 'HEAD')
+  const { Harness, createRegistry, defineDoc } = await import('@earendil-works/pi-durable')
+  const { openNodeSqliteStorage } = await import('@earendil-works/pi-durable/storage/sqlite/node')
+  const { createModels } = await import('@earendil-works/pi-ai/models')
+  const { BACKGROUND_CONTEXT: context } = await import('@earendil-works/chord/context')
+  const Catalog = defineDoc<{ ids: number[] }>({ kind: 'superego.catalog', version: 1, scope: 'session', initial: () => ({ ids: [] }), checkpointWhen: () => true })
+  const ThreadDoc = defineDoc<Record<string, Json>>({
+    kind: 'superego.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current', initial: () => ({ title: '', cwd: '', createdAt: 0 }), checkpointWhen: () => true,
+  })
+  const harness = await Harness.open(await openNodeSqliteStorage(join(dir, 'data', 'superego.sqlite')), { models: createModels(), registry: createRegistry() }, context)
+  const old = await harness.createConversation({
+    ownership: { kind: 'ownerless' }, agent: { cwd: tree.path },
+    init: async (tx, created) => { Object.assign(await tx.doc(ThreadDoc, created), { title: 'Old', cwd: tree.path, createdAt: 1, worktree: tree }); (await tx.doc(Catalog)).ids.push(created) },
+  }, context)
+  await harness.close(context)
+  const id = String(old.id)
+  const first = await open(join(dir, 'data'))
+  expect((await archive(first.peer, id)).worktree).toBe('removed')
+  await first.close()
+  // Started again, it no longer knows its session from its folder.
+  const { peer, close } = await open(join(dir, 'data'))
+  await peer.call('thread.unarchive', { id })
+  expect((await find(peer, id))!.archived).toBeUndefined()
+  expect(treeOf(await find(peer, id))).toMatchObject({ removed: true })
   await close()
 })
