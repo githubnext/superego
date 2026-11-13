@@ -15,8 +15,8 @@ import {
 } from '@superego/client'
 import { appEnv, daemonStarting, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@superego/daemon'
 import {
-  compareVersions, driftPhrase, FEATURES, PROTOCOL_VERSION, RpcError, versionOf, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
-  type ProfileInfo, type ProfileRef, type ThreadInfo, type SettingsSnapshot,
+  AUTH_REJECTED, compareVersions, driftPhrase, FEATURES, PROTOCOL_VERSION, RpcError, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
+  type ProfileInfo, type ProfileRef, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
 export type CliOptions = {
@@ -72,6 +72,7 @@ Usage:
   ${app.id} auth                       List providers and how they are signed in
   ${app.id} auth key <provider>        Store an API key (prompted, or read from stdin)
   ${app.id} auth logout <provider>     Remove a stored credential
+  ${app.id} auth retry [provider]      Retry the threads waiting for sign-in now (they retry by themselves when the credentials change)
 
   ${app.id} actions [--all]            List the actions a machine takes from the command line (--all: every action)
   ${app.id} do <action> [--<param> <value>...] [--params '<json>']
@@ -100,6 +101,23 @@ function table(rows: string[][]) {
   for (const row of rows) console.log(row.map((cell, i) => i === row.length - 1 ? cell : cell.padEnd(widths[i]!)).join('  ').trimEnd())
 }
 const GLYPH: Record<string, string> = { idle: '○', working: '●', done: '*', blocked: '?', error: '!' }
+const stateOf = (status: ThreadInfo['status']) => waitingForSignIn(status) ? '~ waiting for sign-in' : `${GLYPH[status.state]} ${status.state}`
+
+/** The providers that rejected a machine's credentials; none from a daemon too old to say. */
+const rejectedOn = (call: <M extends MethodName>(method: M, params: Params<M>) => Promise<Result<M>>) =>
+  call('value.watch', { key: AUTH_REJECTED }).then((r) => (r.value ?? []) as ProviderRejection[], () => [])
+
+/** What to say of each rejected provider: what happened, what waits, and how to sign in again. */
+function sayRejected(rejections: ProviderRejection[], machine: Machine) {
+  const on = machine.config ? ` -m ${/\s/.test(machine.label) ? JSON.stringify(machine.label) : machine.label}` : ''
+  for (const r of rejections) {
+    const since = new Date(r.since).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+    const waiting = r.threads.length === 0 ? 'New turns wait' : `${r.threads.length} thread${r.threads.length === 1 ? ' is' : 's are'} waiting`
+    console.log(`\n${r.summary}${machine.config ? ` on ${machine.label}` : ''} (since ${since}). ${waiting} for sign-in, and go on once it's done.`)
+    console.log(`  Sign in again: ${app.id} auth key ${r.provider}${on}, or in the app's Settings → Providers`)
+    console.log(`  Retry now:     ${app.id} auth retry ${r.provider}${on}`)
+  }
+}
 
 // ── Reaching daemons ────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -197,10 +215,14 @@ async function startThread(args: { dir?: string; machine?: string; prompt?: stri
 
 async function threads(machineName?: string, archived = false) {
   const machine = resolveMachine(machineName)
-  const list = await on(machine, (call) => call('thread.list', archived ? { archived: true } : {}))
+  const { list, rejected } = await on(machine, async (call) => ({
+    list: await call('thread.list', archived ? { archived: true } : {}),
+    rejected: archived ? [] : await rejectedOn(call),
+  }))
   print(list, () => {
-    if (!list.length) return console.log(`No threads on ${machine.label}. Start one with: ${app.id}`)
-    table(list.map((s: ThreadInfo) => [s.id, `${GLYPH[s.status.state]} ${s.status.state}`, s.title, s.cwd]))
+    if (!list.length) console.log(`No threads on ${machine.label}. Start one with: ${app.id}`)
+    else table(list.map((s: ThreadInfo) => [s.id, stateOf(s.status), s.title, s.cwd]))
+    sayRejected(rejected, machine)
   })
 }
 
@@ -341,9 +363,17 @@ async function readSecret(prompt: string): Promise<string> {
 async function authCommand(sub: string | undefined, rest: string[], machineName?: string) {
   const machine = resolveMachine(machineName)
   if (!sub || sub === 'ls' || sub === 'list') {
-    const snapshot = await on(machine, (call) => call('settings.watch', {}).then((r) => r.value))
+    const { snapshot, rejected } = await on(machine, async (call) => ({ snapshot: await call('settings.watch', {}).then((r) => r.value), rejected: await rejectedOn(call) }))
     const providers = (snapshot.sections.find((s) => s.id === 'providers')?.data ?? []) as ProviderAuthInfo[]
-    return print(providers, () => table(providers.map((p) => [p.id, p.auth ? `${p.auth.type === 'oauth' ? 'signed in' : 'api key'}${p.auth.source ? ` (${p.auth.source})` : ''}` : 'not signed in'])))
+    const listed = providers.map((p) => ({ ...p, ...(rejected.some((r) => r.provider === p.id) ? { rejected: rejected.find((r) => r.provider === p.id) } : {}) }))
+    return print(listed, () => {
+      table(listed.map((p) => [p.id, (p.auth ? `${p.auth.type === 'oauth' ? 'signed in' : 'api key'}${p.auth.source ? ` (${p.auth.source})` : ''}` : 'not signed in') + (p.rejected ? ' · rejected' : '')]))
+      sayRejected(rejected, machine)
+    })
+  }
+  if (sub === 'retry') {
+    const { retried } = await on(machine, (call) => call('action.run', { id: 'auth.retry', params: rest[0] ? { provider: rest[0] } : {}, exposure: 'cli' })) as { retried: number }
+    return print({ retried }, () => console.log(retried ? `Retrying ${retried} thread${retried === 1 ? '' : 's'} on ${machine.label}.` : `Nothing waits for sign-in on ${machine.label}.`))
   }
   const provider = rest[0]
   if (!provider) throw new RpcError('usage', `${app.id} auth ${sub} <provider>`)

@@ -27,8 +27,10 @@ superego threads [--archived]                  # list them (also: ls)
   `thread_archive` (a thread that isn't working, or with no id their own, once the turn ends), and name threads in
   messages as `[title](thread:<id>)`.
 
-A thread's status is `idle`, `working`, `done`, `blocked` (waiting on the user: a question, say) or `error`. To wait
-for an answer from a script, poll:
+A thread's status is `idle`, `working`, `done`, `blocked` (waiting on the user: a question, say) or `error`. Blocked
+with kind `auth` is waiting for sign-in: its provider rejected the machine's credentials, and it goes on by itself
+once they change (`superego threads` says which provider, and how to sign in again). To wait for an answer from a
+script, poll:
 
 ```sh
 id=$(superego create . -p "Summarise the open TODOs" --json | jq -r .id)
@@ -106,6 +108,7 @@ superego settings reset <key>
 superego auth                         # providers and how each is signed in
 superego auth key <provider>          # store an API key (prompted, or from stdin)
 superego auth logout <provider>
+superego auth retry [provider]        # retry the threads waiting for sign-in now
 ```
 
 Each machine has its own settings (models, providers, which extensions are on). OAuth sign-in happens in the app's

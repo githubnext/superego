@@ -185,6 +185,22 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     expect(auth.find((p: any) => p.id === 'openai')).toMatchObject({ auth: { source: 'OPENAI_API_KEY' } })
   })
 
+  it('marks threads waiting for sign-in, and says how to sign in again', async () => {
+    // The scripted model rejects a key that starts with "reject", as Anthropic does one it doesn't know.
+    writeFileSync(join(home, 'auth.json'), JSON.stringify({ faux: { type: 'api_key', key: 'reject-me' } }))
+    const created = await superegoJson(['create', home, '-p', 'are you there'])
+    await until(async () => (await superegoJson(['threads'])).find((t: any) => t.id === created.id)?.status.kind === 'auth')
+    const listed = await superego(['threads'])
+    expect(listed).toMatch(new RegExp(`${created.id}\\s+~ waiting for sign-in`))
+    expect(listed).toContain('faux rejected the API key')
+    expect(listed).toContain('superego auth key faux')
+    expect(await superego(['auth', 'retry', 'faux'])).toContain('Retrying 1 thread')
+    // Signed in again: it goes on by itself.
+    writeFileSync(join(home, 'auth.json'), JSON.stringify({}))
+    await until(async () => (await superegoJson(['threads'])).find((t: any) => t.id === created.id)?.status.state === 'done')
+    expect(await superego(['threads'])).not.toContain('rejected')
+  })
+
   it('prints its skill: the overview, which lists every topic, and each topic', async () => {
     const overview = await superego(['--skill'])
     expect(overview).toMatch(/^---\nname: superego\ndescription: .+\n---\n/)
