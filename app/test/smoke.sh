@@ -32,6 +32,13 @@ cat > "$SUPEREGO_REPLAY" <<'TURNS'
 {"at":0,"provider":"x","model":"x","message":{"role":"assistant","content":[{"type":"text","text":"Blue it is."}],"stopReason":"stop"}}
 {"at":0,"provider":"x","model":"x","message":{"role":"assistant","content":[{"type":"text","text":"Noted for later."}],"stopReason":"stop"}}
 TURNS
+# Then an agent showing images (made by smoke.mjs): one alone, three in a grid (one gone by the time it's looked at),
+# and six in a carousel.
+S="$SUPEREGO_HOME/shots"
+cat >> "$SUPEREGO_REPLAY" <<TURNS
+{"at":0,"provider":"x","model":"x","message":{"role":"assistant","content":[{"type":"toolCall","id":"img-1","name":"show_images","arguments":{"images":[{"path":"$S/wide.png","caption":"The home page, at full width"}]}},{"type":"toolCall","id":"img-2","name":"show_images","arguments":{"title":"Before and after","images":[{"path":"$S/a.png","caption":"Before"},{"path":"$S/b.png","caption":"After"},{"path":"$S/gone.png","caption":"Gone"}]}},{"type":"toolCall","id":"img-3","name":"show_images","arguments":{"images":[{"path":"$S/1.png","caption":"First"},{"path":"$S/2.png","caption":"Second"},{"path":"$S/3.png","caption":"Third"},{"path":"$S/4.png"},{"path":"$S/5.png"},{"path":"$S/6.png","caption":"Last"}]}}],"stopReason":"toolUse"}}
+{"at":0,"provider":"x","model":"x","message":{"role":"assistant","content":[{"type":"text","text":"Those are the screens."}],"stopReason":"stop"}}
+TURNS
 cleanup() {
   # The daemons by their pid files, and anything still holding their sockets.
   for pid in $(cat "$SUPEREGO_HOME/daemon.pid" "$SUPEREGO_HOME/second/daemon.pid" 2>/dev/null) $(lsof -t "$SUPEREGO_HOME"/*.sock "$SUPEREGO_HOME"/second/*.sock 2>/dev/null); do kill "$pid" 2>/dev/null || true; done

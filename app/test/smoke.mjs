@@ -1,10 +1,10 @@
 // Headless end-to-end: the real app, the real daemon (scripted model), driven through the renderer.
 // Phase "first" creates a thread and chats; phase "reopen" is a fresh app process that must find it on the same
 // daemon, which outlived the first app. Run by test/smoke.sh.
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron'
 
 const phase = process.env.SUPEREGO_SMOKE_PHASE ?? 'first'
-import { readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync as makeDir, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 const fail = async (message) => {
   console.error(`smoke(${phase}): FAIL ${message}`)
   const window = BrowserWindow.getAllWindows()[0]
@@ -122,6 +122,70 @@ if (phase === 'first') {
   await run(`[...document.querySelectorAll('.ask-user button')].find((b) => b.querySelector('.ask-user__option-label')?.textContent === 'blue').click()`)
   await until(`!document.querySelector('.ask-user') && document.querySelector('.ask-user-asked')?.textContent.includes('blue') && document.querySelector('.transcript').textContent.includes('Blue it is.')`, 'answered, agent carried on')
   await until(`!document.querySelector('.msg--queued') && document.querySelector('.transcript').textContent.includes('then paint it') && document.querySelector('.transcript').textContent.includes('Noted for later.')`, 'queued follow-up went in')
+  // images: a replayed agent shows images (show_images), drawn in the thread: one alone, a grid, a carousel; a file
+  // gone by then shows as broken; any opens in the lightbox, which zooms, goes through the set, and closes on Escape.
+  const shots = `${process.env.SUPEREGO_HOME}/shots`
+  makeDir(shots, { recursive: true })
+  const picture = (name, width, height, hue) => {
+    const pixels = Buffer.alloc(width * height * 4)
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      // A gradient with a grid over it, so zooming and panning show.
+      const line = x % 80 < 2 || y % 80 < 2
+      const [r, g, b] = [hue, (hue + 90) % 256, (hue + 170) % 256].map((c, i) => Math.round(c * (0.55 + 0.45 * (i === 0 ? x / width : y / height))))
+      pixels.set(line ? [250, 250, 250, 255] : [b, g, r, 255], (y * width + x) * 4)
+    }
+    writeFileSync(`${shots}/${name}.png`, nativeImage.createFromBitmap(pixels, { width, height }).toPNG())
+  }
+  picture('wide', 1280, 720, 40)
+  picture('a', 640, 480, 200); picture('b', 640, 480, 120); picture('gone', 480, 640, 10)
+  for (const n of [1, 2, 3, 4, 5, 6]) picture(String(n), 900 - n * 40, 600, n * 37)
+  const showing = await run(`window.superego.call('local', 'thread.create', {}).then((s) => window.superego.call('local', 'thread.submit', { id: s.id, text: 'show me the screens' }).then(() => s.id))`)
+  await until(`window.superego.call('local', 'thread.list', {}).then((list) => list.find((t) => t.id === '${showing}')?.status.state === 'done')`, 'images shown by the agent')
+  // One shown file gone from the machine before anyone looks: that one is broken, the rest still show.
+  const shownDir = `${process.env.SUPEREGO_HOME}/attachments/${showing}/shown`
+  rmSync(`${shownDir}/${readdirSync(shownDir).find((name) => name.endsWith('-gone.png'))}`)
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('show me the screens'))?.click()`)
+  // Each is read as it nears the screen: the first, above, once scrolled to.
+  await until(`(() => { const e = document.querySelector('.images--single'); e?.scrollIntoView({ block: 'center' }); return Boolean(e) })()`, 'images in the thread')
+  await until(`document.querySelector('.images--single .images__frame.is-ready') && document.querySelector('.images--single .images__caption')?.textContent === 'The home page, at full width'`, 'a single image, loaded, with its caption')
+  await until(`document.querySelectorAll('.images--grid .images__frame').length === 3 && document.querySelectorAll('.images--grid .images__frame.is-ready').length === 2 && document.querySelector('.images--grid .images__frame.is-broken')?.textContent.includes('Image not found')`, 'a grid, with the gone one broken')
+  await until(`document.querySelector('.images--grid .images__title')?.textContent === 'Before and after'`, 'the grid titled')
+  await until(`document.querySelector('.images--carousel .images__count')?.textContent === '1 / 6' && Boolean(document.querySelector('.images--carousel .images__slide .images__frame.is-ready'))`, 'a carousel at its first')
+  // Not folded away with the run's steps: the images are in the thread as it reads.
+  if (await run(`Boolean(document.querySelector('details:not([open]) .images'))`)) await fail('images folded into the run')
+  await run(`document.querySelector('.images--carousel .images__nav--next').click()`)
+  await until(`document.querySelector('.images--carousel .images__count')?.textContent === '2 / 6' && document.querySelector('.images--carousel .images__caption')?.textContent === 'Second'`, 'carousel moved on by its button')
+  await run(`(() => { const c = document.querySelector('.images__carousel'); c.focus(); c.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })) })()`)
+  await until(`document.querySelector('.images--carousel .images__count')?.textContent === '3 / 6'`, 'carousel moved on by →')
+  await until(`(() => { const t = document.querySelector('.images__track'); return Math.abs(t.scrollLeft - 2 * t.clientWidth) < 1 })()`, 'carousel settled on the third', 5000)
+  await run(`document.querySelector('.images--single').scrollIntoView({ block: 'start' })`)
+  await new Promise((r) => setTimeout(r, 300))
+  await shot('images')
+  await run(`document.querySelector('.images--grid').scrollIntoView({ block: 'start' })`)
+  await new Promise((r) => setTimeout(r, 300))
+  await shot('images-grid')
+  nativeTheme.themeSource = 'light'
+  await new Promise((r) => setTimeout(r, 400))
+  await shot('images-grid-light')
+  nativeTheme.themeSource = 'system'
+  // The lightbox: the grid's first, then → to the next; zoom in and out; Escape closes it and the focus goes back.
+  await run(`document.querySelector('.images--grid .images__frame').focus(); document.querySelector('.images--grid .images__frame').click()`)
+  await until(`document.querySelector('.lightbox .lightbox__image.is-ready') && document.querySelector('.lightbox__caption')?.textContent === 'Before' && document.activeElement === document.querySelector('.lightbox')`, 'lightbox open, focused')
+  await new Promise((r) => setTimeout(r, 400))
+  await shot('lightbox')
+  const key2 = (key) => run(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: '${key}', bubbles: true }))`)
+  await key2('ArrowRight')
+  await until(`document.querySelector('.lightbox__caption')?.textContent === 'After' && document.querySelector('.lightbox__count')?.textContent === '2 / 3' && Boolean(document.querySelector('.lightbox .lightbox__image.is-ready'))`, 'lightbox → next image')
+  await run(`document.querySelector('.lightbox__bar button[aria-label="Zoom in"]').click()`)
+  await until(`Boolean(document.querySelector('.lightbox__stage.is-zoomed')) && document.querySelector('.lightbox__image').style.transform.includes('scale(2.5)')`, 'lightbox zoomed')
+  await new Promise((r) => setTimeout(r, 300))
+  await shot('lightbox-zoomed')
+  await key2('0')
+  await until(`!document.querySelector('.lightbox__stage.is-zoomed')`, 'lightbox back to fit')
+  await key2('ArrowRight')
+  await until(`document.querySelector('.lightbox__broken')?.textContent.includes('gone.png')`, 'the gone one, broken in the lightbox too')
+  await key2('Escape')
+  await until(`!document.querySelector('.lightbox') && document.activeElement === document.querySelector('.images--grid .images__frame')`, 'lightbox closed by Escape, focus back')
   await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: 'faux/faux-1' })`)
   void asking
   // Unread results elsewhere: a dot on Threads in the rail, and the thread's own in the list, to go to.
@@ -709,6 +773,20 @@ if (phase === 'first') {
   if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-drawer.png`, (await browser.webContents.capturePage()).toPNG())
   await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await inBrowser(`!document.querySelector('.app__sidebar')`, 'drawer closes on picking a thread')
+  // Images over the WebSocket, on a phone: the thread's images load, and the lightbox fills the screen.
+  await browser.webContents.executeJavaScript(`document.querySelector('.app__mobilebar button').click()`)
+  await inBrowser(`Boolean(document.querySelector('.app.has-drawer .app__sidebar'))`, 'drawer open again')
+  await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('show me the screens')).click()`)
+  await inBrowser(`Boolean(document.querySelector('.images--single .images__frame.is-ready') && document.querySelector('.images--carousel .images__frame.is-ready'))`, 'images read over the web')
+  await browser.webContents.executeJavaScript(`document.querySelector('.images--carousel').scrollIntoView({ block: 'center' })`)
+  await new Promise((r) => setTimeout(r, 300))
+  if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-images.png`, (await browser.webContents.capturePage()).toPNG())
+  await browser.webContents.executeJavaScript(`document.querySelector('.images--single .images__frame').click()`)
+  await inBrowser(`document.querySelector('.lightbox .lightbox__image.is-ready') && document.querySelector('.lightbox').getBoundingClientRect().width === innerWidth`, 'lightbox on a phone')
+  await new Promise((r) => setTimeout(r, 300))
+  if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-lightbox.png`, (await browser.webContents.capturePage()).toPNG())
+  await browser.webContents.executeJavaScript(`document.querySelector('.lightbox__bar button[aria-label="Close"]').click()`)
+  await inBrowser(`!document.querySelector('.lightbox')`, 'lightbox closed on a phone')
   const wrongToken = await browser.webContents.executeJavaScript(`new Promise((resolve) => { const ws = new WebSocket('ws://' + location.host + '/rpc?token=wrong'); ws.onopen = () => resolve('open'); ws.onerror = () => resolve('refused') })`)
   if (wrongToken !== 'refused') { await fail(`a wrong token got in: ${wrongToken}`); throw new Error('failed') }
   // Without the token (a page on the home screen keeps its own storage): it asks, refuses a wrong one, takes the address.
