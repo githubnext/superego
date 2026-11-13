@@ -486,6 +486,38 @@ it("doesn't let a profile's extension take the name of one a window declared", a
   await close()
 })
 
+it('loads a profile again when a file it lists from outside its folder changes', async () => {
+  write(dir, { 'shared/vault.ts': vault('one') })
+  write(join(home, 'profiles', 'default'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['../../../shared/vault.ts'] })\n` })
+  const { peer, close } = await open()
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  await done(peer, thread.id)
+  expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
+  write(dir, { 'shared/vault.ts': vault('two') })
+  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await done(peer, thread.id)
+  expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('two')
+  await close()
+})
+
+it("vouches, in allowing a project's profile, for the files it lists from outside its folder", async () => {
+  write(project, { 'tools/vault.ts': vault('one') })
+  write(join(project, '.superego', 'profiles', 'support'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['../../../tools/vault.ts'] })\n` })
+  const { peer, close } = await open()
+  await peer.call('profile.allow', { cwd: project, name: 'support' })
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'support', prompt: 'hi' })
+  await done(peer, thread.id)
+  expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
+  // Changed since: not run until allowed again.
+  write(project, { 'tools/vault.ts': vault('two') })
+  await expect(peer.call('thread.submit', { id: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await peer.call('profile.allow', { cwd: project, name: 'support' })
+  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await done(peer, thread.id)
+  expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('two')
+  await close()
+})
+
 it('loads a profile one version at a time, the newest last', async () => {
   const profile = join(home, 'profiles', 'default')
   write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': vault('one') })

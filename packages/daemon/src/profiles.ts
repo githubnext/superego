@@ -84,7 +84,7 @@ export type LoadedProfile = ProfileRef & {
   daemon: ProfileDaemonExtension[]
   /** What its files hash to: a change means reloading it, and (for a project's) allowing it again. */
   hash: string
-  /** What it's made of, by folder: its own and what it extends. A change in any means loading it again. */
+  /** What it's made of: its own folder, what it extends, and files it lists from outside them. A change in any means loading it again. */
   versions: Record<string, string>
 }
 
@@ -119,9 +119,13 @@ export function findProfile(cwd: string, userRoot: string, name?: string): Profi
   return found
 }
 
-/** A hash of every file in a profile's folder (not node_modules): what allowing it vouches for. */
+/**
+ * A hash of every file in a profile's folder (not node_modules): what allowing it vouches for. Of a file, its contents:
+ * one a profile lists from outside its folder.
+ */
 export function hashProfile(dir: string): string {
   const hash = createHash('sha256')
+  if (statSync(dir).isFile()) return hash.update(readFileSync(dir)).digest('hex').slice(0, 16)
   const walk = (at: string) => {
     for (const entry of readdirSync(at, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
@@ -134,19 +138,29 @@ export function hashProfile(dir: string): string {
   return hash.digest('hex').slice(0, 16)
 }
 
-/** Which project profiles may run here: the hash each was allowed at. Kept in the daemon's data dir. */
+/**
+ * Which project profiles may run here: the hash each was allowed at, and of each file it lists from outside its folder
+ * then (that's code it runs too). Kept in the daemon's data dir.
+ */
+type Allowed = Record<string, string | { hash: string; files: Record<string, string> }>
 export class Trust {
   #path: string
-  #allowed: Record<string, string> | undefined
+  #allowed: Allowed | undefined
   constructor(dataDir: string) { this.#path = join(dataDir, 'trusted-profiles.json') }
-  async #load() { return this.#allowed ??= JSON.parse(await readFile(this.#path, 'utf8').catch(() => '{}')) as Record<string, string> }
-  async allowed(ref: ProfileRef, hash: string) { return ref.scope === 'user' || (await this.#load())[ref.dir] === hash }
+  async #load() { return this.#allowed ??= JSON.parse(await readFile(this.#path, 'utf8').catch(() => '{}')) as Allowed }
+  async #of(ref: ProfileRef) { const at = (await this.#load())[ref.dir]; return typeof at === 'string' ? { hash: at, files: {} } : at }
+  async allowed(ref: ProfileRef, hash: string) { return ref.scope === 'user' || (await this.#of(ref))?.hash === hash }
+  /** Whether `file`, listed from outside the profile's folder, is as it was when the profile was allowed. */
+  async allowedFile(ref: ProfileRef, file: string) { return ref.scope === 'user' || (await this.#of(ref))?.files[file] === hashProfile(file) }
+  /** Allow it as it is now: its folder, and the files it lists from outside it (reading its profile.ts to know them). */
   async allow(ref: ProfileRef) {
     const all = await this.#load()
-    all[ref.dir] = hashProfile(ref.dir)
+    const files = Object.fromEntries((await outsideFiles(ref)).map((file) => [file, hashProfile(file)]))
+    const hash = hashProfile(ref.dir)
+    all[ref.dir] = Object.keys(files).length ? { hash, files } : hash
     await mkdir(dirname(this.#path), { recursive: true })
     await writeFile(this.#path, JSON.stringify(all, null, 2) + '\n', { mode: 0o600 })
-    return all[ref.dir]!
+    return hash
   }
 }
 
@@ -203,6 +217,29 @@ export function provideSdk(sdk: ProfileSdk) {
   })
 }
 
+/**
+ * A file's module URL, versioned by its contents: a query that changes with the file makes Node load it again rather
+ * than reuse the first import. Wherever it is and whichever profile names it, profiles naming the same file share one.
+ */
+const fresh = (path: string) => `${pathToFileURL(path).href}?v=${createHash('sha256').update(readFileSync(path)).digest('hex').slice(0, 16)}`
+
+/** What a profile's profile.ts says, as it is now. */
+async function specOf(ref: ProfileRef): Promise<ProfileSpec> {
+  const spec = (await load(fresh(join(ref.dir, 'profile.ts'))) as { default?: ProfileSpec }).default
+  if (!spec || typeof spec !== 'object') throw new RpcError('invalid', `${join(ref.dir, 'profile.ts')} must export default defineProfile({ … })`)
+  return spec
+}
+
+/** Whether `file` is inside `dir`. */
+const within = (dir: string, file: string) => { const path = relative(resolve(dir), file); return Boolean(path) && !path.startsWith('..') && !isAbsolute(path) }
+
+/** The files a profile lists from outside its own folder (a shared extension), resolved. */
+async function outsideFiles(ref: ProfileRef) {
+  // One that doesn't load lists nothing: allowed, it fails to load until fixed (and allowed again, as it changed).
+  const spec = await specOf(ref).catch(() => undefined)
+  return (spec?.extensions ?? []).map((path) => resolve(ref.dir, path)).filter((file) => !within(ref.dir, file) && existsSync(file))
+}
+
 /** Load a profile (and what it extends) fresh from disk; refuses a project's profile that isn't allowed as it is now. */
 export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trust): Promise<LoadedProfile> {
   const hash = hashProfile(ref.dir)
@@ -211,11 +248,7 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
       hint: `Look it over, then: superego profile allow ${ref.name}`,
     })
   }
-  // A query that changes with the file makes Node load it again rather than reuse the first import. Its own contents
-  // version it, wherever it is and whichever profile names it: profiles that name the same file share one module.
-  const fresh = (path: string) => `${pathToFileURL(path).href}?v=${createHash('sha256').update(readFileSync(path)).digest('hex').slice(0, 16)}`
-  const spec = (await load(fresh(join(ref.dir, 'profile.ts'))) as { default?: ProfileSpec }).default
-  if (!spec || typeof spec !== 'object') throw new RpcError('invalid', `${join(ref.dir, 'profile.ts')} must export default defineProfile({ … })`)
+  const spec = await specOf(ref)
   let base: LoadedProfile | undefined
   if (spec.extends) {
     const [scope, name] = spec.extends.split(':')
@@ -225,9 +258,18 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
   }
   const extensions: Extension[] = [...(base?.extensions ?? [])]
   const daemon: ProfileDaemonExtension[] = [...(base?.daemon ?? [])]
+  const versions: Record<string, string> = { ...base?.versions, [ref.dir]: hash }
   for (const path of spec.extensions ?? []) {
     const file = resolve(ref.dir, path)
     if (!existsSync(file)) throw new RpcError('not_found', `${path} in profile ${ref.name} doesn't exist`)
+    const outside = !within(ref.dir, file)
+    if (outside && !(await trust.allowedFile(ref, file))) {
+      throw new RpcError('untrusted_profile', `The profile ${ref.name} runs ${file}, which changed since it was allowed (or wasn't listed then)`, {
+        hint: `Look it over, then: superego profile allow ${ref.name}`,
+      })
+    }
+    // A file from outside its folder is part of what it's made of too: a change in it loads the profile again.
+    if (outside) versions[file] = hashProfile(file)
     const key = fresh(file)
     const module = await load(key) as { default?: Extension | DaemonExtension }
     const extension = module.default
@@ -247,7 +289,7 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
     // UI paths are relative to their own profile's folder: only this profile's are served from here.
     ui: spec.ui,
   }
-  return { ...ref, spec: merged, extensions, daemon, hash, versions: { ...base?.versions, [ref.dir]: hash } }
+  return { ...ref, spec: merged, extensions, daemon, hash, versions }
 }
 
 /**
@@ -256,9 +298,8 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
  * profiles that list it load, and after a restart.
  */
 function ownerOf(file: string, ref: ProfileRef, userRoot: string) {
-  const within = (dir: string) => { const path = relative(resolve(dir), file); return path && !path.startsWith('..') && !isAbsolute(path) ? path : undefined }
-  if (within(ref.dir)) return `${ref.scope}:${ref.name}`
-  const name = within(userRoot)?.split(/[\\/]/)[0]
+  if (within(ref.dir, file)) return `${ref.scope}:${ref.name}`
+  const name = within(userRoot, file) ? relative(resolve(userRoot), file).split(/[\\/]/)[0] : undefined
   if (name && existsSync(join(userRoot, name, 'profile.ts'))) return `user:${name}`
   return `file:${createHash('sha256').update(file).digest('hex').slice(0, 12)}`
 }
