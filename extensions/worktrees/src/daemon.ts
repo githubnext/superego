@@ -113,7 +113,7 @@ export default defineDaemonExtension({
           return { note: clean ? `Kept the worktree ${tree.path}: it couldn't be removed.` : `Kept the worktree ${tree.path}: it has uncommitted changes.` }
         }
         await state.set(thread.id, { ...tree, removed: true })
-        return { note: `Removed the worktree ${tree.path}; branch ${tree.branch} kept.` }
+        return { note: exists ? `Removed the worktree ${tree.path}; branch ${tree.branch} kept.` : `Its worktree ${tree.path} was already gone; branch ${tree.branch} kept.` }
       },
       // Back, on the branch it left.
       async unarchiving(thread) {

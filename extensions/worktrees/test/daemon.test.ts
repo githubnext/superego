@@ -88,6 +88,10 @@ it('gives a thread in a repository a worktree of its own when asked, in the same
   await writeFile(join(tree.path, 'app/wip.md'), 'wip\n')
   expect(await archive(peer, thread.id)).toEqual({ notes: { worktrees: `Kept the worktree ${tree.path}: it has uncommitted changes.` }, worktree: 'kept' })
   expect(existsSync(join(tree.path, 'app/wip.md'))).toBe(true)
+  // Gone already (deleted by hand): said so, not that it was removed.
+  await peer.call('thread.unarchive', { id: thread.id })
+  await rm(tree.path, { recursive: true, force: true })
+  expect((await archive(peer, thread.id)).notes).toEqual({ worktrees: `Its worktree ${tree.path} was already gone; branch ${tree.branch} kept.` })
   await close()
 })
 
