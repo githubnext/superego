@@ -1,5 +1,6 @@
 // Screenshots of the window's layout (run by test/look.sh): the sidebar open, folded to dots and closed; the thread
-// alone (and dragged narrower) and with Changes beside it (and a file past it); a long title, parent and branch; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
+// alone (and dragged narrower) and with Changes beside it (and a file past it); a long title, parent and branch; thread
+// details; a phone, its drawer open; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { threads } from './showcase/threads.mjs'
@@ -124,6 +125,21 @@ void (async () => {
   await run(`window.superego.call('local', 'thread.archive', { id: '${longId}' })`)
   await until(`!!document.querySelector('.thread__unarchive')`, 'archived')
   await tight('long-archived')
+  // Thread details beside the thread (⌘I), then a phone's width: the thread under its bar, and the drawer open.
+  await until(`([...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes(${JSON.stringify(title)}.slice(0, 12)))?.click(), document.querySelector('.thread__title')?.title === ${JSON.stringify(title)})`, 'first thread shown again')
+  await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i', metaKey: true, bubbles: true }))`)
+  await until(`!!document.querySelector('.threads-details')`, 'details')
+  await both('details')
+  await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i', metaKey: true, bubbles: true }))`)
+  await until(`!document.querySelector('.threads-details')`, 'details hidden')
+  // The window goes no narrower than 600: zoomed, its page is a phone's 375.
+  win().setContentSize(600, height)
+  win().webContents.setZoomFactor(1.6)
+  await sleep(300)
+  await both('phone')
+  await run(`document.querySelector('.app__mobilebar button')?.click()`)
+  await until(`!!document.querySelector('.app__sidebar')`, 'drawer')
+  await both('phone-drawer')
   console.log(`look: done in ${out}`)
   writeFileSync(`${process.env.SUPEREGO_HOME}/passed`, '')
   app.exit(0)
