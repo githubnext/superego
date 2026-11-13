@@ -14,7 +14,8 @@ export default defineDaemonExtension({
     answer: (id) => s.threads.lastAnswer(id),
     async archive(id) {
       await s.threads.archive(id)
-      const { worktree } = await s.threads.get(id)
+      // Its worktree is the worktrees extension's, said in its facts.
+      const worktree = (await s.threads.get(id)).ext?.worktrees as { removed?: boolean } | undefined
       return { worktree: worktree ? (worktree.removed ? 'removed' : 'kept') : null }
     },
     archiveWhenDone: (id) => s.threads.archive(id, { whenIdle: true }),
