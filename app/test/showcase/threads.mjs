@@ -91,6 +91,9 @@ function save(entry) {
 `,
 }
 
+/** The thread thread 4 starts, by its id: as runs give it (if the turns before change, so does it). */
+const CHILD = '128'
+
 export const threads = [
   {
     prompt: 'Fix the date parsing in the importer. Rows from the Danske export land a day early, and ISO dates from the new bank come out as Invalid Date.',
@@ -103,6 +106,10 @@ export const threads = [
   {
     prompt: 'How should we structure retries for the bank sync? It hits three bank APIs that rate-limit and sometimes go down for an hour. Compare a few options before we pick one.',
     followUps: ['Go with the queue with backoff. Sketch it in src/retry.mjs, nothing fancy.'],
+  },
+  {
+    prompt: 'Have a thread of its own check how the importer handles bad rows.',
+    followUps: ['Thank it for me.', 'Look around, then archive it once it\'s done.'],
   },
 ]
 
@@ -381,4 +388,25 @@ Before this goes near production:
 2. Make \`run\` idempotent per page. A job can run twice if the process dies between the sync and \`store.delete\`.
 3. Log circuit changes. "Danske paused until 14:30" is what you'll want to see during an outage.`),
   ]),
+
+  // ── Thread 4: threads ───────────────────────────────────────────────────────────────────────────────────────────
+  // A child's turns and its parent's race for the next recorded one, so each turn after a call that runs the child
+  // (thread_start, thread_send) is there twice, the same. The child's id is as it comes out of a run: start it in a
+  // turn of its own, and the threads before go as they always do.
+  turn([
+    text('I\'ll hand that to a thread of its own.'),
+    call('thread_start', { prompt: 'Run the importer on a CSV with a bad row and say what happens.', title: 'Importer check' }),
+  ]),
+  turn([text('The importer stops at the first bad row.')]),
+  turn([text('The importer stops at the first bad row.')]),
+  turn([call('thread_send', { id: CHILD, text: 'Thanks, that\'s what I needed.' })]),
+  turn([text('Passed on.')]),
+  turn([text('Passed on.')]),
+  turn([
+    call('thread_list', {}),
+    call('thread_read', { id: '99' }),
+  ]),
+  turn([call('thread_read', { id: CHILD, wait: true })]),
+  turn([call('thread_archive', { id: CHILD })]),
+  turn([text(`Archived [Importer check](thread:${CHILD}). It found that the importer stops at the first bad row, so one bad line loses the whole file.`)]),
 ]
