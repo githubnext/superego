@@ -30,7 +30,7 @@ import { git, worktrees, type Worktree } from './worktrees.ts'
 import { serveWeb, webToken, type WebServer } from './web.ts'
 import { agentsInstructions } from './agents-md.ts'
 import { metaExtension, metaPrompt, type MachineDirectory } from './meta.ts'
-import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileDaemonExtension, type ProfileRef } from './profiles.ts'
+import { defineProfile, findProfile, RENAMED, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileDaemonExtension, type ProfileRef } from './profiles.ts'
 
 const context = BACKGROUND_CONTEXT
 
@@ -46,16 +46,8 @@ const Catalog = defineDoc<{ ids: number[]; ego?: number }>({
 const EGO_WITHOUT = ['coding-tools', 'thread-tools']
 
 /**
- * Extensions known by another name now: a profile's `without` of the old name goes without the new one, and its switch
- * in Settings keeps what was stored under the old name.
- */
-const RENAMED: Record<string, string> = {
-  // The thread tools were "threads", the sidebar's name.
-  threads: 'thread-tools',
-}
-/**
  * Methods moved into an extension, by their old names: a window older than this daemon still calls those, and is
- * answered by the extension's (while the extension is on). Kept one release after the move, then dropped.
+ * answered by the extension's while it's set up. Kept one release after the move, then dropped.
  */
 const MOVED_METHODS: Record<string, string> = {
   'thread.diff': 'git.diff',
@@ -989,7 +981,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     try {
       if (!existsSync(join(ref.dir, 'profile.ts'))) throw new RpcError('not_found', `No profile ${ref.name} at ${ref.dir}`)
       loaded = await loadProfile(ref, userProfiles, trust)
-      if (loaded.spec.without) loaded.spec.without = [...new Set(loaded.spec.without.map((name) => RENAMED[name] ?? name))]
     } catch (error) {
       unload(ref.dir)
       throw error

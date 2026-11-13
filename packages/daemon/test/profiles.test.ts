@@ -582,5 +582,8 @@ it("maps a profile's `without` of an extension's old name to its new one", async
   await done(peer, thread.id)
   expect((await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.without).toEqual(['thread-tools'])
   expect((await agentOf(peer, thread.id)).extensions).not.toContain('thread-tools')
+  // Settings says so by the new name too.
+  const { value } = await peer.call<{ value: { sections: { id: string; data?: { name: string; without?: string[] }[] }[] } }>('settings.watch', {})
+  expect(value.sections.find((s) => s.id === 'profiles')!.data!.find((p) => p.name === 'default')!.without).toEqual(['thread-tools'])
   await close()
 })
