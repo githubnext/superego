@@ -67,7 +67,12 @@ export default defineDaemonExtension({
         if (!tree || tree.removed) return
         const exists = await stat(tree.path).then(() => true, () => false)
         const clean = exists && (await git(tree.path, ['status', '--porcelain']).catch(() => 'unknown')) === ''
-        if (!exists || (clean && await removeWorktree(tree.path, thread.session.root))) await state.set(thread.id, { ...tree, removed: true })
+        // Said, in a line, in what archiving answers (thread_archive tells the agent).
+        if (exists && !(clean && await removeWorktree(tree.path, thread.session.root))) {
+          return { note: clean ? `Kept the worktree ${tree.path}: it couldn't be removed.` : `Kept the worktree ${tree.path}: it has uncommitted changes.` }
+        }
+        await state.set(thread.id, { ...tree, removed: true })
+        return { note: `Removed the worktree ${tree.path}; branch ${tree.branch} kept.` }
       },
       // Back, on the branch it left.
       async unarchiving(thread) {

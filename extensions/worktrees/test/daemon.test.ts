@@ -36,12 +36,8 @@ const listed = async (peer: RpcPeer, archived = false) => peer.call<ThreadInfo[]
 const find = async (peer: RpcPeer, id: string) => [...await listed(peer), ...await listed(peer, true)].find((t) => t.id === id)
 /** A thread's worktree, as clients see it: the extension's fact. */
 const treeOf = (thread: ThreadInfo | undefined) => thread?.ext?.worktrees as Worktree | undefined
-/** Archive a thread, and say what became of its worktree (as `thread.archive` once did). */
-async function archive(peer: RpcPeer, id: string) {
-  await peer.call('thread.archive', { id })
-  const tree = treeOf(await find(peer, id))
-  return { worktree: tree ? (tree.removed ? 'removed' : 'kept') : null }
-}
+/** Archive a thread: what `thread.archive` says (`notes`, and `worktree` for older windows). */
+const archive = (peer: RpcPeer, id: string) => peer.call<{ notes: Record<string, string>; worktree: string | null }>('thread.archive', { id })
 
 it('is required, and announced', async () => {
   const { hello, close } = await open()
@@ -69,7 +65,7 @@ it('gives a thread in a repository a worktree of its own when asked, in the same
   expect(treeOf(here)).toBeUndefined()
   expect(here.session.root).toBe(root)
   // Archived with nothing uncommitted: the worktree goes, the branch stays; unarchived, it's back.
-  expect(await archive(peer, thread.id)).toEqual({ worktree: 'removed' })
+  expect(await archive(peer, thread.id)).toEqual({ notes: { worktrees: `Removed the worktree ${tree.path}; branch ${tree.branch} kept.` }, worktree: 'removed' })
   expect(existsSync(tree.path)).toBe(false)
   expect(git('branch', '--list', tree.branch)).toContain(tree.branch)
   // Let go of by git at once; its files deleted after.
@@ -79,7 +75,7 @@ it('gives a thread in a repository a worktree of its own when asked, in the same
   expect(existsSync(join(tree.path, 'app/readme.md'))).toBe(true)
   // With changes in it, archiving leaves it be.
   await writeFile(join(tree.path, 'app/wip.md'), 'wip\n')
-  expect(await archive(peer, thread.id)).toEqual({ worktree: 'kept' })
+  expect(await archive(peer, thread.id)).toEqual({ notes: { worktrees: `Kept the worktree ${tree.path}: it has uncommitted changes.` }, worktree: 'kept' })
   expect(existsSync(join(tree.path, 'app/wip.md'))).toBe(true)
   await close()
 })
@@ -123,7 +119,7 @@ it('reads the worktree a thread kept before extensions had state, as its own, an
   const id = String(old.id)
   expect(await find(peer, id)).toMatchObject({ ext: { worktrees: tree } })
   // Archived clean, it goes as ever, and is then kept as the extension's.
-  expect(await archive(peer, id)).toEqual({ worktree: 'removed' })
+  expect((await archive(peer, id)).worktree).toBe('removed')
   expect(existsSync(tree.path)).toBe(false)
   expect(await find(peer, id)).toMatchObject({ ext: { worktrees: { ...tree, removed: true } } })
   await peer.call('thread.unarchive', { id })

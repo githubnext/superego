@@ -133,7 +133,7 @@ it('notes a parent reading its child through thread_read', async () => {
   const h = {
     info: async (id: string) => [find('1'), find('2')].find((t) => t.id === id), list: async () => [find('1'), find('2')],
     answer: async () => 'ok', read: reads.note, start: async () => find('2'), send: async () => {},
-    archive: async () => ({ worktree: null }), archiveWhenDone: async () => {},
+    archive: async () => ({ notes: {} }), archiveWhenDone: async () => {},
   }
   const read = tools(h).tools!.find((t) => t.name === 'thread_read')!
   expect(reads.read(find('2'))).toBe(false)

@@ -202,7 +202,9 @@ superego.thread({
   happens, and the hooks after don't run. `creating` may also move where the thread works and give it state, each
   hook seeing the draft as the one before left it.
 - The others are told, and awaited in turn. A throw there is logged, and the thread carries on. `archived` runs
-  before clients see the thread archived, so it's where cleanup goes. `turnStart` and `turnEnd` never hold up a run.
+  before clients see the thread archived, so it's where cleanup goes. `archiving` and `archived` may return
+  `{ note }`, what they did in a line ("Removed the worktree …; branch … kept"): `threads.archive` and `thread.archive`
+  answer `{ notes }`, each extension's by its name, and `thread_archive` tells the agent them. `turnStart` and `turnEnd` never hold up a run.
 - `turnStart` and `turnEnd` are per run, not per message: a message steered or queued into a run that's going is part
   of it. A run resumed after a restart had started already, so it ends with a `turnEnd` alone; one that ended while
   the daemon was down gets neither.

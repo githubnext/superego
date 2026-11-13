@@ -14,8 +14,8 @@ export type ThreadsHost = {
   send(id: string, text: string): Promise<void>
   /** Its last answer, as text, if it has one. */
   answer(id: string): Promise<string | undefined>
-  /** Put it away now, and say what became of its worktree (removed when clean, its branch kept). */
-  archive(id: string): Promise<{ worktree: 'removed' | 'kept' | null }>
+  /** Put it away now, and say what that did: each extension's line (its worktree removed, say), by extension. */
+  archive(id: string): Promise<{ notes: Record<string, string> }>
   /** Put it away once its run ends: how a thread archives itself, mid-turn. */
   archiveWhenDone(id: string): Promise<void>
   /** `reader` read `thread` (thread_read), as it stood: so a report of it isn't relayed again (reads.ts). */
@@ -116,7 +116,7 @@ export function threadTools(host: ThreadsHost) {
       defineTool({
         name: 'thread_archive',
         description: 'Archive a thread: out of the thread list, taking no messages until it\'s unarchived. Its worktree is removed ' +
-          'if nothing in it is uncommitted; its branch stays. Without an id, this thread, once this turn ends.',
+          'if nothing in it is uncommitted; its branch stays. Without an id, this thread, once this turn ends. Says what archiving did.',
         parameters: obj({ id: opt(str({ description: 'The thread to archive; this one if left out.' })) }),
         async execute({ id }, api) {
           const self = await here(api.conversationId)
@@ -132,8 +132,8 @@ export function threadTools(host: ThreadsHost) {
           if (thread.status.state === 'working' || thread.status.state === 'blocked') {
             throw new Error(`${linkTo(thread)} is working: wait for it with thread_read (wait: true), then archive it`)
           }
-          const { worktree } = await host.archive(thread.id)
-          return text(`Archived ${linkTo(thread)}${worktree === 'removed' ? '; its worktree is removed, its branch kept' : worktree === 'kept' ? '; its worktree has uncommitted changes, so it stays' : ''}.`)
+          const { notes } = await host.archive(thread.id)
+          return text([`Archived ${linkTo(thread)}.`, ...Object.values(notes)].join(' '))
         },
       }),
     ],

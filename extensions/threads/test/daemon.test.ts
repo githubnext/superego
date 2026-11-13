@@ -72,6 +72,7 @@ it('lets an agent archive another thread, and its own once its turn ends; never 
   const first = await open()
   const ego = await first.peer.call<ThreadInfo>('ego.ask', {})
   const child = await first.peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'Child', worktree: true })
+  const childTree = child.ext?.worktrees as { path: string; branch: string }
   await first.close()
   // Ego refused, the child archived, then itself; and it carries on to the end of its turn.
   await writeFile(join(dir, 'turns.jsonl'), [
@@ -93,7 +94,7 @@ it('lets an agent archive another thread, and its own once its turn ends; never 
   const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: self.id })
   const entries = JSON.stringify(value.entries)
   expect(entries).toContain("test isn't archived")
-  expect(entries).toContain(`Archived [Child](thread:${child.id}); its worktree is removed, its branch kept.`)
+  expect(entries).toContain(`Archived [Child](thread:${child.id}). Removed the worktree ${childTree.path}; branch ${childTree.branch} kept.`)
   expect(entries).toContain('This thread will be archived when this turn ends.')
   expect(entries).toContain('readme.md') // its worktree was still there for the rest of the turn
   expect(entries).toContain('Done.')
@@ -196,7 +197,7 @@ function host(): ThreadsHost & { threads: ThreadInfo[]; sent: [string, string][]
     start: async () => { throw new Error('not here') },
     send: async (id, text) => { sent.push([id, text]) },
     answer: async (id) => id === '2' ? 'The dates are UTC now.' : undefined,
-    archive: async (id) => { archived.push(id); threads.find((t) => t.id === id)!.archived = true; return { worktree: 'kept' } },
+    archive: async (id) => { archived.push(id); threads.find((t) => t.id === id)!.archived = true; return { notes: { worktrees: 'Kept the worktree /w: it has uncommitted changes.' } } },
     archiveWhenDone: async (id) => { archived.push(`${id} when done`) },
   }
 }
@@ -234,7 +235,7 @@ it("archives a thread that isn't working, and this one only when its turn ends",
   await expect(run(h, 'thread_archive', { id: '9' })).rejects.toThrow(/No thread 9/)
   expect(h.archived).toEqual([])
   h.threads[1]!.status = { state: 'done' }
-  expect(await run(h, 'thread_archive', { id: '2' })).toBe('Archived [Child one](thread:2); its worktree has uncommitted changes, so it stays.')
+  expect(await run(h, 'thread_archive', { id: '2' })).toBe('Archived [Child one](thread:2). Kept the worktree /w: it has uncommitted changes.')
   await expect(run(h, 'thread_archive', { id: '2' })).rejects.toThrow('[Child one](thread:2) is already archived')
   // Itself, by no id or its own.
   expect(await run(h, 'thread_archive', {})).toBe('This thread will be archived when this turn ends.')

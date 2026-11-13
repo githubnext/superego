@@ -13,13 +13,8 @@ export default defineDaemonExtension({
     start: (parent, params) => s.threads.create({ ...params, parent }),
     send: (id, text) => s.threads.submit(id, text),
     answer: (id) => s.threads.lastAnswer(id),
-    async archive(id) {
-      await s.threads.archive(id)
-      // Its worktree is the worktrees extension's, said in its facts.
-      const worktree = (await s.threads.get(id)).ext?.worktrees as { removed?: boolean } | undefined
-      return { worktree: worktree ? (worktree.removed ? 'removed' : 'kept') : null }
-    },
-    archiveWhenDone: (id) => s.threads.archive(id, { whenIdle: true }),
+    archive: (id) => s.threads.archive(id),
+    archiveWhenDone: async (id) => { await s.threads.archive(id, { whenIdle: true }) },
     read: (reader, thread) => readsOf(s.harness).note(reader, thread),
   })),
 })

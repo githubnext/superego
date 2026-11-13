@@ -88,16 +88,23 @@ export type ThreadHooks = {
    * whose status it is calls `invalidate()`.
    */
   blocked?(thread: ThreadInfo): void | Promise<void>
-  /** About to be archived: may refuse. Nothing is done yet; do cleanup in `archived`. */
-  archiving?(thread: ThreadInfo): void | Promise<void>
-  /** Being archived, past refusing: clean up (remove a worktree, say). Done before clients see it archived. */
-  archived?(thread: ThreadInfo): void | Promise<void>
+  /** About to be archived: may refuse. Nothing is done yet; do cleanup in `archived`. A `note` is said with it, as `archived`'s. */
+  archiving?(thread: ThreadInfo): ArchiveNote | void | Promise<ArchiveNote | void>
+  /**
+   * Being archived, past refusing: clean up (remove a worktree, say). Done before clients see it archived. A `note` says
+   * what it did, in a line ("Removed its worktree; branch x kept"): `thread.archive` answers with each extension's.
+   */
+  archived?(thread: ThreadInfo): ArchiveNote | void | Promise<ArchiveNote | void>
   /** About to be brought back: may refuse, or put back what `archived` took away (a worktree). */
   unarchiving?(thread: ThreadInfo): void | Promise<void>
   /** Brought back, taking messages again. */
   unarchived?(thread: ThreadInfo): void | Promise<void>
 }
 export type ThreadCreating = { cwd?: string; state?: Json }
+/** What archiving a thread did, in a line, from an extension's `archiving` or `archived`. */
+export type ArchiveNote = { note?: string }
+/** What archiving a thread did: each extension's note, by its name. */
+export type ArchiveNotes = Record<string, string>
 
 /** An extension's state kept with each thread: in its document, so it persists, forks and archives with it. */
 export type ThreadState<T extends Json> = {
@@ -225,7 +232,7 @@ export type DaemonApi = {
     /** Its newest transcript entries, newest first (`limit`, default 20): what it's doing now, say. */
     entries(id: string, limit?: number): Promise<readonly EntryRecord[]>
     /** Put it away (its `archiving` hooks may refuse); `whenIdle`: once its run ends, kept across restarts (a thread archiving itself). */
-    archive(id: string, options?: { whenIdle?: boolean }): Promise<void>
+    archive(id: string, options?: { whenIdle?: boolean }): Promise<{ notes: ArchiveNotes }>
     unarchive(id: string): Promise<void>
     /**
      * Start it over: its run stopped and a new context, its transcript starting after this (clients watching it watch

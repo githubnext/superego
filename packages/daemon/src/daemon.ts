@@ -21,7 +21,7 @@ import { FileSettingsStore } from '@superego/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import {
-  defineDaemonExtension, type AgentChoice, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type StatusContribution, type SubmitTransform,
+  defineDaemonExtension, type AgentChoice, type ArchiveNote, type ArchiveNotes, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type StatusContribution, type SubmitTransform,
   type ThreadCreating, type ThreadDraft, type ThreadHooks,
 } from './extension.ts'
 import { titleOf } from './names.ts'
@@ -609,23 +609,28 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (profile) await profileOf(profile).catch((error: Error) => console.error(`Profile ${profile.name}: ${error.message}`))
   }
   /** Ask the hooks that may refuse (`archiving`, `unarchiving`): the first to throw stops it, with its error. */
-  async function ask(hook: 'archiving' | 'unarchiving', id: string) {
+  async function ask(hook: 'archiving' | 'unarchiving', id: string, notes: ArchiveNotes = {}) {
     const m = await get(id)
     for (const { value, owner } of hooksOf(id, m)) {
       try {
-        await value[hook]?.(info(id, m))
+        noted(notes, owner, await value[hook]?.(info(id, m)))
       } catch (error) {
         throw refusal(owner, error)
       }
     }
   }
+  /** Keep the line a hook said of what it did, under its extension's name. */
+  const noted = (notes: ArchiveNotes, owner: string, said: unknown) => {
+    const note = (said as ArchiveNote | undefined)?.note
+    if (typeof note === 'string' && note) notes[owner] = notes[owner] ? `${notes[owner]} ${note}` : note
+  }
   /** Tell the hooks what happened, in order: one that throws is logged, and the rest are told all the same. */
-  async function tell(hook: 'created' | 'turnStart' | 'turnEnd' | 'blocked' | 'archived' | 'unarchived', id: string, as?: Partial<ThreadInfo>) {
+  async function tell(hook: 'created' | 'turnStart' | 'turnEnd' | 'blocked' | 'archived' | 'unarchived', id: string, as?: Partial<ThreadInfo>, notes: ArchiveNotes = {}) {
     const m = await get(id)
     for (const { value, owner } of hooksOf(id, m)) {
       try {
         // Each sees what the ones before it did (a worktree removed).
-        await value[hook]?.({ ...info(id, m), ...as })
+        noted(notes, owner, await value[hook]?.({ ...info(id, m), ...as }))
       } catch (error) {
         console.error(`Extension ${owner}: ${hook} of thread ${id} failed:`, error)
       }
@@ -825,7 +830,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         async submit(id, text, { whenBusy = 'followUp' } = {}) { await submit(id, text, randomUUID(), whenBusy) },
         lastAnswer: (id) => answerOf(id),
         async entries(id, limit = 20) { return (await (await get(id)).conversation.entries({ order: 'descending' }, limit, undefined, context)).items },
-        async archive(id, { whenIdle = false } = {}) { await (whenIdle ? archiveWhenDone(id) : archive(id)) },
+        async archive(id, { whenIdle = false } = {}) {
+          if (!whenIdle) return archive(id)
+          await archiveWhenDone(id)
+          return { notes: {} }
+        },
         async unarchive(id) { await unarchive(id) },
         clear: (id) => clear(id),
       },
@@ -1301,19 +1310,29 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   router.register(defineAction({
     id: 'thread.archive', title: 'Archive the thread', runs: 'machine', expose: ['ui', 'cli'], keys: 'mod+shift+e', ...thread,
     params: obj({ id: str() }),
-    run: ({ id }) => archive(id),
+    async run({ id }) {
+      const { notes } = await archive(id)
+      // `worktree`: what a window older than `notes` reads, from the worktrees extension's facts. Remove with the next
+      // protocol version.
+      const worktree = info(id, await get(id)).ext?.worktrees as { removed?: boolean } | undefined
+      return { notes, worktree: worktree ? (worktree.removed ? 'removed' as const : 'kept' as const) : null }
+    },
   }))
-  /** Put a thread away, unless an extension's `archiving` refuses; then its `archived` hooks clean up (a worktree, say). */
-  async function archive(id: string) {
+  /**
+   * Put a thread away, unless an extension's `archiving` refuses; then its `archived` hooks clean up (a worktree, say).
+   * Says what the extensions did, each in a line of its own (`notes`).
+   */
+  async function archive(id: string): Promise<{ notes: ArchiveNotes }> {
+    const notes: ArchiveNotes = {}
     // Already away: nothing for the hooks to see.
     if (!(await get(id)).meta.archived) {
       await withProfile(id)
-      await ask('archiving', id)
+      await ask('archiving', id, notes)
       // Cleaned up before clients see it archived: never shown put away with its worktree still there.
-      await tell('archived', id, { archived: true })
+      await tell('archived', id, { archived: true }, notes)
       await updateMeta(id, (m) => { m.archived = true; delete m.archiveWhenDone })
     }
-    return null
+    return { notes }
   }
   /** Bring a thread back, unless an extension's `unarchiving` refuses (or can't put back its worktree). */
   async function unarchive(id: string) {
