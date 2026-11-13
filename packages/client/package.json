@@ -3,6 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts", "./shared": "./src/shared.ts" },
+  "exports": { ".": "./src/index.ts", "./shared": "./src/shared.ts", "./profile-ui": "./src/profile-ui.ts" },
   "dependencies": { "@superego/protocol": "workspace:*", "@superego/daemon": "workspace:*" }
 }
