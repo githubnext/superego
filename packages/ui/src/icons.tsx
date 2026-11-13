@@ -19,7 +19,6 @@ export {
   BroomIcon,
   CaretDownIcon,
   CaretLeftIcon,
-  CaretUpDownIcon,
   CaretRightIcon,
   ChatCircleIcon,
   ChatsCircleIcon,

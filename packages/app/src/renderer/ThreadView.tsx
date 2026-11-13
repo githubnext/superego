@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowCounterClockwiseIcon, BroomIcon, ArrowDownIcon, ArrowElbowDownRightIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CaretRightIcon, CaretUpDownIcon, ChatCircleIcon, ChatsCircleIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, BroomIcon, ArrowDownIcon, ArrowElbowDownRightIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CaretRightIcon, ChatCircleIcon, ChatsCircleIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
 import { divideWork, entryView, fileKind, folderKind, paneMenu, Slot, toolView, unfoldedTool, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
@@ -76,7 +76,7 @@ export function ThreadView({ machine, thread }: { machine: MachineEntry; thread:
 
 /**
  * Where you are, in the window's title bar: the thread's session (and machine, where it isn't this one), then its status
- * and title, with a button to rename it (or the name being edited) and one to go elsewhere, and the key that does too.
+ * and title, with a button to rename it (or the name being edited), and the key that goes anywhere else.
  */
 export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const editing = useRenaming() === `${machine.id}/${thread.id}`
@@ -95,9 +95,6 @@ export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread
         {editing ? <TitleField machine={machine} thread={thread} /> : (
           <>
             <span className="thread__title" title={thread.title} onDoubleClick={() => startRename(machine.id, thread.id)}>{thread.title.replace(/\.$/, '')}</span>
-            <IconButton label={goKeys ? `Go to a session, thread or pane (${goKeys})` : 'Go to a session, thread or pane'} className="titlebar__switch" onClick={navigate}>
-              <CaretUpDownIcon size={13} aria-hidden />
-            </IconButton>
             <IconButton label="Rename" className="titlebar__rename" onClick={() => startRename(machine.id, thread.id)}>
               <PencilSimpleIcon size={13} aria-hidden />
             </IconButton>
