@@ -72,3 +72,27 @@ it('switched off on a machine, sends a named skill as plain words and offers non
   expect(all).not.toContain('Write commit messages.')
   await close()
 })
+
+it("keeps `without: ['skills', 'agents-md']` working: two extensions, each left out by its own name", async () => {
+  await writeFile(join(dir, 'AGENTS.md'), 'This project uses pnpm.')
+  const profile = async (without: string[]) => {
+    await mkdir(join(dir, 'profiles', 'default'), { recursive: true })
+    await writeFile(join(dir, 'profiles', 'default', 'profile.ts'), `import { defineProfile } from 'superego'\nexport default defineProfile({ without: ${JSON.stringify(without)} })\n`)
+  }
+  await profile(['skills', 'agents-md'])
+  const { peer, close } = await open()
+  const both = await send(peer, 'do $commit')
+  expect(both.content).toBe('do $commit')
+  expect(both.all).not.toContain('Write commit messages.')
+  expect(both.all).not.toContain('This project uses pnpm.')
+  // Either one alone leaves the other.
+  await profile(['agents-md'])
+  const skillsOnly = await send(peer, 'do $commit')
+  expect(skillsOnly.all).toContain('Write commit messages.')
+  expect(skillsOnly.all).not.toContain('This project uses pnpm.')
+  await profile(['skills'])
+  const agentsOnly = await send(peer, 'do $commit')
+  expect(agentsOnly.content).toBe('do $commit')
+  expect(agentsOnly.all).toContain('This project uses pnpm.')
+  await close()
+})
