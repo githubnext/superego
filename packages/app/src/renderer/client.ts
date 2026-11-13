@@ -6,6 +6,7 @@ import type { ConversationView } from '@earendil-works/pi-durable'
 import type { Client, Feature, Json, MethodName, Notifications, Params, Result, ThreadInfo, SettingsSnapshot } from '@superego/protocol'
 import type { MachineEntry, MachineId, SuperegoBridge } from '../shared.ts'
 import { useRegistry } from './extension.tsx'
+import { fonts } from './fonts.ts'
 
 declare global {
   interface Window { superego: SuperegoBridge }
@@ -37,15 +38,8 @@ export function useMachineList(): MachineEntry[] {
   return machines
 }
 
-/** The families of the fonts installed here, through the Local Font Access API. */
-let fontFamilies: Promise<string[]> | undefined
-export function loadFonts(): Promise<string[]> {
-  const query = (window as unknown as { queryLocalFonts?: () => Promise<{ family: string }[]> }).queryLocalFonts
-  if (!query) return Promise.reject(new Error('This build cannot list fonts'))
-  fontFamilies ??= query().then((fonts) => [...new Set(fonts.map((font) => font.family))].sort((a, b) => a.localeCompare(b)))
-  fontFamilies.catch(() => { fontFamilies = undefined })
-  return fontFamilies
-}
+/** The families of the fonts installed here, through the Local Font Access API (kept: see fonts.ts). */
+export const loadFonts = (): Promise<string[]> => fonts.load()
 
 /**
  * A watch shared by everyone who wants it: one subscription per (machine, method, params), however many components

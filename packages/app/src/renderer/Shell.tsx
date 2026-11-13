@@ -8,6 +8,7 @@ import { textScale } from '../shared.ts'
 import { machine as client, useSettings, watched } from './client.ts'
 import { shownPanes, Slot, useRegistry } from './extension.tsx'
 import { ServiceNotice } from './ServiceNotice.tsx'
+import { refreshFontsSoon } from './fonts.ts'
 import { ThreadTitle, ThreadTools, ThreadView } from './ThreadView.tsx'
 import { StripSlot } from './panes.tsx'
 import { SettingsView } from './SettingsView.tsx'
@@ -58,6 +59,8 @@ export function Shell() {
   // Where the thread's columns show their tabs: in the title bar, wide.
   const [strip, setStrip] = useState<HTMLElement | null>(null)
   useEffect(() => { setDrawer(false) }, [selection?.machine, selection?.thread, narrow])
+  // The installed fonts take seconds to list: read them in the background, for Settings' font pickers.
+  useEffect(refreshFontsSoon, [])
   // Actions read the shell as it is when they run.
   registry.router.setContext({
     app: registry.app, machines, selection, select, openSettings, newThread: openNewThread,

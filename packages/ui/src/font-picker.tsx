@@ -3,29 +3,37 @@ import { Popover } from './popover.tsx'
 
 /** Whether `family` draws every glyph the same width: "iiii" and "WWWW" measure alike. */
 export function isMonospace(family: string): boolean {
+  const known = isMonospace.known.get(family)
+  if (known !== undefined) return known
   const context = (isMonospace.canvas ??= document.createElement('canvas')).getContext('2d')!
   context.font = `16px "${family}", serif`
   const narrow = context.measureText('iiiiiiii').width
   const wide = context.measureText('WWWWWWWW').width
-  return Math.abs(narrow - wide) < 0.5
+  const mono = Math.abs(narrow - wide) < 0.5
+  isMonospace.known.set(family, mono)
+  return mono
 }
 isMonospace.canvas = undefined as HTMLCanvasElement | undefined
+isMonospace.known = new Map<string, boolean>()
 
 /**
  * Pick a font family: a button that shows the current one in itself, and a searchable list where every family is
- * drawn in its own face. `loadFonts` runs on first open (font access needs the user's gesture). With `monospace`,
- * only fixed-width families are listed unless "all fonts" is ticked.
+ * drawn in its own face. `fonts` is the list known already (kept from before, say), shown at once; `loadFonts` runs on
+ * first open (font access needs the user's gesture), and draws the list where `fonts` doesn't follow it. With `monospace`, only fixed-width
+ * families are listed unless "all fonts" is ticked.
  */
-export function FontPicker({ value, onChange, loadFonts, monospace, nullLabel = 'Default', label }: {
+export function FontPicker({ value, onChange, fonts: known, loadFonts, monospace, nullLabel = 'Default', label }: {
   value: string | null
   onChange(value: string | null): void
+  fonts?: string[]
   loadFonts(): Promise<string[]>
   monospace?: boolean
   nullLabel?: string
   label: string
 }) {
   const [open, setOpen] = useState(false)
-  const [fonts, setFonts] = useState<string[]>()
+  const [loaded, setLoaded] = useState<string[]>()
+  const fonts = known ?? loaded
   const [error, setError] = useState<string>()
   const [query, setQuery] = useState('')
   const [all, setAll] = useState(!monospace)
@@ -35,7 +43,7 @@ export function FontPicker({ value, onChange, loadFonts, monospace, nullLabel = 
 
   const toggle = (next: boolean) => {
     setOpen(next)
-    if (next && !fonts) loadFonts().then(setFonts, (e: Error) => setError(e.message))
+    if (next && !loaded) loadFonts().then(setLoaded, (e: Error) => setError(e.message))
   }
   const choose = (family: string | null) => { onChange(family); setOpen(false); setQuery('') }
 
@@ -50,7 +58,7 @@ export function FontPicker({ value, onChange, loadFonts, monospace, nullLabel = 
         )}
         <div className="superego-font-picker__list" role="listbox">
           {!query && <button type="button" role="option" aria-selected={value === null} onClick={() => choose(null)}>{nullLabel}</button>}
-          {error ? <div className="superego-font-picker__note">{error}</div>
+          {!fonts && error ? <div className="superego-font-picker__note">{error}</div>
             : !fonts ? <div className="superego-font-picker__note">Loading fonts…</div>
             : shown.length === 0 ? <div className="superego-font-picker__note">No fonts match</div>
             : shown.map((family) => (

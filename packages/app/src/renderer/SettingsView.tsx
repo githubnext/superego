@@ -1,6 +1,6 @@
 // Settings, drawn generically from what each endpoint registers: the app's own settings and every machine's. Sections
 // may name a custom component (`ui`) drawn below their settings; the Providers section is one.
-import { useEffect, useRef, useState, type ComponentType } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from 'react'
 import { useLocalState } from './local-state.ts'
 import type { AuthEvent, AuthPrompt, Json, Notifications, ProviderAuthInfo, SectionInfo, SettingInfo, SettingsSnapshot } from '@superego/protocol'
 import { Button, Dialog, FontPicker, Select, StatusGlyph, Switch, TextField } from '@superego/ui'
@@ -8,6 +8,7 @@ import { remoteCommand } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 
 import { machine as client, has, loadFonts, useSettings } from './client.ts'
+import { fonts } from './fonts.ts'
 import { mergeSettings, type MergedSetting } from './merge-settings.ts'
 import { Keymap } from './Keymap.tsx'
 import { driftNote, MachineDrift } from './machine-drift.tsx'
@@ -78,6 +79,7 @@ function Setting({ setting, value, apply, mixed, note }: {
   setting: SettingInfo; value: Json; apply(value: Json): Promise<unknown>; mixed?: boolean; note?: string
 }) {
   const [error, setError] = useState<string>()
+  const knownFonts = useSyncExternalStore(fonts.subscribe, fonts.get)
   const set = (next: Json) => {
     setError(undefined)
     apply(next).catch((e: Error) => setError(e.message))
@@ -94,7 +96,7 @@ function Setting({ setting, value, apply, mixed, note }: {
     case 'number': control = <TextField type="number" aria-label={setting.title} defaultValue={String(value ?? '')} min={setting.min} max={setting.max} step={setting.step}
       disabled={disabled} onBlur={(e) => set(Number(e.target.value))} />; break
     case 'font': control = <FontPicker label={setting.title} value={typeof value === 'string' ? value : null} monospace={setting.monospace}
-      nullLabel={setting.nullLabel} loadFonts={loadFonts} onChange={set} />; break
+      nullLabel={setting.nullLabel} fonts={knownFonts} loadFonts={loadFonts} onChange={set} />; break
     case 'color': control = <ColorField label={setting.title} value={typeof value === 'string' ? value : String(setting.default ?? '')} fallback={String(setting.default ?? '')} disabled={disabled} onChange={set} onInvalid={setError} />; break
     case 'keymap': return <Keymap setting={setting} value={value} apply={apply} />
     case 'string': control = <TextField type={setting.secret ? 'password' : 'text'} aria-label={setting.title} defaultValue={typeof value === 'string' ? value : ''}
