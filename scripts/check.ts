@@ -9,9 +9,13 @@
 // tickets are ahead of it: first come, first served. A ticket is live while its process is and keeps touching it; a
 // crashed or killed run's ticket is cleared by whoever is waiting behind it. Commands run inside a slot don't take
 // another (SUPEREGO_CHECK_SLOT is set for them).
-import { spawn } from 'node:child_process'
-import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
-import { constants, homedir } from 'node:os'
+//
+// Nothing a run starts outlives it: when it ends, what's left of its process group is stopped, and so are the daemons
+// it started (detached into sessions of their own): this checkout's processes writing a daemon.log in the temp folder,
+// where tests keep their homes. Unless another check of this checkout is running, whose they might be.
+import { spawnSync, spawn } from 'node:child_process'
+import { mkdirSync, readdirSync, readFileSync, realpathSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { constants, homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 
 let argv = process.argv.slice(2)
@@ -31,11 +35,14 @@ const dir = join(homedir(), '.superego', 'check-locks')
 const HEARTBEAT = 5_000
 const STALE = 60_000
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
+const checkout = join(import.meta.dirname, '..')
+const nested = Boolean(process.env.SUPEREGO_CHECK_SLOT)
 
 let ticket: string | undefined
-if (!process.env.SUPEREGO_CHECK_SLOT && slots > 0) await takeSlot()
+if (!nested) await takeSlot()
 run()
 
+/** Take a ticket, and wait for a slot (with no limit, the ticket only says the run is there). */
 async function takeSlot() {
   mkdirSync(dir, { recursive: true })
   const name = `${String(Date.now()).padStart(15, '0')}-${process.pid}`
@@ -45,6 +52,7 @@ async function takeSlot() {
   for (const signal of SIGNALS) process.on(signal, () => process.exit(128 + constants.signals[signal]))
   setInterval(() => { try { utimesSync(ticket!, new Date(), new Date()) } catch {} }, HEARTBEAT).unref()
   // Another run may have named its ticket just before this one but not written it yet.
+  if (!(slots > 0)) return
   await sleep(100)
   let said = false
   for (;;) {
@@ -108,15 +116,43 @@ function run() {
     setTimeout(() => group('SIGKILL'), 10_000).unref()
   }, limit * 1000)
   child.on('error', (error) => { console.error(`${command}: ${error.message}`); process.exit(127) })
-  child.on('exit', (code, signal) => {
+  child.on('exit', async (code, signal) => {
     clearTimeout(timer)
-    if (timedOut) {
-      // What's left of its group, if it shrugged off SIGTERM.
-      group('SIGKILL')
-      process.exit(124)
-    }
-    process.exit(signal ? 128 + constants.signals[signal] : code ?? 1)
+    // What's left of its group: SIGKILL if it shrugged off SIGTERM on timing out.
+    group(timedOut ? 'SIGKILL' : 'SIGTERM')
+    if (!nested) await sweep()
+    process.exit(timedOut ? 124 : signal ? 128 + constants.signals[signal] : code ?? 1)
   })
+}
+
+/** Stop the test daemons this checkout left running (see the top), unless another check of it is running. */
+async function sweep() {
+  const others = readdirSync(dir).filter((name) => /^\d+-\d+$/.test(name) && join(dir, name) !== ticket && live(join(dir, name)))
+  if (others.some((name) => { try { return (JSON.parse(readFileSync(join(dir, name), 'utf8')) as { cwd: string }).cwd.startsWith(checkout) } catch { return true } })) return
+  const temp = [...new Set([tmpdir(), realpathSync(tmpdir()), '/tmp', '/private/tmp'])].map((path) => `n${path.replace(/\/$/, '')}/`)
+  const daemons = () => {
+    const ours = spawnSync('ps', ['-A', '-o', 'pid=,command='], { encoding: 'utf8' }).stdout.split('\n')
+      .filter((line) => line.includes(`${checkout}/`)).map((line) => Number.parseInt(line)).filter((pid) => pid && pid !== process.pid)
+    if (!ours.length) return []
+    // Only these processes: lsof over every process on a busy machine takes minutes.
+    const open = spawnSync('lsof', ['-a', '-p', ours.join(','), '-Fpn'], { encoding: 'utf8' }).stdout ?? ''
+    const found = new Set<number>()
+    let pid = 0
+    for (const line of open.split('\n')) {
+      if (line.startsWith('p')) pid = Number(line.slice(1))
+      else if (line.endsWith('/daemon.log') && temp.some((path) => line.startsWith(path))) found.add(pid)
+    }
+    return [...found]
+  }
+  let left = daemons()
+  if (!left.length) return
+  console.error(`stopping ${left.length} daemon${left.length === 1 ? '' : 's'} the check left running`)
+  for (const pid of left) try { process.kill(pid, 'SIGTERM') } catch {}
+  for (let i = 0; i < 25 && left.length; i++) {
+    await sleep(200)
+    left = left.filter((pid) => { try { process.kill(pid, 0); return true } catch { return false } })
+  }
+  for (const pid of left) try { process.kill(pid, 'SIGKILL') } catch {}
 }
 
 function minutes(seconds: number) {
