@@ -99,7 +99,7 @@
 .transcript { display: flex; flex-direction: column; gap: 14px; font-size: var(--superego-text-body); line-height: var(--superego-leading-body); }
 .transcript__more, .transcript__thinking { color: var(--superego-muted); font-size: var(--superego-text-sm); }
 .transcript__error { color: var(--superego-status-error); font-size: var(--superego-text-ui); border-left: 2px solid currentColor; padding-left: var(--superego-space-3); }
-.msg { overflow-wrap: anywhere; }
+.msg, .md { overflow-wrap: anywhere; }
 /* What's read and copied: messages, the agent's thinking and output, diffs, files, errors. */
 :is(.msg, .step__note, .step__thinking, .step__output, .transcript__error, .composer__error, .diff-file__body, .file-editor .cm-editor, .file-editor__rendered, .service-notice__detail) { -webkit-user-select: text; user-select: text; }
 /* Your turns: a bubble on the right, with clear air above; the agent's work reads down the column. */
@@ -201,7 +201,8 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .md strong { font-weight: 620; }
 .md a { color: var(--superego-accent); text-decoration: none; }
 .md a:hover { text-decoration: underline; }
-.md code { font: 0.86em var(--superego-mono); letter-spacing: -0.01em; background: var(--superego-code-chip); border-radius: 4px; padding: 1px 3px; white-space: nowrap; }
+/* Inline code wraps where it must, chip and all, so it never runs out of its bubble or column; blocks scroll instead. */
+.md code { font: 0.86em var(--superego-mono); letter-spacing: -0.01em; background: var(--superego-code-chip); border-radius: 4px; padding: 1px 3px; overflow-wrap: anywhere; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .md pre { font: calc(12.5px * var(--superego-text-scale))/1.5 var(--superego-mono); background: var(--superego-surface); border-radius: 10px; padding: 10px var(--superego-space-3); white-space: pre; overflow-x: auto; }
 /* Sideways-scrolling code: the scrollbar shows on hover; the edge fades only while a line runs past it. */
 :is(.md, .step__output) pre::-webkit-scrollbar { height: 0; }
@@ -226,10 +227,8 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .md hr { border: 0; border-top: 1px solid var(--superego-border); margin: var(--superego-space-5) 0; }
 .md__table { overflow-x: auto; }
 .md table { border-collapse: collapse; font-size: var(--superego-text-ui); line-height: var(--superego-leading-ui); width: 100%; font-variant-numeric: tabular-nums; }
-/* Columns as wide as their text asks, each at least readable; a table wider than the column scrolls in its wrapper.
-   Code in a cell wraps (anywhere, if it must) instead of running into the next one. */
+/* Columns as wide as their text asks, each at least readable; a table wider than the column scrolls in its wrapper. */
 .md th, .md td { min-width: 8em; }
-.md :is(th, td) code { white-space: normal; overflow-wrap: anywhere; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .md th, .md td { text-align: left; padding: 6px 24px 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--superego-border) 45%, transparent); vertical-align: top; }
 .md th { font-size: var(--superego-text-sm); font-weight: 600; color: var(--superego-muted); border-bottom-color: var(--superego-border); }
 .md tr:last-child td { border-bottom: 0; }

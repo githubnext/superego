@@ -79,11 +79,16 @@ describe('picture sources', () => {
 
 describe('code that names a file', () => {
   it('takes paths and file names', () => {
-    for (const text of ['src/app.ts', 'notes/plan.md', 'README.md', 'docs/guides/', 'plan.md:12', 'package.json', '~/notes/a.txt', 'Cargo.lock'])
+    for (const text of ['src/app.ts', 'notes/plan.md', 'README.md', 'docs/guides/', 'plan.md:12', 'package.json', '~/notes/a.txt', 'Cargo.lock',
+      'daemon.ts', 'packages/daemon/src/extension.ts', '/Users/mikker/dev/gh/superego', 'src/app.ts:12:4'])
       expect(looksLikePath(text), text).toBe(true)
   })
   it("doesn't take dotted code", () => {
     for (const text of ['settings.get', 'settings.onChange', 'foo.bar()', 'x.y', 'superego.pane', 'thread.list', 'https://e.com/a.md', 'a.md b'])
+      expect(looksLikePath(text), text).toBe(false)
+  })
+  it("doesn't take a command that names a path", () => {
+    for (const text of ['git -C /Users/mikker/dev/gh/superego merge --ff-only <your-branch>', 'cat src/app.ts', 'pnpm --filter superego smoke', 'open README.md', 'notes/a plan.md'])
       expect(looksLikePath(text), text).toBe(false)
   })
 })

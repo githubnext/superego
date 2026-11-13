@@ -42,13 +42,15 @@ const EXTENSIONS = new Set(('md markdown mdx txt rst adoc org ts tsx mts cts js 
   + 'zig nix dart r jl hs ml clj elm sol wasm wat tf hcl dockerfile gitignore').split(' '))
 
 /**
- * Inline code that names a file or folder, by its look: no scheme or spaces at its ends, and a folder in it
- * (`src/app.ts`, `docs/`) or a known file extension (`README.md`, `plan.md:12`). Dotted code (`settings.get`) isn't one.
+ * Inline code that is a file or folder, by its look: one token (no spaces, so not a command that names one), no
+ * scheme, and a folder in it (`src/app.ts`, `docs/guides/`) or a known file extension (`README.md`, `plan.md:12`).
+ * Dotted code (`settings.get`) isn't one.
  */
 export function looksLikePath(text: string) {
   if (/^[a-z][\w+.-]*:(?!\d)/i.test(text)) return false
-  if (/^[\w.@~/-][^\n`]*\/[^\n`]*[^\s]$/.test(text)) return true
-  const name = /^[\w@~-][^\n`/]*\.([A-Za-z]\w{0,9})(?::\d+)*$/.exec(text)
+  if (/[\s`]/.test(text)) return false
+  if (/^[\w.@~/-][^/]*\/./.test(text)) return true
+  const name = /^[\w@~-][^/]*\.([A-Za-z]\w{0,9})(?::\d+)*$/.exec(text)
   return Boolean(name && EXTENSIONS.has(name[1]!.toLowerCase()))
 }
 
