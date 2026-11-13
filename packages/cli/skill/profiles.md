@@ -83,6 +83,15 @@ superego profile allow support     # in the project
 `superego profile new` allows what it scaffolds; after you edit a project's profile yourself, allow it again. Your own
 profiles in `~/.superego/profiles` are never asked about.
 
+A profile's UI from another machine is asked about on this computer too, since it runs in the window with reach to
+every machine: once for exactly the sources the window received, again after any change. Allow it from the notice in
+one of its threads, or:
+
+```sh
+superego profile allow-ui default -m box     # as it is now; a name, or the profile's folder there
+superego profile revoke-ui default -m box    # Settings → Machines lists them too, with Revoke
+```
+
 ## When changes apply
 
 - The daemon loads a profile when a thread with it takes a turn, and again when its files changed: edit, then send the

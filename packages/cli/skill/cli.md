@@ -78,6 +78,8 @@ superego profile                    # the profiles a thread here could start wit
 superego profile new [name]         # .superego/profiles/<name>/profile.ts in this project, allowed
 superego profile new [name] --user  # ~/.superego/profiles/<name>: yours, everywhere
 superego profile allow [name]       # let this project's profile run (again, after it changed)
+superego profile allow-ui <name> -m <machine>   # let that machine's profile UI run in this computer's window, as it is now
+superego profile revoke-ui <name> -m <machine>
 ```
 
 `name` defaults to `default`. See `superego --skill profiles`.

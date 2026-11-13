@@ -173,6 +173,11 @@ core marks a finished thread seen the same way, on `select`, `focus` and `thread
   the last lets go. Each gets its agent parts.
 - A change loads between runs, never under one: a thread mid-run keeps what it started with. A profile whose folder
   is gone, or that no longer loads or is allowed, is torn down, and its UI with it. A value torn down reads null.
+- A profile's UI from another machine runs in the window only once allowed on this computer (the thread's notice, or
+  `superego profile allow-ui <name> -m <machine>`), for a hash the window takes of the sources it received; any change
+  to them asks again, and Revoke (Settings → Machines) tears it down at once. Once running it has the window's full
+  reach, every machine's `call` and `dispatch` included: it runs in the window's own JavaScript, where narrowing its API
+  wouldn't stop it calling `window.superego` directly. Real isolation is the sandboxed tier PLAN.md plans.
 
 ## A thread's life
 

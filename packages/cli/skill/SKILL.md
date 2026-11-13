@@ -57,5 +57,6 @@ Read only the topics the task needs. A profile with a tool needs `profiles` and 
 - A first extension, end to end, with diagrams and a cheat sheet: [docs/writing-extensions.md](https://github.com/mikker/superego/blob/main/docs/writing-extensions.md) in the Superego repository.
 - Names are namespaced: an extension called `vault` names its actions and live values `vault.<something>`.
 - A project's profile is code from that repo, so it runs only once allowed: `superego profile allow <name>`, again
-  after any of its files change. Your own (`~/.superego/profiles`) need no allowing.
+  after any of its files change. Your own (`~/.superego/profiles`) need no allowing. A profile's UI from another
+  machine runs in this computer's window only once allowed here: `superego profile allow-ui <name> -m <machine>`.
 - A changed profile loads again on the thread's next turn; its UI loads again when the thread next changes.

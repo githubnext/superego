@@ -192,6 +192,13 @@ A profile's UI is TSX or TS, compiled when the daemon serves it; it imports `rea
 hooks and components, the file editor among them). An example is the `obsidian` profile in `~/.superego/profiles`: a vault's
 notes as a graph and as notes edited in place, with search and backlink tools for the agent.
 
+Adding a machine gives it no say over this computer: a profile's UI from another machine runs in the window only once
+allowed here, for the exact sources the window received (it hashes them itself; any change asks again). Until then its
+threads work without it, and a notice over the composer offers Allow, with its files to read. Settings → Machines lists
+what's allowed, with Revoke; `superego profile allow-ui <name> -m <machine>` allows from a shell. This computer's own
+profiles keep their daemon's rules. A browser or phone talks only to the daemon that served it (it is `local` there), so
+no other machine's UI reaches it.
+
 ## In a browser or on a phone
 
 Settings → a machine → Web access: serve the app to this computer or the local network. Open the address it shows (it
