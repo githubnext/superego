@@ -14,6 +14,10 @@ bin=${SUPEREGO_BIN:-$HOME/.local/bin}
 registry=${SUPEREGO_REGISTRY:-https://packagefeedproxy.microsoft.io/npm/}
 cd "$dir"
 
+# Where git, mise and pnpm usually are: a non-login ssh shell (as Update in the app runs this) may have none of them on
+# PATH, nor `gh`, git's credential helper.
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 # Where mise is now, for the wrapper below: ssh's PATH may not have it (~/.local/bin, say).
 mise=$(command -v mise || true)
 if [[ -n $mise ]]; then
@@ -22,7 +26,7 @@ if [[ -n $mise ]]; then
   eval "$(mise env -s bash -C "$dir")"
 fi
 
-git pull --ff-only --quiet 2> /dev/null || echo "install-machine: not updated from git; installing what's checked out" >&2
+git pull --ff-only --quiet || echo "install-machine: not updated from git; installing what's checked out" >&2
 # The lockfile is resolved through this feed; pnpm refuses tarballs from anywhere else.
 ELECTRON_SKIP_BINARY_DOWNLOAD=1 CI=1 pnpm install --frozen-lockfile --registry="$registry"
 
@@ -41,7 +45,8 @@ exec node "$dir/app/bin/superego.ts" "\$@"
 EOF
 chmod +x "$bin/superego"
 
-"$bin/superego" daemon status | grep -q '^Running' && "$bin/superego" daemon restart
+# SUPEREGO_RESTART_NOW: restart though agents are working (they resume after); else a busy daemon refuses, and this fails.
+"$bin/superego" daemon status | grep -q '^Running' && "$bin/superego" daemon restart ${SUPEREGO_RESTART_NOW:+--now}
 echo "Installed $bin/superego ($(git rev-parse --short HEAD))"
 exit
 }
