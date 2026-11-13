@@ -1,5 +1,6 @@
 // The UI half of an extension: `<pkg>/ui`, listed in the app's renderer entry. It fills named slots in the shell, draws
-// tool calls and entries in the transcript, adds pane kinds, custom settings components and actions (with keys).
+// tool calls and entries in the transcript, adds pane kinds, custom settings components and actions (with keys), and
+// completions and what's drawn with a sent message to the composer.
 // Components reach everything else (machines, threads, selection, live values, calls) through the hooks this package
 // exports.
 //
@@ -11,6 +12,7 @@ import type { AppConfig, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef
 import type { MachineEntry } from '../shared.ts'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowContext, type WindowRouter } from './actions.tsx'
 import { createStore, type Store } from './local-state.ts'
+import type { CompletionProvider, CompletionWord, SentWith } from './composer.ts'
 
 /** Where an extension can put UI. */
 export type SlotName =
@@ -138,6 +140,19 @@ export type UiApi = {
    * in a component). Named `<extension>.<key>`; `persist` keeps it across reloads.
    */
   store<T extends Json>(key: string, initial: T, options?: { persist?: boolean }): Store<T>
+  /** The composer of a thread. */
+  composer: {
+    /**
+     * Complete a word as it's typed (`$co` → `$commit`): the first provider that finds a word at the caret offers its
+     * items in a menu over the box.
+     */
+    complete<W extends CompletionWord>(provider: CompletionProvider<W>): void
+    /**
+     * Draw what this extension put in sent messages (by a submit transform, its daemon half's) under each one, and
+     * leave those blocks out of its text. Drawn for a thread that goes without the extension now too: it went then.
+     */
+    sentWith<T>(sent: SentWith<T>): void
+  }
 }
 
 /**
@@ -179,6 +194,8 @@ export type Registry = {
   settings: Owned<{ ui: string; component: ComponentType<SettingsComponentProps> }>[]
   router: WindowRouter
   appSettings: Owned<DeclaredSection>[]
+  completions: Owned<CompletionProvider<any>>[]
+  sentWith: Owned<SentWith>[]
   /** Set up a profile's UI extensions on `machine`, after tearing down what that profile set up before. */
   installProfile(machine: string, profile: ProfileRef, extensions: UiExtension[]): void
   /** Changes whenever extensions are added or removed at runtime; `subscribe` to hear it. */
@@ -194,7 +211,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   const registry: Registry = {
     app, extensions: extensions.map((e) => e.name),
     slots: { 'sidebar': [], 'rail': [], 'thread.header': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
-    tools: [], entries: [], panes: [], work: [], settings: [], router: createWindowRouter(), appSettings: [],
+    tools: [], entries: [], panes: [], work: [], settings: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [],
     version: 0,
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
     installProfile(machine, profile, list) {
@@ -265,6 +282,10 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         if (!key.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its state "${extension.name}.<key>", not "${key}"`)
         return createStore(key, initial, options)
       },
+      composer: {
+        complete: (provider) => { add(registry.completions, provider as CompletionProvider<any>) },
+        sentWith: (sent) => { add(registry.sentWith, sent as SentWith) },
+      },
     }
     const teardown = () => {
       for (const step of undo.splice(0).reverse()) step()
@@ -300,6 +321,18 @@ export const seenIn = <T,>(list: Owned<T>[], where: Where | undefined) => {
   const scope = scopeOf(where)
   const without = where?.thread.without
   return list.filter(({ owner }) => owner.profile ? owner.profile === scope : !(owner.optional && without?.includes(owner.extension)))
+}
+
+/** The composer's completion providers for `where`, in the order registered. */
+export const completionsIn = (registry: Registry, where: Where) => seenIn(registry.completions, where)
+
+/**
+ * What draws sent messages' blocks for `where`: those of the app's extensions (even one its thread goes without now,
+ * since it went with the message then), and its own profile's.
+ */
+export const sentWithIn = (registry: Registry, where: Where) => {
+  const scope = scopeOf(where)
+  return registry.sentWith.filter(({ owner }) => !owner.profile || owner.profile === scope)
 }
 
 /** The one of `list` that `where` sees by `match`: its profile's own first, else the app's. */

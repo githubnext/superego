@@ -63,6 +63,7 @@ export { useAllThreads, useMachines, useSelection, useSessions, useSidebar, useT
 export { groupSessions, nest, sessionKey, SORT, unread, type Session, type Sort } from './sessions.ts'
 export { showSession } from './actions.tsx'
 export { useComposer, useComposerClaim, type Composer, type ComposerClaim } from './ThreadView.tsx'
+export type { Completion, CompletionProvider, CompletionWord, ComposerWhere, SentBlock, SentWith } from './composer.ts'
 export { Markdown } from './Markdown.tsx'
 export { useLocalState, type Store } from './local-state.ts'
 export { score } from './score.ts'
