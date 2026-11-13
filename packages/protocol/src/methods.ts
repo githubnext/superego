@@ -60,6 +60,8 @@ export type ThreadInfo = {
   without?: string[]
   /** Left out of every list: an extension's own thread (an agent of its own), opened by id. */
   hidden?: boolean
+  /** For a hidden thread, the extension whose it is: there whether that extension is on or off, unlike its facts. */
+  owner?: string
   /** What extensions say about it (their facts), by extension name: `ext.worktrees`, say. Absent: nothing. */
   ext?: Record<string, Json>
   status: Status

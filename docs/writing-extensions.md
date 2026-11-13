@@ -98,7 +98,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `facts(({ id, state }) => …)` | what clients are told of a thread, as `thread.ext.<name>`: worked out from its state |
 | `agentFor(({ id, state, profile }) => ({ instructions, model, extensions, without }))` | choose a thread's agent; the first to answer wins. `agent(part, { always: false })` gives a part only through this |
 | `threads.list({ archived, hidden })`, `get(id)`, `of(conversationId)`, `conversation(id)`, `attachments(id)` | reach threads, and the folder a thread keeps files in |
-| `threads.create({ …, parent, hidden, options })`, `submit(id, text)`, `lastAnswer(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)`, `clear(id)` | start and run threads as the thread tools do; `hidden`: in no list, an agent of its own that takes no messages while the extension is off (find it with `list({ hidden: true })`); `clear`: start it over |
+| `threads.create({ …, parent, hidden, options })`, `submit(id, text)`, `lastAnswer(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)`, `clear(id)` | start and run threads as the thread tools do; `hidden`: in no list, an agent of its own with no profile, that takes no messages while the extension is off (find it by its `owner` in `list({ hidden: true })`, not by its facts, which are gone while the extension is off); `clear`: start it over |
 | `agentsDir`, `dataDir` | the folder agents share (`~/.agents`): skills, `AGENTS.md`; this machine's data folder (`~/.superego`) |
 | `harness` | pi-durable itself; unstable |
 

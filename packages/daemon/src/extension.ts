@@ -229,8 +229,9 @@ export type DaemonApi = {
     attachments(id: string): string
     /**
      * Start a thread, as `thread.create` does (its `creating` hooks too): `parent`, a thread's own child; `hidden`, in
-     * no list, and this extension's (a hidden parent's children are top-level). A hidden thread takes no messages while
-     * the extension that made it is off.
+     * no list, and this extension's (`owner`; a hidden parent's children are top-level). A hidden thread has no profile,
+     * and takes no messages while the extension that made it is off, or goes without it. Find it again by its `owner`
+     * in `list({ hidden: true })`: its facts aren't there while the extension is off.
      */
     create(params: NewThread & { hidden?: boolean }): Promise<ThreadInfo>
     /** Send a thread a message, as a user would; when it's working, `whenBusy` says how (default: after this run). */

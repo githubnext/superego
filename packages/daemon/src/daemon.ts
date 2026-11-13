@@ -523,7 +523,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     session: { root: rootOf(m), name: basename(rootOf(m)) },
     ...factsInfo(id, m.meta, without),
     ...(m.meta.archived ? { archived: true } : {}),
-    ...(m.meta.hidden ? { hidden: true } : {}),
+    ...(m.meta.hidden ? { hidden: true, ...(m.meta.owner ? { owner: m.meta.owner } : {}) } : {}),
     ...(m.meta.parent ? { parent: m.meta.parent } : {}),
     ...(without.size ? { without: [...without].sort() } : {}),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
