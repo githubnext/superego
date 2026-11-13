@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'electron-vite'
+import { writeCommit } from '@superego/daemon/client'
 import { newPackages } from './dev-packages.ts'
 
 export function superegoConfig(root: string) {
@@ -16,6 +17,8 @@ export function superegoConfig(root: string) {
         rolldownOptions: { external: ['electron', /^node:/] },
         lib: { entry: { main: resolve(root, 'src/main.ts'), daemon: resolve(root, 'src/daemon.ts') } },
       },
+      // The commit it's built from, written in: a packaged app has no checkout to ask.
+      plugins: [{ name: 'superego-commit', writeBundle: (options) => writeCommit(root, options.dir!) }],
     },
     preload: {
       // Sandboxed preloads must be CommonJS.

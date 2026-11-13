@@ -2,7 +2,7 @@
 // starts; a client hashes what is on disk now; when they differ, the running daemon is out of date and wants a restart.
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /**
@@ -32,11 +32,24 @@ function walk(dir: string): string[] {
 
 /**
  * The git commit the code in `dir` was checked out at, and when it was made (ms): what tells one machine's Superego
- * from another's. Undefined outside a git checkout (a packaged app).
+ * from another's. A build has it written in (`commit.json`, see writeCommit), so a packaged app knows it too; from
+ * source, it's the checkout's. Undefined outside a git checkout without one.
  */
 export function readCommit(dir: string): { commit: string; committedAt: number } | undefined {
+  try {
+    const written = JSON.parse(readFileSync(join(dir, COMMIT_FILE), 'utf8')) as { commit?: unknown; committedAt?: unknown }
+    if (typeof written.commit === 'string' && typeof written.committedAt === 'number') return { commit: written.commit, committedAt: written.committedAt }
+  } catch {}
   try {
     const [commit, seconds] = execFileSync('git', ['-C', dir, 'log', '-1', '--format=%H %ct'], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).trim().split(' ')
     return commit && seconds ? { commit, committedAt: Number(seconds) * 1000 } : undefined
   } catch { return undefined }
+}
+
+const COMMIT_FILE = 'commit.json'
+
+/** Write the commit of the checkout `source` is in next to a build's code in `dir`, for readCommit there. */
+export function writeCommit(source: string, dir: string) {
+  const commit = readCommit(source)
+  if (commit) writeFileSync(join(dir, COMMIT_FILE), `${JSON.stringify(commit)}\n`)
 }
