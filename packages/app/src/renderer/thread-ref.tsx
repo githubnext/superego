@@ -8,20 +8,23 @@ import { useRegistry } from './extension.tsx'
 import { useSelection, useThreads } from './state.tsx'
 
 /**
- * A machine's archived threads, asked once for each list of the threads in use it has (archiving or unarchiving one
- * changes that list): every reference to a thread not in use shares the answer.
+ * A machine's archived threads, asked once for each set of threads it has in use (archiving or unarchiving one changes
+ * that set; a status or title changing doesn't): every reference to a thread not in use shares the answer.
  */
-const archivedBy = new WeakMap<ThreadInfo[], Promise<ThreadInfo[]>>()
+const archivedBy = new Map<string, { ids: string; asked: Promise<ThreadInfo[]> }>()
 function useArchived(machine: string, id: string, inUse: ThreadInfo[] | undefined, listed: boolean) {
   const [thread, setThread] = useState<ThreadInfo>()
+  const ids = inUse?.map((t) => t.id).sort().join(' ')
   useEffect(() => {
-    if (listed || !inUse) return setThread(undefined)
-    let asked = archivedBy.get(inUse)
-    if (!asked) archivedBy.set(inUse, asked = (window.superego.call(machine, 'thread.list', { archived: true }) as Promise<ThreadInfo[]>).catch(() => []))
+    if (listed || ids === undefined) return setThread(undefined)
+    let known = archivedBy.get(machine)
+    if (known?.ids !== ids) {
+      archivedBy.set(machine, known = { ids, asked: (window.superego.call(machine, 'thread.list', { archived: true }) as Promise<ThreadInfo[]>).catch(() => []) })
+    }
     let alive = true
-    void asked.then((all) => { if (alive) setThread(all.find((t) => t.id === id)) })
+    void known.asked.then((all) => { if (alive) setThread(all.find((t) => t.id === id)) })
     return () => { alive = false }
-  }, [machine, id, inUse, listed])
+  }, [machine, id, ids, listed])
   return thread
 }
 
