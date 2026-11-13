@@ -1,0 +1,25 @@
+// `pnpm typecheck` (tsc -b): every package, extension and the app, each checked incrementally (its tsconfig.tsbuildinfo
+// remembers what passed). A new package or extension goes here too.
+{
+  "files": [],
+  "references": [
+    { "path": "packages/protocol" },
+    { "path": "packages/settings" },
+    { "path": "packages/daemon" },
+    { "path": "packages/client" },
+    { "path": "packages/cli" },
+    { "path": "packages/ui" },
+    { "path": "packages/app" },
+    { "path": "extensions/threads" },
+    { "path": "extensions/ask-user" },
+    { "path": "extensions/files" },
+    { "path": "extensions/git" },
+    { "path": "extensions/tasks" },
+    { "path": "extensions/suggestions" },
+    { "path": "extensions/links" },
+    { "path": "extensions/images" },
+    { "path": "extensions/skills" },
+    { "path": "extensions/web-panes" },
+    { "path": "app" }
+  ]
+}
