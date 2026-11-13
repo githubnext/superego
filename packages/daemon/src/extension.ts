@@ -76,9 +76,12 @@ export type ThreadHooks = {
   creating?(draft: ThreadDraft): ThreadCreating | void | Promise<ThreadCreating | void>
   /** It exists, before its first message is sent. */
   created?(thread: ThreadInfo): void | Promise<void>
-  /** A run started: a message (or one queued) went in. Not for a run resumed after a restart. */
+  /**
+   * A run started: the thread went busy. Per run, not per message: one steered or queued into a run that's going is
+   * part of it. Not for a run resumed after a restart (that one ends with a `turnEnd` alone).
+   */
   turnStart?(thread: ThreadInfo): void | Promise<void>
-  /** Its run ended: answered, failed or stopped. */
+  /** Its run ended: answered, failed or stopped. Not for one that ended while the daemon was down. */
   turnEnd?(thread: ThreadInfo): void | Promise<void>
   /** About to be archived: may refuse. Nothing is done yet; do cleanup in `archived`. */
   archiving?(thread: ThreadInfo): void | Promise<void>
@@ -171,14 +174,15 @@ export type DaemonApi = {
   state<T extends Json = Json>(): ThreadState<T>
   /**
    * What clients are told about each thread, as `ThreadInfo.ext[<name>]`: small, and worked out from the thread's
-   * state (this extension's) whenever its info is (`invalidate()` when something else it reads changed). Nothing
-   * for undefined; a throw is logged and counts as nothing.
+   * state (this extension's) whenever its info is (`invalidate()` when something else it reads changed). Not for
+   * threads that go without this extension, as for hooks. Nothing for undefined; a throw is logged and counts as nothing.
    */
   facts<T extends Json = Json>(describe: (thread: { id: string; state: T | undefined }) => Json | undefined): void
   /**
-   * Choose a thread's agent, from this extension's state with it (none yet while it's made). The first chooser to
-   * answer wins, in the order extensions were set up; a profile's only for its own threads. Called often, so quick
-   * and without side effects; a throw is logged and counts as no answer.
+   * Choose a thread's agent, from this extension's state with it (no `id` yet while it's made; the state its `creating`
+   * gave). Its instructions hold only while it answers. The first chooser to answer wins, in the order extensions were
+   * set up; a profile's only for its own threads. Called often, so quick and without side effects; a throw is logged
+   * (once) and counts as no answer.
    */
   agentFor<T extends Json = Json>(choose: (thread: { id?: string; state: T | undefined; profile?: ProfileRef }) => AgentChoice | undefined): void
   threads: {

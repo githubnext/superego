@@ -1,7 +1,7 @@
 // Extensions in a thread's life: lifecycle hooks, state kept with each thread and the facts clients see of it, choosing
 // its agent, and the thread operations (create, submit, lastAnswer, archive, unarchive) they're given.
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -89,8 +89,16 @@ it("takes part in a thread's life, in order: creating moves it and gives it stat
     'nest archiving false', 'after archiving false', 'nest archived true', 'after archived true',
     'nest unarchiving', 'after unarchiving', 'nest unarchived false', 'after unarchived false',
   ])
-  // Switched off, an extension's hooks aren't for the thread.
+  // Nothing to change, nothing to hear: unarchiving one in use, archiving one put away.
+  heard.length = 0
+  await peer.call('thread.unarchive', { id: thread.id })
+  await peer.call('thread.archive', { id: thread.id })
+  await peer.call('thread.archive', { id: thread.id })
+  expect(heard).toEqual(['nest archiving false', 'after archiving false', 'nest archived true', 'after archived true'])
+  await peer.call('thread.unarchive', { id: thread.id })
+  // Switched off, an extension's hooks and facts aren't for the thread.
   await peer.call('settings.set', { key: 'extensions.nest', value: false })
+  expect((await find(peer, thread.id))!.ext).toBeUndefined()
   heard.length = 0
   const plain = await peer.call<ThreadInfo>('thread.create', { options: { nest: true } })
   expect(plain.cwd).toBe(dir)
@@ -104,7 +112,10 @@ it('refuses when an -ing hook says no; a hook that throws otherwise is logged, a
     name: 'guard',
     setup(superego) {
       superego.thread({
-        creating(draft) { if (draft.options.guard === 'no') throw new RpcError('busy', 'Not now') },
+        creating(draft) {
+          if (draft.options.guard === 'no') throw new RpcError('busy', 'Not now')
+          if (draft.options.guard === 'plain') throw new Error('No way')
+        },
         archiving() { if (refuse) throw new RpcError('busy', 'Still needed') },
         unarchiving() { if (refuse) throw new Error('nope') },
         created() { throw new Error('broken') },
@@ -116,6 +127,8 @@ it('refuses when an -ing hook says no; a hook that throws otherwise is logged, a
   })
   const { peer, close } = await open([guard])
   await expect(peer.call('thread.create', { options: { guard: 'no' } })).rejects.toMatchObject({ kind: 'busy', message: 'Not now' })
+  // A plain error says whose it is, as for the other -ing hooks.
+  await expect(peer.call('thread.create', { options: { guard: 'plain' } })).rejects.toMatchObject({ kind: 'refused', message: 'guard: No way' })
   expect(await listed(peer)).toEqual([])
   const thread = await peer.call<ThreadInfo>('thread.create', { prompt: 'hi' })
   await done(peer, thread.id)
@@ -214,7 +227,9 @@ it("lets an extension choose a thread's agent: instructions, tools and what it g
       superego.agentFor(({ state }) => state === 'mine' ? { instructions: 'Picked.', extensions: [tools], without: ['coding-tools'] } : undefined)
     },
   })
-  const fallback = defineDaemonExtension({ name: 'fallback', setup(superego) { superego.agentFor(() => ({ instructions: 'Anything.' })) } })
+  let answer = true
+  // It can't pick another extension's part.
+  const fallback = defineDaemonExtension({ name: 'fallback', setup(superego) { superego.agentFor(() => answer ? { instructions: 'Anything.', extensions: [tools] } : undefined) } })
   const { peer, close } = await open([picker, fallback])
   const mine = await peer.call<ThreadInfo>('thread.create', { prompt: 'hi', options: { picker: true } })
   const other = await peer.call<ThreadInfo>('thread.create', { prompt: 'hi' })
@@ -229,6 +244,12 @@ it("lets an extension choose a thread's agent: instructions, tools and what it g
   const plain = await agentOf(peer, other.id)
   expect(plain.instructions).toBe('Anything.')
   expect(plain.extensions).not.toContain('picked')
+  // No longer answering, its instructions go with it.
+  answer = false
+  await peer.call('thread.submit', { id: other.id, text: 'again' })
+  await until(async () => !(await agentOf(peer, other.id)).instructions)
+  await done(peer, other.id)
+  expect((await agentOf(peer, other.id)).instructions).toBeFalsy()
   await close()
 })
 
@@ -291,5 +312,45 @@ export default defineDaemonExtension({
   await until(async () => (await find(peer, thread.id))!.ext?.tagged !== undefined && JSON.stringify((await find(peer, thread.id))!.ext) === '{"tagged":{"version":2}}')
   await done(peer, thread.id)
   expect((await agentOf(peer, thread.id)).instructions).toBe('Version 2.')
+  await close()
+})
+
+it("runs a profile's hooks and shows its facts after a restart, before any of its threads runs", async () => {
+  const home = join(dir, 'home')
+  const profile = join(home, 'profiles', 'default')
+  const log = join(dir, 'heard.log')
+  mkdirSync(profile, { recursive: true })
+  writeFileSync(join(profile, 'profile.ts'), `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./keeper.ts'] })\n`)
+  writeFileSync(join(profile, 'keeper.ts'), `import { appendFileSync } from 'node:fs'
+import { defineDaemonExtension } from 'superego'
+const hear = (what) => (t) => { appendFileSync(${JSON.stringify(log)}, what + ' ' + t.title + '\\n') }
+export default defineDaemonExtension({
+  name: 'keeper',
+  setup(superego) {
+    superego.facts(() => ({ kept: true }))
+    superego.thread({ archiving: hear('archiving'), archived: hear('archived'), unarchiving: hear('unarchiving'), unarchived: hear('unarchived') })
+  },
+})
+`)
+  const heard = () => existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : []
+  const first = await open([], home)
+  const away = await first.peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'Away' })
+  expect(away.ext).toEqual({ keeper: { kept: true } })
+  await first.peer.call('thread.archive', { id: away.id })
+  expect(heard()).toEqual(['archiving Away', 'archived Away'])
+  await first.close()
+
+  // Only an archived thread has the profile: nothing loads it at startup, so bringing it back does.
+  const second = await open([], home)
+  await second.peer.call('thread.unarchive', { id: away.id })
+  expect(heard().slice(2)).toEqual(['unarchiving Away', 'unarchived Away'])
+  expect((await find(second.peer, away.id))!.ext).toEqual({ keeper: { kept: true } })
+  await second.close()
+
+  // A thread in use's profile loads at startup: its facts show, and its hooks run, without a turn.
+  const { peer, close } = await open([], home)
+  await until(async () => (await find(peer, away.id))!.ext?.keeper !== undefined)
+  await peer.call('thread.archive', { id: away.id })
+  expect(heard().slice(4)).toEqual(['archiving Away', 'archived Away'])
   await close()
 })

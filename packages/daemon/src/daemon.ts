@@ -22,7 +22,7 @@ import { createAgentSettings } from './agent-settings.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import {
   defineDaemonExtension, type AgentChoice, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type StatusContribution, type SubmitTransform,
-  type ThreadDraft, type ThreadHooks,
+  type ThreadCreating, type ThreadDraft, type ThreadHooks,
 } from './extension.ts'
 import { titleOf } from './names.ts'
 import { readCommit } from './build.ts'
@@ -288,8 +288,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const threadHooks: Owned<ThreadHooks>[] = []
   const factSources: Owned<(thread: { id: string; state: Json | undefined }) => Json | undefined>[] = []
   const choosers: Owned<(thread: { id?: string; state: Json | undefined; profile?: ProfileRef }) => AgentChoice | undefined>[] = []
-  /** Agent parts given to no thread but those an `agentFor` chooses them for: as given, to as installed. */
-  const chosenParts = new Map<Extension, Extension>()
+  /** Agent parts given to no thread but those an `agentFor` of their extension chooses them for: by extension, as given, to as installed. */
+  const chosenParts = new Map<string, Map<Extension, Extension>>()
   /** Whether what an extension registered is for a thread: one it doesn't go without, and of its profile if a profile's. */
   const appliesTo = (entry: Owned<unknown>, without: Set<string>, meta?: ThreadMeta) =>
     !without.has(entry.owner) && (!entry.profiles || Boolean(meta?.profile && entry.profiles.has(meta.profile.dir)))
@@ -301,33 +301,39 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     return without
   }
-  /** A thread's agent as extensions choose it (`agentFor`): the first answer, if any. */
-  function choiceOf(id: string | undefined, meta: ThreadMeta, profile?: LoadedProfile): AgentChoice | undefined {
-    const off = switchedOff(profile)
+  /** Choosers that threw once: logged then, not on every thread's info after. */
+  const failedChoosers = new WeakSet<object>()
+  /** A thread's agent as extensions choose it (`agentFor`): the first answer, if any, and whose it is (`by`). */
+  function choiceOf(id: string | undefined, meta: ThreadMeta, off: Set<string>): (AgentChoice & { by: string }) | undefined {
     for (const chooser of choosers) {
       if (!appliesTo(chooser, off, meta)) continue
       try {
         const choice = chooser.value({ ...(id ? { id } : {}), state: stateOf(meta, chooser.owner), ...(meta.profile ? { profile: meta.profile } : {}) })
-        if (choice) return choice
+        if (choice) return { ...choice, by: chooser.owner }
       } catch (error) {
-        console.error(`Extension ${chooser.owner}: agentFor failed:`, error)
+        if (!failedChoosers.has(chooser)) console.error(`Extension ${chooser.owner}: agentFor failed:`, error)
+        failedChoosers.add(chooser)
       }
     }
     return undefined
   }
   /**
    * The optional extensions a thread goes without: turned off on this machine, left out by its profile, or left out
-   * by the extension that chose its agent (Ego's). One answer for its agent's parts, the pane kinds it's told of, and
-   * the UI the window draws for it.
+   * by the extension that chose its agent (Ego's). One answer for its agent's parts, the pane kinds it's told of, the
+   * hooks and facts that are for it, and the UI the window draws for it. With the choice it was worked out from.
    */
-  function withoutOf(id?: string, meta?: ThreadMeta, profile?: LoadedProfile): Set<string> {
+  function choiceAndWithout(id?: string, meta?: ThreadMeta, profile?: LoadedProfile) {
     const without = switchedOff(profile)
-    for (const name of (meta && choiceOf(id, meta, profile)?.without) ?? []) {
+    const choice = meta && choiceOf(id, meta, without)
+    for (const name of choice?.without ?? []) {
       const known = extensions.get(RENAMED[name] ?? name)
       if (known && !known.required) without.add(known.name)
     }
-    return without
+    return { choice, without }
   }
+  const withoutOf = (id?: string, meta?: ThreadMeta, profile?: LoadedProfile) => choiceAndWithout(id, meta, profile).without
+  /** A thread's profile, if it's loaded yet. */
+  const loadedProfile = (meta: ThreadMeta) => meta.profile && profiles.get(meta.profile.dir)
   /** The agent parts a thread has: every built-in but those of the extensions it goes without. */
   const partsFor = (without: Set<string>) => builtins.filter((b) => !without.has(b.owner)).map((b) => b.part)
   /**
@@ -521,7 +527,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return entry
   }
 
-  const info = (id: string, m: Mounted): ThreadInfo => ({
+  /** What clients see of a thread; `without` worked out once for its facts and what it goes without. */
+  const info = (id: string, m: Mounted, without = withoutOf(id, m.meta, loadedProfile(m.meta))): ThreadInfo => ({
     id, title: m.meta.title || 'New thread', cwd: m.meta.cwd, createdAt: m.meta.createdAt,
     activeAt: Math.max(m.activeAt ?? 0, m.meta.createdAt),
     ...(m.model ? { model: m.model } : {}), ...(m.cost ? { cost: m.cost } : {}), ...(m.meta.model ? { ownModel: true } : {}),
@@ -529,27 +536,22 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     ...(m.meta.profile ? { profile: m.meta.profile } : {}),
     ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),
     session: { root: rootOf(m), name: id === egoId ? options.app.name : basename(rootOf(m)) },
-    ...factsInfo(id, m.meta),
+    ...factsInfo(id, m.meta, without),
     ...(m.meta.archived ? { archived: true } : {}),
     ...(id === egoId ? { meta: true } : {}),
     ...(m.meta.hidden ? { hidden: true } : {}),
     ...(m.meta.parent ? { parent: m.meta.parent } : {}),
-    ...withoutInfo(id, m.meta),
+    ...(without.size ? { without: [...without].sort() } : {}),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
   })
-  /** What a thread goes without, for clients: by its profile once loaded (until then, by this machine's settings). */
-  const withoutInfo = (id: string, meta: ThreadMeta) => {
-    const without = [...withoutOf(id, meta, meta.profile && profiles.get(meta.profile.dir))].sort()
-    return without.length ? { without } : {}
-  }
   /**
-   * What extensions say about a thread (`facts`), by extension. The worktrees extension's is `worktree` too, as
-   * clients read it until they read `ext.worktrees`.
+   * What extensions say about a thread (`facts`), by extension: those it doesn't go without, as for hooks. The worktrees
+   * extension's is `worktree` too, as clients read it until they read `ext.worktrees`.
    */
-  const factsInfo = (id: string, meta: ThreadMeta): Pick<ThreadInfo, 'ext' | 'worktree'> => {
+  const factsInfo = (id: string, meta: ThreadMeta, without: Set<string>): Pick<ThreadInfo, 'ext' | 'worktree'> => {
     const ext: Record<string, Json> = {}
     for (const source of factSources) {
-      if (source.profiles && !(meta.profile && source.profiles.has(meta.profile.dir))) continue
+      if (!appliesTo(source, without, meta)) continue
       try {
         const fact = source.value({ id, state: stateOf(meta, source.owner) })
         if (fact !== undefined) ext[source.owner] = fact
@@ -612,8 +614,19 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   /** The extensions' hooks for a thread, in order: those it doesn't go without, a profile's for its own threads only. */
   const hooksOf = (id: string, m: Mounted) => {
-    const without = withoutOf(id, m.meta, m.meta.profile && profiles.get(m.meta.profile.dir))
+    const without = withoutOf(id, m.meta, loadedProfile(m.meta))
     return threadHooks.filter((h) => appliesTo(h, without, m.meta))
+  }
+  /** A refusal from an extension's hook, as clients see it: its own `RpcError`, else `refused`, saying whose. */
+  const refusal = (owner: string, error: unknown) =>
+    error instanceof RpcError ? error : new RpcError('refused', `${owner}: ${error instanceof Error ? error.message : String(error)}`)
+  /**
+   * A thread's profile loaded, so its extensions' hooks are there for it (after a restart, a profile loads only once
+   * one of its threads runs). One that no longer loads is logged, and its hooks are gone with it.
+   */
+  async function withProfile(id: string) {
+    const { profile } = (await get(id)).meta
+    if (profile) await profileOf(profile).catch((error: Error) => console.error(`Profile ${profile.name}: ${error.message}`))
   }
   /** Ask the hooks that may refuse (`archiving`, `unarchiving`): the first to throw stops it, with its error. */
   async function ask(hook: 'archiving' | 'unarchiving', id: string) {
@@ -622,8 +635,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       try {
         await value[hook]?.(info(id, m))
       } catch (error) {
-        if (error instanceof RpcError) throw error
-        throw new RpcError('refused', `${owner}: ${error instanceof Error ? error.message : String(error)}`)
+        throw refusal(owner, error)
       }
     }
   }
@@ -736,8 +748,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         const { installed, undo: uninstall } = agentExtension(agentPart, always)
         undo.push(uninstall)
         if (always) return
-        chosenParts.set(agentPart, installed)
-        undo.push(() => { chosenParts.delete(agentPart) })
+        const own = chosenParts.get(extension.name) ?? new Map<Extension, Extension>()
+        chosenParts.set(extension.name, own.set(agentPart, installed))
+        undo.push(() => { own.delete(agentPart); if (!own.size) chosenParts.delete(extension.name) })
       },
       settings: {
         register(section) {
@@ -1014,14 +1027,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    */
   async function agentOf(id: string | undefined, meta: ThreadMeta) {
     const profile = meta.profile ? await profileOf(meta.profile) : undefined
-    const choice = choiceOf(id, meta, profile)
+    const { choice, without } = choiceAndWithout(id, meta, profile)
     const { model, thinkingLevel } = agent.resolve({
       model: meta.model ?? choice?.model ?? profile?.spec.model, thinking: meta.thinking ?? choice?.thinking ?? profile?.spec.thinking,
     })
-    const chosen = (choice?.extensions ?? []).map((part) => chosenParts.get(part) ?? console.warn(`agentFor chose ${part.name}, which isn't given with agent(part, { always: false })`)).filter((part) => part !== undefined)
-    const extensions = [...partsFor(withoutOf(id, meta, profile)), ...chosen, ...(profile ? partsOf(profile) : [])]
-    const instructions = choice?.instructions ?? (profile ? profile.spec.prompt || null : undefined)
-    return { model, thinkingLevel, extensions, ...(instructions !== undefined ? { instructions } : {}) }
+    // Only parts its own extension gave with `always: false`.
+    const chosen = (choice?.extensions ?? []).map((part) => chosenParts.get(choice!.by)?.get(part) ?? console.warn(`agentFor of ${choice!.by} chose ${part.name}, which it doesn't give with agent(part, { always: false })`)).filter((part) => part !== undefined)
+    const extensions = [...partsFor(without), ...chosen, ...(profile ? partsOf(profile) : [])]
+    // Always said, never left as it was: instructions a chooser gave go when it no longer answers.
+    const instructions = choice?.instructions ?? (profile?.spec.prompt || null)
+    return { model, thinkingLevel, extensions, instructions }
   }
 
   /** Send `text` to a thread, with the model and thinking it chose, else what this machine's settings say now. */
@@ -1159,7 +1174,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const off = switchedOff(loaded)
     for (const hook of threadHooks) {
       if (!hook.value.creating || !appliesTo(hook, off, meta)) continue
-      const made = await hook.value.creating(clone(draft))
+      let made: ThreadCreating | void
+      try {
+        made = await hook.value.creating(clone(draft))
+      } catch (error) {
+        throw refusal(hook.owner, error)
+      }
       if (made?.cwd) draft.cwd = made.cwd
       if (made?.state !== undefined) ext[hook.owner] = clone(made.state)
     }
@@ -1314,15 +1334,21 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    */
   async function archive(id: string) {
     notEgo(id)
-    await ask('archiving', id)
-    // Cleaned up before clients see it archived: never shown put away with its worktree still there.
-    await tell('archived', id, { archived: true })
-    await updateMeta(id, (m) => { m.archived = true; delete m.archiveWhenDone })
+    // Already away: nothing for the hooks to see.
+    if (!(await get(id)).meta.archived) {
+      await withProfile(id)
+      await ask('archiving', id)
+      // Cleaned up before clients see it archived: never shown put away with its worktree still there.
+      await tell('archived', id, { archived: true })
+      await updateMeta(id, (m) => { m.archived = true; delete m.archiveWhenDone })
+    }
     const { worktree } = info(id, await get(id))
     return { worktree: worktree ? (worktree.removed ? 'removed' as const : 'kept' as const) : null }
   }
   /** Bring a thread back, unless an extension's `unarchiving` refuses (or can't put back its worktree). */
   async function unarchive(id: string) {
+    if (!(await get(id)).meta.archived) return
+    await withProfile(id)
     await ask('unarchiving', id)
     await updateMeta(id, (m) => { delete m.archived; delete m.archiveWhenDone })
     await tell('unarchived', id)
@@ -1477,6 +1503,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (m.live?.run && m.meta.profile) await profileOf(m.meta.profile).catch((error: Error) => console.error(`Profile ${m.meta.profile!.name}: ${error.message}`))
   }
   harness.resume()
+  // The profiles of the threads in use, loaded in the background: their facts and what they go without show without
+  // waiting for a turn. An archived thread's load when it's brought back.
+  const loadingProfiles = (async () => {
+    const refs = new Map([...mounted.values()].filter((m) => !m.meta.archived && m.meta.profile).map((m) => [m.meta.profile!.dir, m.meta.profile!]))
+    for (const ref of refs.values()) await profileOf(ref).catch((error: Error) => console.error(`Profile ${ref.name}: ${error.message}`))
+  })()
 
 
   const daemon: Daemon = {
@@ -1651,6 +1683,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       }
     },
     async close() {
+      await loadingProfiles
       await web?.close()
       for (const cleanup of cleanups.reverse()) cleanup()
       agent.close()
