@@ -41,7 +41,9 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
   const gesture = useRef<Gesture | undefined>(undefined)
   const image = images[index]!
   const { src, broken, problem } = useImageSource(machine, thread, image, true)
+  // Which image was drawn (any version of it: a newer one swaps in without the spinner between).
   const [ready, setReady] = useState<string>()
+  const which = image.url ?? image.path
   const many = images.length > 1
 
   const go = useCallback((by: number) => {
@@ -181,16 +183,16 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
         ) : src && (
           <img
             ref={img}
-            key={src}
+            key={which}
             src={src}
             alt={image.alt ?? image.caption ?? ''}
             draggable={false}
-            className={`lightbox__image ${ready === src ? 'is-ready' : ''}`}
-            onLoad={() => setReady(src)}
+            className={`lightbox__image ${ready === which ? 'is-ready' : ''}`}
+            onLoad={() => setReady(which)}
             style={{ transform: `translate(${view.x + drag}px, ${view.y}px) scale(${view.scale})` }}
           />
         )}
-        {!broken && ready !== src && <div className="lightbox__loading" aria-hidden />}
+        {!broken && ready !== which && <div className="lightbox__loading" aria-hidden />}
       </div>
       <div className="lightbox__bar">
         {many && <span className="lightbox__count" aria-hidden>{index + 1} / {images.length}</span>}

@@ -215,6 +215,11 @@ if (phase === 'first') {
   await until(`document.querySelector('.lightbox__count')?.textContent === '2 / 4' && Boolean(document.querySelector('.lightbox .lightbox__image.is-ready'))`, 'lightbox → the message’s next image')
   await key2('Escape')
   await until(`!document.querySelector('.lightbox')`, 'inline lightbox closed by Escape')
+  // A file rewritten after it showed: the window coming back to the front checks it, and the message shows the new one.
+  const unchanged = await run(`${inline}[0].querySelector('img').src`)
+  picture('wide', 1200, 720, 200)
+  await run(`window.dispatchEvent(new Event('focus'))`)
+  await until(`(() => { const f = ${inline}[0], img = f.querySelector('img'); return img.src !== ${JSON.stringify(unchanged)} && f.classList.contains('is-ready') && img.naturalWidth === 1200 })()`, 'a rewritten image swapped in')
   await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: 'faux/faux-1' })`)
   void asking
   // Unread results elsewhere: a dot on Threads in the rail, and the thread's own in the list, to go to.

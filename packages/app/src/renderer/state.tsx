@@ -6,6 +6,7 @@ import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { has, machine as client, useEgo, useMachineList, useThreads as useThreadsWatch } from './client.ts'
 import { useRegistry } from './extension.tsx'
+import { useImageRechecks } from './images.tsx'
 import { emptyHistory, step, visit, type History, type Place } from './history.ts'
 import { useLocalState } from './local-state.ts'
 import { freeze, sessionKey, useSessionList, type Session } from './sessions.ts'
@@ -104,6 +105,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     const listed = list?.some((t) => t.meta) ? list.filter((t) => !t.meta) : list
     setThreads((all) => all[machine] === listed ? all : { ...all, [machine]: listed })
   }, [])
+  useImageRechecks(threads)
   // One order for the sidebar and everything that walks it (⌘⇧[ ⌘⇧], the navigator): held, a thread changing state
   // doesn't move under the pointer, nor out from under the next press.
   const live = useSessionList(machines, threads)

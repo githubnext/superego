@@ -1,13 +1,14 @@
 // Images of a thread's, wherever they show: a message's Markdown, a rendered file, the images an agent showed. A file's
 // bytes reach the window the way any of the thread's files do: `file.read` on its machine (over the socket on the
-// desktop, the WebSocket in a browser), then a blob URL, read once per window and shared by all that show it (and the
-// lightbox). A web image is used as its address. Each is read only as it nears the screen, shimmers until drawn, and
-// says quietly when it can't be.
+// desktop, the WebSocket in a browser), then a blob URL, shared by all that show it (and the lightbox) and swapped for
+// a newer one when the file changes (image-cache.ts). A web image is used as its address. Each is read only as it
+// nears the screen, shimmers until drawn, and says quietly when it can't be.
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { ImageBrokenIcon } from '@superego/ui'
+import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
-import { call } from './client.ts'
-import { imageType } from './markdown-html.ts'
+import { fileImage, onImageChange, recheckImages } from './image-cache.ts'
+export { onImageChange, recheckImages }
 import './images.css'
 
 /** An image as shown: a file of the thread's on its machine (`path`, read with `file.read`), or an address (`url`). */
@@ -31,13 +32,6 @@ export const imageFileName = (name: string) => name.replace(/[?#].*$/, '').split
 /** What an image is called, to someone who can't see it and in a tooltip: its alt text, else its caption, else its name. */
 export const describeImage = (image: ImageItem) => image.alt || image.caption || imageFileName(image.name)
 
-const cache = new Map<string, Promise<string>>()
-
-const decode = (base64: string): Uint8Array<ArrayBuffer> => {
-  const typed = Uint8Array as unknown as { fromBase64?(s: string): Uint8Array<ArrayBuffer> }
-  return typed.fromBase64 ? typed.fromBase64(base64) : Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
-}
-
 /** Why a read failed, as a tooltip says it. */
 const why = (error: unknown) => {
   const { kind, message } = (error ?? {}) as { kind?: string; message?: string }
@@ -50,16 +44,23 @@ const why = (error: unknown) => {
 export function imageSourceOf(machine: string, thread: string, image: ImageItem): Promise<string> {
   if (image.url) return Promise.resolve(image.url)
   if (!image.path) return Promise.reject(new Error(image.problem ?? 'Nothing to show'))
-  const key = `${machine}\u0000${thread}\u0000${image.path}`
-  let source = cache.get(key)
-  if (!source) {
-    source = call<{ content: string }>(machine, 'file.read', { id: thread, path: image.path, base64: true })
-      .then(({ content }) => URL.createObjectURL(new Blob([decode(content)], { type: image.mimeType ?? imageType(image.path!) })))
-    // A failed read is tried again next time it's wanted (once the machine is back, say).
-    source.catch(() => { if (cache.get(key) === source) cache.delete(key) })
-    cache.set(key, source)
-  }
-  return source
+  return fileImage(machine, thread, image.path, image.mimeType)
+}
+
+/** Check a thread's images that show now against their files, once its run ends: agents rewrite files as they work. */
+export function useImageRechecks(threads: Record<string, ThreadInfo[] | undefined>) {
+  const working = useRef(new Set<string>())
+  useEffect(() => {
+    const now = new Set<string>()
+    for (const [machine, list] of Object.entries(threads)) {
+      for (const thread of list ?? []) {
+        const key = `${machine}\u0000${thread.id}`
+        if (thread.status.state === 'working') now.add(key)
+        else if (working.current.has(key)) void recheckImages({ machine, thread: thread.id, force: true })
+      }
+    }
+    working.current = now
+  }, [threads])
 }
 
 export type LoadedImage = { src?: string; broken: boolean; problem?: string }
@@ -74,11 +75,15 @@ export function useImageSource(machine: MachineEntry, thread: string, image: Ima
     if (!image.url && !image.path) return setLoaded({ broken: true, problem: image.problem, for: key })
     if (!connected && !image.url) return
     let alive = true
-    imageSourceOf(machine.id, thread, image).then(
+    const load = () => imageSourceOf(machine.id, thread, image).then(
       (src) => { if (alive) setLoaded({ src, broken: false, for: key }) },
       (error) => { if (alive) setLoaded({ broken: true, problem: why(error), for: key }) },
     )
-    return () => { alive = false }
+    void load()
+    // A file's: swapped for the newer one when it changes, and checked now, as it comes (back) into view.
+    const off = image.path && !image.url ? onImageChange(machine.id, thread, image.path, load) : undefined
+    if (image.path && !image.url) void recheckImages({ machine: machine.id, thread, path: image.path })
+    return () => { alive = false; off?.() }
   }, [machine.id, connected, thread, key, wanted])
   return loaded.for === key ? loaded : { broken: false }
 }
@@ -100,6 +105,19 @@ export function useNear(ref: RefObject<Element | null>, from?: (element: Element
     return () => observer.disconnect()
   }, [ref, near])
   return near
+}
+
+/** Check the file at `path` again each time `ref` comes back into view (scrolled to, or shown again). */
+function useRecheckInView(ref: RefObject<Element | null>, machine: string, thread: string, path: string | undefined) {
+  useEffect(() => {
+    const element = ref.current
+    if (!element || !path || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) void recheckImages({ machine, thread, path })
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [ref, machine, thread, path])
 }
 
 function scroller(from: Element | null): Element | null {
@@ -135,8 +153,12 @@ export function ImageFrame({ machine, thread, image, onOpen, className = '', img
   const frame = useRef<HTMLButtonElement>(null)
   const near = useNear(frame, nearFrom)
   const { src, broken: unread, problem } = useImageSource(machine, thread, image, near && wanted)
+  useRecheckInView(frame, machine.id, thread, near && !image.url ? image.path : undefined)
+  // Which image was drawn (any version of it): a newer version of the same file takes the old one's place without the
+  // shimmer between.
   const [drawn, setDrawn] = useState<string>()
   const [failed, setFailed] = useState<string>()
+  const which = image.url ?? image.path
   const broken = unread || (src !== undefined && failed === src)
   const name = describeImage(image)
   const reason = problem ?? (broken ? 'can’t be shown' : undefined)
@@ -144,7 +166,7 @@ export function ImageFrame({ machine, thread, image, onOpen, className = '', img
     <button
       ref={frame}
       type="button"
-      className={`image-frame ${className} ${broken ? 'is-broken' : drawn === src && src ? 'is-ready' : 'is-loading'}`}
+      className={`image-frame ${className} ${broken ? 'is-broken' : drawn === which && src ? 'is-ready' : 'is-loading'}`}
       style={style}
       title={broken ? `${image.name}: ${reason}` : image.caption ?? imageFileName(image.name)}
       aria-label={broken ? `${name}: ${reason}` : `Open ${name}`}
@@ -156,7 +178,7 @@ export function ImageFrame({ machine, thread, image, onOpen, className = '', img
         <span className="image-frame__broken"><ImageBrokenIcon size={16} aria-hidden /><span>{brokenLabel}</span></span>
       ) : src && (
         <img src={src} srcSet={srcSet} width={width} height={height} alt={image.alt ?? image.caption ?? ''} decoding="async" draggable={false}
-          className={`image-frame__img ${imgClassName}`} onLoad={() => setDrawn(src)} onError={() => setFailed(src)} />
+          className={`image-frame__img ${imgClassName}`} onLoad={() => setDrawn(which)} onError={() => setFailed(src)} />
       )}
     </button>
   )

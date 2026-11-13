@@ -12,7 +12,7 @@ import remarkGfm from 'remark-gfm'
 import { highlight, languageNamed } from './code-highlight.ts'
 import { htmlPlugins, imageSource, looksLikePath, mediaMatches, parseSrcset } from './markdown-html.ts'
 import type { MachineEntry } from '../shared.ts'
-import { ImageFrame, imageSourceOf, type ImageItem } from './images.tsx'
+import { ImageFrame, imageSourceOf, onImageChange, type ImageItem } from './images.tsx'
 import { Lightbox } from './lightbox.tsx'
 import { CheckIcon, CopyIcon, SquareSplitHorizontalIcon } from '@superego/ui'
 import { ThreadRef } from './thread-ref.tsx'
@@ -245,14 +245,18 @@ function InlineImage({ src, srcSet, alt, title, width, height }: ImageProps) {
 function useSrcset(images: ImagesIn, candidates: { url: string; descriptor: string }[]) {
   const key = candidates.length > 1 ? candidates.map((c) => `${c.url} ${c.descriptor}`).join(',') : ''
   const [set, setSet] = useState<{ key: string; value: string }>()
+  // Read again when one of its files changes (image-cache.ts).
+  const [changed, setChanged] = useState(0)
   useEffect(() => {
     if (!key) return
     let alive = true
-    void Promise.all(candidates.map((c) => imageSourceOf(images.machine.id, images.thread, images.resolve(c.url))
+    const files = candidates.map((c) => images.resolve(c.url))
+    void Promise.all(candidates.map((c, i) => imageSourceOf(images.machine.id, images.thread, files[i]!)
       .then((url) => `${url}${c.descriptor ? ` ${c.descriptor}` : ''}`, () => undefined)))
       .then((urls) => { if (alive) setSet({ key, value: urls.filter(Boolean).join(', ') }) })
-    return () => { alive = false }
-  }, [images.machine.id, images.thread, key])
+    const offs = files.flatMap((file) => file.path && !file.url ? [onImageChange(images.machine.id, images.thread, file.path, () => setChanged((n) => n + 1))] : [])
+    return () => { alive = false; for (const off of offs) off() }
+  }, [images.machine.id, images.thread, key, changed])
   return set?.key === key && set.value ? set.value : undefined
 }
 
