@@ -1,7 +1,7 @@
 // What the window tells extensions as it happens (`superego.on`, see WindowEvents): threads' statuses changing, the
 // thread shown changing, a machine's provider rejecting its credentials, and the window's focus and visibility. The
 // shell's state feeds it; the registry passes it on.
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { ProviderRejection, Status, ThreadInfo } from '@superego/protocol'
 import type { Registry, WindowEvents } from './extension.tsx'
 import type { Selection } from './state.tsx'
@@ -66,8 +66,9 @@ export function useWindowEvents(registry: Registry, { threads, rejections, hidde
   selection: Selection | undefined
   shown: ThreadInfo | undefined
 }) {
-  // The thread shown first, so a listener hearing of its status sees it as shown, with its new status.
-  registry.window.thread = shown
+  // The thread shown first, so a listener hearing of its status sees it as shown, with its new status: set as a render
+  // commits (layout effects run before the effects below), not during one that may never commit.
+  useLayoutEffect(() => { registry.window.thread = shown })
   const statuses = useRef<Statuses>(new Map())
   const selected = useRef<Selection | undefined>(undefined)
   useEffect(() => {
