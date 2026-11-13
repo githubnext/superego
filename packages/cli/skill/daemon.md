@@ -48,6 +48,7 @@ the previous setup's cleanup run first. Everything it registered is removed on r
 | `superego.threads.list()` | every thread: `{ id, title, cwd, status, profile, … }` |
 | `superego.threads.of(conversationId)` | the thread a tool call belongs to: `superego.threads.of(api.conversationId)` |
 | `superego.threads.conversation(id)` | a thread's pi-durable conversation, to submit to or watch |
+| `superego.threads.attachments(id)` | the folder on this machine where a thread keeps its files (attachments, images it showed); clients read a file there with `file.read` by its absolute path |
 | `superego.app` | `{ name, id }` of the app |
 
 ## Common patterns

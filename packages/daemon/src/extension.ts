@@ -49,5 +49,10 @@ export type DaemonApi = {
     conversation(id: string): Promise<Conversation>
     /** The thread a conversation belongs to: subagent conversations map to their top thread. */
     of(conversationId: number): string | undefined
+    /**
+     * The folder on this machine where a thread keeps its files (what was attached to its messages, images it showed):
+     * every client reads a file in it with `file.read`, as it does one in the thread's own folder.
+     */
+    attachments(id: string): string
   }
 }

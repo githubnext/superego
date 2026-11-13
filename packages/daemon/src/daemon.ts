@@ -484,6 +484,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         list: () => list(),
         conversation: async (id) => (await get(id)).conversation,
         of: (conversationId) => mounted.has(String(conversationId)) ? String(conversationId) : undefined,
+        attachments: attachmentsOf,
       },
     }
     try {
@@ -600,9 +601,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * A message's content with its attachments: each file saved under attachments/<thread>/ on this machine and named to
    * the agent by its path (a small text file inline too), images also given to the model as images.
    */
+  /** Where a thread's files are kept on this machine: its attachments, and the images it showed. */
+  function attachmentsOf(id: string) { return join(options.dataDir, 'attachments', id) }
+
   async function contentOf(id: string, text: string, attachments: Attachment[]) {
     if (!attachments.length) return text
-    const dir = join(options.dataDir, 'attachments', id)
+    const dir = attachmentsOf(id)
     await mkdir(dir, { recursive: true })
     const blocks: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[] = []
     if (text.trim()) blocks.push({ type: 'text', text })
@@ -1038,7 +1042,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         'thread.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),
         'file.read': async ({ id, path, base64 }: { id: string; path: string; base64?: boolean }) => {
-          const file = inFolder((await get(id)).meta.cwd, path)
+          // In the thread's folder, or among the files it keeps (attachments, images it showed).
+          const { cwd } = (await get(id)).meta
+          const kept = isAbsolute(path) && resolvePath(path).startsWith(`${attachmentsOf(id)}/`)
+          const file = kept ? resolvePath(path) : inFolder(cwd, path)
           const info = await stat(file).catch(() => undefined)
           if (!info?.isFile()) throw new RpcError('not_found', `No file ${path}`)
           if (info.size > 16 * 1024 * 1024) throw new RpcError('too_large', `${path} is larger than 16 MB`)
