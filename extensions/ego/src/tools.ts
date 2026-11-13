@@ -1,5 +1,4 @@
-// Ego, the meta agent: Superego's own agent, one hidden thread per machine in Superego's data folder (see daemon.ts:
-// `thread.meta`, `thread.meta.clear`). It reads and explains: what Superego is (the prompt below), and this machine's
+// Ego's agent: what it's told (the prompt below) and its tools. It reads and explains: what Superego is (the prompt below), and this machine's
 // setup through tools that read: its settings, its actions, its profiles, the machines this computer reaches, its
 // threads, and files. What it changes itself is setup: this machine's settings (superego_set_setting) and the machines
 // this computer reaches (superego_machines). Any other work it hands to a new, ordinary thread (thread_start), top-level
@@ -9,11 +8,10 @@ import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { createReadTool } from '@earendil-works/pi-durable/tools'
-import { bool, lit, obj, opt, str, union, unknown, type ActionInfo, type Json, type Router, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
-import type { DaemonContext } from './daemon.ts'
 import { lineOf, linkTo, readTool } from '@superego/threads/tools'
+import { bool, lit, obj, opt, str, union, unknown, type ActionInfo, type Exposure, type Json, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 
-/** The machines a computer reaches, as the app keeps them (`machines.json`); given to the daemon by the app, for Ego. */
+/** The machines a computer reaches, as the app keeps them (`machines.json`). */
 export type MachineDirectory = {
   list(): { id: string; label: string; target: string; command?: string; via?: string; enabled: boolean }[]
   add(input: { label?: string; target?: string; command?: string; via?: string }): Promise<{ id: string; label: string }>
@@ -67,7 +65,7 @@ What ${name} is:
       prompt: 'You answer customer email for Acme.', // instructions for its agent
       extensions: ['./tools.ts'],                    // agent tools, prompt sections, hooks (defineExtension from '${id}')
       ui: ['./ui/badge.tsx'],                        // window extensions (defineUiExtension from '${id}/ui')
-      without: ['ask-user'],                         // optional extensions it does without: coding-tools, panes, skills, agents-md, thread-tools, thread-reports, ask-user, files, git, images, links, suggestions, tasks, web-panes
+      without: ['ask-user'],                         // optional extensions it does without: coding-tools, panes, skills, agents-md, thread-tools, thread-reports, ask-user, ego, files, git, images, links, suggestions, tasks, web-panes
       worktree: true,                                // its threads get worktrees
       extends: 'user:default',                       // a project's profile building on the user's
     })
@@ -95,17 +93,18 @@ machines change through your tools, the rest through actions (profile.allow, …
  * The meta agent's tools: they read, except those for setup, which is Ego's own to change (superego_set_setting,
  * superego_machines), and thread_start, which hands any other work to a thread.
  */
-export function metaExtension({ dir, router, snapshot, machines, threads }: {
+export function metaExtension({ dir, dispatch, actions, snapshot, machines, threads }: {
   /** Ego's own folder, the data folder: where relative paths start. */
   dir: string
-  router: Router<DaemonContext>
+  /** Run an action on this machine (`settings.set`, `profile.list`), and list them. */
+  dispatch(id: string, params: Record<string, Json>): Promise<unknown>
+  actions(exposure: Exposure): ActionInfo[]
   snapshot(): Promise<SettingsSnapshot>
   machines?: () => MachineDirectory
   threads: EgoThreads
 }) {
   const json = (value: unknown) => ({ output: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] })
   const text = (value: string) => ({ output: [{ type: 'text' as const, text: value }] })
-  const context: DaemonContext = { source: 'meta', notify: () => {} }
   const brief = (action: ActionInfo) => ({ id: action.id, title: action.title, params: action.params })
   const folder = (path: string) => resolve(dir, path.replace(/^~(?=\/|$)/, homedir()))
   const tools = [
@@ -139,7 +138,7 @@ export function metaExtension({ dir, router, snapshot, machines, threads }: {
       description: "Change one of this machine's settings, by its key (superego_settings lists them, with their types and choices).",
       parameters: obj({ key: str({ minLength: 1 }), value: unknown() }),
       async execute({ key, value }) {
-        await router.dispatch('settings.set', { key, value: (value ?? null) as Json }, context, { source: 'meta' })
+        await dispatch('settings.set', { key, value: (value ?? null) as Json })
         return text(`Set ${key} to ${JSON.stringify(value ?? null)}.`)
       },
     }),
@@ -147,13 +146,13 @@ export function metaExtension({ dir, router, snapshot, machines, threads }: {
       name: 'superego_actions',
       description: 'The actions this machine runs (what the command line may run, `superego do <id>`): id, title and params schema. For explaining, and for the prompts of threads you start; you run none.',
       parameters: obj({}),
-      async execute() { return json(router.list('cli').map(brief)) },
+      async execute() { return json(actions('cli').map(brief)) },
     }),
     defineTool({
       name: 'superego_profiles',
       description: 'The profiles a thread in a folder can start with: the project\'s and the user\'s, each with its folder and whether it is allowed to run.',
       parameters: obj({ cwd: opt(str({ description: 'The project folder; else your own' })) }),
-      async execute({ cwd }) { return json(await router.dispatch('profile.list', { cwd: folder(cwd ?? '.') }, context, { source: 'meta' })) },
+      async execute({ cwd }) { return json(await dispatch('profile.list', { cwd: folder(cwd ?? '.') })) },
     }),
     defineTool({
       name: 'thread_list',

@@ -2,7 +2,7 @@
 // forwarded to where they run (see `dispatch`). Every dispatch from this window is logged, and the log is one action
 // away (Show action log).
 import { useEffect, useState } from 'react'
-import { agentName, obj, opt, Router, str, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
+import { obj, opt, Router, str, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
 import { Dialog } from '@superego/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
@@ -159,15 +159,6 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
   // Within a thread: the thread itself, then each pane beside it.
   defineWindowAction({ id: 'pane.next', title: 'Next pane', keys: 'ctrl+tab', run: (_p, c) => stepPane(c, 1) }),
   defineWindowAction({ id: 'pane.previous', title: 'Previous pane', keys: 'ctrl+shift+tab', run: (_p, c) => stepPane(c, -1) }),
-  // The app's own agent, on this computer: it answers questions about the app and its setup, and hands work to threads.
-  // One thread, in no list, opened (or started) from here.
-  defineWindowAction({
-    id: 'app.meta', title: `Ask ${agentName(app)}`,
-    run: async (_p, c) => {
-      const thread = await c.dispatch('thread.meta', {}, { machine: 'local', source: 'meta' }) as { id: string }
-      c.select({ machine: 'local', thread: thread.id })
-    },
-  }),
   // Another window (in a browser, another tab), showing what this one does.
   defineWindowAction({
     id: 'app.newWindow', title: 'New window', keys: 'mod+shift+n',

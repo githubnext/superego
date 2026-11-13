@@ -19,7 +19,7 @@ export const PROTOCOL_VERSION = 1
 /** A line Superego writes in a thread's transcript itself, for the user, not the model: an entry of this kind, `{ text }`. */
 export const NOTE_ENTRY = 'superego.note'
 
-export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'ego'] as const
+export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -51,15 +51,8 @@ export type ThreadInfo = {
   session: { root: string; name: string }
   /** The thread that started it, if one did (an agent's thread_start, say): it shows nested under that one. */
   parent?: ThreadId
-  /**
-   * Its own git worktree, when it has one; `removed` once archiving took it away (its branch stays). The `worktrees`
-   * extension's fact (`ext.worktrees`), here too until clients read it there.
-   */
-  worktree?: { path: string; branch: string; removed?: boolean }
   /** Put away: listed only with `archived`, readable, and taking no messages until unarchived. */
   archived?: boolean
-  /** Ego, the machine's own agent, about Superego itself (see `thread.meta`): one thread, in no list, never archived. */
-  meta?: boolean
   /**
    * The optional extensions it goes without: turned off on its machine, or left out by its profile. The window draws
    * none of their UI for it either. Absent: it has them all.
@@ -162,10 +155,11 @@ export type Methods = {
   'thread.history': { params: { id: ThreadId; before: number; limit?: number }; result: { entries: unknown[]; more: boolean } }
   /** Snapshot of the conversation view, then `watch.ops` notifications with Chord delta ops against it. */
   'thread.watch': { params: { id: ThreadId }; result: { sub: string; value: ConversationView } }
-  /** Snapshot of the thread list, then `threads.changed` notifications with the whole list. */
-  'threads.watch': { params: {}; result: { sub: string; value: ThreadInfo[] } }
-  /** Ego's thread, which no list has (null until it's first opened), then `meta.changed` notifications with it. */
-  'meta.watch': { params: {}; result: { sub: string; value: ThreadInfo | null } }
+  /**
+   * Snapshot of the thread list, then `threads.changed` notifications with the whole list. `hidden`: the threads no list
+   * shows instead (extensions' own), for a window showing one.
+   */
+  'threads.watch': { params: { hidden?: boolean }; result: { sub: string; value: ThreadInfo[] } }
   unwatch: { params: { sub: string }; result: null }
 
   /** Snapshot of every section and value, then `settings.changed` with the whole snapshot. */
@@ -203,7 +197,6 @@ export type Notifications = {
   'watch.ops': { sub: string; ops: unknown[] }
   'watch.end': { sub: string; reason: string }
   'threads.changed': { sub: string; value: ThreadInfo[] }
-  'meta.changed': { sub: string; value: ThreadInfo | null }
   'settings.changed': { sub: string; value: SettingsSnapshot }
   'auth.event': { flow: string; event: AuthEvent }
   'value.changed': { sub: string; key: string; value: Json }

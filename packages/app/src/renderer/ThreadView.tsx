@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react'
 import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
 import { NOTE_ENTRY, type Attachment, type ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowCounterClockwiseIcon, BroomIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CheckIcon, FileIcon, type Icon as PhosphorIcon, IconButton, ListIcon, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TextArea, XIcon } from '@superego/ui'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CheckIcon, FileIcon, type Icon as PhosphorIcon, IconButton, ListIcon, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TextArea, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
 import { completionsIn, divideWork, entryView, fileKind, folderKind, paneMenu, sentWithIn, Slot, shownPanes, toolRow, toolView, unfoldedTool, urlKind, useRegistry, type ToolRowCall, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
@@ -133,8 +133,9 @@ function TitleField({ machine, thread }: { machine: MachineEntry; thread: Thread
 }
 
 /**
- * What the title bar says about the thread, at its right: where it runs (the machine when it isn't this one, the
- * project, its worktree's branch, its profile), its profile's own header, panes to open, and archiving it.
+ * What the title bar says about the thread, at its right: where it runs (the thread that started it, extensions' chips
+ * like its worktree's branch, its profile), what extensions add to the header, panes to open, and archiving it (not an
+ * extension's own hidden thread, which that extension looks after).
  */
 export function ThreadTools({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const registry = useRegistry()
@@ -143,20 +144,15 @@ export function ThreadTools({ machine, thread }: { machine: MachineEntry; thread
     <span className="thread__tools">
       <span className="thread__crumb">
         {thread.parent && <span className="titlebar__chip thread__parent">from <ThreadRef machine={machine.id} id={thread.parent} /></span>}
-        {thread.worktree && <span className="titlebar__chip thread__branch" title={`${thread.worktree.branch}\n${thread.worktree.path}`}>{thread.worktree.branch}</span>}
+        <Slot name="thread.crumb" props={{ machine, thread }} />
         {thread.profile && <span className="titlebar__chip thread__profile" title={thread.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{thread.profile.name}</span>}
       </span>
       <Slot name="thread.header" props={{ machine, thread }} />
       {thread.cost !== undefined && thread.cost > 0 && <span className="thread__cost" title="Spent on this thread">${thread.cost.toFixed(2)}</span>}
       {/* Without a pane shown, there's no strip to open one from: here instead. */}
       {!shownPanes(registry, { machine: machine.id, thread }).length && <PaneMenu machine={machine} thread={thread} />}
-      {thread.meta
-        ? (
-          // Ego is kept, not archived: cleared, it starts empty again.
-          <IconButton label="Clear" className="thread__clear" onClick={() => void dispatch('thread.meta.clear', {}, { machine: machine.id, source: 'header' }).catch((error) => console.error(error))}>
-            <BroomIcon size={15} aria-hidden />
-          </IconButton>
-        )
+      {thread.hidden
+        ? null
         : thread.archived
         ? <UnarchiveButton machine={machine} thread={thread} />
         : (

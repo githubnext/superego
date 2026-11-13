@@ -247,7 +247,7 @@ function ThreadsRail() {
   return (
     <TooltipProvider>
       <Tooltip content={`Threads: ${!sidebar.open ? 'show' : folded ? 'show the list' : 'fold to dots'}${toggleKeys ? ` (${toggleKeys})` : ''}`} side="right">
-        <IconButton label="Threads" className={`app__meta threads-rail__button ${sidebar.open ? 'is-on' : ''}`} onClick={click}>
+        <IconButton label="Threads" className={`app__rail-button threads-rail__button ${sidebar.open ? 'is-on' : ''}`} onClick={click}>
           <ChatsIcon size={18} aria-hidden />
           {badge && <span className={`threads-rail__badge threads-rail__badge--${badge}`} />}
         </IconButton>

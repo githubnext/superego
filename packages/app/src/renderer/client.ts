@@ -198,9 +198,9 @@ const replace = <T,>(_value: T, _method: string, params: { value: T }) => params
 export const useThreads = (machineId: MachineId, connected: boolean) =>
   useWatch<ThreadInfo[]>(machineId, connected, 'threads.watch', {}, replace, ['threads.changed'])
 
-/** Ego's thread on `machineId`, which no list has: null until it's first opened. */
-export const useEgo = (machineId: MachineId, connected: boolean) =>
-  useWatch<ThreadInfo | null>(machineId, connected, 'meta.watch', {}, replace, ['meta.changed'])
+/** The threads on `machineId` that no list shows (extensions' own, like Ego's): for showing one that's selected. */
+export const useHiddenThreads = (machineId: MachineId, connected: boolean) =>
+  useWatch<ThreadInfo[]>(machineId, connected, 'threads.watch', { hidden: true }, replace, ['threads.changed'])
 
 /**
  * A live value an extension's daemon half publishes (`superego.value`), on `machineId`: null until the extension that

@@ -11,7 +11,7 @@ export type AppConfig = {
   id: string
   /** What the menu bar shows; a character or two. */
   glyph?: string
-  /** What the app's own agent, the one that helps set the app up (`thread.meta`), is called. Else it's the app's own. */
+  /** What the app's own agent, the one that helps set the app up (`ego.ask`), is called. Else it's the app's own. */
   agent?: string
   /** Where the app lives; sent to model providers as attribution. */
   url?: string

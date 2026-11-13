@@ -6,6 +6,8 @@ import type { ConversationView } from '@earendil-works/pi-durable'
 import { MemorySettingsStore } from '@superego/settings'
 import { defineApp, NOTE_ENTRY, PROTOCOL_VERSION, type Json, type RpcPeer, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '@superego/daemon'
+import egoExtension from '@superego/ego/daemon'
+import worktrees from '@superego/worktrees/daemon'
 import threadTools from '../src/daemon.ts'
 import { linkTo, threadTools as tools, type ThreadsHost } from '../src/tools.ts'
 
@@ -60,7 +62,7 @@ it('lets an agent archive another thread, and its own once its turn ends; never 
   await writeFile(join(dir, '.gitignore'), '*\n!readme.md\n!.gitignore\n')
   git('add', '.'); git('commit', '-q', '-m', 'start')
   const open = async () => {
-    const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [threadTools] })
+    const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [worktrees, threadTools, egoExtension] })
     const server = await listen(daemon, join(dir, 's.sock'))
     const { peer, socket } = await connectSocket(join(dir, 's.sock'))
     await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
@@ -68,7 +70,7 @@ it('lets an agent archive another thread, and its own once its turn ends; never 
   }
   // Ego and a child first, for their ids; then the thread that archives them.
   const first = await open()
-  const ego = await first.peer.call<ThreadInfo>('thread.meta', {})
+  const ego = await first.peer.call<ThreadInfo>('ego.ask', {})
   const child = await first.peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'Child', worktree: true })
   await first.close()
   // Ego refused, the child archived, then itself; and it carries on to the end of its turn.
@@ -97,10 +99,11 @@ it('lets an agent archive another thread, and its own once its turn ends; never 
   expect(entries).toContain('Done.')
   // Both worktrees gone, both branches kept; Ego still there.
   for (const t of [child, self]) {
-    expect(existsSync(t.worktree!.path)).toBe(false)
-    expect(git('branch', '--list', t.worktree!.branch)).toContain(t.worktree!.branch)
+    const tree = t.ext?.worktrees as { path: string; branch: string }
+    expect(existsSync(tree.path)).toBe(false)
+    expect(git('branch', '--list', tree.branch)).toContain(tree.branch)
   }
-  expect((await peer.call<{ value: ThreadInfo }>('meta.watch', {})).value.archived).toBeUndefined()
+  expect((await peer.call<{ value: ThreadInfo }>('value.watch', { key: 'ego.thread' })).value.archived).toBeUndefined()
   await expect(peer.call('thread.submit', { id: self.id, text: 'hi' })).rejects.toMatchObject({ kind: 'archived' })
   await close()
 })

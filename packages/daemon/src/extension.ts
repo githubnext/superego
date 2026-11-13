@@ -8,7 +8,7 @@
 // Everything it registers is its own, named `<name>.<something>`, and undone when it's torn down: when the daemon
 // stops, or (a profile's) when the profile's files change.
 import type { Conversation, EntryRecord, Extension, Harness } from '@earendil-works/pi-durable'
-import type { ActionDef, AppConfig, Attachment, BlockedKind, ExtensionAbout, Json, JsonSchema, NewThread, Static, ThreadInfo } from '@superego/protocol'
+import type { ActionDef, ActionInfo, AppConfig, Attachment, BlockedKind, Exposure, ExtensionAbout, Json, JsonSchema, NewThread, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
 import type { DaemonContext } from './daemon.ts'
 import type { ProfileRef, ProfileSpec } from './profiles.ts'
@@ -124,6 +124,8 @@ export type AgentChoice = {
 
 export type DaemonApi = {
   app: AppConfig
+  /** This machine's data folder (`~/.superego`): where the app keeps its own files. */
+  dataDir: string
   /** The folder agents share on this machine (`~/.agents`, or `<APPID>_AGENTS`): skills, `AGENTS.md`. */
   agentsDir: string
   /** The pi-durable harness, for anything the API below doesn't cover. Unstable: it's pi-durable's, not Superego's. */
@@ -140,6 +142,8 @@ export type DaemonApi = {
   settings: {
     register(section: SectionSpec): void
     get<T extends Json>(key: string): T
+    /** Every section with its settings and values, as clients see them. */
+    snapshot(): Promise<SettingsSnapshot>
     /** Something in the settings changed. */
     onChange(listener: () => void): void
   }
@@ -148,6 +152,10 @@ export type DaemonApi = {
    * palette, and to the command line by its exposure. Define it with `defineAction`. Throw an `RpcError` for a clean error.
    */
   action(action: ActionDef<any, unknown, DaemonContext>): void
+  /** Run any action on this machine by id, as this extension (`settings.set`, another extension's): params checked first. */
+  dispatch(id: string, params?: unknown): Promise<unknown>
+  /** The actions on this machine, as data; `exposure`: only those offered to it (`cli`: what `superego do` runs). */
+  actions(exposure?: Exposure): ActionInfo[]
   /**
    * A read, named `<name>.<method>` (given whole, as actions are): a plain request clients `call`, for data a pane or list shows. Not logged, not in
    * the palette, not run from the command line. `params`, when given, is checked (and coerced) first.
@@ -206,7 +214,8 @@ export type DaemonApi = {
     attachments(id: string): string
     /**
      * Start a thread, as `thread.create` does (its `creating` hooks too): `parent`, a thread's own child; `hidden`, in
-     * no list (a hidden parent's children are top-level).
+     * no list, and this extension's (a hidden parent's children are top-level). A hidden thread takes no messages while
+     * the extension that made it is off.
      */
     create(params: NewThread & { hidden?: boolean }): Promise<ThreadInfo>
     /** Send a thread a message, as a user would; when it's working, `whenBusy` says how (default: after this run). */
@@ -218,5 +227,10 @@ export type DaemonApi = {
     /** Put it away (its `archiving` hooks may refuse); `whenIdle`: once its run ends, kept across restarts (a thread archiving itself). */
     archive(id: string, options?: { whenIdle?: boolean }): Promise<void>
     unarchive(id: string): Promise<void>
+    /**
+     * Start it over: its run stopped and a new context, its transcript starting after this (clients watching it watch
+     * again), its panes closed. The thread, its title and its state stay.
+     */
+    clear(id: string): Promise<void>
   }
 }

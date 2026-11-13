@@ -2,8 +2,8 @@
 // the restart notice, Settings, and the app-wide reactions (fonts, ⌘, , threads shown from the command line or a
 // notification).
 import { useEffect, useRef, useState } from 'react'
-import { agentName, type SettingsSnapshot } from '@superego/protocol'
-import { ArrowLeftIcon, ArrowRightIcon, Button, LifebuoyIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select } from '@superego/ui'
+import type { SettingsSnapshot } from '@superego/protocol'
+import { ArrowLeftIcon, ArrowRightIcon, Button, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select } from '@superego/ui'
 import { textScale } from '../shared.ts'
 import { machine as client, useSettings, watched } from './client.ts'
 import { shownPanes, Slot, useRegistry } from './extension.tsx'
@@ -80,7 +80,6 @@ export function Shell() {
       <GearSixIcon size={18} aria-hidden />
     </IconButton>
   )
-  const dispatch = registry.router.dispatch
   // Without a sidebar, at the title bar's start: every thread in a menu, and a new one.
   const tools = (
     <span className="app__tools">
@@ -92,7 +91,7 @@ export function Shell() {
   )
   const sideOpen = hasSidebar && (narrow ? drawer : sidebar.open)
   // Wide: across the top a title bar (the window's buttons, then where you are, the thread's columns and what the thread
-  // says about itself); down the left a rail (Ego, the spaces, Settings) and the sidebar beside it; the rest holds the
+  // says about itself); down the left a rail (what extensions put there, Settings) and the sidebar beside it; the rest holds the
   // thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.
   return (
     <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.superego.web ? 'is-web' : ''}`}>
@@ -113,9 +112,6 @@ export function Shell() {
         {!narrow && (
           <nav className="app__rail" aria-label="App">
             <div className="app__rail-group">
-              <IconButton label={`Ask ${agentName(registry.app)}`} className={`app__meta ${thread?.meta ? 'is-on' : ''}`} onClick={() => void dispatch('app.meta', {}, { source: 'rail' }).catch((error) => console.error(error))}>
-                <LifebuoyIcon size={18} aria-hidden />
-              </IconButton>
               <Slot name="rail" props={{}} />
             </div>
             <div className="app__rail-group">{settingsButton}</div>

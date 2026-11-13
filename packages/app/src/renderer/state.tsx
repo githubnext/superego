@@ -2,9 +2,9 @@
 // number of components show them), which thread is selected, and the Settings dialog; those two kept in the window
 // across reloads; and where the window has been, to go back and forward.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { ThreadInfo } from '@superego/protocol'
+import type { Json, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
-import { has, machine as client, useEgo, useMachineList, useThreads as useThreadsWatch } from './client.ts'
+import { has, machine as client, useHiddenThreads, useMachineList, useThreads as useThreadsWatch } from './client.ts'
 import { useRegistry } from './extension.tsx'
 import { useImageRechecks } from './images.tsx'
 import { emptyHistory, step, visit, type History, type Place } from './history.ts'
@@ -14,8 +14,11 @@ import { freeze, sessionKey, useSessionList, type Session } from './sessions.ts'
 
 export type Selection = { machine: string; thread: string }
 
-/** Where the New thread dialog starts: a machine and folder, and what else to start with. Empty, it takes after the thread shown. */
-export type NewThreadStart = { machine?: string; cwd?: string; profile?: string; model?: string; thinking?: string; worktree?: boolean }
+/**
+ * Where the New thread dialog starts: a machine and folder, and what else to start with (`options`: its extensions'
+ * fields, by extension). Empty, it takes after the thread shown.
+ */
+export type NewThreadStart = { machine?: string; cwd?: string; profile?: string; model?: string; thinking?: string; options?: Record<string, Json> }
 
 type ShellState = {
   machines: MachineEntry[]
@@ -36,8 +39,8 @@ type ShellState = {
   toggleSidebar(open?: boolean): void
   /** The selected thread when it's archived (the machine's list leaves those out): fetched once it's selected. */
   archived: ThreadInfo | undefined
-  /** Ego's thread on this computer, which no list has (see `thread.meta`): shown when selected, from its rail button. */
-  ego: ThreadInfo | undefined
+  /** The selected machine's threads that no list shows (extensions' own, like Ego's): shown when selected. */
+  hidden: ThreadInfo[] | undefined
   canBack: boolean
   canForward: boolean
   go(by: -1 | 1): void
@@ -59,11 +62,11 @@ export const useThreads = (machine: string) => useShellState().threads[machine]
 export const useAllThreads = () => useShellState().threads
 /** The selected thread, and a way to select another (or none). */
 export function useSelection() {
-  const { selection, select, machines, threads, archived, ego } = useShellState()
+  const { selection, select, machines, threads, archived, hidden } = useShellState()
   const machine = machines.find((m) => m.id === selection?.machine)
   const thread = selection && (threads[selection.machine]?.find((s) => s.id === selection.thread)
     ?? (archived?.id === selection.thread ? archived : undefined)
-    ?? (selection.machine === 'local' && ego?.id === selection.thread ? ego : undefined))
+    ?? hidden?.find((t) => t.id === selection.thread))
   return { selection, select, machine, thread }
 }
 /** Every session, in the sidebar's order, and the thread last shown in each. */
@@ -99,12 +102,8 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useLocalState('settings.open', false)
   const [newThread, setNewThread] = useState<NewThreadStart>()
   const [sidebarOpen, setSidebarOpen] = useLocalState('sidebar.open', true)
-  // A daemon from before Ego was kept apart lists it with the rest: left out of the lists here, and shown from there.
-  const [listedEgo, setListedEgo] = useState<ThreadInfo>()
   const onThreads = useCallback((machine: string, list: ThreadInfo[] | undefined) => {
-    if (machine === 'local') setListedEgo(list?.find((t) => t.meta))
-    const listed = list?.some((t) => t.meta) ? list.filter((t) => !t.meta) : list
-    setThreads((all) => all[machine] === listed ? all : { ...all, [machine]: listed })
+    setThreads((all) => all[machine] === list ? all : { ...all, [machine]: list })
   }, [])
   useImageRechecks(threads)
   // One order for the sidebar and everything that walks it (⌘⇧[ ⌘⇧], the navigator): held, a thread changing state
@@ -126,29 +125,33 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [archived, setArchived] = useState<ThreadInfo>()
   const list = selection ? threads[selection.machine] : undefined
   const selectedMachine = machines.find((m) => m.id === selection?.machine)
-  const local = machines.find((m) => m.id === 'local')
-  const ego = useEgo('local', local?.state === 'connected' && has(local, 'ego')) ?? listedEgo
-  const isEgo = selection?.machine === 'local' && selection.thread === ego?.id
+  // The selected machine's hidden threads, followed live: one is shown while it's selected, and back and forward reach it.
+  const hidden = useHiddenThreads(selection?.machine ?? 'local', selectedMachine?.state === 'connected' && has(selectedMachine, 'threads'))
+  const isHidden = Boolean(selection && hidden?.some((t) => t.id === selection.thread))
   useEffect(() => {
-    if (!selection || !list || shown || isEgo || selectedMachine?.state !== 'connected') return setArchived(undefined)
+    if (!selection || !list || shown || isHidden || selectedMachine?.state !== 'connected') return setArchived(undefined)
     let alive = true
     void (window.superego.call(selection.machine, 'thread.list', { archived: true }) as Promise<ThreadInfo[]>)
       .then((all) => { if (alive) setArchived(all.find((t) => t.id === selection.thread)) }, () => {})
     return () => { alive = false }
-  }, [selection?.machine, selection?.thread, list, Boolean(shown), isEgo, selectedMachine?.state])
+  }, [selection?.machine, selection?.thread, list, Boolean(shown), isHidden, selectedMachine?.state])
   // History: every place shown is visited, whoever showed it; back and forward move along it first, so showing what
-  // they went to is where history already is. Threads no longer listed (archived, deleted; Ego's is listed apart) are
-  // stepped over.
+  // they went to is where history already is. Threads no longer listed (archived, deleted; hidden ones on another
+  // machine) are stepped over.
   // What extensions hear of it (`superego.on`): statuses changing, the thread shown, the window's focus.
   const registry = useRegistry()
-  useWindowEvents(registry, { threads, ego, selection, shown: shown ?? (archived?.id === selection?.thread ? archived : undefined) ?? (isEgo ? ego : undefined) })
+  useWindowEvents(registry, {
+    threads, selection,
+    ...(selection && hidden ? { hidden: { machine: selection.machine, threads: hidden } } : {}),
+    shown: shown ?? (archived?.id === selection?.thread ? archived : undefined) ?? hidden?.find((t) => t.id === selection?.thread),
+  })
   const [history, setHistory] = useState<History>(emptyHistory)
   const place: Place | undefined = settingsOpen ? { settings: true } : selection ? { thread: { machine: selection.machine, thread: selection.thread } } : undefined
   useEffect(() => { if (place) setHistory((h) => visit(h, place)) }, [settingsOpen, selection?.machine, selection?.thread])
-  const exists = (p: Place) => 'settings' in p || (p.thread.machine === 'local' && p.thread.thread === ego?.id)
+  const exists = (p: Place) => 'settings' in p || (p.thread.machine === selection?.machine && Boolean(hidden?.some((t) => t.id === p.thread.thread)))
     || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread))
   const value = useMemo<ShellState>(() => ({
-    machines, threads, selection, settingsOpen, newThread, sessions, hold, lastThread, sidebarOpen, archived, ego,
+    machines, threads, selection, settingsOpen, newThread, sessions, hold, lastThread, sidebarOpen, archived, hidden,
     canBack: Boolean(step(history, -1, place, exists)),
     canForward: Boolean(step(history, 1, place, exists)),
     go: (by) => {
@@ -164,7 +167,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     openSettings: (open = true) => setSettingsOpen(open),
     openNewThread: (start = {}) => setNewThread(start === false ? undefined : start),
     toggleSidebar: (open) => setSidebarOpen((was) => open ?? !was),
-  }), [machines, threads, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived, ego, history])
+  }), [machines, threads, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived, hidden, history])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} />)}

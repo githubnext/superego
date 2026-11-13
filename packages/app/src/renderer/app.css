@@ -6,9 +6,9 @@
 .app__body { flex: 1; display: flex; min-height: 0; background: var(--superego-chrome); }
 .app__rail { flex: none; width: var(--superego-rail); display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 9px 0 12px; background: var(--superego-rail-bg); box-shadow: inset -1px 0 0 var(--superego-line); -webkit-app-region: drag; }
 .app__rail-group { display: flex; flex-direction: column; align-items: center; gap: 4px; -webkit-app-region: no-drag; }
-.app__meta { position: relative; width: 34px; height: 34px; min-height: 34px; border-radius: 8px; color: var(--superego-muted); box-shadow: none; background: none; }
-.app__meta:hover { color: var(--superego-text); background: var(--superego-hover); }
-.app__meta.is-on { color: var(--superego-text); background: var(--superego-selected); }
+.app__rail-button { position: relative; width: 34px; height: 34px; min-height: 34px; border-radius: 8px; color: var(--superego-muted); box-shadow: none; background: none; }
+.app__rail-button:hover { color: var(--superego-text); background: var(--superego-hover); }
+.app__rail-button.is-on { color: var(--superego-text); background: var(--superego-selected); }
 /* The sidebar: on the side's grey beside the rail, a hairline at its edge. Hidden while what's in it shows nothing.
    A region (its ring: see the end). */
 .app__sidebar { position: relative; width: var(--superego-sidebar); flex: none; min-height: 0; overflow: auto; padding: 7px 8px 10px; display: flex; flex-direction: column; }

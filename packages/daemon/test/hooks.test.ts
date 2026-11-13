@@ -206,44 +206,6 @@ it('keeps state with each thread, as facts clients see, across a restart', async
   await bare.close()
 })
 
-it('reads the worktree a thread kept before extensions had state, as the worktrees extension\'s, and moves it when it changes', async () => {
-  const repo = join(dir, 'repo')
-  mkdirSync(repo)
-  const git = (...args: string[]) => execFileSync('git', ['-C', repo, '-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { encoding: 'utf8' }).trim()
-  git('init', '-q'); writeFileSync(join(repo, 'readme.md'), 'hi\n'); git('add', '.'); git('commit', '-q', '-m', 'start')
-  const tree = { path: join(dir, 'data', 'worktrees', 'repo', 'old-abc123'), branch: 'superego/old-abc123' }
-  mkdirSync(join(dir, 'data', 'worktrees', 'repo'), { recursive: true })
-  git('worktree', 'add', '-q', '-b', tree.branch, tree.path, 'HEAD')
-  // A database as an older daemon left it: the worktree in the thread's own metadata.
-  const { Harness, createRegistry, defineDoc } = await import('@earendil-works/pi-durable')
-  const { openNodeSqliteStorage } = await import('@earendil-works/pi-durable/storage/sqlite/node')
-  const { createModels } = await import('@earendil-works/pi-ai/models')
-  const { BACKGROUND_CONTEXT: context } = await import('@earendil-works/chord/context')
-  const Catalog = defineDoc<{ ids: number[] }>({ kind: 'superego.catalog', version: 1, scope: 'session', initial: () => ({ ids: [] }), checkpointWhen: () => true })
-  const ThreadDoc = defineDoc<Record<string, Json>>({
-    kind: 'superego.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current', initial: () => ({ title: '', cwd: '', createdAt: 0 }), checkpointWhen: () => true,
-  })
-  const root = await realpath(repo)
-  const harness = await Harness.open(await openNodeSqliteStorage(join(dir, 'data', 'superego.sqlite')), { models: createModels(), registry: createRegistry() }, context)
-  const old = await harness.createConversation({
-    ownership: { kind: 'ownerless' }, agent: { cwd: tree.path },
-    init: async (tx, created) => { Object.assign(await tx.doc(ThreadDoc, created), { title: 'Old', cwd: tree.path, root, createdAt: 1, worktree: tree }); (await tx.doc(Catalog)).ids.push(created) },
-  }, context)
-  await harness.close(context)
-
-  const { peer, close } = await open([], join(dir, 'data'))
-  const id = String(old.id)
-  expect(await find(peer, id)).toMatchObject({ worktree: tree, ext: { worktrees: tree } })
-  // Archived clean, it goes as ever, and is then kept as the extension's.
-  expect(await peer.call('thread.archive', { id })).toEqual({ worktree: 'removed' })
-  expect(existsSync(tree.path)).toBe(false)
-  expect(await find(peer, id)).toMatchObject({ worktree: { ...tree, removed: true }, ext: { worktrees: { ...tree, removed: true } } })
-  await peer.call('thread.unarchive', { id })
-  expect(existsSync(join(tree.path, 'readme.md'))).toBe(true)
-  expect((await find(peer, id))!.worktree).toEqual(tree)
-  await close()
-})
-
 it("lets an extension choose a thread's agent: instructions, tools and what it goes without; the first to answer wins", async () => {
   const tools = defineExtension({ name: 'picked', tools: [defineTool({ name: 'picked_tool', description: 'Picked.', parameters: obj({}), async execute() { return { output: [] } } })] })
   const picker = defineDaemonExtension({

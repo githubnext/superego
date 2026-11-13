@@ -27,6 +27,8 @@ export type SlotName =
   | 'footer'
   /** Right of a thread's title: badges, small actions. */
   | 'thread.header'
+  /** Among the chips that say where a thread works, after the title's: a branch, say. Draw a `titlebar__chip`. */
+  | 'thread.crumb'
   /** Above the composer: things waiting on the user, suggestions. */
   | 'composer.above'
   /** A pane beside the thread: details, diffs, files. Hidden while everything in it renders nothing. */
@@ -46,6 +48,7 @@ export type SlotProps = {
   'rail': Record<string, never>
   'footer': Record<string, never>
   'thread.header': { machine: MachineEntry; thread: ThreadInfo }
+  'thread.crumb': { machine: MachineEntry; thread: ThreadInfo }
   'composer.above': { machine: MachineEntry; thread: ThreadInfo }
   'thread.aside': { machine: MachineEntry; thread: ThreadInfo }
   'editor.side': EditorSlotProps
@@ -76,6 +79,18 @@ export type PaneKind = {
   urls?: boolean
   /** Its width to start with, as a share of the row (0.5 when unset); dragging its edge changes it for that pane. */
   width?: number
+}
+
+/**
+ * A field of the New thread dialog: what it asks, on the machine and in the folder picked. Its value goes to
+ * `thread.create` as `options[<extension>]`, for the extension's `creating` hook; undefined sends nothing.
+ */
+export type NewThreadFieldProps = { machine: MachineEntry; cwd: string; value: Json | undefined; onChange(value: Json | undefined): void }
+
+export type NewThreadField = {
+  component: ComponentType<NewThreadFieldProps>
+  /** Its value for a thread started beside `thread` (like it, ⌘N): undefined, none. */
+  from?(thread: ThreadInfo): Json | undefined
 }
 
 /** A tool call in the transcript. `result` is there once it finished; `live` while it runs. */
@@ -257,6 +272,11 @@ export type UiApi = {
   /** Draw the settings section that names `ui` (its daemon half registers the section). */
   settings(ui: string, component: ComponentType<SettingsComponentProps>): void
   /**
+   * A field in the New thread dialog, shown while the machine picked has this extension: what it's set to goes to
+   * `thread.create` as `options[<extension>]`, which its daemon half's `creating` hook reads. One per extension.
+   */
+  newThreadField(field: NewThreadField): void
+  /**
    * A kind of pane: a view opened beside a thread (`pane.open`, or the agent's open_pane tool) with params of its own.
    * A profile's pane kinds exist in that profile's threads only.
    */
@@ -332,6 +352,8 @@ export type Registry = {
   panes: Owned<PaneKind & { kind: string }>[]
   work: Owned<{ divide: (run: WorkRun) => WorkPart[] | undefined }>[]
   settings: Owned<{ ui: string; component: ComponentType<SettingsComponentProps> }>[]
+  /** The New thread dialog's fields, by the extension each is of (its `options` key). */
+  newThreadFields: Owned<NewThreadField & { name: string }>[]
   router: WindowRouter
   appSettings: Owned<DeclaredSection>[]
   completions: Owned<CompletionProvider<any>>[]
@@ -358,8 +380,8 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   const ownerKey = (owner: Owner) => `${owner.profile ?? ''}/${owner.extension}`
   const registry: Registry = {
     app, extensions: extensions.map(({ name, title, description, required }) => ({ name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}) })),
-    slots: { 'sidebar': [], 'rail': [], 'footer': [], 'thread.header': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
-    tools: [], entries: [], links: [], panes: [], work: [], settings: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
+    slots: { 'sidebar': [], 'rail': [], 'footer': [], 'thread.header': [], 'thread.crumb': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
+    tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
       visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
@@ -442,6 +464,11 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         unique(registry.settings, 'ui', { ui, component }, 'settings section')
       },
       pane: (kind, pane) => unique(registry.panes, 'kind', { ...pane, kind }, 'pane kind'),
+      newThreadField(field) {
+        // The dialog has no thread yet: a profile's UI has nowhere to draw.
+        if (profile) return console.warn(`Profile extension ${extension.name}: New thread fields from a profile's UI aren't supported yet`)
+        unique(registry.newThreadFields, 'name', { ...field, name: extension.name }, 'New thread field')
+      },
       dispatch: (id, params, options) => registry.router.dispatch(id, params, { source: extension.name, ...options }),
       action(action) {
         if (profile) return console.warn(`Profile extension ${extension.name}: actions from a profile's UI aren't supported yet`)

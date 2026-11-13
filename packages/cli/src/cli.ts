@@ -181,7 +181,9 @@ async function startThread(args: { dir?: string; machine?: string; prompt?: stri
   })
   if (args.open) openInApp(machine.id, thread.id)
   print({ machine: machine.id, ...thread }, () => {
-    const where = thread.worktree ? `its worktree ${thread.cwd} (branch ${thread.worktree.branch})` : thread.cwd
+    // Its worktree, as the worktrees extension says (`worktree` from an older daemon).
+    const tree = (thread.ext?.worktrees ?? (thread as { worktree?: unknown }).worktree) as { branch: string } | undefined
+    const where = tree ? `its worktree ${thread.cwd} (branch ${tree.branch})` : thread.cwd
     if (args.open) console.log(`Opened thread ${thread.id} in ${where}${machine.config ? ` on ${machine.label}` : ''}`)
     else console.log(thread.id)
   })

@@ -34,12 +34,13 @@ export function statusChanges(before: Statuses, threads: Record<string, ThreadIn
 const same = (a: Selection | undefined, b: Selection | undefined) => a?.machine === b?.machine && a?.thread === b?.thread
 
 /**
- * Feed the registry's listeners from the shell: every machine's threads (and Ego's, listed apart), the selection and
+ * Feed the registry's listeners from the shell: every machine's threads (and the selected one's hidden ones), the selection and
  * the thread it shows, and the window's focus and visibility.
  */
-export function useWindowEvents(registry: Registry, { threads, ego, selection, shown }: {
+export function useWindowEvents(registry: Registry, { threads, hidden, selection, shown }: {
   threads: Record<string, ThreadInfo[] | undefined>
-  ego: ThreadInfo | undefined
+  /** The threads no list shows (extensions' own, Ego's) on the selected machine: their statuses are heard too. */
+  hidden?: { machine: string; threads: ThreadInfo[] }
   selection: Selection | undefined
   shown: ThreadInfo | undefined
 }) {
@@ -54,8 +55,9 @@ export function useWindowEvents(registry: Registry, { threads, ego, selection, s
     registry.emit('select', { selection, before })
   }, [selection?.machine, selection?.thread])
   useEffect(() => {
-    for (const event of statusChanges(statuses.current, { ...threads, ...(ego ? { local: [...threads.local ?? [], ego] } : {}) })) registry.emit('thread.status', event)
-  }, [threads, ego])
+    const all = hidden ? { ...threads, [hidden.machine]: [...threads[hidden.machine] ?? [], ...hidden.threads] } : threads
+    for (const event of statusChanges(statuses.current, all)) registry.emit('thread.status', event)
+  }, [threads, hidden?.machine, hidden?.threads])
   useEffect(() => {
     const focus = () => { if (!registry.window.focused) registry.emit('focus', { focused: true }) }
     const blur = () => { if (registry.window.focused) registry.emit('focus', { focused: false }) }

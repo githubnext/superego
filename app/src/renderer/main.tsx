@@ -2,6 +2,7 @@
 // here; the sidebar's, required, comes first.
 import { mountApp } from '@superego/app/ui'
 import askUser from '@superego/ask-user/ui'
+import ego from '@superego/ego/ui'
 import files from '@superego/files/ui'
 import git from '@superego/git/ui'
 import images from '@superego/images/ui'
@@ -13,6 +14,7 @@ import tasks from '@superego/tasks/ui'
 import threads from '@superego/threads/ui'
 import unread from '@superego/unread/ui'
 import webPanes from '@superego/web-panes/ui'
+import worktrees from '@superego/worktrees/ui'
 import app from '../../superego.config.ts'
 
-mountApp(app, { extensions: [threads, askUser, files, git, images, links, notifications, skills, suggestions, tasks, unread, webPanes] })
+mountApp(app, { extensions: [threads, worktrees, askUser, ego, files, git, images, links, notifications, skills, suggestions, tasks, unread, webPanes] })

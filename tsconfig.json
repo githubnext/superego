@@ -22,6 +22,8 @@
     { "path": "extensions/web-panes" },
     { "path": "extensions/unread" },
     { "path": "extensions/notifications" },
+    { "path": "extensions/worktrees" },
+    { "path": "extensions/ego" },
     { "path": "app" },
     { "path": "scripts" }
   ]

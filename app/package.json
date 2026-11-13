@@ -13,6 +13,7 @@
     "@superego/daemon": "workspace:*",
     "@superego/protocol": "workspace:*",
     "@superego/ask-user": "workspace:*",
+    "@superego/ego": "workspace:*",
     "@superego/files": "workspace:*",
     "@superego/git": "workspace:*",
     "@superego/images": "workspace:*",
@@ -23,7 +24,8 @@
     "@superego/tasks": "workspace:*",
     "@superego/threads": "workspace:*",
     "@superego/unread": "workspace:*",
-    "@superego/web-panes": "workspace:*"
+    "@superego/web-panes": "workspace:*",
+    "@superego/worktrees": "workspace:*"
   },
   "devDependencies": { "electron": "45.2.1", "electron-vite": "6.0.0", "@types/node": "^24" }
 }

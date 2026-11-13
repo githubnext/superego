@@ -55,7 +55,8 @@ export function Navigator({ onClose }: { onClose(): void }) {
           return [
             {
               key: `${session.key}/${thread.id}`, kind: 'thread', depth: 1, title: thread.title, status: thread.status,
-              ...(thread.worktree ? { detail: thread.worktree.branch } : {}),
+              // Its branch, when the worktrees extension gave it one of its own.
+              ...(branchOf(thread) ? { detail: branchOf(thread) } : {}),
               path: `${session.name} ${thread.title}`, current: isOn && !thread.pane,
               go: go(() => {
                 show()
@@ -134,3 +135,6 @@ export function Navigator({ onClose }: { onClose(): void }) {
     </Dialog>
   )
 }
+
+/** A thread's own branch, as the worktrees extension says (`ext.worktrees`). */
+const branchOf = (thread: ThreadInfo) => (thread.ext?.worktrees as { branch?: string } | undefined)?.branch

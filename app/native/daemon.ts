@@ -1,10 +1,10 @@
 // Separate spike entry: no Electron imports, no dependence on the source checkout at runtime.
 import { openDaemon, listen } from '@superego/daemon'
 import { serveWeb, webToken } from '../../packages/daemon/src/web.ts'
-import { MachineStore } from '@superego/client'
 import { writeFile, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import askUser from '@superego/ask-user/daemon'
+import ego from '@superego/ego/daemon'
 import files from '@superego/files/daemon'
 import git from '@superego/git/daemon'
 import images from '@superego/images/daemon'
@@ -14,13 +14,14 @@ import threadReports from '@superego/threads/reports'
 import threadTools from '@superego/threads/daemon'
 import suggestions from '@superego/suggestions/daemon'
 import webPanes from '@superego/web-panes/daemon'
+import worktrees from '@superego/worktrees/daemon'
 import app from '../superego.config.ts'
 
 const dataDir = process.env.SUPEREGO_HOME
 if (!dataDir) throw new Error('Native spike requires an explicit SUPEREGO_HOME')
 const root = join(dirname(process.execPath), '../Resources/renderer')
 const daemon = await openDaemon({ app, dataDir, defaultCwd: process.env.SUPEREGO_CWD ?? dataDir,
-  agentsDir: process.env.SUPEREGO_AGENTS, extensions: [askUser, files, git, images, skills, tasks, threadTools, threadReports, suggestions, webPanes], machines: () => new MachineStore(dataDir) })
+  agentsDir: process.env.SUPEREGO_AGENTS, extensions: [worktrees, askUser, ego, files, git, images, skills, tasks, threadTools, threadReports, suggestions, webPanes] })
 const socket = await listen(daemon, join(dataDir, 'superego.sock'))
 const web = await serveWeb({ root, host: '127.0.0.1', port: 0, token: await webToken(dataDir), serve: (peer) => daemon.serve(peer) })
 await writeFile(join(dataDir, 'native-endpoint.json'), JSON.stringify({ pid: process.pid, url: web.url }), { mode: 0o600 })

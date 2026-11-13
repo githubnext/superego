@@ -307,6 +307,7 @@ if (phase === 'first') {
   // ⌘N: the New thread dialog refuses a folder that isn't there, then starts with the prompt on ⌘⏎.
   await key('n')
   await until(`Boolean(document.querySelector('.new-thread [aria-label="Prompt"]'))`, 'new thread dialog')
+  await until(`[...document.querySelectorAll('.new-thread__check')].some((l) => l.textContent.includes('worktree'))`, "the worktrees extension's field in it")
   await new Promise((resolve) => setTimeout(resolve, 400))
   await shot('new-thread')
   const setValue = (selector, value) => run(`(() => {
@@ -589,15 +590,15 @@ if (phase === 'first') {
   await until(`![...document.querySelectorAll('.threads-session .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('offshoot'))`, 'offshoot put away')
   // Superego's own agent: from the rail, one thread in Superego's data folder, the same one each time, in no list.
   const elsewhereItem = `[...document.querySelectorAll('.superego-list-item')].find((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere'))`
-  await run(`document.querySelector('.app__meta').click()`)
-  await until(`document.querySelector('.thread__title')?.textContent === 'Ego' && document.querySelector('.app__meta').classList.contains('is-on') && !document.querySelector('.app__sidebar .superego-list-item.is-selected')`, 'Ego opened, not in the sidebar')
-  const ego = await run(`window.superego.call('local', 'thread.meta', {}).then((t) => t.id)`)
+  await run(`document.querySelector('.ego__button').click()`)
+  await until(`document.querySelector('.thread__title')?.textContent === 'Ego' && document.querySelector('.ego__button').classList.contains('is-on') && !document.querySelector('.app__sidebar .superego-list-item.is-selected')`, 'Ego opened, not in the sidebar')
+  const ego = await run(`window.superego.call('local', 'ego.ask', {}).then((t) => t.id)`)
   await run(`${elsewhereItem}.click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'away from it')
-  await run(`document.querySelector('.app__meta').click()`)
+  await run(`document.querySelector('.ego__button').click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'Ego'`, 'the same one again')
-  if (await run(`window.superego.call('local', 'thread.meta', {}).then((t) => t.id)`) !== ego) { await fail('a second Ego'); throw new Error('failed') }
-  if (await run(`window.superego.call('local', 'thread.list', {}).then((all) => all.some((t) => t.meta))`)) { await fail('Ego listed'); throw new Error('failed') }
+  if (await run(`window.superego.call('local', 'ego.ask', {}).then((t) => t.id)`) !== ego) { await fail('a second Ego'); throw new Error('failed') }
+  if (await run(`window.superego.call('local', 'thread.list', {}).then((all) => all.some((t) => t.ext?.ego))`)) { await fail('Ego listed'); throw new Error('failed') }
   // Cleared from its title bar: the same thread, empty again.
   await run(`window.superego.call('local', 'thread.submit', { id: '${ego}', text: 'what is a profile?' })`)
   await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('what is a profile?'))`, 'asked Ego')

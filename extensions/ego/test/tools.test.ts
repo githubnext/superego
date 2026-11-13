@@ -3,8 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { defineAction, obj, opt, Router, str, unknown, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
-import { metaExtension, type EgoThreads, type MachineDirectory } from '../src/meta.ts'
-import type { DaemonContext } from '../src/daemon.ts'
+import { metaExtension, type EgoThreads, type MachineDirectory } from '../src/tools.ts'
 
 type Tool = { name: string; execute(params: unknown, api: unknown, context?: unknown): Promise<{ output: { text: string }[] }> }
 const text = async (tools: readonly unknown[], name: string, params: unknown) => {
@@ -15,6 +14,9 @@ const run = async (tools: readonly unknown[], name: string, params: unknown) => 
 
 const thread = (id: string, title: string, extra: Partial<ThreadInfo> = {}): ThreadInfo =>
   ({ id, title, cwd: '/p', createdAt: 0, activeAt: 0, session: { root: '/p', name: 'p' }, status: { state: 'idle' }, ...extra })
+
+/** What the tools run actions with: `router`'s, as the daemon gives an extension its own. */
+const on = (router: Router) => ({ dispatch: (id: string, params: unknown) => router.dispatch(id, params, {}, { source: 'ego' }), actions: router.list.bind(router) })
 
 describe('Ego, the meta agent', () => {
   const snapshot = async (): Promise<SettingsSnapshot> => ({
@@ -31,13 +33,13 @@ describe('Ego, the meta agent', () => {
   it('reads settings, actions, profiles, machines, threads and files, and changes settings and machines; nothing else', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'superego-meta-'))
     try {
-      const router = new Router<DaemonContext>()
+      const router = new Router()
       router.register(defineAction({ id: 'echo.say', title: 'Say', runs: 'machine', expose: ['cli'], params: obj({ text: str() }), run: ({ text }) => ({ said: text }) }))
       const set: unknown[] = []
       router.register(defineAction({ id: 'settings.set', title: 'Set', runs: 'machine', expose: ['cli'], params: obj({ key: str(), value: unknown() }), run: (params) => { set.push(params); return null } }))
       router.register(defineAction({ id: 'profile.list', title: 'Profiles', runs: 'machine', expose: ['cli'], params: obj({ cwd: opt(str()) }), run: ({ cwd }) => [{ name: 'default', dir: cwd }] }))
       const machines: MachineDirectory = { list: () => [{ id: 'm1', label: 'box', target: 'me@box', enabled: true }], add: async () => ({ id: 'm2', label: 'x' }), update: async () => {}, remove: async () => {} }
-      const { tools = [] } = metaExtension({ dir, router, snapshot, machines: () => machines, threads: threads() })
+      const { tools = [] } = metaExtension({ dir, ...on(router), snapshot, machines: () => machines, threads: threads() })
       const names = (tools as unknown as Tool[]).map((t) => t.name)
       expect(names.sort()).toEqual(['ls', 'read', 'superego_actions', 'superego_machines', 'superego_profiles', 'superego_set_setting', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
       // Setup (settings, machines) is what it changes itself; files, profiles, skills and code go to threads, so it has
@@ -69,7 +71,7 @@ describe('Ego, the meta agent', () => {
       update: async (id, patch) => { list = list.map((m) => m.id === id ? { ...m, ...patch } : m) },
       remove: async (id) => { list = list.filter((m) => m.id !== id) },
     }
-    const { tools = [] } = metaExtension({ dir: '/data', router: new Router(), snapshot, machines: () => directory, threads: threads() })
+    const { tools = [] } = metaExtension({ dir: '/data', ...on(new Router()), snapshot, machines: () => directory, threads: threads() })
     await run(tools, 'superego_machines', { op: 'add', target: 'me@box', name: 'box' })
     await run(tools, 'superego_machines', { op: 'rename', machine: 'box', name: 'Build box' })
     await run(tools, 'superego_machines', { op: 'disable', machine: 'Build box' })
@@ -81,7 +83,7 @@ describe('Ego, the meta agent', () => {
 
   it('hands work to a thread of its own, where the work belongs, and names it', async () => {
     const started: Parameters<EgoThreads['start']>[0][] = []
-    const { tools = [] } = metaExtension({ dir: '/data', router: new Router(), snapshot, threads: threads(started) })
+    const { tools = [] } = metaExtension({ dir: '/data', ...on(new Router()), snapshot, threads: threads(started) })
     expect(await text(tools, 'thread_start', { prompt: 'Add a profile', cwd: 'profiles', title: 'Profile' })).toBe('Started [Profile](thread:3) (id 3), in /data/profiles.')
     expect(started).toEqual([{ prompt: 'Add a profile', title: 'Profile', cwd: '/data/profiles' }])
   })
