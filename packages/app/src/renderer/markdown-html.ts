@@ -35,6 +35,23 @@ export function resolve(dir: string, name: string) {
   return parts.join('/')
 }
 
+/** Extensions a file named alone (no folder) is taken for one by: not `settings.get` or `x.y`, which are code. */
+const EXTENSIONS = new Set(('md markdown mdx txt rst adoc org ts tsx mts cts js jsx mjs cjs json jsonc json5 yaml yml toml ini conf cfg env '
+  + 'lock log csv tsv xml html htm css scss sass less svg png jpg jpeg gif webp avif ico pdf py rb rs go swift java kt kts scala c h cc '
+  + 'cpp hpp m mm cs fs ex exs erl lua php pl sh bash zsh fish ps1 sql graphql proto vue svelte astro mmd dot tex gradle plist patch diff '
+  + 'zig nix dart r jl hs ml clj elm sol wasm wat tf hcl dockerfile gitignore').split(' '))
+
+/**
+ * Inline code that names a file or folder, by its look: no scheme or spaces at its ends, and a folder in it
+ * (`src/app.ts`, `docs/`) or a known file extension (`README.md`, `plan.md:12`). Dotted code (`settings.get`) isn't one.
+ */
+export function looksLikePath(text: string) {
+  if (/^[a-z][\w+.-]*:(?!\d)/i.test(text)) return false
+  if (/^[\w.@~/-][^\n`]*\/[^\n`]*[^\s]$/.test(text)) return true
+  const name = /^[\w@~-][^\n`/]*\.([A-Za-z]\w{0,9})(?::\d+)*$/.exec(text)
+  return Boolean(name && EXTENSIONS.has(name[1]!.toLowerCase()))
+}
+
 /** The folder `path` is in, as `resolve` takes it: `a/b/` for `a/b/c.md`, '' at the top. */
 export const folderOf = (path: string) => path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
 

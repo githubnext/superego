@@ -219,7 +219,11 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .md blockquote { padding: 0 0 0 var(--superego-space-3); border-left: 3px solid var(--superego-border); }
 .md hr { border: 0; border-top: 1px solid var(--superego-border); margin: var(--superego-space-5) 0; }
 .md__table { overflow-x: auto; }
-.md table { border-collapse: collapse; font-size: var(--superego-text-ui); line-height: var(--superego-leading-ui); width: 100%; table-layout: fixed; font-variant-numeric: tabular-nums; }
+.md table { border-collapse: collapse; font-size: var(--superego-text-ui); line-height: var(--superego-leading-ui); width: 100%; font-variant-numeric: tabular-nums; }
+/* Columns as wide as their text asks, each at least readable; a table wider than the column scrolls in its wrapper.
+   Code in a cell wraps (anywhere, if it must) instead of running into the next one. */
+.md th, .md td { min-width: 8em; }
+.md :is(th, td) code { white-space: normal; overflow-wrap: anywhere; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .md th, .md td { text-align: left; padding: 6px 24px 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--superego-border) 45%, transparent); vertical-align: top; }
 .md th { font-size: var(--superego-text-sm); font-weight: 600; color: var(--superego-muted); border-bottom-color: var(--superego-border); }
 .md tr:last-child td { border-bottom: 0; }

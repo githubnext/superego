@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { describe, expect, it } from 'vitest'
-import { folderOf, htmlPlugins, imagePath, imageType, mediaMatches, parseSrcset, resolve } from '../src/renderer/markdown-html.ts'
+import { folderOf, htmlPlugins, imagePath, imageType, looksLikePath, mediaMatches, parseSrcset, resolve } from '../src/renderer/markdown-html.ts'
 
 const render = (text: string) => renderToStaticMarkup(createElement(ReactMarkdown, { remarkPlugins: [remarkGfm], rehypePlugins: htmlPlugins, urlTransform: (url: string) => url }, text))
 
@@ -77,3 +77,13 @@ describe('picture sources', () => {
   })
 })
 
+describe('code that names a file', () => {
+  it('takes paths and file names', () => {
+    for (const text of ['src/app.ts', 'notes/plan.md', 'README.md', 'docs/guides/', 'plan.md:12', 'package.json', '~/notes/a.txt', 'Cargo.lock'])
+      expect(looksLikePath(text), text).toBe(true)
+  })
+  it("doesn't take dotted code", () => {
+    for (const text of ['settings.get', 'settings.onChange', 'foo.bar()', 'x.y', 'superego.pane', 'thread.list', 'https://e.com/a.md', 'a.md b'])
+      expect(looksLikePath(text), text).toBe(false)
+  })
+})

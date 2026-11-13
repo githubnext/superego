@@ -8,7 +8,7 @@ import { createContext, memo, useContext, useEffect, useLayoutEffect, useRef, us
 import ReactMarkdown, { defaultUrlTransform, type Components, type ExtraProps } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { highlight, languageNamed } from './code-highlight.ts'
-import { htmlPlugins, imagePath, mediaMatches, parseSrcset } from './markdown-html.ts'
+import { htmlPlugins, imagePath, looksLikePath, mediaMatches, parseSrcset } from './markdown-html.ts'
 import { CheckIcon, CopyIcon, SquareSplitHorizontalIcon } from '@superego/ui'
 import { ThreadRef } from './thread-ref.tsx'
 
@@ -104,8 +104,6 @@ export const Images = createContext<{ dir: string; load: (path: string) => Promi
 
 const FILE = 'superego-file:'
 const THREAD = 'thread:'
-/** A path, by its look: no spaces at its ends, a slash or a file extension, and no scheme. A folder may end in `/`. */
-const PATHLIKE = /^(?![a-z][\w+.-]*:)(?:[\w.@~/-][^\n`]*\/[^\n`]*[^\s]|[\w@~-][^\n`/]*\.[A-Za-z][\w]{0,7}(?::\d+)*)$/
 
 /** [[target|alias]] and ![[embeds]] as links to the file, outside code. */
 function wikilinks(text: string) {
@@ -240,7 +238,7 @@ const components: Components = {
   code: ({ node: _node, className, children, ...props }) => {
     const open = useContext(OpenFile)
     const text = typeof children === 'string' ? children : undefined
-    if (open && !className && text && PATHLIKE.test(text)) return <FileLink name={text} className="md__file--code"><code {...props}>{text}</code></FileLink>
+    if (open && !className && text && looksLikePath(text)) return <FileLink name={text} className="md__file--code"><code {...props}>{text}</code></FileLink>
     const language = /(?:^|\s)language-(\S+)/.exec(className ?? '')?.[1]
     if (language && text !== undefined) return <Highlighted code={text} name={language} className={className!} />
     return <code className={className} {...props}>{children}</code>
