@@ -3,36 +3,22 @@
 // (⌘P): any file in the selected thread's folder by a few letters of its name, opened beside the thread in the pane
 // kind that takes it. Clicking a file in the tree shows it in that editor; ⌘-click opens it beside. A folder a thread
 // names opens in a pane of its own (`folder`), as a tree to open files from.
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import {
-  defineAction, defineUiExtension, fileKind, score, useAllThreads, useMachines, useRegistry, useSelection,
-  type Dispatch, type EditorSlotProps, type MachineEntry, type PaneProps,
+  call, defineAction, defineUiExtension, fileKind, score, useAllThreads, useDispatch, useMachines, useRegistry, useSelection,
+  type EditorSlotProps, type MachineEntry, type PaneProps, type Store,
 } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, Dialog, FolderSimpleIcon, IconButton } from '@superego/ui'
 import './styles.css'
-import { LIST, type FileList } from './shared.ts'
+import { FOLDER, LIST, type FileList } from './shared.ts'
 
-// ── State shared by the tree, its button and quick open, kept in the window ──────────────────────────────────────
-
-function store<T>(key: string | undefined, initial: T) {
-  let value: T = initial
-  if (key) try { const raw = localStorage.getItem(key); if (raw !== null) value = JSON.parse(raw) as T } catch { /* keep initial */ }
-  const listeners = new Set<() => void>()
-  return {
-    get: () => value,
-    set(next: T) { value = next; if (key) localStorage.setItem(key, JSON.stringify(next)); for (const l of listeners) l() },
-    subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
-  }
-}
+// The tree, its button and quick open share what's shown, kept in the window (set in setup).
 /** The tree beside the editor: closed until asked for, then as last left. */
-const treeShown = store('superego.files.tree', false)
-const quickOpen = store<boolean>(undefined, false)
+let treeShown: Store<boolean>
+let quickOpen: Store<boolean>
 /** Folders open in the tree, by session. */
-const expanded = store<Record<string, string[]>>('superego.files.expanded', {})
-const use = <T,>(s: ReturnType<typeof store<T>>) => useSyncExternalStore(s.subscribe, s.get)
-
-let dispatch: Dispatch = () => Promise.reject(new Error('files is not set up'))
+let expanded: Store<Record<string, string[]>>
 
 /** A thread's files, again whenever it moves on. */
 function useFiles(machine: string | undefined, thread: ThreadInfo | undefined) {
@@ -40,7 +26,7 @@ function useFiles(machine: string | undefined, thread: ThreadInfo | undefined) {
   useEffect(() => {
     if (!machine || !thread) return
     let live = true
-    dispatch(LIST, { id: thread.id }, { machine, source: 'files' }).then((l) => { if (live) setList(l as FileList) }, () => {})
+    call<FileList>(machine, LIST, { id: thread.id }).then((l) => { if (live) setList(l) }, () => {})
     return () => { live = false }
   }, [machine, thread?.id, thread?.activeAt])
   return list
@@ -49,13 +35,18 @@ function useFiles(machine: string | undefined, thread: ThreadInfo | undefined) {
 export default defineUiExtension({
   name: 'files',
   setup(superego) {
-    dispatch = superego.dispatch
+    treeShown = superego.store<boolean>('files.tree', false, { persist: true })
+    quickOpen = superego.store<boolean>('files.open', false)
+    expanded = superego.store<Record<string, string[]>>('files.expanded', {}, { persist: true })
     superego.slot('editor.side', Tree)
     superego.slot('editor.bar', TreeButton)
     superego.slot('overlay', QuickOpen)
-    superego.pane('folder', { title: (pane) => folderTitle((pane.params as { path?: string } | undefined)?.path), component: FolderPane, folders: true })
-    superego.action(defineAction({ id: 'files.tree', title: 'Toggle file tree', runs: 'window', keys: 'mod+shift+t', run: () => treeShown.set(!treeShown.get()) }))
-    superego.action(defineAction({ id: 'files.open', title: 'Open a file…', runs: 'window', keys: 'mod+p', run: () => quickOpen.set(true) }))
+    superego.pane(FOLDER, {
+      title: (pane) => folderTitle((pane.params as { path?: string } | undefined)?.path), icon: FolderSimpleIcon, component: FolderPane, folders: true,
+    })
+    superego.action(defineAction({ id: 'files.tree', title: 'Toggle file tree', keys: 'mod+shift+t', run: () => treeShown.set((shown) => !shown) }))
+    // Files of the thread shown: only while one is.
+    superego.action(defineAction({ id: 'files.open', title: 'Open a file…', keys: 'mod+p', when: (c) => Boolean(c.selection), run: () => quickOpen.set(true) }))
   },
 })
 
@@ -79,7 +70,7 @@ function treeOf(files: string[]): Folder {
 }
 
 function TreeButton() {
-  const shown = use(treeShown)
+  const shown = treeShown.use()
   return (
     <IconButton label={shown ? 'Hide file tree' : 'Show file tree'} className={`files-toggle ${shown ? 'is-on' : ''}`} onClick={() => treeShown.set(!shown)}>
       <FolderSimpleIcon size={15} aria-hidden />
@@ -88,11 +79,11 @@ function TreeButton() {
 }
 
 function Tree({ machine, thread, path, open }: EditorSlotProps) {
-  const shown = use(treeShown)
+  const shown = treeShown.use()
   const list = useFiles(shown ? machine.id : undefined, thread)
   const root = useMemo(() => treeOf(list?.files ?? []), [list])
   const session = thread.session?.root ?? thread.cwd
-  const all = use(expanded)
+  const all = expanded.use()
   // The open file's folders start open.
   const ancestors = path.split('/').slice(0, -1).map((_, i, parts) => parts.slice(0, i + 1).join('/'))
   const isOpen = (folder: string) => ancestors.includes(folder) || (all[session] ?? []).includes(folder)
@@ -148,6 +139,7 @@ const folderTitle = (path: string | undefined) => path ? `${path.split('/').at(-
 /** A folder a thread names (`''`: its whole folder), as a tree to browse; a file opens beside the thread (⌘-click too). */
 function FolderPane({ machine, thread, pane }: PaneProps) {
   const registry = useRegistry()
+  const dispatch = useDispatch()
   const path = ((pane.params as { path?: string } | undefined)?.path ?? '').replace(/\/+$/, '')
   const list = useFiles(machine.id, thread)
   // The thread's whole tree, shown from this folder down.
@@ -172,7 +164,7 @@ function FolderPane({ machine, thread, pane }: PaneProps) {
 const rank = (file: string, query: string) => Math.max(score(file.split('/').at(-1)!, query) * 2, score(file, query))
 
 function QuickOpen() {
-  const open = use(quickOpen)
+  const open = quickOpen.use()
   const { selection } = useSelection()
   if (!open || !selection) return null
   return <QuickOpenDialog machineId={selection.machine} threadId={selection.thread} onClose={() => quickOpen.set(false)} />
@@ -180,6 +172,7 @@ function QuickOpen() {
 
 function QuickOpenDialog({ machineId, threadId, onClose }: { machineId: string; threadId: string; onClose(): void }) {
   const registry = useRegistry()
+  const dispatch = useDispatch()
   const machine = useMachines().find((m) => m.id === machineId) as MachineEntry | undefined
   const thread = useAllThreads()[machineId]?.find((t) => t.id === threadId)
   const list = useFiles(machine?.id, thread)

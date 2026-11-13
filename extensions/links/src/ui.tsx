@@ -1,30 +1,30 @@
 /// <reference path="./env.d.ts" />
 // links, UI half: ⌃O lists the links in the selected thread's transcript, newest first; typing narrows them. ⏎ follows
 // one as a click would, ⌘⏎ opens it in a pane where it can be. The first nine take ⌃1–⌃9 (⌃⌘ for the pane).
-import { useMemo, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
-import { defineAction, defineUiExtension, keyLabel, useSelection } from '@superego/app/ui'
+import { useMemo, useState, type KeyboardEvent } from 'react'
+import { defineAction, defineUiExtension, keyLabel, useSelection, type Store } from '@superego/app/ui'
 import { Dialog } from '@superego/ui'
 import { filter, linksIn, newestFirst, short, type Link } from './links.ts'
 import './styles.css'
 
-let shown = false
-const listeners = new Set<() => void>()
-const show = (next: boolean) => { shown = next; for (const listener of listeners) listener() }
-const useShown = () => useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l) } }, () => shown)
+/** Whether the list is open (set in setup). */
+let shown: Store<boolean>
 
 export default defineUiExtension({
   name: 'links',
   setup(superego) {
+    shown = superego.store<boolean>('links.shown', false)
     superego.slot('overlay', Links)
-    superego.action(defineAction({ id: 'links.list', title: 'Links in this thread…', runs: 'window', keys: 'ctrl+o', run: () => show(!shown) }))
+    // The links of the thread shown: only while one is.
+    superego.action(defineAction({ id: 'links.list', title: 'Links in this thread…', keys: 'ctrl+o', when: (c) => Boolean(c.selection), run: () => shown.set((open) => !open) }))
   },
 })
 
 function Links() {
-  const open = useShown()
+  const open = shown.use()
   const { selection } = useSelection()
   if (!open || !selection) return null
-  return <LinkList onClose={() => show(false)} />
+  return <LinkList onClose={() => shown.set(false)} />
 }
 
 /** ⌃1–⌃9 and ⌃⌘1–⌃⌘9: a digit with ⌃, by the key's place (⌃ may change what the key types). */

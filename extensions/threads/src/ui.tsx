@@ -7,8 +7,8 @@
 // UI only: it uses the core's thread methods and facts.
 import { Fragment, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import {
-  call, defineAction, type Dispatch, defineUiExtension, showSession, SORT, unread, useAppSetting, useLocalState, useMachines, useSelection, useSessions, useSidebar, useThreadView, useShell, useShortcut,
-  type MachineEntry, type Session, type Sort,
+  call, defineAction, defineUiExtension, showSession, SORT, unread, useAppSetting, useLocalState, useMachines, useSelection, useSessions, useSidebar, useThreadView, useShell, useShortcut,
+  type MachineEntry, type Session, type Sort, type Store, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, type ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, ChatsIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
@@ -19,15 +19,20 @@ export const VIEW = 'threads.view'
 export const DETAILS = 'threads.details'
 export type View = 'list' | 'rail'
 
+/**
+ * A narrow window folds the list into dots by itself, as if it were set to; the Threads button unfolds it there for a
+ * while (until the window is wide again). Shared by the list and the rail.
+ */
+let unfolded: Store<boolean>
+
 /** Settings and commands act through the app's settings, so every window and the menu agree. */
-let dispatch: Dispatch = () => Promise.reject(new Error('threads is not set up'))
-const set = (key: string, value: string | boolean) => dispatch('app.settings.set', { key, value }, { machine: 'app', source: 'threads' })
-let current: { sort: Sort; view: View; details: boolean } = { sort: 'recent', view: 'list', details: false }
+const set = (c: Pick<WindowContext, 'dispatch'>, key: string, value: string | boolean) =>
+  c.dispatch('app.settings.set', { key, value }, { machine: 'app', source: 'threads' })
 
 export default defineUiExtension({
   name: 'threads',
   setup(superego) {
-    dispatch = superego.dispatch
+    unfolded = superego.store<boolean>('threads.unfolded', false)
     superego.appSettings({
       id: 'threads', title: 'Sidebar', order: 55,
       settings: [
@@ -39,41 +44,32 @@ export default defineUiExtension({
     superego.slot('rail', ThreadsRail)
     superego.slot('thread.aside', Details)
     superego.slot('thread.header', ModelButton)
-    const action = (id: string, title: string, run: () => void, keys?: string) =>
-      superego.action(defineAction({ id, title, runs: 'window', ...(keys ? { keys } : {}), run }))
-    action('threads.rail', 'Toggle sidebar rail', () => void set(VIEW, current.view === 'rail' ? 'list' : 'rail'), 'mod+\\')
-    action('threads.details', 'Toggle thread details', () => void set(DETAILS, !current.details), 'mod+i')
-    action('threads.sort.created', 'Sort threads: newest first', () => void set(SORT, 'created'))
-    action('threads.sort.status', 'Sort threads: needs you first', () => void set(SORT, 'status'))
-    action('threads.sort.recent', 'Sort threads: recently active', () => void set(SORT, 'recent'))
-    action('threads.next', 'Next thread', () => void dispatch('thread.next', {}, { source: 'threads' }), 'mod+alt+arrowdown')
-    action('threads.previous', 'Previous thread', () => void dispatch('thread.previous', {}, { source: 'threads' }), 'mod+alt+arrowup')
+    const action = (id: string, title: string, run: (c: WindowContext) => void, keys?: string) =>
+      superego.action(defineAction({ id, title, ...(keys ? { keys } : {}), run: (_params, c) => run(c) }))
+    action('threads.rail', 'Toggle sidebar rail', (c) => void set(c, VIEW, c.appSetting<View>(VIEW) === 'rail' ? 'list' : 'rail'), 'mod+\\')
+    action('threads.details', 'Toggle thread details', (c) => void set(c, DETAILS, !c.appSetting<boolean>(DETAILS)), 'mod+i')
+    action('threads.sort.created', 'Sort threads: newest first', (c) => void set(c, SORT, 'created'))
+    action('threads.sort.status', 'Sort threads: needs you first', (c) => void set(c, SORT, 'status'))
+    action('threads.sort.recent', 'Sort threads: recently active', (c) => void set(c, SORT, 'recent'))
+    // ⌘⌥↓ and ⌘⌥↑ too: the same step as thread.next and thread.previous, down the rows the sidebar shows.
+    action('threads.next', 'Next thread', (c) => void c.dispatch('thread.next', {}, { source: 'threads' }), 'mod+alt+arrowdown')
+    action('threads.previous', 'Previous thread', (c) => void c.dispatch('thread.previous', {}, { source: 'threads' }), 'mod+alt+arrowup')
   },
 })
 
-/**
- * A narrow window folds the list into dots by itself, as if it were set to; the Threads button unfolds it there for a
- * while (until the window is wide again). Shared by the list and the rail.
- */
 const NARROW = '(min-width: 600px) and (max-width: 760px)'
 /** A phone (as the app's own layout takes it): the list is a drawer there, never folded. */
 const PHONE = '(max-width: 599px)'
-let unfolded = false
-const foldListeners = new Set<() => void>()
-const setUnfolded = (value: boolean) => { unfolded = value; for (const listener of foldListeners) listener() }
 function useFolded(view: View | undefined) {
   const narrow = useSyncExternalStore((change) => { const list = matchMedia(NARROW); list.addEventListener('change', change); return () => list.removeEventListener('change', change) }, () => matchMedia(NARROW).matches)
-  const open = useSyncExternalStore((change) => { foldListeners.add(change); return () => foldListeners.delete(change) }, () => unfolded)
-  useEffect(() => { if (!narrow) setUnfolded(false) }, [narrow])
+  const open = unfolded.use()
+  useEffect(() => { if (!narrow) unfolded.set(false) }, [narrow])
   const phone = useSyncExternalStore((change) => { const list = matchMedia(PHONE); list.addEventListener('change', change); return () => list.removeEventListener('change', change) }, () => matchMedia(PHONE).matches)
   return { folded: !phone && ((view ?? 'list') === 'rail' || (narrow && !open)), narrow }
 }
 
 function Threads() {
-  const [sort] = useAppSetting<Sort>(SORT)
   const [view] = useAppSetting<View>(VIEW)
-  const [details] = useAppSetting<boolean>(DETAILS)
-  current = { sort: sort ?? 'recent', view: view ?? 'list', details: details ?? false }
   const { folded } = useFolded(view)
   const machines = useMachines().filter((m) => m.state !== 'disabled')
   const { sessions, lastThread, hold } = useSessions()
@@ -189,6 +185,9 @@ const SORTS: { value: Sort; label: string }[] = [{ value: 'recent', label: 'Rece
 
 /** The ··· menu: sort, show as, details. */
 function Options() {
+  const [sort, setSort] = useAppSetting<Sort>(SORT)
+  const [view, setView] = useAppSetting<View>(VIEW)
+  const [details, setDetails] = useAppSetting<boolean>(DETAILS)
   const railKeys = useShortcut('threads.rail')
   const detailsKeys = useShortcut('threads.details')
   return (
@@ -197,20 +196,20 @@ function Options() {
       <Menu.Popup className="threads-menu">
         <Menu.Group>
           <Menu.GroupLabel>Sort</Menu.GroupLabel>
-          <Menu.RadioGroup value={current.sort} onValueChange={(value) => void set(SORT, value as string)}>
+          <Menu.RadioGroup value={sort ?? 'recent'} onValueChange={(value) => void setSort(value as Sort)}>
             {SORTS.map((s) => <Menu.RadioItem key={s.value} value={s.value}>{s.label}</Menu.RadioItem>)}
           </Menu.RadioGroup>
         </Menu.Group>
         <Menu.Separator />
         <Menu.Group>
           <Menu.GroupLabel>Show as</Menu.GroupLabel>
-          <Menu.RadioGroup value={current.view} onValueChange={(value) => void set(VIEW, value as string)}>
+          <Menu.RadioGroup value={view ?? 'list'} onValueChange={(value) => void setView(value as View)}>
             <Menu.RadioItem value="list">List</Menu.RadioItem>
             <Menu.RadioItem value="rail" hint={railKeys}>Rail</Menu.RadioItem>
           </Menu.RadioGroup>
         </Menu.Group>
         <Menu.Separator />
-        <Menu.CheckboxItem checked={current.details} onCheckedChange={(checked) => void set(DETAILS, checked)} hint={detailsKeys}>Thread details</Menu.CheckboxItem>
+        <Menu.CheckboxItem checked={details ?? false} onCheckedChange={(checked) => void setDetails(checked)} hint={detailsKeys}>Thread details</Menu.CheckboxItem>
       </Menu.Popup>
     </Menu.Root>
   )
@@ -222,7 +221,7 @@ function Options() {
  * in the most pressing one's colour.
  */
 function ThreadsRail() {
-  const [view] = useAppSetting<View>(VIEW)
+  const [view, setView] = useAppSetting<View>(VIEW)
   const sidebar = useSidebar()
   const { sessions } = useSessions()
   const { selection, select } = useSelection()
@@ -234,10 +233,10 @@ function ThreadsRail() {
   const click = () => {
     if (fold.narrow) {
       if (!sidebar.open) sidebar.toggle(true)
-      if (view === 'rail') void set(VIEW, 'list')
-      setUnfolded(sidebar.open ? folded : true)
-    } else if (!sidebar.open) { sidebar.toggle(true); if (view === 'rail') void set(VIEW, 'list') }
-    else void set(VIEW, folded ? 'list' : 'rail')
+      if (view === 'rail') void setView('list')
+      unfolded.set(sidebar.open ? folded : true)
+    } else if (!sidebar.open) { sidebar.toggle(true); if (view === 'rail') void setView('list') }
+    else void setView(folded ? 'list' : 'rail')
   }
   const isOn = (session: Session, thread: ThreadInfo) => selection?.machine === session.machine.id && selection.thread === thread.id
   return (
@@ -275,13 +274,13 @@ function ThreadsRail() {
  * spent and touched), lit while they're shown.
  */
 function ModelButton({ thread }: { machine: MachineEntry; thread: ThreadInfo }) {
-  const [on] = useAppSetting<boolean>(DETAILS)
+  const [on, setOn] = useAppSetting<boolean>(DETAILS)
   const keys = useShortcut('threads.details')
   const model = thread.model?.split('/').at(-1) ?? 'No model'
   return (
     <button type="button" className={`threads-model ${on ? 'is-on' : ''}`} aria-pressed={Boolean(on)}
       title={`${thread.model ?? 'No model'}: ${on ? 'hide' : 'show'} thread details${keys ? ` (${keys})` : ''}`}
-      onClick={() => void set(DETAILS, !on)}>
+      onClick={() => void setOn(!on)}>
       {model}
     </button>
   )
@@ -290,8 +289,6 @@ function ModelButton({ thread }: { machine: MachineEntry; thread: ThreadInfo }) 
 /** The details pane: facts about the selected thread, and what its tools did. Nothing while it's turned off. */
 function Details({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const [on] = useAppSetting<boolean>(DETAILS)
-  // Kept here too: the sidebar (which keeps the rest of `current`) may be hidden, and ⌘I must still turn this off.
-  current.details = on ?? false
   if (!on) return null
   return <DetailsPane machine={machine} thread={thread} />
 }
