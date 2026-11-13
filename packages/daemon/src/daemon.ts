@@ -19,7 +19,6 @@ import {
 import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
-import { threadTools } from './thread-tools.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import {
   defineDaemonExtension, type AgentChoice, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type StatusContribution, type SubmitTransform,
@@ -403,23 +402,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     {
       name: 'agents-md', title: 'AGENTS.md', description: 'Follow the standing instructions in AGENTS.md files.',
       setup: (s) => s.agent(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] })),
-    },
-    {
-      // Threads starting, reading, messaging and archiving threads (see thread-tools.ts), through `superego.threads`.
-      name: 'thread-tools', title: 'Thread tools', description: 'Start threads of their own, read, message and archive others.',
-      setup: (s) => s.agent(threadTools({
-        info: (id) => s.threads.get(id).catch(() => undefined),
-        list: () => s.threads.list(),
-        start: (parent, params) => s.threads.create({ ...params, parent }),
-        send: (id, text) => s.threads.submit(id, text),
-        answer: (id) => s.threads.lastAnswer(id),
-        async archive(id) {
-          await s.threads.archive(id)
-          const { worktree } = await s.threads.get(id)
-          return { worktree: worktree ? (worktree.removed ? 'removed' : 'kept') : null }
-        },
-        archiveWhenDone: (id) => s.threads.archive(id, { whenIdle: true }),
-      })),
     },
     worktrees({ dataDir: options.dataDir, appId: options.app.id }),
     {

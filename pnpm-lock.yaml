@@ -474,9 +474,15 @@ importers:
 
   extensions/threads:
     dependencies:
+      '@earendil-works/pi-durable':
+        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
+      '@superego/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
       '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -484,12 +490,21 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
+      '@superego/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
       '@types/react':
         specifier: ^19
         version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.3.0(@types/react@19.3.0)
       react:
         specifier: ^19
         version: 19.3.1
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.3.1(react@19.3.1)
 
   extensions/web-panes:
     dependencies:
@@ -651,6 +666,9 @@ importers:
       '@superego/settings':
         specifier: workspace:*
         version: link:../settings
+      '@superego/threads':
+        specifier: workspace:*
+        version: link:../../extensions/threads
       sucrase:
         specifier: ^3.35.1
         version: 3.35.1

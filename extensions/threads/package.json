@@ -3,8 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { "./ui": "./src/ui.tsx" },
-  "dependencies": { "@superego/app": "workspace:*", "@superego/protocol": "workspace:*", "@superego/ui": "workspace:*" },
+  "exports": { "./daemon": "./src/daemon.ts", "./tools": "./src/tools.ts", "./ui": "./src/ui.tsx" },
+  "dependencies": {
+    "@earendil-works/pi-durable": "1.5.0",
+    "@superego/app": "workspace:*",
+    "@superego/daemon": "workspace:*",
+    "@superego/protocol": "workspace:*",
+    "@superego/ui": "workspace:*"
+  },
   "peerDependencies": { "react": "^19" },
-  "devDependencies": { "@types/react": "^19", "react": "^19" }
+  "devDependencies": { "@superego/settings": "workspace:*", "@types/react": "^19", "@types/react-dom": "^19", "react": "^19", "react-dom": "^19.2.0" }
 }

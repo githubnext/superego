@@ -380,14 +380,14 @@ it("refuses a profile's extension that takes a name already in use, or settings 
 
 it("tells clients what a profile's threads go without, and its agent goes without their parts", async () => {
   write(join(home, 'profiles', 'default'), {
-    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ without: ['thread-tools', 'agents-md'] })\n`,
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ without: ['panes', 'agents-md'] })\n`,
   })
   const { peer, close } = await open()
   const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
   await done(peer, thread.id)
-  expect((await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === thread.id)?.without).toEqual(['agents-md', 'thread-tools'])
+  expect((await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === thread.id)?.without).toEqual(['agents-md', 'panes'])
   const agent = await agentOf(peer, thread.id)
-  expect(agent.extensions).not.toContain('thread-tools')
+  expect(agent.extensions).not.toContain('panes')
   expect(agent.extensions).not.toContain('agents-md')
   expect(agent.extensions).toContain('coding-tools')
   await close()
@@ -602,20 +602,5 @@ export default defineDaemonExtension({ name: 'vault', setup(superego) { ${publis
   await peer.call('profile.ui', { scope: 'user', name: 'default', dir: profile })
   await until(async () => changes.includes(null))
   expect((await peer.call<{ value: unknown }>('value.watch', { key: 'vault.status' })).value).toBeNull()
-  await close()
-})
-
-it("maps a profile's `without` of an extension's old name to its new one", async () => {
-  write(join(home, 'profiles', 'default'), {
-    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ without: ['threads'] })\n`,
-  })
-  const { peer, close } = await open()
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
-  await done(peer, thread.id)
-  expect((await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.without).toEqual(['thread-tools'])
-  expect((await agentOf(peer, thread.id)).extensions).not.toContain('thread-tools')
-  // Settings says so by the new name too.
-  const { value } = await peer.call<{ value: { sections: { id: string; data?: { name: string; without?: string[] }[] }[] } }>('settings.watch', {})
-  expect(value.sections.find((s) => s.id === 'profiles')!.data!.find((p) => p.name === 'default')!.without).toEqual(['thread-tools'])
   await close()
 })

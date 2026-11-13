@@ -11,7 +11,7 @@ import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { createReadTool } from '@earendil-works/pi-durable/tools'
 import { bool, lit, obj, opt, str, union, unknown, type ActionInfo, type Json, type Router, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 import type { DaemonContext } from './daemon.ts'
-import { lineOf, linkTo, readTool } from './thread-tools.ts'
+import { lineOf, linkTo, readTool } from '@superego/threads/tools'
 
 /** The machines a computer reaches, as the app keeps them (`machines.json`); given to the daemon by the app, for Ego. */
 export type MachineDirectory = {

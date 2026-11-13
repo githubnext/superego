@@ -1,6 +1,7 @@
-// Threads, for the agents in them: start one of their own (a child, nested under its parent in the sidebar), read
-// another (waiting for it, if asked), send one a message, list the threads around, and archive one (or their own). A thread is named in a message
-// as a link, [its title](thread:<id>), which the window shows as one.
+// The thread tools: threads, for the agents in them. Start one of their own (a child, nested under its parent in the
+// sidebar), read another (waiting for it, if asked), send one a message, list the threads around, and archive one (or
+// their own). A thread is named in a message as a link, [its title](thread:<id>), which the UI half shows as one.
+// Plain tools on a host, so Ego's own (`thread_read`, its `thread_start`) are built from the same parts.
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { bool, obj, opt, str, type ThreadInfo } from '@superego/protocol'
 

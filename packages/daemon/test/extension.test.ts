@@ -67,7 +67,7 @@ it('lists optional extensions in Settings, and tells clients what each thread go
   const { value } = await peer.call<{ value: { sections: { id: string; settings: { key: string }[] }[] } }>('settings.watch', {})
   const keys = value.sections.find((s) => s.id === 'extensions')!.settings.map((s) => s.key)
   // The core's own parts and the optional bundled one; never a required one.
-  expect(keys).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.thread-tools', 'extensions.links'])
+  expect(keys).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.links'])
   const thread = await peer.call<ThreadInfo>('thread.create', {})
   expect(thread.without).toBeUndefined()
   await peer.call('settings.set', { key: 'extensions.links', value: false })
@@ -149,20 +149,12 @@ it("reserves the core's namespaces: every core method and action is in one, and 
   await expect(open([defineDaemonExtension({ name: 'thread', setup() {} })])).rejects.toThrow(/core's own/)
 })
 
-it('keeps a switch stored under an extension\'s old name: the thread tools were "threads"', async () => {
-  const { MemorySettingsStore } = await import('@superego/settings')
-  process.env.SUPEREGO_MODEL = 'faux'
-  const daemon = await openDaemon({ app: SUPEREGO, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), settingsStore: new MemorySettingsStore({ 'extensions.threads': false }) })
-  expect(daemon.settings.get('extensions.thread-tools')).toBe(false)
-  await daemon.close()
-})
-
 it("knows the extensions a window declares that have no daemon half: a switch for each optional one, and threads go without one off", async () => {
   const { peer, close } = await open([])
   await peer.call('extensions.declare', { extensions: [{ name: 'links', title: 'Links' }, { name: 'threads', required: true }, { name: 'coding-tools', title: 'Mine' }] })
   const { value } = await peer.call<{ value: { sections: { id: string; settings: { key: string; title: string }[] }[] } }>('settings.watch', {})
   const switches = value.sections.find((s) => s.id === 'extensions')!.settings
-  expect(switches.map((s) => s.key)).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.thread-tools', 'extensions.links'])
+  expect(switches.map((s) => s.key)).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.links'])
   // One the daemon sets up keeps its own declaration.
   expect(switches[0]!.title).toBe('Coding tools')
   // A later window's word on one it declared is taken.
