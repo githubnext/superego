@@ -118,6 +118,16 @@ if (phase === 'first') {
   for (let i = 0; i < 100 && await framed() !== 'framed page'; i++) await new Promise((resolve) => setTimeout(resolve, 100))
   if (await framed() !== 'framed page') await fail('a page that refuses framing loads in its pane')
   site.close()
+  // ⌃O lists the links the thread drew (each claimed by what opens it): the web page and the thread it names.
+  const press = (keyCode, modifiers) => {
+    const contents = BrowserWindow.getAllWindows()[0].webContents
+    contents.sendInputEvent({ type: 'keyDown', keyCode, modifiers })
+    contents.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
+  }
+  press('o', ['control'])
+  await until(`(() => { const items = [...document.querySelectorAll('.links .palette__list li')].map((li) => li.textContent); return items.some((t) => t.includes('127.0.0.1')) && items.some((t) => t.includes('this thread')) })()`, 'links listed')
+  press('Escape', [])
+  await until(`!document.querySelector('.links')`, 'links closed')
   // ask-user: a replayed agent asks; the question shows above the composer and the thread as needing you; an answer
   // from the card reaches it, and it carries on.
   await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: 'replay/replay' })`)
