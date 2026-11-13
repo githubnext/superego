@@ -2,7 +2,7 @@
 // status changes the shell works out from each machine's threads.
 import { describe, expect, it } from 'vitest'
 import { defineApp, type Status, type ThreadInfo } from '@superego/protocol'
-import { createRegistry, defineUiExtension, slotEntries, type WindowEvents } from '../src/renderer/extension.tsx'
+import { createRegistry, defineUiExtension, type WindowEvents } from '../src/renderer/extension.tsx'
 import { rejectionChanges, statusChanges, type Statuses } from '../src/renderer/window-events.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
@@ -82,22 +82,6 @@ describe('status changes', () => {
     expect([...before.keys()]).toEqual(['box/far'])
     // Back again (unarchived): seen anew.
     expect(statusChanges(before, { local: [thread('a', 'done')] })[0]!.before).toBeUndefined()
-  })
-})
-
-describe('fallback slots', () => {
-  it('draws a fallback only while nothing else fills the slot', () => {
-    const Bell = () => null
-    const Spaces = () => null
-    const bell = defineUiExtension({ name: 'bell', setup(superego) { superego.slot('rail', Bell, { fallback: true }) } })
-    const spaces = defineUiExtension({ name: 'spaces', setup(superego) { superego.slot('rail', Spaces) } })
-    expect(slotEntries(createRegistry(app, [bell], () => {}), 'rail', undefined).map((e) => e.component)).toEqual([Bell])
-    expect(slotEntries(createRegistry(app, [bell, spaces], () => {}), 'rail', undefined).map((e) => e.component)).toEqual([Spaces])
-    // A button that's always there doesn't fill it.
-    const Ego = () => null
-    const ego = defineUiExtension({ name: 'ego', setup(superego) { superego.slot('rail', Ego, { order: 10, fills: false }) } })
-    expect(slotEntries(createRegistry(app, [bell, ego], () => {}), 'rail', undefined).map((e) => e.component)).toEqual([Ego, Bell])
-    expect(slotEntries(createRegistry(app, [bell, ego, spaces], () => {}), 'rail', undefined).map((e) => e.component)).toEqual([Ego, Spaces])
   })
 })
 

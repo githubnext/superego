@@ -1,4 +1,5 @@
-// The UI half of an extension: `<pkg>/ui`, listed in the app's renderer entry. It fills named slots in the shell, draws
+// The UI half of an extension: `<pkg>/ui`, listed in the app's renderer entry. It declares views (which the layout puts
+// in the shell's places: see layout.ts), fills named slots where behaviour decides the place, draws
 // tool calls and entries in the transcript, adds pane kinds, custom settings components and actions (with keys), and
 // completions and what's drawn with a sent message to the composer. It hears what happens in the window (a thread's
 // status changing, the thread shown changing, the window's focus) through `on`.
@@ -8,37 +9,41 @@
 // Everything an extension registers is owned by it: the registry keeps who added each thing, and an extension's
 // teardown removes all of it at once. A profile's UI is owned by that profile on its machine too, and draws only in
 // that profile's threads there.
-import { createContext, useContext, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type ReactNode } from 'react'
 import type { AppConfig, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, ProviderRejection, SectionInfo, SettingsSnapshot, Status, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import type { Selection } from './state.tsx'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowContext, type WindowRouter } from './actions.tsx'
-import { watched } from './client.ts'
+import { useSettings, watched } from './client.ts'
 import { createStore, type Store } from './local-state.ts'
+import { isLayout, LAYOUT, PLACES, resolveLayout, THREAD_PLACES, type Layout, type Place, type Placed, type Placement } from './layout.ts'
 import type { CompletionProvider, CompletionWord, SentWith } from './composer.ts'
 
-/** Where an extension can put UI. */
-export type SlotName =
-  /** The column left of the thread: thread lists, machine trees. With nothing here, the shell shows a compact picker. */
-  | 'sidebar'
-  /** The rail down the window's left edge: a space's button (and, folded, its list as dots). */
-  | 'rail'
-  /** At the foot of the sidebar on a phone, beside Settings, where there's no rail. */
-  | 'footer'
-  /** Right of a thread's title: badges, small actions. */
-  | 'thread.header'
+/**
+ * Where an extension can put UI by itself: places whose occupant behaviour decides, so the layout doesn't move them (a
+ * question card sits on the composer it asks for).
+ */
+export type BehaviourSlot =
   /** Among the chips that say where a thread works, after the title's: a branch, say. Draw a `titlebar__chip`. */
   | 'thread.crumb'
   /** Above the composer: things waiting on the user, suggestions. */
   | 'composer.above'
-  /** A pane beside the thread: details, diffs, files. Hidden while everything in it renders nothing. */
-  | 'thread.aside'
   /** Beside a file being edited: a file tree, an outline. `open` shows another file there (`beside`: in a pane of its own). */
   | 'editor.side'
   /** In a file editor's bar: small buttons. */
   | 'editor.bar'
   /** Always there, over everything: an extension's own dialogs (a quick open), drawn while it wants them. */
   | 'overlay'
+
+/**
+ * Slots that are places now: `slot()` with one of these declares a view (`<extension>.<slot>`) that the layout puts
+ * there by default. `superego.view` says more (a title, an icon, other places it fits).
+ */
+const VIEW_SLOTS = { 'sidebar': 'space', 'rail': 'rail', 'footer': 'drawer', 'thread.header': 'header', 'thread.aside': 'aside' } as const satisfies Record<string, Place>
+type ViewSlot = keyof typeof VIEW_SLOTS
+
+/** Where `slot()` can put UI: a behaviour slot, or one of the places it used to name (see `VIEW_SLOTS`). */
+export type SlotName = BehaviourSlot | ViewSlot
 
 /** What a slot beside a file editor gets: the file, and a way to show another. */
 export type EditorSlotProps = { machine: MachineEntry; thread: ThreadInfo; path: string; open(path: string, options?: { beside?: boolean }): void }
@@ -54,6 +59,45 @@ export type SlotProps = {
   'editor.side': EditorSlotProps
   'editor.bar': EditorSlotProps
   'overlay': Record<string, never>
+}
+
+/** What a view needs to be drawn: nothing but the window, or a thread. */
+export type ViewContext = 'window' | 'thread'
+
+/**
+ * What a view is drawn with: the place it's in, and for a thread view the thread (in a pane, the pane's; in a space,
+ * the one shown).
+ */
+export type ViewProps<C extends ViewContext = ViewContext> = C extends 'thread'
+  ? { place: Place; machine: MachineEntry; thread: ThreadInfo }
+  : { place: Place }
+
+/** What a space draws in the rail instead of the button that opens it: whether it's the open one, and a way to show it or not. */
+export type SpaceRailProps = { open: boolean; show(open?: boolean): void }
+
+/**
+ * A view: UI an extension offers, which the layout puts in places (see layout.ts). `fits` says which places it can be
+ * drawn in; `default` where it goes unless the user's layout says otherwise (none: offered, not placed).
+ */
+export type View<C extends ViewContext = ViewContext> = {
+  title: string
+  icon?: ComponentType<{ size?: number; 'aria-hidden'?: boolean }>
+  /** `thread`: drawn only where there's a thread (aside, pane, header; in a space, the one shown). */
+  context: C
+  /** The places it can be drawn in. A `thread` view that fits `pane` is a pane kind too, of its id. */
+  fits: Place[]
+  default?: Placement
+  /** On a phone or narrow window, where it goes by default instead (unset: as wide). */
+  narrow?: Placement
+  /** Where it goes by default while no view is in `space`: what stands in for a sidebar (the core's thread picker). */
+  withoutSpaces?: Placement
+  /** Order among the views in a place (100 when unset; then as registered); the user's layout comes first. */
+  order?: number
+  component: ComponentType<ViewProps<C>>
+  /** As a `space`: what it draws in the rail instead of a button with its icon (a list folded into dots). */
+  rail?: ComponentType<SpaceRailProps>
+  /** As a pane: its width to start with, as a share of the row. */
+  width?: number
 }
 
 /** What a pane is drawn with: where it is, and its own params. */
@@ -244,11 +288,16 @@ export type WindowState = {
 export type UiApi = {
   app: AppConfig
   /**
-   * A component in a place in the window, in `order`. `fallback: true` draws it only while nothing else fills that
-   * place: nothing but fallbacks, and entries that say they don't (`fills: false`: a button that's always there, as
-   * Ego's in the rail, beside which the rail is still empty of spaces).
+   * A view, `<extension>.<name>`: UI that the layout puts in the places it fits (a space in the rail, beside the thread,
+   * the pane menu, the title bar), by default where `default` says. The user's layout (`app.layout`) can move or hide
+   * it. A profile's views fit only the places that show a thread, and only its own threads.
    */
-  slot<S extends SlotName>(slot: S, component: ComponentType<SlotProps[S]>, options?: { order?: number; fallback?: boolean; fills?: boolean }): void
+  view<C extends ViewContext>(id: string, view: View<C>): void
+  /**
+   * A component in a place in the window, in `order`. In `sidebar`, `rail`, `footer`, `thread.aside` and
+   * `thread.header`, it's a view of that place (`<extension>.<slot>`, see `view`), placed there by default.
+   */
+  slot<S extends SlotName>(slot: S, component: ComponentType<SlotProps[S]>, options?: { order?: number }): void
   /**
    * Hear what happens in the window (see `WindowEvents`): a thread's status changing, the thread shown changing, the
    * window's focus and visibility. Listening stops at teardown, or with the function returned. `window` is how things
@@ -350,7 +399,9 @@ export type Registry = {
   app: AppConfig
   /** What the app's extensions are, as each declares itself: told to every machine, so UI-only ones are known there. */
   extensions: ExtensionAbout[]
-  slots: { [S in SlotName]: Owned<{ component: ComponentType<SlotProps[S]>; order: number; fallback: boolean; fills: boolean }>[] }
+  slots: { [S in BehaviourSlot]: Owned<{ component: ComponentType<SlotProps[S]>; order: number }>[] }
+  /** The views declared, by id (`<extension>.<name>`): where each goes is the layout's. */
+  views: Owned<View & { id: string }>[]
   /** Drawn by a `component`, or described by a `row`. `fold: false`: its calls show outside the fold of their run of work. */
   tools: Owned<{ name: string; component?: ComponentType<ToolCallProps>; row?: ToolRow; fold: boolean }>[]
   entries: Owned<{ kind: string; component: ComponentType<EntryProps> }>[]
@@ -386,8 +437,8 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   const ownerKey = (owner: Owner) => `${owner.profile ?? ''}/${owner.extension}`
   const registry: Registry = {
     app, extensions: extensions.map(({ name, title, description, required }) => ({ name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}) })),
-    slots: { 'sidebar': [], 'rail': [], 'footer': [], 'thread.header': [], 'thread.crumb': [], 'composer.above': [], 'thread.aside': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
-    tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
+    slots: { 'thread.crumb': [], 'composer.above': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
+    views: [], tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
       visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
@@ -440,13 +491,42 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       if (taken) return console.warn(`Extension ${extension.name}: ${what} ${item[key]} is already drawn by ${taken.owner.extension}; keeping that one`)
       add(list, item)
     }
+    /** A view, checked: a profile's fit only the places that show one of its threads. */
+    const declare = (id: string, view: View) => {
+      if (view.fits.some((place) => !PLACES.includes(place))) console.warn(`Extension ${extension.name}: view ${id} fits a place there isn't (${view.fits.join(', ')})`)
+      const fits = profile ? view.fits.filter((place) => THREAD_PLACES.includes(place)) : view.fits
+      if (!fits.length) return console.warn(`Profile extension ${extension.name}: view ${id} fits no place a profile's UI draws in`)
+      unique(registry.views, 'id', { ...view, fits, id }, 'view')
+    }
     const api: UiApi = {
       app,
+      view(id, view) {
+        own(id, 'views')
+        declare(id, view as View)
+        // A thread view that fits a pane is a pane kind too, of its id: opened from the pane menu while it's placed there.
+        if (view.context === 'thread' && view.fits.includes('pane')) {
+          const Component = view.component as ComponentType<ViewProps<'thread'>>
+          unique(registry.panes, 'kind', {
+            kind: id, title: view.title, component: ({ machine, thread }: PaneProps) => <Component place="pane" machine={machine} thread={thread} />,
+            ...(view.icon ? { icon: view.icon } : {}), ...(view.width ? { width: view.width } : {}),
+          }, 'pane kind')
+        }
+      },
       slot(slot, component, options) {
-        // A profile's UI draws in its threads' slots; the sidebar, the rail, the footer and the overlay are the app's, with no thread.
-        if (profile && (slot === 'sidebar' || slot === 'rail' || slot === 'footer' || slot === 'overlay')) return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
-        const list = registry.slots[slot] as Owned<{ component: ComponentType<SlotProps[typeof slot]>; order: number; fallback: boolean; fills: boolean }>[]
-        add(list, { component: component as never, order: options?.order ?? 100, fallback: options?.fallback ?? false, fills: options?.fills ?? true })
+        if (slot in VIEW_SLOTS) {
+          const place = VIEW_SLOTS[slot as ViewSlot]
+          const taken = registry.views.filter((v) => v.owner === owner && v.id.startsWith(`${extension.name}.${slot}`)).length
+          const Component = component as ComponentType<object>
+          return declare(`${extension.name}.${slot}${taken ? `.${taken + 1}` : ''}`, {
+            title: extension.title ?? extension.name, context: THREAD_PLACES.includes(place) ? 'thread' : 'window', fits: [place], default: place,
+            ...(options?.order !== undefined ? { order: options.order } : {}),
+            component: ({ place: _place, ...props }: ViewProps) => <Component {...props} />,
+          })
+        }
+        // A profile's UI draws in its threads' slots; the overlay is the app's, with no thread.
+        if (profile && slot === 'overlay') return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
+        const list = registry.slots[slot as BehaviourSlot] as Owned<{ component: ComponentType<never>; order: number }>[]
+        add(list, { component: component as never, order: options?.order ?? 100 })
         list.sort((a, b) => a.order - b.order)
       },
       on(event, listener) {
@@ -469,7 +549,14 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         own(ui, 'settings sections')
         unique(registry.settings, 'ui', { ui, component }, 'settings section')
       },
-      pane: (kind, pane) => unique(registry.panes, 'kind', { ...pane, kind }, 'pane kind'),
+      pane(kind, pane) {
+        unique(registry.panes, 'kind', { ...pane, kind }, 'pane kind')
+        // Offered in the pane menu: a view of the pane menu, of the kind's name, placed there by default.
+        if (pane.menu) {
+          const title = typeof pane.title === 'function' ? pane.title({ id: '', kind }) ?? kind : pane.title
+          declare(kind, { title, ...(pane.icon ? { icon: pane.icon } : {}), context: 'thread', fits: ['pane'], default: 'pane', component: () => null })
+        }
+      },
       newThreadField(field) {
         // The dialog has no thread yet: a profile's UI has nowhere to draw.
         if (profile) return console.warn(`Profile extension ${extension.name}: New thread fields from a profile's UI aren't supported yet`)
@@ -562,20 +649,73 @@ function lookUp<T>(list: Owned<T>[], where: Where | undefined, match: (entry: T)
   return found.find((entry) => entry.owner.profile) ?? found[0]
 }
 
-/** What `slot` draws for `where`, in order: fallbacks only while nothing fills it (see `slot`'s `fills`). */
-export function slotEntries<S extends SlotName>(registry: Registry, slot: S, where: Where | undefined) {
-  const seen = seenIn(registry.slots[slot] as Owned<{ component: ComponentType<SlotProps[S]>; order: number; fallback: boolean; fills: boolean }>[], where)
-  const filled = seen.some((entry) => !entry.fallback && entry.fills)
-  return seen.filter((entry) => !entry.fallback || !filled)
-}
-
 /** Draw every component in `slot`, with `props`. */
-export function Slot<S extends SlotName>({ name, props }: { name: S; props: SlotProps[S] }) {
+export function Slot<S extends BehaviourSlot>({ name, props }: { name: S; props: SlotProps[S] }) {
   const registry = useRegistry()
   useSyncExternalStore(registry.subscribe, () => registry.version)
   const { machine, thread } = props as { machine?: MachineEntry; thread?: ThreadInfo }
-  const entries = slotEntries(registry, name, machine && thread ? { machine: machine.id, thread } : undefined)
+  const entries = seenIn(registry.slots[name] as Owned<{ component: ComponentType<SlotProps[S]> }>[], machine && thread ? { machine: machine.id, thread } : undefined)
   return <>{entries.map(({ component: Component, owner }, index) => <Component key={`${owner.profile ?? ''}/${owner.extension}-${index}`} {...props} />)}</>
+}
+
+// ── Views in places ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Whether the window is phone-narrow: no rail, the space a drawer, the narrow layout. */
+export function useNarrow() {
+  const query = '(max-width: 599px)'
+  const [narrow, setNarrow] = useState(() => matchMedia(query).matches)
+  useEffect(() => {
+    const list = matchMedia(query)
+    const change = () => setNarrow(list.matches)
+    list.addEventListener('change', change)
+    return () => list.removeEventListener('change', change)
+  }, [])
+  return narrow
+}
+
+/** The user's layout (`app.layout`), as stored; anything not shaped as one is none. */
+export const layoutOf = (value: Json | undefined): Layout | undefined => isLayout(value) ? value : undefined
+
+/** Where every view goes now, place by place: the views' defaults and the user's layout, narrow on a phone. */
+export function useLayout(): { placed: Placed; narrow: boolean } {
+  const registry = useRegistry()
+  const version = useSyncExternalStore(registry.subscribe, () => registry.version)
+  const stored = useSettings('app', true)?.values[LAYOUT]
+  const narrow = useNarrow()
+  const key = JSON.stringify(stored ?? null)
+  const placed = useMemo(() => resolveLayout(registry.views, layoutOf(stored), { narrow }), [version, key, narrow])
+  return { placed, narrow }
+}
+
+/**
+ * The views in `place` for `where` (a thread's places), in the layout's order: the app's, but not those of an optional
+ * extension its thread goes without, and that thread's profile's own (first, by the same id).
+ */
+export function viewsIn(registry: Registry, placed: Placed, place: Place, where?: Where) {
+  return placed[place].flatMap((id) => {
+    const found = lookUp(registry.views, where, (view) => view.id === id)
+    return found ? [found] : []
+  })
+}
+
+/** Draw the views in a place: a thread's (`machine`, `thread`), or the window's. */
+export function PlacedViews({ place, machine, thread }: { place: Place; machine?: MachineEntry; thread?: ThreadInfo }) {
+  const registry = useRegistry()
+  const { placed } = useLayout()
+  const where = machine && thread ? { machine: machine.id, thread } : undefined
+  // A view that needs a thread isn't drawn without one.
+  return <>{viewsIn(registry, placed, place, where).filter((view) => view.context === 'window' || where).map(({ id, component, owner }) => {
+    const Component = component as ComponentType<ViewProps>
+    return <Component key={`${owner.profile ?? ''}/${id}`} place={place} {...(machine && thread ? { machine, thread } : {})} />
+  })}</>
+}
+
+/** Whether `view` is in `place` now, and a way to put it there or take it out (toggled, unless `on` is given). */
+export function usePlacement(view: string, place: Place): [boolean, (on?: boolean) => void] {
+  const registry = useRegistry()
+  const { placed } = useLayout()
+  const toggle = (on?: boolean) => void registry.router.dispatch('layout.place', { view, place, ...(on === undefined ? {} : { on }) }, { source: 'layout' }).catch((error) => console.error(error))
+  return [placed[place].includes(view), toggle]
 }
 
 /** How calls to the tool `name` are drawn for `where`, if an extension draws them whole. */
@@ -661,12 +801,7 @@ export function shownPanes(registry: Registry, where: Where): Pane[] {
   return (where.thread.panes ?? []).filter((pane) => !gone(pane.kind))
 }
 
-/** The panes a thread's menu offers: the app's and its profile's that open without params. */
-export function paneMenu(registry: Registry, where: Where): { kind: string; title: string }[] {
-  const kinds = [...new Set(seenIn(registry.panes, where).map((p) => p.kind))]
-  return kinds.flatMap((kind) => {
-    const found = paneKind(registry, kind, where)
-    if (!found?.menu) return []
-    return [{ kind, title: (typeof found.title === 'function' ? found.title({ id: '', kind }) : found.title) ?? kind }]
-  })
+/** The panes a thread's menu offers: the views the layout puts in `pane` that it has a kind of, in order. */
+export function paneMenu(registry: Registry, placed: Placed, where: Where): { kind: string; title: string }[] {
+  return viewsIn(registry, placed, 'pane', where).filter(({ id }) => paneKind(registry, id, where)).map(({ id, title }) => ({ kind: id, title }))
 }

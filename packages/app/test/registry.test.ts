@@ -78,7 +78,7 @@ describe('optional and required extensions', () => {
     expect(toolView(registry, 'ask_user', with_)).toBe(Card)
     expect(toolView(registry, 'ask_user', without)).toBeUndefined()
     expect(seenIn(registry.slots['composer.above'], without)).toHaveLength(0)
-    expect(seenIn(registry.slots['thread.aside'], without).map((e) => e.component)).toEqual([Sidebar])
+    expect(seenIn(registry.views, without).map((e) => e.id)).toEqual(['threads.thread.aside'])
   })
 
   it("hides the open panes of an optional extension a thread goes without, keeping the core's and unknown kinds", () => {

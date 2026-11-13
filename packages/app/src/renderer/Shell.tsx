@@ -1,12 +1,15 @@
-// The shell every app gets: the sidebar slot (or, with nothing there, a compact thread picker), the selected thread,
-// the notices (restart required, a provider rejecting the credentials), Settings, and the app-wide reactions (fonts,
-// ⌘, , threads shown from the command line or a notification).
-import { useEffect, useRef, useState } from 'react'
-import type { SettingsSnapshot } from '@superego/protocol'
+// The shell every app gets: its places (the rail's spaces and buttons, the open space in the sidebar, the title bar's
+// start, the aside beside the thread; on a phone, the drawer), with the views the layout puts there; the selected
+// thread, the notices (restart required, a provider rejecting the credentials), Settings, and the app-wide reactions
+// (fonts, ⌘, , threads shown from the command line or a notification). It knows no extension: what's where is the
+// layout's (see layout.ts).
+import { useEffect, useRef, useState, type ComponentType } from 'react'
+import type { SettingsSnapshot, ThreadInfo } from '@superego/protocol'
 import { ArrowLeftIcon, ArrowRightIcon, Button, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select } from '@superego/ui'
-import { textScale } from '../shared.ts'
+import { textScale, type MachineEntry } from '../shared.ts'
 import { machine as client, useSettings, watched } from './client.ts'
-import { shownPanes, Slot, useRegistry } from './extension.tsx'
+import { PlacedViews, shownPanes, Slot, useLayout, useRegistry, viewsIn, type SpaceRailProps, type View, type ViewProps } from './extension.tsx'
+import { useLocalState } from './local-state.ts'
 import { ServiceNotice } from './ServiceNotice.tsx'
 import { refreshFontsSoon } from './fonts.ts'
 import { AuthNotice } from './AuthNotice.tsx'
@@ -20,22 +23,9 @@ import { NewThreadDialog } from './NewThread.tsx'
 import { bound, KEYMAP, shortcutOf, useActions, useShortcut, type Keymap } from './keys.ts'
 import { useAllThreads, useHistory, useMachines, useNewThreadDialog, useSelection, useSessions, useSettingsDialog, useShell, useSidebar, type Selection } from './state.tsx'
 
-/** Dispatch an action from this window: `dispatch('threads.rail')`, `dispatch('thread.select', { machine, thread })`. */
+/** Dispatch an action from this window: `dispatch('app.sidebar')`, `dispatch('thread.select', { machine, thread })`. */
 export function useDispatch() {
   return useRegistry().router.dispatch
-}
-
-/** Whether the window is phone-narrow. */
-function useNarrow() {
-  const query = '(max-width: 599px)'
-  const [narrow, setNarrow] = useState(() => matchMedia(query).matches)
-  useEffect(() => {
-    const list = matchMedia(query)
-    const change = () => setNarrow(list.matches)
-    list.addEventListener('change', change)
-    return () => list.removeEventListener('change', change)
-  }, [])
-  return narrow
 }
 
 export function Shell() {
@@ -50,13 +40,17 @@ export function Shell() {
   const settings = useSettingsDialog()
   const newThread = useNewThreadDialog()
   const { openSettings } = useShell()
-  const hasSidebar = registry.slots.sidebar.length > 0
   const allThreads = useAllThreads()
   const { newThread: openNewThread } = useShell()
   const history = useHistory()
   // A phone (or a narrow window): the sidebar becomes a drawer over the thread, opened from a bar at the top.
-  const narrow = useNarrow()
+  const { placed, narrow } = useLayout()
   const [drawer, setDrawer] = useState(false)
+  // The spaces, and the one the sidebar shows: as the window was left, else the first.
+  const spaces = viewsIn(registry, placed, 'space')
+  const [spaceId, setSpace] = useLocalState<string | undefined>('space', undefined)
+  const space = spaces.find((view) => view.id === spaceId) ?? spaces[0]
+  const where = selection && thread && machine ? { machine: machine.id, thread } : undefined
   // Where the thread's columns show their tabs: in the title bar, wide.
   const [strip, setStrip] = useState<HTMLElement | null>(null)
   useEffect(() => { setDrawer(false) }, [selection?.machine, selection?.thread, narrow])
@@ -84,29 +78,20 @@ export function Shell() {
       <GearSixIcon size={18} aria-hidden />
     </IconButton>
   )
-  // Without a sidebar, at the title bar's start: every thread in a menu, and a new one.
-  const tools = (
-    <span className="app__tools">
-      <ThreadPicker />
-      <IconButton label="New thread (⌘N)" className="app__new" onClick={() => openNewThread()}>
-        <NotePencilIcon size={15} aria-hidden />
-      </IconButton>
-    </span>
-  )
-  const sideOpen = hasSidebar && (narrow ? drawer : sidebar.open)
+  const sideOpen = spaces.length > 0 && (narrow ? drawer : sidebar.open)
   // Wide: across the top a title bar (the window's buttons, then where you are, the thread's columns and what the thread
   // says about itself); down the left a rail (what extensions put there, Settings) and the sidebar beside it; the rest holds the
   // thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.
   return (
     <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.superego.web ? 'is-web' : ''}`}>
-      {narrow && hasSidebar && drawer && <div className="app__scrim" onClick={() => setDrawer(false)} />}
+      {narrow && spaces.length > 0 && drawer && <div className="app__scrim" onClick={() => setDrawer(false)} />}
       {!narrow && (
         <header className="app__drag app__titlebar">
           <BackForward />
-          {!hasSidebar && tools}
+          <PlacedViews place="titlebar" />
           {selection && thread && machine && <ThreadTitle machine={machine} thread={thread} />}
           <span className="app__titlebar-end">
-            {!hasSidebar && <><AuthNotice /><ServiceNotice /></>}
+            {!spaces.length && <><AuthNotice /><ServiceNotice /></>}
             <span className="app__strip" ref={setStrip} />
             {selection && thread && machine && <ThreadTools machine={machine} thread={thread} />}
           </span>
@@ -116,7 +101,11 @@ export function Shell() {
         {!narrow && (
           <nav className="app__rail" aria-label="App">
             <div className="app__rail-group">
-              <Slot name="rail" props={{}} />
+              <PlacedViews place="rail" />
+              {spaces.map((view) => (
+                <SpaceButton key={view.id} view={view} open={sidebar.open && view.id === space?.id}
+                  show={(open = true) => { setSpace(view.id); sidebar.toggle(open) }} />
+              ))}
             </div>
             <div className="app__rail-group">{settingsButton}</div>
           </nav>
@@ -125,24 +114,24 @@ export function Shell() {
           // In the drawer, picking a thread (even the open one) closes it.
           <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) setDrawer(false) } : undefined}>
             {narrow && <div className="app__drag" />}
-            <Slot name="sidebar" props={{}} />
-            <div className="app__footer"><AuthNotice /><ServiceNotice />{narrow && <>{settingsButton}<Slot name="footer" props={{}} /></>}</div>
+            {space && <SpaceView key={space.id} view={space} {...(where ? { machine, thread } : {})} />}
+            <div className="app__footer"><AuthNotice /><ServiceNotice />{narrow && <>{settingsButton}<PlacedViews place="drawer" /></>}</div>
           </aside>
         )}
         <main className="app__main">
-          {narrow && hasSidebar && (
+          {narrow && spaces.length > 0 && (
             <div className="app__mobilebar">
-              <Button onClick={() => setDrawer(true)} aria-label="Threads"><ListIcon size={16} aria-hidden /></Button>
+              <Button onClick={() => setDrawer(true)} aria-label={space?.title}><ListIcon size={16} aria-hidden /></Button>
               <span className="app__mobiletitle">{thread?.title ?? registry.app.name}</span>
               <Button onClick={() => openNewThread()} aria-label="New thread"><PlusIcon size={16} aria-hidden /></Button>
             </div>
           )}
           {selection && thread && machine
             ? <StripSlot.Provider value={narrow ? null : strip}><ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} /></StripSlot.Provider>
-            : <div className="app__empty">{hasSidebar ? 'Select or start a thread.' : `Start a thread with: ${registry.app.id}`}</div>}
+            : <div className="app__empty">{spaces.length ? 'Select or start a thread.' : `Start a thread with: ${registry.app.id}`}</div>}
         </main>
-        {!narrow && selection && thread && machine && registry.slots['thread.aside'].length > 0 && (
-          <aside className="app__aside"><Slot name="thread.aside" props={{ machine, thread }} /></aside>
+        {!narrow && where && viewsIn(registry, placed, 'aside', where).length > 0 && (
+          <aside className="app__aside"><PlacedViews place="aside" machine={machine} thread={thread} /></aside>
         )}
       </div>
       {settings.open && <SettingsView machines={machines} onClose={settings.close} />}
@@ -174,8 +163,39 @@ function BackForward() {
   )
 }
 
-/** Without a sidebar: every machine's threads in one menu, and a new thread on this computer. */
-function ThreadPicker() {
+/** A space's button in the rail: its own (`rail`), else its icon, lit while it's the open one. */
+function SpaceButton({ view, open, show }: { view: View } & SpaceRailProps) {
+  if (view.rail) return <view.rail open={open} show={show} />
+  const Icon = view.icon
+  return (
+    <IconButton label={view.title} className={`app__rail-button ${open ? 'is-on' : ''}`} onClick={() => show(!open)}>
+      {Icon ? <Icon size={18} aria-hidden /> : view.title.slice(0, 1)}
+    </IconButton>
+  )
+}
+
+/** The open space, in the sidebar: a view that needs a thread shows the selected one, and nothing without. */
+function SpaceView({ view, machine, thread }: { view: View; machine?: MachineEntry; thread?: ThreadInfo }) {
+  const Component = view.component as ComponentType<ViewProps>
+  if (view.context === 'thread' && !(machine && thread)) return null
+  return <Component place="space" {...(machine && thread ? { machine, thread } : {})} />
+}
+
+/** Without a space (the core's `core.picker`, at the title bar's start): every thread in a menu, and a new one. */
+export function ThreadPicker() {
+  const { newThread } = useShell()
+  return (
+    <span className="app__tools">
+      <ThreadMenu />
+      <IconButton label="New thread (⌘N)" className="app__new" onClick={() => newThread()}>
+        <NotePencilIcon size={15} aria-hidden />
+      </IconButton>
+    </span>
+  )
+}
+
+/** Every machine's threads in one menu, and a new thread on this computer. */
+function ThreadMenu() {
   const machines = useMachines().filter((m) => m.state !== 'disabled')
   const { selection, select } = useSelection()
   const threads = useAllThreads()

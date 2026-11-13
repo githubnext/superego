@@ -5,15 +5,15 @@ import { join } from 'node:path'
 import { SettingsRegistry, withMovedKeys } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import type { AppConfig } from '@superego/protocol'
-import { APP_MOVED, TEXT_SIZES, withMovedActions } from '../shared.ts'
+import { APP_MOVED, LAYOUT_SETTING, TEXT_SIZES, withMovedActions, withMovedLayout } from '../shared.ts'
 
 export const APP = 'app'
 export const APP_KEYS = {
-  keymap: 'app.keys', interfaceFont: 'app.font.interface', textSize: 'app.font.size', monoFont: 'app.font.mono', accent: 'app.accent', menuBar: 'app.menuBar', hideDock: 'app.hideDock',
+  keymap: 'app.keys', interfaceFont: 'app.font.interface', textSize: 'app.font.size', monoFont: 'app.font.mono', accent: 'app.accent', layout: 'app.layout', menuBar: 'app.menuBar', hideDock: 'app.hideDock',
 } as const
 
 export function createAppSettings(dataDir: string, app: AppConfig) {
-  const settings = new SettingsRegistry(withMovedActions(withMovedKeys(new FileSettingsStore(join(dataDir, 'app-settings.json')), APP_MOVED)))
+  const settings = new SettingsRegistry(withMovedLayout(withMovedActions(withMovedKeys(new FileSettingsStore(join(dataDir, 'app-settings.json')), APP_MOVED))))
   settings.register({
     id: 'appearance', title: 'Appearance', order: 50,
     settings: [
@@ -30,6 +30,7 @@ export function createAppSettings(dataDir: string, app: AppConfig) {
         key: APP_KEYS.accent, title: 'Accent colour', default: 'color(display-p3 0.155 0.319 0.654)',
         description: 'Focus rings, primary buttons, links and selection. Any CSS colour.', type: { type: 'color' },
       },
+      LAYOUT_SETTING,
     ],
   })
   settings.register({

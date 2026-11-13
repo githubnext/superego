@@ -1,14 +1,15 @@
 /// <reference path="./env.d.ts" />
 // threads: the sidebar. Sessions (a project on a machine) and the threads in each; the machine is said on the session,
-// where it isn't this computer. One extension with modes, all kept as app settings:
-// - sort: recently active, newest first, or needs you first: sessions, and the threads in each
-// - show as: a list, or a rail of status glyphs
-// - details: a pane beside the thread with what it runs with, spent and touched
+// where it isn't this computer. Its views:
+// - the list (`threads.list`), a space: sorted recently active, newest first, or needs you first; shown as a list, or
+//   folded into a rail of status glyphs (both kept as app settings)
+// - details (`threads.details`): what the thread runs with, spent and touched; beside it (in the aside) or not, ⌘I
+// - the model (`threads.model`), in the title bar: a button that shows or hides the details
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are its daemon half's.
 import { Fragment, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import {
-  call, defineAction, defineUiExtension, MachineDrift, showSession, SORT, unread, useAppSetting, useLocalState, useMachines, useSelection, useSessions, useSidebar, useThreadView, useShell, useShortcut,
-  type MachineEntry, type Session, type Sort, type Store, type WindowContext,
+  call, defineAction, defineUiExtension, MachineDrift, showSession, SORT, unread, useAppSetting, useLocalState, useMachines, usePlacement, useSelection, useSessions, useThreadView, useShell, useShortcut,
+  type MachineEntry, type Session, type Sort, type SpaceRailProps, type Store, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, ChatsIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
@@ -18,7 +19,8 @@ import { registerLinks, registerRows } from './rows.tsx'
 import { about } from './shared.ts'
 
 export const VIEW = 'threads.view'
-export const DETAILS = 'threads.details'
+/** The details view, and the action that puts it beside the thread or takes it away. */
+const DETAILS = 'threads.details'
 export type View = 'list' | 'rail'
 
 /**
@@ -39,19 +41,17 @@ export default defineUiExtension({
       id: 'threads', title: 'Sidebar', order: 55,
       settings: [
         { key: VIEW, title: 'Show as', default: 'list', type: 'choice', options: [{ value: 'list', label: 'List' }, { value: 'rail', label: 'Rail' }] },
-        { key: DETAILS, title: 'Thread details', description: 'A pane beside the thread: machine, model, cost, tools, files.', default: false, type: 'boolean' },
       ],
     })
-    superego.slot('sidebar', Threads)
-    superego.slot('rail', ThreadsRail)
-    superego.slot('thread.aside', Details)
-    superego.slot('thread.header', ModelButton)
+    superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: Threads, rail: ThreadsRail })
+    superego.view(DETAILS, { title: 'Thread details', context: 'thread', fits: ['aside', 'pane'], component: DetailsPane })
+    superego.view('threads.model', { title: 'Model', context: 'thread', fits: ['header'], default: 'header', component: ModelButton })
     registerRows(superego)
     registerLinks(superego)
     const action = (id: string, title: string, run: (c: WindowContext) => void, keys?: string) =>
       superego.action(defineAction({ id, title, ...(keys ? { keys } : {}), run: (_params, c) => run(c) }))
     action('threads.rail', 'Toggle sidebar rail', (c) => void set(c, VIEW, c.appSetting<View>(VIEW) === 'rail' ? 'list' : 'rail'), 'mod+\\')
-    action('threads.details', 'Toggle thread details', (c) => void set(c, DETAILS, !c.appSetting<boolean>(DETAILS)), 'mod+i')
+    action(DETAILS, 'Toggle thread details', (c) => void c.dispatch('layout.place', { view: DETAILS, place: 'aside' }, { source: 'threads' }), 'mod+i')
     action('threads.sort.created', 'Sort threads: newest first', (c) => void set(c, SORT, 'created'))
     action('threads.sort.status', 'Sort threads: needs you first', (c) => void set(c, SORT, 'status'))
     action('threads.sort.recent', 'Sort threads: recently active', (c) => void set(c, SORT, 'recent'))
@@ -192,9 +192,9 @@ const SORTS: { value: Sort; label: string }[] = [{ value: 'recent', label: 'Rece
 function Options() {
   const [sort, setSort] = useAppSetting<Sort>(SORT)
   const [view, setView] = useAppSetting<View>(VIEW)
-  const [details, setDetails] = useAppSetting<boolean>(DETAILS)
+  const [details, setDetails] = usePlacement(DETAILS, 'aside')
   const railKeys = useShortcut('threads.rail')
-  const detailsKeys = useShortcut('threads.details')
+  const detailsKeys = useShortcut(DETAILS)
   return (
     <Menu.Root>
       <Menu.Trigger render={<IconButton label="Sidebar options" className="threads-menu-trigger" />}><DotsThreeIcon size={16} weight="bold" aria-hidden /></Menu.Trigger>
@@ -214,7 +214,7 @@ function Options() {
           </Menu.RadioGroup>
         </Menu.Group>
         <Menu.Separator />
-        <Menu.CheckboxItem checked={details ?? false} onCheckedChange={(checked) => void setDetails(checked)} hint={detailsKeys}>Thread details</Menu.CheckboxItem>
+        <Menu.CheckboxItem checked={details} onCheckedChange={(checked) => setDetails(checked)} hint={detailsKeys}>Thread details</Menu.CheckboxItem>
       </Menu.Popup>
     </Menu.Root>
   )
@@ -222,32 +222,31 @@ function Options() {
 
 /**
  * In the window's rail: Threads, lit while the sidebar shows them. A click folds the list into status dots here (and
- * back); with the sidebar closed, it opens it. Something unread you can't see from here shows as a dot on the button,
- * in the most pressing one's colour.
+ * back); with the sidebar closed (or showing another space), it opens it. Something unread you can't see from here
+ * shows as a dot on the button, in the most pressing one's colour.
  */
-function ThreadsRail() {
+function ThreadsRail({ open, show }: SpaceRailProps) {
   const [view, setView] = useAppSetting<View>(VIEW)
-  const sidebar = useSidebar()
   const { sessions } = useSessions()
   const { selection, select } = useSelection()
   const fold = useFolded(view)
-  const folded = sidebar.open && fold.folded
+  const folded = open && fold.folded
   const toggleKeys = useShortcut('threads.rail')
   const waiting = sessions.flatMap((s) => s.threads.filter((t) => unread(t) && !(s.machine.id === selection?.machine && t.id === selection.thread)).map((t) => t.status))
   const badge = !folded && waiting.length ? rollup(waiting).state : undefined
   const click = () => {
     if (fold.narrow) {
-      if (!sidebar.open) sidebar.toggle(true)
+      if (!open) show()
       if (view === 'rail') void setView('list')
-      unfolded.set(sidebar.open ? folded : true)
-    } else if (!sidebar.open) { sidebar.toggle(true); if (view === 'rail') void setView('list') }
+      unfolded.set(open ? folded : true)
+    } else if (!open) { show(); if (view === 'rail') void setView('list') }
     else void setView(folded ? 'list' : 'rail')
   }
   const isOn = (session: Session, thread: ThreadInfo) => selection?.machine === session.machine.id && selection.thread === thread.id
   return (
     <TooltipProvider>
-      <Tooltip content={`Threads: ${!sidebar.open ? 'show' : folded ? 'show the list' : 'fold to dots'}${toggleKeys ? ` (${toggleKeys})` : ''}`} side="right">
-        <IconButton label="Threads" className={`app__rail-button threads-rail__button ${sidebar.open ? 'is-on' : ''}`} onClick={click}>
+      <Tooltip content={`Threads: ${!open ? 'show' : folded ? 'show the list' : 'fold to dots'}${toggleKeys ? ` (${toggleKeys})` : ''}`} side="right">
+        <IconButton label="Threads" className={`app__rail-button threads-rail__button ${open ? 'is-on' : ''}`} onClick={click}>
           <ChatsIcon size={18} aria-hidden />
           {badge && <span className={`threads-rail__badge threads-rail__badge--${badge}`} />}
         </IconButton>
@@ -278,28 +277,22 @@ function ThreadsRail() {
  * In the title bar: the model the thread runs with, as a button that shows or hides its details (what it runs with,
  * spent and touched), lit while they're shown.
  */
-function ModelButton({ thread }: { machine: MachineEntry; thread: ThreadInfo }) {
-  const [on, setOn] = useAppSetting<boolean>(DETAILS)
-  const keys = useShortcut('threads.details')
+function ModelButton({ thread }: { thread: ThreadInfo }) {
+  const [on, setOn] = usePlacement(DETAILS, 'aside')
+  const keys = useShortcut(DETAILS)
   const model = thread.model?.split('/').at(-1) ?? 'No model'
   return (
     <button type="button" className={`threads-model ${on ? 'is-on' : ''}`} aria-pressed={Boolean(on)}
       title={`${thread.model ?? 'No model'}: ${on ? 'hide' : 'show'} thread details${keys ? ` (${keys})` : ''}`}
-      onClick={() => void setOn(!on)}>
+      onClick={() => setOn()}>
       {model}
     </button>
   )
 }
 
-/** The details pane: facts about the selected thread, and what its tools did. Nothing while it's turned off. */
-function Details({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
-  const [on] = useAppSetting<boolean>(DETAILS)
-  if (!on) return null
-  return <DetailsPane machine={machine} thread={thread} />
-}
-
 type ToolCall = { name: string; arguments?: Record<string, unknown> }
 
+/** The details: facts about the thread, and what its tools did. */
 function DetailsPane({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const view = useThreadView(machine.id, machine.state === 'connected', thread.id)
   const { tools, files } = useMemo(() => {

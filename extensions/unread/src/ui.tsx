@@ -1,9 +1,9 @@
 /// <reference path="./env.d.ts" />
 // unread, UI half: what agents have for you that you haven't seen (a result, a failure, a question). A bell and how
 // many, coloured by the most pressing (as Fut shows its waiting agents), opening a list of them, the most pressing
-// first; picking one goes there. In the rail when nothing else is there (the sidebar shows its own), and beside
-// Settings on a phone. ⌘. goes to the next one, in every session or the one you're in.
-import { defineAction, defineUiExtension, useSelection, useSessions } from '@superego/app/ui'
+// first; picking one goes there. A view (`unread.bell`): in the rail while there's no space (a sidebar shows its own),
+// and beside Settings in a phone's drawer. ⌘. goes to the next one, in every session or the one you're in.
+import { defineAction, defineUiExtension, useSelection, useSessions, type ViewProps } from '@superego/app/ui'
 import { rollup } from '@superego/protocol'
 import { BellIcon, Button, Menu, StatusGlyph } from '@superego/ui'
 import { about } from './shared.ts'
@@ -22,8 +22,9 @@ export default defineUiExtension({
         { value: 'all', label: 'In every session' }, { value: 'session', label: 'In the current session' },
       ] }],
     })
-    superego.slot('rail', InRail, { fallback: true })
-    superego.slot('footer', InFooter)
+    superego.view('unread.bell', {
+      title: 'Unread', icon: BellIcon, context: 'window', fits: ['rail', 'drawer'], withoutSpaces: 'rail', narrow: 'drawer', component: UnreadButton,
+    })
     superego.action(defineAction({
       id: 'unread.next', title: 'Next unread thread', keys: 'mod+.',
       run: (_params, c) => {
@@ -34,10 +35,7 @@ export default defineUiExtension({
   },
 })
 
-const InRail = () => <UnreadButton side="right" />
-const InFooter = () => <UnreadButton side="top" />
-
-function UnreadButton({ side }: { side: 'top' | 'right' }) {
+function UnreadButton({ place }: ViewProps<'window'>) {
   const { sessions } = useSessions()
   const { selection, select } = useSelection()
   const list = waiting(sessions, selection)
@@ -50,7 +48,7 @@ function UnreadButton({ side }: { side: 'top' | 'right' }) {
         <BellIcon size={15} aria-hidden />
         <span className="unread-button__count">{list.length}</span>
       </Menu.Trigger>
-      <Menu.Popup side={side} className="unread-menu">
+      <Menu.Popup side={place === 'rail' ? 'right' : 'top'} className="unread-menu">
         {list.map(({ session, thread }) => (
           <Menu.Item key={`${session.machine.id}/${thread.id}`} hint={session.name} onClick={() => select({ machine: session.machine.id, thread: thread.id })}>
             <span className="unread-menu__row"><StatusGlyph status={thread.status} /><span className="unread-menu__title">{thread.title}</span></span>

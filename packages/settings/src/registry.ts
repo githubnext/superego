@@ -61,6 +61,9 @@ function check(spec: SettingSpec, value: Json): void {
         if (keys !== null && (typeof keys !== 'string' || !/^([a-z]+\+)*(\+|[^+\s]+)$/i.test(keys))) throw bad(`${id}: ${JSON.stringify(keys)} is not a shortcut like mod+shift+k`)
       }
       return
+    case 'layout':
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw bad('expected a layout')
+      return
     case 'choice':
       if (value === null && type.nullable) return
       if (typeof value !== 'string' || !type.options.some((option) => option.value === value)) throw bad(`unknown choice ${JSON.stringify(value)}`)

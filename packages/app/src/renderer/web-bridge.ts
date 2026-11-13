@@ -3,7 +3,7 @@
 // keeps in its main process (the app's own settings) is kept in this browser.
 import { FEATURES, PROTOCOL_VERSION, RpcError, RpcPeer, type Hello } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
-import { APP_MOVED, withMovedActions, type MachineEntry, type SuperegoBridge, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
+import { APP_MOVED, LAYOUT_SETTING, withMovedActions, withMovedLayout, type MachineEntry, type SuperegoBridge, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { askPairing, LIMITED, type Pairing } from './pair-gate.ts'
 
 const SETTINGS = 'superego.appSettings'
@@ -34,10 +34,10 @@ async function admitted(): Promise<Pairing> {
 }
 
 /** App settings, kept in localStorage; those kept under an old key (or a shortcut under an old action's id) read as their new one's, as the desktop app's are. */
-const store: SettingsStore = withMovedActions(withMovedKeys({
+const store: SettingsStore = withMovedLayout(withMovedActions(withMovedKeys({
   load: () => { try { return JSON.parse(localStorage.getItem(SETTINGS) ?? '{}') } catch { return {} } },
   save: async (values) => localStorage.setItem(SETTINGS, JSON.stringify(values)),
-}, APP_MOVED))
+}, APP_MOVED)))
 
 export function webBridge(): SuperegoBridge {
   const listeners = new Set<(event: SuperegoEvent) => void>()
@@ -113,6 +113,7 @@ export function webBridge(): SuperegoBridge {
       { key: 'app.font.interface', title: 'Interface font', default: null, type: { type: 'font', nullLabel: 'System' } },
       { key: 'app.font.mono', title: 'Monospace font', default: null, description: 'Code, tool output and paths.', type: { type: 'font', monospace: true, nullLabel: 'System monospace' } },
       { key: 'app.accent', title: 'Accent colour', default: 'color(display-p3 0.155 0.319 0.654)', description: 'Focus rings, primary buttons, links and selection. Any CSS colour.', type: { type: 'color' } },
+      LAYOUT_SETTING,
     ],
   })
   settings.register({

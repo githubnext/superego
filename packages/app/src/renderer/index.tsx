@@ -5,14 +5,15 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@superego/ui/styles.css'
 import './app.css'
-import type { AppConfig } from '@superego/protocol'
-import { createRegistry, RegistryProvider, type UiExtension } from './extension.tsx'
+import { bool, obj, opt, str, type AppConfig } from '@superego/protocol'
+import { createRegistry, layoutOf, RegistryProvider, type UiExtension } from './extension.tsx'
+import { LAYOUT, placeIn, type Place } from './layout.ts'
 import { Profiles, Providers } from './SettingsView.tsx'
 import { WebAccess } from './web-access.tsx'
-import { Shell } from './Shell.tsx'
+import { Shell, ThreadPicker } from './Shell.tsx'
 import { SORT } from './sessions.ts'
 import { ShellStateProvider } from './state.tsx'
-import { coreActions } from './actions.tsx'
+import { coreActions, defineWindowAction } from './actions.tsx'
 import { webBridge } from './web-bridge.ts'
 import { registerBuiltInPanes } from './panes.tsx'
 import { registerToolRows } from './tool-rows.tsx'
@@ -42,6 +43,15 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
     registerSeen(core)
     registerProfileUi(core)
     for (const action of coreActions(app)) core.action(action)
+    // Every thread in a menu, and a new one: at the title bar's start while there's no space (no sidebar).
+    core.view('core.picker', { title: 'Threads', context: 'window', fits: ['titlebar'], withoutSpaces: 'titlebar', component: ThreadPicker })
+    // A view put in a place, or taken out (toggled, unless `on` says): the user's layout keeps it.
+    core.action(defineWindowAction({
+      id: 'layout.place', title: 'Put a view in a place', params: obj({ view: str(), place: str(), on: opt(bool()) }),
+      run: ({ view, place, on }, c) => c.dispatch('app.settings.set', {
+        key: LAYOUT, value: placeIn(registry.views, layoutOf(c.appSetting(LAYOUT)), view, place as Place, on),
+      }, { machine: 'app', source: 'layout' }),
+    }))
   })
   void registry.router.load('app')
   // Declared before anything renders, so a component reading or setting them finds them registered.
@@ -56,11 +66,12 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
 }
 
 export {
-  defineUiExtension, fileKind, Slot, urlKind, useApp, useRegistry,
-  type EditorSlotProps, type EntryProps, type WindowEvent, type WindowEvents, type WindowState, type LinkAttributes, type LinkHandler, type LinkProps, type LinkWhere, type NewThreadField, type NewThreadFieldProps, type PaneKind, type PaneProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type ToolRow, type ToolRowCall, type ToolState, type UiApi, type UiExtension,
+  defineUiExtension, fileKind, Slot, urlKind, useApp, usePlacement, useRegistry,
+  type BehaviourSlot, type EditorSlotProps, type SpaceRailProps, type View, type ViewContext, type ViewProps, type EntryProps, type WindowEvent, type WindowEvents, type WindowState, type LinkAttributes, type LinkHandler, type LinkProps, type LinkWhere, type NewThreadField, type NewThreadFieldProps, type PaneKind, type PaneProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type ToolRow, type ToolRowCall, type ToolState, type UiApi, type UiExtension,
   type WorkBlock, type WorkPart, type WorkRun, type WorkStatus,
 } from './extension.tsx'
 export { useAppSetting } from './client.ts'
+export { LAYOUT, type Layout, type Place, type Placement } from './layout.ts'
 export { useDispatch } from './Shell.tsx'
 export type { Dispatch } from './actions.tsx'
 export { keyLabel, useActions, useKeymap, useShortcut } from './keys.ts'

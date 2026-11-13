@@ -78,6 +78,35 @@ export const ACTIONS_MOVED: Record<string, string> = {
   'app.meta': 'ego.open',
 }
 
+/**
+ * Where the window's views go (see renderer/layout.ts), changed where they are: hidden from Settings until it has a
+ * Layout section of its own.
+ */
+export const LAYOUT_SETTING = {
+  key: 'app.layout', title: 'Layout', default: {}, type: { type: 'layout' }, hidden: () => true,
+} as const
+
+/**
+ * `store` with the placement settings there were before views were placed by `app.layout` read into it (and saved so,
+ * with the next change): `threads.details` on is the threads' details in the aside. Kept one release after the move:
+ * remove with PROTOCOL_VERSION 2.
+ */
+export function withMovedLayout(store: SettingsStore): SettingsStore {
+  return {
+    load() {
+      const values = store.load()
+      if (!('threads.details' in values)) return values
+      const { 'threads.details': details, ...rest } = values
+      const layout = rest['app.layout']
+      const kept = layout && typeof layout === 'object' && !Array.isArray(layout) ? layout : {}
+      const place = kept.place && typeof kept.place === 'object' && !Array.isArray(kept.place) ? kept.place : {}
+      if (details !== true || 'threads.details' in place) return rest
+      return { ...rest, 'app.layout': { ...kept, place: { ...place, 'threads.details': 'aside' } } }
+    },
+    save: (values) => store.save(values),
+  }
+}
+
 /** `store` with what `app.keys` holds for an action's old id read as its new one's (and saved so). */
 export function withMovedActions(store: SettingsStore): SettingsStore {
   return {

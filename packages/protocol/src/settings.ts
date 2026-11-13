@@ -19,6 +19,8 @@ export type SettingType =
   | { type: 'color' }
   /** Shortcuts by action id, like `mod+shift+k`, or `null` for none: only what differs from the actions' own. */
   | { type: 'keymap' }
+  /** Where the window's views go, by view id (see `app.layout`): only what differs from the views' own defaults. */
+  | { type: 'layout' }
 
 /** A setting as clients see it: its type, with options resolved for the current state. */
 export type SettingInfo = SettingType & {

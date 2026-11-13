@@ -4,7 +4,7 @@ import { NOTE_ENTRY, waitingForSignIn, type Attachment, type ThreadInfo } from '
 import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CheckIcon, FileIcon, type Icon as PhosphorIcon, IconButton, ListIcon, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TextArea, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
-import { completionsIn, divideWork, entryView, fileKind, folderKind, paneMenu, sentWithIn, Slot, shownPanes, toolRow, toolView, unfoldedTool, urlKind, useRegistry, type ToolRowCall, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
+import { completionsIn, divideWork, entryView, fileKind, folderKind, paneMenu, PlacedViews, sentWithIn, Slot, shownPanes, toolRow, toolView, unfoldedTool, urlKind, useLayout, useRegistry, type ToolRowCall, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useRejections, useShell } from './state.tsx'
 import { useShortcut } from './keys.ts'
 import { ctrlDigit } from './shortcuts.ts'
@@ -147,7 +147,7 @@ export function ThreadTools({ machine, thread }: { machine: MachineEntry; thread
         <Slot name="thread.crumb" props={{ machine, thread }} />
         {thread.profile && <span className="titlebar__chip thread__profile" title={thread.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{thread.profile.name}</span>}
       </span>
-      <Slot name="thread.header" props={{ machine, thread }} />
+      <PlacedViews place="header" machine={machine} thread={thread} />
       {thread.cost !== undefined && thread.cost > 0 && <span className="thread__cost" title="Spent on this thread">${thread.cost.toFixed(2)}</span>}
       {/* Without a pane shown, there's no strip to open one from: here instead. */}
       {!shownPanes(registry, { machine: machine.id, thread }).length && <PaneMenu machine={machine} thread={thread} />}
@@ -946,7 +946,7 @@ function Composer({ machine, thread, busy, inbox, onJump }: { machine: MachineEn
 /** Open a pane beside the thread: the kinds that show something without being told what (Changes, a profile's own). */
 export function PaneMenu({ machine, thread, add = false }: { machine: MachineEntry; thread: ThreadInfo; add?: boolean }) {
   const registry = useRegistry()
-  const kinds = paneMenu(registry, { machine: machine.id, thread })
+  const kinds = paneMenu(registry, useLayout().placed, { machine: machine.id, thread })
   if (!kinds.length) return null
   const open = (kind: string) => void registry.router.dispatch('pane.open', { id: thread.id, kind }, { machine: machine.id, source: 'header' })
   return (

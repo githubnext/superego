@@ -1,8 +1,9 @@
 /// <reference path="./env.d.ts" />
-// ego, UI half: Ego's button at the top of the rail and "Ask Ego" in ⌘K, which open its thread on this computer (made
-// the first time); and in its thread's title bar, Clear instead of archiving. Its thread is a hidden one: the window
+// ego, UI half: Ego's button (`ego.button`: at the top of the rail, and at the foot of a phone's drawer) and "Ask Ego"
+// in ⌘K, which open its thread on this computer (made the first time); and in its thread's title bar, Clear instead of
+// archiving. Its thread is a hidden one: the window
 // shows it while it's selected, as any.
-import { defineAction, defineUiExtension, has, useApp, useDispatch, useMachines, useSelection, type SlotProps } from '@superego/app/ui'
+import { defineAction, defineUiExtension, has, useApp, useDispatch, useMachines, useSelection, type ViewProps } from '@superego/app/ui'
 import { agentName, type ThreadInfo } from '@superego/protocol'
 import { BroomIcon, IconButton, LifebuoyIcon } from '@superego/ui'
 import { about, ASK, CLEAR } from './shared.ts'
@@ -14,9 +15,12 @@ const isEgo = (thread: ThreadInfo | undefined) => thread?.ext?.ego === true
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    // Before the spaces (threads), at the rail's top; not a space, so what shows when there are none (Unread) still does.
-    superego.slot('rail', RailButton, { order: 10, fills: false })
-    superego.slot('thread.header', ClearButton)
+    // A button, not a space: it shows a thread, and the sidebar keeps what it shows. First in the rail.
+    superego.view('ego.button', {
+      title: `Ask ${agentName(superego.app)}`, icon: LifebuoyIcon, context: 'window', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10,
+      component: EgoButton,
+    })
+    superego.view('ego.clear', { title: 'Clear', context: 'thread', fits: ['header'], default: 'header', component: ClearButton })
     superego.action(defineAction({
       id: OPEN, title: `Ask ${agentName(superego.app)}`,
       when: (c) => has(c.machines.find((m) => m.id === 'local'), 'ext:ego'),
@@ -28,7 +32,7 @@ export default defineUiExtension({
   },
 })
 
-function RailButton() {
+function EgoButton({ place }: ViewProps<'window'>) {
   const app = useApp()
   const dispatch = useDispatch()
   const local = useMachines().find((m) => m.id === 'local')
@@ -36,14 +40,14 @@ function RailButton() {
   if (!has(local, 'ext:ego')) return null
   const on = selection?.machine === 'local' && isEgo(thread)
   return (
-    <IconButton label={`Ask ${agentName(app)}`} className={`app__rail-button ego__button ${on ? 'is-on' : ''}`} onClick={() => void dispatch(OPEN, {}, { source: 'rail' }).catch((error) => console.error(error))}>
+    <IconButton label={`Ask ${agentName(app)}`} className={`app__rail-button ego__button ${on ? 'is-on' : ''}`} onClick={() => void dispatch(OPEN, {}, { source: place }).catch((error) => console.error(error))}>
       <LifebuoyIcon size={18} aria-hidden />
     </IconButton>
   )
 }
 
 /** Ego is kept, not archived: cleared, it starts empty again. */
-function ClearButton({ machine, thread }: SlotProps['thread.header']) {
+function ClearButton({ machine, thread }: ViewProps<'thread'>) {
   const dispatch = useDispatch()
   if (!isEgo(thread)) return null
   return (
