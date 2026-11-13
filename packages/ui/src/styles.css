@@ -192,15 +192,10 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-tooltip { background: var(--superego-text); color: var(--superego-bg); font-size: var(--superego-text-sm); border-radius: 6px; padding: 5px 8px; white-space: nowrap; transition: opacity .1s; }
 .superego-tooltip[data-starting-style], .superego-tooltip[data-ending-style] { opacity: 0; }
 
-/* Focus is always apparent, and always the same: one solid outline in the accent colour, whatever a component's own
-   styles say. Text being typed shows it on the box it's typed in (a field, the composer), and an editor on its column;
-   a splitter on its bar. Keyboard focus only: a click on a button doesn't ring it. */
-:focus:not(:focus-visible) { outline: none; }
-:focus-visible:not(input, textarea, select, [contenteditable], [role="separator"]) {
-  outline: 2px solid var(--superego-ring) !important; outline-offset: 2px;
-}
-.superego-select:focus-visible { outline: 2px solid var(--superego-ring) !important; outline-offset: 2px; }
-.superego-list-item:focus-visible { outline-offset: -2px; }
+/* Focus: the region holding it wears the ring (the app's), and a text field its own. Nothing else does, but a small
+   control reached from the keyboard: one solid outline in the accent colour, inside its edge, so nothing clips it. */
+:focus { outline: none; }
+:is(button, a, summary, .superego-list-item):focus-visible { outline: 2px solid var(--superego-ring); outline-offset: -2px; }
 
 /* Scrollbars that stay out of the way: thin, no track, darker on hover. */
 ::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }

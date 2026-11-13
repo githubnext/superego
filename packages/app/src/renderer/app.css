@@ -11,8 +11,8 @@
 .app__meta:hover { color: var(--superego-text); background: var(--superego-hover); }
 .app__meta.is-on { color: var(--superego-text); background: var(--superego-selected); }
 /* The sidebar: on the side's grey beside the rail, a hairline at its edge. Hidden while what's in it shows nothing.
-   What's in it scrolls inside a clear border, where its focus ring goes. */
-.app__sidebar { position: relative; width: var(--superego-sidebar); flex: none; min-height: 0; overflow: auto; border: 5px solid transparent; padding: 4px 5px 7px; display: flex; flex-direction: column; }
+   A region (its ring: see the end). */
+.app__sidebar { position: relative; width: var(--superego-sidebar); flex: none; min-height: 0; overflow: auto; padding: 7px 8px 10px; display: flex; flex-direction: column; }
 .app__sidebar:has(> .app__footer:first-child:empty) { display: none; }
 .app__tools { display: flex; align-items: center; gap: 2px; }
 .app__tools .superego-icon-button { color: var(--superego-muted); }
@@ -87,8 +87,6 @@
 /* The thread: a crumb, a title and a reading column; the composer floats at the bottom. */
 .thread { display: flex; flex-direction: column; flex: 1; min-height: 0; position: relative; }
 .thread__scroll { flex: 1; overflow: auto; scrollbar-gutter: stable; }
-/* Holding the focus, the thread shows it as its column does (the ring around the card), not a second ring inside. */
-.thread__scroll:focus-visible { outline: none; }
 /* Room below the end for the composer floating over it (--dock: its height, kept by ThreadBody), its bar above it, and air. */
 .thread__column { width: var(--superego-column); max-width: calc(100% - 2 * var(--superego-space-6)); margin: 0 auto; padding: var(--superego-space-4) 0 calc(var(--dock, 70px) + 100px); }
 /* Text scrolls away under soft edges: at the top, and behind the floating composer. */
@@ -419,8 +417,7 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .panes__gap:hover::after, .panes__gap:active::after { opacity: 1; height: 40px; background: var(--superego-muted); }
 /* While a column is dragged: the cursor stays, and nothing under it is selected. */
 .is-resizing-columns, .is-resizing-columns * { cursor: col-resize !important; user-select: none !important; }
-.panes__column { flex: none; display: flex; flex-direction: column; min-height: 0; position: relative; background: var(--superego-bg); }
-.panes__column--thread { border-left: 0; overflow: hidden; }
+.panes__column { flex: none; display: flex; flex-direction: column; min-height: 0; position: relative; overflow: hidden; background: var(--superego-bg); }
 .panes__column--thread > .thread { flex: 1; min-width: 0; }
 .panes__column--thread .thread__column { max-width: calc(100% - 2 * var(--superego-space-7)); }
 .panes__column--thread .dock { max-width: calc(100% - 2 * var(--superego-space-4)); }
@@ -432,7 +429,7 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .panes__close:hover { color: var(--superego-text); background: var(--superego-hover); }
 .panes__body { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .panes--narrow { scroll-snap-type: x mandatory; scrollbar-width: none; }
-.panes--narrow .panes__column { scroll-snap-align: start; scroll-snap-stop: always; border-left: 0; }
+.panes--narrow .panes__column { scroll-snap-align: start; scroll-snap-stop: always; }
 .pane-empty { margin: auto; color: var(--superego-muted); padding: var(--superego-space-5); text-align: center; }
 .pane-scroll { flex: 1; overflow: auto; }
 .pane-bar { display: flex; align-items: center; gap: var(--superego-space-3); padding: 6px var(--superego-space-3); border-bottom: 1px solid color-mix(in srgb, var(--superego-border) 60%, transparent); font-size: var(--superego-text-sm); color: var(--superego-muted); flex: none; min-height: 38px; }
@@ -477,7 +474,6 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 :is(.file-editor--live, .file-editor--rendered) .file-editor__after { box-sizing: content-box; }
 /* Rendered: the file read as a message reads, in live preview's column. */
 .file-editor__rendered { max-width: 720px; margin: 0 auto; padding: 20px var(--superego-space-5) 32px; font-size: var(--superego-text-body); line-height: var(--superego-leading-body); overflow-wrap: anywhere; }
-.file-editor__rendered:focus-visible { outline: none; }
 /* A task list is its boxes, as live preview shows it. */
 .file-editor__rendered .contains-task-list { list-style: none; padding-left: 0; }
 .file-editor__rendered .task-list-item input { margin: 0 0.45em 0 0; vertical-align: -0.1em; }
@@ -562,10 +558,6 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .new-thread__check { display: flex; gap: 8px; align-items: baseline; font-size: var(--superego-text-sm); }
 .new-thread__check em { font-style: normal; color: var(--superego-muted); }
 
-/* Focus, as everywhere: the box text is typed in carries the ring, and the region holding focus says so. */
-/* Typing shows on the box, unless panes are open: then the column's ring says it. */
-:not(.has-panes) > .panes .dock__box:has(.composer textarea:focus-visible), :not(.has-panes) > .panes .dock__box:has(.composer textarea:focus),
-:not(.has-panes) > .panes .dock:has(.composer textarea:focus) .dock__join { box-shadow: 0 0 0 2px var(--superego-ring), 0 4px 16px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); }
 .palette__input:focus { outline: 2px solid var(--superego-ring); outline-offset: -2px; }
 
 /* Attachments: chips, an image's with its thumbnail; waiting above the composer, then under the message they went with. */
@@ -605,26 +597,12 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 
 .dock.is-dropping .dock__box { outline: 2px dashed var(--superego-ring); outline-offset: 2px; }
 
-/* A region (the sidebar, the thread, a pane) wears a ring while it holds the focus and the focus shows: on what was
-   reached from the keyboard, or on what takes typing (a text field, an editor, a page). Mouse clicks on buttons don't
-   draw it; typing does. What has the focus inside a page is out of the window's sight (its frame never matches
-   :focus-visible, and only sometimes :focus), so a frame holding the focus shows it, as a text field always does. */
-:is(.app__sidebar, .panes > .panes__column):focus-within:not(:focus:not(:focus-visible), :has(:focus:not(:focus-visible, iframe))) {
-  /* No room around a column or the sidebar: the ring sits just inside its edge, and what's inside it shows only inside
-     the ring. The sidebar scrolls, so it takes an outline (which stays put) on the clear border its content scrolls
-     within; a column draws its ring over what's in it, and covers what lies outside it with its own colour. */
-  outline: 2px solid var(--superego-ring) !important; outline-offset: -5px;
-  .panes > & { outline: none !important; }
-  &::before { opacity: 1; }
-}
-.app__sidebar { border-radius: 10px; }
-.panes > .panes__column::before {
-  content: ''; position: absolute; inset: 3px; z-index: 6; pointer-events: none; border-radius: 7px;
-  box-shadow: inset 0 0 0 2px var(--superego-ring), 0 0 0 8px var(--superego-bg); clip-path: inset(-3px); opacity: 0; transition: opacity .12s;
-}
-/* The thread alone: its composer (or what has the focus in it) shows the focus; no ring around the whole sheet. */
-.sheet:not(.has-panes) > .panes > .panes__column::before { display: none; }
-.panes--narrow > .panes__column::before { inset: 0; border-radius: 0; box-shadow: inset 0 0 0 3px var(--superego-ring); }
+/* Focus: the region holding it (the sidebar, the thread, a pane) wears the ring, its own border. The border is always
+   there, clear until then, so nothing moves; it lies outside what's in the region, which the region clips, so nothing
+   in it (scrolled text, a page, an editor) can paint over it. Nothing inside a region wears a ring of its own, but a
+   small control reached from the keyboard (see @superego/ui's styles). */
+.app__sidebar, .panes > .panes__column { border: 2px solid transparent; }
+:is(.app__sidebar, .panes > .panes__column):focus-within { border-color: var(--superego-ring); }
 
 /* Over the row: a tab for the thread and each pane (the focused one tinted, those out of view faint, with which way
    they are), the row in small, and + for another pane. */

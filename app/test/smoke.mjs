@@ -585,7 +585,7 @@ if (phase === 'first') {
   const shown = await run(`window.superego.call('local', 'thread.list', {}).then((all) => all.find((t) => t.title === 'elsewhere').id)`)
   // The column wearing the ring, and the one brought forward (its title lit): focus moving into a column brings it.
   const ringed = (label) => until(`(() => {
-    const ringed = [...document.querySelectorAll('.panes > [data-column]')].filter((c) => getComputedStyle(c, '::before').opacity === '1')
+    const ringed = [...document.querySelectorAll('.panes > [data-column]')].filter((c) => getComputedStyle(c).borderTopColor !== 'rgba(0, 0, 0, 0)')
     return ringed.length === 1 && (ringed[0].querySelector('.panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}
   })()`, `only ${label} ringed`)
   const front = (label) => until(`(document.querySelector('.panes__tab.is-active .panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}`, `${label} brought forward`)

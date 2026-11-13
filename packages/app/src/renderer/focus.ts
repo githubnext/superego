@@ -1,9 +1,9 @@
-// Focus, after Tremolo: always visible (one ring, see @superego/ui's styles), and in one place the app and the keyboard
-// agree on. The window is a row of regions, left to right: the sidebar, the thread, each pane beside it. ⌘⌥← and ⌘⌥→
-// move between them, ⌃I goes to the prompt (esc leaves it for the thread); going to a region focuses what's used there
-// (the selected thread in the sidebar, the thread's transcript, an editor's text, a page, else the pane itself). Focus
-// moving into a pane makes it the thread's focused pane; a pane brought forward from the keyboard (⌃Tab, the
-// navigator) takes the focus with it.
+// Focus, after Tremolo: always visible (the region holding it wears the ring, see app.css), and in one place the app
+// and the keyboard agree on. The window is a row of regions, left to right: the sidebar, the thread, each pane beside
+// it. ⌘⌥← and ⌘⌥→ move between them, ⌃I goes to the prompt (esc leaves it for the thread); going to a region focuses
+// what's used there (the selected thread in the sidebar, the thread's transcript, an editor's text, a page, else the
+// pane itself). Focus moving into a pane makes it the thread's focused pane; a pane brought forward from the keyboard
+// (⌃Tab, the navigator) takes the focus with it.
 
 /** The regions, left to right, as the window shows them now. */
 function regions(): HTMLElement[] {
@@ -28,9 +28,9 @@ function target(region: HTMLElement): HTMLElement | null {
 }
 
 /**
- * Focus what's used in a region. Moved there by a command (a key, the navigator), the focus shows, wherever the key was
- * pressed: the browser's own guess goes by the last input the window saw, and a key pressed in a page, or a click
- * before it, leaves that wrong. Moved there by a click (`visible: false`), it shows as a click's would.
+ * Focus what's used in a region. Moved there by a command (a key, the navigator), a row it lands on wears its keyboard
+ * ring, wherever the key was pressed: the browser's own guess goes by the last input the window saw, and a key pressed
+ * in a page, or a click before it, leaves that wrong. Moved there by a click (`visible: false`), it doesn't.
  */
 export function focusRegion(region: HTMLElement | null | undefined, { visible = true }: { visible?: boolean } = {}): boolean {
   const el = region && target(region)

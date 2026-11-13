@@ -200,7 +200,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
       {stripSlot ? strip && createPortal(strip, stripSlot) : strip}
       <div className={`panes ${narrow ? 'panes--narrow' : ''}`} ref={row} onScroll={onScroll}>
         {/* Focus moving into a column (a click, a key) makes it the focused one: the app and the keyboard agree. */}
-        <div data-column="thread" tabIndex={-1} className={`panes__column panes__column--thread ${focused === undefined ? 'is-focused' : ''}`}
+        <div data-column="thread" tabIndex={-1} className="panes__column panes__column--thread"
           style={{ width: threadWidth }} onPointerDownCapture={() => focus(undefined)} onFocusCapture={() => focus(undefined)}>{main}</div>
         {/* The gap after each column is its handle: drag it to make that one wider or narrower. */}
         {gap(0)}
@@ -241,7 +241,7 @@ function PaneColumn({ pane, title, focused, width, onFocus, onClick, onClose, ch
 }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   return (
-    <div data-column={pane.id} tabIndex={-1} className={`panes__column ${focused ? 'is-focused' : ''}`}
+    <div data-column={pane.id} tabIndex={-1} className="panes__column"
       style={{ width }} onPointerDownCapture={onFocus} onFocusCapture={onFocus} onClick={onClick}>
       <div className={`panes__tab ${focused ? 'is-active' : ''}`}>
         <button className="panes__label" title={title}>{title}</button>

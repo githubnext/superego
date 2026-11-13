@@ -86,7 +86,7 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
 | `⌘,` | Settings |
 
 Every one is an action: Settings → Keyboard changes them, `⌘K` lists them, `superego do <id>` runs a machine's from a shell.
-Focus is always visible: whatever has it wears one solid ring, and the region holding it is marked.
+Focus is always visible: the region holding it (the sidebar, the thread, a pane) wears one solid ring.
 
 ## Layout
 

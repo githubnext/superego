@@ -1,5 +1,6 @@
 #!/bin/sh
-# The window's layout in the states the design covers, screenshotted: `test/look.sh <dir>` (after electron-vite build).
+# The window's layout in the states the design covers, screenshotted: `test/look.sh <dir> [focus]` (after electron-vite
+# build); `focus`: each region holding the focus.
 set -e
 cd "$(dirname "$0")/.."
 OUT="$(cd "$(dirname "${1:?usage: look.sh <dir>}")" && pwd)/$(basename "$1")"
@@ -15,4 +16,4 @@ cleanup() {
   rm -rf "$SUPEREGO_HOME"
 }
 trap cleanup EXIT
-node_modules/.bin/electron test/look.mjs
+node_modules/.bin/electron "test/${2:-look}.mjs"
