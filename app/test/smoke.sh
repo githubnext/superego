@@ -2,6 +2,8 @@
 # Two app processes against one daemon, which must outlive the first. Cleans up the daemon afterwards.
 set -e
 cd "$(dirname "$0")/.."
+# A heavy check: it waits for a slot (../scripts/check.ts).
+[ -n "$SUPEREGO_CHECK_SLOT" ] || exec node ../scripts/check.ts test/smoke.sh "$@"
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_MODEL=faux SUPEREGO_HEADLESS=1
 # A recorded agent that asks the user something, then uses the answer: offered as the model "replay/replay".

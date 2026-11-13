@@ -4,8 +4,8 @@
   "type": "module",
   "packageManager": "pnpm@12.14.0",
   "scripts": {
-    "typecheck": "tsc -b",
-    "test": "vitest run",
+    "typecheck": "node scripts/check.ts tsc -b",
+    "test": "node scripts/check.ts vitest run",
     "dev": "pnpm --filter superego dev",
     "build": "pnpm --filter superego build",
     "link:cli": "ln -sf \"$PWD/app/bin/superego.ts\" \"$HOME/.local/bin/superego\" && echo \"Linked $HOME/.local/bin/superego\""

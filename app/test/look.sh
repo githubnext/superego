@@ -1,8 +1,10 @@
 #!/bin/sh
-# The window's layout in the states the design covers, screenshotted: `test/look.sh <dir> [focus|composer]` (after electron-vite
-# build); `focus`: each region holding the focus; `composer`: the composer and what's around it.
+# The window's layout in the states the design covers, screenshotted: `test/look.sh <dir> [focus|composer]`;
+# `focus`: each region holding the focus; `composer`: the composer and what's around it.
 set -e
 cd "$(dirname "$0")/.."
+# A heavy check: it waits for a slot (../scripts/check.ts).
+[ -n "$SUPEREGO_CHECK_SLOT" ] || exec node ../scripts/check.ts test/look.sh "$@"
 OUT="$(cd "$(dirname "${1:?usage: look.sh <dir>}")" && pwd)/$(basename "$1")"
 mkdir -p "$OUT"
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY

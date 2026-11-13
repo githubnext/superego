@@ -3,6 +3,8 @@
 # Each thread at its top, middle and end, in light and dark. Cleans up its daemon afterwards.
 set -e
 cd "$(dirname "$0")/.."
+# A heavy check: it waits for a slot (../scripts/check.ts).
+[ -n "$SUPEREGO_CHECK_SLOT" ] || exec node ../scripts/check.ts test/showcase.sh "$@"
 OUT="$(cd "$(dirname "${1:?usage: showcase.sh <dir>}")" && pwd)/$(basename "$1")"
 mkdir -p "$OUT"
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
