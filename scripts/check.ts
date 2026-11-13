@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Runs a heavy check (tests, typecheck, smoke, screenshots) once a slot is free: at most SUPEREGO_CHECK_SLOTS (default
-// 2; 0 for no limit) run at once on this machine, across every worktree. `node scripts/check.ts <command> [args…]`.
+// 2; 0 for no limit) run at once on this machine, across every worktree, and none runs longer than its limit.
+// `node scripts/check.ts [--timeout <VAR>=<seconds>] <command> [args…]`: the limit is $VAR if set, else the seconds
+// given; without --timeout, SUPEREGO_CHECK_TIMEOUT (default 1200). A run over its limit is stopped with everything it
+// started (its process group: SIGTERM, then SIGKILL 10s later) and exits 124.
 //
 // Each run takes a ticket, a file in ~/.superego/check-locks named by when it arrived, and runs once fewer than N live
 // tickets are ahead of it: first come, first served. A ticket is live while its process is and keeps touching it; a
@@ -11,9 +14,16 @@ import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, utimesSync,
 import { constants, homedir } from 'node:os'
 import { basename, join } from 'node:path'
 
-const [command, ...args] = process.argv.slice(2)
-if (!command) {
-  console.error('usage: node scripts/check.ts <command> [args…]')
+let argv = process.argv.slice(2)
+let [limitVar, limitDefault] = ['SUPEREGO_CHECK_TIMEOUT', '1200']
+if (argv[0] === '--timeout') {
+  [limitVar, limitDefault] = argv[1]!.split('=') as [string, string]
+  argv = argv.slice(2)
+}
+const limit = Number(process.env[limitVar] || limitDefault)
+const [command, ...args] = argv
+if (!command || !(limit > 0)) {
+  console.error('usage: node scripts/check.ts [--timeout <VAR>=<seconds>] <command> [args…]')
   process.exit(2)
 }
 const slots = Number(process.env.SUPEREGO_CHECK_SLOTS ?? 2)
@@ -82,14 +92,35 @@ function release() {
 }
 
 function run() {
-  const child = spawn(command!, args, { stdio: 'inherit', env: { ...process.env, SUPEREGO_CHECK_SLOT: ticket ?? '1' } })
-  // Ctrl-C reaches the child from the terminal too; a signal sent to this process alone is passed on.
+  // In a process group of its own, so that stopping it stops everything it started (Electron and its helpers, say).
+  const child = spawn(command!, args, { stdio: 'inherit', detached: true, env: { ...process.env, SUPEREGO_CHECK_SLOT: ticket ?? '1', SUPEREGO_CHECK_COMMAND: command } })
+  const group = (signal: NodeJS.Signals) => { try { process.kill(-child.pid!, signal) } catch {} }
+  // Ctrl-C reaches only this process now (the terminal's foreground group): it's passed on.
   for (const signal of SIGNALS) {
     process.removeAllListeners(signal)
-    process.on(signal, () => child.kill(signal))
+    process.on(signal, () => group(signal))
   }
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    console.error(`\n${[command, ...args].join(' ')}: still running after ${minutes(limit)}, stopping it (${limitVar}=<seconds> to allow longer)`)
+    group('SIGTERM')
+    setTimeout(() => group('SIGKILL'), 10_000).unref()
+  }, limit * 1000)
   child.on('error', (error) => { console.error(`${command}: ${error.message}`); process.exit(127) })
-  child.on('exit', (code, signal) => process.exit(signal ? 128 + constants.signals[signal] : code ?? 1))
+  child.on('exit', (code, signal) => {
+    clearTimeout(timer)
+    if (timedOut) {
+      // What's left of its group, if it shrugged off SIGTERM.
+      group('SIGKILL')
+      process.exit(124)
+    }
+    process.exit(signal ? 128 + constants.signals[signal] : code ?? 1)
+  })
+}
+
+function minutes(seconds: number) {
+  return seconds % 60 ? `${seconds}s` : `${seconds / 60} min`
 }
 
 function sleep(ms: number) {
