@@ -399,7 +399,7 @@ function Sent({ blocks, className, children }: { blocks: SentBlock[]; className:
   if (!text && !found.length && !files.length && !children) return null
   return (
     <div className={className}>
-      {text}
+      {text && <Markdown text={text} breaks />}
       {(found.length > 0 || files.length > 0) && (
         <div className="msg__files">
           {found.map(({ reader: { component: Component, owner }, items }) => <Component key={`${owner.profile ?? ''}/${owner.extension}`} {...here} items={items} />)}

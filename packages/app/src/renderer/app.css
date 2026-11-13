@@ -111,6 +111,14 @@
 .turn-end + .msg--user { margin-top: 30px; }
 .msg__text + .msg--user, .steps + .msg--user { margin-top: 40px; }
 .msg--user + * { margin-top: var(--superego-space-1); }
+/* Your words as Markdown, each newline kept: compact, with code tinted over the bubble rather than on the page's grey. */
+.msg--user .md { white-space: normal; }
+.msg--user .md :is(p, ul, ol, blockquote, .md__table, .md__code) { margin-bottom: var(--superego-space-2); }
+.msg--user .md :is(p, ul, ol, blockquote, .md__table, .md__code):last-child { margin-bottom: 0; }
+.msg--user .md :is(h1, h2, h3, h4) { font-size: 1em; margin: var(--superego-space-2) 0 var(--superego-space-1); }
+.msg--user .md pre { background: light-dark(rgb(0 0 0 / .045), rgb(255 255 255 / .06)); }
+.msg--user .md .md__copy { background: var(--superego-bubble); }
+.msg--user .md a { color: light-dark(var(--superego-accent), color-mix(in oklab, var(--superego-accent) 55%, #fff)); }
 /* Narration leads straight into the work it announces. */
 .msg__text.is-streaming .md > :last-child::after { content: '▍'; color: var(--superego-muted); animation: superego-pulse 1s infinite; }
 .msg--note { color: var(--superego-muted); font: var(--superego-text-xs) var(--superego-mono); }

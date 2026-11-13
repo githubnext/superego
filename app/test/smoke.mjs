@@ -75,6 +75,11 @@ if (phase === 'first') {
     ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
   })()`)
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: typed message')`, 'typed answer rendered')
+  // Your messages read as Markdown too, each newline kept: a thread link, code, a highlighted block; a lone * stays.
+  const said = `From [this thread](thread:${id}):\nrun \`pnpm test\` * twice\n\n\`\`\`ts\nconst a = 1\n\`\`\``
+  await run(`window.superego.call('local', 'thread.submit', { id: '${id}', text: ${JSON.stringify(said)} })`)
+  await until(`(() => { const m = [...document.querySelectorAll('.msg--user')].at(-1); return Boolean(m?.querySelector('a.thread-ref') && m.querySelector('p br')) && m.querySelector('p code')?.textContent === 'pnpm test' && m.textContent.includes(' * twice') && Boolean(m.querySelector('pre code.is-highlighted span')) })()`, 'a user message as Markdown')
+  await shot('user-markdown')
   // Naming a skill: $ offers this machine's skills as you type; ⇥ takes one, and the message carries it.
   await run(`(() => {
     const ta = document.querySelector('.composer textarea')

@@ -6,6 +6,7 @@
 // names ([title](thread:<id>)) shows as that thread, to open (ThreadMachine).
 import { createContext, memo, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from 'react'
 import ReactMarkdown, { defaultUrlTransform, type Components, type ExtraProps } from 'react-markdown'
+import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import { highlight, languageNamed } from './code-highlight.ts'
 import { htmlPlugins, imagePath, looksLikePath, mediaMatches, parseSrcset } from './markdown-html.ts'
@@ -258,12 +259,18 @@ const urlTransform = (url: string) => url.startsWith(FILE) || url.startsWith(THR
 /** Footnotes' ids are prefixed once, by the sanitizing, not again before it. */
 const noPrefix = { clobberPrefix: '' }
 
-/** `text` as Markdown; with `html`, its HTML too (sanitized), as a document's. */
-export const Markdown = memo(function Markdown({ text, html = false }: { text: string; html?: boolean }) {
+const gfm = [remarkGfm]
+const gfmWithBreaks = [remarkGfm, remarkBreaks]
+
+/**
+ * `text` as Markdown; with `html`, its HTML too (sanitized), as a document's; with `breaks`, each newline a line break,
+ * as a person typed it.
+ */
+export const Markdown = memo(function Markdown({ text, html = false, breaks = false }: { text: string; html?: boolean; breaks?: boolean }) {
   const files = useContext(OpenFile)
   return (
     <div className="md">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} {...(html ? { rehypePlugins: htmlPlugins, remarkRehypeOptions: noPrefix } : {})} components={components} urlTransform={urlTransform}>
+      <ReactMarkdown remarkPlugins={breaks ? gfmWithBreaks : gfm} {...(html ? { rehypePlugins: htmlPlugins, remarkRehypeOptions: noPrefix } : {})} components={components} urlTransform={urlTransform}>
         {files ? wikilinks(text) : text}
       </ReactMarkdown>
     </div>
