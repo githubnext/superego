@@ -135,7 +135,8 @@ void (async () => {
   // The window goes no narrower than 600: zoomed, its page is a phone's 375.
   win().setContentSize(600, height)
   win().webContents.setZoomFactor(1.6)
-  await sleep(300)
+  // Laid out again from the wide window: a theme changed at once can miss the next shot.
+  await sleep(1500)
   await both('phone')
   await run(`document.querySelector('.app__mobilebar button')?.click()`)
   await until(`!!document.querySelector('.app__sidebar')`, 'drawer')
