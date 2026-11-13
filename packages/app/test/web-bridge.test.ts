@@ -10,7 +10,7 @@ class FakeSocket {
   onopen?: () => void
   onmessage?: (message: { data: string }) => void
   onclose?: () => void
-  constructor(readonly url: string) { FakeSocket.last = this; queueMicrotask(() => this.onopen?.()) }
+  constructor() { FakeSocket.last = this; queueMicrotask(() => this.onopen?.()) }
   send(line: string) {
     const request = JSON.parse(line) as { id: number; method: string }
     if (request.method === 'hello') this.receive({ jsonrpc: '2.0', id: request.id, result: { version: PROTOCOL_VERSION, machine: { id: 'm1', hostname: 'box' }, features: ['threads', 'ext:git'], methods: [] } })

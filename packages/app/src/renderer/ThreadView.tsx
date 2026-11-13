@@ -12,7 +12,7 @@ import { Markdown, OpenFile, OpenUrl, Scroll, ThreadMachine } from './Markdown.t
 import { ThreadRef } from './thread-ref.tsx'
 import { useLocalState } from './local-state.ts'
 import { readAttachment, splitMessage } from './attachments.ts'
-import { complete, completing, readSent, type Completion, type CompletionProvider, type SentBlock } from './composer.ts'
+import { askFor, complete, completing, menuFor, readSent, type Completion, type Offered, type SentBlock } from './composer.ts'
 import { useProfileUi } from './profile-ui.ts'
 import { ThreadPanes } from './panes.tsx'
 import { startRename, stopRename, useRenaming } from './rename.ts'
@@ -836,20 +836,13 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
   const [dismissed, setDismissed] = useState<number>()
   const found = claim ? undefined : completing(completionsIn(registry, { machine: machine.id, thread }), text, caret)
   const word = found?.word
-  // What the provider offered for the word, kept while it's asked again as the word grows, so the menu doesn't blink.
-  const [offered, setOffered] = useState<{ provider: CompletionProvider<any>; start: number; query: string; items: Completion[] }>()
+  // What the provider offered for the word, kept while it's asked again as the word grows (see menuFor).
+  const [offered, setOffered] = useState<Offered>()
   useEffect(() => {
     if (!found) return setOffered(undefined)
-    let current = true
-    const { provider, word } = found
-    const offer = (items: Completion[]) => { if (current) setOffered({ provider, start: word.start, query: word.query, items }) }
-    try {
-      void Promise.resolve(provider.items(word, { machine, thread })).then(offer, (error) => { console.error('Completing failed', error); offer([]) })
-    } catch (error) { console.error('Completing failed', error); offer([]) }
-    return () => { current = false }
-  }, [found?.provider, word?.start, word?.query, machine.id, thread.id])
-  const items = found && offered?.provider === found.provider && offered.start === word!.start ? offered.items : []
-  const menu = word && items.length > 0 && dismissed !== word.start ? items : undefined
+    return askFor(found, { machine, thread }, setOffered)
+  }, [found?.provider, JSON.stringify(word), machine.id, thread.id])
+  const menu = menuFor(found, offered, dismissed)
   useEffect(() => { setPick(0) }, [word?.query, word?.start])
   useEffect(() => { if (!word) setDismissed(undefined) }, [word === undefined])
   // What an extension above offers, picked from with ←/→ while the box is empty, and what it puts in.

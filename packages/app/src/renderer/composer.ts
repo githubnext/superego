@@ -33,6 +33,34 @@ export function completing(providers: readonly CompletionProvider<any>[], text: 
   return undefined
 }
 
+/** What a provider offered for a word. */
+export type Offered = { provider: CompletionProvider<any>; word: CompletionWord; items: Completion[] }
+
+/**
+ * Ask `found`'s provider what it offers; `offer` gets it, unless the returned cancel came first (the word changed before
+ * the answer did). A provider that fails offers nothing.
+ */
+export function askFor(found: { provider: CompletionProvider<any>; word: CompletionWord }, where: ComposerWhere, offer: (offered: Offered) => void): () => void {
+  let current = true
+  const { provider, word } = found
+  const done = (items: Completion[]) => { if (current) offer({ provider, word, items }) }
+  const failed = (error: unknown) => { console.error('Completing failed', error); done([]) }
+  try { void Promise.resolve(provider.items(word, where)).then(done, failed) } catch (error) { failed(error) }
+  return () => { current = false }
+}
+
+/** A word but its query: the same while it's typed further, another if it moved or a field of the provider's changed. */
+const stem = (word: CompletionWord) => JSON.stringify({ ...word, query: undefined })
+
+/**
+ * The menu for the word being completed: what was offered for it, or for it as typed so far (the same provider and
+ * stem), so the menu doesn't blink while it grows and is asked again. None once dismissed (esc) where the word starts.
+ */
+export function menuFor(found: { provider: CompletionProvider<any>; word: CompletionWord } | undefined, offered: Offered | undefined, dismissed?: number): Completion[] | undefined {
+  if (!found || !offered || offered.provider !== found.provider || stem(offered.word) !== stem(found.word)) return undefined
+  return offered.items.length && dismissed !== found.word.start ? offered.items : undefined
+}
+
 /** `text` with the word from `start` to the caret replaced by `insert`, and where the caret goes: after it. A space it ends with isn't doubled. */
 export function complete(text: string, caret: number, start: number, insert: string): { text: string; caret: number } {
   const after = /\s$/.test(insert) ? text.slice(caret).replace(/^ /, '') : text.slice(caret)
