@@ -114,6 +114,20 @@ superego auth retry [provider]        # retry the threads waiting for sign-in no
 Each machine has its own settings (models, providers, which extensions are on). OAuth sign-in happens in the app's
 Settings.
 
+## Web access
+
+```sh
+superego settings set web.access local       # off | local (this computer) | tailscale (https://<machine>.<tailnet>.ts.net)
+superego web pair                            # a link, its QR code, and a code to type: one device, once, for 5 minutes
+superego web devices                         # paired devices: name, last seen, address
+superego web revoke <device>                 # unpaired; its connections close at once
+superego web rename <device> <name>
+```
+
+A browser gets in as a paired device (an HttpOnly cookie; nothing secret in an address). With `tailscale`, the daemon
+runs `tailscale serve` itself; your own Tailscale login gets in without pairing unless `web.tailscale.pairing` is on.
+A device unused for 90 days is forgotten.
+
 ## The daemon
 
 ```sh

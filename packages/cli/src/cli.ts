@@ -9,6 +9,7 @@ import { createConnection } from 'node:net'
 import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
+import { renderUnicodeCompact } from 'uqr'
 import { devApp } from './dev-app.ts'
 import {
   checkIdentity, collectProfileUi, filesOf, hashProfileUi, MachineStore, openLocal, openMachine, routeOf, runUpdate, UiAllowStore, updateScript, type MachineConfig, type Transport,
@@ -73,6 +74,10 @@ Usage:
   ${app.id} auth key <provider>        Store an API key (prompted, or read from stdin)
   ${app.id} auth logout <provider>     Remove a stored credential
   ${app.id} auth retry [provider]      Retry the threads waiting for sign-in now (they retry by themselves when the credentials change)
+
+  ${app.id} web pair                   Pair a browser or phone with this machine: a link, its QR code, and a code to type
+  ${app.id} web devices                The devices paired (and your own through Tailscale)
+  ${app.id} web revoke|rename <device> [name]
 
   ${app.id} actions [--all]            List the actions a machine takes from the command line (--all: every action)
   ${app.id} do <action> [--<param> <value>...] [--params '<json>']
@@ -546,6 +551,44 @@ async function profileUiCommand(sub: 'allow-ui' | 'revoke-ui', machine: Machine,
   print(allowed, () => console.log(`Allowed ${allowed.profile.name}'s UI from ${machine.label} (${allowed.files.length} file${allowed.files.length === 1 ? '' : 's'}, ${size} bytes) as it is now`))
 }
 
+// ── Web access ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+const ago = (time: number) => {
+  const minutes = Math.floor((Date.now() - time) / 60_000)
+  return minutes < 1 ? 'just now' : minutes < 60 ? `${minutes} min ago` : minutes < 48 * 60 ? `${Math.floor(minutes / 60)} h ago` : `${Math.floor(minutes / 1440)} days ago`
+}
+
+async function webCommand(sub: string | undefined, rest: string[], values: { machine?: string }) {
+  const machine = resolveMachine(values.machine)
+  const run = (id: string, params: Record<string, unknown> = {}) => on(machine, (call) => call('action.run', { id, params, exposure: 'cli' }))
+  if (sub === 'pair') {
+    const ticket = await run('web.pair') as { link: string; code: string; expires: number }
+    return print(ticket, () => {
+      if (process.stdout.isTTY) console.log(renderUnicodeCompact(ticket.link, { border: 2 }))
+      console.log(`Open ${ticket.link}`)
+      console.log(`or enter ${ticket.code} on the device. Works once, for 5 minutes.`)
+    })
+  }
+  if (!sub || sub === 'devices' || sub === 'ls') {
+    const devices = await run('web.devices') as { id: string; name: string; lastSeen: number; address: string; tailscale?: true }[]
+    return print(devices, () => {
+      if (!devices.length) return console.log(`No devices paired. Pair one: ${app.id} web pair`)
+      table(devices.map((d) => [d.tailscale ? '' : d.id, d.tailscale ? `you via Tailscale (${d.name})` : d.name, ago(d.lastSeen), d.address]))
+    })
+  }
+  if (sub === 'revoke') {
+    if (!rest[0]) throw new RpcError('usage', `${app.id} web revoke <device>`)
+    await run('web.revoke', { id: rest[0] })
+    return print({ ok: true }, () => console.log(`Unpaired ${rest[0]}`))
+  }
+  if (sub === 'rename') {
+    if (!rest[0] || !rest[1]) throw new RpcError('usage', `${app.id} web rename <device> <name>`)
+    const device = await run('web.rename', { id: rest[0], name: rest.slice(1).join(' ') })
+    return print(device, () => console.log(`Renamed ${rest[0]}`))
+  }
+  throw new RpcError('usage', `Unknown: ${app.id} web ${sub}`)
+}
+
 // ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** A one-line signature for an action's params: `id* text whenBusy?=steer|followUp`. */
@@ -618,7 +661,7 @@ export function skill(topic?: string): string {
 
 // ── Dispatch ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const COMMANDS = new Set(['open', 'threads', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles'])
+const COMMANDS = new Set(['open', 'threads', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles', 'web'])
 
 async function main() {
   // `do` takes the action's own --params, which parseArgs would refuse.
@@ -665,6 +708,7 @@ async function main() {
     case 'daemon': return daemonCommand(rest[0], Boolean(values.now))
     case 'connect': return values.update ? updateHere(Boolean(values.now)) : bridge(Boolean(values.start))
     case 'actions': return actionsCommand(rest[0], values)
+    case 'web': return webCommand(rest[0], rest.slice(1), values)
   }
 }
 

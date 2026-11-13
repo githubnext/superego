@@ -203,7 +203,13 @@ no other machine's UI reaches it.
 
 ## In a browser or on a phone
 
-Settings → a machine → Web access: serve the app to this computer or the local network. Open the address it shows (it
-carries a token); on a phone, add it to the home screen. Each pane is a screen wide there, and a swipe moves between
-the thread and its panes. A browser notifies like the desktop app once allowed: the first time a thread works, a pill
-over the composer offers it. A phone's browser shows them only from a service worker, which there isn't yet.
+Settings → a machine → Web access: serve the app to this computer, or over Tailscale (the daemon sets up
+`tailscale serve`, so it's at `https://<machine>.<tailnet>.ts.net` to your tailnet). Then **Pair a device**: scan the QR
+code or open its link on the device, once, within 5 minutes. A page added to a phone's home screen keeps cookies of its
+own, so it asks for the code shown beside the link. Your own Tailscale login gets in without pairing (unless you
+require it). Paired devices are listed there, to rename or revoke; one unused for 90 days is forgotten. From a
+terminal: `superego web pair`, `superego web devices`.
+
+On a phone, each pane is a screen wide, and a swipe moves between the thread and its panes. A browser notifies like the
+desktop app once allowed: the first time a thread works, a pill over the composer offers it. A phone's browser shows
+them only from a service worker, which there isn't yet.
