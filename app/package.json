@@ -17,6 +17,7 @@
     "@superego/git": "workspace:*",
     "@superego/images": "workspace:*",
     "@superego/links": "workspace:*",
+    "@superego/skills": "workspace:*",
     "@superego/suggestions": "workspace:*",
     "@superego/tasks": "workspace:*",
     "@superego/threads": "workspace:*",

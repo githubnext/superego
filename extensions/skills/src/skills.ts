@@ -1,9 +1,9 @@
-// Skills and standing instructions from ~/.agents, the folder agents share: each skill a folder with a SKILL.md (its
-// name and description in front matter, its instructions below), and AGENTS.md for what the agent should always know.
-// The agent sees the skills' names and descriptions and reads one when it fits; a message that names one with
-// `$name` or `/skill:name` brings that skill's instructions along with it.
-import { readdir, readFile, stat } from 'node:fs/promises'
+// Skills from ~/.agents/skills, the folder agents share: each a folder with a SKILL.md (its name and description in
+// front matter, its instructions below). The agent sees the skills' names and descriptions and reads one when it fits;
+// a message that names one with `$name` or `/skill:name` brings that skill's instructions along with it.
+import { readdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { quote } from './shared.ts'
 
 export type Skill = {
   name: string
@@ -52,7 +52,6 @@ export async function listSkills(dir: string): Promise<Skill[]> {
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
-const quote = (value: string) => value.replace(/[&"<>]/g, (c) => `&#${c.charCodeAt(0)};`)
 const escape = (value: string) => value.replace(/[&<>]/g, (c) => `&#${c.charCodeAt(0)};`)
 
 /** What the agent is told about the skills it may use: each one's name, what it's for, and where to read it. */
@@ -82,32 +81,8 @@ export function mentionedSkills(text: string, skills: Skill[]): Skill[] {
   return [...found.values()]
 }
 
-/** A skill a message asked for, as the text that goes with it: its instructions whole, tagged with where they came from. */
+/** A skill a message asked for, as the text that goes with it: its instructions whole, tagged with where they came from (see SENT). */
 export async function skillBlock(skill: Skill): Promise<string> {
   const { body } = frontMatter(await readFile(skill.path, 'utf8'))
   return `<skill name="${quote(skill.name)}" location="${quote(skill.path)}">\nThe user asked for this skill. Follow its instructions; paths in it are relative to ${quote(dirname(skill.path))}.\n\n${body.trim()}\n</skill>`
-}
-
-/**
- * Standing instructions: `AGENTS.md` in `agentsDir`, then each one from the filesystem's root down to `cwd`, the
- * nearest last, each tagged with where it came from.
- */
-export async function agentsInstructions(agentsDir: string, cwd: string | undefined): Promise<string | undefined> {
-  const files = [join(agentsDir, 'AGENTS.md')]
-  if (cwd) {
-    const chain: string[] = []
-    for (let dir = cwd; ; dir = dirname(dir)) {
-      chain.unshift(join(dir, 'AGENTS.md'))
-      if (dirname(dir) === dir) break
-    }
-    for (const file of chain) if (!files.includes(file)) files.push(file)
-  }
-  const parts: string[] = []
-  for (const file of files) {
-    const info = await stat(file).catch(() => undefined)
-    if (!info?.isFile() || info.size > 256 * 1024) continue
-    const text = (await readFile(file, 'utf8').catch(() => '')).trim()
-    if (text) parts.push(`<file path="${quote(file)}">\n${text}\n</file>`)
-  }
-  return parts.length ? parts.join('\n\n') : undefined
 }

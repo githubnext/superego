@@ -1,6 +1,6 @@
-// Naming a skill in the composer: the word at the caret that names one, and the skills it could be.
-
-export type SkillInfo = { name: string; description: string }
+// Naming a skill in the composer: the word at the caret that names one, and the skills it could be; and the skills a
+// sent message named, found again in it to show.
+import { SENT, unquote, type SkillInfo } from './shared.ts'
 
 /**
  * The skill being named at the caret, if one is: `$na` or `/skill:na` at the start of a word, or `/na` opening the
@@ -22,4 +22,17 @@ export const matchSkills = (skills: SkillInfo[], query: string) => {
   return skills.filter((skill) => skill.name.toLowerCase().includes(q))
     .sort((a, b) => Number(!a.name.toLowerCase().startsWith(q)) - Number(!b.name.toLowerCase().startsWith(q)))
     .slice(0, 8)
+}
+
+/** A sent message's skills (each a block the daemon half added, see SENT), and which blocks they were. */
+export function sentSkills(blocks: readonly { type: string; text?: string }[]): { items: { name: string; path: string }[]; blocks: number[] } {
+  const items: { name: string; path: string }[] = []
+  const at: number[] = []
+  blocks.forEach((block, index) => {
+    const tag = block.type === 'text' ? SENT.exec(block.text ?? '') : null
+    if (!tag) return
+    items.push({ name: unquote(tag[1]!), path: unquote(tag[2]!) })
+    at.push(index)
+  })
+  return { items, blocks: at }
 }

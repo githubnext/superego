@@ -24,7 +24,7 @@ import { threadTools } from './thread-tools.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type StatusContribution, type SubmitTransform } from './extension.ts'
 import { serveWeb, webToken, type WebServer } from './web.ts'
-import { agentsInstructions, listSkills, mentionedSkills, skillBlock, skillsPrompt } from './skills.ts'
+import { agentsInstructions } from './agents-md.ts'
 import { metaExtension, metaPrompt, type MachineDirectory } from './meta.ts'
 import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileRef } from './profiles.ts'
 
@@ -313,10 +313,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const declared = Object.entries(profile?.spec.panes ?? {}).map(([kind, about]) => ({ kind, about }))
     return [...paneKinds.filter((p) => !without.has(p.owner) && (!p.profile || p.profile === meta?.profile?.dir)), ...declared]
   }
-  // Skills and standing instructions from the folder agents share (see skills.ts). Each is its own extension, so a
-  // profile can do without either.
+  // The folder agents share: standing instructions in AGENTS.md (see agents-md.ts), and the skills extension's skills.
   const agentsDir = options.agentsDir ?? join(homedir(), '.agents')
-  const skillsDir = join(agentsDir, 'skills')
   // Threads starting, reading, messaging and archiving threads (see thread-tools.ts).
   const threadInfo = async (id: string) => { const m = await get(id).catch(() => undefined); return m && info(id, m) }
   /**
@@ -333,10 +331,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         s.pane('editor', '{ path }: a file, for the user to read and edit')
         s.pane('thread', '{ thread }: another conversation')
       },
-    },
-    {
-      name: 'skills', title: 'Skills', description: 'Know the shared skills, and use them when they fit.',
-      setup: (s) => s.agent(defineExtension({ name: 'skills', sections: [section('skills', async () => skillsPrompt(await listSkills(skillsDir)))] })),
     },
     {
       name: 'agents-md', title: 'AGENTS.md', description: 'Follow the standing instructions in AGENTS.md files.',
@@ -718,24 +712,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
     await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null, ...rest }, context)
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
-    const content = await transformed(id, m, text, attachments, await withSkills(m.meta, text, await contentOf(id, text, attachments)))
+    const content = await transformed(id, m, text, attachments, await contentOf(id, text, attachments))
     const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}) }, context)
     return String(submission.id)
-  }
-
-  /**
-   * A message that names skills (`$commit`, `/skill:commit`) carries their instructions after its own content, when the
-   * thread's profile hasn't done without skills.
-   */
-  async function withSkills(meta: ThreadMeta, text: string, content: Awaited<ReturnType<typeof contentOf>>) {
-    if (!/[$/]/.test(text)) return content
-    const profile = meta.profile ? await profileOf(meta.profile) : undefined
-    if (withoutOf(meta, profile).has('skills')) return content
-    const named = mentionedSkills(text, await listSkills(skillsDir))
-    if (!named.length) return content
-    const blocks = typeof content === 'string' ? (content ? [{ type: 'text' as const, text: content }] : []) : content
-    for (const skill of named) blocks.push({ type: 'text', text: await skillBlock(skill) })
-    return blocks
   }
 
   /**
@@ -1216,8 +1195,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           if (info.size > 16 * 1024 * 1024) throw new RpcError('too_large', `${path} is larger than 16 MB`)
           return { path: file, content: await readFile(file, base64 ? 'base64' : 'utf8') }
         },
-        /** The skills a message can name, for completing `$name` as it's typed. */
-        'skill.list': async () => (await listSkills(skillsDir)).map(({ name, description }) => ({ name, description })),
         'file.find': async ({ id, name }: { id: string; name: string }) => locate((await get(id)).meta.cwd, name),
         // A profile's UI is its code too: served only for a real profile folder, and only once it is allowed.
         'profile.ui': async (ref: ProfileRef) => {

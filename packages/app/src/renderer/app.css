@@ -561,20 +561,17 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .attachment__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment__remove { border: 0; background: none; color: var(--superego-faint); font: inherit; padding: 0 2px; cursor: default; }
 .attachment__remove:hover { color: var(--superego-text); }
-/* A skill a message named: a chip like a file's. */
-.attachment--skill { padding-left: 8px; }
-.attachment--skill .attachment__icon { width: auto; height: auto; color: var(--superego-accent); }
-/* Skills offered while one is being named, floating above the composer. */
-.skill-menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); max-height: 50vh; overflow: auto; padding: 4px; background: var(--superego-raised); border-radius: var(--superego-radius-lg); box-shadow: var(--superego-shadow-float); font-size: var(--superego-text-ui); }
-.dock:not(:focus-within) .skill-menu { display: none; }
-.skill-menu__item { display: flex; align-items: baseline; gap: var(--superego-space-3); padding: 6px 10px; border-radius: var(--superego-radius); cursor: default; }
-.skill-menu__item.is-active { background: var(--superego-selected); }
-.skill-menu__name { flex: none; font-weight: 500; }
-.skill-menu__description { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--superego-muted); }
+/* What an extension offers for the word being typed (skills, say), floating above the composer. */
+.completions { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); max-height: 50vh; overflow: auto; padding: 4px; background: var(--superego-raised); border-radius: var(--superego-radius-lg); box-shadow: var(--superego-shadow-float); font-size: var(--superego-text-ui); }
+.dock:not(:focus-within) .completions { display: none; }
+.completions__item { display: flex; align-items: baseline; gap: var(--superego-space-3); padding: 6px 10px; border-radius: var(--superego-radius); cursor: default; }
+.completions__item.is-active { background: var(--superego-selected); }
+.completions__label { flex: none; font-weight: 500; }
+.completions__detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--superego-muted); }
 /* Over the box: attach at the left, Jump to bottom in the middle, Stop at the right, each floating on its own. */
 .dock__bar { position: absolute; left: 0; right: 0; bottom: calc(100% + 14px); display: flex; justify-content: center; pointer-events: none; }
 .dock__bar > * { pointer-events: auto; }
-.dock:has(.skill-menu) .dock__bar { display: none; }
+.dock:has(.completions) .dock__bar { display: none; }
 .dock:has(.dock__above:not(:empty)) .dock__bar { bottom: calc(100% + 8px); }
 .dock__pill { height: 26px; padding: 0 10px 0 8px; gap: 5px; font-weight: 400; color: var(--superego-muted); background: var(--superego-raised); box-shadow: var(--superego-shadow-float); border-radius: 999px; }
 .dock__pill:hover { color: var(--superego-text); }

@@ -67,7 +67,7 @@ it('lists optional extensions in Settings, and tells clients what each thread go
   const { value } = await peer.call<{ value: { sections: { id: string; settings: { key: string }[] }[] } }>('settings.watch', {})
   const keys = value.sections.find((s) => s.id === 'extensions')!.settings.map((s) => s.key)
   // The core's own parts and the optional bundled one; never a required one.
-  expect(keys).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.skills', 'extensions.agents-md', 'extensions.thread-tools', 'extensions.links'])
+  expect(keys).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.thread-tools', 'extensions.links'])
   const thread = await peer.call<ThreadInfo>('thread.create', {})
   expect(thread.without).toBeUndefined()
   await peer.call('settings.set', { key: 'extensions.links', value: false })

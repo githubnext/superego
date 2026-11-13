@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { matchSkills, skillAt } from '../src/renderer/skill-names.ts'
+import { matchSkills, sentSkills, skillAt } from '../src/names.ts'
 
 describe('naming a skill', () => {
   it('finds $name and /skill:name at the start of a word, and /name only opening the message', () => {
@@ -17,5 +17,18 @@ describe('naming a skill', () => {
     const skills = [{ name: 'recommit', description: '' }, { name: 'commit', description: '' }, { name: 'pr', description: '' }]
     expect(matchSkills(skills, 'comm').map((s) => s.name)).toEqual(['commit', 'recommit'])
     expect(matchSkills(skills, '')).toHaveLength(3)
+  })
+})
+
+describe('skills sent with a message', () => {
+  it('finds the skill blocks the daemon added, by name and path, and only those', () => {
+    const blocks = [
+      { type: 'text', text: 'do $commit' },
+      { type: 'text', text: '<skill name="commit" location="/s/commit/SKILL.md">\nThe user asked…\n</skill>' },
+      { type: 'image', data: 'x' },
+      { type: 'text', text: '<skill name="a&#38;b" location="/s/a/SKILL.md">\n…\n</skill>' },
+    ]
+    expect(sentSkills(blocks)).toEqual({ items: [{ name: 'commit', path: '/s/commit/SKILL.md' }, { name: 'a&b', path: '/s/a/SKILL.md' }], blocks: [1, 3] })
+    expect(sentSkills([{ type: 'text', text: 'no skills' }])).toEqual({ items: [], blocks: [] })
   })
 })

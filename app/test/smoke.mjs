@@ -83,9 +83,9 @@ if (phase === 'first') {
     ta.setSelectionRange(8, 8)
     ta.dispatchEvent(new Event('input', { bubbles: true }))
   })()`)
-  await until(`document.querySelector('.skill-menu')?.textContent.includes('$smoke-skill') && document.querySelector('.skill-menu').textContent.includes('Checks the smoke.')`, 'skills offered')
+  await until(`document.querySelector('.completions')?.textContent.includes('$smoke-skill') && document.querySelector('.completions').textContent.includes('Checks the smoke.')`, 'skills offered')
   await run(`document.querySelector('.composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))`)
-  await until(`document.querySelector('.composer textarea').value === 'try $smoke-skill ' && !document.querySelector('.skill-menu')`, 'skill taken')
+  await until(`document.querySelector('.composer textarea').value === 'try $smoke-skill ' && !document.querySelector('.completions')`, 'skill taken')
   await run(`document.querySelector('.composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`)
   await until(`[...document.querySelectorAll('.attachment--skill')].some((chip) => chip.textContent.includes('smoke-skill'))`, 'skill sent with the message')
   // A web link in the thread: the button beside it opens the page in a pane, not the browser, even a page that refuses

@@ -1,10 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react'
 import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@superego/protocol'
 import { ArchiveIcon, ArrowCounterClockwiseIcon, BroomIcon, ArrowDownIcon, ArrowElbowDownRightIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CaretRightIcon, ChatCircleIcon, ChatsCircleIcon, CheckIcon, FileIcon, FilePlusIcon, FileTextIcon, type Icon as PhosphorIcon, IconButton, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, SparkleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TerminalIcon, TextArea, WrenchIcon, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
-import { divideWork, entryView, fileKind, folderKind, paneMenu, Slot, shownPanes, toolView, unfoldedTool, urlKind, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
+import { completionsIn, divideWork, entryView, fileKind, folderKind, paneMenu, sentWithIn, Slot, shownPanes, toolView, unfoldedTool, urlKind, useRegistry, type ToolCallProps, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useShell } from './state.tsx'
 import { useShortcut } from './keys.ts'
 import { ctrlDigit } from './shortcuts.ts'
@@ -12,7 +12,7 @@ import { Markdown, OpenFile, OpenUrl, Scroll, ThreadMachine } from './Markdown.t
 import { ThreadRef } from './thread-ref.tsx'
 import { useLocalState } from './local-state.ts'
 import { readAttachment, splitMessage } from './attachments.ts'
-import { matchSkills, skillAt, type SkillInfo } from './skill-names.ts'
+import { complete, completing, readSent, type Completion, type CompletionProvider, type SentBlock } from './composer.ts'
 import { useProfileUi } from './profile-ui.ts'
 import { ThreadPanes } from './panes.tsx'
 import { startRename, stopRename, useRenaming } from './rename.ts'
@@ -377,30 +377,44 @@ function Queued({ inbox }: { inbox: InboxState | undefined }) {
     <div className="queued">
       {items.map((item) => {
         const content = item.content as Message['content']
-        const { text, ...sent } = splitMessage(typeof content === 'string' ? [{ type: 'text', text: content }] : content)
         return (
-          <div key={String(item.id)} className="msg msg--user msg--queued">
-            {text}
-            <SentWith {...sent} />
+          <Sent key={String(item.id)} className="msg msg--user msg--queued" blocks={typeof content === 'string' ? [{ type: 'text', text: content }] : content}>
             <span className="msg__queued">{item.mode === 'steer' ? 'Waiting · steers after this step' : 'Queued · sent when the agent is done'}</span>
-          </div>
+          </Sent>
         )
       })}
     </div>
   )
 }
 
-/** What went with a message: its files, and the skills it named (their instructions went along whole). */
-function SentWith({ files, skills }: Pick<ReturnType<typeof splitMessage>, 'files' | 'skills'>) {
-  if (!files.length && !skills.length) return null
+/**
+ * A message you sent: your words, whole, and what went with them below: what extensions put in it (a skill it named,
+ * drawn by the extension that sent it along), then its files.
+ */
+function Sent({ blocks, className, children }: { blocks: SentBlock[]; className: string; children?: ReactNode }) {
+  const here = useContext(Here)
+  const registry = useRegistry()
+  const { found, rest } = readSent(sentWithIn(registry, { machine: here.machine.id, thread: here.thread }), blocks)
+  const { text, files } = splitMessage(rest)
+  if (!text && !found.length && !files.length && !children) return null
   return (
-    <div className="msg__files">
-      {skills.map((skill) => (
-        <span key={`skill:${skill.name}`} className="attachment attachment--skill" title={skill.path}>
-          <span className="attachment__icon"><SparkleIcon size={13} weight="fill" aria-hidden /></span>
-          <span className="attachment__name">{skill.name}</span>
-        </span>
-      ))}
+    <div className={className}>
+      {text}
+      {(found.length > 0 || files.length > 0) && (
+        <div className="msg__files">
+          {found.map(({ reader: { component: Component, owner }, items }) => <Component key={`${owner.profile ?? ''}/${owner.extension}`} {...here} items={items} />)}
+          <Files files={files} />
+        </div>
+      )}
+      {children}
+    </div>
+  )
+}
+
+/** The files that went with a message. */
+function Files({ files }: { files: ReturnType<typeof splitMessage>['files'] }) {
+  return (
+    <>
       {/* An image shows as itself, its name on hover; other files as a chip with their name. */}
       {files.map((file, index) => file.image
         ? <span key={`${file.path}-${index}`} className="attachment attachment--image" title={file.name}><img src={file.image} alt={file.name} /></span>
@@ -410,7 +424,7 @@ function SentWith({ files, skills }: Pick<ReturnType<typeof splitMessage>, 'file
             <span className="attachment__name">{file.name}</span>
           </span>
         ))}
-    </div>
+    </>
   )
 }
 
@@ -490,11 +504,7 @@ function Entry({ entry }: { entry: EntryRecord }) {
   if (custom) { const Custom = custom; return <Custom {...here} entry={{ id: entry.id, kind: entry.kind, data: entry.data }} /> }
   const message = entry.model?.[0] as Message | undefined
   if (message?.role === 'user') {
-    // Your words, whole; files and skills sent with them below.
-    const { text, files, skills } = splitMessage(blocks(message))
-    const sent = (files.length > 0 || skills.length > 0) && <SentWith files={files} skills={skills} />
-    if (!text && !sent) return null
-    return <div className="msg msg--user">{text}{sent}</div>
+    return <Sent className="msg msg--user" blocks={blocks(message)} />
   }
   return <div className="msg msg--note">{entry.kind}</div>
 }
@@ -817,21 +827,31 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
 
   // While the agent works, ⏎ steers it (the message joins the running work after its current step) and ⌃⏎ queues
   // the message for when it's done.
-  // Naming a skill: `$` (or `/skill:`, or `/` opening the message) offers this machine's skills as you type; ↑↓ pick,
-  // ⇥ or ⏎ takes one, esc leaves the word as typed.
-  const [skills, setSkills] = useState<SkillInfo[]>([])
+  // Completing a word as it's typed, as extensions offer (`$co` → a skill, see composer.ts): ↑↓ pick, ⇥ or ⏎ takes
+  // one, esc leaves the word as typed.
+  const registry = useRegistry()
+  useSyncExternalStore(registry.subscribe, () => registry.version)
   const [caret, setCaret] = useState(0)
   const [pick, setPick] = useState(0)
   const [dismissed, setDismissed] = useState<number>()
-  const naming = claim ? undefined : skillAt(text, caret)
-  const offered = naming ? matchSkills(skills, naming.query) : []
-  const menu = naming && offered.length > 0 && dismissed !== naming.start ? offered : undefined
-  const wanting = naming !== undefined
+  const found = claim ? undefined : completing(completionsIn(registry, { machine: machine.id, thread }), text, caret)
+  const word = found?.word
+  // What the provider offered for the word, kept while it's asked again as the word grows, so the menu doesn't blink.
+  const [offered, setOffered] = useState<{ provider: CompletionProvider<any>; start: number; query: string; items: Completion[] }>()
   useEffect(() => {
-    if (wanting) void call<SkillInfo[]>(machine.id, 'skill.list').then(setSkills, () => setSkills([]))
-  }, [wanting, machine.id])
-  useEffect(() => { setPick(0) }, [naming?.query, naming?.start])
-  useEffect(() => { if (!naming) setDismissed(undefined) }, [naming === undefined])
+    if (!found) return setOffered(undefined)
+    let current = true
+    const { provider, word } = found
+    const offer = (items: Completion[]) => { if (current) setOffered({ provider, start: word.start, query: word.query, items }) }
+    try {
+      void Promise.resolve(provider.items(word, { machine, thread })).then(offer, (error) => { console.error('Completing failed', error); offer([]) })
+    } catch (error) { console.error('Completing failed', error); offer([]) }
+    return () => { current = false }
+  }, [found?.provider, word?.start, word?.query, machine.id, thread.id])
+  const items = found && offered?.provider === found.provider && offered.start === word!.start ? offered.items : []
+  const menu = word && items.length > 0 && dismissed !== word.start ? items : undefined
+  useEffect(() => { setPick(0) }, [word?.query, word?.start])
+  useEffect(() => { if (!word) setDismissed(undefined) }, [word === undefined])
   // What an extension above offers, picked from with ←/→ while the box is empty, and what it puts in.
   const [offers, setOffers] = useState<{ messages: string[]; picked: number }>({ messages: [], picked: 0 })
   const offering = !claim && !text && !busy && offers.messages.length > 0
@@ -847,14 +867,12 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
     suggest,
     picked: offering ? offers.picked : undefined,
   }), [text, setText, suggest, offering, offers.picked])
-  const takeSkill = (skill: SkillInfo) => {
-    if (!naming) return
-    const word = `${naming.trigger === '$' ? '$' : '/skill:'}${skill.name} `
-    const after = text.slice(caret).replace(/^ /, '')
-    const at = naming.start + word.length
-    setText(text.slice(0, naming.start) + word + after)
-    setCaret(at)
-    requestAnimationFrame(() => { input.current?.setSelectionRange(at, at); input.current?.focus() })
+  const take = (item: Completion) => {
+    if (!word) return
+    const next = complete(text, caret, word.start, item.insert)
+    setText(next.text)
+    setCaret(next.caret)
+    requestAnimationFrame(() => { input.current?.setSelectionRange(next.caret, next.caret); input.current?.focus() })
   }
 
   /** Send what the box holds (`typed`: a suggestion picked instead). */
@@ -899,14 +917,14 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
   const sendable = Boolean(text.trim()) || (!claim && files.length > 0)
   const onKeyDown = (event: KeyboardEvent) => {
     if (claim?.keyDown?.(event, text)) { event.preventDefault(); return }
-    if (menu && naming && !event.metaKey && !event.altKey && !event.ctrlKey) {
+    if (menu && word && !event.metaKey && !event.altKey && !event.ctrlKey) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
         setPick((pick + (event.key === 'ArrowDown' ? 1 : -1) + menu.length) % menu.length)
         return
       }
-      if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) { event.preventDefault(); takeSkill(menu[pick] ?? menu[0]!); return }
-      if (event.key === 'Escape') { event.preventDefault(); setDismissed(naming.start); return }
+      if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) { event.preventDefault(); take(menu[pick] ?? menu[0]!); return }
+      if (event.key === 'Escape') { event.preventDefault(); setDismissed(word.start); return }
     }
     if (suggested && !event.metaKey && !event.altKey && !event.ctrlKey && !event.shiftKey) {
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
@@ -958,12 +976,12 @@ function Composer({ machine, thread, busy, onJump }: { machine: MachineEntry; th
       </div>
     )}
     {menu && (
-      <div className="skill-menu" role="listbox" aria-label="Skills">
-        {menu.map((skill, index) => (
-          <div key={skill.name} role="option" aria-selected={index === pick} className={`skill-menu__item ${index === pick ? 'is-active' : ''}`}
-            onMouseEnter={() => setPick(index)} onMouseDown={(e) => { e.preventDefault(); takeSkill(skill) }}>
-            <span className="skill-menu__name">{naming!.trigger === '$' ? '$' : '/skill:'}{skill.name}</span>
-            <span className="skill-menu__description">{skill.description}</span>
+      <div className="completions" role="listbox" aria-label={found!.provider.title}>
+        {menu.map((item, index) => (
+          <div key={`${item.label}-${index}`} role="option" aria-selected={index === pick} className={`completions__item ${index === pick ? 'is-active' : ''}`}
+            onMouseEnter={() => setPick(index)} onMouseDown={(e) => { e.preventDefault(); take(item) }}>
+            <span className="completions__label">{item.label}</span>
+            {item.detail && <span className="completions__detail">{item.detail}</span>}
           </div>
         ))}
       </div>
