@@ -92,7 +92,12 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
 | `submit(({ thread, text, attachments, content }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it |
 | `settings.register({ id: 'x', settings })`, `settings.get`, `settings.onChange` | machine settings of its own (`x.…`); read any |
-| `threads.list()`, `get(id)`, `of(conversationId)`, `conversation(id)`, `attachments(id)` | reach threads, and the folder a thread keeps files in |
+| `thread({ creating, created, turnStart, turnEnd, archiving, archived, unarchiving, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it |
+| `state()` → `get(id)`, `set(id, next)`, `update(id, edit)` | state of its own kept with each thread, across restarts; `creating` gives a new one its first |
+| `facts(({ id, state }) => …)` | what clients are told of a thread, as `thread.ext.<name>`: worked out from its state |
+| `agentFor(({ id, state, profile }) => ({ instructions, model, extensions, without }))` | choose a thread's agent; the first to answer wins. `agent(part, { always: false })` gives a part only through this |
+| `threads.list({ archived, hidden })`, `get(id)`, `of(conversationId)`, `conversation(id)`, `attachments(id)` | reach threads, and the folder a thread keeps files in |
+| `threads.create({ …, parent, hidden, options })`, `submit(id, text)`, `lastAnswer(id)`, `archive(id, { whenIdle })`, `unarchive(id)` | start and run threads as the thread tools do; `hidden`: in no list (an agent of its own) |
 | `agentsDir` | the folder agents share (`~/.agents`): skills, `AGENTS.md` |
 | `harness` | pi-durable itself; unstable |
 
@@ -137,12 +142,48 @@ threads, and not in `sidebar` or `rail`.
 - A change loads between runs, never under one: a thread mid-run keeps what it started with. A profile whose folder
   is gone, or that no longer loads or is allowed, is torn down, and its UI with it. A value torn down reads null.
 
+## A thread's life
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/thread-life-dark.svg"><img src="writing-extensions/thread-life.svg" alt="creating makes a thread (a hook may move where it works and give it state, or refuse); created; turnStart and turnEnd around each run; archiving then archived on the way to archived, unarchiving then unarchived on the way back"></picture>
+
+```ts
+const state = superego.state<{ path: string; branch: string }>()
+superego.facts(({ state }) => state)                   // thread.ext.worktrees
+superego.thread({
+  async creating(draft) {                              // draft.options: what thread.create asked for, by extension
+    if (draft.options.worktrees !== true || !draft.checkout) return
+    const { path, branch } = await makeWorktree(draft.checkout.top)  // yours: git worktree add
+    return { cwd: path, state: { path, branch } }
+  },
+  async archived(thread) {
+    const tree = await state.get(thread.id)
+    if (tree) await removeIfClean(tree.path)                 // yours too
+  },
+})
+```
+
+- Hooks run in the order extensions were set up (the core's, the bundled ones, then profiles'), one at a time. Not
+  for a thread that goes without the extension; a profile's only for that profile's threads.
+- `creating`, `archiving` and `unarchiving` may refuse by throwing (an `RpcError` says it cleanly): nothing more
+  happens, and the hooks after don't run. `creating` may also move where the thread works and give it state, each
+  hook seeing the draft as the one before left it.
+- The others are told, and awaited in turn. A throw there is logged, and the thread carries on. `archived` runs
+  before clients see the thread archived, so it's where cleanup goes. `turnStart` and `turnEnd` never hold up a run.
+- A thread archiving itself mid-turn is `threads.archive(id, { whenIdle: true })`: archived once its run ends, even
+  across a restart.
+- State is kept in the thread's document under the extension's name, so it persists, and goes with the thread.
+  `ThreadMeta.worktree` and `meta`, from before, read as the `worktrees` and `ego` extensions' state until those write
+  it. Facts are recomputed whenever the thread's info is; `invalidate()` when something else they read changed.
+- `agentFor` is called often: quick, and without side effects. The thread's own model wins over its answer, its answer
+  over the profile's, and the profile's over the machine's settings. Its `without` is what the thread goes without,
+  its agent's parts, panes and UI alike.
+
 Bundled extensions also declare whether they're required, once, in `about` (spread into both halves):
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/required-dark.svg"><img src="writing-extensions/required.svg" alt="A required extension is always on; an optional one can be switched off per machine or left out by a profile, and that thread then has none of its agent parts or UI"></picture>
 
-Only the sidebar (`threads`) is required. Everything else is optional, the core's own `coding-tools`, `panes`,
-`agents-md` and `thread-tools` included. The core's `panes` is the agent's `open_pane`: switched off, the agent can't
+Only the sidebar (`threads`) is required, and the core's `markdown`, `worktrees` and `ego`. Everything else is
+optional, the core's own `coding-tools`, `panes`, `agents-md` and `thread-tools` included. The core's `panes` is the agent's `open_pane`: switched off, the agent can't
 open panes, but the window's own pane kinds stay, being the required core's. An extension with a UI half only needs no
 daemon half: the window declares it to each machine, which lists it and lets profiles do without it.
 
@@ -160,6 +201,7 @@ daemon half: the window declares it to each machine, which lists it and lets pro
 | [`files`](../extensions/files/src) | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | [`links`](../extensions/links/src) | UI only: the window declares it to the machine |
 | [`threads`](../extensions/threads/src) | the required one: `sidebar`, `rail`, `thread.aside`, app settings |
+| [`worktrees`](../packages/daemon/src/worktrees.ts) | the core's, for now: `thread` hooks, `state` and `facts` |
 
 Diagram sources are the `.mmd` files in [writing-extensions/](writing-extensions/); re-render with the `diagram` skill
 (`bun <skill>/scripts/render.ts x.mmd x.svg`, and `--dark` for `x-dark.svg`).

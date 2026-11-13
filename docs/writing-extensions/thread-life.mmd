@@ -1,0 +1,13 @@
+stateDiagram-v2
+  direction LR
+  state "Being made" as Making
+  state "Idle" as Idle
+  state "Working" as Working
+  state "Archived" as Archived
+  [*] --> Making: creating (cwd, state)
+  Making --> [*]: a creating hook throws
+  Making --> Idle: created
+  Idle --> Working: turnStart
+  Working --> Idle: turnEnd
+  Idle --> Archived: archiving, then archived
+  Archived --> Idle: unarchiving, then unarchived

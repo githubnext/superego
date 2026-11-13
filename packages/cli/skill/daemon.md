@@ -61,11 +61,18 @@ the same name is refused.
 | `superego.settings.register({ id, title, settings })` | a settings section of its own: id `<name>`, keys `<name>.<key>`. `settings.get(key)` reads any setting, `settings.onChange(fn)` hears changes |
 | `superego.submit(({ thread, text, attachments, content }) => …)` | change what each message sent to a thread gives its agent, before the turn starts: `content` is its blocks so far (`{ type: 'text', text }`, `{ type: 'image', data, mimeType }`), the text first; return the blocks to send instead, or nothing. Transforms run in order, each given the last one's; not for threads that go without the extension, a profile's only for its own threads. A throw fails the send |
 | `superego.status((threadId) => …)` | return `{ kind: 'question' \| 'permission' \| 'auth', msg? }` while a thread needs the user; it shows as blocked. Call `superego.invalidate()` when what it depends on changes |
-| `superego.threads.list()` | every thread: `{ id, title, cwd, status, profile, … }` |
+| `superego.threads.list({ archived?, hidden? })` | every thread: `{ id, title, cwd, status, profile, ext, … }`; `archived` or `hidden` lists those instead |
 | `superego.threads.get(id)` | one thread, archived too; `not_found` if there's none |
 | `superego.threads.of(conversationId)` | the thread a tool call belongs to: `superego.threads.of(api.conversationId)` |
 | `superego.threads.conversation(id)` | a thread's pi-durable conversation, to submit to or watch |
 | `superego.threads.attachments(id)` | the folder on this machine where a thread keeps its files (attachments, images it showed); clients read a file there with `file.read` by its absolute path |
+| `superego.threads.create({ cwd?, title?, prompt?, profile?, parent?, hidden?, options? })` | start a thread, as `thread.create` does (its hooks too): `parent` makes it a child; `hidden` keeps it out of every list; `options` are for extensions' `creating` hooks, by name |
+| `superego.threads.submit(id, text, { whenBusy? })`, `lastAnswer(id)` | send a thread a message (after its run, if it's working), and read its last answer as text |
+| `superego.threads.archive(id, { whenIdle? })`, `unarchive(id)` | put a thread away and back; `whenIdle` waits for its run to end (a thread archiving itself), across restarts too |
+| `superego.thread({ creating, created, turnStart, turnEnd, archiving, archived, unarchiving, unarchived })` | take part in a thread's life. `creating(draft)` may return `{ cwd, state }` (work elsewhere: a worktree); `creating`, `archiving` and `unarchiving` refuse by throwing; the rest are told, a throw only logged. `archived` runs before clients see it archived: clean up there. In set-up order; not for threads that go without the extension, a profile's only for its own |
+| `superego.state<T>()` | its own state with each thread, kept in the thread (across restarts): `get(id)`, `set(id, next \| undefined)`, `update(id, edit)` |
+| `superego.facts(({ id, state }) => …)` | what clients see of each thread as `thread.ext.<name>`, worked out from its state; nothing for undefined |
+| `superego.agentFor(({ id, state, profile }) => …)` | choose a thread's agent: `{ instructions?, model?, thinking?, extensions?, without? }`, or nothing. The first answer wins; quick, no side effects. Parts it names are given with `superego.agent(part, { always: false })`, which gives them to no other thread |
 | `superego.app` | `{ name, id }` of the app |
 | `superego.agentsDir` | the folder agents share on this machine (`~/.agents`, or `SUPEREGO_AGENTS`): `skills/`, `AGENTS.md` |
 
