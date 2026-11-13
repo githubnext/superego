@@ -51,6 +51,8 @@ it('offers the skills to the agent, sends one a message names, and lists them fo
   expect(await peer.call('skills.list', {})).toEqual([
     { name: 'commit', description: 'Write commit messages.' }, { name: 'secret', description: 'Only by name.' },
   ])
+  // And by the core's old name, for a window older than the move.
+  expect(await peer.call('skill.list', {})).toEqual(await peer.call('skills.list', {}))
   const { all, content } = await send(peer, 'do $commit and /skill:secret, not $HOME')
   // The agent is told what each skill is for and where it is, but not about one kept to being named.
   expect(all).toContain(`<skill name=\\"commit\\" location=\\"${join(dir, 'agents', 'skills', 'commit', 'SKILL.md')}\\">Write commit messages.</skill>`)

@@ -53,6 +53,14 @@ const RENAMED: Record<string, string> = {
   // The thread tools were "threads", the sidebar's name.
   threads: 'thread-tools',
 }
+/**
+ * Methods moved into an extension, by their old names: a window older than this daemon still calls those, and is
+ * answered by the extension's (while the extension is on). Kept one release after the move, then dropped.
+ */
+const MOVED_METHODS: Record<string, string> = {
+  'thread.diff': 'git.diff',
+  'skill.list': 'skills.list',
+}
 /** Settings kept under another key now: a value stored under the old one is read as the new one's. */
 const MOVED = Object.fromEntries(Object.entries(RENAMED).map(([old, now]) => [`extensions.${old}`, `extensions.${now}`]))
 
@@ -63,6 +71,7 @@ const MOVED = Object.fromEntries(Object.entries(RENAMED).map(([old, now]) => [`e
 export const RESERVED = new Set([
   'action', 'agent', 'app', 'auth', 'core', 'daemon', 'extensions', 'file', 'hello', 'meta', 'model', 'pane', 'profile', 'profiles',
   'providers', 'settings', 'skill', 'thread', 'threads', 'unwatch', 'value', 'watch', 'web',
+  // `skill` is no longer the core's, but older windows still call skill.list (see MOVED_METHODS).
 ])
 
 /** A thread's own metadata, next to its transcript. */
@@ -1619,7 +1628,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       // this connection opened are there too.
       peer.handleOthers((method) => {
         if (router.has(method)) return open(method, (params) => router.dispatch(method, params, ctx(), { source: client }))
-        const read = methods.get(method)
+        const read = methods.get(MOVED_METHODS[method] ?? method)
         return read && open(method, read)
       })
       return () => {

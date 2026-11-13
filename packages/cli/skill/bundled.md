@@ -86,7 +86,9 @@ Bundled extensions get more than a profile's:
 - **Machine settings** from the daemon half: `superego.settings.register({ id: 'orders', title, settings: [{ key: 'orders.x', title, default, type }] })`.
 - A feature flag: the daemon announces `ext:<name>` for each extension set up and switched on there, and tells clients
   again whenever that changes, so `has(machine, 'ext:orders')` says whether a machine has it now (a profile's once the
-  profile loads). Watching a value needs no check: it's null until the extension publishes it.
+  profile loads). Watching a value needs no check: it's null until the extension publishes it. Check it before calling the
+  daemon half's methods: a machine running an older Superego may not have them. Renaming a method keeps the old name as
+  an alias for a release (`MOVED_METHODS` in daemon.ts).
 
 ## Tests
 

@@ -2,7 +2,7 @@
 // skills, UI half: naming a skill as you type. `$` (or `/skill:`, or `/` opening the message) offers the thread's
 // machine's skills in the composer, and a skill a message named shows as a chip under it (its instructions went along
 // whole, see daemon.ts).
-import { call, defineUiExtension, type Completion, type ComposerWhere } from '@superego/app/ui'
+import { call, defineUiExtension, has, type Completion, type ComposerWhere } from '@superego/app/ui'
 import { SparkleIcon } from '@superego/ui'
 import { matchSkills, sentSkills, skillAt } from './names.ts'
 import { about, LIST, type SkillInfo } from './shared.ts'
@@ -15,7 +15,8 @@ import './styles.css'
 let listed: { key: string; skills: Promise<SkillInfo[]> } | undefined
 const skillsFor = ({ machine, thread }: ComposerWhere, start: number) => {
   const key = `${machine.id}\u0000${thread.id}\u0000${start}`
-  if (listed?.key !== key) listed = { key, skills: call<SkillInfo[]>(machine.id, LIST).catch(() => []) }
+  // A machine without the daemon half (an older Superego) has nothing to list.
+  if (listed?.key !== key) listed = { key, skills: has(machine, 'ext:skills') ? call<SkillInfo[]>(machine.id, LIST).catch(() => []) : Promise.resolve([]) }
   return listed.skills
 }
 

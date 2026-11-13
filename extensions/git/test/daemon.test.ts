@@ -48,6 +48,8 @@ it("reads a thread's changes by git: the diff against HEAD and the files not tra
   expect(changes.diff).toContain('-one')
   expect(changes.diff).toContain('+two')
   expect(changes.untracked).toEqual(['new.md'])
+  // A window older than the move still asks by the core's old name.
+  expect(await peer.call<Changes>('thread.diff', { id: thread.id })).toEqual(changes)
   // A read, not an action; and a folder that isn't a repository says so.
   expect((await peer.call<ActionInfo[]>('action.list', {})).map((a) => a.id)).not.toContain(DIFF)
   const plain = await peer.call<ThreadInfo>('thread.create', { cwd: join(dir, 'data') })
