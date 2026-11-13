@@ -18,6 +18,11 @@ const fail = async (message) => {
 process.on('uncaughtException', (error) => void fail(`uncaught in main: ${error.stack ?? error}`))
 process.on('unhandledRejection', (error) => void fail(`unhandled in main: ${error?.stack ?? error}`))
 app.on('web-contents-created', (_e, contents) => contents.on('console-message', (event) => console.error('renderer:', event.message)))
+// The installed fonts, as the Local Font Access API gives them (only where the page has it): Chromium reads every font
+// on the machine for the real list, 2,000-odd on a Mac, which takes over ten seconds alone and minutes beside other runs.
+const FONTS = ['Arial', 'Courier', 'Georgia', 'Helvetica', 'Menlo', 'Monaco', 'Times']
+app.on('web-contents-created', (_e, contents) => contents.on('dom-ready', () => void contents.executeJavaScript(
+  `if (window.queryLocalFonts) window.queryLocalFonts = async () => ${JSON.stringify(FONTS)}.map((family) => ({ family }))`).catch(() => {})))
 setTimeout(() => fail('timed out'), 90_000)
 
 await import('../out/main/main.js')
@@ -706,9 +711,9 @@ if (phase === 'first') {
   await run(`document.querySelector('.app__settings').click()`)
   await until(`document.querySelector('.settings')?.textContent.includes('Appearance') && document.querySelector('.settings').textContent.includes('Notifications')`, 'app settings')
   await shot('settings')
-  // Fonts: the picker lists installed families (needs a user gesture), and a choice sets the CSS variable.
+  // Fonts: the picker lists installed families (FONTS here; needs a user gesture), and a choice sets the CSS variable.
   await run(`document.querySelector('[data-key="app.font.interface"] .superego-font-picker__button').click()`, true)
-  await until(`document.querySelectorAll('.superego-font-picker__list button').length > 5`, 'installed fonts listed', 40_000)
+  await until(`document.querySelectorAll('.superego-font-picker__list button').length > 5`, 'installed fonts listed')
   await run(`[...document.querySelectorAll('.superego-font-picker__list button')].find((b) => b.textContent === 'Helvetica' || b.textContent === 'Arial').click()`)
   await until(`/Helvetica|Arial/.test(document.documentElement.style.getPropertyValue('--superego-font'))`, 'interface font applied')
   await run(`window.superego.call('app', 'app.settings.set', { key: 'app.font.mono', value: 'Menlo' })`)
