@@ -1,5 +1,5 @@
 // Screenshots of the window's layout (run by test/look.sh): the sidebar open, folded to dots and closed; the thread
-// alone and with Changes beside it (and a file past it); light and dark. Into $SUPEREGO_SHOWCASE_OUT.
+// alone and with Changes beside it (and a file past it); a long title, parent and branch; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { threads } from './showcase/threads.mjs'
@@ -92,6 +92,25 @@ void (async () => {
   await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true }))`)
   await sleep(300)
   await both('closed')
+  // A long title, a parent and a long branch, then archived: the title bar fits the window, wide and at its narrowest.
+  await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true }))`)
+  const long = 'Make the next and previous thread keys follow the order the sidebar shows them in, children under their parents'
+  const { id: longId } = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(project)}, worktree: true, parent: '${id}', title: ${JSON.stringify(long)} })`)
+  await until(`([...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('Make the next'))?.click(), document.querySelector('.thread__title')?.title === ${JSON.stringify(long)})`, 'long thread shown')
+  const tight = async (name) => {
+    await both(name)
+    for (const narrow of [860, 600]) {
+      win().setContentSize(narrow, height)
+      await sleep(300)
+      await both(`${name}-${narrow}`)
+    }
+    win().setContentSize(width, height)
+    await sleep(300)
+  }
+  await tight('long')
+  await run(`window.superego.call('local', 'thread.archive', { id: '${longId}' })`)
+  await until(`!!document.querySelector('.thread__unarchive')`, 'archived')
+  await tight('long-archived')
   console.log(`look: done in ${out}`)
   app.exit(0)
 })()
