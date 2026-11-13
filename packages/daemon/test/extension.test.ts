@@ -1,5 +1,5 @@
-// The daemon half of the extension API, as an extension sees it: methods (reads) apart from actions, threads by id, and
-// pane kinds told to the agent.
+// The daemon half of the extension API, as an extension sees it: methods (reads) apart from actions, threads by id,
+// pane kinds told to the agent, and submit transforms.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -72,5 +72,41 @@ it('lists optional extensions in Settings, and tells clients what each thread go
   expect(thread.without).toBeUndefined()
   await peer.call('settings.set', { key: 'extensions.links', value: false })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.without?.join() === 'links')
+  await close()
+})
+
+it('transforms what a message gives the agent, in order, but not for a thread that goes without the extension', async () => {
+  const seen: unknown[] = []
+  const stamp = defineDaemonExtension({
+    name: 'stamp',
+    setup(superego) {
+      superego.submit(async ({ thread, text, content }) => {
+        seen.push({ thread: thread.id, text, content })
+        if (text.includes('stamp')) return [...content, { type: 'text', text: 'stamped' }]
+      })
+    },
+  })
+  const count = defineDaemonExtension({
+    name: 'count',
+    setup(superego) { superego.submit(({ content }) => [...content, { type: 'text', text: `${content.length} before me` }]) },
+  })
+  const { peer, close } = await open([stamp, count])
+  const thread = await peer.call<ThreadInfo>('thread.create', {})
+  const users = async () => {
+    const { value } = await peer.call<{ value: { entries: { kind: string; model?: { content: unknown }[] }[] } }>('thread.watch', { id: thread.id })
+    return value.entries.filter((e) => e.kind === 'pi.user').map((e) => e.model![0]!.content)
+  }
+  const send = async (text: string) => {
+    const before = (await users()).length
+    await peer.call('thread.submit', { id: thread.id, text })
+    await until(async () => (await users()).length > before && (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
+    return (await users()).at(-1)
+  }
+  // Each transform gets what the one before returned.
+  expect(await send('stamp this')).toEqual([{ type: 'text', text: 'stamp this' }, { type: 'text', text: 'stamped' }, { type: 'text', text: '2 before me' }])
+  expect(seen[0]).toEqual({ thread: thread.id, text: 'stamp this', content: [{ type: 'text', text: 'stamp this' }] })
+  // Turned off on this machine, its transform is skipped; untouched, a message goes as it came.
+  await peer.call('settings.set', { key: 'extensions.count', value: false })
+  expect(await send('plain')).toBe('plain')
   await close()
 })

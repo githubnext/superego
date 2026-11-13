@@ -22,7 +22,7 @@ import { FileSettingsStore } from '@superego/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
 import { threadTools } from './thread-tools.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
-import { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveValue, type StatusContribution } from './extension.ts'
+import { defineDaemonExtension, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type StatusContribution, type SubmitTransform } from './extension.ts'
 import { serveWeb, webToken, type WebServer } from './web.ts'
 import { agentsInstructions, listSkills, mentionedSkills, skillBlock, skillsPrompt } from './skills.ts'
 import { metaExtension, metaPrompt, type MachineDirectory } from './meta.ts'
@@ -525,6 +525,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (entry && !entry.owned && !entry.listeners.size) values.delete(name)
   }
   const contributors: ((threadId: string) => StatusContribution | undefined)[] = []
+  /** Extensions' submit transforms, in the order registered: whose, and (a profile's) for which profile's threads. */
+  const transforms: { transform: SubmitTransform; owner: string; profile?: string }[] = []
   const cleanups: (() => void)[] = []
   const blockedOf = (id: string) => {
     for (const contribute of contributors) {
@@ -563,6 +565,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     const api: DaemonApi = {
       app: options.app,
+      agentsDir,
       harness,
       agent: (agentPart) => { undo.push(agentExtension(agentPart)) },
       settings: {
@@ -602,6 +605,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         return { get: () => entry.value as T, set, update: (edit) => set(edit(entry.value as T)) }
       },
       status: (contribute) => { contributors.push(contribute); undo.push(() => { contributors.splice(contributors.indexOf(contribute), 1) }) },
+      submit(transform) {
+        const entry = { transform, owner: extension.name, ...(profile ? { profile: profile.dir } : {}) }
+        transforms.push(entry)
+        undo.push(() => { transforms.splice(transforms.indexOf(entry), 1) })
+      },
       invalidate: changed,
       threads: {
         list: () => list(),
@@ -710,7 +718,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
     await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null, ...rest }, context)
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
-    const content = await withSkills(m.meta, text, await contentOf(id, text, attachments))
+    const content = await transformed(id, m, text, attachments, await withSkills(m.meta, text, await contentOf(id, text, attachments)))
     const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}) }, context)
     return String(submission.id)
   }
@@ -728,6 +736,25 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const blocks = typeof content === 'string' ? (content ? [{ type: 'text' as const, text: content }] : []) : content
     for (const skill of named) blocks.push({ type: 'text', text: await skillBlock(skill) })
     return blocks
+  }
+
+  /**
+   * A message's content as extensions' submit transforms leave it (a skill it names brought along, say): each in turn,
+   * those of extensions the thread goes without skipped, and a profile's for its own threads only. Untouched, it's sent
+   * as it came.
+   */
+  async function transformed(id: string, m: Mounted, text: string, attachments: Attachment[], content: string | MessageBlock[]) {
+    const without = withoutOf(m.meta, m.meta.profile && profiles.get(m.meta.profile.dir))
+    const applying = transforms.filter((t) => !without.has(t.owner) && (!t.profile || t.profile === m.meta.profile?.dir))
+    if (!applying.length) return content
+    const thread = info(id, m)
+    let blocks: MessageBlock[] = typeof content === 'string' ? (content ? [{ type: 'text', text: content }] : []) : content
+    let touched = false
+    for (const { transform } of applying) {
+      const next = await transform({ thread, text, attachments, content: blocks })
+      if (next) { blocks = next; touched = true }
+    }
+    return touched ? blocks : content
   }
 
   /**
