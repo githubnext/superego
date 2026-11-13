@@ -386,8 +386,20 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .action-log__error { font-size: var(--superego-text-xs); }
 .action-log__none { color: var(--superego-muted); }
 
-.web-access { display: flex; align-items: center; gap: var(--superego-space-3); padding: var(--superego-space-2) 0; }
+.web-access { display: grid; gap: var(--superego-space-2); padding: var(--superego-space-2) 0; }
+.web-access p { margin: 0; }
+.web-access__row { display: flex; align-items: center; gap: var(--superego-space-2); }
 .web-access__url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--superego-muted); }
+.web-pair { display: flex; gap: var(--superego-space-4); align-items: center; padding: var(--superego-space-3); border: 1px solid var(--superego-border); border-radius: 10px; }
+/* Dark on light whatever the theme: what a camera reads best. */
+.web-pair__qr { flex: none; width: 148px; height: 148px; border-radius: 6px; overflow: hidden; background: white; }
+.web-pair__qr svg { display: block; width: 100%; height: 100%; }
+.web-pair__how { display: grid; gap: 6px; min-width: 0; }
+.web-pair__link { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--superego-muted); font-size: var(--superego-text-xs); }
+.web-pair__code { font-size: 1.15em; font-weight: 600; letter-spacing: .06em; }
+.web-pair__actions { display: flex; gap: 6px; }
+.web-device { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--superego-border); }
+.web-device__actions { display: flex; gap: 6px; flex: none; }
 
 /* Phones and narrow windows: one column, the sidebar a drawer, nothing hovering where a thumb goes. */
 .app__mobilebar { display: flex; align-items: center; gap: var(--superego-space-2); padding: calc(env(safe-area-inset-top) + 8px) var(--superego-space-3) 8px; border-bottom: 1px solid var(--superego-border); background: var(--superego-sidebar-bg); flex: none; }
@@ -416,7 +428,7 @@ code { font-family: var(--superego-mono); font-size: .92em; }
   .settings__nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--superego-border); padding: 8px; }
   .settings__nav button { white-space: nowrap; }
   .settings__content { padding: 8px 16px 40px; }
-  .setting, .provider, .profile-row, .machine-row { flex-wrap: wrap; }
+  .setting, .provider, .profile-row, .machine-row, .web-device, .web-pair { flex-wrap: wrap; }
 }
 
 .thread__tools { display: inline-flex; align-items: center; gap: var(--superego-space-2); flex: 0 1 auto; min-width: 0; }

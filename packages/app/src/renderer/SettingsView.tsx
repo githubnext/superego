@@ -170,20 +170,6 @@ function ColorField({ label, value, fallback, disabled, onChange, onInvalid }: {
   )
 }
 
-/** Settings → a machine → Web access: the address a browser or phone opens (it carries the token), to copy. */
-export function WebAccess({ section }: { target: string; section: SectionInfo }) {
-  const { url, error } = (section.data ?? {}) as { url?: string | null; error?: string | null }
-  const [copied, setCopied] = useState(false)
-  if (error) return <p className="setting__error">{error}</p>
-  if (!url) return null
-  return (
-    <div className="web-access">
-      <code className="web-access__url">{url.replace(/#token=.*/, '#token=…')}</code>
-      <Button onClick={() => { void navigator.clipboard.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }) }}>{copied ? 'Copied' : 'Copy address'}</Button>
-    </div>
-  )
-}
-
 type ProfileRow = {
   name: string; scope: 'user' | 'project'; dir: string; allowed: boolean
   description?: string; model?: string; extends?: string; extensions?: number; ui?: number; without?: string[]; error?: string
