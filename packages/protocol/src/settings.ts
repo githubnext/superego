@@ -67,6 +67,30 @@ export type ProviderAuthInfo = {
   models: number
 }
 
+/**
+ * A provider that rejected this machine's credentials (an invalid or expired key, a sign-in that couldn't be renewed),
+ * as the machine's `auth.rejected` value lists them. Until its credentials change or someone retries, new turns for it
+ * wait without asking it, and the threads it failed wait for sign-in; they go on by themselves once it's signed in.
+ */
+export type ProviderRejection = {
+  provider: string
+  /** The provider's name, as Settings → Providers shows it. */
+  name: string
+  /** What happened, in a few words: "Anthropic rejected the API key". */
+  summary: string
+  /** The provider's own error, as the first run it failed got it. */
+  detail: string
+  /** When it first rejected them, ms since the epoch. */
+  since: number
+  /** The threads waiting for sign-in. */
+  threads: string[]
+  /** Set while the waiting threads are being retried. */
+  retrying?: boolean
+}
+
+/** The value naming the providers that rejected a machine's credentials: `ProviderRejection[]`, empty when none. */
+export const AUTH_REJECTED = 'auth.rejected'
+
 /** What a sign-in flow asks the user, mirroring pi-ai's AuthPrompt. */
 export type AuthPrompt =
   | { type: 'text' | 'secret' | 'manual_code'; message: string; placeholder?: string }

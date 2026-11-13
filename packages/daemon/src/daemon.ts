@@ -14,7 +14,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  arr, type Attachment, paramsParser, bool, defineAction, deriveStatus, FEATURES, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type RpcPeer, type ThreadInfo,
+  arr, type Attachment, AUTH_REJECTED, paramsParser, bool, defineAction, deriveStatus, FEATURES, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
@@ -152,8 +152,10 @@ export type DaemonOptions = {
 /** One mounted thread: its conversation and a small watch that keeps its status current. */
 type Mounted = {
   conversation: Conversation; meta: ThreadMeta; live?: LiveState; lastEntryId?: number
-  /** What the thread runs with and has spent, and when anything last happened in it. */
-  model?: string; cost?: number; activeAt?: number
+  /** What the thread runs with (and whose model it is) and has spent, and when anything last happened in it. */
+  model?: string; provider?: string; cost?: number; activeAt?: number
+  /** The task of the last failed run it heard of (null: none), so each failure is looked at once. */
+  failure?: number | null
   /** Its session, found from its folder, for a thread from before threads kept it. */
   root?: string
   stop(): Promise<unknown>
@@ -492,9 +494,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         entry.activeAt = (last?.model?.at(-1) as { timestamp?: number } | undefined)?.timestamp ?? Date.now()
       } else if (entry.live?.run && !wasRunning) entry.activeAt = Date.now()
       entry.lastEntryId = last?.id
-      const agent = view.docs['pi.agent'] as { model?: { modelId?: string } } | undefined
+      const agent = view.docs['pi.agent'] as { model?: { modelId?: string; provider?: string } } | undefined
       entry.model = agent?.model?.modelId
+      entry.provider = agent?.model?.provider
       entry.cost = costOf(view.docs['pi.usage'] as Parameters<typeof costOf>[0])
+      heedFailure(key, entry)
       changed()
     }
     absorb(watch.value)
@@ -526,8 +530,52 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     ...(m.meta.hidden ? { hidden: true, ...(m.meta.owner ? { owner: m.meta.owner } : {}) } : {}),
     ...(m.meta.parent ? { parent: m.meta.parent } : {}),
     ...(without.size ? { without: [...without].sort() } : {}),
-    status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id) }),
+    status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id), ...signInOf(id, m) }),
   })
+  /**
+   * A run that failed for its credentials: its thread waits for sign-in to the provider (whose turns then fail at once)
+   * until those change or someone retries. Each failure once; those there before the thread was watched were heard of
+   * before (or are too old to wait on). A thread that runs again, or answers, no longer waits.
+   */
+  function heedFailure(id: string, m: Mounted) {
+    const failure = m.live?.run ? undefined : m.live?.runFailure
+    const fresh = failure && m.failure !== undefined && failure.taskId !== m.failure
+    m.failure = failure?.taskId ?? null
+    if (fresh && failure.reason === 'model_error' && m.provider && agent.rejected(m.provider, id, failure.taskId, failure.detail)) return
+    if (!agent.rejections.waiting(id, failure?.taskId)) agent.rejections.release(id)
+  }
+  const waitingOn = (id: string, m: Mounted) => m.live?.run ? undefined : agent.rejections.waiting(id, m.live?.runFailure?.taskId)
+  const signInOf = (id: string, m: Mounted) => {
+    const rejection = waitingOn(id, m)
+    return rejection ? { signIn: rejection.summary } : {}
+  }
+  /** The providers that rejected this machine's credentials, with the threads in use waiting on them. */
+  const rejectedNow = (): ProviderRejection[] => agent.rejections.all().map(({ credential: _, threads, ...rejection }) => ({
+    ...rejection, threads: Object.keys(threads).filter((id) => mounted.has(id) && !mounted.get(id)!.meta.archived),
+  }))
+  /**
+   * Retry the threads waiting on `provider` (or every rejected one), once each: their runs continue where they failed,
+   * as one cut off by a restart does. One whose credentials are rejected again waits again, until the next change.
+   */
+  async function retrySignIn(provider?: string) {
+    let retried = 0
+    for (const id of provider ? [provider] : agent.rejections.all().map((r) => r.provider)) {
+      const rejection = agent.rejections.retry(id)
+      if (!rejection) continue
+      for (const thread of Object.keys(rejection.threads)) {
+        const m = mounted.get(thread)
+        if (!m || m.meta.archived || restarting || !waitingOn(thread, m)) continue
+        try {
+          await m.conversation.submit({ type: 'continue' }, context)
+          retried++
+        } catch (error) {
+          console.error(`Retrying thread ${thread} after sign-in:`, error)
+        }
+      }
+      agent.rejections.settle(rejection)
+    }
+    return retried
+  }
   /** What extensions say about a thread (`facts`), by extension: those it doesn't go without, as for hooks. */
   const factsInfo = (id: string, meta: ThreadMeta, without: Set<string>): Pick<ThreadInfo, 'ext'> => {
     const ext: Record<string, Json> = {}
@@ -677,6 +725,18 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const prune = (name: string) => {
     const entry = values.get(name)
     if (entry && !entry.owned && !entry.listeners.size) values.delete(name)
+  }
+  // The core's own: which providers rejected this machine's credentials, and how many threads wait (ProviderRejection).
+  const rejectedValue = valueOf(AUTH_REJECTED)
+  rejectedValue.owned = true
+  let rejectedJson = ''
+  const publishRejected = () => {
+    const now = rejectedNow()
+    const json = JSON.stringify(now)
+    if (json === rejectedJson) return
+    rejectedJson = json
+    rejectedValue.value = now
+    for (const listener of rejectedValue.listeners) listener(now)
   }
   const contributors: ((threadId: string) => StatusContribution | undefined)[] = []
   /** Extensions' submit transforms, in the order registered: whose, and (a profile's) for which profiles' threads (their folders). */
@@ -1492,6 +1552,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   }))
   router.register(defineAction({
+    id: 'auth.retry', title: 'Retry the threads waiting for sign-in', runs: 'machine', expose: ['ui', 'cli'],
+    params: obj({ provider: opt(str()) }),
+    async run({ provider }) { return { retried: await retrySignIn(provider) } },
+  }))
+  router.register(defineAction({
     id: 'auth.respond', title: 'Answer a sign-in step', runs: 'machine',
     params: obj({ flow: str(), prompt: str(), value: str() }),
     run({ flow, prompt, value }) { agent.respond(flow, prompt, value); return null },
@@ -1531,6 +1596,13 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (m.live?.run && m.meta.profile) await profileOf(m.meta.profile).catch((error: Error) => console.error(`Profile ${m.meta.profile!.name}: ${error.message}`))
   }
   harness.resume()
+  // Waiting on threads gone since (deleted, say) no longer; a provider whose credentials changed while the daemon was
+  // down is retried. Then the value says which are rejected, as it keeps saying.
+  for (const rejection of agent.rejections.all()) for (const id of Object.keys(rejection.threads)) if (!mounted.has(id)) agent.rejections.release(id)
+  for (const provider of agent.changedSinceRejected()) void retrySignIn(provider)
+  publishRejected()
+  listListeners.add(publishRejected)
+  cleanups.push(agent.rejections.onChange(changed), agent.onCredentials((provider) => void retrySignIn(provider)))
   // The profiles of the threads in use, loaded in the background: their facts and what they go without show without
   // waiting for a turn. An archived thread's load when it's brought back.
   const loadingProfiles = (async () => {
@@ -1707,6 +1779,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       agent.close()
       for (const m of mounted.values()) await m.stop()
       await harness.close(context)
+      await agent.rejections.saved()
     },
   }
 

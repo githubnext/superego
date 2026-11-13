@@ -1,10 +1,11 @@
 // Everything about which model the agents use and how Superego is signed in to its providers, as settings: the Model and
 // Providers sections, the credential store, and sign-in flows. Nothing else in the daemon knows about auth.
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import { watch as watchFs } from 'node:fs'
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AuthPrompt as PiAuthPrompt, Credential, CredentialStore, ModelThinkingLevel } from '@earendil-works/pi-ai'
-import { fauxAssistantMessage, fauxProvider, type FauxResponseStep } from '@earendil-works/pi-ai'
+import { createAssistantMessageEventStream, fauxAssistantMessage, fauxProvider, type FauxResponseStep } from '@earendil-works/pi-ai'
 import { createModels, getSupportedThinkingLevels, clampThinkingLevel, type Models, type Provider } from '@earendil-works/pi-ai/models'
 import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic'
 import { openaiProvider } from '@earendil-works/pi-ai/providers/openai'
@@ -13,6 +14,7 @@ import { RpcError, type AppConfig, type AuthEvent, type ModelCatalog, type AuthP
 import type { SettingsRegistry } from '@superego/settings'
 import { appEnv } from './paths.ts'
 import { replayProvider, withRecording } from './replay.ts'
+import { authFailure, Rejections, rejectionSummary, WAITING } from './provider-auth.ts'
 
 /** The model each provider starts on when it is the first one signed in. */
 const PREFERRED: Record<string, string> = { anthropic: 'claude-opus-5-5', openai: 'gpt-6.1-sol' }
@@ -52,6 +54,8 @@ class FileCredentialStore implements CredentialStore {
     this.#queue = run.catch(() => {})
     return run
   }
+  /** Every credential as stored; none when there's no file. */
+  all() { return this.#serial(() => this.#load()) }
   async #load(): Promise<Record<string, Credential>> {
     try { return JSON.parse(await readFile(this.path, 'utf8')) } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {}
@@ -85,17 +89,49 @@ function withServiceTier<T extends Provider>(provider: T, fast: () => boolean): 
   })
 }
 
-/** A scripted model that echoes the last user message: tests and demos, with `<ID>_MODEL=faux`. */
+/**
+ * `provider`, answering at once without asking it while `blocks` says its credentials were rejected: the turn fails as
+ * an auth failure, so it waits for sign-in like the one that was rejected.
+ */
+function gated<T extends Provider>(provider: T, blocks: () => string | undefined): T {
+  const refuse = (model: { id: string; api: string }) => {
+    const stream = createAssistantMessageEventStream()
+    const message = { ...fauxAssistantMessage('', { stopReason: 'error', errorMessage: `${WAITING} ${blocks()}` }), api: model.api, provider: provider.id, model: model.id }
+    queueMicrotask(() => { stream.push({ type: 'error', reason: 'error', error: message }); stream.end(message) })
+    return stream
+  }
+  return new Proxy(provider, {
+    get(target, key, receiver) {
+      if (key === 'stream' || key === 'streamSimple') {
+        return (model: { id: string; api: string }, ...rest: unknown[]) => blocks() !== undefined ? refuse(model) : (target[key] as Function).call(target, model, ...rest)
+      }
+      return Reflect.get(target, key, receiver)
+    },
+  })
+}
+
+/** What the scripted model answers to a stored key that starts with "reject": Anthropic's, for a key it doesn't know. */
+const REJECTED = '401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}'
+
+/**
+ * A scripted model that echoes the last user message: tests and demos, with `<ID>_MODEL=faux`. A key stored for it
+ * (`faux` in auth.json) that starts with "reject" makes it answer as a provider rejecting the key.
+ */
 function echoProvider() {
   const faux = fauxProvider()
-  const echo: FauxResponseStep = (context) => {
+  const echo: FauxResponseStep = (context, options) => {
     faux.appendResponses([echo])
+    if (options?.apiKey?.startsWith('reject')) return fauxAssistantMessage('', { stopReason: 'error', errorMessage: REJECTED })
     const last = [...context.messages].reverse().find((message) => message.role === 'user')
     const text = typeof last?.content === 'string' ? last.content : last?.content.map((part) => part.type === 'text' ? part.text : '').join('') ?? ''
     return fauxAssistantMessage(`echo: ${text}`)
   }
   faux.setResponses([echo])
-  return faux
+  const provider: Provider = {
+    ...faux.provider,
+    auth: { apiKey: { name: 'Faux', resolve: async ({ credential }) => ({ auth: credential?.key ? { apiKey: credential.key } : {} }) } },
+  }
+  return { ...faux, provider }
 }
 
 type Flow = { abort: AbortController; prompts: Map<string, { resolve(value: string): void; reject(error: Error): void }> }
@@ -114,6 +150,17 @@ export type AgentSettings = {
   respond(flow: string, prompt: string, value: string): void
   cancel(flow: string): void
   logout(provider: string): Promise<void>
+  /** The providers that rejected this machine's credentials, and the threads waiting on them. */
+  rejections: Rejections
+  /**
+   * A run failed: when for its credentials, its thread waits on its provider (`task`, the task it failed in), and it
+   * is true. Turns for that provider then fail at once, without asking it, until its credentials change or it's retried.
+   */
+  rejected(provider: string, thread: string, task: number, error: string | undefined): boolean
+  /** Hear a provider's credentials change: stored or removed here, or auth.json edited by hand. */
+  onCredentials(listener: (provider: string) => void): () => void
+  /** The rejected providers whose credentials changed since (while the daemon was down, say): to retry. */
+  changedSinceRejected(): string[]
   close(): void
 }
 
@@ -121,9 +168,14 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
   const env = appEnv(app)
   const credentials = new FileCredentialStore(join(dataDir, 'auth.json'))
   const models = createModels({ credentials })
-  // <ID>_RECORD keeps every answer for replaying later; see replay.ts.
+  const credentialListeners = new Set<(provider: string) => void>()
+  const rejections = new Rejections(join(dataDir, 'auth-rejected.json'))
+  // <ID>_RECORD keeps every answer for replaying later; see replay.ts. Every provider is refused while rejected.
   const record = env('RECORD')
-  const recorded = <T extends Provider>(provider: T) => record ? withRecording(provider, record) : provider
+  const recorded = <T extends Provider>(provider: T) => {
+    const blocks = () => rejections.blocks(provider.id) ? rejections.get(provider.id)!.summary : undefined
+    return gated(record ? withRecording(provider, record) : provider, blocks)
+  }
   models.setProvider(recorded(anthropicProvider()))
   models.setProvider(recorded(withServiceTier(openaiProvider(), () => settings.get<boolean>(KEYS.fast) && FAST.has(chosen()?.provider ?? ''))))
   const model = env('MODEL')
@@ -215,6 +267,30 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
 
   await refreshAuth()
 
+  // Each provider's credentials as last seen (a hash), to tell which ones a change to auth.json changed.
+  const hashOf = (credential: Credential | undefined) => credential ? createHash('sha256').update(JSON.stringify(credential)).digest('hex').slice(0, 16) : ''
+  let seen = new Map(Object.entries(await credentials.all().catch(() => ({}))).map(([id, c]) => [id, hashOf(c)]))
+  const credentialsChanged = (provider: string) => { for (const listener of credentialListeners) listener(provider) }
+  async function rereadCredentials() {
+    const now = new Map(Object.entries(await credentials.all().catch(() => ({}))).map(([id, c]) => [id, hashOf(c)]))
+    const changed = [...new Set([...seen.keys(), ...now.keys()])].filter((id) => seen.get(id) !== now.get(id))
+    seen = now
+    if (!changed.length) return
+    await refreshAuth()
+    for (const provider of changed) credentialsChanged(provider)
+  }
+  // auth.json, whoever writes it: a sign-in here, the CLI, an editor. Its folder, as it's replaced, not written in place.
+  let reread: ReturnType<typeof setTimeout> | undefined
+  const watcher = (() => {
+    try {
+      return watchFs(dataDir, (_event, name) => {
+        if (name !== null && String(name) !== 'auth.json') return
+        clearTimeout(reread)
+        reread = setTimeout(() => void rereadCredentials(), 100)
+      }).on('error', () => {})
+    } catch { return undefined }
+  })()
+
   const flows = new Map<string, Flow>()
   // Some sign-ins identify the installation; it is created once per machine and kept next to the credentials.
   const deviceIdPath = join(dataDir, 'device-id')
@@ -280,6 +356,9 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
       }, { agentName: app.id, getDeviceId }).then(async () => {
         await refreshAuth()
         emit({ type: 'done' })
+        // Signed in again, even with the same key (fixed at the provider, say): what waited on it goes on.
+        seen.set(provider, hashOf(await credentials.read(provider).catch(() => undefined)))
+        credentialsChanged(provider)
       }, (error: unknown) => {
         emit({ type: 'failed', message: flow.abort.signal.aborted ? 'Cancelled' : error instanceof Error ? error.message : String(error) })
       }).finally(() => flows.delete(id))
@@ -298,8 +377,25 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
       await models.logout(provider)
       await refreshAuth()
     },
+    rejections,
+    rejected(provider, thread, task, error) {
+      if (!authFailure(error)) return false
+      const name = models.getProviders().find((p) => p.id === provider)?.name ?? provider
+      // A turn refused here keeps the rejection it was refused for; only the provider's own word starts one.
+      const known = rejections.get(provider)
+      const detail = error!.startsWith(WAITING) && known ? known.detail : error!
+      rejections.fail(provider, thread, task, { name, summary: rejectionSummary(name, authed.get(provider)?.type, detail), detail, credential: seen.get(provider) ?? '' })
+      return true
+    },
+    changedSinceRejected: () => rejections.all().filter((r) => r.credential !== (seen.get(r.provider) ?? '')).map((r) => r.provider),
+    onCredentials(listener) {
+      credentialListeners.add(listener)
+      return () => { credentialListeners.delete(listener) }
+    },
     close() {
       for (const flow of flows.values()) flow.abort.abort()
+      clearTimeout(reread)
+      watcher?.close()
     },
   }
 }
