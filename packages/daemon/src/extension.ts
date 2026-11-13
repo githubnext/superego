@@ -57,7 +57,10 @@ export type ThreadDraft = {
   parent?: string
   /** The profile it starts with, as loaded. */
   profile?: { ref: ProfileRef; spec: ProfileSpec }
-  /** What extensions were asked for, by name (`NewThread.options`; `worktree` is `options.worktrees`). */
+  /**
+   * What extensions were asked for, by name: its profile's `options`, then `NewThread.options` over them (`worktree`,
+   * in either, is `options.worktrees`).
+   */
   options: Record<string, Json>
 }
 
@@ -74,6 +77,11 @@ export type ThreadHooks = {
    * Each hook sees the draft as the ones before it left it.
    */
   creating?(draft: ThreadDraft): ThreadCreating | void | Promise<ThreadCreating | void>
+  /**
+   * The thread its `creating` took part in isn't made after all: a later hook refused, or making it failed. Undo what
+   * `creating` did (remove the worktree it added); `state` is what it gave the thread. Told in reverse order.
+   */
+  abandoned?(draft: ThreadDraft, state: Json | undefined): void | Promise<void>
   /** It exists, before its first message is sent. */
   created?(thread: ThreadInfo): void | Promise<void>
   /**

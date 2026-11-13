@@ -192,9 +192,12 @@ superego.thread({
     const { path, branch } = await makeWorktree(draft.checkout.top)  // yours: git worktree add
     return { cwd: path, state: { path, branch } }
   },
+  async abandoned(draft, made) {                       // a later hook refused it: undo
+    if (made) await removeWorktree(made.path)               // yours too
+  },
   async archived(thread) {
     const tree = await state.get(thread.id)
-    if (tree) await removeIfClean(tree.path)                 // yours too
+    if (tree && await removeIfClean(tree.path)) return { note: 'its worktree is removed' }  // yours too
   },
 })
 ```
@@ -205,7 +208,9 @@ superego.thread({
 - Archiving an archived thread, or unarchiving one in use, does nothing: the hooks see only real changes.
 - `creating`, `archiving` and `unarchiving` may refuse by throwing (an `RpcError` says it cleanly): nothing more
   happens, and the hooks after don't run. `creating` may also move where the thread works and give it state, each
-  hook seeing the draft as the one before left it.
+  hook seeing the draft as the one before left it. When a later hook refuses (or making the thread fails), those
+  whose `creating` already ran are told `abandoned(draft, state)`, in reverse, to undo it: a worktree goes again.
+  `draft.options` is what the thread was asked for by extension: its profile's `options`, then `thread.create`'s.
 - The others are told, and awaited in turn. A throw there is logged, and the thread carries on. `archived` runs
   before clients see the thread archived, so it's where cleanup goes. `archiving` and `archived` may return
   `{ note }`, what they did in a line ("Removed the worktree …; branch … kept"): `threads.archive` and `thread.archive`
@@ -219,7 +224,7 @@ superego.thread({
   across a restart.
 - State is kept in the thread's document under the extension's name, so it persists, and goes with the thread.
   `ThreadMeta.worktree` and `meta`, from before, read as the `worktrees` and `ego` extensions' state until those write
-  it (`LEGACY` in daemon.ts); Ego's thread from before (kept apart, or listed and marked `meta`) is a hidden one now.
+  it (`LEGACY` in daemon.ts), which moves it: a daemon downgraded after that no longer sees it. Ego's thread from before (kept apart, or listed and marked `meta`) is a hidden one now.
   Facts are recomputed whenever the thread's info is; `invalidate()` when something else they read changed. A
   profile's show once its profile has loaded: at startup for the threads in use, else when one of its threads is.
 - `agentFor` is called often: quick, and without side effects. The thread's own model wins over its answer, its answer

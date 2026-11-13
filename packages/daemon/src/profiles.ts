@@ -22,7 +22,7 @@ import * as nodeModule from 'node:module'
 import { transform } from 'sucrase'
 import type { Extension } from '@earendil-works/pi-durable'
 import type { DaemonExtension } from './extension.ts'
-import { RpcError } from '@superego/protocol'
+import { RpcError, type Json } from '@superego/protocol'
 
 export type ProfileSpec = {
   description?: string
@@ -47,7 +47,12 @@ export type ProfileSpec = {
    * registers them with superego.pane(kind, …).
    */
   panes?: Record<string, string>
-  /** Whether its threads get a git worktree of their own (in a repository), unless a thread is started otherwise. */
+  /**
+   * What its threads ask extensions for, by name, unless a thread is started otherwise: as `thread.create`'s `options`,
+   * read by their `creating` hooks (`{ worktrees: true }`: a git worktree of its own).
+   */
+  options?: Record<string, Json>
+  /** Shorthand for `options.worktrees`, as `thread.create`'s `worktree` is. */
   worktree?: boolean
   /** Built-in extensions this profile does without: 'coding-tools', 'ask-user', … */
   without?: string[]
@@ -286,6 +291,7 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, trust: Trus
     ...base?.spec, ...spec,
     prompt: [base?.spec.prompt, spec.prompt].filter(Boolean).join('\n\n') || undefined,
     without: [...new Set([...(base?.spec.without ?? []), ...(spec.without ?? [])].map((name) => RENAMED[name] ?? name))],
+    options: { ...base?.spec.options, ...spec.options },
     // UI paths are relative to their own profile's folder: only this profile's are served from here.
     ui: spec.ui,
   }

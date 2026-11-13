@@ -635,12 +635,13 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         console.error(`Extension ${owner}: ${hook} of thread ${id} failed:`, error)
       }
     }
+    return notes
   }
   /** Turns as the hooks hear them: in order for each thread, one after another, never holding up the run. */
   const told = new Map<string, Promise<void>>()
   function tellLater(hook: 'turnStart' | 'turnEnd' | 'blocked', id: string) {
     if (!threadHooks.some((h) => h.value[hook])) return
-    const next = (told.get(id) ?? Promise.resolve()).then(() => tell(hook, id)).catch(() => {})
+    const next = (told.get(id) ?? Promise.resolve()).then(async () => { await tell(hook, id) }).catch(() => {})
     told.set(id, next)
     void next.then(() => { if (told.get(id) === next) told.delete(id) })
   }
@@ -1182,30 +1183,52 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const draft: ThreadDraft = {
       cwd: dir, root: checkout?.root ?? dir, ...(checkout ? { checkout } : {}), title: title?.trim() ?? '',
       ...(prompt ? { prompt } : {}), ...(parent ? { parent } : {}), ...(ref && loaded ? { profile: { ref, spec: loaded.spec } } : {}),
-      options: { ...(worktree !== undefined ? { worktrees: worktree } : {}), ...clone(asked) },
+      // Its profile's, then what it was started with: `worktree` the shorthand for `worktrees`, in both.
+      options: {
+        ...clone(loaded?.spec.options), ...(loaded?.spec.worktree !== undefined ? { worktrees: loaded.spec.worktree } : {}),
+        ...(worktree !== undefined ? { worktrees: worktree } : {}), ...clone(asked),
+      },
     }
     const ext: Record<string, Json> = {}
     const meta = { ...(ref ? { profile: ref } : {}) } as ThreadMeta
     const off = switchedOff(loaded)
-    for (const hook of threadHooks) {
-      if (!hook.value.creating || !appliesTo(hook, off, meta)) continue
-      let made: ThreadCreating | void
-      try {
-        made = await hook.value.creating(clone(draft))
-      } catch (error) {
-        throw refusal(hook.owner, error)
+    // The hooks that took part, to undo what they did (`abandoned`, in reverse) if the thread isn't made after all.
+    const took: (typeof threadHooks)[number][] = []
+    let id: string
+    try {
+      for (const hook of threadHooks) {
+        if (!hook.value.creating || !appliesTo(hook, off, meta)) continue
+        let made: ThreadCreating | void
+        try {
+          made = await hook.value.creating(clone(draft))
+        } catch (error) {
+          throw refusal(hook.owner, error)
+        }
+        took.push(hook)
+        if (made?.cwd) draft.cwd = made.cwd
+        if (made?.state !== undefined) ext[hook.owner] = clone(made.state)
       }
-      if (made?.cwd) draft.cwd = made.cwd
-      if (made?.state !== undefined) ext[hook.owner] = clone(made.state)
+      id = await createThread({
+        title: draft.title, cwd: draft.cwd, createdAt: Date.now(), root: draft.root, ...(Object.keys(ext).length ? { ext } : {}),
+        ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}), ...(ref ? { profile: ref } : {}), ...(parent ? { parent } : {}),
+        ...(hidden ? { hidden: true, owner: hidden } : {}),
+      })
+    } catch (error) {
+      for (const hook of took.reverse()) {
+        try {
+          await hook.value.abandoned?.(clone(draft), clone(ext[hook.owner]))
+        } catch (undoing) {
+          console.error(`Extension ${hook.owner}: abandoned failed:`, undoing)
+        }
+      }
+      throw error
     }
-    return createThread({
-      title: draft.title, cwd: draft.cwd, createdAt: Date.now(), root: draft.root, ...(Object.keys(ext).length ? { ext } : {}),
-      ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}), ...(ref ? { profile: ref } : {}), ...(parent ? { parent } : {}),
-      ...(hidden ? { hidden: true, owner: hidden } : {}),
-    }, prompt, attachments)
+    // Made: a first message that fails (no model yet) leaves it made, and says why.
+    if (prompt?.trim() || attachments?.length) await submit(id, prompt ?? '', randomUUID(), undefined, attachments)
+    return info(id, await get(id))
   }
-  /** A new thread with `meta`, and its first message when there is one. */
-  async function createThread(meta: ThreadMeta, prompt?: string, attachments?: Attachment[]) {
+  /** A new thread with `meta`: its id, once extensions were told it's there (`created`). */
+  async function createThread(meta: ThreadMeta) {
     const { model, thinkingLevel } = await agentOf(undefined, meta)
     const conversation = await harness.createConversation({
       ownership: { kind: 'ownerless' },
@@ -1215,11 +1238,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         ;(await tx.doc(Catalog)).ids.push(created)
       },
     }, context)
-    const m = await mount(conversation.id)
+    await mount(conversation.id)
     changed()
     await tell('created', String(conversation.id))
-    if (prompt?.trim() || attachments?.length) await submit(String(conversation.id), prompt ?? '', randomUUID(), undefined, attachments)
-    return info(String(conversation.id), m)
+    return String(conversation.id)
   }
   /**
    * Start a thread over (`threads.clear`): stopped, then a new context, so the model sees nothing before it, and the
