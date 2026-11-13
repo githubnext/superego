@@ -452,6 +452,29 @@ it("names a shared file's agent parts the same whichever profile loads it first"
   expect(await notes(['b', 'a'])).toEqual(first)
 })
 
+it("transforms the messages of a profile's threads, and of those extending it, but no other's", async () => {
+  write(join(home, 'profiles', 'default'), {
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./stamp.ts'] })\n`,
+    'stamp.ts': `import { defineDaemonExtension } from 'superego'
+export default defineDaemonExtension({ name: 'stamp', setup(superego) { superego.submit(({ content }) => [...content, { type: 'text', text: 'stamped' }]) } })
+`,
+  })
+  write(join(home, 'profiles', 'work'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extends: 'user:default' })\n` })
+  write(join(home, 'profiles', 'plain'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({})\n` })
+  const { peer, close } = await open()
+  const sent = async (profile: string) => {
+    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile, prompt: 'hi' })
+    await done(peer, thread.id)
+    const { value } = await peer.call<{ value: { entries: { kind: string; model?: { content: unknown }[] }[] } }>('thread.watch', { id: thread.id })
+    return value.entries.find((e) => e.kind === 'pi.user')!.model![0]!.content
+  }
+  const stamped = [{ type: 'text', text: 'hi' }, { type: 'text', text: 'stamped' }]
+  expect(await sent('default')).toEqual(stamped)
+  expect(await sent('work')).toEqual(stamped)
+  expect(await sent('plain')).toBe('hi')
+  await close()
+})
+
 it('loads a profile one version at a time, the newest last', async () => {
   const profile = join(home, 'profiles', 'default')
   write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': vault('one') })
