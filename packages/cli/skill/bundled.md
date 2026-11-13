@@ -35,15 +35,31 @@ A package in `extensions/<name>` with up to two halves, imported by the app at b
 extensions/orders/
   package.json        "name": "@superego/orders", "exports": { "./daemon": "./src/daemon.ts", "./ui": "./src/ui.tsx" }
   tsconfig.json       copy extensions/tasks/tsconfig.json
-  src/shared.ts       what both halves agree on: tool names, value keys, action ids, types
+  src/shared.ts       what both halves agree on: `about` (what it is), tool names, value keys, action ids, types
   src/daemon.ts       export default defineDaemonExtension({ … })   from '@superego/daemon'
   src/ui.tsx          export default defineUiExtension({ … })       from '@superego/app/ui'
   test/daemon.test.ts
 ```
 
 Bundled code imports packages directly, not `'superego'`: `defineExtension`, `defineTool`, `section` from
-`@earendil-works/pi-durable`; schemas from `@earendil-works/pi-schema`; `defineAction`, `RpcError` from
-`@superego/protocol`; components from `@superego/ui`. Copy `extensions/ask-user/package.json` for dependencies.
+`@earendil-works/pi-durable`; schemas from `@earendil-works/pi-schema`; `defineAction` (machine actions), `RpcError`
+from `@superego/protocol`; `defineAction` for window actions from `@superego/app/ui`; components from `@superego/ui`.
+Copy `extensions/ask-user/package.json` for dependencies.
+
+**Required or optional.** An extension says what it is once, in `src/shared.ts`, and spreads that into both halves:
+
+```ts
+export const about = { name: 'orders', title: 'Orders', description: 'Look orders up.' } satisfies ExtensionAbout
+// daemon.ts: defineDaemonExtension({ ...about, setup(superego) { … } })
+// ui.tsx:    defineUiExtension({ ...about, setup(superego) { … } })
+```
+
+Optional is the default, and almost always right: a machine can turn it off (Settings → Extensions lists it with its
+`title` and `description`), a profile can leave it out (`without: ['orders']`), and the app works without it. A thread
+that goes without it gets none of its agent parts or pane kinds, and the window draws none of its UI for that thread
+(`ThreadInfo.without`). `required: true` is for what the app is (the sidebar): never listed, never left out. Nothing
+else decides this. An extension whose work is all in the window still gets a daemon half of its declaration alone
+(`export default defineDaemonExtension(about)`, as `links` has), so machines know it; a required one needn't.
 
 Then wire it in:
 
@@ -57,15 +73,17 @@ Bundled extensions get more than a profile's:
 
 - **Every slot**, including `sidebar`, and **`superego.work(divide)`** to group a run of work in the transcript
   (as `tasks` does).
-- **Window actions** with keys: `superego.action({ id: 'orders.open', title, keys: 'mod+shift+o', run(params, context) { … } })`;
-  ids start with the extension's name.
+- **Window actions** with keys: `superego.action(defineAction({ id: 'orders.open', title, keys: 'mod+shift+o', when, run(params, context) { … } }))`;
+  ids start with the extension's name. `when(context)` says when keys and the palette offer it (`(c) => Boolean(c.selection)`);
+  `context` has the selection, sessions, `appSetting(key)` and `dispatch`.
+- **Window state** for actions and components to share: `const open = superego.store('orders.open', false)` in setup,
+  `open.set(true)` in an action, `open.use()` in a component; `{ persist: true }` keeps it across reloads. No module
+  globals that rendering sets.
 - **App settings** (per user, in Settings → General): `superego.appSettings({ id, title, settings: [{ key: 'orders.x', … }] })`,
-  read with `useAppSetting('orders.x')`.
-- **Machine settings** from the daemon half: `superego.settings.register({ id, title, settings: [{ key, title, default, type }] })`.
+  read with `useAppSetting('orders.x')`, or `context.appSetting('orders.x')` in an action.
+- **Machine settings** from the daemon half: `superego.settings.register({ id: 'orders', title, settings: [{ key: 'orders.x', title, default, type }] })`.
 - A feature flag: the daemon announces `ext:<name>`, so a UI half checks `has(machine, 'ext:orders')` before
   watching a value an older or different daemon doesn't have.
-- Settings → Extensions lists it with its `title` and `description`, and lets each machine turn it off; a profile
-  leaves it out with `without: ['orders']`.
 
 ## Tests
 

@@ -122,12 +122,17 @@ As built (2026-11-04). An extension is a package with up to two halves, imported
 
 **Daemon half** (`defineDaemonExtension`):
 - `superego.agent(ext)`: pi-durable tools, prompt sections, hooks, tasks
-- `superego.settings`: register settings sections
+- `superego.settings`: register settings sections of its own (`<name>.…`), read any
 - `superego.action(defineAction({ id: '<name>.<m>', params, run }))`: what clients can do (§3a)
-- `superego.value(key, initial)`: live values, watched with `value.watch`
+- `superego.method('<name>.<m>', run, { params })`: reads, called by name, not actions
+- `superego.value(key, initial)`: live values, watched by name with `value.watch`
+- `superego.pane(kind, about)`: pane kinds told to the agent for open_pane
 - `superego.status(fn)`: mark a thread blocked
-- `superego.harness`, `superego.threads` (list, conversation, `of(conversationId)`)
-- Each one announces `ext:<name>` in `hello`.
+- `superego.harness`, `superego.threads` (list, get, conversation, `of(conversationId)`)
+- Everything registered is owned and undone with the extension. Each one announces `ext:<name>` in `hello`.
+- Each extension declares itself once (`{ name, title, description, required }`, both halves): optional ones (all but
+  the sidebar, the core's agent parts included) are switched per machine and left out by profiles (`without`); a
+  thread's `without` reaches clients, and the window draws none of their UI for it.
 
 **UI half** (`defineUiExtension`):
 - Slots: `sidebar`, `thread.header`, `composer.above`, `thread.aside`, `editor.side`, `editor.bar`, `overlay`
@@ -135,7 +140,8 @@ As built (2026-11-04). An extension is a package with up to two halves, imported
 - `superego.tool(name, C)` and `superego.entry(kind, C)`: transcript renderers
 - `superego.settings(ui, C)`: custom settings sections
 - `superego.appSettings(section)`: the UI half's own settings, kept by the app
-- `superego.action(defineAction({ id, title, keys, run }))`: window actions, for keys and the ⌘K palette; `superego.dispatch` runs any action
+- `superego.action(defineAction({ id, title, keys, when, run }))`: window actions, for keys and the ⌘K palette (offered while `when` holds); `superego.dispatch` runs any action
+- `superego.store(key, initial, { persist })`: the extension's window state, for its actions and components
 - Hooks: `useMachines`, `useThreads`, `useSessions`, `useSelection`, `useSidebar`, `useThreadView`, `useValue`, `useAppSetting`, `useLocalState`, `useComposerClaim`, `useDispatch`, `useShortcut`, `call`, `has`.
 - Components: `Markdown`, `FileEditor` (live preview, saves as you type, follows its file on disk; links, bar actions and what goes below are the caller's).
 

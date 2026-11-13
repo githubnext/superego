@@ -1,25 +1,27 @@
 # UI extensions
 
-A profile's UI runs in the window, for that profile's threads only: panes, things beside a thread, and how its tool
-calls look in the transcript. List modules in the profile's `ui`; each default-exports `defineUiExtension`:
+A profile's UI runs in the window, for that profile's threads only (on the machine it came from): panes, things beside
+a thread, and how its tool calls look in the transcript. List modules in the profile's `ui`; each default-exports
+`defineUiExtension`. Everything a module registers belongs to it, and goes when the profile's files change and the
+window loads them again.
 
 ```tsx
 // .superego/profiles/support/ui/order.tsx
 import { useEffect, useState } from 'react'
-import { defineUiExtension, useDispatch, Button, type PaneProps, type ToolCallProps } from 'superego/ui'
+import { call, defineUiExtension, PaneHeader, FileTextIcon, type PaneProps, type ToolCallProps } from 'superego/ui'
 
 function OrderPane({ machine, thread, pane }: PaneProps) {
-  const dispatch = useDispatch()
   const { id } = (pane.params ?? {}) as { id?: string }
   const [order, setOrder] = useState<any>()
   const [error, setError] = useState<string>()
   useEffect(() => {
     if (!id) return
-    dispatch('orders.find', { number: id }, { machine: machine.id }).then(setOrder, (e: Error) => setError(e.message))
+    // A read: the daemon half's method (superego.method), not an action.
+    call(machine.id, 'orders.find', { number: id }).then(setOrder, (e: Error) => setError(e.message))
   }, [id, thread.activeAt])           // again as the thread moves on
   if (error) return <div className="pane-empty">{error}</div>
   if (!order) return <div className="pane-empty">Loading…</div>
-  return <div className="order-pane"><h2>Order {id}</h2>…</div>
+  return <div className="order-pane"><PaneHeader><span>{order.status}</span></PaneHeader><h2>Order {id}</h2>…</div>
 }
 
 function FoundOrder({ call, result, live }: ToolCallProps) {
@@ -30,14 +32,14 @@ function FoundOrder({ call, result, live }: ToolCallProps) {
 export default defineUiExtension({
   name: 'support-ui',
   setup(superego) {
-    superego.pane('order', { title: (pane) => `Order ${(pane.params as any)?.id ?? ''}`, component: OrderPane })
+    superego.pane('order', { title: (pane) => `Order ${(pane.params as any)?.id ?? ''}`, icon: FileTextIcon, component: OrderPane })
     superego.tool('find_order', FoundOrder)
   },
 })
 ```
 
-Then, in `profile.ts`: `ui: ['./ui/order.tsx'], panes: { order: 'an order, with its lines. Params: { id }' }`. The
-agent opens it with `open_pane({ kind: 'order', params: { id: '1234' } })`; so can you, with
+Then, in `profile.ts`: `ui: ['./ui/order.tsx'], panes: { order: 'an order, with its lines. Params: { id }' }` (or, from
+a daemon extension, `superego.pane('order', '…')`). The agent opens it with `open_pane({ kind: 'order', params: { id: '1234' } })`; so can you, with
 `superego do pane.open --params '{"id":"<thread>","kind":"order","params":{"id":"1234"}}'`.
 
 ## What a module can import
@@ -53,11 +55,16 @@ there is no type checking.
 
 | | |
 |---|---|
-| `superego.pane(kind, { title, component, menu?, opens?, folders?, width? })` | a kind of pane. `title`: a string, or `(pane) => string`. `component` gets `{ machine, thread, pane }`; `pane.params` is what it was opened with. `menu: true` offers it in the thread's pane menu (it needs no params). `opens: (path) => boolean` makes files named in the thread open in it (`/\.csv$/.test(path)`); `folders: true`, folders (`params.path`, `''` for the thread's own). `width`: share of the row, 0.5 by default |
+| `superego.pane(kind, { title, component, icon?, file?, menu?, opens?, folders?, width? })` | a kind of pane. `title`: a string, or `(pane) => string`. `component` gets `{ machine, thread, pane }`; `pane.params` is what it was opened with. `icon`: its glyph on the pane's tab (a Phosphor icon from `superego/ui`). `file: true`: its title is a file name, and the tab shows it as one. `menu: true` offers it in the thread's pane menu (it needs no params). `opens: (path) => boolean` makes files named in the thread open in it (`/\.csv$/.test(path)`); `folders: true`, folders (`params.path`, `''` for the thread's own). `width`: share of the row, 0.5 by default |
 | `superego.tool(name, component, { fold? })` | draw calls to a tool in the transcript. Gets `{ machine, thread, call: { id, name, arguments }, result?: { text, isError, details }, live?: { status, output, details } }`. `fold: false` shows them under their run of work, open, instead of folded into it: for what the agent shows you (as `images` does) |
 | `superego.slot(slot, component, { order? })` | put a component in a place in the shell (below) |
 | `superego.entry(kind, component)` | draw transcript entries of a kind an extension writes |
+| `superego.settings(ui, component)` | draw below the settings section (of its daemon half) that names `ui` |
+| `superego.store(key, initial, { persist? })` | state of the extension kept in the window (`<name>.<key>`): `get()`, `set(next)`, `subscribe`, and `use()` in a component |
 | `superego.dispatch(id, params, { machine })` | run an action outside React |
+
+A profile's module may draw its tool calls the way it likes; if two draw the same tool, the first stays (with a warning
+in the console). A profile's own wins over a bundled extension's in its threads.
 
 Slots a profile can fill, each given `{ machine, thread }` (and for the editor ones, `path` and `open(path)`):
 
@@ -71,15 +78,20 @@ Slots a profile can fill, each given `{ machine, thread }` (and for the editor o
 
 The sidebar, work dividers, window actions and app settings are for bundled extensions (`superego --skill bundled`).
 
+Inside a pane: `<PaneHeader>` puts small things (a count, Refresh) in the pane's header beside its title, and
+`useTabNote(note, key)` shows a note on its tab in the strip (Changes shows +3 −1).
+
 ## From 'superego/ui'
 
 Talking to the daemon:
 
+- `call(machine.id, 'orders.find', params)`: a read, a daemon extension's method (or any protocol method). A promise of
+  its result.
 - `useDispatch()` → `dispatch(id, params, { machine: machine.id })`: run an action (a daemon extension's, or a
-  built-in like `pane.open`, `thread.submit`). Returns a promise of its result.
+  built-in like `pane.open`, `thread.submit`): something that changes things. Returns a promise of its result.
 - `useValue<T>(machine.id, machine.state === 'connected', 'orders.recent')`: a daemon extension's live value, kept
-  current. Undefined until it arrives.
-- `call(machine.id, method, params)`: a raw protocol call.
+  current. Undefined until it arrives, null while nothing publishes it yet (the profile hasn't loaded). However many
+  components watch the same value, the window holds one subscription.
 - `useThreads(machine.id, connected)`, `useAllThreads()`, `useMachines()`, `useSelection()`: what the window knows.
 
 Opening things:

@@ -29,7 +29,7 @@ export default defineProfile({
   prompt: 'You answer customer email for Acme. Be brief.',
   extensions: ['./orders.ts'],                       // daemon side: see below
   ui: ['./ui/order.tsx'],                            // window side: defineUiExtension modules
-  panes: {                                           // pane kinds its UI adds, told to the agent for open_pane
+  panes: {                                           // pane kinds its UI adds, listed to the agent for open_pane
     order: 'an order, with its lines and status. Params: { id }',
   },
   without: ['ask-user'],                             // built-ins to leave out
@@ -49,8 +49,12 @@ Every field is optional.
     line run, live values, a thread's blocked status, and agent extensions of its own (`superego --skill daemon`).
 - **`ui`** are modules for the window (`superego --skill ui`). They draw only in this profile's threads.
 - **`panes`** describes each pane kind the UI registers, so the agent knows it can open one and with which params.
-- **`without`** takes the names of built-ins: `coding-tools` (read, write, edit, bash), `panes` (open_pane),
-  `skills`, `agents-md`, `threads` (thread_start, thread_read, thread_send, thread_list, thread_archive), and the bundled extensions `ask-user`, `files`, `images`, `tasks`, `suggestions`.
+- **`without`** takes the names of optional extensions, the ones Settings → Extensions lists: the core's
+  `coding-tools` (read, write, edit, bash), `panes` (open_pane), `skills`, `agents-md`, `thread-tools` (thread_start,
+  thread_read, thread_send, thread_list, thread_archive), and the bundled `ask-user`, `files`, `images`, `links`,
+  `suggestions`, `tasks`. Its
+  threads get none of their tools or prompt sections, and the window shows none of their UI there. Required ones (the
+  sidebar) can't be left out.
 
 Profile files are TypeScript (types are stripped; no type checking) or JavaScript. They may import each other and
 Node's built-ins (`node:fs/promises`, …). `'superego'` is the only package they get; there is no `npm install`.
