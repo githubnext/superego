@@ -80,4 +80,18 @@ describe('link handlers', () => {
     // Nowhere to open files: [[wikilinks]] stay text.
     expect(draw({}, 'see [[plan]]')).toContain('[[plan]]')
   })
+
+  it("keeps an HTML link's own attributes when a handler draws it", () => {
+    const registry = createRegistry(app, [], registerLinks)
+    const html = renderToStaticMarkup(h(RegistryProvider, { registry, children: h(LinkPlace.Provider, { value: inThread() },
+      h(Markdown, { html: true, text: '<a href="https://a.dev" id="go" aria-label="Go">Go</a> and <a href="plan.md" id="plan">plan</a>' })) }))
+    expect(html).toContain('<a id="user-content-go" aria-label="Go" href="https://a.dev"')
+    expect(html).toContain('<a id="user-content-plan" href="#" class="md__file"')
+  })
+
+  it('matches a /g or /y pattern every time, not every other', () => {
+    const tickets = defineUiExtension({ name: 'tickets', setup(superego) { superego.link({ match: /^ticket:\d+/gy, open: () => {} }) } })
+    const registry = createRegistry(app, [tickets], registerLinks)
+    for (let i = 0; i < 3; i++) expect(linkHandler(registry, 'ticket:12', 'link', inThread())).toBeDefined()
+  })
 })

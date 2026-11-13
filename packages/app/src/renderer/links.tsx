@@ -5,7 +5,7 @@
 // A thread's transcript keeps the links it draws, in order, for ⌃O's list (`transcriptLinks`).
 import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { SquareSplitHorizontalIcon } from '@superego/ui'
-import type { LinkHandler, LinkProps, LinkWhere, UiApi } from './extension.tsx'
+import type { LinkAttributes, LinkHandler, LinkProps, LinkWhere, UiApi } from './extension.tsx'
 import { looksLikePath } from './markdown-html.ts'
 
 /** A link drawn in a transcript: what it says, where it goes, and a way to follow it. */
@@ -16,6 +16,7 @@ type Kept = TranscriptLink & { element: Element }
 export type LinkPlaceValue = LinkWhere & { collect?: (link: Kept) => () => void }
 export const LinkPlace = createContext<LinkPlaceValue>({})
 
+/** By thread: one window draws one transcript (Shell's ThreadView), so a thread's links are one view's. */
 const kept = new Map<string, Set<Kept>>()
 
 /** Keeps the links drawn in a thread's transcript, for `transcriptLinks`. */
@@ -77,18 +78,18 @@ export function registerLinks(core: UiApi) {
 }
 
 /** A file or folder a message names. One that can't be opened says why, and looks it. */
-function FileLink({ href, code, children, open }: LinkProps) {
+function FileLink({ href, code, children, open, attributes }: LinkProps) {
   const [problem, setProblem] = useState<string>()
   const name = fileName(href, code ? 'code' : 'link')
   return (
-    <a href="#" className={['md__file', code && 'md__file--code', problem && 'md__file--missing'].filter(Boolean).join(' ')} title={problem ? `${name}: ${problem}` : name}
+    <a {...attributes} href="#" className={['md__file', attributes?.className, code && 'md__file--code', problem && 'md__file--missing'].filter(Boolean).join(' ')} title={problem ? `${name}: ${problem}` : name}
       onClick={(e) => { e.preventDefault(); void open(false).then(setProblem) }}>{children}</a>
   )
 }
 
 /** A web page: opened in the browser, with a button beside it to open it in a pane instead, where something shows them. */
-function WebLink({ href, title, children, where }: LinkProps) {
-  const web = <a href={href} title={title} target="_blank" rel="noreferrer">{children}</a>
+function WebLink({ href, title, children, where, attributes }: LinkProps) {
+  const web = <a {...attributes} href={href} title={title} target="_blank" rel="noreferrer">{children}</a>
   if (!where.openUrl || !/^https?:\/\//i.test(href)) return web
   return (
     <>
@@ -101,10 +102,10 @@ function WebLink({ href, title, children, where }: LinkProps) {
 }
 
 /** A link with no drawing of its own: follows it, and is struck through with why when it couldn't. */
-function PlainLink({ href, title, children, open }: LinkProps) {
+function PlainLink({ href, title, children, open, attributes }: LinkProps) {
   const [problem, setProblem] = useState<string>()
   return (
-    <a href={href} className={problem ? 'md__file--missing' : undefined} title={problem ? `${title ?? href}: ${problem}` : title}
+    <a {...attributes} href={href} className={[attributes?.className, problem && 'md__file--missing'].filter(Boolean).join(' ') || undefined} title={problem ? `${title ?? href}: ${problem}` : title}
       onClick={(e) => { e.preventDefault(); void open(e.metaKey || e.ctrlKey).then(setProblem) }}>{children}</a>
   )
 }
@@ -118,7 +119,7 @@ export async function follow(handler: LinkHandler, href: string, kind: 'link' | 
 }
 
 /** A link a handler claimed, drawn its way; in a transcript, kept for ⌃O's list. */
-export function Claimed({ handler, href, kind, text, title, children }: { handler: LinkHandler; href: string; kind: 'link' | 'code'; text: string; title?: string; children: ReactNode }) {
+export function Claimed({ handler, href, kind, text, title, attributes, children }: { handler: LinkHandler; href: string; kind: 'link' | 'code'; text: string; title?: string; attributes?: LinkAttributes; children: ReactNode }) {
   const { collect, ...where } = useContext(LinkPlace)
   const place = useContext(LinkPlace)
   const open = useMemo(() => (beside: boolean) => follow(handler, href, kind, where, beside), [handler, href, kind, place])
@@ -128,7 +129,7 @@ export function Claimed({ handler, href, kind, text, title, children }: { handle
     return collect({ element: ref.current, text: text || href, href, target: handler.target?.(href, kind) ?? href, open })
   }, [collect, open, text])
   const Render = handler.render ?? PlainLink
-  const drawn = <Render href={href} code={kind === 'code'} where={where} open={open} {...(title ? { title } : {})}>{children}</Render>
+  const drawn = <Render href={href} code={kind === 'code'} where={where} open={open} {...(title ? { title } : {})} {...(attributes ? { attributes } : {})}>{children}</Render>
   // A box-less wrapper: its place in the document orders the list.
   return collect ? <span ref={ref} style={{ display: 'contents' }}>{drawn}</span> : drawn
 }

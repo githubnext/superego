@@ -249,7 +249,13 @@ const components: Components = {
     const registry = useOptionalRegistry()
     const where = useContext(LinkPlace)
     const handler = registry && linkHandler(registry, href, 'link', where)
-    if (handler) return <Claimed handler={handler} href={href} kind="link" text={textOf(node as HastNode | undefined).trim()} {...(props.title ? { title: props.title } : {})}>{props.children}</Claimed>
+    if (handler) {
+      const { children, title, ref: _ref, ...attributes } = props
+      return (
+        <Claimed handler={handler} href={href} kind="link" text={textOf(node as HastNode | undefined).trim()} {...(title ? { title } : {})}
+          {...(Object.keys(attributes).length ? { attributes } : {})}>{children}</Claimed>
+      )
+    }
     return <a {...props} href={href} target="_blank" rel="noreferrer" />
   },
   code: ({ node: _node, className, children, ...props }) => {

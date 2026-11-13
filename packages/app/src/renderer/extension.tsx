@@ -7,7 +7,7 @@
 // Everything an extension registers is owned by it: the registry keeps who added each thing, and an extension's
 // teardown removes all of it at once. A profile's UI is owned by that profile on its machine too, and draws only in
 // that profile's threads there.
-import { createContext, useContext, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
+import { createContext, useContext, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type ReactNode } from 'react'
 import type { AppConfig, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, SectionInfo, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowContext, type WindowRouter } from './actions.tsx'
@@ -127,6 +127,9 @@ export type LinkWhere = {
 }
 
 /** A link a handler draws: where it goes, what it says (inline code, for `code`), and a way to follow it. */
+/** A link's attributes besides where it goes, what it says and its title. */
+export type LinkAttributes = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'children' | 'title'>
+
 export type LinkProps = {
   href: string
   children: ReactNode
@@ -134,6 +137,8 @@ export type LinkProps = {
   code: boolean
   /** The link's own title, if it gave one. */
   title?: string
+  /** Its other attributes, as the HTML gave them (`class`, `id`, `aria-*`): for a drawing of it as a link to keep. */
+  attributes?: LinkAttributes
   where: LinkWhere
   /** Follow it, as a click does (`beside`: ⌘-click); resolves to why it couldn't, if it couldn't. */
   open(beside: boolean): Promise<string | undefined>
@@ -476,7 +481,8 @@ export const unfoldedTool = (registry: Registry, name: string, where: Where) => 
 export function linkHandler(registry: Registry, href: string, kind: 'link' | 'code', where: LinkWhere): LinkHandler | undefined {
   const seen = seenIn(registry.links, where.machine && where.thread ? { machine: where.machine, thread: where.thread } : undefined)
   const claims = ({ match }: LinkHandler) => typeof match === 'string' ? kind === 'link' && href.toLowerCase().startsWith(match.toLowerCase())
-    : match instanceof RegExp ? kind === 'link' && match.test(href)
+    // From the start each time: a /g or /y pattern remembers where it last matched.
+    : match instanceof RegExp ? kind === 'link' && ((match.lastIndex = 0), match.test(href))
     : match(href, kind, where)
   const rank = (owner: Owner) => owner.profile ? 0 : owner.extension === 'core' ? 2 : 1
   return [...seen].sort((a, b) => rank(a.owner) - rank(b.owner)).find(claims)
