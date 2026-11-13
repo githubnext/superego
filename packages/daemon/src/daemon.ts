@@ -627,7 +627,13 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         const entry = valueOf(name)
         if (entry.owned) throw new Error(`Value ${name} is already published`)
         entry.owned = true
-        undo.push(() => { entry.owned = false; prune(name) })
+        // Gone with it: watchers see null again (as before it was set up), and a later watch waits on null.
+        undo.push(() => {
+          entry.owned = false
+          entry.value = null
+          for (const listener of entry.listeners) listener(null)
+          prune(name)
+        })
         const set = (next: T) => {
           entry.value = next
           for (const listener of entry.listeners) listener(next)

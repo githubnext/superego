@@ -497,3 +497,22 @@ export default defineDaemonExtension({
   expect((await agentOf(peer, thread.id)).extensions).not.toContain('user:default/notes')
   await close()
 })
+
+it('sets a value back to null when the extension that published it is torn down, and tells its watchers', async () => {
+  const profile = join(home, 'profiles', 'default')
+  const extension = (publish: boolean) => `import { defineDaemonExtension } from 'superego'
+export default defineDaemonExtension({ name: 'vault', setup(superego) { ${publish ? "superego.value('vault.status', 'open')" : ''} } })
+`
+  write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': extension(true) })
+  const { peer, close } = await open()
+  await peer.call<ThreadInfo>('thread.create', { cwd: project })
+  const watched = await peer.call<{ sub: string; value: unknown }>('value.watch', { key: 'vault.status' })
+  expect(watched.value).toBe('open')
+  const changes: unknown[] = []
+  peer.on('value.changed', (params: { sub: string; value: unknown }) => { if (params.sub === watched.sub) changes.push(params.value) })
+  write(profile, { 'vault.ts': extension(false) })
+  await peer.call('profile.ui', { scope: 'user', name: 'default', dir: profile })
+  await until(async () => changes.includes(null))
+  expect((await peer.call<{ value: unknown }>('value.watch', { key: 'vault.status' })).value).toBeNull()
+  await close()
+})
