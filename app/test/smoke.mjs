@@ -931,6 +931,38 @@ if (phase === 'first') {
   await until(`window.superego.machines().then((list) => list.filter((m) => m.state === 'connected').length === 2)`, 'second machine reconnected after reopen', 30_000)
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: typed message')`, 'transcript after reopen')
+  // The second machine's provider rejects its key (the scripted model does, for a key starting "reject"): the threads it
+  // stops wait quietly, one notice names the machine and counts them, one notification says it (not one per thread),
+  // Sign in again opens that machine's Providers, and a new key takes them on by themselves.
+  const secondId = await run(`window.superego.machines().then((list) => list.find((m) => m.label === 'Second').id)`)
+  const secondAuth = `${process.env.SUPEREGO_HOME}/second/auth.json`
+  writeFileSync(secondAuth, JSON.stringify({ faux: { type: 'api_key', key: 'reject-me' } }))
+  globalThis.superegoNotices = []
+  await run(`window.dispatchEvent(new Event('blur'))`)
+  for (const prompt of ['keyed one', 'keyed two']) await run(`window.superego.call('${secondId}', 'thread.create', { title: '${prompt}', prompt: '${prompt}' })`)
+  await until(`document.querySelector('.auth-notice')?.textContent.startsWith('faux rejected the API key on Second.2 threads are waiting.')`, 'one notice for the rejected key, naming the machine')
+  await until(`[...document.querySelectorAll('.superego-list-item')].filter((li) => /keyed (one|two)/.test(li.textContent) && li.querySelector('.superego-status--signin')).length === 2`, 'the threads waiting quietly')
+  await new Promise((r) => setTimeout(r, 500))
+  const keyNotices = globalThis.superegoNotices.filter((n) => n.machine === secondId)
+  if (keyNotices.length !== 1 || keyNotices[0].title !== 'faux rejected the API key') { await fail(`not one notification for the rejected key: ${JSON.stringify(globalThis.superegoNotices)}`); throw new Error('failed') }
+  await run(`window.dispatchEvent(new Event('focus'))`)
+  // Shown, a waiting thread says why in place of its failure, and offers to sign in again.
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('keyed one')).click()`)
+  await until(`document.querySelector('.transcript__waiting')?.textContent.startsWith('faux rejected the API key. It goes on once you sign in again.') && !document.querySelector('.transcript__error')`, 'the thread waiting, not failed')
+  await run(`document.querySelector('.auth-notice').scrollIntoView()`)
+  for (const theme of ['light', 'dark']) {
+    nativeTheme.themeSource = theme
+    await new Promise((r) => setTimeout(r, 400))
+    await shot(`auth-notice-${theme}`)
+  }
+  nativeTheme.themeSource = 'system'
+  await run(`[...document.querySelectorAll('.auth-notice button')].find((b) => b.textContent === 'Sign in again').click()`)
+  await until(`document.querySelector('.settings__nav-machine.is-selected')?.textContent.includes('Second') && document.querySelector('.settings')?.textContent.includes('Providers')`, "sign in again: that machine's Providers")
+  await run(`document.querySelector('.superego-dialog__actions button[aria-label="Close"]').click()`)
+  writeFileSync(secondAuth, JSON.stringify({}))
+  // The one shown is seen as it answers; the other is done.
+  await until(`!document.querySelector('.auth-notice') && !document.querySelector('.transcript__waiting') && document.querySelector('.transcript')?.textContent.includes('echo: keyed one')
+    && [...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('keyed two') && li.querySelector('.superego-status--done'))`, 'a new key: the threads went on and answered', 20_000)
   // `superego <dir> -p ...` from a terminal: a new thread there, shown in this (already running) app.
   const { execFileSync } = await import('node:child_process')
   const cli = new URL('../bin/superego.ts', import.meta.url).pathname
