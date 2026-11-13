@@ -347,6 +347,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       description: 'Open a pane beside this conversation for the user to look at. The kinds there are, and the params each takes, are listed in your instructions under panes.',
       parameters: obj({ kind: str({ minLength: 1 }), title: opt(str()), params: opt(obj({}, { open: true, description: 'What the pane shows, as an object: { "path": "notes/a.md" }, not a string of JSON.' })) }),
       async execute({ kind, title, params }, api) {
+        // Only the kinds this thread is told of: another (its extension off, or gone without) would be kept but not drawn.
+        const kinds = panesOf(String(api.conversationId)).map((k) => k.kind)
+        if (!kinds.includes(kind)) throw new Error(`There is no "${kind}" pane here. The kinds there are: ${kinds.map((k) => `"${k}"`).join(', ')}.`)
         const pane = await openPane(String(api.conversationId), { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}) })
         return { output: [{ type: 'text', text: `Opened the ${kind} pane (${pane.id}).` }] }
       },
