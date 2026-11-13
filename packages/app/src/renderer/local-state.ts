@@ -1,7 +1,7 @@
 // The window's own state, kept across reloads: which thread is selected, a draft not yet sent, how a view was left.
 // It lives in this window's storage (the app's, or the browser's for the web app), never on a machine, and is only
 // read when a component first shows it. A value back at its initial one is forgotten, so drafts don't pile up.
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useSyncExternalStore } from 'react'
 
 const PREFIX = 'superego.'
 
@@ -36,4 +36,32 @@ export function useLocalState<T>(key: string, initial: T): [T, (next: T | ((prev
     })
   }, [key])
   return [current.value, set]
+}
+
+/**
+ * State an extension keeps in the window, outside any one component: what its actions change and its components show
+ * (a dialog open, a tree shown). `persist` keeps it across reloads, in this window's storage like `useLocalState`.
+ */
+export type Store<T> = {
+  get(): T
+  set(next: T | ((previous: T) => T)): void
+  subscribe(listener: () => void): () => void
+  /** In a component: the value, redrawn when it changes. */
+  use(): T
+}
+
+export function createStore<T>(key: string, initial: T, { persist = false }: { persist?: boolean } = {}): Store<T> {
+  let value = persist ? read(key, initial) : initial
+  const listeners = new Set<() => void>()
+  const store: Store<T> = {
+    get: () => value,
+    set(next) {
+      value = typeof next === 'function' ? (next as (previous: T) => T)(value) : next
+      if (persist) write(key, value, initial)
+      for (const listener of listeners) listener()
+    },
+    subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
+    use: () => useSyncExternalStore(store.subscribe, store.get),
+  }
+  return store
 }

@@ -24,7 +24,7 @@ export function Palette({ onClose }: { onClose(): void }) {
     const done = (run: () => void) => () => { onClose(); run() }
     // Every action that can run as it is: the palette dispatches it like a key would.
     // The app's and the selected machine's too: thread actions apply to the selected thread.
-    const all: Item[] = actions.filter((a) => a.expose.includes('ui') && runsBare(a) && a.id !== 'app.palette' && (!a.thread || selection)).map((a): Item => ({
+    const all: Item[] = actions.filter((a) => a.expose.includes('ui') && runsBare(a) && registry.router.offered(a.id) && a.id !== 'app.palette' && (!a.thread || selection)).map((a): Item => ({
       id: a.id, title: a.title, ...(bound(a, keymap) ? { keys: bound(a, keymap) } : {}), ...(a.thread && selection ? { detail: 'this thread' } : {}),
       run: done(() => void registry.router.dispatch(a.id, {}, { source: 'palette' }).catch((error) => console.error(error))),
     }))

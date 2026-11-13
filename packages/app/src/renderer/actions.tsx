@@ -2,12 +2,15 @@
 // forwarded to where they run (see `dispatch`). Every dispatch from this window is logged, and the log is one action
 // away (Show action log).
 import { useEffect, useState } from 'react'
-import { agentName, defineAction, obj, Router, str, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig } from '@superego/protocol'
+import { agentName, obj, Router, str, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
 import { Dialog } from '@superego/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
 import { threadBeside, unread, type Session } from './sessions.ts'
+
+/** App setting: whether ⌘. looks for the next unread thread everywhere, or only in the session you're in. */
+export const UNREAD = 'app.unread'
 import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
 import { scrollHalfPage } from './scroll.ts'
 import { startRename } from './rename.ts'
@@ -32,8 +35,8 @@ export type WindowContext = {
   /** Back and forward through the threads (and Settings) this window has shown. */
   back(): void
   forward(): void
-  /** ⌘. : the next unread thread anywhere, or only in the selected thread's session. */
-  unreadScope: 'all' | 'session'
+  /** One of the app's settings as it is now (`useAppSetting` in components). */
+  appSetting<T extends Json>(key: string): T | undefined
   dispatch: Dispatch
 }
 
@@ -44,10 +47,30 @@ export type WindowContext = {
  */
 export type Dispatch = (id: string, params?: Record<string, unknown>, options?: { source?: string; machine?: string }) => Promise<unknown>
 
-export type WindowAction = ActionDef<any, unknown, WindowContext>
+/**
+ * An action that runs in the window. `when` says whether it applies now (a thread is selected, a pane has the focus):
+ * keys and the palette offer it only then. Dispatching it from code runs it regardless.
+ */
+export type WindowAction = ActionDef<any, unknown, WindowContext> & { when?: (context: WindowContext) => boolean }
+
+/**
+ * Define a window action: with a pi-schema `params`, `run` gets them typed, and the window's context. `runs` is the
+ * window's; `when`, if given, says when keys and the palette offer it.
+ */
+export function defineWindowAction<S extends JsonSchema | undefined = undefined, R = unknown>(
+  def: Omit<ActionInfo, 'params' | 'expose' | 'runs'> & {
+    params?: S; expose?: Exposure[]
+    run(params: S extends JsonSchema ? Static<S> : Record<string, never>, context: WindowContext): R | Promise<R>
+    when?: (context: WindowContext) => boolean
+  },
+): WindowAction {
+  return { expose: ['ui'], ...def, runs: 'window' } as WindowAction
+}
 
 export function createWindowRouter() {
   const router = new Router<WindowContext>()
+  /** When each window action applies, for those that say. */
+  const conditions = new Map<string, (context: WindowContext) => boolean>()
   /** The shell keeps this current; actions read it when they run. */
   let context: WindowContext | undefined
   /** What the app and each machine offer, by target ('app' or a machine id). */
@@ -77,6 +100,20 @@ export function createWindowRouter() {
   return {
     router,
     dispatch,
+    /** Add a window action; the returned function removes it again. */
+    register(action: WindowAction): () => void {
+      const { when, ...def } = action
+      const off = router.register({ ...def, runs: 'window' })
+      if (when) conditions.set(action.id, when)
+      return () => { off(); if (conditions.get(action.id) === when) conditions.delete(action.id) }
+    },
+    /** Whether keys and the palette offer `id` now: an action elsewhere always; a window action while its `when` holds. */
+    offered(id: string): boolean {
+      const when = conditions.get(id)
+      if (!when) return true
+      if (!context) return false
+      try { return when(context) } catch (error) { console.error(`${id}: when failed`, error); return false }
+    },
     setContext(next: Omit<WindowContext, 'dispatch'>) { context = { ...next, dispatch } },
     /** Fetch what `target` offers ('app', or a connected machine's id). */
     async load(target: string) {
@@ -102,62 +139,62 @@ declare const __SUPEREGO_DEV_SERVER__: string | undefined
 
 /** The shell's own actions. Extensions add theirs with `superego.action`. */
 export const coreActions = (app: AppConfig): WindowAction[] => [
-  defineAction({ id: 'app.palette', title: 'Commands', runs: 'window', keys: 'mod+k', run: (_p, c: WindowContext) => c.togglePalette() }),
-  defineAction({ id: 'app.navigator', title: 'Go to a session, thread or pane', runs: 'window', keys: 'mod+l', run: (_p, c: WindowContext) => c.toggleNavigator() }),
-  defineAction({ id: 'app.sidebar', title: 'Toggle sidebar', runs: 'window', keys: 'mod+/', run: (_p, c: WindowContext) => c.toggleSidebar() }),
+  defineWindowAction({ id: 'app.palette', title: 'Commands', keys: 'mod+k', run: (_p, c) => c.togglePalette() }),
+  defineWindowAction({ id: 'app.navigator', title: 'Go to a session, thread or pane', keys: 'mod+l', run: (_p, c) => c.toggleNavigator() }),
+  defineWindowAction({ id: 'app.sidebar', title: 'Toggle sidebar', keys: 'mod+/', run: (_p, c) => c.toggleSidebar() }),
   // Through every thread, in the sidebar's order, across sessions; and between sessions, at the thread last shown in each.
-  defineAction({ id: 'thread.next', title: 'Next thread', runs: 'window', keys: 'mod+shift+]', run: (_p, c: WindowContext) => stepThread(c, 1) }),
-  defineAction({ id: 'thread.previous', title: 'Previous thread', runs: 'window', keys: 'mod+shift+[', run: (_p, c: WindowContext) => stepThread(c, -1) }),
-  defineAction({ id: 'session.next', title: 'Next session', runs: 'window', run: (_p, c: WindowContext) => stepSession(c, 1) }),
-  defineAction({ id: 'session.previous', title: 'Previous session', runs: 'window', run: (_p, c: WindowContext) => stepSession(c, -1) }),
+  defineWindowAction({ id: 'thread.next', title: 'Next thread', keys: 'mod+shift+]', run: (_p, c) => stepThread(c, 1) }),
+  defineWindowAction({ id: 'thread.previous', title: 'Previous thread', keys: 'mod+shift+[', run: (_p, c) => stepThread(c, -1) }),
+  defineWindowAction({ id: 'session.next', title: 'Next session', run: (_p, c) => stepSession(c, 1) }),
+  defineWindowAction({ id: 'session.previous', title: 'Previous session', run: (_p, c) => stepSession(c, -1) }),
   // Where this window has been, as a browser goes back and forward.
-  defineAction({ id: 'app.back', title: 'Back', runs: 'window', keys: 'mod+[', run: (_p, c: WindowContext) => c.back() }),
-  defineAction({ id: 'app.forward', title: 'Forward', runs: 'window', keys: 'mod+]', run: (_p, c: WindowContext) => c.forward() }),
-  defineAction({ id: 'thread.unread', title: 'Next unread thread', runs: 'window', keys: 'mod+.', run: (_p, c: WindowContext) => nextUnread(c) }),
+  defineWindowAction({ id: 'app.back', title: 'Back', keys: 'mod+[', run: (_p, c) => c.back() }),
+  defineWindowAction({ id: 'app.forward', title: 'Forward', keys: 'mod+]', run: (_p, c) => c.forward() }),
+  defineWindowAction({ id: 'thread.unread', title: 'Next unread thread', keys: 'mod+.', run: (_p, c) => nextUnread(c) }),
   // Focus: the region beside (sidebar, thread, each pane), and the prompt.
-  defineAction({ id: 'focus.left', title: 'Focus the region to the left', runs: 'window', keys: 'mod+alt+arrowleft', run: () => focusBeside(-1) }),
-  defineAction({ id: 'focus.right', title: 'Focus the region to the right', runs: 'window', keys: 'mod+alt+arrowright', run: () => focusBeside(1) }),
-  defineAction({ id: 'focus.prompt', title: 'Focus the prompt', runs: 'window', keys: 'ctrl+i', run: () => focusPrompt() }),
-  defineAction({ id: 'focus.thread', title: 'Focus the thread', runs: 'window', run: () => focusThread() }),
+  defineWindowAction({ id: 'focus.left', title: 'Focus the region to the left', keys: 'mod+alt+arrowleft', run: () => focusBeside(-1) }),
+  defineWindowAction({ id: 'focus.right', title: 'Focus the region to the right', keys: 'mod+alt+arrowright', run: () => focusBeside(1) }),
+  defineWindowAction({ id: 'focus.prompt', title: 'Focus the prompt', keys: 'ctrl+i', run: () => focusPrompt() }),
+  defineWindowAction({ id: 'focus.thread', title: 'Focus the thread', run: () => focusThread() }),
   // What has the focus (the thread from its prompt) scrolls half a page.
-  defineAction({ id: 'scroll.down', title: 'Scroll down half a page', runs: 'window', keys: 'ctrl+d', run: () => scrollHalfPage(1) }),
-  defineAction({ id: 'scroll.up', title: 'Scroll up half a page', runs: 'window', keys: 'ctrl+u', run: () => scrollHalfPage(-1) }),
+  defineWindowAction({ id: 'scroll.down', title: 'Scroll down half a page', keys: 'ctrl+d', run: () => scrollHalfPage(1) }),
+  defineWindowAction({ id: 'scroll.up', title: 'Scroll up half a page', keys: 'ctrl+u', run: () => scrollHalfPage(-1) }),
   // Within a thread: the thread itself, then each pane beside it.
-  defineAction({ id: 'pane.next', title: 'Next pane', runs: 'window', keys: 'ctrl+tab', run: (_p, c: WindowContext) => stepPane(c, 1) }),
-  defineAction({ id: 'pane.previous', title: 'Previous pane', runs: 'window', keys: 'ctrl+shift+tab', run: (_p, c: WindowContext) => stepPane(c, -1) }),
+  defineWindowAction({ id: 'pane.next', title: 'Next pane', keys: 'ctrl+tab', run: (_p, c) => stepPane(c, 1) }),
+  defineWindowAction({ id: 'pane.previous', title: 'Previous pane', keys: 'ctrl+shift+tab', run: (_p, c) => stepPane(c, -1) }),
   // The app's own agent, on this computer: it answers questions about the app and its setup, and hands work to threads.
   // One thread, in no list, opened (or started) from here.
-  defineAction({
-    id: 'app.meta', title: `Ask ${agentName(app)}`, runs: 'window',
-    run: async (_p, c: WindowContext) => {
+  defineWindowAction({
+    id: 'app.meta', title: `Ask ${agentName(app)}`,
+    run: async (_p, c) => {
       const thread = await c.dispatch('thread.meta', {}, { machine: 'local', source: 'meta' }) as { id: string }
       c.select({ machine: 'local', thread: thread.id })
     },
   }),
   // Another window (in a browser, another tab), showing what this one does.
-  defineAction({
-    id: 'app.newWindow', title: 'New window', runs: 'window', keys: 'mod+shift+n',
+  defineWindowAction({
+    id: 'app.newWindow', title: 'New window', keys: 'mod+shift+n',
     run: async () => { if (window.superego.web) window.open(location.href, '_blank'); else await window.superego.call('app', 'app.newWindow', {}) },
   }),
   // In dev only: restart the window's dev server so packages linked since it started resolve (see dev-packages.ts).
-  ...(typeof __SUPEREGO_DEV_SERVER__ === 'string' ? [defineAction({
-    id: 'app.reloadPackages', title: 'Reload, picking up new packages', runs: 'window',
+  ...(typeof __SUPEREGO_DEV_SERVER__ === 'string' ? [defineWindowAction({
+    id: 'app.reloadPackages', title: 'Reload, picking up new packages', 
     run: async () => {
       const answer = await fetch(__SUPEREGO_DEV_SERVER__, { method: 'POST' })
       if (!answer.ok) throw new Error(`The dev server didn't restart (${answer.status})`)
     },
   })] : []),
-  defineAction({ id: 'app.settings', title: 'Settings', runs: 'window', keys: 'mod+,', run: (_p, c: WindowContext) => c.openSettings() }),
-  defineAction({ id: 'app.log', title: 'Show action log', runs: 'window', run: (_p, c: WindowContext) => c.showLog() }),
+  defineWindowAction({ id: 'app.settings', title: 'Settings', keys: 'mod+,', run: (_p, c) => c.openSettings() }),
+  defineWindowAction({ id: 'app.log', title: 'Show action log', run: (_p, c) => c.showLog() }),
   // Panes of the selected thread.
-  defineAction({
-    id: 'panes.changes', title: 'Show changes', runs: 'window', keys: 'mod+shift+d',
-    run: async (_p, c: WindowContext) => { if (c.selection) await c.dispatch('pane.open', { id: c.selection.thread, kind: 'diff' }, { machine: c.selection.machine, source: 'panes' }) },
+  defineWindowAction({
+    id: 'panes.changes', title: 'Show changes', keys: 'mod+shift+d',
+    run: async (_p, c) => { if (c.selection) await c.dispatch('pane.open', { id: c.selection.thread, kind: 'diff' }, { machine: c.selection.machine, source: 'panes' }) },
   }),
-  defineAction({
+  defineWindowAction({
     // The pane with the focus; the focus moves left, to the pane before it or the thread. The thread itself stays.
-    id: 'panes.close', title: 'Close pane', runs: 'window', keys: 'mod+w',
-    run: async (_p, c: WindowContext) => {
+    id: 'panes.close', title: 'Close pane', keys: 'mod+w',
+    run: async (_p, c) => {
       const thread = c.selection && c.threadOf(c.selection)
       const panes = thread?.panes ?? []
       const index = panes.findIndex((p) => p.id === focusedColumn(thread))
@@ -166,18 +203,18 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
       focusColumn(panes[index - 1]?.id)
     },
   }),
-  defineAction({
-    id: 'thread.startRename', title: 'Rename thread…', runs: 'window',
-    run: (_p, c: WindowContext) => { if (c.selection) startRename(c.selection.machine, c.selection.thread) },
+  defineWindowAction({
+    id: 'thread.startRename', title: 'Rename thread…', 
+    run: (_p, c) => { if (c.selection) startRename(c.selection.machine, c.selection.thread) },
   }),
-  defineAction({
-    id: 'thread.new', title: 'New thread…', runs: 'window', keys: 'mod+n',
-    params: obj({}), run: (_p, c: WindowContext) => c.newThread(),
+  defineWindowAction({
+    id: 'thread.new', title: 'New thread…', keys: 'mod+n',
+    params: obj({}), run: (_p, c) => c.newThread(),
   }),
-  defineAction({
-    id: 'thread.select', title: 'Show a thread', runs: 'window',
+  defineWindowAction({
+    id: 'thread.select', title: 'Show a thread', 
     params: obj({ machine: str(), thread: str() }),
-    run: ({ machine, thread }, c: WindowContext) => c.select({ machine, thread }),
+    run: ({ machine, thread }, c) => c.select({ machine, thread }),
   }),
 ]
 
@@ -208,7 +245,7 @@ function stepThread(c: WindowContext, by: number) {
 /** The next thread after this one, in order, with something unread; around to the start, but never this one. */
 function nextUnread(c: WindowContext) {
   const { session } = current(c)
-  const scope = c.unreadScope === 'session' && session ? [session] : c.sessions
+  const scope = c.appSetting<'all' | 'session'>(UNREAD) === 'session' && session ? [session] : c.sessions
   const order = scope.flatMap((s) => s.threads.map((thread) => ({ machine: s.machine.id, thread })))
   const at = order.findIndex((o) => o.machine === c.selection?.machine && o.thread.id === c.selection.thread)
   for (let step = 1; step <= order.length; step++) {

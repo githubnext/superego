@@ -29,6 +29,7 @@ export class RpcPeer {
   #next = 1
   #pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>()
   #handlers = new Map<string, Handler>()
+  #resolve: ((method: string) => Handler | undefined) | undefined
   #listeners = new Map<string, Set<NotificationHandler>>()
   #any = new Set<(method: string, params: unknown) => void>()
   #closed: Error | undefined
@@ -65,6 +66,11 @@ export class RpcPeer {
 
   handle(method: string, handler: Handler): void {
     this.#handlers.set(method, handler)
+  }
+
+  /** Answer methods with no handler of their own by looking one up when they're called: ones registered since. */
+  handleOthers(resolve: (method: string) => Handler | undefined): void {
+    this.#resolve = resolve
   }
 
   on(method: string, listener: NotificationHandler): () => void {
@@ -107,7 +113,7 @@ export class RpcPeer {
   }
 
   async #dispatch(request: Request) {
-    const handler = this.#handlers.get(request.method)
+    const handler = this.#handlers.get(request.method) ?? this.#resolve?.(request.method)
     try {
       if (!handler) throw new RpcError('unknown_method', `Unknown method ${request.method}`, { code: -32601 })
       const result = await handler(request.params ?? {})

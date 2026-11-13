@@ -7,9 +7,10 @@
 // teardown removes all of it at once. A profile's UI is owned by that profile on its machine too, and draws only in
 // that profile's threads there.
 import { createContext, useContext, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
-import type { AppConfig, DeclaredSection, Pane, ProfileRef, SectionInfo, ThreadInfo } from '@superego/protocol'
+import type { AppConfig, DeclaredSection, Json, Pane, ProfileRef, SectionInfo, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowRouter } from './actions.tsx'
+import { createStore, type Store } from './local-state.ts'
 
 /** Where an extension can put UI. */
 export type SlotName =
@@ -130,6 +131,11 @@ export type UiApi = {
    * named `<extension>.<key>`. Read and change them with `useAppSetting`.
    */
   appSettings(section: DeclaredSection): void
+  /**
+   * State of this extension, kept in the window: read and changed by its actions and components alike (`store.use()`
+   * in a component). Named `<extension>.<key>`; `persist` keeps it across reloads.
+   */
+  store<T extends Json>(key: string, initial: T, options?: { persist?: boolean }): Store<T>
 }
 
 export type UiExtension = {
@@ -234,7 +240,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       action(action) {
         if (profile) return console.warn(`Profile extension ${extension.name}: actions from a profile's UI aren't supported yet`)
         if (extension.name !== 'core' && !action.id.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its actions "${extension.name}.<name>", not "${action.id}"`)
-        undo.push(registry.router.router.register({ ...action, runs: 'window' }))
+        undo.push(registry.router.register(action))
       },
       appSettings(section) {
         if (profile) return console.warn(`Profile extension ${extension.name}: app settings from a profile's UI aren't supported yet`)
@@ -242,6 +248,10 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
           if (extension.name !== 'core' && !setting.key.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its settings "${extension.name}.<key>", not "${setting.key}"`)
         }
         add(registry.appSettings, section)
+      },
+      store(key, initial, options) {
+        if (!key.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its state "${extension.name}.<key>", not "${key}"`)
+        return createStore(key, initial, options)
       },
     }
     const teardown = () => {

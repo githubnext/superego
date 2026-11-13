@@ -38,9 +38,20 @@ export function defineAction<S extends JsonSchema | undefined, R, C = any>(
 /** One dispatch, as the log keeps it. */
 export type ActionLogEntry = { at: number; id: string; source: string; ms: number; ok: boolean; params?: Json; error?: string }
 
-type Compiled = ReturnType<typeof compileParams>
-function compileParams(schema: JsonSchema | undefined) {
-  return schema ? compile(schema, { coerce: true }) : undefined
+/**
+ * Check parameters against `schema` (coercing strings, as the command line sends them): the parsed parameters, or an
+ * `invalid_params` error naming what's wrong. Without a schema, anything goes.
+ */
+export function paramsParser(id: string, schema: JsonSchema | undefined): (params: unknown) => unknown {
+  const validator = schema ? compile(schema, { coerce: true }) : undefined
+  return (params) => {
+    const value = params ?? {}
+    if (!validator) return value
+    const parsed = validator.parse(value)
+    if (parsed.ok) return parsed.value
+    const why = parsed.errors.map((e) => `${(e as { path?: string }).path || 'params'}: ${(e as { message?: string }).message ?? 'invalid'}`).join('; ')
+    throw new RpcError('invalid_params', `${id}: ${why}`)
+  }
 }
 
 /**
@@ -48,7 +59,7 @@ function compileParams(schema: JsonSchema | undefined) {
  * actions get besides their parameters: the window's selection, the calling connection, and so on.
  */
 export class Router<C = unknown> {
-  #actions = new Map<string, { def: ActionDef<any, unknown, C>; validator: Compiled }>()
+  #actions = new Map<string, { def: ActionDef<any, unknown, C>; parse: (params: unknown) => unknown }>()
   #log: ActionLogEntry[] = []
   #listeners = new Set<(entry: ActionLogEntry) => void>()
   readonly logSize: number
@@ -58,7 +69,7 @@ export class Router<C = unknown> {
   register(def: ActionDef<any, unknown, C>): () => void {
     if (this.#actions.has(def.id)) throw new Error(`Action ${def.id} is already defined`)
     if (!/^[a-z][a-z0-9-]*(\.[a-z][a-zA-Z0-9-]*)+$/.test(def.id)) throw new Error(`Action id "${def.id}" must be dotted lowercase, like thread.create`)
-    this.#actions.set(def.id, { def, validator: compileParams(def.params) })
+    this.#actions.set(def.id, { def, parse: paramsParser(def.id, def.params) })
     return () => { if (this.#actions.get(def.id)?.def === def) this.#actions.delete(def.id) }
   }
 
@@ -80,16 +91,7 @@ export class Router<C = unknown> {
     try {
       if (!action) throw new RpcError('unknown_action', `No action ${id}`)
       if (exposure && !action.def.expose.includes(exposure)) throw new RpcError('not_exposed', `${id} can't be run from ${exposure}`)
-      let value: unknown = params ?? {}
-      if (action.validator) {
-        const parsed = action.validator.parse(value)
-        if (!parsed.ok) {
-          const why = parsed.errors.map((e) => `${(e as { path?: string }).path || 'params'}: ${(e as { message?: string }).message ?? 'invalid'}`).join('; ')
-          throw new RpcError('invalid_params', `${id}: ${why}`)
-        }
-        value = parsed.value
-      }
-      const result = await action.def.run(value, context)
+      const result = await action.def.run(action.parse(params), context)
       record(true)
       return result
     } catch (error) {
@@ -129,3 +131,4 @@ const info = ({ run: _run, ...rest }: ActionDef<any, unknown, any>): ActionInfo 
 
 /** Schema builders for action parameters, so extensions need nothing beyond @superego/*. */
 export { arr, bool, int, lit, nullable, num, obj, opt, str, union, unknown } from '@earendil-works/pi-schema'
+export type { JsonSchema, Static } from '@earendil-works/pi-schema'

@@ -15,7 +15,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  agentName, arr, type Attachment, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type RpcPeer, type ThreadInfo,
+  agentName, arr, type Attachment, paramsParser, bool, defineAction, deriveStatus, FEATURES, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
@@ -268,21 +268,43 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** The built-ins this machine's settings leave on (see the Extensions section). */
   const enabled = () => builtins.filter((e) => settings.get(`extensions.${ownerOf(e)}`) !== false)
   installBuiltin(createCodingTools())
-  // Panes: the agent opens them beside its thread (a diff, a preview, an artifact it wrote, a profile's own).
+  /**
+   * The kinds of pane the agent can open, and what each shows: the core's, and those extensions describe (the window
+   * draws them; the extension's UI half registers the same kind). A profile's extension's are for that profile's threads
+   * only (`profile`: its folder).
+   */
+  const paneKinds: { kind: string; about: string; owner: string; profile?: string }[] = [
+    { kind: 'diff', about: 'the changes in the working folder; no params', owner: 'panes' },
+    { kind: 'preview', about: '{ url }: a web page, such as a local dev server', owner: 'panes' },
+    { kind: 'artifact', about: '{ path }: an HTML file in the working folder, shown as a page; write it first', owner: 'panes' },
+    { kind: 'editor', about: '{ path }: a file, for the user to read and edit', owner: 'panes' },
+    { kind: 'thread', about: '{ thread }: another conversation', owner: 'panes' },
+  ]
+  // Panes: the agent opens them beside its thread (a diff, a preview, an artifact it wrote, a profile's own), from the
+  // kinds its instructions list.
   installBuiltin(defineExtension({
     name: 'panes',
     tools: [defineTool({
       name: 'open_pane',
-      description: 'Open a pane beside this conversation for the user to look at. Built-in kinds: "diff" (the changes in the working folder; no params), ' +
-        '"preview" ({ url }: a web page, such as a local dev server), "artifact" ({ path }: an HTML file in the working folder, shown as a page; write it first), ' +
-        '"editor" ({ path }: a file, for the user to read and edit), "thread" ({ thread }: another conversation). A profile may add kinds; its instructions name them.',
+      description: 'Open a pane beside this conversation for the user to look at. The kinds there are, and the params each takes, are listed in your instructions under panes.',
       parameters: obj({ kind: str({ minLength: 1 }), title: opt(str()), params: opt(obj({}, { open: true, description: 'What the pane shows, as an object: { "path": "notes/a.md" }, not a string of JSON.' })) }),
       async execute({ kind, title, params }, api) {
         const pane = await openPane(String(api.conversationId), { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}) })
         return { output: [{ type: 'text', text: `Opened the ${kind} pane (${pane.id}).` }] }
       },
     })],
+    sections: [section('panes', ({ conversationId }) => {
+      const kinds = panesOf(String(conversationId))
+      return `Panes you can open beside this conversation with open_pane, by kind:\n${kinds.map(({ kind, about }) => `- "${kind}": ${about}`).join('\n')}`
+    })],
   }))
+  /** The pane kinds a thread's agent is told of: the core's and extensions', and its profile's. */
+  function panesOf(id: string) {
+    const meta = mounted.get(id)?.meta
+    const profile = meta?.profile && profiles.get(meta.profile.dir)
+    const declared = Object.entries(profile?.spec.panes ?? {}).map(([kind, about]) => ({ kind, about }))
+    return [...paneKinds.filter((p) => !p.profile || p.profile === meta?.profile?.dir), ...declared]
+  }
   // Skills and standing instructions from the folder agents share (see skills.ts). Each is its own extension, so a
   // profile can do without either.
   const agentsDir = options.agentsDir ?? join(homedir(), '.agents')
@@ -476,6 +498,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (!name.startsWith(`${extension}.`)) throw new Error(`Extension ${extension} must name things "${extension}.<name>", not "${name}"`)
     return name
   }
+  /** Extensions' read methods, `<name>.<method>`: plain requests, looked up when called (a profile's come and go). */
+  const methods = new Map<string, (params: unknown) => Promise<Json>>()
   /**
    * The names in use: an extension's name is the prefix of everything it registers, so it's claimed while the extension
    * is set up, and a second extension of that name (bundled or a profile's) is refused rather than mixed in.
@@ -489,7 +513,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * profile's selection). Everything it registers is its own, and the returned teardown undoes all of it: its agent
    * parts, actions, values, status, settings and its name.
    */
-  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension) => () => void): Promise<() => void> {
+  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension) => () => void, profile?: ProfileRef): Promise<() => void> {
     if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
     if (claimed.has(extension.name)) throw new Error(`An extension named ${extension.name} is already set up`)
     claimed.add(extension.name)
@@ -512,6 +536,19 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         onChange: (listener) => { undo.push(settings.onChange(listener)) },
       },
       action: (action) => { undo.push(router.register({ ...action, id: named(extension.name, action.id), runs: 'machine' })) },
+      method(name, run, options = {}) {
+        const id = named(extension.name, name)
+        if (methods.has(id) || router.has(id)) throw new Error(`Method ${id} is already defined`)
+        const parse = paramsParser(id, options.params)
+        methods.set(id, async (params: unknown) => run(parse(params) as never))
+        undo.push(() => { methods.delete(id) })
+      },
+      pane(kind, about) {
+        if (paneKinds.some((p) => p.kind === kind && p.profile === profile?.dir)) throw new Error(`Pane kind ${kind} is already described`)
+        const entry = { kind, about, owner: extension.name, ...(profile ? { profile: profile.dir } : {}) }
+        paneKinds.push(entry)
+        undo.push(() => { paneKinds.splice(paneKinds.indexOf(entry), 1) })
+      },
       value<T extends Json>(key: string, initial: T): LiveValue<T> {
         const name = named(extension.name, key)
         const entry = valueOf(name)
@@ -529,6 +566,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       invalidate: changed,
       threads: {
         list: () => list(),
+        get: async (id) => info(id, await get(id)),
         conversation: async (id) => (await get(id)).conversation,
         of: (conversationId) => mounted.has(String(conversationId)) ? String(conversationId) : undefined,
         attachments: attachmentsOf,
@@ -578,7 +616,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
             const scoped = { ...agentExtension, name: `${ref.scope}:${ref.name}/${agentExtension.name}` }
             loaded.extensions.push(scoped)
             return () => { loaded.extensions.splice(loaded.extensions.indexOf(scoped), 1) }
-          }))
+          }, ref))
         }
         for (const extension of loaded.extensions) {
           registry.install(extension)
@@ -613,9 +651,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return {
       model, thinkingLevel,
       extensions: [...enabled().filter((e) => !without.has(e.name) && !without.has(ownerOf(e))), ...profile.extensions],
-      instructions: [profile.spec.prompt, profile.spec.panes && Object.keys(profile.spec.panes).length
-        ? `Panes this profile adds, for open_pane:\n${Object.entries(profile.spec.panes).map(([kind, about]) => `- "${kind}": ${about}`).join('\n')}`
-        : undefined].filter(Boolean).join('\n\n') || null,
+      instructions: profile.spec.prompt || null,
     }
   }
 
@@ -1094,7 +1130,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
             throw new RpcError('version_mismatch', `This machine's superego speaks protocol ${PROTOCOL_VERSION}, the client ${version}`, { hint: 'Update superego on the older side.' })
           }
           if (typeof name === 'string') client = name
-          return { version: PROTOCOL_VERSION, features: features(), machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id)] }
+          return { version: PROTOCOL_VERSION, features: features(), machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id), ...methods.keys()] }
         },
         'thread.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),
@@ -1230,17 +1266,20 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         /** The newest dispatches on this machine, oldest first. */
         'action.log': async () => router.log(),
       }
-      const ctx: DaemonContext = { notify: (event, params) => notify(event as keyof Notifications, params as never), source: client }
-      for (const action of router.list()) {
-        handlers[action.id] = (params: unknown) => router.dispatch(action.id, params, { ...ctx, source: client }, { source: client })
+      const ctx = (): DaemonContext => ({ notify: (event, params) => notify(event as keyof Notifications, params as never), source: client })
+      const open = (method: string, handler: (params: unknown) => unknown) => (params: unknown) => {
+        if (restarting && method !== 'hello') throw new RpcError('restarting', 'The daemon is restarting. Try again in a moment.')
+        return handler(params)
       }
       connections.add(peer)
-      for (const [method, handler] of Object.entries(handlers)) {
-        peer.handle(method, (params: unknown) => {
-          if (restarting && method !== 'hello') throw new RpcError('restarting', 'The daemon is restarting. Try again in a moment.')
-          return (handler as (params: unknown) => unknown)(params)
-        })
-      }
+      for (const [method, handler] of Object.entries(handlers)) peer.handle(method, open(method, handler))
+      // Actions under their ids, and extensions' methods: looked up as they're called, so a profile's registered since
+      // this connection opened are there too.
+      peer.handleOthers((method) => {
+        if (router.has(method)) return open(method, (params) => router.dispatch(method, params, ctx(), { source: client }))
+        const read = methods.get(method)
+        return read && open(method, read)
+      })
       return () => {
         connections.delete(peer)
         for (const stop of subs.values()) void stop()

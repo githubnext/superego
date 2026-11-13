@@ -2,11 +2,11 @@
 // the restart notice, Settings, and the app-wide reactions (fonts, ⌘, , threads shown from the command line or a
 // notification, marking finished threads seen).
 import { useEffect, useRef, useState } from 'react'
-import { agentName } from '@superego/protocol'
+import { agentName, type SettingsSnapshot } from '@superego/protocol'
 import { ArrowLeftIcon, ArrowRightIcon, Button, LifebuoyIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select } from '@superego/ui'
 import { textScale } from '../shared.ts'
 import { UnreadButton } from './Unread.tsx'
-import { machine as client, useAppSetting, useSettings } from './client.ts'
+import { machine as client, useSettings, watched } from './client.ts'
 import { Slot, useRegistry } from './extension.tsx'
 import { ServiceNotice } from './ServiceNotice.tsx'
 import { ThreadTitle, ThreadTools, ThreadView } from './ThreadView.tsx'
@@ -37,16 +37,12 @@ function useNarrow() {
   return narrow
 }
 
-/** App setting: whether ⌘. looks for the next unread thread everywhere, or only in the session you're in. */
-export const UNREAD = 'app.unread'
-
 export function Shell() {
   const registry = useRegistry()
   const [palette, setPalette] = useState(false)
   const [navigator, setNavigator] = useState(false)
   const sidebar = useSidebar()
   const { sessions, lastThread } = useSessions()
-  const [unreadScope] = useAppSetting<'all' | 'session'>(UNREAD)
   const [log, setLog] = useState(false)
   const machines = useMachines()
   const { selection, select, machine, thread } = useSelection()
@@ -70,7 +66,7 @@ export function Shell() {
     toggleNavigator: () => { setPalette(false); setNavigator((open) => !open) },
     showLog: () => setLog(true),
     threadOf: (s) => allThreads[s.machine]?.find((x) => x.id === s.thread),
-    sessions, lastThread, unreadScope: unreadScope ?? 'all',
+    sessions, lastThread, appSetting: (key) => watched<SettingsSnapshot>('app', 'settings.watch', {})?.values[key] as never,
     toggleSidebar: () => narrow ? setDrawer((open) => !open) : sidebar.toggle(),
     back: history.back, forward: history.forward,
   })
@@ -246,7 +242,7 @@ function useAppEffects() {
     // shortcut, the first registered wins (Settings → Keyboard shows the clash).
     const runKeys = (pressed: string) => {
       for (const action of registry.router.all(selectionRef.current?.machine)) {
-        if (runsBare(action) && bound(action, keymapRef.current) === pressed) {
+        if (runsBare(action) && bound(action, keymapRef.current) === pressed && registry.router.offered(action.id)) {
           void registry.router.dispatch(action.id, {}, { source: 'keys' }).catch((error) => console.error(error))
           return true
         }
