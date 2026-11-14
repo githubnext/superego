@@ -114,7 +114,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `tool(name, { icon, verbs, subject, stat, meta, body, phrase, file, weight }, { fold })` | how calls to a tool look, described: `verbs: ['Read', 'Reading', 'Read failed']`, `subject(call)` after the verb, `body(call)` what it opens to, `phrase(count)` in a run's line ("read 2 files"); the rest default. The core's coding tools and `threads`' thread tools are rows too |
 | `tool(name, Component, { fold })` | how calls to a tool look, drawn whole; `fold: false` shows them outside the run's fold (images) |
 | `entry(kind, Component)` | transcript entries of a kind it writes |
-| `link({ match, open, render, target })` | claim links: `match` a scheme (`'ticket:'`), a pattern, or `(href, kind, where) => boolean` that sees inline code too (`kind: 'code'`); `open(href, { machine, thread, beside, openFile, openUrl })` follows one (a click, ⌃O); `render` draws it; `scheme` names the scheme a pattern or test claims (`'thread'`), so HTML files keep its links. A profile's are asked first, then the bundled ones' (`threads`' `thread:`), the core's (files, `[[wikilinks]]` as `wikilink:`, web pages) last |
+| `link({ match, open, render, target, scheme })` | claim links: `match` a scheme (`'ticket:'`), a pattern, or `(href, kind, where) => boolean` that sees inline code too (`kind: 'code'`); `open(href, { machine, thread, beside, openFile, openUrl })` follows one (a click, ⌘-click `beside`, ⌃O); `render` draws it; `scheme` names the scheme a pattern or test claims (`'thread'`), so HTML files keep its links. Claiming files, `[[wikilinks]]` or web pages overrides the core's: [Links](#links) |
 | `composer.complete({ title, word(text, caret), items(word, { machine, thread }) })` | complete the word being typed: `word` finds it (`{ start, query }`), `items` offers `{ label, detail, insert }` |
 | `composer.sentWith({ read(blocks), component })` | draw what its `submit` put in sent messages under them (a chip): `read` returns `{ items, blocks }`, and those blocks leave the text |
 | `work(divide)` | split a run of work into titled parts (tasks); bundled only |
@@ -134,6 +134,41 @@ half checks `has(machine, 'ext:x')` first and says so, or offers nothing, when i
 renamed or moved keeps its old name as an alias on the daemon for one release (`MOVED_METHODS` in daemon.ts; a watch
 that became a value, `MOVED_WATCHES`; a feature, `MOVED_FEATURES`), so older windows keep working: Ego's `thread.meta`,
 `thread.meta.clear` and `meta.watch` answer as `ego.ask`, `ego.clear` and the value `ego.thread`.
+
+## Links
+
+A link in a message, in ⌃O's list, or in a Markdown file (rendered, or clicked in live preview) is followed by the
+first handler that claims it, asked in this order:
+
+1. **the thread's profile's** (its `ui` files' `superego.link`), only in that profile's threads;
+2. **the extensions'**, in the order they're set up, but not those of an optional one the thread goes without
+   (`threads` claims `thread:`);
+3. **the core's**, the defaults: files a thread names (relative links, inline code that reads as a path, and
+   `wikilink:`), which open in the pane kind that takes the file, and web pages (`http:`, `https:`, `mailto:`), which
+   open in the browser, or beside in a pane that shows web pages (`urls: true`, `web-panes`' Preview).
+
+A link no handler claims opens in the browser; an HTML link of a scheme none claims there is dropped. So to open
+links your own way, claim them: nothing else to switch off. `[[Note#Heading|alias]]` reaches handlers as
+`wikilink:Note#Heading` (each part URI-encoded), saying "alias"; `parseWikilink(href)` gives
+`{ target: 'Note', heading: 'Heading' }` (or `block` for `#^id`). A profile that keeps notes its own way, say:
+
+```tsx
+// In a profile's ui/note.tsx: [[wikilinks]] open the vault's own note pane, found by the vault's rules.
+superego.link({
+  match: 'wikilink:',
+  open(href, { machine, thread }) {
+    const { target, heading } = parseWikilink(href)!
+    return superego.dispatch('pane.open', { id: thread!.id, kind: 'note', params: { path: target, heading } }, { machine })
+      .then(() => undefined, (error: Error) => error.message)
+  },
+  target: (href) => parseWikilink(href)!.target,
+})
+```
+
+Return (or resolve to) a string to say why it couldn't: the link is struck through with it. Claiming files is the
+same with a test: `match: (href, kind) => /\.md$/.test(href)` takes Markdown links and paths in code alike, ahead of
+the core's. The core's file and web handlers stay the core's rather than `files`' or `web-panes'`: both extensions
+are optional, and a link to a file or a page has to work in a thread that goes without them.
 
 ## Views and the layout
 

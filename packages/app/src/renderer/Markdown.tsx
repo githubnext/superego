@@ -15,7 +15,7 @@ import type { MachineEntry } from '../shared.ts'
 import { ImageFrame, imageSourceOf, onImageChange, type ImageItem } from './images.tsx'
 import { Lightbox } from './lightbox.tsx'
 import { CheckIcon, CopyIcon } from '@superego/ui'
-import { linkHandler, useOptionalRegistry, type Registry } from './extension.tsx'
+import { linkHandler, linkSchemes, useOptionalRegistry } from './extension.tsx'
 import { Claimed, LinkPlace, WIKILINK, wikilinks } from './links.tsx'
 
 /** Code scrolls sideways, never wraps; it fades at the right edge only while a line runs past it. */
@@ -281,12 +281,6 @@ const components: Components = {
 /** An image's data, blob or file:// address kept (read as the others, in a thread). */
 const imageUrl = (url: string, key: string) => key === 'src' && /^(data:image\/|blob:|file:)/i.test(url)
 
-/** The schemes handlers claim by name (`ticket:` → `ticket`), for HTML's links to keep. */
-const schemesOf = (registry: Registry) => registry.links.flatMap(({ match, scheme }) => [
-  ...scheme ? [scheme.toLowerCase()] : [],
-  ...typeof match === 'string' && /^[a-z][\w+.-]*:$/i.test(match) ? [match.slice(0, -1).toLowerCase()] : [],
-])
-
 /** Footnotes' ids are prefixed once, by the sanitizing, not again before it. */
 const noPrefix = { clobberPrefix: '' }
 
@@ -306,7 +300,7 @@ export const Markdown = memo(function Markdown({ text, html = false, breaks = fa
   const urlTransform = (url: string, key: string) => imageUrl(url, key) || (key === 'href' && claimed(url)) ? url : defaultUrlTransform(url)
   const rendered = (
     <div className="md">
-      <ReactMarkdown remarkPlugins={breaks ? gfmWithBreaks : gfm} {...(html ? { rehypePlugins: htmlPlugins(registry ? schemesOf(registry) : []), remarkRehypeOptions: noPrefix } : {})} components={components} urlTransform={urlTransform}>
+      <ReactMarkdown remarkPlugins={breaks ? gfmWithBreaks : gfm} {...(html ? { rehypePlugins: htmlPlugins(registry ? linkSchemes(registry, where) : []), remarkRehypeOptions: noPrefix } : {})} components={components} urlTransform={urlTransform}>
         {claimed(`${WIKILINK}x`) ? wikilinks(text) : text}
       </ReactMarkdown>
     </div>

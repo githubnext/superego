@@ -2,7 +2,8 @@
 // files and threads the same way), in live preview (as Obsidian does: rendered, its syntax back where the cursor is),
 // or as source; anything else as source. It saves as you type, and follows the file when the agent changes it: your
 // view updates, or, with edits of yours not yet saved, it asks which to keep.
-// The editor pane is this; a profile's own panes use it too (the obsidian profile's notes), with their own links.
+// The editor pane is this; a profile's own panes use it too (the obsidian profile's notes). Its links, rendered or in
+// live preview, are followed by the link handlers, as a message's are: a thread's profile can claim them its own way.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { history, historyKeymap, standardKeymap } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
@@ -16,15 +17,14 @@ import type { ThreadInfo } from '@superego/protocol'
 import { Button } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { machine as client } from './client.ts'
-import { fileKind, folderKind, Slot, urlKind, useRegistry, type EditorSlotProps } from './extension.tsx'
+import { fileKind, folderKind, linkHandler, Slot, urlKind, useRegistry, type EditorSlotProps } from './extension.tsx'
 import { Images, imagesIn, Markdown } from './Markdown.tsx'
-import { LinkPlace, type LinkPlaceValue } from './links.tsx'
+import { follow, LinkPlace, type LinkPlaceValue } from './links.tsx'
 import { codeHighlight } from './code-highlight.ts'
 import { folderOf, resolve } from './markdown-html.ts'
-import { linkAt, livePreview, type MarkdownLink } from './live-markdown.ts'
+import { linkAt, livePreview } from './live-markdown.ts'
 import { arrivals } from './arrivals.ts'
 
-export type { MarkdownLink }
 export type FileEditorProps = {
   machine: MachineEntry
   thread: ThreadInfo
@@ -32,8 +32,6 @@ export type FileEditorProps = {
   path: string
   /** A line to show, with the cursor at its start: on opening, and whenever it changes. */
   line?: number
-  /** Opening a link (a click on it, or ⌘-click while it's being edited). Without one, links open beside the thread. */
-  onLink?: (link: MarkdownLink) => void
   /** In the bar, after the file's name. */
   actions?: ReactNode
   /** Below the text, scrolling with it: a note's backlinks, say. */
@@ -104,7 +102,7 @@ function goToLine(view: EditorView, line: number, scroller: HTMLElement | null) 
   requestAnimationFrame(() => { center(); requestAnimationFrame(center) })
 }
 
-export function FileEditor({ machine, thread, path, line, onLink, actions, children, onOpenFile }: FileEditorProps) {
+export function FileEditor({ machine, thread, path, line, actions, children, onOpenFile }: FileEditorProps) {
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path)
   const [mode, setMode] = useState<Mode>(storedMode)
   /** The editor in live preview: shown, or kept behind the rendered text. */
@@ -131,8 +129,6 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
   const setConflict = (text: string | undefined) => { conflictRef.current = text; setConflictState(text) }
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
-  const linkRef = useRef(onLink)
-  linkRef.current = onLink
   // The line to open at, for the editor made below.
   const lineRef = useRef(line)
   lineRef.current = line
@@ -161,19 +157,15 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
   const saveRef = useRef(save)
   saveRef.current = save
 
-  const open = (link: MarkdownLink) => {
-    if (linkRef.current) return linkRef.current(link)
-    if (link.kind === 'url' && /^[a-z][\w+.-]*:/i.test(link.target)) return void window.open(link.target, '_blank')
-    void (async () => {
-      const base = folderOf(path)
-      const target = link.kind === 'url' ? `${base}${decodeURI(link.target.split('#')[0]!)}` : link.target
-      const { path: found, folder } = await client(machine.id).call('file.find', { id: thread.id, name: target })
-      if (found === null || folder) return setNote({ text: `No file ${link.target}`, error: true })
-      const kind = fileKind(registry, { machine: machine.id, thread }, found)
-      if (!kind) return setNote({ text: `Nothing here shows ${link.target}`, error: true })
-      await dispatch('pane.open', { id: thread.id, kind, params: { path: found } }, { machine: machine.id, source: 'editor' })
-    })()
+  // A link in live preview (a click on it, or ⌘-click while it's being edited; ⌘: beside), followed by its handler, as
+  // in rendered text; one none claims, in the browser.
+  const open = (href: string, beside: boolean) => {
+    const where = linksRef.current
+    const handler = where && linkHandler(registry, href, 'link', where)
+    if (!handler) return void (/^[a-z][\w+.-]*:/i.test(href) && window.open(href, '_blank', 'noopener,noreferrer'))
+    void follow(handler, href, 'link', where, beside).then((problem) => { if (problem) setNote({ text: `${href}: ${problem}`, error: true }) })
   }
+  const linksRef = useRef<LinkPlaceValue>(undefined)
   const openRef = useRef(open)
   openRef.current = open
 
@@ -219,7 +211,7 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
               const hit = event.button === 0 ? linkAt(event.target) : undefined
               if (!hit || (hit.raw && !(event.metaKey || event.ctrlKey))) return false
               event.preventDefault()
-              openRef.current(hit.link)
+              openRef.current(hit.href, event.metaKey || event.ctrlKey)
               return true
             },
           }),
@@ -328,7 +320,6 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
   // A file the text names: from beside this one first, as a link in it means, else as a message's would be (by its
   // name, anywhere in the folder). Opened beside the thread, in the pane kind that takes it; else why not.
   const findAndOpen = async (name: string): Promise<string | undefined> => {
-    if (linkRef.current) return void linkRef.current({ kind: /[/.]/.test(name) ? 'url' : 'wiki', target: name })
     try {
       const peer = client(machine.id)
       const at = /^(.+?)((?::\d+)+|#L\d+.*)$/.exec(name)
@@ -358,6 +349,7 @@ export function FileEditor({ machine, thread, path, line, onLink, actions, child
   }, [machine.id, thread.id, webKind])
   const linkThread = useMemo(() => thread, [thread.id, thread.profile?.dir, String(thread.without)])
   const links = useMemo<LinkPlaceValue>(() => ({ machine: machine.id, thread: linkThread, openFile, ...(webKind ? { openUrl } : {}) }), [machine.id, linkThread, openFile, webKind, openUrl])
+  linksRef.current = links
   const openIn = (kind: string | undefined, file: string) => kind && dispatch('pane.open', { id: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'editor' })
   // Its images, read from beside it on the thread's machine.
   const images = useMemo(() => imagesIn(machine, thread.id, thread.cwd, folderOf(path)), [machine, thread.id, thread.cwd, path])

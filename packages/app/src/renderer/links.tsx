@@ -1,12 +1,16 @@
 // Links in Markdown, claimed by handlers (`superego.link`): what a link of a kind looks like and what following it does.
-// The core claims the files a thread names (`[[wikilinks]]`, relative links, code that reads as a path) and web pages;
-// the threads extension claims threads (`thread:<id>`); an extension or a profile can claim others, or these its own
-// way, ahead of the core.
+// The core claims the files a thread names (`[[wikilinks]]`, relative links, code that reads as a path) and web pages,
+// as defaults: a thread's profile is asked first, then the extensions, so either can claim these its own way (the
+// obsidian profile's notes). The threads extension claims threads (`thread:<id>`). Messages, a file's rendered text and
+// the editor's live preview all follow links through the same handlers (`linkHandler`, `follow`).
+// They stay the core's, not the files' or web-panes' extensions': both are optional, and a link to a file or a page
+// must work in a thread that goes without them (a file opens in the core's editor, a page in the browser).
 // A thread's transcript keeps the links it draws, in order, for ⌃O's list (`transcriptLinks`).
 import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { SquareSplitHorizontalIcon } from '@superego/ui'
 import type { LinkAttributes, LinkHandler, LinkProps, LinkWhere, UiApi } from './extension.tsx'
 import { looksLikePath } from './markdown-html.ts'
+import { parseWikilink, WIKILINK } from './wikilinks.ts'
 
 /** A link drawn in a transcript: what it says, where it goes, and a way to follow it. */
 export type TranscriptLink = { text: string; href: string; target: string; open(beside: boolean): Promise<string | undefined> }
@@ -36,20 +40,14 @@ export function transcriptLinks(machine: string, thread: string): TranscriptLink
   return order.map(({ element: _element, ...link }) => link)
 }
 
-export const WIKILINK = 'wikilink:'
+export { parseWikilink, WIKILINK, wikilinkHref, wikilinks, type Wikilink } from './wikilinks.ts'
 
-/** [[target|alias]] and ![[embeds]] as `wikilink:` links, outside code. */
-export function wikilinks(text: string) {
-  return text.split(/(```[\s\S]*?```|`[^`\n]*`)/).map((part, i) => i % 2 ? part : part.replace(/!?\[\[([^\]|#^\n]+)(?:[#^][^\]|\n]*)?(?:\|([^\]\n]*))?\]\]/g,
-    (_all, target: string, alias?: string) => `[${(alias ?? target).trim().replace(/[[\]]/g, '')}](<${WIKILINK}${encodeURIComponent(target.trim())}>)`)).join('')
-}
-
-/** The file a link names: a wikilink's target, a relative link's path (its #anchor left off), or code as it reads. */
+/** The file a link names: a wikilink's note (its #heading left off), a relative link's path (its #anchor too), or code as it reads. */
 function fileName(href: string, kind: 'link' | 'code') {
   if (kind === 'code') return href
-  try {
-    return href.toLowerCase().startsWith(WIKILINK) ? decodeURIComponent(href.slice(WIKILINK.length)) : decodeURI(href.split('#')[0]!)
-  } catch { return href }
+  const wiki = parseWikilink(href)
+  if (wiki) return wiki.target
+  try { return decodeURI(href.split('#')[0]!) } catch { return href }
 }
 
 /** A web address as a list shows it: host and path, no scheme. */
@@ -83,14 +81,17 @@ function FileLink({ href, code, children, open, attributes }: LinkProps) {
   const name = fileName(href, code ? 'code' : 'link')
   return (
     <a {...attributes} href="#" className={['md__file', attributes?.className, code && 'md__file--code', problem && 'md__file--missing'].filter(Boolean).join(' ')} title={problem ? `${name}: ${problem}` : name}
-      onClick={(e) => { e.preventDefault(); void open(false).then(setProblem) }}>{children}</a>
+      onClick={(e) => { e.preventDefault(); void open(e.metaKey || e.ctrlKey).then(setProblem) }}>{children}</a>
   )
 }
 
 /** A web page: opened in the browser, with a button beside it to open it in a pane instead, where something shows them. */
-function WebLink({ href, title, children, where, attributes }: LinkProps) {
-  const web = <a {...attributes} href={href} title={title} target="_blank" rel="noreferrer">{children}</a>
-  if (!where.openUrl || !/^https?:\/\//i.test(href)) return web
+function WebLink({ href, title, children, where, attributes, open }: LinkProps) {
+  const inPane = Boolean(where.openUrl) && /^https?:\/\//i.test(href)
+  // ⌘-click: beside, as any link's.
+  const web = <a {...attributes} href={href} title={title} target="_blank" rel="noreferrer"
+    {...inPane ? { onClick: (e) => { if (e.metaKey || e.ctrlKey) { e.preventDefault(); void open(true) } } } : {}}>{children}</a>
+  if (!inPane) return web
   return (
     <>
       {web}

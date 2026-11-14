@@ -1,14 +1,14 @@
 // Markdown shown as it reads, edited as it's written: Obsidian's live preview, on CodeMirror. Headings, emphasis, code,
 // links, [[wikilinks]], #tags, quotes, lists and tasks render in place; the syntax behind one comes back where the
 // cursor is while you edit (marks inside a line where the selection touches them, a line's own marks on its lines).
-// Links are marked with `data-link`, so the editor that holds this decides what opening one does.
+// Links are marked with `data-link`, their href (a [[wikilink]]'s as `wikilink:`, wikilinks.ts), so the editor that
+// holds this follows them through the link handlers, as a message's are.
 import { syntaxTree } from '@codemirror/language'
 import type { EditorState, Range } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import type { SyntaxNodeRef } from '@lezer/common'
+import { wikilinkHref } from './wikilinks.ts'
 
-/** A link the reader can open: a [[wikilink]] (or ![[embed]]) by name, or a Markdown link by its URL. */
-export type MarkdownLink = { kind: 'wiki' | 'url'; target: string }
 
 class Bullet extends WidgetType {
   eq() { return true }
@@ -117,7 +117,7 @@ function build(view: EditorView): DecorationSet {
             if (marks.length < 2 || !url) return false
             const textFrom = marks[0]!.to, textTo = marks[1]!.from
             const reveal = touches(node.from, node.to)
-            if (textTo > textFrom) ranges.push(mark(reveal ? 'cm-lp-link cm-lp-raw' : 'cm-lp-link', { 'data-link': JSON.stringify({ kind: 'url', target: url } satisfies MarkdownLink) }).range(textFrom, textTo))
+            if (textTo > textFrom) ranges.push(mark(reveal ? 'cm-lp-link cm-lp-raw' : 'cm-lp-link', { 'data-link': url }).range(textFrom, textTo))
             if (!reveal) {
               ranges.push(hide.range(node.from, textFrom))
               ranges.push(hide.range(textTo, node.to))
@@ -169,10 +169,10 @@ function build(view: EditorView): DecorationSet {
     for (const match of text.matchAll(WIKILINK)) {
       const start = from + match.index!, end = start + match[0].length
       if (start <= front || inCode.has(start)) continue
-      const [, bang, target = '', , alias] = match
+      const [, bang, target = '', sub, alias] = match
       const shown = alias ?? target
       const reveal = touches(start, end)
-      const link = JSON.stringify({ kind: 'wiki', target: target.trim() } satisfies MarkdownLink)
+      const link = wikilinkHref(target, sub)
       if (reveal) { ranges.push(mark('cm-lp-wikilink cm-lp-raw', { 'data-link': link }).range(start, end)); continue }
       const shownFrom = alias !== undefined ? end - 2 - alias.length : start + bang!.length + 2
       const shownTo = alias !== undefined ? end - 2 : shownFrom + target.length
@@ -208,8 +208,8 @@ export function livePreview() {
  * The link under a click in a live preview, if there is one, and whether it's shown as written (the cursor is in it),
  * where a plain click edits and only ⌘-click opens.
  */
-export function linkAt(target: EventTarget | null): { link: MarkdownLink; raw: boolean } | undefined {
+export function linkAt(target: EventTarget | null): { href: string; raw: boolean } | undefined {
   const el = (target as HTMLElement | null)?.closest?.('[data-link]')
-  if (!el) return undefined
-  try { return { link: JSON.parse(el.getAttribute('data-link')!) as MarkdownLink, raw: el.classList.contains('cm-lp-raw') } } catch { return undefined }
+  const href = el?.getAttribute('data-link')
+  return el && href ? { href, raw: el.classList.contains('cm-lp-raw') } : undefined
 }

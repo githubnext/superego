@@ -212,7 +212,8 @@ export type LinkProps = {
 
 /**
  * Links of a kind, claimed: what they look like in Markdown and what following one does (a click, or ⌃O's list).
- * `[[wikilinks]]` come as `wikilink:<target, URI-encoded>`.
+ * `[[Note#Heading|alias]]` comes as `wikilink:Note#Heading` (each part URI-encoded; `parseWikilink` takes it apart), its
+ * alias as its text. Asked in turn: a thread's profile's, then the app's extensions', then the core's (files, web pages).
  */
 export type LinkHandler = {
   /**
@@ -805,7 +806,7 @@ export const unfoldedTool = (registry: Registry, name: string, where: Where) => 
  * extensions' in order, then the core's.
  */
 export function linkHandler(registry: Registry, href: string, kind: 'link' | 'code', where: LinkWhere): LinkHandler | undefined {
-  const seen = seenIn(registry.links, where.machine && where.thread ? { machine: where.machine, thread: where.thread } : undefined)
+  const seen = linksSeen(registry, where)
   const claims = ({ match }: LinkHandler) => typeof match === 'string' ? kind === 'link' && href.toLowerCase().startsWith(match.toLowerCase())
     // From the start each time: a /g or /y pattern remembers where it last matched.
     : match instanceof RegExp ? kind === 'link' && ((match.lastIndex = 0), match.test(href))
@@ -813,6 +814,15 @@ export function linkHandler(registry: Registry, href: string, kind: 'link' | 'co
   const rank = (owner: Owner) => owner.profile ? 0 : owner.extension === 'core' ? 2 : 1
   return [...seen].sort((a, b) => rank(a.owner) - rank(b.owner)).find(claims)
 }
+
+/** The link handlers `where` has: its thread's profile's, and the app's but those of extensions the thread goes without. */
+const linksSeen = (registry: Registry, where: LinkWhere) => seenIn(registry.links, where.machine && where.thread ? { machine: where.machine, thread: where.thread } : undefined)
+
+/** The schemes `where`'s handlers claim by name (`ticket:` → `ticket`), for its HTML's links to keep. */
+export const linkSchemes = (registry: Registry, where: LinkWhere) => [...new Set(linksSeen(registry, where).flatMap(({ match, scheme }) => [
+  ...scheme ? [scheme.toLowerCase()] : [],
+  ...typeof match === 'string' && /^[a-z][\w+.-]*:$/i.test(match) ? [match.slice(0, -1).toLowerCase()] : [],
+]))]
 
 /** How entries of `kind` are drawn for `where`, if an extension draws them. */
 export const entryView = (registry: Registry, kind: string, where: Where) => lookUp(registry.entries, where, (e) => e.kind === kind)?.component

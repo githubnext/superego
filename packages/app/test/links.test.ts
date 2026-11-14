@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { defineApp, type ThreadInfo } from '@superego/protocol'
 import { createRegistry, defineUiExtension, linkHandler, RegistryProvider, type LinkProps, type LinkWhere } from '../src/renderer/extension.tsx'
-import { follow, LinkPlace, registerLinks, wikilinks } from '../src/renderer/links.tsx'
+import { follow, LinkPlace, parseWikilink, registerLinks, wikilinkHref, wikilinks } from '../src/renderer/links.tsx'
 import { Markdown } from '../src/renderer/Markdown.tsx'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
@@ -55,6 +55,59 @@ describe('link handlers', () => {
 
   it('turns [[wikilinks]] into links, leaving code alone', () => {
     expect(wikilinks('see [[notes/plan|the plan]] and `[[not]]`')).toBe('see [the plan](<wikilink:notes%2Fplan>) and `[[not]]`')
+  })
+
+  it('keeps a [[wikilink]]\'s heading or block in its href, its alias as its text', () => {
+    expect(wikilinks('[[Note#Heading|alias]]')).toBe('[alias](<wikilink:Note#Heading>)')
+    expect(wikilinks('[[My Note#Two words]] ![[pic.png]] [[Note#^b1|x]]')).toBe('[My Note](<wikilink:My%20Note#Two%20words>) [pic.png](<wikilink:pic.png>) [x](<wikilink:Note#%5Eb1>)')
+    expect(parseWikilink('wikilink:Note#Heading')).toEqual({ target: 'Note', heading: 'Heading' })
+    expect(parseWikilink('wikilink:My%20Note#Two%20words')).toEqual({ target: 'My Note', heading: 'Two words' })
+    expect(parseWikilink(wikilinkHref('a#b', '#^b1'))).toEqual({ target: 'a#b', block: 'b1' })
+    expect(parseWikilink(wikilinkHref('Plans/Q3 ', undefined))).toEqual({ target: 'Plans/Q3' })
+    expect(parseWikilink('https://a.dev')).toBeUndefined()
+  })
+
+  it("opens a [[wikilink]]'s note as a file, its heading left off", async () => {
+    const registry = createRegistry(app, [], registerLinks)
+    const openFile = vi.fn(async (_name: string) => undefined)
+    const where = { ...inThread(), openFile }
+    const files = linkHandler(registry, 'wikilink:Note#Heading', 'link', where)!
+    expect(files.target?.('wikilink:Note#Heading', 'link')).toBe('Note')
+    await follow(files, 'wikilink:Note#Heading', 'link', where, false)
+    expect(openFile).toHaveBeenLastCalledWith('Note')
+  })
+
+  it("lets a thread's profile claim wikilinks and files ahead of the extensions, and they ahead of the core", () => {
+    const mine = (name: string, match: string | ((href: string, kind: 'link' | 'code') => boolean)) =>
+      defineUiExtension({ name, setup(superego) { superego.link({ match, open: () => name }) } })
+    const claims = (registry: ReturnType<typeof createRegistry>, href: string, kind: 'link' | 'code', where: LinkWhere) =>
+      linkHandler(registry, href, kind, where)?.open(href, { ...where, beside: false, kind })
+    const md = (href: string, kind: 'link' | 'code') => kind === 'code' ? href.endsWith('.md') : /\.md$/.test(href)
+    const registry = createRegistry(app, [mine('vaults', 'wikilink:'), mine('mdfiles', md)], registerLinks)
+    registry.installProfile('local', profile, [mine('obsidian', 'wikilink:'), mine('obsidian-files', md)])
+    // The profile's thread: the profile's, for [[wikilinks]] and for the files it claims, code too.
+    expect(claims(registry, 'wikilink:Note#H', 'link', inThread(true))).toBe('obsidian')
+    expect(claims(registry, 'notes/a.md', 'link', inThread(true))).toBe('obsidian-files')
+    expect(claims(registry, 'notes/a.md', 'code', inThread(true))).toBe('obsidian-files')
+    // Another thread: the extensions', ahead of the core's.
+    expect(claims(registry, 'wikilink:Note', 'link', inThread())).toBe('vaults')
+    expect(claims(registry, 'notes/a.md', 'link', inThread())).toBe('mdfiles')
+    // What none claims falls to the core: other files, web pages.
+    expect(linkHandler(registry, 'src/a.ts', 'code', inThread(true))).toBe(linkHandler(registry, 'src/a.ts', 'code', inThread()))
+    expect(linkHandler(registry, 'https://a.dev', 'link', inThread(true))).toBe(linkHandler(registry, 'https://a.dev', 'link', {}))
+    // A thread that goes without an extension goes on to the next: the core's.
+    const without = { ...inThread(), thread: { ...thread(), without: ['vaults'] } }
+    expect(linkHandler(registry, 'wikilink:Note', 'link', without)).toBe(linkHandler(registry, 'src/a.ts', 'code', without))
+  })
+
+  it("keeps a profile's schemes in its own threads' HTML only", () => {
+    const Ticket = ({ href, children }: LinkProps) => h('a', { className: 'ticket', 'data-href': href }, children)
+    const claims = defineUiExtension({ name: 'claims', setup(superego) { superego.link({ match: 'ticket:', render: Ticket, open: () => {} }) } })
+    const registry = createRegistry(app, [], registerLinks)
+    registry.installProfile('local', profile, [claims])
+    const draw = (where: LinkWhere) => renderToStaticMarkup(h(RegistryProvider, { registry, children: h(LinkPlace.Provider, { value: where }, h(Markdown, { text: '<a href="ticket:12">t</a>', html: true })) }))
+    expect(draw(inThread(true))).toContain('class="ticket" data-href="ticket:12"')
+    expect(draw(inThread())).not.toContain('ticket:12')
   })
 
   it('keeps, in HTML files, links of the schemes handlers claim: by their match, or the scheme a test says', () => {
