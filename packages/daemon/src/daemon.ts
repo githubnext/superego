@@ -2006,6 +2006,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       for (const m of mounted.values()) await m.stop()
       await harness.close(context)
       await agent.rejections.saved()
+      await webDevices.saved()
     },
   }
 

@@ -71,6 +71,7 @@ describe('devices', () => {
     expect(stored).not.toContain(paired!.cookie.split('.')[1])
     expect(devices.check(paired!.cookie, '1.2.3.4')?.id).toBe(paired!.device.id)
     expect(devices.check(`${paired!.device.id}.wrong`, '1.2.3.4')).toBeUndefined()
+    await devices.saved()
   })
 
   it('forgets a device unused for 90 days, and says so to whoever holds its connections', async () => {
@@ -85,6 +86,8 @@ describe('devices', () => {
     expect(devices.check(cookie, 'a')).toBeUndefined()
     expect(devices.list()).toEqual([])
     expect(gone).toEqual([device.id])
+    // Forgotten on disk too, before the folder goes.
+    await devices.saved()
   })
 
   it('names a device from its browser', () => {
@@ -117,7 +120,7 @@ describe('the web server', () => {
       artifact: async (thread, path) => Buffer.from(`${thread}/${path}`),
     })
   })
-  afterEach(async () => { await web.close() })
+  afterEach(async () => { await web.close(); await devices.saved() })
   const paired = async () => cookieFrom(await pairWith(web.port, { ticket: devices.pair().ticket }))
 
   it('pairs a browser with a cookie, and lets it in by that alone', async () => {
@@ -251,7 +254,7 @@ describe('the daemon’s web access', () => {
     const { peer, socket: sock } = await connectSocket(join(dir, 'superego.sock'))
     await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
     const section = async () => (await peer.call<{ value: SettingsSnapshot }>('settings.watch', {})).value.sections.find((s) => s.id === 'web')!
-    return { daemon, peer, section, close: async () => { sock.destroy(); server.close(); await daemon.close() } }
+    return { daemon, peer, section, close: async () => { sock.destroy(); await new Promise((resolve) => server.close(resolve)); await daemon.close() } }
   }
   const until = async (check: () => Promise<boolean>) => { for (let i = 0; i < 250 && !(await check()); i++) await new Promise((r) => setTimeout(r, 20)) }
 
@@ -350,7 +353,9 @@ esac
       expect((await http(port, `${prefix}/rpc`, { headers })).status).toBe(401)
       expect(await peer.call('web.devices', {})).toEqual([])
       await peer.call('settings.set', { key: 'web.access', value: 'off' })
-      await until(async () => (await readFile(log, 'utf8')).includes('serve --https=443 off'))
+      // Taken down: the stub logs the command before it has done it.
+      await until(async () => (await readFile(join(dir, 'serve.json'), 'utf8')).trim() === '{}')
+      expect(await readFile(log, 'utf8')).toContain('serve --https=443 off')
       expect(await readFile(join(dir, 'serve.json'), 'utf8')).toContain('{}')
       await close()
     })

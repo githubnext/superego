@@ -151,6 +151,8 @@ export class WebDevices {
   onRevoke(listener: (id: string) => void): () => void { this.#revoked.add(listener); return () => { this.#revoked.delete(listener) } }
   /** Devices changed: one paired, renamed, revoked, or first seen again after a while. */
   onChange(listener: () => void): () => void { this.#changed.add(listener); return () => { this.#changed.delete(listener) } }
+  /** Once what's changed is written: seeing a device saves it in the background. */
+  saved(): Promise<void> { return this.#saving }
 
   // ── Notice: why web access is off, after an update turned it off ─────────────────────────────────────────────────
 

@@ -111,7 +111,9 @@ describe('the layout file', () => {
 
   it('keeps comments typed in the file when the window changes the layout', async () => {
     writeFileSync(file.path, `${layoutHead(views)}\n// mine\n{ "place": { "ego.button": null } }\n`)
-    await new Promise((resolve) => setTimeout(resolve, 150))
+    // Read as saved (what the watcher does once it hears of it): a change from the window before then finds the file
+    // saved since, and takes the file's side.
+    await file.read()
     await settings.set('app.layout', { place: { 'threads.details': 'pane' } })
     await wait(() => readFileSync(file.path, 'utf8').includes('"threads.details": "pane"'))
     expect(readFileSync(file.path, 'utf8')).toContain('\n\n// mine\n{\n')
