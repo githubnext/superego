@@ -14,7 +14,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  arr, type Attachment, AUTH_REJECTED, DATA_VIEWS, dataViewProblem, type DataViewInfo, paramsParser, bool, defineAction, deriveStatus, FEATURES, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
+  aliasesOf, arr, type Attachment, AUTH_REJECTED, DATA_VIEWS, dataViewProblem, type DataViewInfo, paramsParser, bool, defineAction, deriveStatus, FEATURES, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
@@ -43,34 +43,17 @@ const Catalog = defineDoc<{ ids: number[]; ego?: number }>({
   kind: 'superego.catalog', version: 1, scope: 'session', initial: () => ({ ids: [] }), checkpointWhen: () => true,
 })
 
-/**
- * Methods moved into an extension, by their old names: a window older than this daemon still calls those, and is
- * answered by the extension's while it's set up. Kept one release after the move: remove with PROTOCOL_VERSION 2.
- */
-const MOVED_METHODS: Record<string, string> = {
-  'thread.diff': 'git.diff',
-  'skill.list': 'skills.list',
-  // Actions too: answered by the extension's action of the new name.
-  'thread.meta': 'ego.ask',
-  'thread.meta.clear': 'ego.clear',
-}
-/**
- * Watches moved into an extension's live value: the old watch method, the value it follows now, and the notification
- * older windows listen for (`{ sub, value }`). Remove with PROTOCOL_VERSION 2, as MOVED_METHODS.
- */
-const MOVED_WATCHES: Record<string, { value: string; event: string }> = {
-  'meta.watch': { value: 'ego.thread', event: 'meta.changed' },
-}
-/** Features that became an extension's: announced by their old names too, while it is, for older windows. Remove with PROTOCOL_VERSION 2. */
-const MOVED_FEATURES: Record<string, string> = { ego: 'ext:ego' }
-/**
- * Thread fields that became an extension's fact: given by their old names too, for older windows (the branch chip,
- * Ego's Clear). Remove with PROTOCOL_VERSION 2.
- */
-const MOVED_FACTS = (ext: Record<string, Json> | undefined) => ({
-  ...(ext?.worktrees !== undefined ? { worktree: ext.worktrees } : {}),
-  ...(ext?.ego === true ? { meta: true } : {}),
-})
+// Names kept on the wire for older windows, from the one table of them (ALIASES in @superego/protocol), each until its
+// milestone.
+/** Methods (and actions) moved into an extension, by their old names: answered by the extension's while it's set up. */
+const MOVED_METHODS: Record<string, string> = Object.fromEntries(aliasesOf('method').map((a) => [a.old, a.now]))
+/** Watches moved into an extension's live value: the old watch method, the value it follows now, and the notification older windows listen for (`{ sub, value }`). */
+const MOVED_WATCHES: Record<string, { value: string; event: string }> = Object.fromEntries(aliasesOf('watch').map((a) => [a.old, { value: a.now, event: a.event }]))
+/** Features that became an extension's: announced by their old names too, while it is. */
+const MOVED_FEATURES: Record<string, string> = Object.fromEntries(aliasesOf('feature').map((a) => [a.old, a.now]))
+/** Thread fields that became an extension's fact: given by their old names too (the branch chip, Ego's Clear). */
+const MOVED_FACTS = (ext: Record<string, Json> | undefined) =>
+  Object.fromEntries(aliasesOf('fact').filter((a) => ext?.[a.now] !== undefined).map((a) => [a.old, ext![a.now]!]))
 /** Settings kept under another key now: a value stored under the old one is read as the new one's. */
 const MOVED = Object.fromEntries(Object.entries(RENAMED).map(([old, now]) => [`extensions.${old}`, `extensions.${now}`]))
 
@@ -123,8 +106,8 @@ const ThreadDoc = defineDoc<ThreadMeta>({
 /**
  * Extensions' state from before extensions kept their own: read from the field the core kept it in, until the extension
  * first writes its state, which moves it. So a thread from before reads the same, and nothing needs copying. A
- * migration of data, not of clients: remove only once databases from before extensions kept state (2026-11) are no
- * longer opened, with migrateHidden.
+ * migration of data, not of clients (MIGRATIONS' `thread-state`): remove only once databases from before extensions kept
+ * state (2026-11) are no longer opened, with migrateHidden; never with a protocol bump.
  */
 const LEGACY: Record<string, { read(meta: ThreadMeta): Json | undefined; drop(meta: ThreadMeta): void }> = {
   worktrees: { read: (meta) => meta.worktree, drop: (meta) => { delete meta.worktree } },
@@ -1386,7 +1369,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /**
    * Hidden threads from before extensions made them: Ego's, kept apart in the catalog (`ego`), or older, listed and
    * marked `meta`. Each becomes a hidden thread of the ego extension, which takes one up and leaves the rest. Remove
-   * with LEGACY (and the catalog's `ego`), once databases from before (2026-11) are no longer opened.
+   * with LEGACY (and the catalog's `ego`), once databases from before (2026-11) are no longer opened (MIGRATIONS'
+   * `hidden-threads`).
    */
   async function migrateHidden() {
     const catalog = await harness.snapshot(Catalog, context)
@@ -1461,8 +1445,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     params: obj({ id: str() }),
     async run({ id }) {
       const { notes } = await archive(id)
-      // `worktree`: what a window older than `notes` reads, from the worktrees extension's facts. Remove with
-      // PROTOCOL_VERSION 2.
+      // `worktree`: what a window older than `notes` reads, from the worktrees extension's facts (the alias
+      // 'thread.archive:worktree').
       const worktree = info(id, await get(id)).ext?.worktrees as { removed?: boolean } | undefined
       return { notes, worktree: worktree ? (worktree.removed ? 'removed' as const : 'kept' as const) : null }
     },

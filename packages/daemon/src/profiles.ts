@@ -22,7 +22,7 @@ import * as nodeModule from 'node:module'
 import { transform } from 'sucrase'
 import type { Extension } from '@earendil-works/pi-durable'
 import type { DaemonExtension } from './extension.ts'
-import { RpcError, type Json } from '@superego/protocol'
+import { MIGRATIONS, RpcError, type Json } from '@superego/protocol'
 
 export type ProfileSpec = {
   description?: string
@@ -69,10 +69,7 @@ export type ProfileRef = { scope: 'user' | 'project'; name: string; dir: string 
  * Extensions known by another name now: a profile's `without` of the old name goes without the new one (and says so in
  * Settings), and its switch in Settings keeps what was stored under the old name.
  */
-export const RENAMED: Record<string, string> = {
-  // The thread tools were "threads", the sidebar's name.
-  threads: 'thread-tools',
-}
+export const RENAMED: Record<string, string> = MIGRATIONS['extension-names'].renames
 
 /**
  * A daemon extension a profile names, and which: `key` is its file at the version loaded (the module's URL), so two

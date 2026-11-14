@@ -4,7 +4,7 @@ export type MachineId = string
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected'
 import type { MachineConfig } from '@superego/client/shared'
 import type { SettingsStore } from '@superego/settings'
-import { waitingForSignIn, type MachineVersion, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
+import { MIGRATIONS, waitingForSignIn, type MachineVersion, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
 
 export type { MachineConfig }
 
@@ -59,24 +59,10 @@ export const NOTIFY = 'notifications.enabled'
  * The app's settings kept under another key now: a value stored under the old one is read as the new one's (and saved
  * so), by the desktop app and a browser alike.
  */
-export const APP_MOVED: Record<string, string> = {
-  // The order sessions and threads go in is the window's own (the navigator and ⌘⇧[ ] walk it), not the sidebar's.
-  'threads.sort': 'app.sort',
-  // Where ⌘. looks is the unread extension's.
-  'app.unread': 'unread.scope',
-  // Whether to notify is the notifications extension's.
-  'app.notifications': NOTIFY,
-}
+export const APP_MOVED: Record<string, string> = MIGRATIONS['app-settings'].renames
 
 /** Actions known by another id now: a shortcut set for the old one (in `app.keys`) is the new one's. */
-export const ACTIONS_MOVED: Record<string, string> = {
-  // Changes moved into the git extension.
-  'panes.changes': 'git.changes',
-  // ⌘. moved into the unread extension.
-  'thread.unread': 'unread.next',
-  // Opening Ego moved into the ego extension.
-  'app.meta': 'ego.open',
-}
+export const ACTIONS_MOVED: Record<string, string> = MIGRATIONS['action-keys'].renames
 
 /**
  * Where the window's views go (see renderer/layout.ts): edited as text (layout.json, see main/layout-file.ts; in a
@@ -89,8 +75,8 @@ export const LAYOUT_SETTING = {
 
 /**
  * `store` with the placement settings there were before views were placed by `app.layout` read into it (and saved so,
- * with the next change): `threads.details` on is the threads' details in the aside. Kept one release after the move:
- * remove with PROTOCOL_VERSION 2.
+ * with the next change): `threads.details` on is the threads' details in the aside. A migration of stored settings
+ * (MIGRATIONS' `layout`), not of the wire.
  */
 export function withMovedLayout(store: SettingsStore): SettingsStore {
   return {
