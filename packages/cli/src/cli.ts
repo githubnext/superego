@@ -11,6 +11,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { renderUnicodeCompact } from 'uqr'
 import { devApp } from './dev-app.ts'
+import { newExtension, testExtension } from './extensions.ts'
+import { formatReport } from './inspect.ts'
 import {
   checkIdentity, collectProfileUi, filesOf, hashProfileUi, MachineStore, openLocal, openMachine, routeOf, runUpdate, UiAllowStore, updateScript, type MachineConfig, type Transport,
 } from '@superego/client'
@@ -57,6 +59,15 @@ Usage:
                                 Let that machine's profile UI run in this computer's window, as it is now
   ${app.id} profile revoke-ui <name|dir> -m <machine>
                                 Stop it running here
+
+  ${app.id} extensions [--thread T]    What each extension on this machine is, where it's from, how it stands and
+                                what it registered; with --thread, what that thread goes without, and why
+  ${app.id} extension new <name> [--ui] [-P profile] [--user]
+                                Make an extension in this project's profile (or yours): data-only, or with a UI half
+  ${app.id} extension test [name] [-P profile] [--user]
+                                Check its types and run its tests (superego/testing)
+  ${app.id} extension reload [-P profile] [--user]
+                                Load the profile's changes now, as its next turn would
 
   ${app.id} machines                   List machines and whether they answer
   ${app.id} machines add <ssh-target> [--name N] [--command C]
@@ -520,6 +531,56 @@ async function profileCommand(sub: string | undefined, rest: string[], values: {
   throw new RpcError('usage', `Unknown: ${app.id} profile ${sub}`)
 }
 
+/** The folder of the profile `-P` names (default: `default`) that a thread here would start with, or yours with `--user`. */
+async function profileHere(values: { profile?: string; user?: boolean }, make = false): Promise<string> {
+  const name = values.profile ?? 'default'
+  if (values.user) return join(dataDir, 'profiles', name)
+  const list = await on(resolveMachine(undefined), (call) => call('action.run', { id: 'profile.list', params: { cwd: process.cwd() }, exposure: 'cli' })) as ProfileInfo[]
+  const found = list.find((p) => p.name === name && p.scope === 'project') ?? (make ? undefined : list.find((p) => p.name === name))
+  if (found) return found.dir
+  if (make) return join(process.cwd(), '.superego', 'profiles', name)
+  throw new RpcError('not_found', `No profile ${name} here. Make one: ${app.id} extension new <name>${values.profile ? ` -P ${values.profile}` : ''}`)
+}
+
+async function extensionCommand(sub: string | undefined, rest: string[], values: { profile?: string; user?: boolean; ui?: boolean; 'data-only'?: boolean; machine?: string; thread?: string }) {
+  if (!sub || sub === 'ls' || sub === 'list' || sub === 'inspect') {
+    const machine = resolveMachine(values.machine)
+    const report = await on(machine, (call) => call('extensions.inspect', values.thread ? { thread: values.thread } : {}))
+    return print(report, () => console.log(formatReport(report, machine.label)))
+  }
+  if (sub === 'new') {
+    const name = rest[0]
+    if (!name) throw new RpcError('usage', `${app.id} extension new <name> [--ui] [-P profile] [--user]`)
+    if (values.ui && values['data-only']) throw new RpcError('usage', 'Either --ui or --data-only')
+    const dir = await profileHere(values, true)
+    const kind = values.ui ? 'ui' : 'data-only'
+    const { written, madeProfile, missing } = newExtension(dir, name, kind)
+    // You wrote it, so it may run: a project's profile is allowed as it is now.
+    const project = !values.user && dir.startsWith(join(process.cwd(), '.superego'))
+    if (project) await on(resolveMachine(undefined), (call) => call('action.run', { id: 'profile.allow', params: { cwd: process.cwd(), name: values.profile ?? 'default' }, exposure: 'cli' }))
+    return print({ dir, written, madeProfile, missing }, () => {
+      console.log(`Made ${name} (${kind === 'ui' ? 'a daemon half and a UI half' : 'data-only'}) in ${dir}${madeProfile ? ', a new profile' : ''}:`)
+      for (const file of written) console.log(`  ${file}`)
+      if (missing.length) console.log(`Add to its profile.ts's defineProfile({ … }): ${missing.join(', ')}`)
+      console.log(`\nNext: ${app.id} extension test ${name}${values.profile ? ` -P ${values.profile}` : ''}${values.user ? ' --user' : ''}, then send one of the profile's threads a message.`)
+      if (project) console.log(`After you edit it: ${app.id} profile allow${values.profile ? ` ${values.profile}` : ''} (a project's profile runs as it was allowed).`)
+    })
+  }
+  if (sub === 'test') {
+    const dir = await profileHere(values)
+    const target = rest[0] ? join(dir, rest[0]) : undefined
+    if (target && !existsSync(target)) throw new RpcError('not_found', `No ${rest[0]} in ${dir}`)
+    process.exitCode = await testExtension(dir, target)
+    return
+  }
+  if (sub === 'reload') {
+    const name = values.profile ?? 'default'
+    const ref = await on(resolveMachine(values.machine), (call) => call('action.run', { id: 'profile.reload', params: { ...(values.user ? {} : { cwd: process.cwd() }), name }, exposure: 'cli' })) as ProfileRef
+    return print(ref, () => console.log(`Loaded ${ref.name} (${ref.dir}) again`))
+  }
+  throw new RpcError('usage', `Unknown: ${app.id} extension ${sub}`)
+}
+
 /**
  * Let another machine's profile UI run in this computer's window, or stop it: allowed for a hash of exactly the
  * sources fetched here now, as the app does (ui-allowed.json, shared with it). This computer's own run on its daemon's say.
@@ -674,7 +735,7 @@ function layoutCommand() {
 
 // ── Dispatch ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const COMMANDS = new Set(['open', 'threads', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles', 'web', 'layout'])
+const COMMANDS = new Set(['extension', 'extensions', 'open', 'threads', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles', 'web', 'layout'])
 
 async function main() {
   // `do` takes the action's own --params, which parseArgs would refuse.
@@ -686,7 +747,7 @@ async function main() {
     allowPositionals: true,
     options: {
       machine: { type: 'string', short: 'm' }, prompt: { type: 'string', short: 'p' }, json: { type: 'boolean' }, profile: { type: 'string', short: 'P' }, worktree: { type: 'boolean', short: 'w' },
-      user: { type: 'boolean' }, archived: { type: 'boolean' },
+      user: { type: 'boolean' }, archived: { type: 'boolean' }, ui: { type: 'boolean' }, 'data-only': { type: 'boolean' }, thread: { type: 'string' },
       all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
       start: { type: 'boolean' }, update: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, skill: { type: 'boolean' },
     },
@@ -709,6 +770,7 @@ async function main() {
     case 'threads': case 'ls': return threads(values.machine, Boolean(values.archived))
     case 'new': case 'create': return startThread({ dir: rest[0], machine: values.machine, prompt: values.prompt, profile: values.profile, worktree: values.worktree, open: false })
     case 'profile': case 'profiles': return profileCommand(rest[0], rest.slice(1), values)
+    case 'extension': case 'extensions': return extensionCommand(rest[0], rest.slice(1), values)
     case 'send': {
       const [id, ...text] = rest
       if (!id || !text.length) throw new RpcError('usage', `${app.id} send <thread> <text...>`)

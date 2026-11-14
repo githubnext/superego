@@ -8,7 +8,9 @@
     ".": "./src/index.ts",
     "./ui": "./src/ui.ts",
     "./unstable": "./src/unstable.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./package.json": "./package.json",
+    "./vitest.author": "./vitest.author.ts"
   },
   "dependencies": {
     "@superego/app": "workspace:*",

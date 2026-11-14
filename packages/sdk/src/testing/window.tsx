@@ -205,6 +205,8 @@ export type TestWindow = {
   installProfile(machine: string, ref: ProfileRef, extensions: UiExtension[]): Promise<void>
   /** Let what's under way settle: answers, effects, renders. */
   settle(): Promise<void>
+  /** Wait until `check` holds, letting what's under way settle between tries (a machine's answer, a value changing). */
+  until(check: () => boolean, what?: string, timeout?: number): Promise<void>
   /** Take everything down: what's drawn, and every extension's setup (its signal aborted, its cleanup run). */
   unmount(): Promise<void>
 }
@@ -351,6 +353,13 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       await settle()
     },
     settle,
+    async until(check, what = 'the condition', timeout = 10_000) {
+      const end = Date.now() + timeout
+      while (!check()) {
+        if (Date.now() > end) throw new Error(`Timed out waiting for ${what}`)
+        await act(async () => { await new Promise((r) => setTimeout(r, 20)) })
+      }
+    },
     async unmount() {
       for (const root of [...roots]) await act(async () => root.unmount())
       roots.clear()
