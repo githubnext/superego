@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
 
 const CLI = fileURLToPath(new URL('../../../app/bin/superego.ts', import.meta.url))
 let home: string
@@ -95,6 +95,8 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
   it('manages machines and works on them with -m', async () => {
     const via = `SUPEREGO_HOME='${join(home, 'second')}' SUPEREGO_MODEL=faux '${process.execPath}' '${CLI}' connect --start`
     expect(await superego(['machines', 'add', '--via', via, '--name', 'Second'])).toMatch(/Added Second \(/)
+    // Gone however this ends (a timeout too), so the tests after it see only their own machines.
+    onTestFinished(() => superego(['machines', 'rm', 'Second']).then(() => {}, () => {}))
     const list = await superegoJson(['machines'])
     expect(list.map((m: any) => [m.label, m.state])).toEqual([['This computer', 'answers'], ['Second', 'answers']])
 
@@ -141,7 +143,9 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     const stub = join(home, 'machine.sh')
     writeFileSync(stub, `case "$*" in\n  *--update*) echo "pulling"; ${run} daemon restart; echo "Installed";;\n  *) exec ${run} connect --start;;\nesac\n`)
     await superego(['machines', 'add', '--via', `sh '${stub}' connect --start`, '--name', 'Third'])
-    const [here, there] = await superegoJson(['machines'])
+    onTestFinished(() => superego(['machines', 'rm', 'Third']).then(() => {}, () => {}))
+    const all = await superegoJson(['machines'])
+    const here = all.find((m: any) => m.id === 'local'), there = all.find((m: any) => m.label === 'Third')
     expect(here.version).toMatchObject({ commit: expect.stringMatching(/^[0-9a-f]{40}$/), protocol: 1 })
     expect(there).toMatchObject({ drift: { state: 'current' } })
     expect(await superego(['machines'])).not.toContain('runs an')

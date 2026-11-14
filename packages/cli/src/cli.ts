@@ -16,7 +16,8 @@ import { formatReport } from './inspect.ts'
 import {
   checkIdentity, collectProfileUi, filesOf, hashProfileUi, MachineStore, openLocal, openMachine, routeOf, runUpdate, UiAllowStore, updateScript, type MachineConfig, type Transport,
 } from '@superego/client'
-import { appEnv, daemonStarting, defaultDataDir, isListening, readBuild, serveDaemon, socketPath } from '@superego/daemon'
+// The daemon itself only for `daemon run`: loading it costs every other command most of its start.
+import { appEnv, daemonStarting, defaultDataDir, isListening, readBuild, socketPath } from '@superego/daemon/client'
 import {
   AUTH_REJECTED, compareVersions, driftPhrase, FEATURES, PROTOCOL_VERSION, RpcError, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ProfileRef, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
@@ -420,7 +421,7 @@ async function authCommand(sub: string | undefined, rest: string[], machineName?
 async function daemonCommand(sub: string | undefined, now: boolean) {
   // The app's own daemon entry (Superego's sets up its bundled extensions); without one, a plain daemon: the core only,
   // as this package knows no app's extensions.
-  if (!sub) return options.daemon ? void await import(pathToFileURL(options.daemon).href) : serveDaemon({ app, dataDir, socket })
+  if (!sub) return options.daemon ? void await import(pathToFileURL(options.daemon).href) : (await import('@superego/daemon')).serveDaemon({ app, dataDir, socket })
   const local: Machine = { id: 'local', label: 'This computer' }
   const running = await isListening(socket)
   if (sub === 'status') {
