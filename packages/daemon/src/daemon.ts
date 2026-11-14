@@ -1047,7 +1047,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         undo(() => { transforms.splice(transforms.indexOf(entry), 1) }, 'a submit transform')
       },
       invalidate() { changed(); heedStatus() },
-      thread(hooks) { own(threadHooks, hooks, 'thread hooks'); note('thread hooks', Object.keys(hooks).join(', ')) },
+      thread(hooks) { own(threadHooks, hooks as ThreadHooks, 'thread hooks'); note('thread hooks', Object.keys(hooks).join(', ')) },
       state<T extends Json>() {
         const name = extension.name
         return {

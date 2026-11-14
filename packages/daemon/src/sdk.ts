@@ -3,9 +3,9 @@
 // against this file (`@superego/sdk`, as the starter's tsconfig maps 'superego'). What's here follows the extension
 // API's semver (`EXTENSION_API`); what isn't (the pi-durable harness, entry records) is unstable, and says so.
 export { defineExtension, defineTool, hook, section, wrapSection, wrapTool } from '@earendil-works/pi-durable'
-export { arr, bool, defineAction, int, lit, nullable, num, obj, opt, RpcError, str, union, unknown } from '@superego/protocol'
+export { arr, bool, int, lit, nullable, num, obj, opt, RpcError, str, union, unknown } from '@superego/protocol'
 export { defineProfile } from './profiles.ts'
-export { defineDaemonExtension } from './extension.ts'
+export { defineAction, defineDaemonExtension } from './extension.ts'
 
 export type { Extension as AgentExtension } from '@earendil-works/pi-durable'
 export type {

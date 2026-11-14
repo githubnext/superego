@@ -30,6 +30,16 @@ export type DaemonExtension = ExtensionAbout & {
 /** Identity for type inference: `export default defineDaemonExtension({ name, setup(superego) { … } })`. */
 export const defineDaemonExtension = (extension: DaemonExtension) => extension
 
+/**
+ * An action of a daemon half (`superego.action`): it runs on its machine, so `runs` needn't be said. With a pi-schema
+ * `params`, `run` gets them typed. Throw an `RpcError` for a clean error.
+ */
+export function defineAction<S extends JsonSchema | undefined, R>(
+  def: Omit<ActionInfo, 'params' | 'expose' | 'runs'> & { runs?: 'machine'; params?: S; expose?: Exposure[]; run(params: S extends JsonSchema ? Static<S> : Record<string, never>, context: DaemonContext): R | Promise<R> },
+): ActionDef<any, R, DaemonContext> {
+  return { expose: ['ui'], runs: 'machine', ...def } as ActionDef<any, R, DaemonContext>
+}
+
 /** A value an extension publishes; clients watch it with `value.watch` and get every change. Kept in memory only. */
 export type LiveValue<T extends Json> = { get(): T; set(next: T): void; update(edit: (current: T) => T): void }
 
@@ -94,17 +104,17 @@ export type ThreadDraft = {
  * made, archived or unarchived, and the hooks after it don't run. The others are told after, and a throw there is only
  * logged: one extension's mistake never wedges a thread.
  */
-export type ThreadHooks = {
+export type ThreadHooks<S extends Json = Json> = {
   /**
    * Before a thread exists: may move where it works (`cwd`: a worktree, say) and give it this extension's state.
    * Each hook sees the draft as the ones before it left it.
    */
-  creating?(draft: ThreadDraft): ThreadCreating | void | Promise<ThreadCreating | void>
+  creating?(draft: ThreadDraft): ThreadCreating<S> | void | Promise<ThreadCreating<S> | void>
   /**
    * The thread its `creating` took part in isn't made after all: a later hook refused, or making it failed. Undo what
    * `creating` did (remove the worktree it added); `state` is what it gave the thread. Told in reverse order.
    */
-  abandoned?(draft: ThreadDraft, state: Json | undefined): void | Promise<void>
+  abandoned?(draft: ThreadDraft, state: S | undefined): void | Promise<void>
   /** It exists, before its first message is sent. */
   created?(thread: ThreadInfo): void | Promise<void>
   /**
@@ -138,7 +148,7 @@ export type ThreadHooks = {
   /** Brought back, taking messages again. */
   unarchived?(thread: ThreadInfo): void | Promise<void>
 }
-export type ThreadCreating = { cwd?: string; state?: Json }
+export type ThreadCreating<S extends Json = Json> = { cwd?: string; state?: S }
 /** What archiving a thread did, in a line, from an extension's `archiving` or `archived`. */
 export type ArchiveNote = { note?: string }
 /** What archiving a thread did: each extension's note, by its name. */
@@ -244,8 +254,8 @@ export type DaemonApi = {
    * `DataView`). A profile's fit only the places that show a thread, and only its own threads.
    */
   view(id: string, view: DataView): void
-  /** Take part in threads' lives: see ThreadHooks. */
-  thread(hooks: ThreadHooks): void
+  /** Take part in threads' lives: see ThreadHooks. `S`: the state its `creating` gives a thread (`state<S>()`). */
+  thread<S extends Json = Json>(hooks: ThreadHooks<S>): void
   /** This extension's state with each thread, kept under its name (`creating` can give a new thread its first). */
   state<T extends Json = Json>(): ThreadState<T>
   /**
