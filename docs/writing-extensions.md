@@ -160,7 +160,7 @@ superego.view('ego.button', { title: 'Ask Ego', icon: LifebuoyIcon, context: 'wi
 | `header` | right of the thread's title: a button, a badge | `{ place, machine, thread }` |
 
 - `default` is a place, several, or none (offered, not placed: the user puts it somewhere). `narrow` is where it goes
-  on a phone instead. `withoutSpaces` is where it goes while no view is in `space` (Unread's bell in the rail, the core's
+  on a phone instead (unless the user hid it: hidden wide is hidden there too). `withoutSpaces` is where it goes while no view is in `space` (Unread's bell in the rail, the core's
   picker in the title bar).
 - `app.layout` holds only what the user changed: `{ place: { 'threads.details': 'aside', 'ego.button': null }, order:
   { pane: ['git.changes'] }, narrow: { place: { … } } }`. A view it names that isn't there (an extension removed) is
@@ -183,7 +183,8 @@ superego.view('ego.button', { title: 'Ask Ego', icon: LifebuoyIcon, context: 'wi
   ```
 
   A right-click on a view in the window (its ··· beside the thread or in a pane) has *Move to*, *Remove from here* and
-  *Edit layout…*. So `default` is only where a view starts. Draw it to work in every place it `fits`
+  *Edit layout…*. ⌘K offers each view in each place it fits and isn't in (*Show Files beside the thread*), and *Reset
+  layout*; a browser, which keeps its layout itself, has those but no file. So `default` is only where a view starts. Draw it to work in every place it `fits`
   (read `place` when it must differ: a menu's side, a button's size), never assume another view sits beside it, and
   don't keep a setting of your own for where it shows: `usePlacement` and `layout.place` are that setting. Declare
   only the places it can really be drawn in.
@@ -201,7 +202,8 @@ A daemon half can declare a view as data, and the window draws it with its own c
 remote machine's, or a project profile's, needs none of the trust its UI code would. The content is a few fixed parts,
 any of them, top to bottom: a `note`, `facts` (label and value), `items` (a list: `title`, `subtitle`, `detail`,
 `status`, a `thread` to link, `actions`), a `table` (`columns`, `rows`), `markdown`, and `actions` (buttons), with
-`empty` for when there's none. A button runs one of the machine's actions, as `superego do` would.
+`empty` for when there's none. A button runs one of the extension's own actions (`<extension>.<name>`) on that
+machine, as the window may (one exposed to `ui`); a button naming any other is left out.
 
 ```ts
 // orders.ts, a daemon half: the open orders, as a space, with a button on each

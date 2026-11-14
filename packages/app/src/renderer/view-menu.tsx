@@ -11,6 +11,10 @@ import type { Place } from './layout.ts'
 export const PLACE_TITLES: Record<Place, string> = {
   space: 'Spaces', rail: 'Rail buttons', drawer: 'Drawer buttons', titlebar: 'Title bar', aside: 'Beside the thread', pane: 'Pane menu', header: 'Thread header',
 }
+/** Where a view goes, to say so: "Show Files beside the thread". */
+export const PLACE_PHRASES: Record<Place, string> = {
+  space: 'as a space', rail: 'in the rail', drawer: 'in the drawer', titlebar: 'in the title bar', aside: 'beside the thread', pane: 'in the pane menu', header: 'in the thread header',
+}
 /** The places a wide window shows, and a phone's (its aside in the thread's sheet): views move only among those there are. */
 export const WIDE_PLACES: Place[] = ['space', 'rail', 'titlebar', 'aside', 'pane', 'header']
 export const NARROW_PLACES: Place[] = ['space', 'drawer', 'aside', 'pane', 'header']

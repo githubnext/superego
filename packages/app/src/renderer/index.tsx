@@ -60,6 +60,11 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
         return c.dispatch('app.settings.set', { key: LAYOUT, value }, { machine: 'app', source: 'layout' })
       },
     }))
+    // Every view back where it goes by default, wide and on a phone: in a browser too, which keeps its layout itself.
+    core.action(defineWindowAction({
+      id: 'layout.reset', title: 'Reset layout',
+      run: (_params, c) => c.dispatch('app.settings.set', { key: LAYOUT, value: {} }, { machine: 'app', source: 'layout' }),
+    }))
     registerLayoutText(core)
   })
   void registry.router.load('app')
