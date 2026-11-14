@@ -88,13 +88,14 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `action(defineAction({ id: 'x.y', params, run }))` | an intent: logged, in ⌘K; `expose: ['ui', 'cli']` for `superego do` |
 | `method('x.y', run, { params })` | a read for the UI; params checked first |
 | `value('x.y', initial)` → `get`, `set`, `update` | live state the UI watches; in memory |
+| `signal` | aborted at teardown: for its own timers, watchers and fetches (below) |
 | `pane(kind, about)` | tell the agent about a pane kind, for `open_pane` |
 | `view('x.y', { title, icon, context, fits, default, value \| method })` | a view drawn from data (below): no UI code, so a remote machine's or a project profile's runs no code in the window; its buttons still have that machine's authority |
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
 | `submit(({ thread, text, attachments, content, by }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it. `by`: the extension that sent it (`threads.submit`, `threads.create`'s prompt), absent for the user's |
 | `settings.register({ id: 'x', settings })`, `settings.get`, `settings.snapshot`, `settings.onChange` | machine settings of its own (`x.…`); read any |
 | `dispatch(id, params)`, `actions(exposure)` | run any action on the machine as this extension (`settings.set`); list them |
-| `thread({ creating, created, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
+| `thread({ creating, abandoned, created, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchiveAbandoned, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
 | `state()` → `get(id)`, `set(id, next)`, `update(id, edit)` | state of its own kept with each thread, across restarts; `creating` gives a new one its first |
 | `facts(({ id, state }) => …)` | what clients are told of a thread, as `thread.ext.<name>`: worked out from its state |
 | `agentFor(({ id, state, profile }) => ({ instructions, model, extensions, without }))` | choose a thread's agent; the first to answer wins. `agent(part, { always: false })` gives a part only through this |
@@ -108,6 +109,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `view('x.y', { title, icon, context, fits, default, narrow, withoutSpaces, order, component, rail, width })` | UI the layout puts in places (below): a space, a rail button, beside the thread, the pane menu, the title bar; `default` where it goes unless the user moves it |
 | `slot(name, Component, { order })` | a component in a slot whose place behaviour decides (below): `thread.crumb` for a chip where the title bar says where a thread works, `composer.above`, `editor.side`, `editor.bar`, `overlay`. The old places (`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) still work: each declares a view of that place, `<extension>.<slot>` |
 | `newThreadField({ component, from })` | a field in the New thread dialog: its value goes to `thread.create` as `options.<name>`, for the daemon half's `creating`; `from(thread)` its value for one started like `thread`; bundled only |
+| `signal` | aborted at teardown (its profile's UI reloaded or revoked): for its own timers, listeners and fetches (below) |
 | `on(event, listener)` → off; `window` | hear the window: `thread.status` (`{ machine, thread, before }`; `before` undefined the first time it's seen), `select` (`{ selection, before }`), `focus` (`{ focused }`), `visibility` (`{ visible }`); `window` is `{ focused, visible, selection, thread }` now. In Electron and browsers alike |
 | `appSetting(key)` | one of the app's settings as it is now, outside React |
 | `pane(kind, { title, component, icon, file, menu, opens, fallback, folders, urls, width })` | a kind of pane beside the thread; `opens`, `folders`, `urls`: files, folders or web pages a thread names open in it; `fallback`: any file nothing else opens |
@@ -389,7 +391,25 @@ says it once for all.
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/lifecycle-dark.svg"><img src="writing-extensions/lifecycle.svg" alt="Set up, registrations owned by the extension, torn down when its profile changes or the daemon stops, then set up again"></picture>
 
-- `setup` may return a cleanup. Registrations need none: teardown removes them all.
+Each set-up of an extension, in either half, has one lifetime: everything it registers is owned by it, and teardown
+(its profile reloaded or gone, its UI revoked, the daemon stopping) ends all of it at once.
+
+- Teardown aborts `superego.signal`, then runs `setup`'s cleanup (if it returned one), then undoes every registration,
+  last first. Each step is tried whatever the others do: a cleanup that throws is logged, and the rest still goes, its
+  name too, so the next version sets up. Torn down twice, nothing more happens.
+- Registrations need no cleanup. What isn't a registration does: a timer, a watcher, a fetch, a listener on something
+  of its own. Give it the signal (`setInterval` cleared on `abort`, `watch(path, { signal })`, `fetch(url, { signal })`,
+  `addEventListener(…, { signal })`), or return a cleanup that stops it. A listener on the signal mustn't throw: in the
+  daemon, that's an uncaught error.
+- What it registers after teardown is refused: the call throws, and nothing is left behind. A live value's `set` and
+  `update` from work that outlived it (a reply that came late) do nothing, with a warning once, so they never change
+  what the next version publishes; its `get` reads what it last set.
+- A daemon half's `setup` that takes longer than 15s is given up on: torn down (its signal aborted), and the profile
+  it's in fails to load with a message saying so, so profiles behind it load. A profile whose modules hang as they load
+  is given up on the same way.
+- What a UI half draws is drawn apart: each view, slot, space, pane, tool row, entry, settings component and New
+  thread field in a boundary of its own. One that throws shows "<extension> failed to draw", its error and Retry, in
+  its place; the rest of the window carries on.
 - A name is claimed while set up: a second extension of the same name is refused. The core's namespaces (`thread`,
   `value`, `settings`, …) are never free.
 - A profile's daemon half loads with its first turn, when a window shows one of its threads, or before an interrupted
@@ -400,6 +420,15 @@ says it once for all.
   the last lets go. Each gets its agent parts.
 - A change loads between runs, never under one: a thread mid-run keeps what it started with. A profile whose folder
   is gone, or that no longer loads or is allowed, is torn down, and its UI with it. A value torn down reads null.
+- What a reload runs: a profile's daemon modules load by versions of their own, each the hash of the module and every
+  local file it imports, so an edit to a helper alone loads the new code, and that of whatever imports it. A module none
+  of whose files changed is the one loaded before, its module-level state with it (keep state in `setup`, which runs
+  again); a helper two extensions import is one module, as ever. Packages (bare imports, `node_modules`) load once:
+  restart the daemon for a new version of one. An import whose path is worked out as it runs isn't seen: it's loaded
+  again only with the module importing it. The window loads a profile's UI modules afresh, all of them, whenever any of
+  the profile's files changed.
+- What allowing a project's profile vouches for is what it runs: its folder's files, and the local files its code
+  imports from outside it; a file it lists from outside, with what that imports.
 - A profile's UI from another machine runs in the window only once allowed on this computer (the thread's notice, or
   `superego profile allow-ui <name> -m <machine>`), for a hash the window takes of the sources it received; any change
   to them asks again, and Revoke (Settings → Machines) takes out what it registered at once. Once running it has the window's full
@@ -413,9 +442,10 @@ says it once for all.
   run its extension's actions there, as the window may.
 - **A remote profile's UI**, once allowed: runs in the window's own JavaScript, with the window's full authority over
   every machine it reaches. Allowing it is trusting that code as much as the window itself.
-- **Revoke** takes out what that UI registered (views, panes, actions, slots), but can't undo what its code already
-  did or stop what it left going (a timer, a listener, a global, a request). The window offers a reload, which does;
-  what was done stays done.
+- **Revoke** takes out what that UI registered (views, panes, actions, slots), aborts its `signal` and runs its
+  `setup`'s cleanup, so what it stopped with those stops. It can't undo what its code already did, or stop what it left
+  going otherwise (a timer it didn't tie to either, a global, a request). The window offers a reload, which does; what
+  was done stays done.
 - A **daemon half** (a profile's or the app's) runs with Node's full access on its machine, as this computer's profiles
   trust their daemon (a project's once `superego profile allow`ed).
 
@@ -450,9 +480,13 @@ superego.thread({
   happens, and the hooks after don't run. `creating` may also move where the thread works and give it state, each
   hook seeing the draft as the one before left it. When a later hook refuses (or making the thread fails), those
   whose `creating` already ran are told `abandoned(draft, state)`, in reverse, to undo it: a worktree goes again.
+  Likewise, when a later `unarchiving` refuses (or bringing the thread back fails), those whose `unarchiving` already
+  ran are told `unarchiveAbandoned(thread)`, in reverse, to undo what they put back; the thread stays archived.
   `draft.options` is what the thread was asked for by extension: its profile's `options`, then `thread.create`'s.
 - The others are told, and awaited in turn. A throw there is logged, and the thread carries on. `archived` runs
-  before clients see the thread archived, so it's where cleanup goes. `archiving` and `archived` may return
+  before clients see the thread archived, so it's where cleanup goes. Hooks aren't a transaction: archiving goes on
+  past a cleanup that failed, and may be tried again (a restart between), so make cleanup idempotent, and safe to find
+  half done. `archiving` and `archived` may return
   `{ note }`, what they did in a line ("Removed the worktree …; branch … kept"): `threads.archive` and `thread.archive`
   answer `{ notes }`, each extension's by its name, and `thread_archive` tells the agent them. `turnStart` and `turnEnd` never hold up a run.
 - `turnStart` and `turnEnd` are per run, not per message: a message steered or queued into a run that's going is part

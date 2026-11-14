@@ -9,8 +9,9 @@
 // reported, so a grandchild's result makes its way up. Kept with the child (this extension's state: false, the
 // user's), so it holds across restarts; a child from before this was kept is reported as before.
 //
-// The read log and reports waiting to go are in memory (reads.ts): after a restart, a report that was waiting is lost,
-// and a run resumed then may report what the parent had read already.
+// Reports are best-effort, a convenience, not delivery to rely on: the read log and reports waiting to go are in memory
+// (reads.ts), so after a restart a report that was waiting is lost, and a run resumed then may report what the parent
+// had read already. A workflow that must know a child finished asks it (thread_read), not its report.
 import { defineExtension, section } from '@earendil-works/pi-durable'
 import { defineDaemonExtension } from '@superego/daemon'
 import { waitingForSignIn, type ThreadInfo } from '@superego/protocol'

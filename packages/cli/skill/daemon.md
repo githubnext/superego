@@ -49,7 +49,14 @@ cleanup run first. Everything it registered (tools, actions, methods, values, se
 and removed on reload, so register freely. Its name is the prefix of everything it registers; a second extension of
 the same name is refused. Profiles load one at a time, so keep `setup` quick, and don't await anything that loads a
 profile in it (starting a thread, reading one): that waits on the load in progress, which is waiting on `setup`. Start
-such work without awaiting it, or do it in a tool, action or hook.
+such work without awaiting it, or do it in a tool, action or hook. A `setup` that takes over 15s is given up on: torn
+down, and the profile fails to load, saying so.
+
+Teardown aborts `superego.signal` first: tie timers, watchers and fetches of your own to it (`watch(path, { signal })`,
+`fetch(url, { signal })`), or return a cleanup. A cleanup that throws is logged, and the rest still goes. After teardown,
+registering throws, and a live value's `set` and `update` do nothing, so work that outlives it can't publish over the
+next version. An edit to any local file an extension imports (a helper) reloads it with its new code; packages load
+once.
 
 ## The API
 
@@ -74,12 +81,13 @@ such work without awaiting it, or do it in a tool, action or hook.
 | `superego.threads.submit(id, text, { whenBusy? })`, `lastAnswer(id)`, `entries(id, limit?)` | send a thread a message (after its run, if it's working), read its last answer as text, and its newest transcript entries since it was last cleared (newest first: the tool call it's in, say; pi-durable's entry records, whose shape isn't stable) |
 | `superego.threads.archive(id, { whenIdle? })`, `unarchive(id)` | put a thread away and back; `archive` resolves to `{ notes }`, what each extension's hooks said they did, by name (none for `whenIdle`, which waits for its run to end: a thread archiving itself, across restarts too; its notes are then said in the thread, as Superego's own note) |
 | `superego.threads.clear(id)` | start a thread over: its run stopped, a new context, its transcript starting after this (windows showing it watch again), its panes closed |
-| `superego.thread({ creating, created, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchived })` | take part in a thread's life. `blocked`: it came to need the user mid-run (a question), once each time. `creating(draft)` may return `{ cwd, state }` (work elsewhere: a worktree); `draft.options` is what its profile's `options` and `thread.create` asked of extensions, by name. `creating`, `archiving` and `unarchiving` refuse by throwing; the rest are told, a throw only logged. `abandoned(draft, state)`: a later `creating` refused after this one ran, so undo it. `archived` runs before clients see it archived: clean up there, `archiving` and `archived` may return `{ note }`, what they did in a line (`threads.archive` and `thread.archive` answer `{ notes }`, by extension). In set-up order; not for threads that go without the extension, a profile's only for its own |
+| `superego.thread({ creating, created, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchived })` | take part in a thread's life. `blocked`: it came to need the user mid-run (a question), once each time. `creating(draft)` may return `{ cwd, state }` (work elsewhere: a worktree); `draft.options` is what its profile's `options` and `thread.create` asked of extensions, by name. `creating`, `archiving` and `unarchiving` refuse by throwing; the rest are told, a throw only logged. `abandoned(draft, state)`: a later `creating` refused after this one ran, so undo it; `unarchiveAbandoned(thread)`, the same for `unarchiving`. `archived` runs before clients see it archived: clean up there, idempotently (archiving goes on past a failed cleanup, and may be tried again); `archiving` and `archived` may return `{ note }`, what they did in a line (`threads.archive` and `thread.archive` answer `{ notes }`, by extension). In set-up order; not for threads that go without the extension, a profile's only for its own |
 | `superego.state<T>()` | its own state with each thread, kept in the thread (across restarts): `get(id)`, `set(id, next \| undefined)`, `update(id, edit)` |
 | `superego.facts(({ id, state }) => …)` | what clients see of each thread as `thread.ext.<name>`, worked out from its state; nothing for undefined |
 | `superego.agentFor(({ id, state, profile }) => …)` | choose a thread's agent: `{ instructions?, model?, thinking?, extensions?, without? }`, or nothing. The first answer wins; quick, no side effects. Parts it names are given with `superego.agent(part, { always: false })`, which gives them to no other thread |
 | `superego.app` | `{ name, id }` of the app |
 | `superego.dataDir` | this machine's data folder (`~/.superego`): worktrees keeps its own in `worktrees/` |
+| `superego.signal` | an `AbortSignal`, aborted when the extension is torn down (its profile reloaded or gone, the daemon stopping) |
 | `superego.agentsDir` | the folder agents share on this machine (`~/.agents`, or `SUPEREGO_AGENTS`): `skills/`, `AGENTS.md` |
 
 ## Common patterns
