@@ -47,6 +47,9 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
   adds a tree beside the editor and quick open.
 - **Messages** take files: attach, drop or paste them into the composer. Images go to the model as images; every file
   is saved on the thread's machine and named to the agent by its path.
+- **The layout** is yours: what sits in the rail, beside the thread, in the pane menu and in the thread's header (and a
+  phone's drawer) moves, reorders or goes in Settings → Layout, or from a right-click on it (the ··· beside the thread or
+  on a pane) with *Move to*. Thread details (⌘I) are a view beside the thread like any.
 - **Images** an agent shows (`show_images`: a screenshot it took, a chart it drew) appear in the thread where it showed
   them: one fits the column, a few sit in a grid, more go one at a time in a carousel (‹ ›, ←/→, a swipe). Click one
   to look closely: zoom by clicking, scrolling or pinching, drag to pan, ←/→ through the set, Esc to close. Each is

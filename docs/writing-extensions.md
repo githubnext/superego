@@ -165,8 +165,15 @@ superego.view('ego.button', { title: 'Ask Ego', icon: LifebuoyIcon, context: 'wi
   { pane: ['git.changes'] }, narrow: { place: { … } } }`. A view it names that isn't there (an extension removed) is
   ignored, and a place a view doesn't fit is too. A view can be in two places at once.
 - To put a view in a place or take it out, dispatch `layout.place` with `{ view, place, on? }` (toggled without
-  `on`); in a component, `usePlacement(view, place)` gives `[placed, toggle]`. ⌘I is `threads.details` in the `aside`,
-  or not.
+  `on`); `from` takes it out of that place in the same change (moved), `narrow` changes the phone's layer. In a
+  component, `usePlacement(view, place)` gives `[placed, toggle]`. ⌘I is `threads.details` in the `aside`, or not.
+  `layout.customise` opens Settings → Layout.
+- The user moves views: Settings → Layout lists every place with what's there, to reorder, remove, add what fits and
+  reset; a right-click on a view in the window (its ··· beside the thread or in a pane) has *Move to*, *Remove from
+  here* and *Customise layout…*. So `default` is only where a view starts. Draw it to work in every place it `fits`
+  (read `place` when it must differ: a menu's side, a button's size), never assume another view sits beside it, and
+  don't keep a setting of your own for where it shows: `usePlacement` and `layout.place` are that setting. Declare
+  only the places it can really be drawn in.
 - `pane(kind, { menu: true })` is a view of the pane menu, of the kind's name, placed there by default.
 - A profile's views fit only the places that show a thread (`aside`, `pane`, `header`), in its own threads.
 
