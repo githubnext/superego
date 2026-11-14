@@ -842,7 +842,9 @@ This can start once Phase 0's shared subscriptions are in, and runs alongside Ph
     menu from the layout. Convert `threads` (list as a space, details as a view, model as a header item) and `files`
     (tree as a view). Core's picker, Unread and Ego's button become views. The shell then names no extension. Done
     when `Shell.tsx` has no `UnreadButton`, `LifebuoyIcon` or `hasSidebar`, and ⌘I is a placement.
-9b. **Settings → Layout** and the moves from context menus (2–3 days).
+9b. **Settings → Layout** and the moves from context menus (2–3 days). For now the layout is text instead
+    (`layout.json`, Edit layout…, `superego layout`), with the moves from context menus; the editor waits for the model
+    to settle.
 9c. **Data-only views from the daemon** (3–5 days), then the narrow layout (1–2 days).
 
 ### Phase 3: optional (as needed)

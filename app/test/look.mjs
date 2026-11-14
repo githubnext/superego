@@ -139,7 +139,7 @@ void (async () => {
   await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i', metaKey: true, bubbles: true }))`)
   await until(`!!document.querySelector('.threads-details')`, 'details')
   await both('details')
-  // Its ··· menu, then Settings → Layout from there.
+  // Its ··· menu, then the layout's file from there.
   await run(`document.querySelector('.placed-view .view-menu__button').click()`)
   await until(`[...document.querySelectorAll('.view-menu .superego-menu__item')].some((i) => i.textContent === 'Move to')`, 'view menu')
   await run(`[...document.querySelectorAll('.view-menu .superego-menu__item')].find((i) => i.textContent === 'Move to').focus()`)
