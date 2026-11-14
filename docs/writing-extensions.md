@@ -143,7 +143,7 @@ Three versions, each for its own question:
 | Version | What it versions | Where it's said | Who checks it |
 |---|---|---|---|
 | **The release** | the code a machine runs: its git commit (the packages are `0.0.0`) | `hello.machine.commit`, Settings → Machines ("an older Superego") | the user, who updates |
-| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`1.0.0`) | `hello.api` | the host, setting an extension up |
+| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`1.1.0`; 1.1 added `signal`, a UI `setup`'s cleanup and `unarchiveAbandoned`) | `hello.api` | the host, setting an extension up |
 | **The protocol** | the wire: a generation, `PROTOCOL_VERSION` (`1`), and in it the features each side announces | `hello.version`, `hello.features` | both ends, at `hello` |
 
 And each extension's own **version**, semver, which its other half, profiles and scripts rely on.
@@ -161,7 +161,7 @@ export const about = { name: 'orders', version: '1.2.0', api: '^1', title: 'Orde
   extensions started at `1.0.0`. Unset: it counts as `0.0.0`.
 - `api`: the range of extension APIs it works with: `^1` for any 1.x, `^1.3` once it uses something 1.3 added. A host
   outside the range refuses it before `setup` runs, with why: *Extension orders needs extension API ^2, and this
-  Superego has 1.0.0: update Superego*. A bundled one fails the build's tests; a profile's fails its profile's load
+  Superego has 1.1.0: update Superego*. A bundled one fails the build's tests; a profile's fails its profile's load
   (the thread says so); a profile UI's is left out, the rest of the profile set up. Unset: any.
 - `capabilities`: optional, finer than a version: things it can do that a client may ask about (`['stat']`).
 
