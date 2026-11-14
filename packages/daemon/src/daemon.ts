@@ -1,6 +1,6 @@
 // The Superego daemon: one per user per machine. It owns a pi-durable Harness on SQLite, the thread catalog, and every
 // live subscription. Clients (the Electron app, the CLI, a remote app over ssh) speak the protocol in @superego/protocol.
-import { existsSync, watch as watchFs } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { link, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, hostname, platform } from 'node:os'
@@ -25,6 +25,7 @@ import {
   type ThreadCreating, type ThreadDraft, type ThreadHooks,
 } from './extension.ts'
 import { titleOf } from './names.ts'
+import { watchFiles } from './watch-files.ts'
 import * as sdk from './sdk.ts'
 import { readCommit } from './build.ts'
 import { git } from './git.ts'
@@ -2008,15 +2009,13 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           const sub = randomUUID()
           // The folder, not the file: an editor that saves by renaming a new file over it would end a watch on the file.
           let timer: ReturnType<typeof setTimeout> | undefined
-          const watcher = watchFs(dirname(file), (_event, name) => {
-            if (name && String(name) !== basename(file)) return
+          const watcher = watchFiles(dirname(file), [basename(file)], () => {
             clearTimeout(timer)
             timer = setTimeout(async () => {
               const now = await read()
               if (now !== last) { last = now; notify('file.changed', { sub, content: now }) }
             }, 60)
           })
-          watcher.on('error', () => {})
           subs.set(sub, () => { clearTimeout(timer); watcher.close() })
           return { sub, content: last }
         },

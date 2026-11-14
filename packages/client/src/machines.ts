@@ -1,10 +1,11 @@
 // The machines a client connects to besides this computer, kept in `machines.json` in Superego's data dir. The app and the
 // CLI share the file; each notices the other's changes.
 import { randomUUID } from 'node:crypto'
-import { readFileSync, watch, type FSWatcher } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { mkdirSync } from 'node:fs'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { watchFiles } from '@superego/daemon/client'
 import { RpcError } from '@superego/protocol'
 import type { MachineConfig } from './shared.ts'
 
@@ -13,7 +14,7 @@ export class MachineStore {
   #machines: MachineConfig[]
   #listeners = new Set<() => void>()
 
-  #watcher: FSWatcher | undefined
+  #watcher: { close(): void } | undefined
 
   constructor(dataDir: string) {
     this.#path = join(dataDir, 'machines.json')
@@ -29,8 +30,7 @@ export class MachineStore {
     if (this.#watcher) return
     const name = this.#path.split('/').at(-1)!
     mkdirSync(this.#path.slice(0, -name.length - 1), { recursive: true, mode: 0o700 })
-    this.#watcher = watch(this.#path.slice(0, -name.length - 1), (_event, file) => {
-      if (file !== name) return
+    this.#watcher = watchFiles(this.#path.slice(0, -name.length - 1), [name], () => {
       const next = this.#read()
       if (JSON.stringify(next) === JSON.stringify(this.#machines)) return
       this.#machines = next

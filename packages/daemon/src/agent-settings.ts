@@ -1,7 +1,7 @@
 // Everything about which model the agents use and how Superego is signed in to its providers, as settings: the Model and
 // Providers sections, the credential store, and sign-in flows. Nothing else in the daemon knows about auth.
 import { createHash, randomUUID } from 'node:crypto'
-import { readFileSync, watch as watchFs } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AuthPrompt as PiAuthPrompt, Credential, CredentialStore, ModelThinkingLevel } from '@earendil-works/pi-ai'
@@ -15,6 +15,7 @@ import type { SettingsRegistry } from '@superego/settings'
 import { appEnv } from './paths.ts'
 import { replayProvider, withRecording } from './replay.ts'
 import { authFailure, Rejections, rejectionSummary, WAITING } from './provider-auth.ts'
+import { watchFiles } from './watch-files.ts'
 
 /** The model each provider starts on when it is the first one signed in. */
 const PREFERRED: Record<string, string> = { anthropic: 'claude-opus-5-5', openai: 'gpt-6.1-sol' }
@@ -303,11 +304,10 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
   let reread: ReturnType<typeof setTimeout> | undefined
   const watcher = (() => {
     try {
-      return watchFs(dataDir, (_event, name) => {
-        if (name !== null && String(name) !== 'auth.json') return
+      return watchFiles(dataDir, ['auth.json'], () => {
         clearTimeout(reread)
         reread = setTimeout(() => void rereadCredentials(), 100)
-      }).on('error', () => {})
+      })
     } catch { return undefined }
   })()
 

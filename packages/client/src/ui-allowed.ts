@@ -3,9 +3,10 @@
 // put off ("Not now"), for the hash declined, so the window doesn't ask again until that code changes. A file of its own
 // so that nothing reading the allowed list (an older app or CLI) can take a declined entry for an allowed one. A profile
 // is in one of them at most. The app and the CLI share the files; each notices the other's changes.
-import { mkdirSync, readFileSync, watch, type FSWatcher } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { watchFiles } from '@superego/daemon/client'
 import { isAllowed, type AllowedUi } from './profile-ui.ts'
 
 const ALLOWED = 'ui-allowed.json'
@@ -17,7 +18,7 @@ export class UiAllowStore {
   #allowed: AllowedUi[]
   #declined: AllowedUi[]
   #listeners = new Set<() => void>()
-  #watcher: FSWatcher | undefined
+  #watcher: { close(): void } | undefined
 
   constructor(dataDir: string) {
     this.#dir = dataDir
@@ -33,8 +34,7 @@ export class UiAllowStore {
   watch() {
     if (this.#watcher) return
     mkdirSync(this.#dir, { recursive: true, mode: 0o700 })
-    this.#watcher = watch(this.#dir, (_event, file) => {
-      if (file !== ALLOWED && file !== DECLINED) return
+    this.#watcher = watchFiles(this.#dir, [ALLOWED, DECLINED], (file) => {
       const next = this.#read(file)
       const list = file === ALLOWED ? this.#allowed : this.#declined
       if (JSON.stringify(next) === JSON.stringify(list)) return

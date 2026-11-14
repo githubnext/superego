@@ -5,9 +5,9 @@
 // written back to it, keeping the comments typed in it, unless it doesn't read: then it's left as typed. Its head is
 // comments: what goes in it, and the views the windows declare, the places each fits (`superego layout` prints it too).
 // Comments are whole lines starting with `//`.
-import { watch, type FSWatcher } from 'node:fs'
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { watchFiles } from '@superego/daemon/client'
 import type { Json } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
 import { isLayout, LAYOUT, PLACES, type Layout, type Place } from '../renderer/layout.ts'
@@ -137,7 +137,7 @@ export class LayoutFile {
   #text: string | undefined
   /** The setting as the file last had it. */
   #applied: string
-  #watcher: FSWatcher | undefined
+  #watcher: { close(): void } | undefined
   #timer: ReturnType<typeof setTimeout> | undefined
   #changed: () => void
 
@@ -152,8 +152,7 @@ export class LayoutFile {
   /** Read the file in (written first if there's none), and from then on as it's saved. */
   async start(): Promise<void> {
     await this.read()
-    this.#watcher = watch(join(this.path, '..'), (_event, file) => {
-      if (file !== LAYOUT_FILE) return
+    this.#watcher = watchFiles(join(this.path, '..'), [LAYOUT_FILE], () => {
       clearTimeout(this.#timer)
       this.#timer = setTimeout(() => void this.read(), 50)
     })
