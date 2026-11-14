@@ -8,12 +8,13 @@ import { promptsOf, SYSTEM, transcriptOf } from './suggest.ts'
 export default defineDaemonExtension({
   ...about,
   setup(superego) {
-    const next = superego.value<Record<string, Suggested>>(NEXT, {})
+    // Watched by each thread for its own; whole, it's every thread's by id, as windows from before 1.1 read it.
+    const next = superego.scopedValue<Suggested | null>(NEXT, null)
     // Each thread's latest ask: an answer that comes back after the thread moved on is dropped.
     const asks = new Map<string, number>()
     const forget = (thread: string) => {
       asks.set(thread, (asks.get(thread) ?? 0) + 1)
-      if (thread in next.get()) next.update(({ [thread]: _gone, ...rest }) => rest)
+      next.delete(thread)
     }
     // A thread's own conversation; not a subagent's.
     const threadOf = (conversationId: number) => {
@@ -53,7 +54,7 @@ export default defineDaemonExtension({
           }, { maxTokens: 300, signal: AbortSignal.any([superego.signal, AbortSignal.timeout(30_000)]) }).then((reply) => {
             if (superego.signal.aborted || asks.get(thread) !== ask || reply.stopReason === 'error' || reply.stopReason === 'aborted') return
             const prompts = promptsOf(reply.content.map((b) => b.type === 'text' ? b.text : '').join(''))
-            if (prompts.length) next.update((all) => ({ ...all, [thread]: { after: run.answer, prompts } }))
+            if (prompts.length) next.set(thread, { after: run.answer, prompts })
           }, () => {})
           return undefined
         },

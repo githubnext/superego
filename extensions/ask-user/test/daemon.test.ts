@@ -6,7 +6,7 @@ import type { ConversationView } from '@earendil-works/pi-durable'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
 import { defineApp, PROTOCOL_VERSION, type Json, type Notifications, type ThreadInfo } from '@superego/protocol'
 import askUser from '../src/daemon.ts'
-import { ANSWER, PENDING, type Question } from '../src/shared.ts'
+import { ANSWER, ASKING, PENDING, type Question } from '../src/shared.ts'
 
 const app = defineApp({ name: 'test', id: 'askusertest' })
 let dir: string
@@ -38,8 +38,15 @@ it('asks, blocks the thread, takes an answer from any client, and carries on', a
   peer.on('value.changed', ({ sub, value }: Notifications['value.changed']) => { if (sub === watched.sub) questions = value as Question[] })
 
   const thread = await peer.call<ThreadInfo>('thread.create', {})
+  // The thread's own questions, in its scope; another's scope hears nothing.
+  const own = await peer.call<{ sub: string; value: Question[] }>('value.watch', { key: ASKING, scope: thread.id })
+  const other = await peer.call<{ sub: string; value: Question[] }>('value.watch', { key: ASKING, scope: 'another' })
+  let mine = own.value
+  const others: unknown[] = []
+  peer.on('value.changed', ({ sub, value }: Notifications['value.changed']) => { if (sub === own.sub) mine = value as Question[]; if (sub === other.sub) others.push(value) })
   await peer.call('thread.submit', { id: thread.id, text: 'pick a colour' })
-  await until(() => questions.length === 1)
+  await until(() => questions.length === 1 && mine.length === 1)
+  expect(mine).toEqual(questions)
   expect(questions[0]).toMatchObject({ thread: thread.id, question: 'Which colour?', options: [{ label: 'red' }, { label: 'blue', description: 'like the sky' }] })
   const blocked = (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!
   expect(blocked.status).toEqual({ state: 'blocked', kind: 'question', msg: 'Which colour?' })
@@ -48,6 +55,8 @@ it('asks, blocks the thread, takes an answer from any client, and carries on', a
   await peer.call(ANSWER, { id: questions[0]!.id, answer: 'blue' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
   expect(questions).toEqual([])
+  await until(() => mine.length === 0)
+  expect(others).toEqual([])
   const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
   const text = JSON.stringify(value.entries)
   expect(text).toContain('The user answered: blue')

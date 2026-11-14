@@ -16,9 +16,9 @@ export default defineUiExtension({
 })
 
 function Suggestions({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
-  const all = useValue<Record<string, Suggested>>(machine.id, machine.state === 'connected', NEXT)
+  const next = useValue<Suggested>(machine, NEXT, { scope: thread.id })
   const composer = useComposer()
-  const shown = !thread.archived && thread.status.state !== 'working' && !composer.text ? all?.[thread.id]?.prompts ?? [] : []
+  const shown = !thread.archived && thread.status.state !== 'working' && !composer.text ? next?.prompts ?? [] : []
   const offered = shown.join('\n')
   useEffect(() => { composer.suggest(offered ? offered.split('\n') : undefined); return () => composer.suggest(undefined) }, [offered, composer.suggest])
   if (!shown.length) return null

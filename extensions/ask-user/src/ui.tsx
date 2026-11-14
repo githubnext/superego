@@ -5,7 +5,7 @@
 import { useState } from 'react'
 import { defineUiExtension, has, useDispatch, keyLabel, Markdown, useComposer, useComposerClaim, useValue, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
-import { about, ANSWER, PENDING, TOOL, type AskDetails, type Option, type Question } from './shared.ts'
+import { about, ANSWER, ASKING, PENDING, TOOL, type AskDetails, type Option, type Question } from './shared.ts'
 import { answerOf, keyMove, partsOf } from './question.ts'
 import './styles.css'
 
@@ -17,13 +17,18 @@ export default defineUiExtension({
   },
 })
 
-/** The questions this machine's agents wait on; none where the daemon half isn't set up (its value stays null). */
-function usePending(machine: MachineEntry) {
-  return useValue<Question[]>(machine.id, machine.state === 'connected', PENDING) ?? []
+/**
+ * The questions a thread's agent waits on: its own scope of them (1.1), or, from an older daemon half, every thread's
+ * picked for it (`ALIASES['ask-user:pending']`). None where the daemon half isn't set up (its value stays null).
+ */
+function useAsking(machine: MachineEntry, thread: ThreadInfo) {
+  const scoped = has(machine, 'ext:ask-user@^1.1')
+  const questions = useValue<Question[]>(machine, scoped ? ASKING : PENDING, scoped ? { scope: thread.id } : {}) ?? []
+  return scoped ? questions : questions.filter((q) => q.thread === thread.id)
 }
 
 function Waiting({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
-  const questions = usePending(machine).filter((q) => q.thread === thread.id)
+  const questions = useAsking(machine, thread)
   // The oldest question first; answering it brings up the next.
   const question = questions[0]
   return question ? <QuestionCard key={question.id} machine={machine} question={question} /> : null

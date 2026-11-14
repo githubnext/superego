@@ -4,7 +4,7 @@ import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { arr, obj, opt, str, union } from '@earendil-works/pi-schema'
 import { defineDaemonExtension } from '@superego/daemon'
 import { defineAction, RpcError } from '@superego/protocol'
-import { about, ANSWER, PENDING, TOOL, type AskDetails, type Option, type Question } from './shared.ts'
+import { about, ANSWER, ASKING, PENDING, TOOL, type AskDetails, type Option, type Question } from './shared.ts'
 
 /** An option as given (a label, or a label and a description), as the UI shows it. */
 const optionOf = (option: string | Option): Option =>
@@ -13,11 +13,16 @@ const optionOf = (option: string | Option): Option =>
 export default defineDaemonExtension({
   ...about,
   setup(superego) {
+    // Each thread's questions, watched by its thread alone; and all of them in one list for windows from before.
+    const asking = superego.scopedValue<Question[]>(ASKING, [])
     const pending = superego.value<Question[]>(PENDING, [])
     const answers = new Map<string, (answer: string) => void>()
-    const settle = (id: string) => {
-      answers.delete(id)
-      pending.update((list) => list.filter((q) => q.id !== id))
+    const settle = (question: Question) => {
+      answers.delete(question.id)
+      const left = asking.get(question.thread).filter((q) => q.id !== question.id)
+      if (left.length) asking.set(question.thread, left)
+      else asking.delete(question.thread)
+      pending.update((list) => list.filter((q) => q.id !== question.id))
       superego.invalidate()
     }
 
@@ -45,20 +50,21 @@ export default defineDaemonExtension({
             answers.set(question.id, resolve)
             context.abortSignal?.addEventListener('abort', () => reject(new Error('The question was withdrawn')), { once: true })
           })
+          asking.update(question.thread, (list) => [...list.filter((q) => q.id !== question.id), question])
           pending.update((list) => [...list.filter((q) => q.id !== question.id), question])
           superego.invalidate()
           try {
             const answer = await answered
             return { output: [{ type: 'text', text: `The user answered: ${answer}` }], details: { ...details, answer } }
           } finally {
-            settle(question.id)
+            settle(question)
           }
         },
       })],
     }))
 
     superego.status((thread) => {
-      const question = pending.get().find((q) => q.thread === thread)
+      const question = asking.get(thread)[0]
       return question && { kind: 'question', msg: question.question }
     })
 
