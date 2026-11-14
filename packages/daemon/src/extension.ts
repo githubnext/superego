@@ -8,7 +8,7 @@
 // Everything it registers is its own, named `<name>.<something>`, and undone when it's torn down: when the daemon
 // stops, or (a profile's) when the profile's files change.
 import type { Conversation, EntryRecord, Extension, Harness } from '@earendil-works/pi-durable'
-import type { ActionDef, ActionInfo, AppConfig, Attachment, BlockedKind, Exposure, ExtensionAbout, Json, JsonSchema, NewThread, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
+import type { ActionDef, ActionInfo, AppConfig, Attachment, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, NewThread, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
 import type { DaemonContext } from './daemon.ts'
 import type { ProfileRef, ProfileSpec } from './profiles.ts'
@@ -200,6 +200,13 @@ export type DaemonApi = {
    * open_pane can open it from then on. A profile's extension's are for that profile's threads.
    */
   pane(kind: string, about: string): void
+  /**
+   * A view drawn from data, named `<name>.<view>`: the window draws its content (facts, a list, a table, Markdown, buttons
+   * that run this machine's actions) with its own components, so no UI code ships, and a remote machine's or a
+   * project profile's needs no trust. Its content comes from a live value of this extension's or a method of its (see
+   * `DataView`). A profile's fit only the places that show a thread, and only its own threads.
+   */
+  view(id: string, view: DataView): void
   /** Take part in threads' lives: see ThreadHooks. */
   thread(hooks: ThreadHooks): void
   /** This extension's state with each thread, kept under its name (`creating` can give a new thread its first). */

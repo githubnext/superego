@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { defineApp, PROTOCOL_VERSION, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { DATA_VIEWS, defineApp, PROTOCOL_VERSION, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, listen, openDaemon } from '../src/index.ts'
 import { loadProfile, Trust, type ProfileRef } from '../src/profiles.ts'
 
@@ -671,5 +671,33 @@ export default defineDaemonExtension({ name: 'vault', setup(superego) { ${publis
   await peer.call('profile.ui', { scope: 'user', name: 'default', dir: profile })
   await until(async () => changes.includes(null))
   expect((await peer.call<{ value: unknown }>('value.watch', { key: 'vault.status' })).value).toBeNull()
+  await close()
+})
+
+it("announces a profile's data views for its threads only: with its folder, in the places that show a thread, gone on reload", async () => {
+  const profile = join(home, 'profiles', 'default')
+  const extension = (title: string) => `import { defineDaemonExtension } from 'superego'
+export default defineDaemonExtension({
+  name: 'board',
+  setup(superego) {
+    superego.value('board.cards', {})
+    superego.view('board.cards', { title: '${title}', context: 'thread', fits: ['space', 'aside', 'pane'], default: 'aside', value: 'board.cards' })
+  },
+})
+`
+  write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./board.ts'] })\n`, 'board.ts': extension('Board') })
+  const { peer, close } = await open()
+  const watched = await peer.call<{ sub: string; value: DataViewInfo[] }>('value.watch', { key: DATA_VIEWS })
+  expect(watched.value).toEqual([])
+  let views = watched.value
+  peer.on('value.changed', (p: { sub: string; value: DataViewInfo[] }) => { if (p.sub === watched.sub) views = p.value })
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  await done(peer, thread.id)
+  await until(async () => views.length === 1)
+  expect(views[0]).toMatchObject({ id: 'board.cards', title: 'Board', fits: ['aside', 'pane'], profiles: [profile] })
+  write(profile, { 'board.ts': extension('Cards') })
+  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await done(peer, thread.id)
+  await until(async () => views.length === 1 && views[0]!.title === 'Cards')
   await close()
 })

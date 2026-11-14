@@ -14,7 +14,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  arr, type Attachment, AUTH_REJECTED, paramsParser, bool, defineAction, deriveStatus, FEATURES, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
+  arr, type Attachment, AUTH_REJECTED, DATA_VIEWS, dataViewProblem, type DataViewInfo, paramsParser, bool, defineAction, deriveStatus, FEATURES, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
@@ -80,7 +80,7 @@ const MOVED = Object.fromEntries(Object.entries(RENAMED).map(([old, now]) => [`e
  */
 export const RESERVED = new Set([
   'action', 'agent', 'app', 'auth', 'core', 'daemon', 'extensions', 'file', 'hello', 'meta', 'model', 'pane', 'profile', 'profiles',
-  'providers', 'settings', 'skill', 'thread', 'threads', 'unwatch', 'value', 'watch', 'web',
+  'providers', 'settings', 'skill', 'thread', 'threads', 'unwatch', 'value', 'view', 'watch', 'web',
   // `skill` is no longer the core's, but older windows still call skill.list (see MOVED_METHODS).
 ])
 
@@ -756,6 +756,17 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     rejectedValue.value = now
     for (const listener of rejectedValue.listeners) listener(now)
   }
+  // The core's own: extensions' data views (`superego.view`), as the window draws them (DataViewInfo[]).
+  const viewsValue = valueOf(DATA_VIEWS)
+  viewsValue.owned = true
+  viewsValue.value = []
+  /** Each with the profiles it's for (a profile's: their folders, which change as profiles share it). */
+  const dataViews: { info: DataViewInfo; profiles?: Set<string> }[] = []
+  /** Tell watchers the views as they are now: a profile's only once a profile has it. */
+  const publishViews = () => {
+    viewsValue.value = dataViews.filter((v) => !v.profiles || v.profiles.size).map((v) => v.profiles ? { ...v.info, profiles: [...v.profiles] } : v.info)
+    for (const listener of viewsValue.listeners) listener(viewsValue.value)
+  }
   const contributors: ((threadId: string) => StatusContribution | undefined)[] = []
   /** Extensions' submit transforms, in the order registered: whose, and (a profile's) for which profiles' threads (their folders). */
   const transforms: { transform: SubmitTransform; owner: string; profiles?: Set<string> }[] = []
@@ -857,6 +868,23 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         const entry = { kind, about, owner: extension.name, ...(profiles ? { profiles } : {}) }
         paneKinds.push(entry)
         undo.push(() => { paneKinds.splice(paneKinds.indexOf(entry), 1) })
+      },
+      view(id, view) {
+        const name = named(extension.name, id)
+        const problem = dataViewProblem(view)
+        if (problem) throw new Error(`View ${name} ${problem}`)
+        const source = view.value ?? view.method!
+        if (!source.startsWith(`${extension.name}.`)) throw new Error(`View ${name} must read a value or method of ${extension.name}'s, not ${source}`)
+        if (dataViews.some((v) => v.info.id === name)) throw new Error(`View ${name} is already declared`)
+        // A profile's show only in its threads: the places that show one.
+        const fits = profiles ? view.fits.filter((p) => p !== 'space') : view.fits
+        if (!fits.length) throw new Error(`View ${name} fits no place a profile's view is drawn in (aside, pane)`)
+        const entry = { info: { ...view, fits, id: name, extension: extension.name }, ...(profiles ? { profiles } : {}) }
+        dataViews.push(entry)
+        publishViews()
+        undo.push(() => { dataViews.splice(dataViews.indexOf(entry), 1); publishViews() })
+        // Told to the agent as a pane kind it can open, when it says what it shows.
+        if (view.about && view.context === 'thread' && fits.includes('pane')) api.pane(name, view.about)
       },
       value<T extends Json>(key: string, initial: T): LiveValue<T> {
         const name = named(extension.name, key)
@@ -1027,10 +1055,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     const used = entry
     used.profiles.add(dir)
+    publishViews()
     return {
       entry: used,
       release() {
         used.profiles.delete(dir)
+        publishViews()
         if (used.profiles.size) return
         shared.delete(used.key)
         used.teardown()
