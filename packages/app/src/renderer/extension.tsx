@@ -447,6 +447,8 @@ export type Registry = {
   emit<E extends WindowEvent>(event: E, payload: WindowEvents[E]): void
   /** Set up a profile's UI extensions on `machine`, after tearing down what that profile set up before. */
   installProfile(machine: string, profile: ProfileRef, extensions: UiExtension[]): void
+  /** Tear down every extension set up, the core's last: as the window closing would (a test's end). */
+  teardown(): void
   /** Changes whenever extensions are added or removed at runtime; `subscribe` to hear it. */
   version: number
   subscribe(listener: () => void): () => void
@@ -485,6 +487,12 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       if (JSON.stringify(registry.dataViews[machine] ?? []) === JSON.stringify(views)) return
       registry.dataViews = { ...registry.dataViews, [machine]: views }
       placeDataViews()
+      registry.version++
+      for (const listener of listeners) listener()
+    },
+    teardown() {
+      for (const [key, teardown] of [...teardowns].reverse()) if (key !== '/core') teardown()
+      teardowns.get('/core')?.()
       registry.version++
       for (const listener of listeners) listener()
     },

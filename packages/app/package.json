@@ -48,6 +48,7 @@
     "./package": "./src/package.ts",
     "./shared": "./src/shared.ts",
     "./sdk-ui": "./src/renderer/sdk-ui.ts",
-    "./sdk-unstable": "./src/renderer/sdk-unstable.ts"
+    "./sdk-unstable": "./src/renderer/sdk-unstable.ts",
+    "./internals": "./src/renderer/internals.ts"
   }
 }

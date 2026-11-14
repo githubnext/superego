@@ -14,7 +14,8 @@
     "@superego/app": "workspace:*",
     "@superego/client": "workspace:*",
     "@superego/daemon": "workspace:*",
-    "@superego/protocol": "workspace:*"
+    "@superego/protocol": "workspace:*",
+    "happy-dom": "^21.0.4"
   },
   "peerDependencies": {
     "react": "^19"

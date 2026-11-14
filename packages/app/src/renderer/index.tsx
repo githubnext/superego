@@ -26,6 +26,21 @@ import { registerProfileUi } from './profile-ui-notice.tsx'
 export function mountApp(app: AppConfig, { extensions = [], root = document.getElementById('root')! }: { extensions?: UiExtension[]; root?: HTMLElement } = {}) {
   // In a browser there is no preload: the bridge is a WebSocket to the daemon that served the page.
   if (!window.superego) window.superego = webBridge()
+  const registry = windowRegistry(app, extensions)
+  void registry.router.load('app')
+  // Declared before anything renders, so a component reading or setting them finds them registered.
+  for (const { owner: _owner, ...section } of registry.appSettings) void window.superego.call('app', 'settings.register', { section }).catch((error) => console.error(error))
+  createRoot(root).render(
+    <StrictMode>
+      <RegistryProvider registry={registry}>
+        <ShellStateProvider><Shell /></ShellStateProvider>
+      </RegistryProvider>
+    </StrictMode>,
+  )
+}
+
+/** The window's registry: the core's own (its panes, rows, links, actions, the thread picker), then `extensions`. */
+export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
   // The Providers settings section is the core's own custom component.
   const registry = createRegistry(app, extensions, (core) => {
     core.settings('providers', Providers)
@@ -67,16 +82,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
     }))
     registerLayoutText(core)
   })
-  void registry.router.load('app')
-  // Declared before anything renders, so a component reading or setting them finds them registered.
-  for (const { owner: _owner, ...section } of registry.appSettings) void window.superego.call('app', 'settings.register', { section }).catch((error) => console.error(error))
-  createRoot(root).render(
-    <StrictMode>
-      <RegistryProvider registry={registry}>
-        <ShellStateProvider><Shell /></ShellStateProvider>
-      </RegistryProvider>
-    </StrictMode>,
-  )
+  return registry
 }
 
 // Everything an extension can import: the stable author surface (what profiles get as 'superego/ui') and the window's
