@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
-import { defineApp, PROTOCOL_VERSION, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { DATA_VIEWS, defineApp, PROTOCOL_VERSION, type DataViewInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import skills from '../src/daemon.ts'
 
 const app = defineApp({ name: 'test', id: 'skillstest' })
@@ -53,6 +53,12 @@ it('offers the skills to the agent, sends one a message names, and lists them fo
   ])
   // And by the core's old name, for a window older than the move.
   expect(await peer.call('skill.list', {})).toEqual(await peer.call('skills.list', {}))
+  // To browse, as a data view the window draws: offered for a space or beside the thread, not placed.
+  const views = await peer.call<{ value: DataViewInfo[] }>('value.watch', { key: DATA_VIEWS })
+  expect(views.value).toEqual([{ id: 'skills.view', extension: 'skills', title: 'Skills', icon: 'sparkle', context: 'window', fits: ['space', 'aside'], method: 'skills.view' }])
+  expect(await peer.call('skills.view', {})).toMatchObject({ items: [
+    { id: 'commit', title: '$commit', subtitle: 'Write commit messages.' }, { id: 'secret', title: '$secret', subtitle: 'Only by name.', detail: 'by name' },
+  ] })
   const { all, content } = await send(peer, 'do $commit and /skill:secret, not $HOME')
   // The agent is told what each skill is for and where it is, but not about one kept to being named.
   expect(all).toContain(`<skill name=\\"commit\\" location=\\"${join(dir, 'agents', 'skills', 'commit', 'SKILL.md')}\\">Write commit messages.</skill>`)

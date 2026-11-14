@@ -8,6 +8,9 @@ export const about = { name: 'skills', title: 'Skills', description: 'Know the s
 /** The skills a message can name on a machine, for completing `$name` as it's typed. */
 export const LIST = 'skills.list'
 
+/** The skills on a machine to browse: a data view, and the method that feeds it. */
+export const VIEW = 'skills.view'
+
 /** A skill as the composer offers it. */
 export type SkillInfo = { name: string; description: string }
 
