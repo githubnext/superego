@@ -1,6 +1,7 @@
 // Data views: views a machine's daemon extensions declare as data (`superego.view` there), drawn here with the core's
 // own components. Their content (`ViewContent`: a note, facts, a list, a table, Markdown, buttons) comes from a live
-// value or a method of the extension's; a button runs one of the machine's actions. Nothing of the extension's runs in
+// value or a method of the extension's; a button runs one of the extension's own actions, there, as the window may.
+// Nothing of the extension's runs in
 // the window, so a remote machine's, or a project profile's, needs no trust. The registry makes each a view (see
 // `setDataViews`), and the layout places it as any other.
 import { useEffect, useState, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
@@ -49,6 +50,7 @@ export function DataViewBody({ id, place, machine, thread }: { id: string; place
     const info = declaredOn(registry, machine.id, id, thread)
     return info ? framed(info.title, <Source info={info} machine={machine} thread={thread} />) : null
   }
+  // A machine away says so, under its name; one switched off isn't there.
   const on = machines.filter((m) => m.state !== 'disabled' && declaredOn(registry, m.id, id))
   return framed(view?.title ?? id, on.map((m) => (
     <section key={m.id} className="data-view__machine">
@@ -59,6 +61,7 @@ export function DataViewBody({ id, place, machine, thread }: { id: string; place
 }
 
 function Source({ info, machine, thread }: { info: DataViewInfo; machine: MachineEntry; thread?: ThreadInfo }) {
+  if (machine.state === 'disconnected') return <div className="data-view__empty">{machine.label} is offline.</div>
   return info.value
     ? <FromValue info={info} value={info.value} machine={machine} thread={thread} />
     : <FromMethod info={info} method={info.method!} machine={machine} thread={thread} />
@@ -66,9 +69,10 @@ function Source({ info, machine, thread }: { info: DataViewInfo; machine: Machin
 
 /** Fed by a live value: a thread view's holds each thread's content by its id. */
 function FromValue({ info, value, machine, thread }: { info: DataViewInfo; value: string; machine: MachineEntry; thread?: ThreadInfo }) {
+  // Undefined until it's heard; null when it's never been set, and a thread view's with nothing for this thread: none.
   const live = useValue<Json>(machine.id, machine.state === 'connected', value)
-  const content = info.context === 'thread' ? (thread && live && typeof live === 'object' && !Array.isArray(live) ? live[thread.id] : undefined) : live
-  return <DataContent content={content} machine={machine} />
+  const content = info.context === 'thread' ? (thread && live && typeof live === 'object' && !Array.isArray(live) ? live[thread.id] ?? null : live === undefined ? undefined : null) : live
+  return <DataContent content={content} extension={info.extension} machine={machine} />
 }
 
 /** Fed by a method: read again as the thread moves on (a window view: any thread on the machine), and after a button ran. */
@@ -77,27 +81,31 @@ function FromMethod({ info, method, machine, thread }: { info: DataViewInfo; met
   const threads = useAllThreads()[machine.id]
   const moved = info.context === 'thread' ? `${thread?.id}:${thread?.activeAt}:${thread?.status.state}` : (threads ?? []).map((t) => `${t.id}:${t.activeAt}:${t.status.state}`).join()
   const [read, setRead] = useState<{ content?: Json; error?: string }>({})
+  // Answered, it's read: null (or nothing) is none.
   const [again, setAgain] = useState(0)
   useEffect(() => {
     if (!connected) return
     let live = true
     call<Json>(machine.id, method, info.context === 'thread' ? { id: thread?.id } : {})
-      .then((content) => { if (live) setRead({ content }) }, (error: Error) => { if (live) setRead((r) => ({ ...r, error: error.message })) })
+      .then((content) => { if (live) setRead({ content: content ?? null }) }, (error: Error) => { if (live) setRead((r) => ({ ...r, error: error.message })) })
     return () => { live = false }
   }, [machine.id, connected, method, moved, again])
-  return <DataContent content={read.content} error={read.error} machine={machine} ran={() => setAgain((n) => n + 1)} />
+  return <DataContent content={read.content} error={read.error} extension={info.extension} machine={machine} ran={() => setAgain((n) => n + 1)} />
 }
 
 const text = (value: unknown) => typeof value === 'string' ? value : typeof value === 'number' ? String(value) : undefined
 const STATES: Status['state'][] = ['idle', 'working', 'done', 'blocked', 'error']
 
-/** What a machine sent, as content: only what's shaped as `ViewContent` says, the rest left out. */
-export function contentOf(value: unknown): ViewContent | undefined {
+/**
+ * What a machine sent for `extension`'s view, as content: only what's shaped as `ViewContent` says, the rest left out;
+ * and only buttons that run one of that extension's own actions (`<extension>.<name>`), never another's or the core's.
+ */
+export function contentOf(value: unknown, extension: string): ViewContent | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const v = value as Record<string, unknown>
   const actions = (list: unknown): ViewAction[] => !Array.isArray(list) ? [] : list.flatMap((a) => {
     const title = text(a?.title), action = text(a?.action)
-    return title && action ? [{ title, action, ...(a.params !== undefined ? { params: a.params as Json } : {}), ...(typeof a.icon === 'string' ? { icon: a.icon as DataIcon } : {}) }] : []
+    return title && action?.startsWith(`${extension}.`) ? [{ title, action, ...(a.params !== undefined ? { params: a.params as Json } : {}), ...(typeof a.icon === 'string' ? { icon: a.icon as DataIcon } : {}) }] : []
   })
   const items = Array.isArray(v.items) ? v.items.flatMap((i): ViewItem[] => {
     const title = text(i?.title)
@@ -118,16 +126,20 @@ export function contentOf(value: unknown): ViewContent | undefined {
   }
 }
 
-/** Content, drawn top to bottom: its note, facts, list, table, Markdown and buttons; what it says when there's none. */
-export function DataContent({ content: raw, error, machine, ran }: { content: unknown; error?: string | undefined; machine: MachineEntry; ran?: () => void }) {
-  const content = contentOf(raw)
+/**
+ * `extension`'s content, drawn top to bottom: its note, facts, list, table, Markdown and buttons; what it says when
+ * there's none. `content` undefined: not read yet.
+ */
+export function DataContent({ content: raw, error, extension, machine, ran }: { content: unknown; error?: string | undefined; extension: string; machine: MachineEntry; ran?: () => void }) {
+  const content = contentOf(raw, extension)
   const registry = useRegistry()
   const [failed, setFailed] = useState<string>()
-  // A button runs the machine's action it names, there (never one of the window's), logged as this window's are.
+  // A button runs the extension's action it names, on the machine (never one of the window's), as the window may run
+  // it (exposed to the UI), logged as this window's are.
   const run = (action: ViewAction) => {
     setFailed(undefined)
     const params = action.params ?? {}
-    void registry.router.router.track(action.action, params, `view → ${machine.id}`, () => call(machine.id, 'action.run', { id: action.action, params }))
+    void registry.router.router.track(action.action, params, `view → ${machine.id}`, () => call(machine.id, 'action.run', { id: action.action, params, exposure: 'ui' }))
       .then(() => ran?.(), (e: Error) => setFailed(e.message))
   }
   const c = content ?? {}
@@ -136,7 +148,7 @@ export function DataContent({ content: raw, error, machine, ran }: { content: un
   return (
     <>
       {problem && <div className="data-view__error">{problem}</div>}
-      {nothing && <div className="data-view__empty">{content === undefined ? (error ? '' : 'Loading…') : c.empty ?? 'Nothing here yet.'}</div>}
+      {nothing && !(raw === undefined && error) && <div className="data-view__empty">{raw === undefined ? 'Loading…' : c.empty ?? 'Nothing here yet.'}</div>}
       {c.note && <div className="data-view__note">{c.note}</div>}
       {!!c.facts?.length && <dl className="data-view__facts">{c.facts.map((f, i) => <div key={i}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
       {!!c.items?.length && (

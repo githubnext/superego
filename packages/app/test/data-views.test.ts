@@ -65,21 +65,26 @@ describe('data views in the registry', () => {
 
 describe('data view content', () => {
   it('keeps only what is shaped as content', () => {
-    expect(contentOf(null)).toBeUndefined()
-    expect(contentOf([1])).toBeUndefined()
+    expect(contentOf(null, 'x')).toBeUndefined()
+    expect(contentOf([1], 'x')).toBeUndefined()
     expect(contentOf({
       note: 'two', items: [{ title: 'A', status: 'working', actions: [{ title: 'Go', action: 'x.go' }, { title: 'No action' }] }, { subtitle: 'no title' }, 'junk'],
       facts: [{ label: 'Branch', value: 'main' }, { label: 'x' }], table: { columns: ['a'], rows: [[1, 'b', { no: 1 }], 'junk'] }, markdown: false, actions: 'nope',
-    })).toEqual({
+    }, 'x')).toEqual({
       note: 'two', items: [{ title: 'A', status: 'working', actions: [{ title: 'Go', action: 'x.go' }] }],
       facts: [{ label: 'Branch', value: 'main' }], table: { columns: ['a'], rows: [['1', 'b', null]] }, actions: [],
     })
   })
 
+  it("keeps only buttons that run the extension's own actions", () => {
+    const content = contentOf({ actions: [{ title: 'Ship', action: 'orders.ship' }, { title: 'Archive', action: 'thread.archive' }, { title: 'Sneaky', action: 'ordersx.go' }, { title: 'Bare', action: 'orders' }] }, 'orders')
+    expect(content?.actions).toEqual([{ title: 'Ship', action: 'orders.ship' }])
+  })
+
   it('draws a note, facts, a list with its buttons, a table and Markdown', () => {
     const registry = createRegistry(app, [], () => {})
     const machine = { id: 'local', label: 'This Mac', state: 'connected' } as never
-    const draw = (content: unknown) => renderToStaticMarkup(createElement(RegistryProvider, { registry, children: createElement(DataContent, { machine, content }) }))
+    const draw = (content: unknown) => renderToStaticMarkup(createElement(RegistryProvider, { registry, children: createElement(DataContent, { machine, content, extension: 'orders' }) }))
     const html = draw({
         note: '1 running', facts: [{ label: 'Branch', value: 'main' }],
         items: [{ title: 'No. 1', subtitle: 'Ada', detail: '5m', status: 'working', actions: [{ title: 'Ship', action: 'orders.ship', params: { id: '1' } }, { title: 'Archive', action: 'orders.archive', icon: 'archive' }] }],
@@ -89,5 +94,8 @@ describe('data view content', () => {
       expect(html).toContain(part)
     }
     expect(draw({ empty: 'No orders yet.' })).toContain('No orders yet.')
+    // Read, with nothing: none, not loading.
+    expect(draw(null)).toContain('Nothing here yet.')
+    expect(draw(undefined)).toContain('Loading…')
   })
 })
