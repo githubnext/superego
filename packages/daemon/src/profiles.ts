@@ -14,15 +14,15 @@
 // A project's profile replaces the user's of the same name, unless it `extends: 'user:<name>'`. A project's profile is
 // code from that repo, so it runs only once allowed (`superego profile allow`), and again after any of its files change.
 import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import * as nodeModule from 'node:module'
 import { transform } from 'sucrase'
 import type { Extension } from '@earendil-works/pi-durable'
 import type { DaemonExtension } from './extension.ts'
 import { MIGRATIONS, RpcError, type Json } from '@superego/protocol'
-import { graphOf, versionedImport, versionedUrl, versionOf } from './module-graph.ts'
+import { CODE, digestOf, graphOf, versionedImport, versionedUrl, versionOf, within } from './module-graph.ts'
 
 export type ProfileSpec = {
   description?: string
@@ -132,27 +132,37 @@ export function findProfile(cwd: string, userRoot: string, name?: string): Profi
 
 /**
  * A hash of what a profile runs, what allowing it vouches for: every file in its folder (not node_modules, nor
- * dotfiles), and the local files its code imports from outside it. Of a file (one a profile lists from outside its
- * folder), it and the local files it imports (`versionOf`). Packages it imports by name aren't in it.
+ * dotfiles: what its code reads as it runs, say), and every file its code can run (module-graph.ts): each module in its
+ * folder, hidden ones too, and every local file they import, wherever, dotfiles included. Symlinks are followed. Of a
+ * file (one a profile lists from outside its folder), it and the local files it imports (`versionOf`). Packages it
+ * imports by name aren't in it. Throws for a module whose imports can't be told.
  */
 export function hashProfile(dir: string): string {
   if (statSync(dir).isFile()) return versionOf(dir)
+  const root = real(dir)
   const hash = createHash('sha256')
+  const hashed = new Set<string>()
+  const add = (name: string, file: string) => { hashed.add(file); hash.update(name).update('\0').update(digestOf(file)).update('\0') }
   const code: string[] = []
-  const walk = (at: string) => {
-    for (const entry of readdirSync(at, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
-      const path = join(at, entry.name)
-      if (entry.isDirectory()) walk(path)
-      else if (entry.isFile()) {
-        hash.update(relative(dir, path)).update('\0').update(readFileSync(path)).update('\0')
-        if (/\.[cm]?[jt]sx?$/.test(entry.name)) code.push(path)
+  const walk = (at: string, hidden: boolean, folders: Set<string>) => {
+    for (const entry of readdirSync(at).sort((a, b) => a.localeCompare(b))) {
+      if (entry === 'node_modules' || entry === '.git') continue
+      const path = join(at, entry)
+      const file = real(path)
+      let stat
+      try { stat = statSync(file) } catch { continue }
+      const dot = hidden || entry.startsWith('.')
+      // A symlinked folder is walked as its own, once along the way (a link to a folder above it isn't a loop).
+      if (stat.isDirectory()) { if (!folders.has(file)) walk(path, dot, new Set([...folders, file])) }
+      else if (stat.isFile()) {
+        if (CODE.test(entry)) code.push(file)
+        if (!dot) add(relative(dir, path), file)
       }
     }
   }
-  walk(dir)
-  // What it imports from outside its folder (a helper shared between profiles) runs as its own does.
-  for (const file of graphOf(code).filter((file) => !within(dir, file))) hash.update(file).update('\0').update(readFileSync(file)).update('\0')
+  walk(dir, false, new Set([root]))
+  // What its code imports and the walk left out: a hidden file, or one outside its folder (a helper shared between profiles).
+  for (const file of graphOf(code)) if (!hashed.has(file)) add(within(root, file) ? relative(root, file) : file, file)
   return hash.digest('hex').slice(0, 16)
 }
 
@@ -252,9 +262,6 @@ async function specOf(ref: ProfileRef): Promise<ProfileSpec> {
   if (!spec || typeof spec !== 'object') throw new RpcError('invalid', `${join(ref.dir, 'profile.ts')} must export default defineProfile({ … })`)
   return spec
 }
-
-/** Whether `file` is inside `dir`. */
-const within = (dir: string, file: string) => { const path = relative(resolve(dir), file); return Boolean(path) && !path.startsWith('..') && !isAbsolute(path) }
 
 /** The files a profile lists from outside its own folder (a shared extension), resolved. */
 async function outsideFiles(ref: ProfileRef) {

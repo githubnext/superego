@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { collectProfileUi, filesOf, hashProfileUi, type ProfileModule } from '../src/profile-ui.ts'
+import { collectProfileUi, filesOf, hashProfileUi, pointImports, type ProfileModule } from '../src/profile-ui.ts'
 import { UiAllowStore } from '../src/ui-allowed.ts'
 
 const served = (files: Record<string, string>) => async (path: string): Promise<ProfileModule> => {
@@ -36,6 +36,16 @@ it('walks the imports, and hashes exactly what would run', async () => {
 
 it('refuses imports a profile UI cannot make', async () => {
   await expect(collectProfileUi(['./a.ts'], served({ 'a.ts': `import x from 'https://evil.example/x.js'` }))).rejects.toMatchObject({ kind: 'invalid' })
+})
+
+it('reads imports as JavaScript does: an import split by a comment is one, an import commented out or in a string none', async () => {
+  const code = `// import { old } from './old.ts'\nimport { label } from /* the label */ './label.ts'\nconst s = "import x from './str.ts'"\nexport const later = () => import('./later.ts')\n`
+  const sources = await collectProfileUi(['./a.ts'], served({ 'a.ts': code, 'label.ts': `export const label = 1`, 'later.ts': `export {}` }))
+  expect([...sources.modules.keys()]).toEqual(['./a.ts', 'label.ts', 'later.ts'])
+  expect(pointImports({ path: 'a.ts', code }, (specifier) => `blob:${specifier}`)).toBe(code.replace(`/* the label */ './label.ts'`, `/* the label */ 'blob:./label.ts'`).replace(`import('./later.ts')`, `import('blob:./later.ts')`))
+  // One whose path is worked out as it runs can't be fetched, hashed or pointed at.
+  await expect(collectProfileUi(['./a.ts'], served({ 'a.ts': `const name = './b.ts'\nexport const b = () => import(name)` })))
+    .rejects.toMatchObject({ kind: 'invalid', message: expect.stringContaining('a.ts:2 imports import(name)') })
 })
 
 it('allows a profile for one hash, forgets it on a change, and revokes', async () => {

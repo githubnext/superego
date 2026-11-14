@@ -795,6 +795,72 @@ it('versions an extension by every local file it imports, and vouches for those 
   await close()
 })
 
+it("runs a helper's new code however its import is written, and not on an import commented out (Node's own loader)", async () => {
+  const profile = join(home, 'profiles', 'p')
+  write(profile, {
+    'profile.ts': profileTs(['./extension.ts']),
+    'extension.ts': `import { defineDaemonExtension } from 'superego'
+// import { old } from './old.ts'
+import { v } from /* the helper */ './helper.ts'
+export default defineDaemonExtension({ name: 'x', setup() { return v } })
+`,
+    'helper.ts': `export const v = 'before'\n`,
+    'old.ts': `export const old = 1\n`,
+  })
+  const profiles = new URL('../src/profiles.ts', import.meta.url).href
+  write(dir, { 'probe.ts': `import { writeFileSync } from 'node:fs'
+import { loadProfile, provideSdk, SDK_EXPORTS, Trust } from '${profiles}'
+provideSdk(Object.fromEntries(SDK_EXPORTS.map((key) => [key, (x) => x])))
+const ref = { scope: 'user', name: 'p', dir: ${JSON.stringify(profile)} }
+const load = () => loadProfile(ref, ${JSON.stringify(join(home, 'profiles'))}, new Trust(${JSON.stringify(home)}))
+const first = await load()
+writeFileSync(${JSON.stringify(join(profile, 'old.ts'))}, 'export const old = 2\\n')
+const second = await load()
+writeFileSync(${JSON.stringify(join(profile, 'helper.ts'))}, "export const v = 'after'\\n")
+const third = await load()
+console.log(JSON.stringify([first.daemon[0].key === second.daemon[0].key, first.daemon[0].extension.setup(), third.daemon[0].extension.setup()]))
+` })
+  const { execFileSync } = await import('node:child_process')
+  const out = execFileSync(process.execPath, [join(dir, 'probe.ts')], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } })
+  // The file commented out isn't part of what it runs; the helper, behind a comment, is.
+  expect(JSON.parse(out.trim().split('\n').at(-1)!)).toEqual([true, 'before', 'after'])
+})
+
+it("vouches, in allowing a project's profile, for every file its code can run: hidden ones and symlinked ones too", async () => {
+  const profile = join(project, '.superego', 'profiles', 'support')
+  write(profile, {
+    'profile.ts': profileTs(['./vault.ts', './.listed.ts']),
+    'vault.ts': `import { defineDaemonExtension } from 'superego'\nimport { a } from './.helper.ts'\nimport { b } from './.lib/b.ts'\nimport { c } from './linked.ts'\nexport default defineDaemonExtension({ name: 'vault', setup() { return a + b + c } })\n`,
+    '.listed.ts': `import { defineDaemonExtension } from 'superego'\nexport default defineDaemonExtension({ name: 'listed', setup() {} })\n`,
+    '.helper.ts': `export const a = 'a'\n`,
+    '.lib/b.ts': `export const b = 'b'\n`,
+  })
+  write(project, { 'tools/c.ts': `export const c = 'c'\n` })
+  symlinkSync(join(project, 'tools', 'c.ts'), join(profile, 'linked.ts'))
+  const ref: ProfileRef = { scope: 'project', name: 'support', dir: profile }
+  const trust = new Trust(home)
+  for (const [file, content] of [['.helper.ts', `export const a = 'A'\n`], ['.lib/b.ts', `export const b = 'B'\n`], ['../../../tools/c.ts', `export const c = 'C'\n`], ['.listed.ts', `export default { name: 'listed' }\n`]] as const) {
+    await trust.allow(ref)
+    await loadProfile(ref, join(home, 'profiles'), trust)
+    write(profile, { [file]: content })
+    await expect(loadProfile(ref, join(home, 'profiles'), trust), file).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  }
+  // What its code doesn't import, and isn't in its folder, isn't part of it.
+  await trust.allow(ref)
+  write(project, { 'tools/other.ts': `export const other = 1\n` })
+  await expect(loadProfile(ref, join(home, 'profiles'), trust)).resolves.toMatchObject({ name: 'support' })
+})
+
+it('refuses a module that imports a path worked out as it runs: what it loads can be neither versioned nor vouched for', async () => {
+  const profile = join(home, 'profiles', 'default')
+  write(profile, {
+    'profile.ts': profileTs(['./vault.ts']),
+    'vault.ts': `import { defineDaemonExtension } from 'superego'\nconst name = './helper.ts'\nexport default defineDaemonExtension({ name: 'vault', async setup() { await import(name) } })\n`,
+  })
+  await expect(loadProfile(userRef('default') as ProfileRef, join(home, 'profiles'), new Trust(home)))
+    .rejects.toMatchObject({ kind: 'invalid', message: expect.stringMatching(/vault\.ts:3 .*import\(name\)/) })
+})
+
 it("tears down every part however its cleanups fail, refuses what it registers after, and ignores its old publishers", async () => {
   const profile = join(home, 'profiles', 'default')
   const vaultOf = (answer: string) => `import { defineDaemonExtension, defineAction, obj } from 'superego'

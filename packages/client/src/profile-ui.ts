@@ -1,8 +1,9 @@
-// A profile's UI as a client receives it from a machine: every module its entries need, walked import by import, and a
-// hash of exactly that. A machine other than this computer's own decides nothing about whether its profile's UI runs
-// here: the window (or the CLI) hashes what it received and runs it only once this computer allowed that hash (see
-// ui-allowed.ts). No Node imports: the renderer uses this too.
-import type { ProfileRef } from '@superego/protocol'
+// A profile's UI as a client receives it from a machine: every module its entries need, walked import by import (read
+// as the daemon reads a profile's modules: @superego/protocol's importsOf), and a hash of exactly that. A machine other
+// than this computer's own decides nothing about whether its profile's UI runs here: the window (or the CLI) hashes
+// what it received and runs it only once this computer allowed that hash (see ui-allowed.ts). No Node imports: the
+// renderer uses this too.
+import { importsOf, type ProfileRef } from '@superego/protocol'
 
 export type ProfileModule = { path: string; code: string }
 
@@ -12,14 +13,18 @@ export type ProfileUiSources = { entries: string[]; modules: Map<string, Profile
 /** What a profile's modules may import by name; anything else is one of its own files, by a relative path. */
 export const SHARED_MODULES = ['react', 'react/jsx-runtime', 'superego/ui', 'superego/unstable']
 
-/** Every import and re-export in a module, with the specifier as its third group. */
-export const SPECIFIER = /(\bfrom\s*|\bimport\s*\(?\s*)(['"])([^'"]+)\2/g
-
 /** `specifier`, imported by the module at `from`, as a path in the profile. */
 export const resolveSpecifier = (from: string, specifier: string) => new URL(specifier, `file:///p/${from}`).pathname.slice(3)
 
-/** The specifiers a module imports, each once. */
-export const importsOf = (code: string) => [...new Set([...code.matchAll(SPECIFIER)].map((m) => m[3]!))]
+/** The specifiers a module imports, each once, read as the daemon reads a profile's modules (importsOf). */
+const specifiersOf = (module: ProfileModule) => [...new Set(importsOf(module.code, module.path).map((i) => i.specifier))]
+
+/** A module's code with each import pointed elsewhere: `to` of its specifier. */
+export function pointImports(module: ProfileModule, to: (specifier: string) => string): string {
+  let code = '', at = 0
+  for (const { specifier, start, end } of importsOf(module.code, module.path)) { code += module.code.slice(at, start) + to(specifier); at = end }
+  return code + module.code.slice(at)
+}
 
 /** Fetch every module `entries` need, by `fetch` (the machine's `profile.module`). Refuses imports a profile can't make. */
 export async function collectProfileUi(entries: string[], fetch: (path: string) => Promise<ProfileModule>): Promise<ProfileUiSources> {
@@ -28,7 +33,7 @@ export async function collectProfileUi(entries: string[], fetch: (path: string) 
     if (modules.has(path)) return
     const module = await fetch(path)
     modules.set(path, module)
-    for (const specifier of importsOf(module.code)) {
+    for (const specifier of specifiersOf(module)) {
       if (SHARED_MODULES.includes(specifier)) continue
       if (!specifier.startsWith('.')) throw Object.assign(new Error(`${module.path} imports ${specifier}: a profile's UI can import ${SHARED_MODULES.map((m) => `'${m}'`).join(', ')} and its own files`), { kind: 'invalid' })
       await visit(resolveSpecifier(module.path, specifier))

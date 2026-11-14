@@ -1640,9 +1640,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     async run({ cwd }) {
       const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
       return Promise.all(listProfiles(dir, userProfiles).map(async (ref) => {
-        const hash = hashProfile(ref.dir)
         const description = profiles.get(ref.dir)?.spec.description
-        return { ...ref, ...(description ? { description } : {}), allowed: await trust.allowed(ref, hash) }
+        // One whose imports can't be told can't be allowed as it is: loading it says why.
+        const allowed = await Promise.resolve().then(() => trust.allowed(ref, hashProfile(ref.dir))).catch(() => false)
+        return { ...ref, ...(description ? { description } : {}), allowed }
       }))
     },
   }))

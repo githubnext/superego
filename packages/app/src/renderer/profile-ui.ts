@@ -17,7 +17,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import type { ProfileRef, ThreadInfo } from '@superego/protocol'
 import {
-  collectProfileUi, filesOf, hashProfileUi, importsOf, isAllowed, resolveSpecifier, SPECIFIER, type AllowedUi, type ProfileUiSources,
+  collectProfileUi, filesOf, hashProfileUi, isAllowed, pointImports, resolveSpecifier, type AllowedUi, type ProfileUiSources,
 } from '@superego/client/profile-ui'
 import { machine as client } from './client.ts'
 import { useRegistry, type Registry, type UiExtension } from './extension.tsx'
@@ -53,9 +53,7 @@ const loadProfileUi: LoadUi = async (profile, sources) => {
     if (done) return done
     if (chain.includes(asked)) throw new Error(`${[...chain, asked].join(' → ')}: a profile's UI modules can't import each other in a cycle`)
     const module = sources.modules.get(asked)!
-    const targets = new Map(importsOf(module.code).map((specifier) =>
-      [specifier, names.get(specifier) ?? urlOf(resolveSpecifier(module.path, specifier), [...chain, asked])]))
-    const code = module.code.replace(SPECIFIER, (all, lead: string, quote: string, specifier: string) => `${lead}${quote}${targets.get(specifier) ?? specifier}${quote}`)
+    const code = pointImports(module, (specifier) => names.get(specifier) ?? urlOf(resolveSpecifier(module.path, specifier), [...chain, asked]))
     const url = URL.createObjectURL(new Blob([`${code}\n//# sourceURL=superego-profile://${profile.scope}/${profile.name}/${module.path}`], { type: 'text/javascript' }))
     urls.set(asked, url)
     return url

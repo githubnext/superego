@@ -814,6 +814,9 @@ importers:
       '@earendil-works/pi-schema':
         specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
         version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+      es-module-lexer:
+        specifier: 2.3.2
+        version: 2.3.2
 
   packages/sdk:
     dependencies:
