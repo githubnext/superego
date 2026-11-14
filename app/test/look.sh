@@ -16,6 +16,12 @@ export SUPEREGO_SHOWCASE_PROJECT="$SUPEREGO_HOME/ledger"
 node test/showcase/setup.mjs "$SUPEREGO_SHOWCASE_PROJECT" "$SUPEREGO_HOME/turns.jsonl"
 (cd "$SUPEREGO_SHOWCASE_PROJECT" && git init -q && git add -A && git -c user.name=x -c user.email=x@x commit -qm init)
 export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/turns.jsonl"
+# Skills of its own (shown in the Skills data view), not this machine's ~/.agents.
+export SUPEREGO_AGENTS="$SUPEREGO_HOME/agents"
+for skill in commit:'Write commit messages in the house style.' release:'Cut a release and write its notes.' review:'Review a change for bugs and missing tests.'; do
+  mkdir -p "$SUPEREGO_AGENTS/skills/${skill%%:*}"
+  printf -- '---\nname: %s\ndescription: %s\n---\n\nDo it.\n' "${skill%%:*}" "${skill#*:}" > "$SUPEREGO_AGENTS/skills/${skill%%:*}/SKILL.md"
+done
 if [ "$2" = web ]; then
   mkdir -p "$SUPEREGO_HOME/bin"
   cp test/showcase/tailscale.sh "$SUPEREGO_HOME/bin/tailscale"

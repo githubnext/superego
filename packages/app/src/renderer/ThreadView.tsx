@@ -136,9 +136,10 @@ function TitleField({ machine, thread }: { machine: MachineEntry; thread: Thread
 /**
  * What the title bar says about the thread, at its right: where it runs (the thread that started it, extensions' chips
  * like its worktree's branch, its profile), what extensions add to the header, panes to open, and archiving it (not an
- * extension's own hidden thread, which that extension looks after).
+ * extension's own hidden thread, which that extension looks after). `panes: false` leaves the pane menu to the caller
+ * (a phone's thread sheet lists the panes itself).
  */
-export function ThreadTools({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
+export function ThreadTools({ machine, thread, panes = true }: { machine: MachineEntry; thread: ThreadInfo; panes?: boolean }) {
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
   return (
@@ -151,7 +152,7 @@ export function ThreadTools({ machine, thread }: { machine: MachineEntry; thread
       <PlacedViews place="header" machine={machine} thread={thread} frame={withContextMenu('header', { machine: machine.id, thread })} />
       {thread.cost !== undefined && thread.cost > 0 && <span className="thread__cost" title="Spent on this thread">${thread.cost.toFixed(2)}</span>}
       {/* Without a pane shown, there's no strip to open one from: here instead. */}
-      {!shownPanes(registry, { machine: machine.id, thread }).length && <PaneMenu machine={machine} thread={thread} />}
+      {panes && !shownPanes(registry, { machine: machine.id, thread }).length && <PaneMenu machine={machine} thread={thread} />}
       {thread.hidden
         ? null
         : thread.archived

@@ -11,9 +11,9 @@ import type { Place } from './layout.ts'
 export const PLACE_TITLES: Record<Place, string> = {
   space: 'Spaces', rail: 'Rail buttons', drawer: 'Drawer buttons', titlebar: 'Title bar', aside: 'Beside the thread', pane: 'Pane menu', header: 'Thread header',
 }
-/** The places a wide window shows, and a phone's: views move only among those there are. */
+/** The places a wide window shows, and a phone's (its aside in the thread's sheet): views move only among those there are. */
 export const WIDE_PLACES: Place[] = ['space', 'rail', 'titlebar', 'aside', 'pane', 'header']
-export const NARROW_PLACES: Place[] = ['space', 'drawer', 'pane', 'header']
+export const NARROW_PLACES: Place[] = ['space', 'drawer', 'aside', 'pane', 'header']
 
 export type ViewMenuProps = {
   view: string

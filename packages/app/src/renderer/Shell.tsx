@@ -5,10 +5,10 @@
 // layout's (see layout.ts).
 import { useEffect, useRef, useState, type ComponentType } from 'react'
 import type { SettingsSnapshot, ThreadInfo } from '@superego/protocol'
-import { ArrowLeftIcon, ArrowRightIcon, Button, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select } from '@superego/ui'
+import { ArrowLeftIcon, ArrowRightIcon, Button, CaretDownIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select, StatusGlyph } from '@superego/ui'
 import { textScale, type MachineEntry } from '../shared.ts'
 import { machine as client, useSettings, watched } from './client.ts'
-import { PlacedViews, shownPanes, Slot, useLayout, useRegistry, viewsIn, type SpaceRailProps, type View, type ViewProps } from './extension.tsx'
+import { paneMenu, PlacedViews, shownPanes, Slot, useLayout, useRegistry, viewsIn, type SpaceRailProps, type View, type ViewProps } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
 import { ServiceNotice } from './ServiceNotice.tsx'
 import { ViewContextMenu, withContextMenu, withMenuButton } from './view-menu.tsx'
@@ -47,6 +47,8 @@ export function Shell() {
   // A phone (or a narrow window): the sidebar becomes a drawer over the thread, opened from a bar at the top.
   const { placed, narrow } = useLayout()
   const [drawer, setDrawer] = useState(false)
+  // On a phone, what the title bar and the aside hold for the thread: a sheet from the foot, opened from its title.
+  const [sheet, setSheet] = useState(false)
   // The spaces, and the one the sidebar shows: as the window was left, else the first.
   const spaces = viewsIn(registry, placed, 'space')
   const [spaceId, setSpace] = useLocalState<string | undefined>('space', undefined)
@@ -54,7 +56,7 @@ export function Shell() {
   const where = selection && thread && machine ? { machine: machine.id, thread } : undefined
   // Where the thread's columns show their tabs: in the title bar, wide.
   const [strip, setStrip] = useState<HTMLElement | null>(null)
-  useEffect(() => { setDrawer(false) }, [selection?.machine, selection?.thread, narrow])
+  useEffect(() => { setDrawer(false); setSheet(false) }, [selection?.machine, selection?.thread, narrow])
   // The installed fonts take seconds to list: read them in the background, for Settings' font pickers.
   useEffect(refreshFontsSoon, [])
   // Actions read the shell as it is when they run.
@@ -118,14 +120,32 @@ export function Shell() {
           <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) setDrawer(false) } : undefined}>
             {narrow && <div className="app__drag" />}
             {space && <SpaceView key={space.id} view={space} {...(where ? { machine, thread } : {})} />}
-            <div className="app__footer"><AuthNotice /><ServiceNotice />{narrow && <>{settingsButton}<PlacedViews place="drawer" frame={withContextMenu('drawer')} /></>}</div>
+            <div className="app__footer"><AuthNotice /><ServiceNotice />{narrow && (
+              // A phone's drawer: the other spaces to switch to, what the layout puts in the drawer, and Settings at the end.
+              <div className="app__drawer-bar">
+                {spaces.length > 1 && <>
+                  {spaces.map((view) => (
+                    <ViewContextMenu key={view.id} view={view.id} place="space"><SpaceButton view={view} open={view.id === space?.id} show={() => setSpace(view.id)} narrow /></ViewContextMenu>
+                  ))}
+                  <span className="app__drawer-sep" aria-hidden />
+                </>}
+                <PlacedViews place="drawer" frame={withContextMenu('drawer')} />
+                <span className="app__drawer-end">{settingsButton}</span>
+              </div>
+            )}</div>
           </aside>
         )}
         <main className="app__main">
           {narrow && spaces.length > 0 && (
             <div className="app__mobilebar">
               <Button onClick={() => setDrawer(true)} aria-label={space?.title}><ListIcon size={16} aria-hidden /></Button>
-              <span className="app__mobiletitle">{thread?.title ?? registry.app.name}</span>
+              {thread && machine
+                ? (
+                  <button type="button" className="app__mobiletitle" aria-expanded={sheet} aria-label={`${thread.title}: the thread's tools`} onClick={() => setSheet((open) => !open)}>
+                    <StatusGlyph status={thread.status} /><span className="app__mobiletitle-text">{thread.title}</span><CaretDownIcon size={12} aria-hidden />
+                  </button>
+                )
+                : <span className="app__mobiletitle">{registry.app.name}</span>}
               <Button onClick={() => openNewThread()} aria-label="New thread"><PlusIcon size={16} aria-hidden /></Button>
             </div>
           )}
@@ -137,6 +157,7 @@ export function Shell() {
           <aside className="app__aside"><PlacedViews place="aside" machine={machine} thread={thread} frame={withMenuButton('aside', where)} /></aside>
         )}
       </div>
+      {narrow && sheet && thread && machine && <ThreadSheet machine={machine} thread={thread} onClose={() => setSheet(false)} />}
       {settings.open && <SettingsView machines={machines} onClose={settings.close} />}
       {palette && <Palette onClose={() => setPalette(false)} />}
       {navigator && <Navigator onClose={() => setNavigator(false)} />}
@@ -166,14 +187,54 @@ function BackForward() {
   )
 }
 
-/** A space's button in the rail: its own (`rail`), else its icon, lit while it's the open one. */
-function SpaceButton({ view, open, show }: { view: View } & SpaceRailProps) {
-  if (view.rail) return <view.rail open={open} show={show} />
+/** A space's button in the rail: its own (`rail`), else its icon, lit while it's the open one. In a phone's drawer, always its icon. */
+function SpaceButton({ view, open, show, narrow = false }: { view: View; narrow?: boolean } & SpaceRailProps) {
+  if (view.rail && !narrow) return <view.rail open={open} show={show} />
   const Icon = view.icon
   return (
     <IconButton label={view.title} className={`app__rail-button ${open ? 'is-on' : ''}`} onClick={() => show(!open)}>
       {Icon ? <Icon size={18} aria-hidden /> : view.title.slice(0, 1)}
     </IconButton>
+  )
+}
+
+/**
+ * On a phone, the thread's sheet: what the title bar says of it wide (where it runs, the header's views, archiving),
+ * the panes to open beside it, and the views the layout puts in the aside. Over the thread, from the foot.
+ */
+function ThreadSheet({ machine, thread, onClose }: { machine: MachineEntry; thread: ThreadInfo; onClose(): void }) {
+  const registry = useRegistry()
+  const { placed } = useLayout()
+  const where = { machine: machine.id, thread }
+  const kinds = paneMenu(registry, placed, where)
+  const asides = viewsIn(registry, placed, 'aside', where)
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); onClose() } }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  const open = (kind: string) => {
+    onClose()
+    void registry.router.dispatch('pane.open', { id: thread.id, kind }, { machine: machine.id, source: 'sheet' }).catch((error) => console.error(error))
+  }
+  return (
+    <>
+      <div className="app__scrim app__scrim--sheet" onClick={onClose} />
+      <div className="thread-sheet" role="dialog" aria-label={thread.title}>
+        <div className="thread-sheet__head">
+          <span className="thread-sheet__session">{machine.id !== 'local' && `${machine.label} · `}{thread.session?.name}</span>
+          <span className="thread-sheet__title"><StatusGlyph status={thread.status} />{thread.title}</span>
+        </div>
+        <div className="thread-sheet__tools"><ThreadTools machine={machine} thread={thread} panes={false} /></div>
+        {kinds.length > 0 && (
+          <div className="thread-sheet__panes">
+            <h5>Open beside</h5>
+            {kinds.map(({ kind, title }) => <Button key={kind} variant="ghost" className="thread-sheet__pane" onClick={() => open(kind)}>{title}</Button>)}
+          </div>
+        )}
+        {asides.length > 0 && <div className="thread-sheet__aside"><PlacedViews place="aside" machine={machine} thread={thread} frame={withMenuButton('aside', where)} /></div>}
+      </div>
+    </>
   )
 }
 

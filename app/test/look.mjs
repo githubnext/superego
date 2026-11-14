@@ -1,6 +1,7 @@
 // Screenshots of the window's layout (run by test/look.sh): the sidebar open, folded to dots and closed; the thread
 // alone (and dragged narrower) and with Changes beside it (and a file past it); a long title, parent and branch; thread
-// details, their menu and Settings → Layout; a phone, its drawer open; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
+// details, their menu and Settings → Layout; a phone, its drawer open, a data view in it, the thread's sheet; a data view
+// as a space; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { threads } from './showcase/threads.mjs'
@@ -165,6 +166,33 @@ void (async () => {
   await run(`document.querySelector('.app__mobilebar button')?.click()`)
   await until(`!!document.querySelector('.app__sidebar')`, 'drawer')
   await both('phone-drawer')
+  // A data view (the skills, placed as a space): in the drawer, switched to from its foot.
+  await setting('app.layout', { place: { 'skills.view': 'space' } })
+  await until(`!!document.querySelector('.app__drawer-bar [aria-label="Skills"]')`, 'Skills in the drawer')
+  await run(`document.querySelector('.app__drawer-bar [aria-label="Skills"]').click()`)
+  await until(`document.querySelector('.data-view--space')?.textContent.includes('$release')`, 'skills listed')
+  await both('phone-data-view')
+  await run(`document.querySelector('.app__drawer-bar [aria-label="Threads"]').click()`)
+  await run(`document.querySelector('.app__scrim').click()`)
+  // The thread's sheet: what the title bar holds wide, the panes to open, and (the model pressed) the details.
+  await run(`document.querySelector('button.app__mobiletitle').click()`)
+  await until(`!!document.querySelector('.thread-sheet')`, 'sheet')
+  await both('phone-sheet')
+  await run(`document.querySelector('.thread-sheet .threads-model').click()`)
+  await until(`!!document.querySelector('.thread-sheet .threads-details')`, 'details in the sheet')
+  await both('phone-sheet-details')
+  await run(`document.querySelector('.thread-sheet .threads-model').click()`)
+  await run(`document.querySelector('.app__scrim--sheet').click()`)
+  // Wide again: the data view as a space, its button in the rail.
+  win().webContents.setZoomFactor(1)
+  win().setContentSize(width, height)
+  await sleep(1000)
+  await until(`!!document.querySelector('.app__rail [aria-label="Skills"]')`, 'Skills in the rail')
+  await run(`document.querySelector('.app__rail [aria-label="Skills"]').click()`)
+  await until(`document.querySelector('.data-view--space')?.textContent.includes('$release')`, 'skills space')
+  await sleep(1500)
+  await both('data-view')
+  await setting('app.layout', {})
   console.log(`look: done in ${out}`)
   writeFileSync(`${process.env.SUPEREGO_HOME}/passed`, '')
   app.exit(0)

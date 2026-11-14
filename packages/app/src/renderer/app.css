@@ -431,6 +431,32 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 /* Phones and narrow windows: one column, the sidebar a drawer, nothing hovering where a thumb goes. */
 .app__mobilebar { display: flex; align-items: center; gap: var(--superego-space-2); padding: calc(env(safe-area-inset-top) + 8px) var(--superego-space-3) 8px; border-bottom: 1px solid var(--superego-border); background: var(--superego-sidebar-bg); flex: none; }
 .app__mobiletitle { flex: 1; min-width: 0; text-align: center; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The thread's title opens its sheet: the status, the title, a caret that says there's more. */
+button.app__mobiletitle { display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 6px; border: 0; border-radius: 8px; background: none; color: var(--superego-text); font: inherit; font-weight: 600; cursor: default; }
+button.app__mobiletitle:active, button.app__mobiletitle[aria-expanded="true"] { background: var(--superego-hover); }
+.app__mobiletitle-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
+/* The drawer's foot: the spaces to switch to and the drawer's views, Settings at the end. */
+.app__drawer-bar { flex: 1 0 100%; display: flex; align-items: center; gap: 6px; }
+.app__drawer-bar .app__rail-button { width: 40px; height: 40px; min-height: 40px; }
+.app__drawer-end { margin-left: auto; }
+.app__drawer-sep { width: 1px; height: 20px; margin: 0 2px; background: var(--superego-line); }
+.app__drawer-sep:last-child, .app__drawer-sep:has(+ .app__drawer-end) { display: none; }
+/* A phone's thread sheet: the title bar's and the aside's, up from the foot over the thread. */
+.app__scrim--sheet { z-index: 30; }
+.thread-sheet { position: fixed; z-index: 31; left: 0; right: 0; bottom: 0; max-height: 85dvh; overflow: auto; padding: var(--superego-space-4) var(--superego-space-4) calc(env(safe-area-inset-bottom) + var(--superego-space-4)); background: var(--superego-bg); border-radius: 14px 14px 0 0; box-shadow: var(--superego-shadow-float); display: flex; flex-direction: column; gap: var(--superego-space-4); }
+.thread-sheet__head { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.thread-sheet__session { font-size: var(--superego-text-sm); color: var(--superego-muted); }
+.thread-sheet__title { display: flex; align-items: center; gap: 8px; font-weight: 600; overflow-wrap: anywhere; }
+.thread-sheet__title > .superego-status { flex: none; }
+.thread-sheet__tools .thread__tools { display: flex; flex-wrap: wrap; row-gap: var(--superego-space-2); }
+.thread-sheet__tools .thread__crumb { flex: 1 0 100%; max-width: none; white-space: normal; }
+.thread-sheet__tools .thread__crumb:empty { display: none; }
+.thread-sheet__tools .thread__archive { margin-left: auto; }
+.thread-sheet h5 { margin: 0 0 6px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); }
+.thread-sheet__panes { display: flex; flex-direction: column; align-items: stretch; }
+.thread-sheet__pane.superego-button { justify-content: flex-start; height: 40px; min-height: 40px; padding: 0 8px; }
+.thread-sheet__aside { margin: 0 calc(-1 * var(--superego-space-4)); border-top: 1px solid var(--superego-line); }
 .app__mobilebar .superego-button { min-width: 36px; min-height: 32px; }
 .app__scrim { position: fixed; inset: 0; z-index: 20; background: rgb(0 0 0 / .3); }
 .app.is-narrow { background: var(--superego-bg); }

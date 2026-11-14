@@ -906,6 +906,28 @@ if (phase === 'first') {
   await inBrowser(`[...document.querySelectorAll('.unread-menu .superego-menu__item')].some((i) => i.textContent.includes('unread on the phone'))`, 'the finished thread in Unread')
   await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.unread-menu .superego-menu__item')].find((i) => i.textContent.includes('unread on the phone')).click()`)
   await inBrowser(`document.querySelector('.app__mobilebar')?.textContent.includes('unread on the phone') && !document.querySelector('.app__sidebar')`, 'Unread went to the thread')
+  // A data view on a phone: the skills, placed as a space, switched to from the drawer's foot and drawn from data.
+  await browser.webContents.executeJavaScript(`window.superego.call('app', 'app.settings.set', { key: 'app.layout', value: { place: { 'skills.view': 'space' } } })`)
+  await browser.webContents.executeJavaScript(`document.querySelector('.app__mobilebar button').click()`)
+  await inBrowser(`Boolean(document.querySelector('.app__drawer-bar [aria-label="Skills"]'))`, 'Skills among the spaces in the drawer')
+  await browser.webContents.executeJavaScript(`document.querySelector('.app__drawer-bar [aria-label="Skills"]').click()`)
+  await inBrowser(`document.querySelector('.data-view--space')?.textContent.includes('$smoke-skill') && document.querySelector('.data-view--space')?.textContent.includes('Checks the smoke.')`, 'the skills data view in the drawer')
+  if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-data-view.png`, (await browser.webContents.capturePage()).toPNG())
+  await browser.webContents.executeJavaScript(`document.querySelector('.app__drawer-bar [aria-label="Threads"]').click()`)
+  await inBrowser(`Boolean(document.querySelector('.app__sidebar .superego-list-item'))`, 'back to the threads in the drawer')
+  // Ego from the drawer: its thread shown, and its Clear in the thread's sheet (the title bar's, on a phone).
+  await browser.webContents.executeJavaScript(`document.querySelector('.app__footer .ego__button').click()`)
+  await inBrowser(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('button.app__mobiletitle'))`, "Ego's thread shown on a phone")
+  await browser.webContents.executeJavaScript(`document.querySelector('button.app__mobiletitle').click()`)
+  await inBrowser(`Boolean(document.querySelector('.thread-sheet .thread__clear')) && !document.querySelector('.thread-sheet .thread__archive')`, "Ego's Clear in the thread's sheet")
+  if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-ego-sheet.png`, (await browser.webContents.capturePage()).toPNG())
+  // The model button there shows the details (the aside's) in the sheet.
+  await browser.webContents.executeJavaScript(`document.querySelector('.thread-sheet .threads-model').click()`)
+  await inBrowser(`Boolean(document.querySelector('.thread-sheet .threads-details'))`, 'thread details in the sheet')
+  await browser.webContents.executeJavaScript(`document.querySelector('.thread-sheet .threads-model').click()`)
+  await browser.webContents.executeJavaScript(`document.querySelector('.app__scrim--sheet').click()`)
+  await inBrowser(`!document.querySelector('.thread-sheet')`, 'the sheet closed')
+  await browser.webContents.executeJavaScript(`window.superego.call('app', 'app.settings.set', { key: 'app.layout', value: {} })`)
   // Images over the WebSocket, on a phone: the thread's images load, and the lightbox fills the screen.
   await browser.webContents.executeJavaScript(`document.querySelector('.app__mobilebar button').click()`)
   await inBrowser(`Boolean(document.querySelector('.app.has-drawer .app__sidebar'))`, 'drawer open again')
