@@ -27,13 +27,14 @@ import { label } from './label.ts'
 export default defineUiExtension({
   name: 'badge',
   setup(superego) {
-    superego.slot('thread.header', ({ thread }) => h('span', { className: 'smoke-badge' }, `${label}: ${thread.title}`))
+    superego.view('badge.label', { title: 'Badge', context: 'thread', fits: ['header'], default: 'header',
+      component: ({ thread }) => h('span', { className: 'smoke-badge' }, `${label}: ${thread.title}`) })
     // One that throws as it draws until the smoke says otherwise: it shows that it failed, in its own place, and the
     // rest of the window carries on.
-    superego.slot('thread.header', () => {
+    superego.view('badge.crash', { title: 'Crash', context: 'thread', fits: ['header'], default: 'header', component: () => {
       if (!globalThis.__smokeFixed) throw new Error('smoke crash')
       return h('span', { className: 'smoke-fixed' }, 'fixed')
-    })
+    } })
   },
 })
 UI
@@ -49,7 +50,7 @@ import { defineUiExtension, h } from 'superego/ui'
 import { label } from './label.ts'
 export default defineUiExtension({
   name: 'remote-badge',
-  setup(superego) { superego.slot('thread.header', () => h('span', { className: 'remote-badge' }, label)) },
+  setup(superego) { superego.view('remote-badge.label', { title: 'Remote badge', context: 'thread', fits: ['header'], default: 'header', component: () => h('span', { className: 'remote-badge' }, label) }) },
 })
 UI
 printf "export const label: string = 'remote ui'\n" > "$SUPEREGO_HOME/second/profiles/default/ui/label.ts"
