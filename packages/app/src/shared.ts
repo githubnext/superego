@@ -80,7 +80,7 @@ export const ACTIONS_MOVED: Record<string, string> = {
 
 /**
  * Where the window's views go (see renderer/layout.ts): edited as text (layout.json, see main/layout-file.ts) and from
- * the views' own menus, so not drawn among the other settings.
+ * the views' own menus, so hidden among the other settings (the one way Settings leaves it out).
  */
 export const LAYOUT_SETTING = {
   key: 'app.layout', title: 'Layout', default: {}, type: { type: 'layout' }, hidden: () => true,

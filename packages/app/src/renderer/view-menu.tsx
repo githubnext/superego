@@ -30,7 +30,7 @@ export type ViewMenuProps = {
   pane?: string
 }
 
-/** The menu's items: Move to → the other places it fits, Remove from here, Edit layout…. */
+/** The menu's items: Move to → the other places it fits, Remove from here (on a pane's tab, from the pane menu), Edit layout…. */
 export function ViewMenuItems({ view, place, machine, thread, pane }: ViewMenuProps) {
   const registry = useRegistry()
   const { placed, narrow } = useLayout()
@@ -56,7 +56,8 @@ export function ViewMenuItems({ view, place, machine, thread, pane }: ViewMenuPr
           </Menu.SubmenuPopup>
         </Menu.SubmenuRoot>
       )}
-      <Menu.Item data-remove onClick={() => void change({ place, on: false }).catch(fail)}>Remove from here</Menu.Item>
+      {/* On a pane's tab, beside the ✕ that only closes it: this takes it out of the menu too. */}
+      <Menu.Item data-remove onClick={() => void change({ place, on: false }).catch(fail)}>{pane ? 'Remove from pane menu' : 'Remove from here'}</Menu.Item>
       {!window.superego.web && <><Menu.Separator /><Menu.Item onClick={() => void dispatch('layout.edit', {}, { source: 'layout' }).catch(fail)}>Edit layout…</Menu.Item></>}
     </>
   )

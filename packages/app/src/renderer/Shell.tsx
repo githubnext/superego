@@ -137,9 +137,12 @@ export function Shell() {
           </aside>
         )}
         <main className="app__main">
-          {narrow && spaces.length > 0 && (
+          {narrow && (
+            // With no space there's no drawer: what stands in for one (the title bar's: the thread picker) and Settings.
             <div className="app__mobilebar">
-              <Button onClick={() => setDrawer(true)} aria-label={space?.title}><ListIcon size={16} aria-hidden /></Button>
+              {spaces.length > 0
+                ? <Button onClick={() => setDrawer(true)} aria-label={space?.title}><ListIcon size={16} aria-hidden /></Button>
+                : <PlacedViews place="titlebar" frame={withContextMenu('titlebar')} />}
               {thread && machine
                 ? (
                   <button type="button" className="app__mobiletitle" aria-expanded={sheet} aria-label={`${thread.title}: the thread's tools`} onClick={() => setSheet((open) => !open)}>
@@ -147,7 +150,8 @@ export function Shell() {
                   </button>
                 )
                 : <span className="app__mobiletitle">{registry.app.name}</span>}
-              <Button onClick={() => openNewThread()} aria-label="New thread"><PlusIcon size={16} aria-hidden /></Button>
+              {spaces.length > 0 || !placed.titlebar.length ? <Button onClick={() => openNewThread()} aria-label="New thread"><PlusIcon size={16} aria-hidden /></Button> : null}
+              {!spaces.length && settingsButton}
             </div>
           )}
           {selection && thread && machine

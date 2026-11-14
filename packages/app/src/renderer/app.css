@@ -62,7 +62,8 @@
 .titlebar__chip + .titlebar__chip::before { content: '·'; margin: 0 6px; }
 .thread__cost { font-size: var(--superego-text-sm); color: var(--superego-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .app__aside { width: 280px; flex: none; min-height: 0; overflow: auto; background: var(--superego-bg); box-shadow: inset .5px 0 0 var(--superego-line); }
-.app__aside:empty { display: none; }
+/* Hidden while every view in it draws nothing: then each holds only its ···. */
+.app__aside:empty, .app__aside:not(:has(> .placed-view > :not(.view-menu__button))) { display: none; }
 .app__empty { margin: auto; color: var(--superego-muted); padding: var(--superego-space-5); }
 .thread-picker { display: flex; gap: var(--superego-space-2); align-items: center; }
 .app__footer { position: sticky; bottom: 0; margin-top: auto; padding: var(--superego-space-2) 0 0; background: inherit; }
@@ -304,6 +305,8 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .layout-note.is-problem { color: var(--superego-status-error); white-space: normal; }
 /* A view beside the thread, with its ··· at its top right. */
 .placed-view { position: relative; }
+/* A view that draws nothing (for this thread) takes no room: nor does its ···. */
+.placed-view:not(:has(> :not(.view-menu__button))) { display: none; }
 .placed-view > .view-menu__button { position: absolute; top: 6px; right: 6px; z-index: 1; }
 .view-menu__button { width: 24px; height: 24px; min-height: 24px; box-shadow: none; background: none; color: var(--superego-faint); }
 .view-menu__button:hover, .view-menu__button[data-popup-open] { background: var(--superego-hover); color: var(--superego-text); }
@@ -438,6 +441,7 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .thread-sheet__panes { display: flex; flex-direction: column; align-items: stretch; }
 .thread-sheet__pane.superego-button { justify-content: flex-start; height: 40px; min-height: 40px; padding: 0 8px; }
 .thread-sheet__aside { margin: 0 calc(-1 * var(--superego-space-4)); border-top: 1px solid var(--superego-line); }
+.thread-sheet__aside:not(:has(> .placed-view > :not(.view-menu__button))) { display: none; }
 .app__mobilebar .superego-button { min-width: 36px; min-height: 32px; }
 .app__scrim { position: fixed; inset: 0; z-index: 20; background: rgb(0 0 0 / .3); }
 .app.is-narrow { background: var(--superego-bg); }

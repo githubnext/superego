@@ -231,7 +231,8 @@ superego.view('orders.open', { title: 'Orders', icon: 'list', context: 'window',
 
 Below 600px wide there's no rail and no title bar. `space` views are the drawer, with the others to switch to at its
 foot beside `drawer` views (Ego, Unread) and Settings. The thread's title opens its **sheet**, which holds the title
-bar's (`header` views, where it runs, archiving), the pane menu, and the `aside` views; `titlebar` views don't show.
+bar's (`header` views, where it runs, archiving), the pane menu, and the `aside` views. With no space there's no
+drawer: `titlebar` views (the thread picker) and Settings are in the bar at the top instead.
 `narrow` moves a view elsewhere on a phone.
 
 ## Hearing the window

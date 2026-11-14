@@ -1,6 +1,6 @@
 // Focus, after Tremolo: always visible (the region holding it wears the ring, see app.css), and in one place the app
 // and the keyboard agree on. The window is a row of regions, left to right: the sidebar, the thread, each pane beside
-// it. ⌘⌥← and ⌘⌥→ move between them, ⌃I goes to the prompt (esc leaves it for the thread); going to a region focuses
+// it, the aside. ⌘⌥← and ⌘⌥→ move between them, ⌃I goes to the prompt (esc leaves it for the thread); going to a region focuses
 // what's used there (the selected thread in the sidebar, the thread's transcript, an editor's text, a page, else the
 // pane itself). Focus moving into a pane makes it the thread's focused pane; a pane brought forward from the keyboard
 // (⌃Tab, the navigator) takes the focus with it.
@@ -10,12 +10,14 @@ function regions(): HTMLElement[] {
   const sidebar = document.querySelector<HTMLElement>('.app__sidebar')
   const columns = [...document.querySelectorAll<HTMLElement>('.app__main .panes > [data-column]')]
   const thread = columns.length ? [] : [document.querySelector<HTMLElement>('.app__main .thread')].filter((e): e is HTMLElement => Boolean(e))
-  return [...(sidebar ? [sidebar] : []), ...thread, ...columns]
+  const aside = [...document.querySelectorAll<HTMLElement>('.app__aside')].filter((e) => getComputedStyle(e).display !== 'none')
+  return [...(sidebar ? [sidebar] : []), ...thread, ...columns, ...aside]
 }
 
 /**
  * What to focus in a region: what's used there. A thread is its transcript (to read and scroll; typing goes on to the
- * prompt), an editor its text (rendered, the text to read), a page itself; any other pane takes the focus itself.
+ * prompt), an editor its text (rendered, the text to read), a page itself; any other pane takes the focus itself; a
+ * space or an aside of other views (a data view's), the first thing in it to use, past the views' ··· buttons.
  */
 function target(region: HTMLElement): HTMLElement | null {
   return region.querySelector<HTMLElement>('.superego-list-item.is-selected[tabindex]')
@@ -25,6 +27,7 @@ function target(region: HTMLElement): HTMLElement | null {
     ?? region.querySelector<HTMLElement>('.superego-list-item[tabindex]')
     ?? region.querySelector<HTMLElement>('.panes__body iframe')
     ?? (region.tabIndex >= 0 || region.hasAttribute('tabindex') ? region : null)
+    ?? region.querySelector<HTMLElement>(':is(a[href], button, input, select, textarea, [tabindex]):not(:disabled, [tabindex="-1"], .view-menu__button)')
 }
 
 /**

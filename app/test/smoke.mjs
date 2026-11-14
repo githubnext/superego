@@ -286,6 +286,21 @@ if (phase === 'first') {
   }
   await key('i')
   await until(`Boolean(document.querySelector('.app__aside .threads-details'))`, 'details beside the thread')
+  // A view that draws nothing takes no room beside the thread, nor its ···; with only such views, there's no aside.
+  await until(`(() => {
+    const aside = document.querySelector('.app__aside')
+    const empty = document.createElement('div')
+    empty.className = 'placed-view'
+    empty.innerHTML = '<button class="view-menu__button"></button>'
+    aside.append(empty)
+    const hidden = getComputedStyle(empty).display === 'none' && getComputedStyle(aside).display !== 'none'
+    const alone = Object.assign(document.createElement('aside'), { className: 'app__aside' })
+    alone.append(empty)
+    document.body.append(alone)
+    const gone = getComputedStyle(alone).display === 'none'
+    alone.remove()
+    return hidden && gone
+  })()`, 'an empty view hidden, and an aside of only those')
   await moveTo('.placed-view[data-view="threads.details"] .view-menu__button', 'pane')
   await until(`Boolean(document.querySelector('.panes__column .threads-details')) && !document.querySelector('.app__aside')`, 'details moved into a pane')
   await until(`${layoutNow()}.then((l) => l === JSON.stringify({ place: { 'threads.details': 'pane' } }))`, 'the layout keeping it in the pane menu')
