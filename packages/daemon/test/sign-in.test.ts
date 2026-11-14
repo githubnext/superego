@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView, LiveState } from '@earendil-works/pi-durable'
 import { AUTH_REJECTED, defineApp, PROTOCOL_VERSION, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { heldRejections } from '../src/agent-settings.ts'
 import { connectSocket, listen, openDaemon } from '../src/index.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
@@ -153,5 +154,18 @@ it('takes a bad key written just before the turns it stops as the one rejected: 
   expect(value.now()[0]).toMatchObject({ since, threads: expect.arrayContaining(ids) })
   expect(value.now()[0]!.retrying).toBeUndefined()
   await value.stop()
+  await close()
+})
+
+it('retries a turn rejected for a key replaced while it ran, with the new one', async () => {
+  await storeKey('reject-held')
+  const { peer, close } = await open()
+  const id = (await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'one' })).id
+  // Asked with the old key; a new one is stored, and heard of, before the old one's rejection comes back.
+  await until(() => heldRejections.length === 1)
+  await storeKey('good')
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  heldRejections.splice(0).forEach((reject) => reject())
+  await until(async () => (await statusOf(peer, id)).state === 'done')
   await close()
 })

@@ -125,14 +125,18 @@ function gated<T extends Provider>(provider: T, blocks: () => string | undefined
 /** What the scripted model answers to a stored key that starts with "reject": Anthropic's, for a key it doesn't know. */
 const REJECTED = '401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}'
 
+/** Tests: the scripted model's rejections of a key starting "reject-held", each held back until it's called. */
+export const heldRejections: (() => void)[] = []
+
 /**
  * A scripted model that echoes the last user message: tests and demos, with `<ID>_MODEL=faux`. A key stored for it
  * (`faux` in auth.json) that starts with "reject" makes it answer as a provider rejecting the key.
  */
 function echoProvider() {
   const faux = fauxProvider()
-  const echo: FauxResponseStep = (context, options) => {
+  const echo: FauxResponseStep = async (context, options) => {
     faux.appendResponses([echo])
+    if (options?.apiKey?.startsWith('reject-held')) await new Promise<void>((resolve) => heldRejections.push(resolve))
     if (options?.apiKey?.startsWith('reject')) return fauxAssistantMessage('', { stopReason: 'error', errorMessage: REJECTED })
     const last = [...context.messages].reverse().find((message) => message.role === 'user')
     const text = typeof last?.content === 'string' ? last.content : last?.content.map((part) => part.type === 'text' ? part.text : '').join('') ?? ''
