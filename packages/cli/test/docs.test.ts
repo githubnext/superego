@@ -18,8 +18,8 @@ const GUIDE = fileURLToPath(new URL('../../../docs/writing-extensions.md', impor
 /** What a fragment of each half is given: its half's API as `superego`, and the stable names it might use. */
 const PRELUDES = {
   daemon: [
-    `import { arr, bool, defineAction, defineDaemonExtension, defineExtension, defineTool, int, lit, nullable, num, obj, opt, RpcError, str, union, unknown } from 'superego'`,
-    `import type { DaemonApi, ExtensionAbout, Json, ThreadInfo, ViewContent } from 'superego'`,
+    `import { arr, bool, defineAction, defineDaemonExtension, defineExtension, defineTool, int, lit, nullable, num, obj, opt, RpcError, spawnGroup, str, union, unknown } from 'superego'`,
+    `import type { DaemonApi, ExtensionAbout, Json, SpawnedGroup, ThreadInfo, ViewContent } from 'superego'`,
     `declare const superego: DaemonApi`,
     `type Build = { id: string; command: string; state: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'; at: number }`,
   ],

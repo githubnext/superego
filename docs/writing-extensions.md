@@ -24,9 +24,9 @@ A profile's halves import `'superego'` and `'superego/ui'`. A bundled extension'
 
 | Import | What | Stability |
 |---|---|---|
-| `'superego'` | the daemon half and a profile: `defineDaemonExtension`, `defineProfile`, `defineExtension`, `defineTool`, `defineAction`, the schema helpers (`obj`, `str`, …), `RpcError`, and their types (`DaemonApi`, `ScopedValue`, `ViewContent`, …) | stable: follows the extension API's version |
+| `'superego'` | the daemon half and a profile: `defineDaemonExtension`, `defineProfile`, `defineExtension`, `defineTool`, `defineAction`, the schema helpers (`obj`, `str`, …), `RpcError`, `spawnGroup` (a command run as a process tree that stops as one), and their types (`DaemonApi`, `ScopedValue`, `ViewContent`, …) | stable: follows the extension API's version |
 | `'superego/ui'` | the UI half: `defineUiExtension`, `defineAction`, hooks (`useMethod`, `useValue`, `useDispatch`, `useSelection`, …), `call`, `has`, `version`, components to build from (`Markdown`, `PaneHeader`, `Picker`, `Diff`, `FileEditor`, `Button`, the icons), and their types | stable |
-| `'superego/testing'` | test helpers: a daemon with a scripted model, a window with a fake bridge (see [Testing](#testing)) | stable |
+| `'superego/testing'` | test helpers: a daemon with a scripted model, a window with a fake bridge, `isRunning(pid)` (see [Testing](#testing)) | stable |
 | `'superego/unstable'` | the window's workings the bundled extensions build on: `useRegistry`, `useShell`, `useSidebar`, `fileKind`, the session list, `useWatch`, `useThreadView`, … | none: changes with the window. A profile's UI still finds these in `'superego/ui'` until 2027-03-01, without types |
 
 On a `DaemonApi`, `harness` (pi-durable itself) and `threads.entries`' records are pi-durable's shapes, unstable too.
@@ -130,9 +130,37 @@ superego.agent(defineExtension({
     },
   })],
 }))
+```
+
+Running a build is the part to get right. Its command starts processes of its own (a compiler, a test runner's
+workers), and stopping its shell leaves those running, still writing to the thread's folder. So run it with
+**`spawnGroup`**, as a process group of its own, and stop the group: `stop()` sends it SIGTERM, then SIGKILL after a
+grace (`grace`, 5s), and resolves once nothing of it is left; given `superego.signal`, teardown stops it the same way.
+`exited` waits for the whole group too, and says whether it was `stopped`. Say a build is cancelled only once it has
+stopped, and claim a build (mark it running) before anything is awaited, so two calls can't both start it. (POSIX
+stops a group with the grace; Windows has no groups, so there it ends the tree at once with `taskkill /T /F`.)
+
+<!-- check: daemon; declare const queue: import('superego').ScopedValue<Build[]> -->
+```ts
+const running = new Map<string, SpawnedGroup>()
+const setState = (thread: string, id: string, state: Build['state']) =>
+  queue.update(thread, (builds) => builds.map((b) => b.id === id ? { ...b, state } : b))
+async function run(thread: string, build: Build) {
+  setState(thread, build.id, 'running')                     // claimed, before anything is awaited
+  const { cwd } = await superego.threads.get(thread)
+  const group = spawnGroup('sh', ['-c', build.command], { cwd, stdio: 'ignore', signal: superego.signal })
+  running.set(build.id, group)
+  const { code, stopped } = await group.exited              // all of it gone, not just the shell
+  running.delete(build.id)
+  setState(thread, build.id, stopped ? 'cancelled' : code === 0 ? 'done' : 'failed')
+}
 superego.action(defineAction({
   id: 'builds.cancel', title: 'Cancel a build', runs: 'machine', params: obj({ thread: str(), id: str() }),
-  run({ thread, id }) { queue.update(thread, (builds) => builds.map((b) => b.id === id ? { ...b, state: 'cancelled' } : b)); return null },
+  async run({ thread, id }) {
+    await running.get(id)?.stop()                           // answers once the build has stopped
+    setState(thread, id, 'cancelled')
+    return null
+  },
 }))
 ```
 
@@ -212,6 +240,9 @@ it('queues builds and shows the thread its own', async () => {
   `callTools(…)`. It has `thread(prompt)`, `send`, `idle`, `transcript`, `call`, `dispatch`, `watch(key, { scope })`,
   `features`; `edit(path, content)` then `reload()` to load a change (a helper edited alone loads too);
   `restart({ model })` on the same folder; `close()`.
+- **`isRunning(pid)`**: whether a process is still there, to check that what an extension started stopped with it.
+  The queue examples' tests cancel a build whose command starts a `sleep` of its own, and check it's gone once the
+  build says cancelled.
 - **`mountUi({ extensions, profile, machines, layout, narrow, select })`**: `extensions` are set up as the app's,
   `profile: { ref, extensions }` as that profile's (drawn only in its threads). `machines` are test daemons
   (`daemonMachine(daemon, id)`) or fakes: `fakeMachine({ threads, values, methods, extensions, features })`, whose
@@ -304,7 +335,7 @@ Three versions, each for its own question:
 | Version | What it versions | Where it's said | Who checks it |
 |---|---|---|---|
 | **The release** | the code a machine runs: its git commit (the packages are `0.0.0`) | `hello.machine.commit`, Settings → Machines ("an older Superego") | the user, who updates |
-| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`1.2.0`; 1.1 added `signal`, a UI `setup`'s cleanup and `unarchiveAbandoned`; 1.2 `scopedValue` and `useValue`'s `scope`, `useMethod`, a profile's window actions, and `'superego/unstable'` apart) | `hello.api` | the host, setting an extension up |
+| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`1.3.0`; 1.1 added `signal`, a UI `setup`'s cleanup and `unarchiveAbandoned`; 1.2 `scopedValue` and `useValue`'s `scope`, `useMethod`, a profile's window actions, and `'superego/unstable'` apart; 1.3 `spawnGroup`) | `hello.api` | the host, setting an extension up |
 | **The protocol** | the wire: a generation, `PROTOCOL_VERSION` (`1`), and in it the features each side announces | `hello.version`, `hello.features` | both ends, at `hello` |
 
 And each extension's own **version**, semver, which its other half, profiles and scripts rely on.
@@ -323,7 +354,7 @@ export const about = { name: 'orders', version: '1.2.0', api: '^1', title: 'Orde
   extensions started at `1.0.0`. Unset: it counts as `0.0.0`.
 - `api`: the range of extension APIs it works with: `^1` for any 1.x, `^1.3` once it uses something 1.3 added. A host
   outside the range refuses it before `setup` runs, with why: *Extension orders needs extension API ^2, and this
-  Superego has 1.2.0: update Superego*. A bundled one fails the build's tests; a profile's fails its profile's load
+  Superego has 1.3.0: update Superego*. A bundled one fails the build's tests; a profile's fails its profile's load
   (the thread says so); a profile UI's is left out, the rest of the profile set up. Unset: any.
 - `capabilities`: optional, finer than a version: things it can do that a client may ask about (`['stat']`).
 
@@ -572,8 +603,8 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
   last first. Each step is tried whatever the others do: a cleanup that throws is logged, and the rest still goes, its
   name too, so the next version sets up. Torn down twice, nothing more happens.
 - Registrations need no cleanup. What isn't a registration does: a timer, a watcher, a fetch, a listener on something
-  of its own. Give it the signal (`setInterval` cleared on `abort`, `watch(path, { signal })`, `fetch(url, { signal })`,
-  `addEventListener(…, { signal })`), or return a cleanup that stops it. A listener on the signal that throws is logged as
+  of its own, a process. Give it the signal (`setInterval` cleared on `abort`, `watch(path, { signal })`, `fetch(url, { signal })`,
+  `addEventListener(…, { signal })`, `spawnGroup(command, args, { signal })`), or return a cleanup that stops it. A listener on the signal that throws is logged as
   the extension's, and the others are still told.
 - What it registers after teardown is refused: the call throws, and nothing is left behind. A live value's `set` and
   `update` from work that outlived it (a reply that came late) do nothing, with a warning once, so they never change

@@ -6,6 +6,7 @@ export { defineExtension, defineTool, hook, section, wrapSection, wrapTool } fro
 export { arr, bool, int, lit, nullable, num, obj, opt, RpcError, str, union, unknown } from '@superego/protocol'
 export { defineProfile } from './profiles.ts'
 export { defineAction, defineDaemonExtension } from './extension.ts'
+export { spawnGroup } from './process-group.ts'
 
 export type { Extension as AgentExtension } from '@earendil-works/pi-durable'
 export type {
@@ -18,3 +19,4 @@ export type {
   ScopedValue, StatusContribution, SubmitTransform, ThreadCreating, ThreadDraft, ThreadHooks, ThreadState,
 } from './extension.ts'
 export type { DaemonContext } from './daemon.ts'
+export type { GroupExit, SpawnedGroup, SpawnGroupOptions } from './process-group.ts'

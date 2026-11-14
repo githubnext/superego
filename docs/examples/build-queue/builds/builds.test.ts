@@ -1,7 +1,10 @@
 // The build queue, as it runs: the agent queues two builds, the first runs while the second waits, the thread's view
-// shows only its own queue, Cancel stops the running one and the next runs, and ⌘⇧B opens the queue as a pane.
+// shows only its own queue, Cancel stops the running one and the next runs, and ⌘⇧B opens the queue as a pane. A
+// cancelled build, or one running at teardown, stops with everything its command started.
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { callTools, daemonMachine, mountUi, say, testDaemon, type TestDaemon } from 'superego/testing'
+import { callTools, daemonMachine, isRunning, mountUi, say, testDaemon, type TestDaemon } from 'superego/testing'
 import type { ViewContent } from 'superego'
 import { QUEUE, VIEW, type Build } from './shared.ts'
 
@@ -44,4 +47,34 @@ it('draws the queue beside the thread, cancels from its button, and opens it as 
   } finally {
     await window.unmount()
   }
+})
+
+/** A build whose command starts a process of its own (a `sleep`, as a compiler starts workers), and that process's id. */
+const SLEEPER = "sh -c 'sleep 30 & echo $! > sleeper.pid; wait'"
+async function sleeper(cwd: string) {
+  const file = join(cwd, 'sleeper.pid')
+  await daemon!.until(async () => (await readFile(file, 'utf8').catch(() => '')).endsWith('\n'), 'the build to start its sleep')
+  return Number(await readFile(file, 'utf8'))
+}
+
+it("cancels all of a build: once it says cancelled, nothing its command started is running", async () => {
+  daemon = await testDaemon({ profile, model: [callTools({ name: 'enqueue_build', args: { command: SLEEPER } }), say('Queued.')] })
+  const thread = await daemon.thread('Build it')
+  const queue = await daemon.watch<Build[]>(QUEUE, { scope: thread.id })
+  const pid = await sleeper(thread.cwd)
+  await daemon.dispatch('builds.cancel', { thread: thread.id, id: queue.value[0]!.id })
+  await queue.until((builds) => builds[0]?.state === 'cancelled')
+  expect(isRunning(pid)).toBe(false)
+})
+
+it('stops a running build, all of it, when the extension is torn down', async () => {
+  daemon = await testDaemon({ profile, model: [callTools({ name: 'enqueue_build', args: { command: SLEEPER } }), say('Queued.')] })
+  const thread = await daemon.thread('Build it')
+  const pid = await sleeper(thread.cwd)
+  await daemon.close()
+  daemon = undefined
+  // Teardown sends the group SIGTERM; the sleep goes at once.
+  const end = Date.now() + 5000
+  while (isRunning(pid) && Date.now() < end) await new Promise((resolve) => setTimeout(resolve, 25))
+  expect(isRunning(pid)).toBe(false)
 })

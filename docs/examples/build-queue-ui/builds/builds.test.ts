@@ -1,7 +1,10 @@
 // The build queue with its own UI: the agent queues two builds, the window draws this thread's queue beside it (and
-// no other's), Cancel stops the running one so the next runs, and ⌘⇧B takes it out of the aside and puts it back.
+// no other's), Cancel stops the running one so the next runs, and ⌘⇧B takes it out of the aside and puts it back. A
+// cancelled build stops with everything its command started.
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { callTools, daemonMachine, mountUi, say, testDaemon, type TestDaemon } from 'superego/testing'
+import { callTools, daemonMachine, isRunning, mountUi, say, testDaemon, type TestDaemon } from 'superego/testing'
 import ui from './ui.tsx'
 import { QUEUE, VIEW, type Build } from './shared.ts'
 
@@ -34,6 +37,27 @@ it("draws this thread's queue beside it, cancels from it, and ⌘⇧B shows or h
     expect(window.placed('aside', { thread: thread.id })).not.toContain(VIEW)
     await window.press('mod+shift+b')
     expect(window.placed('aside', { thread: thread.id })).toContain(VIEW)
+  } finally {
+    await window.unmount()
+  }
+})
+
+it('cancels all of a build from its button: nothing its command started outlives it', async () => {
+  // The command starts a process of its own (a `sleep`, as a compiler starts workers), and says its id.
+  const command = "sh -c 'sleep 30 & echo $! > sleeper.pid; wait'"
+  daemon = await testDaemon({ profile, model: [callTools({ name: 'enqueue_build', args: { command } }), say('Queued.')] })
+  const thread = await daemon.thread('Build it')
+  const queue = await daemon.watch<Build[]>(QUEUE, { scope: thread.id })
+  const file = join(thread.cwd, 'sleeper.pid')
+  await daemon.until(async () => (await readFile(file, 'utf8').catch(() => '')).endsWith('\n'), 'the build to start its sleep')
+  const sleeper = Number(await readFile(file, 'utf8'))
+  const window = await mountUi({ machines: [daemonMachine(daemon)], profile: { ref: thread.profile!, extensions: [ui] }, select: { thread: thread.id } })
+  try {
+    const aside = await window.render({ place: 'aside', thread: thread.id })
+    await window.until(() => aside.text().includes('running'))
+    await aside.click('Cancel')
+    await queue.until((builds) => builds[0]?.state === 'cancelled')
+    expect(isRunning(sleeper)).toBe(false)
   } finally {
     await window.unmount()
   }

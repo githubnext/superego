@@ -53,7 +53,9 @@ such work without awaiting it, or do it in a tool, action or hook. A `setup` tha
 down, and the profile fails to load, saying so.
 
 Teardown aborts `superego.signal` first: tie timers, watchers and fetches of your own to it (`watch(path, { signal })`,
-`fetch(url, { signal })`), or return a cleanup. A cleanup that throws is logged, and the rest still goes. After teardown,
+`fetch(url, { signal })`), or return a cleanup. Run commands with `spawnGroup(command, args, { cwd, signal })` (from
+'superego'), not `spawn`: it runs them as a process group, `stop()` (or the signal) ends all of it, SIGTERM then SIGKILL
+after `grace`, and `exited` resolves once none of it is left. Stopping a shell alone leaves what it started running. A cleanup that throws is logged, and the rest still goes. After teardown,
 registering throws, and a live value's `set` and `update` do nothing, so work that outlives it can't publish over the
 next version. An edit to any local file an extension imports (a helper) reloads it with its new code; packages load
 once.
