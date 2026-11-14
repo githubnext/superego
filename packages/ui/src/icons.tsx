@@ -48,6 +48,7 @@ export {
   SidebarSimpleIcon,
   SparkleIcon,
   SquareSplitHorizontalIcon,
+  TableIcon,
   StopIcon,
   TerminalIcon,
   WrenchIcon,

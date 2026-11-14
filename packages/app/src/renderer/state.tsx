@@ -2,7 +2,7 @@
 // number of components show them), which thread is selected, and the Settings dialog; those two kept in the window
 // across reloads; and where the window has been, to go back and forward.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { AUTH_REJECTED, type Json, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
+import { AUTH_REJECTED, DATA_VIEWS, type DataViewInfo, type Json, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { has, machine as client, useHiddenThreads, useMachineList, useThreads as useThreadsWatch, useValue } from './client.ts'
 import { useRegistry } from './extension.tsx'
@@ -200,7 +200,13 @@ function MachineThreads({ machine, onThreads, onRejections }: {
   const rejected = useValue<ProviderRejection[] | null>(machine.id, machine.state === 'connected' && has(machine, 'threads'), AUTH_REJECTED)
   useEffect(() => { onRejections(machine.id, rejected ?? undefined) }, [rejected])
   // What the machine offers, for the palette and for routing thread actions.
-  const { router, extensions } = useRegistry()
+  const registry = useRegistry()
+  const { router, extensions } = registry
+  // Its data views, but those of extensions switched off there; gone with it.
+  const views = useValue<DataViewInfo[] | null>(machine.id, machine.state === 'connected' && has(machine, 'data-views'), DATA_VIEWS)
+  const on = (views ?? []).filter((v) => has(machine, `ext:${v.extension}`))
+  useEffect(() => { registry.setDataViews(machine.id, on) }, [JSON.stringify(on)])
+  useEffect(() => () => registry.setDataViews(machine.id, []), [])
   // Again when what it offers changes: a profile's extensions bring actions of their own.
   useEffect(() => { if (machine.state === 'connected' && has(machine, 'actions')) void router.load(machine.id) }, [machine.state, machine.machine?.id, machine.features?.join()])
   useEffect(() => { if (threads) onThreads(machine.id, threads) }, [threads])

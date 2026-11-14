@@ -57,6 +57,7 @@ declare module '@phosphor-icons/react' {
   export const SidebarSimpleIcon: Icon
   export const SparkleIcon: Icon
   export const SquareSplitHorizontalIcon: Icon
+  export const TableIcon: Icon
   export const StopIcon: Icon
   export const TerminalIcon: Icon
   export const WrenchIcon: Icon

@@ -10,7 +10,7 @@
 // teardown removes all of it at once. A profile's UI is owned by that profile on its machine too, and draws only in
 // that profile's threads there.
 import { createContext, Fragment, useContext, useEffect, useMemo, useState, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type ReactNode } from 'react'
-import type { AppConfig, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, ProviderRejection, SectionInfo, SettingsSnapshot, Status, ThreadInfo } from '@superego/protocol'
+import type { AppConfig, DataViewInfo, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, ProviderRejection, SectionInfo, SettingsSnapshot, Status, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import type { Selection } from './state.tsx'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowContext, type WindowRouter } from './actions.tsx'
@@ -18,6 +18,7 @@ import { useSettings, watched } from './client.ts'
 import { createStore, type Store } from './local-state.ts'
 import { isLayout, LAYOUT, PLACES, resolveLayout, THREAD_PLACES, type Layout, type Place, type Placed, type Placement } from './layout.ts'
 import type { CompletionProvider, CompletionWord, SentWith } from './composer.ts'
+import { dataIcon, DataViewBody } from './data-views.tsx'
 
 /**
  * Where an extension can put UI by itself: places whose occupant behaviour decides, so the layout doesn't move them (a
@@ -384,7 +385,7 @@ export const defineUiExtension = (extension: UiExtension) => extension
  * Who registered something: an extension, whether it's optional (a thread can go without it), and for a profile's UI,
  * that profile on its machine (`profileScope`).
  */
-type Owner = { extension: string; optional: boolean; profile?: string }
+type Owner = { extension: string; optional: boolean; profile?: string; data?: true }
 type Owned<T> = T & { owner: Owner }
 
 /** A thread as lookups see it: on a machine, maybe with a profile. */
@@ -400,8 +401,15 @@ export type Registry = {
   /** What the app's extensions are, as each declares itself: told to every machine, so UI-only ones are known there. */
   extensions: ExtensionAbout[]
   slots: { [S in BehaviourSlot]: Owned<{ component: ComponentType<SlotProps[S]>; order: number }>[] }
-  /** The views declared, by id (`<extension>.<name>`): where each goes is the layout's. */
-  views: Owned<View & { id: string }>[]
+  /**
+   * The views declared, by id (`<extension>.<name>`): where each goes is the layout's. A machine's data view
+   * (`dataViews`) is one too, drawn by the core, with the machines that have it (`machines`).
+   */
+  views: Owned<View & { id: string; machines?: string[] }>[]
+  /** The data views each machine declares (its daemon extensions' `superego.view`), by machine. */
+  dataViews: Record<string, DataViewInfo[]>
+  /** Take the data views `machine` declares now (none: it's gone, or switched them off). */
+  setDataViews(machine: string, views: DataViewInfo[]): void
   /** Drawn by a `component`, or described by a `row`. `fold: false`: its calls show outside the fold of their run of work. */
   tools: Owned<{ name: string; component?: ComponentType<ToolCallProps>; row?: ToolRow; fold: boolean }>[]
   entries: Owned<{ kind: string; component: ComponentType<EntryProps> }>[]
@@ -438,7 +446,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   const registry: Registry = {
     app, extensions: extensions.map(({ name, title, description, required }) => ({ name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}) })),
     slots: { 'thread.crumb': [], 'composer.above': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
-    views: [], tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
+    views: [], dataViews: {}, tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
       visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
@@ -456,6 +464,13 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     },
     version: 0,
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
+    setDataViews(machine, views) {
+      if (JSON.stringify(registry.dataViews[machine] ?? []) === JSON.stringify(views)) return
+      registry.dataViews = { ...registry.dataViews, [machine]: views }
+      placeDataViews()
+      registry.version++
+      for (const listener of listeners) listener()
+    },
     installProfile(machine, profile, list) {
       const scope = profileScope(machine, profile)
       for (const [key, teardown] of [...teardowns]) if (key.startsWith(`${scope}/`)) teardown()
@@ -596,6 +611,40 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     try { extension.setup(api) } catch (error) { teardown(); throw error }
   }
 
+  /**
+   * The machines' data views, as views: one per id however many machines have it (a profile's, one per profile on
+   * each machine), after the extensions' own; one an extension's UI declares already is theirs. Made again as a
+   * machine's change.
+   */
+  function placeDataViews() {
+    const drop = <T,>(list: Owned<T>[]) => { for (let i = list.length - 1; i >= 0; i--) if (list[i]!.owner.data) list.splice(i, 1) }
+    drop(registry.views)
+    drop(registry.panes)
+    for (const [machine, infos] of Object.entries(registry.dataViews)) {
+      for (const info of infos) {
+        for (const profile of info.profiles?.map((dir) => profileScope(machine, { dir } as ProfileRef)) ?? [undefined]) {
+          const same = registry.views.find((v) => v.id === info.id && v.owner.profile === profile)
+          if (same) {
+            if (same.owner.data && !same.machines!.includes(machine)) same.machines!.push(machine)
+            else if (!same.owner.data) console.warn(`Data view ${info.id} on ${machine}: ${same.owner.extension}'s UI declares it already; keeping that one`)
+            continue
+          }
+          const owner: Owner = { extension: info.extension, optional: !profile, ...(profile ? { profile } : {}), data: true }
+          const icon = dataIcon(info.icon)
+          const component = (props: ViewProps) => <DataViewBody id={info.id} {...props} />
+          registry.views.push({
+            id: info.id, title: info.title, ...(icon ? { icon } : {}), context: info.context, fits: info.fits,
+            ...(info.default !== undefined ? { default: info.default } : {}), ...(info.narrow !== undefined ? { narrow: info.narrow } : {}),
+            ...(info.order !== undefined ? { order: info.order } : {}), component, machines: [machine], owner,
+          })
+          if (info.context === 'thread' && info.fits.includes('pane')) {
+            registry.panes.push({ kind: info.id, title: info.title, ...(icon ? { icon } : {}), component: ({ machine, thread }: PaneProps) => <DataViewBody id={info.id} place="pane" machine={machine} thread={thread} />, owner })
+          }
+        }
+      }
+    }
+  }
+
   setUp({ name: 'core', required: true, setup: core })
   for (const extension of extensions) setUp(extension)
   return registry
@@ -692,8 +741,10 @@ export function useLayout(): { placed: Placed; narrow: boolean } {
  * extension its thread goes without, and that thread's profile's own (first, by the same id).
  */
 export function viewsIn(registry: Registry, placed: Placed, place: Place, where?: Where) {
+  // A data view shows a thread only from that thread's machine: another's has nothing to say of it.
+  const on = (view: Registry['views'][number]) => !where || !view.machines || view.machines.includes(where.machine)
   return placed[place].flatMap((id) => {
-    const found = lookUp(registry.views, where, (view) => view.id === id)
+    const found = lookUp(registry.views.filter(on), where, (view) => view.id === id)
     return found ? [found] : []
   })
 }
