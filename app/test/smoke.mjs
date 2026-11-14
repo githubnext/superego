@@ -173,9 +173,10 @@ if (phase === 'first') {
   const shownDir = `${process.env.SUPEREGO_HOME}/attachments/${showing}/shown`
   rmSync(`${shownDir}/${readdirSync(shownDir).find((name) => name.endsWith('-gone.png'))}`)
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('show me the screens'))?.click()`)
-  // Each is read as it nears the screen: the first, above, once scrolled to.
-  await until(`(() => { const e = document.querySelector('.images--single'); e?.scrollIntoView({ block: 'center' }); return Boolean(e) })()`, 'images in the thread')
-  await until(`document.querySelector('.images--single .images__frame.is-ready') && document.querySelector('.images--single .images__caption')?.textContent === 'The home page, at full width'`, 'a single image, loaded, with its caption')
+  // Opened, it lands at its end, and stays there as what's in it is laid out.
+  await until(`(() => { const s = document.querySelector('.thread__scroll'); return Boolean(document.querySelector('.images--carousel')) && s.scrollHeight - s.scrollTop - s.clientHeight < 2 })()`, 'the thread opened at its end')
+  // Each is read as it nears the screen: the first, above, once scrolled to (and kept in view while it loads).
+  await until(`(() => { document.querySelector('.images--single')?.scrollIntoView({ block: 'center' }); return document.querySelector('.images--single .images__frame.is-ready') && document.querySelector('.images--single .images__caption')?.textContent === 'The home page, at full width' })()`, 'a single image, loaded, with its caption')
   await until(`document.querySelectorAll('.images--grid .images__frame').length === 3 && document.querySelectorAll('.images--grid .images__frame.is-ready').length === 2 && document.querySelector('.images--grid .images__frame.is-broken')?.textContent.includes('Image not found')`, 'a grid, with the gone one broken')
   await until(`document.querySelector('.images--grid .images__title')?.textContent === 'Before and after'`, 'the grid titled')
   await until(`document.querySelector('.images--carousel .images__count')?.textContent === '1 / 6' && Boolean(document.querySelector('.images--carousel .images__slide .images__frame.is-ready'))`, 'a carousel at its first')

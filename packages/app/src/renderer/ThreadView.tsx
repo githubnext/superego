@@ -217,6 +217,8 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
   const live = watched?.docs['pi.live'] as LiveState | undefined
   const scroller = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
+  /** Where its end was when last kept there. */
+  const end = useRef(0)
   // Scrolled up from the end: the composer offers a way back down.
   const [away, setAway] = useState(false)
   const jumpToEnd = useCallback(() => {
@@ -277,7 +279,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
     if (!el || !column || !dock) return
     const observer = new ResizeObserver(() => {
       el.parentElement!.style.setProperty('--dock', `${dock.offsetHeight}px`)
-      if (pinned.current) el.scrollTop = el.scrollHeight
+      if (pinned.current) { el.scrollTop = el.scrollHeight; end.current = el.scrollTop }
     })
     observer.observe(column)
     observer.observe(dock)
@@ -303,7 +305,10 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
         }}
         onScroll={(e) => {
           const el = e.currentTarget
-          pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < PINNED
+          const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < PINNED
+          if (atEnd) end.current = el.scrollHeight - el.clientHeight
+          // Not scrolled up from where its end was: the transcript shrinking moves it too, heard only once it's grown back.
+          pinned.current = atEnd || (pinned.current && el.scrollTop >= end.current - PINNED)
           setAway(el.scrollHeight - el.scrollTop - el.clientHeight > 200)
           el.parentElement?.classList.toggle('is-scrolled', el.scrollTop > 8)
           if (el.scrollTop < el.clientHeight) loadOlder()
