@@ -2,9 +2,10 @@
 // number of components show them), which thread is selected, and the Settings dialog; those two kept in the window
 // across reloads; and where the window has been, to go back and forward.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { AUTH_REJECTED, DATA_VIEWS, type DataViewInfo, type Json, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
+import { AUTH_REJECTED, DATA_VIEWS, type Json, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { has, machine as client, useHiddenThreads, useMachineList, useThreads as useThreadsWatch, useValue } from './client.ts'
+import { checkDataViews, warnDropped } from './data-view-check.ts'
 import { useRegistry } from './extension.tsx'
 import { useImageRechecks } from './images.tsx'
 import { emptyHistory, step, visit, type History, type Place } from './history.ts'
@@ -211,8 +212,13 @@ function MachineThreads({ machine, onThreads, onHidden, onRejections }: {
   const registry = useRegistry()
   const { router, extensions } = registry
   // Its data views, but those of extensions switched off there; gone with it.
-  const views = useValue<DataViewInfo[] | null>(machine.id, machine.state === 'connected' && has(machine, 'data-views'), DATA_VIEWS)
-  const on = (views ?? []).filter((v) => has(machine, `ext:${v.extension}`))
+  // Checked here, not taken on the machine's word: only what can be a view of one of its extensions (data-view-check.ts).
+  const views = useValue<unknown>(machine.id, machine.state === 'connected' && has(machine, 'data-views'), DATA_VIEWS)
+  const on = useMemo(() => {
+    const { views: on, dropped } = checkDataViews(views, (extension) => has(machine, `ext:${extension}`))
+    warnDropped(machine.id, 'view.list', dropped)
+    return on
+  }, [views, machine.features?.join()])
   useEffect(() => { registry.setDataViews(machine.id, on) }, [JSON.stringify(on)])
   useEffect(() => () => registry.setDataViews(machine.id, []), [])
   // Again when what it offers changes: a profile's extensions bring actions of their own.

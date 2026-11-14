@@ -756,6 +756,8 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .data-view__note { margin-bottom: 8px; color: var(--superego-muted); font-size: var(--superego-text-sm); }
 .data-view__empty { color: var(--superego-muted); padding: var(--superego-space-3) 6px; }
 .data-view__error { color: var(--superego-danger, #d70015); font-size: var(--superego-text-sm); margin-bottom: 8px; overflow-wrap: anywhere; }
+.data-view__dropped { color: var(--superego-muted); font-size: var(--superego-text-sm); margin-bottom: 8px; overflow-wrap: anywhere; }
+.data-view__retry { all: unset; cursor: pointer; text-decoration: underline; }
 .data-view__facts { display: grid; grid-template-columns: minmax(70px, max-content) 1fr; gap: 6px 10px; margin: 0 0 var(--superego-space-4); }
 .data-view__facts > div { display: contents; }
 .data-view__facts dt { color: var(--superego-muted); }
