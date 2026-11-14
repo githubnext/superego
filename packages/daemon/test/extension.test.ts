@@ -157,8 +157,8 @@ it("knows the extensions a window declares that have no daemon half: a switch fo
   expect(switches.map((s) => s.key)).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.links'])
   // One the daemon sets up keeps its own declaration.
   expect(switches[0]!.title).toBe('Coding tools')
-  // A later window's word on one it declared is taken.
-  await peer.call('extensions.declare', { extensions: [{ name: 'links', title: 'Web links' }] })
+  // A newer window's word on one it declared is taken (see contract.test.ts).
+  await peer.call('extensions.declare', { extensions: [{ name: 'links', version: '1.0.0', title: 'Web links' }] })
   const again = await peer.call<{ value: { sections: { id: string; settings: { key: string; title: string }[] }[] } }>('settings.watch', {})
   expect(again.value.sections.find((s) => s.id === 'extensions')!.settings.find((s) => s.key === 'extensions.links')!.title).toBe('Web links')
   await peer.call<ThreadInfo>('thread.create', {})

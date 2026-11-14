@@ -1,11 +1,12 @@
-// The extension contract as a daemon keeps it: an extension the host's API can't serve is refused, and what each
-// extension set up is at is announced (hello, features.changed).
+// The extension contract as a daemon keeps it: an extension the host's API can't serve is refused, what each extension
+// set up is at is announced (hello, features.changed), windows' declarations are settled the same whatever order they
+// come in, and the core still answers all protocol generation 1 released.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { contractProblem, defineApp, EXTENSION_API, PROTOCOL_VERSION, type ExtensionAbout, type ExtensionManifest, type Hello } from '@superego/protocol'
+import { contractProblem, defineApp, EXTENSION_API, PROTOCOL_VERSION, RELEASED, type ExtensionAbout, type ExtensionManifest, type Hello, type RpcPeer } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonExtension } from '../src/index.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
@@ -74,6 +75,54 @@ it('announces each extension at its version, in hello and as it changes', async 
   await peer.call('settings.set', { key: 'extensions.git', value: true })
   await until(() => told.length === 2)
   expect(of(told[1]!.extensions, 'git')).toMatchObject({ version: '1.3.0' })
+  await close()
+})
+
+/** What the machine's Settings says of `name`: its switch's title, or nothing. */
+async function switchOf(peer: RpcPeer, name: string) {
+  const { value } = await peer.call<{ value: { sections: { id: string; settings: { key: string; title: string; description?: string }[] }[] } }>('settings.watch', {})
+  return value.sections.find((s) => s.id === 'extensions')?.settings.find((s) => s.key === `extensions.${name}`)
+}
+
+it('settles windows that declare one extension differently the same whatever order they come in: the newest version', async () => {
+  const declarations: ExtensionAbout[] = [
+    { name: 'links', version: '1.0.0', title: 'Links' },
+    { name: 'links', version: '1.2.0', title: 'Web links' },
+    { name: 'links', version: '1.2.0', title: 'Other links' },
+    { name: 'links', title: 'Old links' },
+    { name: 'links', version: '1.1.0', title: 'Middle links' },
+  ]
+  const orders = [[0, 1, 2, 3, 4], [4, 3, 2, 1, 0], [3, 0, 4, 1, 2]]
+  const outcomes: string[] = []
+  for (const [i, order] of orders.entries()) {
+    const data = join(dir, `order-${i}`)
+    mkdirSync(data, { recursive: true })
+    const { connect, close } = await open([], data)
+    // Each from a window of its own.
+    for (const at of order) {
+      const { peer, socket } = await connect()
+      await peer.call('extensions.declare', { extensions: [declarations[at]!] })
+      socket.destroy()
+    }
+    const { peer, socket } = await connect()
+    outcomes.push((await switchOf(peer, 'links'))!.title)
+    socket.destroy()
+    await close()
+  }
+  // The newest wins; the two at the newest version are settled by what they say, the same each time.
+  expect(outcomes).toEqual(['Web links', 'Web links', 'Web links'])
+})
+
+it("never lets an older window's declaration take back what a newer one said", async () => {
+  const { peer, close } = await open()
+  await peer.call('extensions.declare', { extensions: [{ name: 'links', version: '2.0.0', title: 'Links', required: true }] })
+  await peer.call('extensions.declare', { extensions: [{ name: 'links', version: '1.4.0', title: 'Links' }] })
+  await peer.call('extensions.declare', { extensions: [{ name: 'links', title: 'Links' }] })
+  // Required: no switch.
+  expect(await switchOf(peer, 'links')).toBeUndefined()
+  // A version that isn't one is ignored.
+  await peer.call('extensions.declare', { extensions: [{ name: 'links', version: '9', title: 'Bad' }] })
+  expect(await switchOf(peer, 'links')).toBeUndefined()
   await close()
 })
 

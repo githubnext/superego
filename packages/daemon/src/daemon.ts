@@ -14,7 +14,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  aliasesOf, arr, type Attachment, AUTH_REJECTED, contractProblem, EXTENSION_API, type ExtensionManifest, manifestOf, DATA_VIEWS, dataViewProblem, type DataViewInfo, paramsParser, bool, defineAction, deriveStatus, FEATURES, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
+  aliasesOf, arr, type Attachment, AUTH_REJECTED, compareVersion, contractProblem, EXTENSION_API, type ExtensionManifest, manifestOf, parseVersion, UNVERSIONED, DATA_VIEWS, dataViewProblem, type DataViewInfo, paramsParser, bool, defineAction, deriveStatus, FEATURES, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
@@ -982,7 +982,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * Extensions a window has whose work is all there (no daemon half): known here as the window declares them, so an
    * optional one has its switch in Settings and a profile can do without it, as with any other. Until a window
    * connects (after a restart), threads aren't told they go without one. Its name is claimed, so no profile's
-   * extension takes it; and a later window's word on it (a new title, now required) is taken.
+   * extension takes it. When windows disagree on one, the newest version's word is taken (a new title, now required),
+   * whatever order they say it in; never last-come.
    */
   const declared = new Set<string>()
   function declare(abouts: ExtensionAbout[]) {
@@ -991,9 +992,13 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       const name = about?.name
       if (typeof name !== 'string' || !/^[a-z][a-z0-9-]*$/.test(name) || RESERVED.has(name)) continue
       if (!declared.has(name) && (extensions.has(name) || claimed.has(name))) continue
-      const { title, description, required } = about
-      const next: ExtensionAbout = { name, ...(typeof title === 'string' ? { title } : {}), ...(typeof description === 'string' ? { description } : {}), ...(required === true ? { required } : {}) }
-      if (JSON.stringify(extensions.get(name)) === JSON.stringify(next)) continue
+      const next = aboutOf(about)
+      if (next.version !== undefined && !parseVersion(next.version)) continue
+      const known = extensions.get(name)
+      if (JSON.stringify(known) === JSON.stringify(next)) continue
+      // The newest version's word; two words at one version (windows built apart), settled by their text, so the
+      // same one stands whatever order the windows connect in.
+      if (known && (compareVersion(next.version ?? UNVERSIONED, known.version ?? UNVERSIONED) || (JSON.stringify(next) > JSON.stringify(known) ? 1 : -1)) < 0) continue
       extensions.set(name, next)
       declared.add(name)
       claimed.add(name)
