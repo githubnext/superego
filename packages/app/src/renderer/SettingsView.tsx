@@ -17,7 +17,7 @@ import { driftNote, MachineDrift } from './machine-drift.tsx'
 import { settingsView, useApp, useRegistry } from './extension.tsx'
 import { useSettingsDialog } from './state.tsx'
 import { useAllowedUi, useDeclinedUi } from './profile-ui.ts'
-import { sizeOf } from './profile-ui-notice.tsx'
+import { RevokedUiNotice, sizeOf } from './profile-ui-notice.tsx'
 
 const APP = 'app'
 /** Settings → Machines (also opened by Update: see actions.tsx). */
@@ -381,10 +381,13 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
             {/* Its profiles' UI this computer lets run in its window, each for the sources allowed (see profile-ui.ts). */}
             {allowedUi.filter((a) => a.machine === m.id).map((a) => (
               <div key={a.profile.dir} className="settings__note machine-row__ui" title={a.profile.dir}>
-                <span>Profile <b>{a.profile.name}</b>’s UI runs here · {a.files.length === 1 ? '1 file' : `${a.files.length} files`}, {sizeOf(a.files.reduce((sum, f) => sum + f.size, 0))}</span>
-                <Button onClick={() => void act('profiles.revokeUi', { machine: m.id, dir: a.profile.dir }).catch(() => {})}>Revoke</Button>
+                <span>Profile <b>{a.profile.name}</b>’s UI runs here, with this window’s full access · {a.files.length === 1 ? '1 file' : `${a.files.length} files`}, {sizeOf(a.files.reduce((sum, f) => sum + f.size, 0))}</span>
+                <Button title="Takes out its views and actions. Reload the window after, to stop anything its code left running"
+                  onClick={() => void act('profiles.revokeUi', { machine: m.id, dir: a.profile.dir }).catch(() => {})}>Revoke</Button>
               </div>
             ))}
+            {/* Revoked after it ran here: a reload clears what its code may have left going. */}
+            <RevokedUiNotice machine={m.id} />
             {/* And the ones put off ("Not now"), for the sources they were then: to allow from here too. */}
             {declinedUi.filter((d) => d.machine === m.id).map((d) => (
               <div key={d.profile.dir} className="settings__note machine-row__ui" title={d.profile.dir}>

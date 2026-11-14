@@ -1042,7 +1042,7 @@ if (phase === 'first') {
   browser.destroy()
   await run(`window.superego.call('local', 'settings.set', { key: 'web.access', value: 'off' })`)
   // The second machine's profile UI: the thread works without it, and the window asks; it runs once allowed here, stops
-  // when its sources change, and stops at once when revoked.
+  // when its sources change, and is taken out when revoked, with a reload offered.
   const onSecond = await run(`window.superego.call('${secondId}', 'thread.create', { title: '' }).then((t) => t.id)`)
   await run(`window.superego.call('${secondId}', 'thread.submit', { id: '${onSecond}', text: 'over on second' })`)
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('over on second'))`, 'the remote thread in the sidebar', 30_000)
@@ -1072,16 +1072,21 @@ if (phase === 'first') {
   await until(`Boolean(document.querySelector('.profile-ui-notice')) && !document.querySelector('.profile-ui-marker')`, 'the marker asks again')
   await run(`[...document.querySelectorAll('.profile-ui-notice button')].find((b) => b.textContent === 'Allow').click()`)
   await until(`document.querySelector('.remote-badge')?.textContent === 'changed ui'`, 'the changed UI runs once allowed')
-  // Settings lists it under its machine; Revoke stops it at once.
+  // Settings lists it under its machine; Revoke takes it out.
   await run(`document.querySelector('.app__settings').click()`)
   await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent === 'Machines').click()`)
   await until(`document.querySelector('.machine-row__ui')?.textContent.includes('default')`, 'allowed profile UI listed in Settings')
   await shot('profile-ui-settings')
   await run(`[...document.querySelectorAll('.machine-row__ui button')].find((b) => b.textContent === 'Revoke').click()`)
   await until(`!document.querySelector('.machine-row__ui') && !document.querySelector('.remote-badge')`, 'revoked: the remote profile UI stops')
+  // Its code ran here: a reload is offered, to stop anything it left going.
+  await until(`document.querySelector('.machine-row__revoked')?.textContent.includes('Reload the window')`, 'revoked: a reload offered in Settings')
   await escape()
   await until(`!document.querySelector('.superego-dialog.settings')`, 'settings closed')
   await until(`Boolean(document.querySelector('.profile-ui-notice')) && !document.querySelector('.profile-ui-marker')`, 'revoked: asked again')
+  await until(`[...document.querySelectorAll('.revoked-ui-notice button')].some((b) => b.textContent === 'Reload')`, 'revoked: a reload offered in the window')
+  await run(`[...document.querySelectorAll('.revoked-ui-notice button')].find((b) => b.textContent === 'Later').click()`)
+  await until(`!document.querySelector('.revoked-ui-notice')`, 'revoked: the reload put off')
   console.log('smoke(first): ok')
 } else {
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread after reopen')

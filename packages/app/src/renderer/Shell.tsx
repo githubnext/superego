@@ -11,6 +11,7 @@ import { machine as client, useSettings, watched } from './client.ts'
 import { paneMenu, PlacedViews, shownPanes, Slot, useLayout, useRegistry, viewsIn, type SpaceRailProps, type View, type ViewProps } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
 import { ServiceNotice } from './ServiceNotice.tsx'
+import { RevokedUiNotice } from './profile-ui-notice.tsx'
 import { LayoutEditor, LayoutNotice, LayoutViews } from './layout-text.tsx'
 import { ViewContextMenu, withContextMenu, withMenuButton } from './view-menu.tsx'
 import { refreshFontsSoon } from './fonts.ts'
@@ -97,7 +98,7 @@ export function Shell() {
           <PlacedViews place="titlebar" frame={withContextMenu('titlebar')} />
           {selection && thread && machine && <ThreadTitle machine={machine} thread={thread} />}
           <span className="app__titlebar-end">
-            {!spaces.length && <><AuthNotice /><ServiceNotice /><LayoutNotice /></>}
+            {!spaces.length && <><AuthNotice /><ServiceNotice /><LayoutNotice /><RevokedUiNotice /></>}
             <span className="app__strip" ref={setStrip} />
             {selection && thread && machine && <ThreadTools machine={machine} thread={thread} />}
           </span>
@@ -123,7 +124,7 @@ export function Shell() {
           <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) setDrawer(false) } : undefined}>
             {narrow && <div className="app__drag" />}
             {space && <SpaceView key={space.id} view={space} {...(where ? { machine, thread } : {})} />}
-            <div className="app__footer"><AuthNotice /><ServiceNotice /><LayoutNotice />{narrow && (
+            <div className="app__footer"><AuthNotice /><ServiceNotice /><LayoutNotice /><RevokedUiNotice />{narrow && (
               // A phone's drawer: the other spaces to switch to, what the layout puts in the drawer, and Settings at the end.
               <div className="app__drawer-bar">
                 {spaces.length > 1 && <>

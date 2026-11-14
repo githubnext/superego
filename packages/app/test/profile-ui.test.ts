@@ -5,7 +5,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { RpcError } from '@superego/protocol'
 import { collectProfileUi, hashProfileUi, type AllowedUi } from '@superego/client/profile-ui'
 import type { SuperegoBridge, SuperegoEvent } from '../src/shared.ts'
-import { declineUi, ensureProfileUi, pendingUi, reopenUi, resetProfileUi, setLoader } from '../src/renderer/profile-ui.ts'
+import { declineUi, dismissRevokedUi, ensureProfileUi, pendingUi, reopenUi, resetProfileUi, revokedUi, setLoader } from '../src/renderer/profile-ui.ts'
 
 let answer: () => unknown
 let files: Record<string, string>
@@ -113,12 +113,35 @@ it("runs another machine's profile UI only once allowed here, for exactly those 
   await ensureProfileUi(registry, 'remote', p)
   expect(registry.installProfile).toHaveBeenCalledWith('remote', p, [])
   expect(pendingUi('remote', p.dir)?.hash).not.toBe(hash)
+  expect(revokedUi()).toEqual([])
 
-  // Allowed again, then revoked: it stops at once.
-  await allowList([{ machine: 'remote', profile: p, hash: await hashOf(['./ui/a.ts']), files: [], at: 0 }])
+  // Allowed again, then revoked: what it registered is taken out at once, and, as its code ran here, a reload offered.
+  const again = await hashOf(['./ui/a.ts'])
+  await allowList([{ machine: 'remote', profile: p, hash: again, files: [], at: 0 }])
   expect(registry.installProfile).toHaveBeenLastCalledWith('remote', p, [expect.anything()])
   await allowList([])
   expect(registry.installProfile).toHaveBeenLastCalledWith('remote', p, [])
+  expect(revokedUi()).toEqual([{ machine: 'remote', profile: p }])
+  // Later: no longer offered.
+  dismissRevokedUi(revokedUi())
+  expect(revokedUi()).toEqual([])
+  // Allowed again: running, so nothing to reload for; revoked again, offered again.
+  await allowList([{ machine: 'remote', profile: p, hash: again, files: [], at: 0 }])
+  await allowList([])
+  expect(revokedUi()).toHaveLength(1)
+  await allowList([{ machine: 'remote', profile: p, hash: again, files: [], at: 0 }])
+  expect(revokedUi()).toEqual([])
+})
+
+it('offers no reload for UI revoked before it ever ran', async () => {
+  const registry = { installProfile: vi.fn() }
+  const p = profile()
+  files = { 'a.ts': 'code' }
+  answer = () => ({ hash: 'v1', entries: ['./a.ts'] })
+  await ensureProfileUi(registry, 'remote', p)
+  await allowList([])
+  expect(registry.installProfile).not.toHaveBeenCalled()
+  expect(revokedUi()).toEqual([])
 })
 
 it('allowed already: runs at once, without asking', async () => {

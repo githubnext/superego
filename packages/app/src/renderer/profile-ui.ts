@@ -11,6 +11,8 @@
 // thread works without it, and the window offers to allow it (ProfileUiNotice). This computer's own profiles keep their
 // daemon's rules: they are on this computer already. Once allowed, it runs in the window's own JavaScript with its full
 // reach: a narrower `call` or `dispatch` wouldn't hold, with `window.superego` beside it. Isolating it is a sandbox's job.
+// Revoking it takes out what it registered, but not what its code already did (timers, listeners, globals, requests
+// under way): the window offers a reload for that (RevokedUiNotice).
 import { useEffect, useSyncExternalStore } from 'react'
 import type { ProfileRef, ThreadInfo } from '@superego/protocol'
 import {
@@ -136,15 +138,45 @@ async function install(entry: Known) {
   }) : []
   entry.registry.installProfile(entry.machine, entry.profile, extensions)
   entry.installed = true
+  if (revokedRan.delete(keyOf(entry.machine, entry.profile.dir))) revokedList = [...revokedRan.values()]
 }
 
-/** Let what runs follow the allowed list: allowed ones that wait start, revoked ones stop at once. */
+// ── Revoked after it ran ────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Remote profile UIs revoked after their code ran in this window. Revoking takes out what they registered (views,
+ * panes, actions), but code that ran may have left timers, listeners, globals or requests going that nothing here can
+ * undo: only a fresh window clears them. Each is offered a reload until allowed again or dismissed.
+ */
+export type RevokedUi = { machine: string; profile: ProfileRef }
+const revokedRan = new Map<string, RevokedUi>()
+let revokedList: RevokedUi[] = []
+
+/** The ones revoked after their code ran here, to offer a reload for. */
+export const revokedUi = () => revokedList
+export function useRevokedUi(): RevokedUi[] {
+  return useSyncExternalStore(subscribe, () => revokedList)
+}
+
+/** Not reloading after all: stop offering it for these. */
+export function dismissRevokedUi(list: RevokedUi[]) {
+  for (const r of list) revokedRan.delete(keyOf(r.machine, r.profile.dir))
+  revokedList = [...revokedRan.values()]
+  changed()
+}
+
+/** Let what runs follow the allowed list: allowed ones that wait start, revoked ones are taken out (see RevokedUi). */
 async function settle() {
   for (const entry of known.values()) {
     if (!entry.hash) continue
     const ok = isAllowed(allowed, entry.machine, entry.profile.dir, entry.hash)
     if (ok && !entry.installed) await install(entry).catch((error) => console.error(`The ${entry.profile.name} profile's UI didn't load`, error))
-    else if (!ok && entry.installed) { entry.registry.installProfile(entry.machine, entry.profile, []); entry.installed = false }
+    else if (!ok && entry.installed) {
+      entry.registry.installProfile(entry.machine, entry.profile, [])
+      entry.installed = false
+      revokedRan.set(keyOf(entry.machine, entry.profile.dir), { machine: entry.machine, profile: entry.profile })
+      revokedList = [...revokedRan.values()]
+    }
   }
   changed()
 }
@@ -261,5 +293,5 @@ export function reopenUi(pending: PendingUi, open: boolean) {
 
 /** Tests: forget every profile's UI. */
 export function resetProfileUi() {
-  known.clear(); reopened.clear(); allowed = []; declined = []; allowedLoad = undefined; load = loadProfileUi
+  known.clear(); reopened.clear(); revokedRan.clear(); revokedList = []; allowed = []; declined = []; allowedLoad = undefined; load = loadProfileUi
 }

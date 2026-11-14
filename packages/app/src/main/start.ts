@@ -438,7 +438,7 @@ export function startApp(appConfig: AppConfig) {
     },
   }))
   appRouter.register(defineAction({
-    id: 'profiles.revokeUi', title: "Stop a machine's profile UI running in this window", runs: 'app', expose: ['ui'],
+    id: 'profiles.revokeUi', title: "Revoke a machine's profile UI in this app's windows", runs: 'app', expose: ['ui'],
     params: obj({ machine: str(), dir: str() }),
     async run({ machine, dir }) { await uiAllowed.revoke(machine, dir); return null },
   }))

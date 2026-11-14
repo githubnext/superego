@@ -8,7 +8,7 @@ import type { MachineEntry } from '../shared.ts'
 import type { PaneProps, UiApi } from './extension.tsx'
 import type { ThreadInfo } from '@superego/protocol'
 import { Markdown } from './Markdown.tsx'
-import { declineUi, reopenUi, usePendingUi, useProfileSource } from './profile-ui.ts'
+import { declineUi, dismissRevokedUi, reopenUi, usePendingUi, useProfileSource, useRevokedUi } from './profile-ui.ts'
 import { useRegistry } from './extension.tsx'
 
 /** A size in bytes, as people say it. */
@@ -40,7 +40,7 @@ function ProfileUiNotice({ machine, thread }: { machine: MachineEntry; thread: T
   }, { machine: machine.id, source: 'profile-ui' })
   return (
     <div className="profile-ui-notice" role="status">
-      <div>{machine.label}’s profile <b>{pending.profile.name}</b> has UI code. Allow it to run in this window?</div>
+      <div>{machine.label}’s profile <b>{pending.profile.name}</b> has UI code. Allow it to run in this window? It would have the window’s full access, to every machine.</div>
       {open && (
         <ul className="profile-ui-notice__files">
           {pending.files.map((file) => (
@@ -56,6 +56,28 @@ function ProfileUiNotice({ machine, thread }: { machine: MachineEntry; thread: T
         </Button>
       </div>
       {error && <div className="setting__error">{error}</div>}
+    </div>
+  )
+}
+
+/**
+ * A remote profile's UI revoked after it ran here: its views and actions are gone, but its code may have left
+ * something going (a timer, a listener, a request), and only a fresh window is sure to stop it. Offers that reload, in
+ * the window (and, `machine`, in that machine's row in Settings).
+ */
+export function RevokedUiNotice({ machine }: { machine?: string }) {
+  const revoked = useRevokedUi().filter((r) => !machine || r.machine === machine)
+  if (!revoked.length) return null
+  const names = revoked.length === 1 ? `the ${revoked[0]!.profile.name} profile’s` : `the ${revoked.map((r) => r.profile.name).join(', ')} profiles’`
+  return (
+    <div className={machine ? 'settings__note machine-row__revoked' : 'service-notice revoked-ui-notice'} role="status" aria-live="polite">
+      <div className={machine ? undefined : 'service-notice__label'}>
+        Revoked {names} UI. Reload the window to make sure none of its code keeps running.
+      </div>
+      <div className={machine ? undefined : 'service-notice__actions'}>
+        <Button variant="primary" onClick={() => location.reload()}>Reload</Button>
+        {!machine && <Button onClick={() => dismissRevokedUi(revoked)}>Later</Button>}
+      </div>
     </div>
   )
 }
