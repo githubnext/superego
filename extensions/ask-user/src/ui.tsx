@@ -3,7 +3,7 @@
 // the composer with the question and its numbered options (a free answer is typed below them); in the transcript, the
 // question and the answer it got.
 import { useState } from 'react'
-import { defineUiExtension, useDispatch, keyLabel, Markdown, useComposer, useComposerClaim, useValue, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
+import { defineUiExtension, has, useDispatch, keyLabel, Markdown, useComposer, useComposerClaim, useValue, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import { about, ANSWER, PENDING, TOOL, type AskDetails, type Option, type Question } from './shared.ts'
 import { answerOf, keyMove, partsOf } from './question.ts'
@@ -36,8 +36,9 @@ function QuestionCard({ machine, question }: { machine: MachineEntry; question: 
   // Typing a free answer drops it: ⏎ then sends what's typed.
   const highlighted = useComposer().text.trim() ? undefined : active
   const dispatch = useDispatch()
-  // From an older daemon, options are plain labels.
-  const options = question.options.map((option): Option => typeof option === 'string' ? { label: option } : option)
+  // ask-user 1.0 gives options as objects; a daemon from before versions may give plain labels (the alias
+  // 'ask-user:labels', until its milestone).
+  const options = has(machine, 'ext:ask-user@^1') ? question.options : question.options.map((option): Option => typeof option === 'string' ? { label: option } : option)
   const { context, ask } = partsOf(question.question)
   const answer = (value: string) => {
     setError(undefined)

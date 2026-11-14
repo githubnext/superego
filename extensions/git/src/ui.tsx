@@ -14,12 +14,15 @@ export default defineUiExtension({
     superego.pane(CHANGES, { title: 'Changes', icon: ArrowsLeftRightIcon, component: ChangesPane, menu: true, width: 0.45 })
     superego.action(defineAction({
       id: 'git.changes', title: 'Show changes', keys: 'mod+shift+d',
-      // Not on a machine without git's daemon half: an older Superego there has no git.diff.
-      when: (c) => Boolean(c.selection) && has(c.machines.find((m) => m.id === c.selection!.machine), 'ext:git'),
+      // Not on a machine without a git daemon half this speaks: an older Superego there has no git.diff.
+      when: (c) => Boolean(c.selection) && has(c.machines.find((m) => m.id === c.selection!.machine), SPEAKS),
       run: async (_p, c) => { if (c.selection) await c.dispatch('pane.open', { id: c.selection.thread, kind: CHANGES }, { machine: c.selection.machine, source: 'git' }) },
     }))
   },
 })
+
+/** The git daemon halves this one speaks: 1.x, or one from before versions (0.0.0), whose git.diff is 1.0's. */
+const SPEAKS = 'ext:git@<2'
 
 /** The folder's changes by git, refreshed as the thread moves on. */
 function ChangesPane({ machine, thread }: PaneProps) {
@@ -27,7 +30,7 @@ function ChangesPane({ machine, thread }: PaneProps) {
   const dispatch = useDispatch()
   const [changes, setChanges] = useState<Changes>()
   const [error, setError] = useState<string>()
-  const able = has(machine, 'ext:git')
+  const able = has(machine, SPEAKS)
   const load = () => !able ? Promise.resolve() : call<Changes>(machine.id, DIFF, { id: thread.id }).then((c) => { setChanges(c); setError(undefined) }, (e: Error) => setError(e.message))
   useEffect(() => { void load() }, [thread.id, thread.activeAt, thread.status.state, able])
   const files = changes?.repo ? parseDiff(changes.diff) : []
