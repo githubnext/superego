@@ -9,8 +9,8 @@ import { bool, obj, opt, str, type AppConfig } from '@superego/protocol'
 import { createRegistry, layoutOf, RegistryProvider, type UiExtension } from './extension.tsx'
 import { LAYOUT, type Place } from './layout.ts'
 import { placeView } from './layout-edit.ts'
-import { setLocalState } from './local-state.ts'
-import { LAYOUT_TARGET, Profiles, Providers } from './SettingsView.tsx'
+import { registerLayoutText } from './layout-text.tsx'
+import { Profiles, Providers } from './SettingsView.tsx'
 import { WebAccess } from './web-access.tsx'
 import { Shell, ThreadPicker } from './Shell.tsx'
 import { SORT } from './sessions.ts'
@@ -57,10 +57,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
         }),
       }, { machine: 'app', source: 'layout' }),
     }))
-    core.action(defineWindowAction({
-      id: 'layout.customise', title: 'Customise layout…',
-      run: (_p, c) => { setLocalState('settings.target', LAYOUT_TARGET, 'app'); c.openSettings() },
-    }))
+    registerLayoutText(core)
   })
   void registry.router.load('app')
   // Declared before anything renders, so a component reading or setting them finds them registered.

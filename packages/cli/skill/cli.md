@@ -105,6 +105,7 @@ with `ssh <target> superego connect --start`.
 superego settings                     # every setting and its value
 superego settings set <key> <value>   # value is JSON, or plain text; --all: every enabled machine
 superego settings reset <key>
+superego layout                       # the window's layout.json: the views there are, the places each fits, and where they are
 superego auth                         # providers and how each is signed in
 superego auth key <provider>          # store an API key (prompted, or from stdin)
 superego auth logout <provider>

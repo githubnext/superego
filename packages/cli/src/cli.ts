@@ -70,6 +70,8 @@ Usage:
   ${app.id} settings                   List settings and their values
   ${app.id} settings set <key> <value> Change a setting (value is JSON, or plain text)
   ${app.id} settings reset <key>       Back to the default
+  ${app.id} layout                     Where the window's views go: layout.json (edit it; Edit layout… in ⌘K), with the
+                                views there are and the places each fits
   ${app.id} auth                       List providers and how they are signed in
   ${app.id} auth key <provider>        Store an API key (prompted, or read from stdin)
   ${app.id} auth logout <provider>     Remove a stored credential
@@ -659,9 +661,20 @@ export function skill(topic?: string): string {
   return readFileSync(join(SKILL_DIR, `${topic}.md`), 'utf8')
 }
 
+/**
+ * The app's layout as text (`layout.json`, which the desktop app keeps beside its settings): its path, then the file,
+ * whose head lists the views the window declared and the places each fits.
+ */
+function layoutCommand() {
+  const file = join(dataDir, 'layout.json')
+  if (!existsSync(file)) throw new RpcError('not_found', `No ${file} yet: ${app.name}'s window writes it once it's open`)
+  const content = readFileSync(file, 'utf8')
+  print({ file, content }, () => console.log(`${file}\n\n${content.trimEnd()}`))
+}
+
 // ── Dispatch ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const COMMANDS = new Set(['open', 'threads', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles', 'web'])
+const COMMANDS = new Set(['open', 'threads', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles', 'web', 'layout'])
 
 async function main() {
   // `do` takes the action's own --params, which parseArgs would refuse.
@@ -709,6 +722,7 @@ async function main() {
     case 'connect': return values.update ? updateHere(Boolean(values.now)) : bridge(Boolean(values.start))
     case 'actions': return actionsCommand(rest[0], values)
     case 'web': return webCommand(rest[0], rest.slice(1), values)
+    case 'layout': return layoutCommand()
   }
 }
 

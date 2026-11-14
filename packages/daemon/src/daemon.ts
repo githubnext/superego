@@ -1211,7 +1211,15 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** A file of a thread's that clients may read: in its folder, or among the files it keeps (attachments, images it showed). */
   function threadFile(cwd: string, id: string, path: string) {
     const kept = isAbsolute(path) && resolvePath(path).startsWith(`${attachmentsOf(id)}/`)
-    return kept ? resolvePath(path) : inFolder(cwd, path)
+    return kept ? resolvePath(path) : editable(cwd, path)
+  }
+  /**
+   * A file of a thread's that clients may edit: in its folder, or the app's layout (`layout.json` in the data folder,
+   * which the desktop app on this computer keeps: Edit layout… opens it beside any thread here).
+   */
+  function editable(cwd: string, path: string) {
+    const layout = join(options.dataDir, 'layout.json')
+    return isAbsolute(path) && resolvePath(path) === layout ? layout : inFolder(cwd, path)
   }
 
   async function contentOf(id: string, text: string, attachments: Attachment[]) {
@@ -1568,7 +1576,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     id: 'file.write', title: 'Save a file', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str(), path: str({ minLength: 1 }), content: str() }),
     async run({ id, path, content }) {
-      const file = inFolder((await get(id)).meta.cwd, path)
+      const file = editable((await get(id)).meta.cwd, path)
       await writeFile(file, content)
       return { path: file }
     },
@@ -1756,7 +1764,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         },
         'settings.watch': serveSettings(settings, (params) => notify('settings.changed', params), subs)['settings.watch'],
         async 'file.watch'({ id, path }: { id: string; path: string }) {
-          const file = inFolder((await get(id)).meta.cwd, path)
+          const file = editable((await get(id)).meta.cwd, path)
           const read = () => stat(file).then((info) => info.isFile() && info.size <= 16 * 1024 * 1024 ? readFile(file, 'utf8') : null, () => null)
           let last = await read()
           const sub = randomUUID()

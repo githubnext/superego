@@ -10,6 +10,7 @@ import {
 import { serveSettings } from '@superego/settings'
 import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, NOTIFY, signInNotice, threadNotice, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
+import { LayoutFile, type LayoutView } from './layout-file.ts'
 import { checkIdentity, MachineStore, openLocal as openLocalSocket, openMachine, routeOf, runUpdate, UiAllowStore } from '@superego/client'
 import { Link } from './link.ts'
 import { MenuBar } from './tray.ts'
@@ -45,6 +46,13 @@ export function startApp(appConfig: AppConfig) {
   }
 
   const appSettings = createAppSettings(dataDir, appConfig)
+  // The layout as text: layout.json, read in as it's saved, and what's wrong with it told to the windows.
+  const layoutFile = new LayoutFile(dataDir, appSettings, () => appSettings.invalidate())
+  appSettings.register({
+    id: 'layout', title: 'Layout', order: 1000, settings: [],
+    data: async () => ({ file: layoutFile.path, ...(layoutFile.problem ? { problem: layoutFile.problem } : {}) }),
+  })
+  void layoutFile.start().catch((error) => console.error('layout.json:', error))
 
   /** The app's own endpoint: its settings, per window so a closed window's subscriptions go with it. */
   const appSubs = new Map<number, Map<string, () => unknown>>()
@@ -452,6 +460,15 @@ export function startApp(appConfig: AppConfig) {
     id: 'service.act', title: 'Restart the background process', runs: 'app', expose: ['ui'],
     params: obj({ action: union([lit('restart'), lit('interrupt'), lit('later'), lit('review')]) }),
     async run({ action }) { await service.act(action as ServiceAction); return service.state },
+  }))
+  appRouter.register(defineAction({
+    id: 'app.layout.views', title: 'Tell the layout file the views there are', runs: 'app', expose: ['ui'],
+    params: obj({ views: unknown() }),
+    async run({ views }) { await layoutFile.setViews(views as LayoutView[]); return null },
+  }))
+  appRouter.register(defineAction({
+    id: 'app.layout.open', title: 'Open the layout file in its own app', runs: 'app', expose: ['ui'],
+    async run() { await layoutFile.read(); const error = await shell.openPath(layoutFile.path); if (error) throw new RpcError('failed', error); return null },
   }))
   appRouter.register(defineAction({ id: 'app.quit', title: `Quit ${appConfig.name}`, runs: 'app', run: () => app.quit() }))
 

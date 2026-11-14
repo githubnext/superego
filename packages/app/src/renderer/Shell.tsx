@@ -11,6 +11,7 @@ import { machine as client, useSettings, watched } from './client.ts'
 import { paneMenu, PlacedViews, shownPanes, Slot, useLayout, useRegistry, viewsIn, type SpaceRailProps, type View, type ViewProps } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
 import { ServiceNotice } from './ServiceNotice.tsx'
+import { LayoutNotice, LayoutViews } from './layout-text.tsx'
 import { ViewContextMenu, withContextMenu, withMenuButton } from './view-menu.tsx'
 import { refreshFontsSoon } from './fonts.ts'
 import { AuthNotice } from './AuthNotice.tsx'
@@ -94,7 +95,7 @@ export function Shell() {
           <PlacedViews place="titlebar" frame={withContextMenu('titlebar')} />
           {selection && thread && machine && <ThreadTitle machine={machine} thread={thread} />}
           <span className="app__titlebar-end">
-            {!spaces.length && <><AuthNotice /><ServiceNotice /></>}
+            {!spaces.length && <><AuthNotice /><ServiceNotice /><LayoutNotice /></>}
             <span className="app__strip" ref={setStrip} />
             {selection && thread && machine && <ThreadTools machine={machine} thread={thread} />}
           </span>
@@ -120,7 +121,7 @@ export function Shell() {
           <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) setDrawer(false) } : undefined}>
             {narrow && <div className="app__drag" />}
             {space && <SpaceView key={space.id} view={space} {...(where ? { machine, thread } : {})} />}
-            <div className="app__footer"><AuthNotice /><ServiceNotice />{narrow && (
+            <div className="app__footer"><AuthNotice /><ServiceNotice /><LayoutNotice />{narrow && (
               // A phone's drawer: the other spaces to switch to, what the layout puts in the drawer, and Settings at the end.
               <div className="app__drawer-bar">
                 {spaces.length > 1 && <>
@@ -162,6 +163,7 @@ export function Shell() {
       {palette && <Palette onClose={() => setPalette(false)} />}
       {navigator && <Navigator onClose={() => setNavigator(false)} />}
       <Slot name="overlay" props={{}} />
+      <LayoutViews />
       {log && <ActionLog router={registry.router.router} onClose={() => setLog(false)} />}
       {newThread.start && <NewThreadDialog start={newThread.start} onClose={newThread.close} />}
     </div>

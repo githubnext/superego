@@ -1,6 +1,6 @@
 // Screenshots of the window's layout (run by test/look.sh): the sidebar open, folded to dots and closed; the thread
 // alone (and dragged narrower) and with Changes beside it (and a file past it); a long title, parent and branch; thread
-// details, their menu and Settings → Layout; a phone, its drawer open, a data view in it, the thread's sheet; a data view
+// details, their menu and the layout's file beside the thread; a phone, its drawer open, a data view in it, the thread's sheet; a data view
 // as a space; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import { writeFileSync } from 'node:fs'
@@ -146,15 +146,12 @@ void (async () => {
   await run(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))`)
   await sleep(300)
   await both('details-menu')
-  await run(`[...document.querySelectorAll('.view-menu .superego-menu__item')].find((i) => i.textContent.startsWith('Customise layout')).click()`)
-  await until(`!!document.querySelector('.layout-settings .layout-row')`, 'Settings → Layout')
-  await sleep(300)
-  await both('settings-layout')
-  await run(`[...document.querySelectorAll('.layout-settings__tabs button')].find((b) => b.textContent === 'Phone').click()`)
-  await sleep(200)
-  await both('settings-layout-phone')
-  await run(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
-  await until(`!document.querySelector('.layout-settings')`, 'Settings closed')
+  await run(`[...document.querySelectorAll('.view-menu .superego-menu__item')].find((i) => i.textContent === 'Edit layout…').click()`)
+  await until(`!!document.querySelector('.layout-note')`, 'layout.json beside the thread')
+  await sleep(500)
+  await both('layout-file')
+  const layoutPane = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').panes.at(-1).id)`)
+  await run(`window.superego.call('local', 'pane.close', { id: '${id}', pane: '${layoutPane}' })`)
   await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i', metaKey: true, bubbles: true }))`)
   await until(`!document.querySelector('.threads-details')`, 'details hidden')
   // The window goes no narrower than 600: zoomed, its page is a phone's 375.

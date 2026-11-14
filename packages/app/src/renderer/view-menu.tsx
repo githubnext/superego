@@ -1,4 +1,4 @@
-// A view's menu where it's shown: move it to another place it fits, take it out of this one, or open Settings → Layout.
+// A view's menu where it's shown: move it to another place it fits, take it out of this one, or edit the layout's text.
 // A right-click (or a long press) on a view in the rail, the title bar, the drawer or the thread's header; the ··· of a
 // view beside the thread or in a pane. All of it through `layout.place`, as the user's layout keeps it.
 import type { ReactNode } from 'react'
@@ -26,7 +26,7 @@ export type ViewMenuProps = {
   pane?: string
 }
 
-/** The menu's items: Move to → the other places it fits, Remove from here, Customise layout…. */
+/** The menu's items: Move to → the other places it fits, Remove from here, Edit layout…. */
 export function ViewMenuItems({ view, place, machine, thread, pane }: ViewMenuProps) {
   const registry = useRegistry()
   const { placed, narrow } = useLayout()
@@ -53,8 +53,7 @@ export function ViewMenuItems({ view, place, machine, thread, pane }: ViewMenuPr
         </Menu.SubmenuRoot>
       )}
       <Menu.Item data-remove onClick={() => void change({ place, on: false }).catch(fail)}>Remove from here</Menu.Item>
-      <Menu.Separator />
-      <Menu.Item onClick={() => void dispatch('layout.customise', {}, { source: 'layout' }).catch(fail)}>Customise layout…</Menu.Item>
+      {!window.superego.web && <><Menu.Separator /><Menu.Item onClick={() => void dispatch('layout.edit', {}, { source: 'layout' }).catch(fail)}>Edit layout…</Menu.Item></>}
     </>
   )
 }
