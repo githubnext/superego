@@ -186,10 +186,12 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-menu__item[data-highlighted] { background: var(--superego-accent); color: var(--superego-accent-text); }
 .superego-menu__item[data-highlighted] .superego-menu__hint, .superego-menu__item[data-highlighted] .superego-menu__check { color: inherit; }
 .superego-menu__item[data-disabled] { opacity: .5; }
+.superego-menu__item[data-popup-open]:not([data-highlighted]) { background: var(--superego-hover); }
 .superego-menu__hint { display: inline-flex; gap: 6px; align-items: center; color: var(--superego-muted); font: var(--superego-text-xs) var(--superego-mono); }
 .superego-menu__check { color: var(--superego-text); }
 .superego-menu__label { margin: 6px 8px 4px; font-size: var(--superego-text-xs); color: var(--superego-muted); }
 .superego-menu__separator { border-top: 1px solid var(--superego-border); margin: 5px 8px; }
+.superego-context { display: contents; }
 .superego-tooltip { background: var(--superego-text); color: var(--superego-bg); font-size: var(--superego-text-sm); border-radius: 6px; padding: 5px 8px; white-space: nowrap; transition: opacity .1s; }
 .superego-tooltip[data-starting-style], .superego-tooltip[data-ending-style] { opacity: 0; }
 
