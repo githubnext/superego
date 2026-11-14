@@ -17,7 +17,8 @@ export function serveSettings(registry: SettingsRegistry, notify: (params: Notif
         const json = JSON.stringify(value)
         if (json !== last && subs.has(sub)) { last = json; notify({ sub, value }) }
       }
-      const off = registry.onChange(() => { void push() })
+      // One that fails (the daemon closing under it) tells nothing.
+      const off = registry.onChange(() => { push().catch(() => {}) })
       subs.set(sub, off)
       const value = await registry.snapshot()
       last = JSON.stringify(value)

@@ -6,7 +6,8 @@
 // and say things about it to clients, and choose a thread's agent.
 //
 // Everything it registers is its own, named `<name>.<something>`, and undone when it's torn down: when the daemon
-// stops, or (a profile's) when the profile's files change.
+// stops, or (a profile's) when the profile's files change. Torn down, its `signal` aborts, what it registers after is
+// refused, and its live values' `set` and `update` do nothing.
 import type { Conversation, EntryRecord, Extension, Harness } from '@earendil-works/pi-durable'
 import type { ActionDef, ActionInfo, AppConfig, Attachment, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, NewThread, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
@@ -19,7 +20,10 @@ import type { ProfileRef, ProfileSpec } from './profiles.ts'
  * (`extensions.declare`), which then lists it in Settings and lets a profile do without it.
  */
 export type DaemonExtension = ExtensionAbout & {
-  /** Called once when it's set up (the daemon starting, before interrupted work resumes; a profile loading). May return a cleanup. */
+  /**
+   * Called once when it's set up (the daemon starting, before interrupted work resumes; a profile loading). May return a
+   * cleanup, run first at teardown. Given up on (and torn down) when it takes longer than 15s.
+   */
   setup?(superego: DaemonApi): void | (() => void) | Promise<void | (() => void)>
 }
 
@@ -156,6 +160,11 @@ export type DaemonApi = {
   agentsDir: string
   /** The pi-durable harness, for anything the API below doesn't cover. Unstable: it's pi-durable's, not Superego's. */
   harness: Harness
+  /**
+   * Aborted when this extension is torn down, before its registrations go: for its own timers, watchers and fetches
+   * (`fetch(url, { signal })`, `watch(path, { signal })`, `signal.addEventListener('abort', …)`, which mustn't throw).
+   */
+  signal: AbortSignal
   /**
    * Give the agents tools, system prompt sections, hooks or tasks. `always: false`: to no thread but those an
    * `agentFor` of this extension chooses it for.

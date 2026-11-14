@@ -14,9 +14,9 @@ let dir: string
 let home: string
 let project: string
 
-const open = async (dataDir = home) => {
+const open = async (dataDir = home, setupTimeout?: number) => {
   process.env.SUPEREGO_MODEL = 'faux'
-  const daemon = await openDaemon({ app: SUPEREGO, dataDir, defaultCwd: dir })
+  const daemon = await openDaemon({ app: SUPEREGO, dataDir, defaultCwd: dir, ...(setupTimeout ? { setupTimeout } : {}) })
   const server = await listen(daemon, join(dataDir, 'superego.sock'))
   const { peer, socket } = await connectSocket(join(dataDir, 'superego.sock'))
   await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
@@ -702,12 +702,14 @@ export default defineDaemonExtension({
   await close()
 })
 
-// ── Reload ──────────────────────────────────────────────────────────────────────────────────────────────
+// ── Lifetime and reload ──────────────────────────────────────────────────────────────────────────────────────────────
 
 const profileTs = (extensions: string[]) => `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ${JSON.stringify(extensions)} })\n`
 const userRef = (name: string) => ({ scope: 'user', name, dir: join(home, 'profiles', name) })
 /** Load (or reload) a profile, as a window showing one of its threads does. */
 const load = (peer: RpcPeer, name = 'default') => peer.call('profile.ui', userRef(name))
+/** What a profile's modules leave on `globalThis` for a test to reach. */
+const left = globalThis as unknown as Record<string, any>
 
 it("runs a helper's new code when only the helper changed, and two extensions importing one helper share it", async () => {
   const profile = join(home, 'profiles', 'default')
@@ -787,5 +789,81 @@ it('versions an extension by every local file it imports, and vouches for those 
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
   write(project, { 'tools/helper.ts': `export const answer = 'two'\n` })
   await expect(peer.call('thread.submit', { id: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await close()
+})
+
+it("tears down every part however its cleanups fail, refuses what it registers after, and ignores its old publishers", async () => {
+  const profile = join(home, 'profiles', 'default')
+  const vaultOf = (answer: string) => `import { defineDaemonExtension, defineAction, obj } from 'superego'
+export default defineDaemonExtension({
+  name: 'vault',
+  setup(superego) {
+    const status = superego.value('vault.status', '${answer}')
+    superego.action(defineAction({ id: 'vault.answer', title: 'Answer', params: obj({}), async run() { return '${answer}' } }))
+    superego.status(() => { throw new Error('a broken status') })
+    globalThis.__vault = { api: superego, status, signal: superego.signal }
+    return () => { throw new Error('a broken cleanup') }
+  },
+})
+`
+  const notesOf = (answer: string) => `import { defineDaemonExtension } from 'superego'
+export default defineDaemonExtension({ name: 'notes', setup() { return () => { globalThis.__notesCleaned = (globalThis.__notesCleaned ?? 0) + 1 } } })
+// ${answer}
+`
+  write(profile, { 'profile.ts': profileTs(['./notes.ts', './vault.ts']), 'vault.ts': vaultOf('one'), 'notes.ts': notesOf('one') })
+  left.__notesCleaned = 0
+  const { peer, close } = await open()
+  // A status that throws counts as none: the threads list as ever.
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  await done(peer, thread.id)
+  const watched = await peer.call<{ sub: string; value: unknown }>('value.watch', { key: 'vault.status' })
+  let status = watched.value
+  peer.on('value.changed', (params: { sub: string; value: unknown }) => { if (params.sub === watched.sub) status = params.value })
+  expect(status).toBe('one')
+  const old = left.__vault
+  write(profile, { 'vault.ts': vaultOf('two'), 'notes.ts': notesOf('two') })
+  await load(peer)
+  // Its cleanup threw: everything else went all the same (its name too, so the new version set up), and the other's
+  // cleanup ran.
+  expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('two')
+  expect(left.__notesCleaned).toBe(1)
+  expect(old.signal.aborted).toBe(true)
+  await until(async () => status === 'two')
+  // The old version's publisher, from work that outlived it: nothing changes.
+  old.status.set('stale')
+  old.status.update(() => 'stale')
+  await new Promise((r) => setTimeout(r, 50))
+  expect(status).toBe('two')
+  expect((await peer.call<{ value: unknown }>('value.watch', { key: 'vault.status' })).value).toBe('two')
+  // What it registers after its teardown is refused, not left behind.
+  expect(() => old.api.method('vault.late', () => 1)).toThrow(/torn down/)
+  expect(() => old.api.value('vault.late', 1)).toThrow(/torn down/)
+  await close()
+})
+
+it("gives up on a profile whose setup hangs, without holding up another profile's", async () => {
+  write(join(home, 'profiles', 'hang'), {
+    'profile.ts': profileTs(['./stuck.ts']),
+    'stuck.ts': `import { defineDaemonExtension } from 'superego'
+export default defineDaemonExtension({ name: 'stuck', async setup(superego) {
+  await new Promise((resolve) => superego.signal.addEventListener('abort', resolve))
+  globalThis.__stuckAborted = true
+  superego.method('stuck.late', () => 1)
+} })
+`,
+  })
+  write(join(home, 'profiles', 'default'), { 'profile.ts': profileTs(['./vault.ts']), 'vault.ts': vault('one') })
+  left.__stuckAborted = false
+  const { peer, close } = await open(home, 300)
+  const hanging = load(peer, 'hang').then(() => undefined, (error: Error) => error)
+  const started = Date.now()
+  await load(peer, 'default')
+  expect(Date.now() - started).toBeLessThan(5_000)
+  expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
+  expect((await hanging)?.message).toMatch(/stuck failed to start: its setup didn't finish in 300ms/)
+  // Given up on, it was told (its signal), and what it registered after that was refused.
+  expect(left.__stuckAborted).toBe(true)
+  const hello = await peer.call<{ methods: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
+  expect(hello.methods).not.toContain('stuck.late')
   await close()
 })

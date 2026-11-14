@@ -44,12 +44,14 @@ export default defineDaemonExtension({
           const page = await api.entries({ maxEntryId: run.last, order: 'descending' }, 40, undefined, context)
           const transcript = transcriptOf([...page.items].reverse().flatMap((entry) => (entry.model ?? []) as never[]))
           if (!transcript) return undefined
-          // Not awaited: the run ends now, and the suggestions follow when they come.
+          // Not awaited: the run ends now, and the suggestions follow when they come. It outlives the hook, not the
+          // extension: torn down (switched off, the daemon stopping), the call is cut off.
+          if (superego.signal.aborted) return undefined
           void models.completeSimple(model, {
             systemPrompt: SYSTEM,
             messages: [{ role: 'user', content: transcript, timestamp: Date.now() }],
-          }, { maxTokens: 300, signal: AbortSignal.timeout(30_000) }).then((reply) => {
-            if (asks.get(thread) !== ask || reply.stopReason === 'error' || reply.stopReason === 'aborted') return
+          }, { maxTokens: 300, signal: AbortSignal.any([superego.signal, AbortSignal.timeout(30_000)]) }).then((reply) => {
+            if (superego.signal.aborted || asks.get(thread) !== ask || reply.stopReason === 'error' || reply.stopReason === 'aborted') return
             const prompts = promptsOf(reply.content.map((b) => b.type === 'text' ? b.text : '').join(''))
             if (prompts.length) next.update((all) => ({ ...all, [thread]: { after: run.answer, prompts } }))
           }, () => {})

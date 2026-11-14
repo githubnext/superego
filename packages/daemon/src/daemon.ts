@@ -14,7 +14,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  aliasesOf, arr, type Attachment, AUTH_REJECTED, compareVersion, contractProblem, EXTENSION_API, type ExtensionManifest, manifestOf, parseVersion, UNVERSIONED, DATA_VIEWS, dataViewProblem, type DataViewInfo, paramsParser, bool, defineAction, deriveStatus, FEATURES, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
+  aliasesOf, arr, type Attachment, AUTH_REJECTED, compareVersion, contractProblem, EXTENSION_API, type ExtensionManifest, manifestOf, parseVersion, UNVERSIONED, DATA_VIEWS, dataViewProblem, type DataViewInfo, paramsParser, bool, defineAction, deriveStatus, FEATURES, Lifetime, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
@@ -152,6 +152,11 @@ export type DaemonOptions = {
   webRoot?: string
   /** The folder agents share: skills in `skills/`, standing instructions in `AGENTS.md`. Defaults to `~/.agents`. */
   agentsDir?: string
+  /**
+   * How long an extension's `setup` (and a profile's modules loading) may take, in ms, before it's given up on and torn
+   * down, so one that hangs doesn't hold up every profile after it. 15s by default.
+   */
+  setupTimeout?: number
 }
 
 /** One mounted thread: its conversation and a small watch that keeps its status current. */
@@ -399,6 +404,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
   // The folder agents share: standing instructions in AGENTS.md (see agents-md.ts), and the skills extension's skills.
   const agentsDir = options.agentsDir ?? join(homedir(), '.agents')
+  const setupTimeout = options.setupTimeout ?? 15_000
+  const inTime = setupTimeout < 1000 ? `${setupTimeout}ms` : `${Math.round(setupTimeout / 1000)}s`
   /**
    * The core's own agent parts, as extensions like any other: each optional, so a machine can turn it off and a profile
    * can do without it. Set up first, through the same API as the bundled ones.
@@ -779,14 +786,23 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     viewsValue.value = dataViews.filter((v) => !v.profiles || v.profiles.size).map((v) => v.profiles ? { ...v.info, profiles: [...v.profiles] } : v.info)
     for (const listener of viewsValue.listeners) listener(viewsValue.value)
   }
-  const contributors: ((threadId: string) => StatusContribution | undefined)[] = []
+  const contributors: { contribute: (threadId: string) => StatusContribution | undefined; owner: string }[] = []
+  /** Status contributors that threw once: logged then, not on every thread's info after. */
+  const failedContributors = new WeakSet<object>()
   /** Extensions' submit transforms, in the order registered: whose, and (a profile's) for which profiles' threads (their folders). */
   const transforms: { transform: SubmitTransform; owner: string; profiles?: Set<string> }[] = []
-  const cleanups: (() => void)[] = []
+  /** The daemon's own: what it set up for its life (the bundled extensions), undone as it closes. */
+  const daemonLife = new Lifetime('The daemon')
   const blockedOf = (id: string) => {
-    for (const contribute of contributors) {
-      const blocked = contribute(id)
-      if (blocked) return { blocked }
+    for (const contributor of contributors) {
+      try {
+        const blocked = contributor.contribute(id)
+        if (blocked) return { blocked }
+      } catch (error) {
+        // A throw counts as nothing, as facts' and choosers' do.
+        if (!failedContributors.has(contributor)) console.error(`Extension ${contributor.owner}: status of thread ${id} failed:`, error)
+        failedContributors.add(contributor)
+      }
     }
     return {}
   }
@@ -845,7 +861,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const problem = contractProblem(extension)
     if (problem) throw new Error(problem)
     claimed.add(extension.name)
-    const undo: (() => void)[] = [() => { claimed.delete(extension.name); announced.delete(extension.name); announce() }]
+    // Everything it registers goes through its lifetime: undone together at teardown, and refused after.
+    const life = new Lifetime(`Extension ${extension.name}`)
+    const undo = (step: () => unknown, what: string) => life.add(step, what)
+    undo(() => { claimed.delete(extension.name); announced.delete(extension.name); announce() }, 'its name')
     const ownKey = (key: string) => {
       if (key !== extension.name && !key.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its settings "${extension.name}.<key>", not "${key}"`)
     }
@@ -854,42 +873,48 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       dataDir: options.dataDir,
       agentsDir,
       harness,
+      signal: life.signal,
       agent(agentPart, { always = true } = {}) {
+        life.live(`the agent part ${agentPart.name}`)
         const { installed, undo: uninstall } = agentExtension(agentPart, always)
-        undo.push(uninstall)
+        undo(uninstall, 'an agent part')
         if (always) return
         const own = chosenParts.get(extension.name) ?? new Map<Extension, Extension>()
         chosenParts.set(extension.name, own.set(agentPart, installed))
-        undo.push(() => { own.delete(agentPart); if (!own.size) chosenParts.delete(extension.name) })
+        undo(() => { own.delete(agentPart); if (!own.size) chosenParts.delete(extension.name) }, 'an agent part')
       },
       settings: {
         register(section) {
+          life.live(`the settings ${section.id}`)
           ownKey(section.id)
           for (const setting of section.settings) ownKey(setting.key)
-          undo.push(settings.register(section))
+          undo(settings.register(section), 'settings')
         },
         get: (key) => settings.get(key),
         snapshot: () => settings.snapshot(),
-        onChange: (listener) => { undo.push(settings.onChange(listener)) },
+        onChange: (listener) => { life.live('a settings listener'); undo(settings.onChange(listener), 'a settings listener') },
       },
-      action: (action) => { undo.push(router.register({ ...action, id: named(extension.name, action.id), runs: 'machine' })) },
+      action: (action) => { life.live(`the action ${action.id}`); undo(router.register({ ...action, id: named(extension.name, action.id), runs: 'machine' }), 'an action') },
       dispatch: (id, params) => router.dispatch(id, params ?? {}, { source: extension.name, notify: () => {} }, { source: extension.name }),
       actions: (exposure) => router.list(exposure),
       method(name, run, options = {}) {
         const id = named(extension.name, name)
+        life.live(`the method ${id}`)
         if (methods.has(id) || router.has(id)) throw new Error(`Method ${id} is already defined`)
         const parse = paramsParser(id, options.params)
         methods.set(id, async (params: unknown) => run(parse(params) as never))
-        undo.push(() => { methods.delete(id) })
+        undo(() => { methods.delete(id) }, 'a method')
       },
       pane(kind, about) {
+        life.live(`the pane kind ${kind}`)
         if (paneKinds.some((p) => p.kind === kind && p.profiles === profiles)) throw new Error(`Pane kind ${kind} is already described`)
         const entry = { kind, about, owner: extension.name, ...(profiles ? { profiles } : {}) }
         paneKinds.push(entry)
-        undo.push(() => { paneKinds.splice(paneKinds.indexOf(entry), 1) })
+        undo(() => { paneKinds.splice(paneKinds.indexOf(entry), 1) }, 'a pane kind')
       },
       view(id, view) {
         const name = named(extension.name, id)
+        life.live(`the view ${name}`)
         const problem = dataViewProblem(view)
         if (problem) throw new Error(`View ${name} ${problem}`)
         const source = view.value ?? view.method!
@@ -901,37 +926,48 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         const entry = { info: { ...view, fits, id: name, extension: extension.name }, ...(profiles ? { profiles } : {}) }
         dataViews.push(entry)
         publishViews()
-        undo.push(() => { dataViews.splice(dataViews.indexOf(entry), 1); publishViews() })
+        undo(() => { dataViews.splice(dataViews.indexOf(entry), 1); publishViews() }, 'a view')
         // Told to the agent as a pane kind it can open, when it says what it shows.
         if (view.about && view.context === 'thread' && fits.includes('pane')) api.pane(name, view.about)
       },
       value<T extends Json>(key: string, initial: T): LiveValue<T> {
         const name = named(extension.name, key)
+        life.live(`the value ${name}`)
         const entry = valueOf(name)
         if (entry.owned) throw new Error(`Value ${name} is already published`)
         entry.owned = true
         // Gone with it: watchers see null again (as before it was set up), and a later watch waits on null.
-        undo.push(() => {
+        undo(() => {
           entry.owned = false
           entry.value = null
           for (const listener of entry.listeners) listener(null)
           prune(name)
-        })
-        const set = (next: T) => {
+        }, 'a value')
+        // Its own: what it last published, which a later set-up of the same name (the next generation) never sees, nor
+        // overwrites from here. After teardown, `set` and `update` do nothing.
+        let mine = initial
+        const set = life.guard(`a change to ${name}`, (next: T) => {
+          mine = next
           entry.value = next
           for (const listener of entry.listeners) listener(next)
-        }
+        })
         set(initial)
-        return { get: () => entry.value as T, set, update: (edit) => set(edit(entry.value as T)) }
+        return { get: () => mine, set, update: life.guard(`a change to ${name}`, (edit: (current: T) => T) => set(edit(mine))) }
       },
-      status: (contribute) => { contributors.push(contribute); undo.push(() => { contributors.splice(contributors.indexOf(contribute), 1) }) },
+      status(contribute) {
+        life.live('a status')
+        const entry = { contribute, owner: extension.name }
+        contributors.push(entry)
+        undo(() => { contributors.splice(contributors.indexOf(entry), 1) }, 'a status')
+      },
       submit(transform) {
+        life.live('a submit transform')
         const entry = { transform, owner: extension.name, ...(profiles ? { profiles } : {}) }
         transforms.push(entry)
-        undo.push(() => { transforms.splice(transforms.indexOf(entry), 1) })
+        undo(() => { transforms.splice(transforms.indexOf(entry), 1) }, 'a submit transform')
       },
       invalidate() { changed(); heedStatus() },
-      thread(hooks) { own(threadHooks, hooks) },
+      thread(hooks) { own(threadHooks, hooks, 'thread hooks') },
       state<T extends Json>() {
         const name = extension.name
         return {
@@ -942,10 +978,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       },
       facts(describe) {
         if (factSources.some((f) => f.owner === extension.name)) throw new Error(`Extension ${extension.name} already says its facts`)
-        own(factSources, describe as (typeof factSources)[number]['value'])
+        own(factSources, describe as (typeof factSources)[number]['value'], 'facts')
         changed()
       },
-      agentFor(choose) { own(choosers, choose as (typeof choosers)[number]['value']); changed() },
+      agentFor(choose) { own(choosers, choose as (typeof choosers)[number]['value'], 'an agentFor'); changed() },
       threads: {
         list: (options) => list(options),
         get: async (id) => info(id, await get(id)),
@@ -966,18 +1002,31 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       },
     }
     /** Keep something it registered about threads in `list`, as its own, until it's torn down. */
-    function own<T>(list: Owned<T>[], value: T) {
+    function own<T>(list: Owned<T>[], value: T, what: string) {
+      life.live(what)
       const entry: Owned<T> = { value, owner: extension.name, ...(profiles ? { profiles } : {}) }
       list.push(entry)
-      undo.push(() => { list.splice(list.indexOf(entry), 1); changed() })
+      undo(() => { list.splice(list.indexOf(entry), 1); changed() }, what)
     }
-    const teardown = () => { for (const step of undo.splice(0).reverse()) step() }
+    const teardown = () => { life.dispose() }
+    // Given up on when it takes too long: torn down (its signal aborted, what it registered undone, what it registers
+    // after refused), so the profiles waiting behind it load. A cleanup it returns after that runs at once.
+    const setup = Promise.resolve().then(() => extension.setup?.(api))
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timedOut = new Promise<'timeout'>((resolve) => { timer = setTimeout(() => resolve('timeout'), setupTimeout) })
     try {
-      const cleanup = await extension.setup?.(api)
-      if (cleanup) undo.push(cleanup)
+      const cleanup = await Promise.race([setup, timedOut])
+      if (cleanup === 'timeout') {
+        void setup.then((late) => { if (typeof late === 'function') late() }).catch((error: unknown) => console.error(`Extension ${extension.name}: its setup, given up on, failed after:`, error))
+        throw new Error(`its setup didn't finish in ${inTime}, so it's torn down. Keep setup quick, and don't await work that loads a profile (starting or reading a thread) in it`)
+      }
+      if (cleanup) undo(cleanup, 'a cleanup')
     } catch (error) {
       teardown()
+      console.error(`Extension ${extension.name} failed to start:`, error)
       throw new Error(`Extension ${extension.name} failed to start: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+    } finally {
+      clearTimeout(timer)
     }
     // Offered once it's set up: a client that sees `ext:<name>` finds its methods there, and one that fails never shows.
     announced.set(extension.name, manifestOf(extension))
@@ -989,7 +1038,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   // Before any extension looks for its hidden threads.
   await migrateHidden()
   for (const extension of [...core, ...options.extensions ?? []]) {
-    cleanups.push(await setUp(extension, (part, always) => {
+    daemonLife.add(await setUp(extension, (part, always) => {
       if (always) return { installed: part, undo: installBuiltin(part, extension.name) }
       registry.install(part)
       return { installed: part, undo: () => registry.uninstall(part) }
@@ -1123,7 +1172,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     let loaded: LoadedProfile
     try {
       if (!existsSync(join(ref.dir, 'profile.ts'))) throw new RpcError('not_found', `No profile ${ref.name} at ${ref.dir}`)
-      loaded = await loadProfile(ref, userProfiles, trust)
+      // Its modules may hang as they load (a top-level await): given up on in time, so the profiles behind it load.
+      let timer: ReturnType<typeof setTimeout> | undefined
+      loaded = await Promise.race([
+        loadProfile(ref, userProfiles, trust),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new RpcError('invalid', `Profile ${ref.name} didn't load in ${inTime}: one of its modules hangs as it loads`)), setupTimeout) }),
+      ]).finally(() => clearTimeout(timer))
     } catch (error) {
       unload(ref.dir)
       throw error
@@ -1138,17 +1192,18 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     unload(ref.dir)
     for (const dir of others) unload(dir)
-    // Everything it sets up is undone together: when a later step fails too, so a fixed profile can load again.
+    // Everything it sets up is undone together, each step tried whatever the others do: when a later step fails too, so
+    // a fixed profile can load again.
     const uses: Shared[] = []
-    const undo: (() => void)[] = []
-    const release = () => { for (const step of undo.splice(0).reverse()) step() }
+    const life = new Lifetime(`Profile ${ref.name}`)
+    const release = () => { life.dispose() }
     try {
       for (const item of loaded.daemon) {
         const { entry, release } = await share(item, ref.dir)
         uses.push(entry)
-        undo.push(release)
+        life.add(release)
       }
-      for (const extension of loaded.extensions) undo.push(install(extension))
+      for (const extension of loaded.extensions) life.add(install(extension))
     } catch (error) {
       release()
       throw new RpcError('invalid', `Profile ${ref.name}: ${(error as Error).message}`)
@@ -1691,7 +1746,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   for (const provider of agent.changedSinceRejected()) void retrySignIn(provider)
   publishRejected()
   listListeners.add(publishRejected)
-  cleanups.push(agent.rejections.onChange(changed), agent.onCredentials((provider) => void retrySignIn(provider)))
+  daemonLife.add(agent.rejections.onChange(changed))
+  daemonLife.add(agent.onCredentials((provider) => void retrySignIn(provider)))
   // The profiles of the threads in use, loaded in the background: their facts and what they go without show without
   // waiting for a turn. An archived thread's load when it's brought back.
   const loadingProfiles = (async () => {
@@ -1865,7 +1921,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       await loadingProfiles
       await webQueue
       await web?.close()
-      for (const cleanup of cleanups.reverse()) cleanup()
+      // Profiles' extensions first, then the bundled ones: each step tried whatever the others did.
+      for (const dir of [...holds.keys()]) unload(dir)
+      daemonLife.dispose()
       agent.close()
       for (const m of mounted.values()) await m.stop()
       await harness.close(context)
