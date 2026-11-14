@@ -701,3 +701,91 @@ export default defineDaemonExtension({
   await until(async () => views.length === 1 && views[0]!.title === 'Cards')
   await close()
 })
+
+// ── Reload ──────────────────────────────────────────────────────────────────────────────────────────────
+
+const profileTs = (extensions: string[]) => `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ${JSON.stringify(extensions)} })\n`
+const userRef = (name: string) => ({ scope: 'user', name, dir: join(home, 'profiles', name) })
+/** Load (or reload) a profile, as a window showing one of its threads does. */
+const load = (peer: RpcPeer, name = 'default') => peer.call('profile.ui', userRef(name))
+
+it("runs a helper's new code when only the helper changed, and two extensions importing one helper share it", async () => {
+  const profile = join(home, 'profiles', 'default')
+  const answering = (name: string) => `import { defineDaemonExtension, defineAction, obj } from 'superego'
+import { answer } from './lib/answer.ts'
+import { seen } from './lib/seen.ts'
+export default defineDaemonExtension({
+  name: '${name}',
+  setup(superego) {
+    seen.push('${name}')
+    superego.action(defineAction({ id: '${name}.answer', title: 'Answer', params: obj({}), async run() { return answer + ' ' + seen.join(',') } }))
+  },
+})
+`
+  write(profile, {
+    'profile.ts': profileTs(['./vault.ts', './notes.ts']), 'vault.ts': answering('vault'), 'notes.ts': answering('notes'),
+    'lib/answer.ts': `export const answer = 'one'\n`, 'lib/seen.ts': `export const seen: string[] = []\n`,
+  })
+  const { peer, close } = await open()
+  await load(peer)
+  // One `seen` for both: a helper they share, at one version, is one module.
+  expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one vault,notes')
+  write(profile, { 'lib/answer.ts': `export const answer = 'two'\n` })
+  await load(peer)
+  // The new helper's code; `seen`, unchanged, is the module loaded before, its state with it.
+  expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('two vault,notes,vault,notes')
+  await close()
+})
+
+it("runs a helper's new code under Node's own loader too, as the daemon does (not vitest's)", async () => {
+  const profile = join(home, 'profiles', 'p')
+  write(profile, {
+    'profile.ts': profileTs(['./extension.ts']),
+    'extension.ts': `import { defineDaemonExtension } from 'superego'\nimport { v } from './helper.ts'\nexport default defineDaemonExtension({ name: 'x', setup() { return v } })\n`,
+    'helper.ts': `export const v = 'before'\n`,
+  })
+  const profiles = new URL('../src/profiles.ts', import.meta.url).href
+  write(dir, { 'probe.ts': `import { writeFileSync } from 'node:fs'
+import { loadProfile, provideSdk, SDK_EXPORTS, Trust } from '${profiles}'
+provideSdk(Object.fromEntries(SDK_EXPORTS.map((key) => [key, (x) => x])))
+const ref = { scope: 'user', name: 'p', dir: ${JSON.stringify(profile)} }
+const load = () => loadProfile(ref, ${JSON.stringify(join(home, 'profiles'))}, new Trust(${JSON.stringify(home)}))
+const before = (await load()).daemon[0].extension.setup()
+writeFileSync(${JSON.stringify(join(profile, 'helper.ts'))}, "export const v = 'after'\\n")
+console.log(JSON.stringify([before, (await load()).daemon[0].extension.setup()]))
+` })
+  const { execFileSync } = await import('node:child_process')
+  const out = execFileSync(process.execPath, [join(dir, 'probe.ts')], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } })
+  expect(JSON.parse(out.trim().split('\n').at(-1)!)).toEqual(['before', 'after'])
+})
+
+it('versions an extension by every local file it imports, and vouches for those from outside the folder too', async () => {
+  const profile = join(home, 'profiles', 'default')
+  write(profile, {
+    'profile.ts': profileTs(['./vault.ts']),
+    'vault.ts': `import { defineDaemonExtension } from 'superego'\nimport { tag } from '../../../shared/tag.ts'\nexport default defineDaemonExtension({ name: 'vault', setup() { void tag } })\n`,
+  })
+  write(dir, { 'shared/tag.ts': `export const tag = 'one'\n` })
+  const trust = new Trust(home)
+  const before = await loadProfile(userRef('default') as ProfileRef, join(home, 'profiles'), trust)
+  write(dir, { 'shared/tag.ts': `export const tag = 'two'\n` })
+  const after = await loadProfile(userRef('default') as ProfileRef, join(home, 'profiles'), trust)
+  // The helper is outside the folder: still part of what it runs, so of its hash and its extension's version.
+  expect(after.hash).not.toBe(before.hash)
+  expect(after.daemon[0]!.key).not.toBe(before.daemon[0]!.key)
+
+  // A project's profile importing a helper from outside its folder runs it only as allowed.
+  write(project, { 'tools/helper.ts': `export const answer = 'one'\n` })
+  write(join(project, '.superego', 'profiles', 'support'), {
+    'profile.ts': profileTs(['./vault.ts']),
+    'vault.ts': `import { defineDaemonExtension, defineAction, obj } from 'superego'\nimport { answer } from '../../../tools/helper.ts'\nexport default defineDaemonExtension({ name: 'vault', setup(superego) { superego.action(defineAction({ id: 'vault.answer', title: 'Answer', params: obj({}), async run() { return answer } })) } })\n`,
+  })
+  const { peer, close } = await open()
+  await peer.call('profile.allow', { cwd: project, name: 'support' })
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'support', prompt: 'hi' })
+  await done(peer, thread.id)
+  expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
+  write(project, { 'tools/helper.ts': `export const answer = 'two'\n` })
+  await expect(peer.call('thread.submit', { id: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await close()
+})

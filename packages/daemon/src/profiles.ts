@@ -17,12 +17,12 @@ import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import * as nodeModule from 'node:module'
 import { transform } from 'sucrase'
 import type { Extension } from '@earendil-works/pi-durable'
 import type { DaemonExtension } from './extension.ts'
 import { MIGRATIONS, RpcError, type Json } from '@superego/protocol'
+import { graphOf, versionedImport, versionedUrl, versionOf } from './module-graph.ts'
 
 export type ProfileSpec = {
   description?: string
@@ -72,8 +72,8 @@ export type ProfileRef = { scope: 'user' | 'project'; name: string; dir: string 
 export const RENAMED: Record<string, string> = MIGRATIONS['extension-names'].renames
 
 /**
- * A daemon extension a profile names, and which: `key` is its file at the version loaded (the module's URL), so two
- * profiles naming the same file (one extending the other, or both listing it) share one set-up of it. `prefix` names
+ * A daemon extension a profile names, and which: `key` is its file at the version loaded (the module's URL, versioned
+ * by it and every local file it imports: see module-graph.ts), so two profiles naming the same file (one extending the other, or both listing it) share one set-up of it. `prefix` names
  * its agent parts: `<prefix>/<part>`, the profile whose folder holds the file (else `file:<hash of its path>`).
  */
 export type ProfileDaemonExtension = { extension: DaemonExtension; key: string; file: string; prefix: string }
@@ -131,21 +131,28 @@ export function findProfile(cwd: string, userRoot: string, name?: string): Profi
 }
 
 /**
- * A hash of every file in a profile's folder (not node_modules): what allowing it vouches for. Of a file, its contents:
- * one a profile lists from outside its folder.
+ * A hash of what a profile runs, what allowing it vouches for: every file in its folder (not node_modules, nor
+ * dotfiles), and the local files its code imports from outside it. Of a file (one a profile lists from outside its
+ * folder), it and the local files it imports (`versionOf`). Packages it imports by name aren't in it.
  */
 export function hashProfile(dir: string): string {
+  if (statSync(dir).isFile()) return versionOf(dir)
   const hash = createHash('sha256')
-  if (statSync(dir).isFile()) return hash.update(readFileSync(dir)).digest('hex').slice(0, 16)
+  const code: string[] = []
   const walk = (at: string) => {
     for (const entry of readdirSync(at, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
       const path = join(at, entry.name)
       if (entry.isDirectory()) walk(path)
-      else if (entry.isFile()) hash.update(relative(dir, path)).update('\0').update(readFileSync(path)).update('\0')
+      else if (entry.isFile()) {
+        hash.update(relative(dir, path)).update('\0').update(readFileSync(path)).update('\0')
+        if (/\.[cm]?[jt]sx?$/.test(entry.name)) code.push(path)
+      }
     }
   }
   walk(dir)
+  // What it imports from outside its folder (a helper shared between profiles) runs as its own does.
+  for (const file of graphOf(code).filter((file) => !within(dir, file))) hash.update(file).update('\0').update(readFileSync(file)).update('\0')
   return hash.digest('hex').slice(0, 16)
 }
 
@@ -214,6 +221,8 @@ export function provideSdk(sdk: ProfileSdk) {
   // Bun's runtime virtual modules (not its bundler-only onResolve hooks).
   const bun = (globalThis as typeof globalThis & { Bun?: BunModuleLoader }).Bun
   if (bun) {
+    // Bun's runtime hooks don't see a module's version (its importer comes without the query): there, an edit to a
+    // helper alone loads with the next edit to the module that imports it.
     bun.plugin({ name: 'superego-profile-sdk', setup(build) {
       build.module('superego', () => ({ exports: sdk, loader: 'object' }))
     } })
@@ -223,16 +232,19 @@ export function provideSdk(sdk: ProfileSdk) {
   nodeModule.registerHooks({
     resolve(specifier, context, next) {
       if (specifier === 'superego') return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true }
-      return next(specifier, context)
+      // A profile's module imports its own files at their versions now, not the copies Node loaded before.
+      const resolved = next(specifier, context)
+      return { ...resolved, url: versionedImport(resolved.url, context.parentURL) }
     },
   })
 }
 
 /**
- * A file's module URL, versioned by its contents: a query that changes with the file makes Node load it again rather
- * than reuse the first import. Wherever it is and whichever profile names it, profiles naming the same file share one.
+ * A file's module URL, versioned by it and the local files it imports (module-graph.ts): a query that changes with any
+ * of them makes Node load it again rather than reuse the first import, and the files it imports are loaded at their
+ * versions too. Wherever it is and whichever profile names it, profiles naming the same file share one.
  */
-const fresh = (path: string) => `${pathToFileURL(path).href}?v=${createHash('sha256').update(readFileSync(path)).digest('hex').slice(0, 16)}`
+const fresh = versionedUrl
 
 /** What a profile's profile.ts says, as it is now. */
 async function specOf(ref: ProfileRef): Promise<ProfileSpec> {
