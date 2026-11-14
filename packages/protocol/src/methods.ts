@@ -198,12 +198,48 @@ export type Methods = {
   /** The window's extensions, as each declares itself: those without a daemon half become known to the machine too. */
   'extensions.declare': { params: { extensions: ExtensionAbout[] }; result: null }
   /**
+   * What each extension here is and does, for an author finding out why theirs doesn't show (`superego extensions`):
+   * where it's from, how it stands, what it registered, who watches its values; its profiles' loads; and, given a
+   * thread, which extensions that thread goes without, and why.
+   */
+  'extensions.inspect': { params: { thread?: string }; result: ExtensionsReport }
+  /**
    * Restart onto newer code: the daemon exits and the client starts the new one. Refused (`restarted: false`) while a
    * thread is working, unless `interrupt`; interrupted runs resume after the restart. `build` must be the running
    * build, so a client never restarts a daemon it didn't inspect. `env` is laid over the daemon's own environment for
    * its successor: `box run superego daemon restart` adds its keys.
    */
   'daemon.restart': { params: { build: string; interrupt?: boolean; env?: Record<string, string> }; result: { restarted: boolean; busy: boolean } }
+}
+
+/** An extension as `extensions.inspect` reports it. */
+export type ExtensionReport = {
+  name: string
+  version?: string
+  api?: string
+  title?: string
+  required?: boolean
+  /** Where it's from: the core's, the app's own (bundled), a profile's (its file, and the profiles that have it), or a window's (no daemon half). */
+  source: 'core' | 'bundled' | 'profile' | 'window'
+  file?: string
+  profiles?: string[]
+  /** `set up` and running; `off` (switched off here); or why it isn't: it threw (`failed`), was refused before it ran, or its setup took too long. */
+  state: 'set up' | 'off' | 'failed' | 'refused' | 'timed out'
+  error?: string
+  /** What it registered, by kind (`methods`, `actions`, `values`, `views`, `thread hooks`, …): names, or how many. */
+  registered: Record<string, string[]>
+  /** Its live values being watched now: by how many, whole, and in how many scopes. */
+  watches: { value: string; whole: number; scopes: number }[]
+}
+
+/** What `extensions.inspect` says. */
+export type ExtensionsReport = {
+  api: string
+  extensions: ExtensionReport[]
+  /** The profiles loaded or tried here, and how each stands. */
+  profiles: { name: string; scope: 'user' | 'project'; dir: string; state: 'loaded' | 'failed'; error?: string }[]
+  /** Given a thread: its profile, and each extension that doesn't take part in it, with why. */
+  thread?: { id: string; profile?: string; without: { extension: string; why: string }[] }
 }
 
 export type Notifications = {

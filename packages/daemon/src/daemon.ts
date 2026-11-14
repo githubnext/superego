@@ -14,7 +14,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  aliasesOf, arr, type Attachment, AUTH_REJECTED, compareVersion, contractProblem, EXTENSION_API, type ExtensionManifest, manifestOf, parseVersion, UNVERSIONED, DATA_VIEWS, dataViewProblem, type DataViewInfo, paramsParser, bool, defineAction, deriveStatus, FEATURES, Lifetime, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
+  aliasesOf, arr, type Attachment, AUTH_REJECTED, compareVersion, contractProblem, EXTENSION_API, type ExtensionManifest, manifestOf, parseVersion, UNVERSIONED, DATA_VIEWS, dataViewProblem, type DataViewInfo, type ExtensionReport, type ExtensionsReport, paramsParser, bool, defineAction, deriveStatus, FEATURES, Lifetime, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
@@ -848,6 +848,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const claimed = new Set<string>()
   /** Extensions announced as `ext:<name>`: the extensions set up now, bundled and profiles' alike, each as it declares itself. */
   const announced = new Map<string, ExtensionManifest>()
+  /** The extensions set up now, with where each is from and what it registered: what the inspector reports. */
+  const inspected = new Map<string, { extension: DaemonExtension; from: { source: 'core' | 'bundled' | 'profile'; file?: string }; profiles?: Set<string>; registered: Map<string, string[]> }>()
+  /** Those that failed to set up, by their file (a profile's) or name, until one sets up in their place. */
+  const failures = new Map<string, ExtensionReport>()
   /** The extensions announced and on: those switched off on this machine aren't offered. */
   const offered = () => [...announced.values()].filter(({ name }) => extensions.get(name)?.required || settings.get(`extensions.${name}`) !== false)
   /**
@@ -882,18 +886,26 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * `agentExtension` installs an agent part, and gives it to every thread it's for when `always`: the installed part
    * (a profile's are renamed), and how to undo it.
    */
-  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension, always: boolean) => { installed: Extension; undo: () => void }, profiles?: Set<string>): Promise<() => void> {
-    if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
-    if (RESERVED.has(extension.name)) throw new Error(`The name ${extension.name} is the core's own`)
-    if (claimed.has(extension.name)) throw new Error(`An extension named ${extension.name} is already set up`)
+  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension, always: boolean) => { installed: Extension; undo: () => void }, profiles?: Set<string>, from: { source: 'core' | 'bundled' | 'profile'; file?: string } = { source: 'bundled' }): Promise<() => void> {
+    const report = (state: 'failed' | 'refused' | 'timed out', error: string) => {
+      failures.set(from.file ?? extension.name, { ...manifestOf(extension), ...(extension.title ? { title: extension.title } : {}), ...from, ...(profiles ? { profiles: [...profiles] } : {}), state, error, registered: {}, watches: [] })
+    }
+    const refuse = (why: string) => { report('refused', why); return new Error(why) }
+    if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw refuse(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
+    if (RESERVED.has(extension.name)) throw refuse(`The name ${extension.name} is the core's own`)
+    if (claimed.has(extension.name)) throw refuse(`An extension named ${extension.name} is already set up`)
     // One whose versions don't read, or that needs an extension API this host isn't, is refused before it runs.
     const problem = contractProblem(extension)
-    if (problem) throw new Error(problem)
+    if (problem) throw refuse(problem)
     claimed.add(extension.name)
+    // What it registers, for the inspector: kept while it's set up.
+    const registered = new Map<string, string[]>()
+    const note = (kind: string, what: string) => { registered.set(kind, [...registered.get(kind) ?? [], what]) }
+    inspected.set(extension.name, { extension, from, ...(profiles ? { profiles } : {}), registered })
     // Everything it registers goes through its lifetime: undone together at teardown, and refused after.
     const life = new Lifetime(`Extension ${extension.name}`)
     const undo = (step: () => unknown, what: string) => life.add(step, what)
-    undo(() => { claimed.delete(extension.name); announced.delete(extension.name); announce() }, 'its name')
+    undo(() => { claimed.delete(extension.name); announced.delete(extension.name); inspected.delete(extension.name); announce() }, 'its name')
     const ownKey = (key: string) => {
       if (key !== extension.name && !key.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its settings "${extension.name}.<key>", not "${key}"`)
     }
@@ -905,6 +917,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       signal: life.signal,
       agent(agentPart, { always = true } = {}) {
         life.live(`the agent part ${agentPart.name}`)
+        note('agent parts', always ? agentPart.name : `${agentPart.name} (only where its agentFor chooses it)`)
         const { installed, undo: uninstall } = agentExtension(agentPart, always)
         undo(uninstall, 'an agent part')
         if (always) return
@@ -917,13 +930,14 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           life.live(`the settings ${section.id}`)
           ownKey(section.id)
           for (const setting of section.settings) ownKey(setting.key)
+          note('settings', section.id)
           undo(settings.register(section), 'settings')
         },
         get: (key) => settings.get(key),
         snapshot: () => settings.snapshot(),
         onChange: (listener) => { life.live('a settings listener'); undo(settings.onChange(listener), 'a settings listener') },
       },
-      action: (action) => { life.live(`the action ${action.id}`); undo(router.register({ ...action, id: named(extension.name, action.id), runs: 'machine' }), 'an action') },
+      action: (action) => { life.live(`the action ${action.id}`); undo(router.register({ ...action, id: named(extension.name, action.id), runs: 'machine' }), 'an action'); note('actions', action.keys ? `${action.id} (${action.keys})` : action.id) },
       dispatch: (id, params) => router.dispatch(id, params ?? {}, { source: extension.name, notify: () => {} }, { source: extension.name }),
       actions: (exposure) => router.list(exposure),
       method(name, run, options = {}) {
@@ -933,6 +947,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         const parse = paramsParser(id, options.params)
         methods.set(id, async (params: unknown) => run(parse(params) as never))
         undo(() => { methods.delete(id) }, 'a method')
+        note('methods', id)
       },
       pane(kind, about) {
         life.live(`the pane kind ${kind}`)
@@ -940,6 +955,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         const entry = { kind, about, owner: extension.name, ...(profiles ? { profiles } : {}) }
         paneKinds.push(entry)
         undo(() => { paneKinds.splice(paneKinds.indexOf(entry), 1) }, 'a pane kind')
+        note('pane kinds', kind)
       },
       view(id, view) {
         const name = named(extension.name, id)
@@ -955,6 +971,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         const entry = { info: { ...view, fits, id: name, extension: extension.name }, ...(profiles ? { profiles } : {}) }
         dataViews.push(entry)
         publishViews()
+        note('views', `${name} (${fits.join(', ')}; from ${source})`)
         undo(() => { dataViews.splice(dataViews.indexOf(entry), 1); publishViews() }, 'a view')
         // Told to the agent as a pane kind it can open, when it says what it shows.
         if (view.about && view.context === 'thread' && fits.includes('pane')) api.pane(name, view.about)
@@ -965,6 +982,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         const entry = valueOf(name)
         if (entry.owned) throw new Error(`Value ${name} is already published`)
         entry.owned = true
+        note('values', name)
         // Gone with it: watchers see null again (as before it was set up), and a later watch waits on null.
         undo(() => {
           entry.owned = false
@@ -989,6 +1007,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         const entry = valueOf(name)
         if (entry.owned) throw new Error(`Value ${name} is already published`)
         entry.owned = true
+        note('values', `${name} (scoped)`)
         // Its own, as a plain value's is: a later set-up of the same name starts from nothing.
         const mine = new Map<string, T>()
         entry.scopes = { values: mine as Map<string, Json>, initial }
@@ -1016,17 +1035,19 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       status(contribute) {
         life.live('a status')
         const entry = { contribute, owner: extension.name }
+        note('status', 'a status')
         contributors.push(entry)
         undo(() => { contributors.splice(contributors.indexOf(entry), 1) }, 'a status')
       },
       submit(transform) {
         life.live('a submit transform')
         const entry = { transform, owner: extension.name, ...(profiles ? { profiles } : {}) }
+        note('submit', 'a submit transform')
         transforms.push(entry)
         undo(() => { transforms.splice(transforms.indexOf(entry), 1) }, 'a submit transform')
       },
       invalidate() { changed(); heedStatus() },
-      thread(hooks) { own(threadHooks, hooks, 'thread hooks') },
+      thread(hooks) { own(threadHooks, hooks, 'thread hooks'); note('thread hooks', Object.keys(hooks).join(', ')) },
       state<T extends Json>() {
         const name = extension.name
         return {
@@ -1038,9 +1059,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       facts(describe) {
         if (factSources.some((f) => f.owner === extension.name)) throw new Error(`Extension ${extension.name} already says its facts`)
         own(factSources, describe as (typeof factSources)[number]['value'], 'facts')
+        note('facts', 'facts')
         changed()
       },
-      agentFor(choose) { own(choosers, choose as (typeof choosers)[number]['value'], 'an agentFor'); changed() },
+      agentFor(choose) { own(choosers, choose as (typeof choosers)[number]['value'], 'an agentFor'); note('agentFor', 'an agentFor'); changed() },
       threads: {
         list: (options) => list(options),
         get: async (id) => info(id, await get(id)),
@@ -1077,17 +1099,19 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       const cleanup = await Promise.race([setup, timedOut])
       if (cleanup === 'timeout') {
         void setup.then((late) => { if (typeof late === 'function') late() }).catch((error: unknown) => console.error(`Extension ${extension.name}: its setup, given up on, failed after:`, error))
-        throw new Error(`its setup didn't finish in ${inTime}, so it's torn down. Keep setup quick, and don't await work that loads a profile (starting or reading a thread) in it`)
+        throw Object.assign(new Error(`its setup didn't finish in ${inTime}, so it's torn down. Keep setup quick, and don't await work that loads a profile (starting or reading a thread) in it`), { timedOut: true })
       }
       if (cleanup) undo(cleanup, 'a cleanup')
     } catch (error) {
       teardown()
+      report((error as { timedOut?: boolean }).timedOut ? 'timed out' : 'failed', error instanceof Error ? error.message : String(error))
       console.error(`Extension ${extension.name} failed to start:`, error)
       throw new Error(`Extension ${extension.name} failed to start: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
     } finally {
       clearTimeout(timer)
     }
     // Offered once it's set up: a client that sees `ext:<name>` finds its methods there, and one that fails never shows.
+    failures.delete(from.file ?? extension.name)
     announced.set(extension.name, manifestOf(extension))
     announce()
     return teardown
@@ -1101,7 +1125,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       if (always) return { installed: part, undo: installBuiltin(part, extension.name) }
       registry.install(part)
       return { installed: part, undo: () => registry.uninstall(part) }
-    }))
+    }, undefined, { source: core.includes(extension) ? 'core' : 'bundled' }))
     extensions.set(extension.name, aboutOf(extension))
   }
   let unregisterSwitches = registerExtensionSettings(settings, [...extensions.values()])
@@ -1149,6 +1173,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   // ── Profiles ────────────────────────────────────────────────────────────────────────────────────────────────────
 
   const profiles = new Map<string, LoadedProfile>()
+  /** Profiles that failed to load, and why: until they load. */
+  const profileErrors = new Map<string, { ref: ProfileRef; error: string }>()
   /**
    * A profile's daemon extension, set up once however many profiles have it (by its file at one version, `key`: see
    * ProfileDaemonExtension), and torn down when the last of them lets it go. `profiles`: their folders, whose threads
@@ -1181,7 +1207,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         if (!always) return { installed: named, undo: uninstall }
         made.parts.push(named)
         return { installed: named, undo: () => { made.parts.splice(made.parts.indexOf(named), 1); uninstall() } }
-      }, made.profiles)
+      }, made.profiles, { source: 'profile', file: item.file })
       shared.set(item.key, entry = made)
     }
     const used = entry
@@ -1239,6 +1265,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       ]).finally(() => clearTimeout(timer))
     } catch (error) {
       unload(ref.dir)
+      profileErrors.set(ref.dir, { ref, error: (error as Error).message })
       throw error
     }
     // Another version of a file it has, set up for other profiles too: they let go of it, and load this one next time.
@@ -1265,10 +1292,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       for (const extension of loaded.extensions) life.add(install(extension))
     } catch (error) {
       release()
+      profileErrors.set(ref.dir, { ref, error: (error as Error).message })
       throw new RpcError('invalid', `Profile ${ref.name}: ${(error as Error).message}`)
     }
     holds.set(ref.dir, { uses, release })
     profiles.set(ref.dir, loaded)
+    profileErrors.delete(ref.dir)
     // What its threads go without may have changed with it.
     changed()
     for (const name of loaded.spec.without ?? []) {
@@ -1277,6 +1306,55 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       else if (known.required) console.warn(`Profile ${ref.name}: ${name} is required, and can't be done without`)
     }
     return loaded
+  }
+
+  /** What each extension here is and does, and (given a thread) which don't take part in it and why: `extensions.inspect`. */
+  async function inspect(threadId?: string): Promise<ExtensionsReport> {
+    const off = switchedOff()
+    const watchesOf = (name: string) => [...values].filter(([key, entry]) => key.startsWith(`${name}.`) && (entry.listeners.size || entry.watchers.size))
+      .map(([key, entry]) => ({ value: key, whole: entry.listeners.size, scopes: entry.watchers.size }))
+    const dirName = new Map([...profiles.values()].map((p) => [p.dir, `${p.scope === 'project' ? 'project' : 'user'}:${p.name}`]))
+    const reports: ExtensionReport[] = []
+    for (const [name, { extension, from, profiles: dirs, registered }] of inspected) {
+      reports.push({
+        ...manifestOf(extension), ...(extension.title ? { title: extension.title } : {}), ...(extension.required ? { required: true } : {}),
+        ...from, ...(dirs ? { profiles: [...dirs].map((dir) => dirName.get(dir) ?? dir) } : {}),
+        state: off.has(name) ? 'off' : 'set up', registered: Object.fromEntries(registered), watches: watchesOf(name),
+      })
+    }
+    for (const name of declared) {
+      const about = extensions.get(name)!
+      reports.push({ ...manifestOf(about), ...(about.title ? { title: about.title } : {}), source: 'window', state: off.has(name) ? 'off' : 'set up', registered: {}, watches: [] })
+    }
+    reports.push(...failures.values())
+    const report: ExtensionsReport = {
+      api: EXTENSION_API,
+      extensions: reports,
+      profiles: [
+        ...[...profiles.values()].map((p) => ({ name: p.name, scope: p.scope, dir: p.dir, state: 'loaded' as const })),
+        ...[...profileErrors.values()].map(({ ref, error }) => ({ name: ref.name, scope: ref.scope, dir: ref.dir, state: 'failed' as const, error })),
+      ],
+    }
+    if (threadId === undefined) return report
+    const { meta } = await get(threadId)
+    const profile = meta.profile ? await profileOf(meta.profile).catch(() => undefined) : undefined
+    const { choice } = choiceAndWithout(threadId, meta, profile)
+    const without: { extension: string; why: string }[] = []
+    for (const { name, required } of extensions.values()) {
+      if (required) continue
+      if (settings.get(`extensions.${name}`) === false) without.push({ extension: name, why: 'switched off on this machine (Settings → Extensions)' })
+      else if (profile?.spec.without?.includes(name)) without.push({ extension: name, why: `its profile ${profile.name} goes without it (without)` })
+      else if (choice?.without?.some((n) => (RENAMED[n] ?? n) === name)) without.push({ extension: name, why: `${choice.by}'s agentFor chose an agent without it` })
+    }
+    for (const [name, { profiles: dirs }] of inspected) {
+      if (!dirs || (meta.profile && dirs.has(meta.profile.dir))) continue
+      without.push({ extension: name, why: `it's a profile's (${[...dirs].map((dir) => dirName.get(dir) ?? dir).join(', ')}), and this thread's profile is ${meta.profile ? meta.profile.name : 'none'}` })
+    }
+    if (meta.profile && !profile) {
+      const why = profileErrors.get(meta.profile.dir)?.error ?? "it isn't loaded"
+      without.push({ extension: `profile ${meta.profile.name}`, why: `none of its extensions: ${why}` })
+    }
+    return { ...report, thread: { id: threadId, ...(meta.profile ? { profile: `${meta.profile.scope}:${meta.profile.name}` } : {}), without } }
   }
 
   /**
@@ -1958,6 +2036,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         'action.log': async () => router.log(),
         /** The window's extensions, as each declares itself: those without a daemon half become known here (see declare). */
         'extensions.declare': async ({ extensions: abouts }: Methods['extensions.declare']['params']) => { declare(Array.isArray(abouts) ? abouts : []); return null },
+        'extensions.inspect': ({ thread }: Methods['extensions.inspect']['params'] = {}) => inspect(thread),
       }
       /** A live value (or its part in `scope`), then `tell` with each new one, until unwatched. */
       function watchValue(key: string, scope: string | undefined, tell: (sub: string, value: Json) => void) {
