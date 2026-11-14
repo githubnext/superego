@@ -10,6 +10,8 @@ import ego from '@superego/ego/daemon'
 import files from '@superego/files/daemon'
 import git from '@superego/git/daemon'
 import images from '@superego/images/daemon'
+import paneUi from '@superego/pane-ui/daemon'
+import replyUi from '@superego/reply-ui/daemon'
 import skills from '@superego/skills/daemon'
 import suggestions from '@superego/suggestions/daemon'
 import tasks from '@superego/tasks/daemon'
@@ -22,7 +24,7 @@ import app from '../superego.config.ts'
 // The window's build, for Web access: next to this file once built (out/main → out/renderer); from source, the last build.
 const webRoot = [join(import.meta.dirname, '../renderer'), join(import.meta.dirname, '../out/renderer')].find((dir) => existsSync(join(dir, 'index.html')))
 
-serveDaemon({ app, defaultCwd: homedir(), extensions: [worktrees, askUser, ego, files, git, images, skills, suggestions, tasks, threadTools, threadReports, webPanes], ...(webRoot ? { webRoot } : {}) }).catch((error) => {
+serveDaemon({ app, defaultCwd: homedir(), extensions: [worktrees, askUser, ego, files, git, images, paneUi, replyUi, skills, suggestions, tasks, threadTools, threadReports, webPanes], ...(webRoot ? { webRoot } : {}) }).catch((error) => {
   console.error(error)
   process.exit(1)
 })

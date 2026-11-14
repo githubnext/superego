@@ -11,6 +11,7 @@
     { "path": "packages/ui" },
     { "path": "packages/app" },
     { "path": "packages/sdk" },
+    { "path": "packages/blocks" },
     { "path": "extensions/threads" },
     { "path": "extensions/ask-user" },
     { "path": "extensions/files" },
@@ -25,6 +26,8 @@
     { "path": "extensions/notifications" },
     { "path": "extensions/worktrees" },
     { "path": "extensions/ego" },
+    { "path": "extensions/reply-ui" },
+    { "path": "extensions/pane-ui" },
     { "path": "app" },
     { "path": "scripts" }
   ]

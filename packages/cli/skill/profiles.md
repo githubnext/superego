@@ -53,7 +53,7 @@ Every field is optional.
 - **`without`** takes the names of optional extensions, the ones Settings → Extensions lists: the core's
   `coding-tools` (read, write, edit, bash), `panes` (open_pane), `agents-md`, and the bundled `thread-tools`
   (thread_start, thread_read, thread_send, thread_list, thread_archive; `threads`, its old name, means it too),
-  `thread-reports` (a thread started by another tells it when it finishes, fails or waits on a question), `ask-user`, `files`, `git`, `images`, `links`, `skills`, `suggestions`, `tasks`, `web-panes`. Its
+  `thread-reports` (a thread started by another tells it when it finishes, fails or waits on a question), `ask-user`, `files`, `git`, `images`, `links`, `pane-ui` (open_ui, update_ui), `reply-ui` (show_ui, ask_ui), `skills`, `suggestions`, `tasks`, `web-panes`. Its
   threads get none of their tools or prompt sections, and the window shows none of their UI there. Required ones (the
   sidebar) can't be left out.
 

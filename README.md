@@ -108,12 +108,15 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `packages/client` | reaching daemons: local socket, ssh, any stdio command; the machine list |
 | `packages/cli` | the command line |
 | `packages/ui` | component kit and design tokens |
+| `packages/blocks` | UI an agent writes as JSON blocks: the strict schema (checked by the daemon half that takes them and again in the window that draws them), the words an answer sends, and the renderer (an `html` block runs in a sandboxed frame, replying only as the user acts) |
 | `packages/app` | main process, window, preload, build and packaging; panes, the editor, the navigator; the UI half of the extension API |
 | `packages/sdk` | what an extension's author imports: `superego`, `superego/ui`, `superego/testing` (a test daemon, a test window), `superego/unstable` |
 | `extensions/threads` | the sidebar: sessions and their threads; the thread tools' rows and `thread:` links (UI; required). Its daemon half is `thread-tools`, the agent's `thread_*` tools (optional), and `thread-reports`: a thread started by another tells it when what it was asked finishes, fails or waits on a question, until the user takes it over by writing to it (optional) |
 | `extensions/worktrees` | a git worktree of its own for a thread that asks (`-w`, the New thread checkbox, a profile's `worktree: true`): made on a branch, removed when archived clean (what still runs from it stopped first), put back when unarchived; the branch in the title bar (daemon + UI; required) |
 | `extensions/ego` | Ego, Superego's own agent: one hidden thread per machine, its prompt and tools that read and set up; the rail's lifebuoy (a phone's drawer's too), *Ask Ego* in ⌘K, *Clear* (daemon + UI) |
 | `extensions/ask-user` | an `ask_user` tool; the question card and blocked status (daemon + UI) |
+| `extensions/reply-ui` | `show_ui` (blocks in the transcript, pressed later as a message) and `ask_ui` (blocks above the composer, waiting for an answer); both drawn out of the run's fold (daemon + UI) |
+| `extensions/pane-ui` | `open_ui`/`update_ui`: the agent's blocks in a `ui` pane beside the thread, kept with the thread across restarts (daemon + UI) |
 | `extensions/git` | Changes (`⌘⇧D`): the thread's folder's changes by git, file by file, +N −N on its tab; the agent opens it too (daemon + UI) |
 | `extensions/web-panes` | Preview, a web page beside the thread (a link it names, opened beside), and Artifact, an HTML file the agent wrote, sandboxed (daemon + UI) |
 | `extensions/files` | the file tree beside the editor and quick open (`⌘P`) (daemon + UI) |
