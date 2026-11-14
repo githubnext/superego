@@ -89,6 +89,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `method('x.y', run, { params })` | a read for the UI; params checked first |
 | `value('x.y', initial)` → `get`, `set`, `update` | live state the UI watches; in memory |
 | `pane(kind, about)` | tell the agent about a pane kind, for `open_pane` |
+| `view('x.y', { title, icon, context, fits, default, value \| method })` | a view drawn from data (below): no UI code, so a remote machine's or a project profile's needs no trust |
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
 | `submit(({ thread, text, attachments, content, by }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it. `by`: the extension that sent it (`threads.submit`, `threads.create`'s prompt), absent for the user's |
 | `settings.register({ id: 'x', settings })`, `settings.get`, `settings.snapshot`, `settings.onChange` | machine settings of its own (`x.…`); read any |
@@ -181,6 +182,43 @@ Slots are places that behaviour decides, so the layout doesn't move them: a ques
 for. They get `{ machine, thread }`; the editor's also `path` and `open(path)`. `superego.slot` in one of the old places
 (`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) declares a view of that place, `<extension>.<slot>`,
 placed there by default: its `sidebar` is a space, its `footer` the `drawer`.
+
+### Data-only views
+
+A daemon half can declare a view as data, and the window draws it with its own components: no UI code ships, so a
+remote machine's, or a project profile's, needs none of the trust its UI code would. The content is a few fixed parts,
+any of them, top to bottom: a `note`, `facts` (label and value), `items` (a list: `title`, `subtitle`, `detail`,
+`status`, a `thread` to link, `actions`), a `table` (`columns`, `rows`), `markdown`, and `actions` (buttons), with
+`empty` for when there's none. A button runs one of the machine's actions, as `superego do` would.
+
+```ts
+// orders.ts, a daemon half: the open orders, as a space, with a button on each
+const open = superego.value<ViewContent>('orders.open', { items: [], empty: 'No open orders.' })
+const show = (orders: Order[]) => open.set({
+  note: `${orders.length} open`,
+  items: orders.map((o) => ({ id: o.id, title: `No. ${o.id}`, subtitle: o.customer, status: o.late ? 'blocked' : 'idle',
+    actions: [{ title: 'Ship', action: 'orders.ship', params: { id: o.id } }] })),
+})
+superego.action(defineAction({ id: 'orders.ship', title: 'Ship an order', params: obj({ id: str() }), run: async ({ id }) => show(await ship(id)) }))
+superego.view('orders.open', { title: 'Orders', icon: 'list', context: 'window', fits: ['space', 'aside'], default: 'space', value: 'orders.open' })
+```
+
+- The source is a live value of the extension's (`value`), or a method of its (`method`), read again as the thread
+  moves on and after a button ran. A `thread` view's value holds each thread's content by its id, and its method is
+  called with `{ id }`.
+- Data views fit `space`, `aside` and `pane` (a `window` view: `space` and `aside`), and the layout places them as any
+  other. A `thread` view in `pane` is a pane kind of its id; with `about`, the agent is told it can open it.
+- The window hears of them as every daemon's live value `view.list`. A view a machine's extension declares shows a
+  thread only from that machine, and a `window` view gathers every machine's, each under its name. A profile's fit only
+  `aside` and `pane`, in its own threads. An extension's UI half that declares a view of the same id draws it instead.
+- The `skills` extension's *Skills* is one (`extensions/skills/src/daemon.ts`).
+
+### On a phone
+
+Below 600px wide there's no rail and no title bar. `space` views are the drawer, with the others to switch to at its
+foot beside `drawer` views (Ego, Unread) and Settings. The thread's title opens its **sheet**, which holds the title
+bar's (`header` views, where it runs, archiving), the pane menu, and the `aside` views; `titlebar` views don't show.
+`narrow` moves a view elsewhere on a phone.
 
 ## Hearing the window
 

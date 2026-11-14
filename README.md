@@ -64,7 +64,8 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
   as you type) sends that skill's instructions with it. `disable-model-invocation: true` keeps a skill to being named.
   `~/.agents/AGENTS.md`, and any `AGENTS.md` from the root down to the thread's folder, are standing instructions.
   A profile can do without either (`without: ['skills', 'agents-md']`), and a machine can turn either off. Skills are
-  the `skills` extension; `AGENTS.md` is the core's.
+  the `skills` extension; `AGENTS.md` is the core's. *Skills* lists every machine's to browse, once placed in Settings →
+  Layout (a space, or beside the thread).
 
 ## Keys
 
@@ -117,7 +118,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `extensions/unread` | the bell with what agents have for you that you haven't seen (in the rail when the sidebar isn't there, beside Settings on a phone), most pressing first; `⌘.` to the next, everywhere or in this session (UI only) |
 | `extensions/notifications` | a notification when a thread finishes, fails or needs you while the window is in the background; clicking it shows the thread. On the desktop, and in a browser once you allow it (offered over the composer while a thread works). With no window open, the desktop app notifies by itself; the menu bar keeps its count either way (UI only) |
 | `extensions/links` | ⌃O: the links in the thread, newest first, fuzzy filtered; ⏎ follows one, ⌘⏎ opens it in a pane, ⌃1–9 / ⌃⌘1–9 the first nine (UI only) |
-| `extensions/skills` | skills from `~/.agents/skills`: what each is for in the prompt, `$name` completed in the composer and sent with the message, a chip under it (daemon + UI) |
+| `extensions/skills` | skills from `~/.agents/skills`: what each is for in the prompt, `$name` completed in the composer and sent with the message, a chip under it, and a data view listing them (daemon + UI) |
 | `extensions/suggestions` | after each answer, a side call to the thread's model for what you might send next; offered over the composer, numbered; ←/→ pick, ⏎ sends, ⇥ takes it to change, ⌃1–9 send that one (daemon + UI) |
 | `extensions/tasks` | `task_start`/`task_finish` tools and a prompt asking the agent to report its work as tasks; the transcript folds work under each task's title, status and outcome (daemon + UI) |
 
@@ -213,6 +214,9 @@ own, so it asks for the code shown beside the link. Your own Tailscale login get
 require it). Paired devices are listed there, to rename or revoke; one unused for 90 days is forgotten. From a
 terminal: `superego web pair`, `superego web devices`.
 
-On a phone, each pane is a screen wide, and a swipe moves between the thread and its panes. A browser notifies like the
+On a phone, the bar at the top opens the drawer (☰: the threads, any other space to switch to at its foot, Ego,
+Unread and Settings) and, from the thread's title, its sheet: what the title bar holds on the desktop (where it runs,
+the model, archiving), the panes to open beside it, and what the layout puts beside the thread (thread details). Each
+pane is a screen wide, and a swipe moves between the thread and its panes. A browser notifies like the
 desktop app once allowed: the first time a thread works, a pill over the composer offers it. A phone's browser shows
 them only from a service worker, which there isn't yet.
