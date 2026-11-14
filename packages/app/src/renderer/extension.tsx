@@ -10,6 +10,7 @@
 // teardown removes all of it at once. A profile's UI is owned by that profile on its machine too, and draws only in
 // that profile's threads there.
 import { createContext, Fragment, useContext, useEffect, useMemo, useState, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type ReactNode } from 'react'
+import { contractProblem } from '@superego/protocol'
 import type { AppConfig, DataViewInfo, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, ProviderRejection, SectionInfo, SettingsSnapshot, Status, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import type { Selection } from './state.tsx'
@@ -445,7 +446,10 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   const teardowns = new Map<string, () => void>()
   const ownerKey = (owner: Owner) => `${owner.profile ?? ''}/${owner.extension}`
   const registry: Registry = {
-    app, extensions: extensions.map(({ name, title, description, required }) => ({ name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}) })),
+    app, extensions: extensions.map(({ name, title, description, required, version, api, capabilities }) => ({
+      name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}),
+      ...(version ? { version } : {}), ...(api ? { api } : {}), ...(capabilities?.length ? { capabilities } : {}),
+    })),
     slots: { 'thread.crumb': [], 'composer.above': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
     views: [], dataViews: {}, tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
     window: {
@@ -486,6 +490,9 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   /** Set up one extension: everything it adds is owned by it, and its teardown takes all of it away again. */
   function setUp(extension: UiExtension, profile?: string) {
     if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
+    // One whose versions don't read, or that needs an extension API this window isn't, is refused before it runs.
+    const problem = contractProblem(extension)
+    if (problem) throw new Error(problem)
     // The core's and a profile's own aren't the machine's to turn off; a bundled extension is, unless it's required.
     const owner: Owner = { extension: extension.name, optional: !profile && extension.name !== 'core' && !extension.required, ...(profile ? { profile } : {}) }
     // A name is the extension's prefix: one of each among the app's, and a profile's can't take one of theirs.

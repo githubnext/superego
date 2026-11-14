@@ -7,4 +7,4 @@ export const NEXT = 'suggestions.next'
 export type Suggested = { after: number; prompts: string[] }
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
-export const about = { name: 'suggestions', title: 'Prompt suggestions', description: 'After each answer, suggest what you might send next.' } satisfies ExtensionAbout
+export const about = { name: 'suggestions', version: '1.0.0', api: '^1', title: 'Prompt suggestions', description: 'After each answer, suggest what you might send next.' } satisfies ExtensionAbout

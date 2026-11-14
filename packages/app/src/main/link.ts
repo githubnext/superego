@@ -1,6 +1,6 @@
 // A link to one machine's daemon. It connects, says hello, relays notifications, and reconnects with backoff when the
 // transport drops. While down, calls fail fast and the renderer keeps showing what it last knew (stale, not gone).
-import { FEATURES, PROTOCOL_VERSION, RpcError, versionOf, type Hello } from '@superego/protocol'
+import { FEATURES, offers, PROTOCOL_VERSION, RpcError, versionOf, type Hello, type Notifications } from '@superego/protocol'
 import type { ConnectionState, MachineEntry, MachineId } from '../shared.ts'
 
 import type { Transport } from '@superego/client'
@@ -39,11 +39,12 @@ export class Link {
     return {
       id: this.id, label: this.label, state: this.state,
       ...(this.error ? { error: this.error.message, errorKind: this.error.kind } : {}),
-      ...(this.hello ? { machine: { id: this.hello.machine.id, hostname: this.hello.machine.hostname }, features: this.hello.features, version: versionOf(this.hello) } : {}),
+      ...(this.hello ? { machine: { id: this.hello.machine.id, hostname: this.hello.machine.hostname }, features: this.hello.features, ...(this.hello.extensions ? { extensions: this.hello.extensions } : {}), version: versionOf(this.hello) } : {}),
     }
   }
 
-  has(feature: string) { return this.hello?.features.includes(feature) ?? false }
+  /** Whether the daemon offers `feature`: `threads`, `ext:git`, `ext:git@^1.2` (see `offers`). */
+  has(feature: string) { return offers(this.hello, feature) }
 
   get stopped() { return this.#stopped }
 
@@ -78,7 +79,8 @@ export class Link {
         transport.peer.onAny((method, params) => {
           // What it offers changed since hello (an extension set up, torn down, switched off): `has` follows.
           if (method === 'features.changed' && this.hello) {
-            this.hello = { ...this.hello, features: (params as { features: string[] }).features }
+            const { features, extensions } = params as Notifications['features.changed']
+            this.hello = { ...this.hello, features, ...(extensions ? { extensions } : {}) }
             this.#set(this.state)
           }
           this.#options.onEvent(method, params)

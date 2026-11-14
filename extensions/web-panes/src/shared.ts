@@ -7,4 +7,4 @@ export const PREVIEW = 'preview'
 export const ARTIFACT = 'artifact'
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
-export const about = { name: 'web-panes', title: 'Web panes', description: 'Web pages and HTML files the agent wrote, shown beside a thread.' } satisfies ExtensionAbout
+export const about = { name: 'web-panes', version: '1.0.0', api: '^1', title: 'Web panes', description: 'Web pages and HTML files the agent wrote, shown beside a thread.' } satisfies ExtensionAbout

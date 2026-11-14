@@ -7,7 +7,7 @@ import type { ExtensionAbout } from '@superego/protocol'
  * switch nor a profile's `without` could mean anything for it.
  */
 export const about = {
-  name: 'threads', title: 'Sidebar', description: 'Sessions and their threads, sorted, as a list or a rail, with thread details.', required: true,
+  name: 'threads', version: '1.0.0', api: '^1', title: 'Sidebar', description: 'Sessions and their threads, sorted, as a list or a rail, with thread details.', required: true,
 } satisfies ExtensionAbout
 
 /**
@@ -15,7 +15,7 @@ export const about = {
  * sidebar's name, still means these (the daemon's `RENAMED`).
  */
 export const toolsAbout = {
-  name: 'thread-tools', title: 'Thread tools', description: 'Start threads of their own, read, message and archive others.',
+  name: 'thread-tools', version: '1.0.0', api: '^1', title: 'Thread tools', description: 'Start threads of their own, read, message and archive others.',
 } satisfies ExtensionAbout
 
 /**
@@ -24,5 +24,5 @@ export const toolsAbout = {
  * while keeping the tools, and a thread without the tools still reports.
  */
 export const reportsAbout = {
-  name: 'thread-reports', title: 'Thread reports', description: 'Tell the thread that started one when it finishes, fails or waits on a question.',
+  name: 'thread-reports', version: '1.0.0', api: '^1', title: 'Thread reports', description: 'Tell the thread that started one when it finishes, fails or waits on a question.',
 } satisfies ExtensionAbout

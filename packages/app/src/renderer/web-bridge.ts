@@ -1,7 +1,7 @@
 // Superego in a browser: the same window as the desktop app, with `window.superego` over a WebSocket to the daemon that served the
 // page (its Web access setting), instead of Electron's preload. That daemon is the one machine, "local". What the desktop
 // keeps in its main process (the app's own settings) is kept in this browser.
-import { FEATURES, PROTOCOL_VERSION, RpcError, RpcPeer, type Hello } from '@superego/protocol'
+import { FEATURES, PROTOCOL_VERSION, RpcError, RpcPeer, type Hello, type Notifications } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { APP_MOVED, LAYOUT_SETTING, withMovedActions, withMovedLayout, type MachineEntry, type SuperegoBridge, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { askPairing, LIMITED, type Pairing } from './pair-gate.ts'
@@ -70,7 +70,10 @@ export function webBridge(): SuperegoBridge {
       ws.onmessage = (message) => next.receive(String(message.data))
       next.onAny((method, params) => {
         // What it offers changed since hello: `has` follows.
-        if (method === 'features.changed') setEntry({ features: (params as { features: string[] }).features })
+        if (method === 'features.changed') {
+          const { features, extensions } = params as Notifications['features.changed']
+          setEntry({ features, extensions })
+        }
         emit({ machine: 'local', method, params })
       })
       ws.onopen = async () => {
@@ -79,7 +82,7 @@ export function webBridge(): SuperegoBridge {
           const hello = await next.call<Hello>('hello', { client: 'web', version: PROTOCOL_VERSION, features: [...FEATURES] })
           peer = next
           retry = 500
-          setEntry({ state: 'connected', label: hello.machine.hostname, machine: { id: hello.machine.id, hostname: hello.machine.hostname }, features: hello.features, error: undefined })
+          setEntry({ state: 'connected', label: hello.machine.hostname, machine: { id: hello.machine.id, hostname: hello.machine.hostname }, features: hello.features, extensions: hello.extensions, error: undefined })
           resolve(next)
         } catch (error) { reject(error) }
       }

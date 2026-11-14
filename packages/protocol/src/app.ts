@@ -45,4 +45,14 @@ export type ExtensionAbout = {
   title?: string
   description?: string
   required?: boolean
+  /**
+   * Its own version, semver: a major for a change its other half, a profile or a script relying on its methods,
+   * actions, values or data can't follow; a minor for something added. Machines announce it, and a UI half checks
+   * it with `has(machine, 'ext:<name>@^1.2')`. Unset: 0.0.0.
+   */
+  version?: string
+  /** The extension API it needs of the host, a semver range (`^1`, `^1.2`): a host it doesn't satisfy refuses it. Unset: any. */
+  api?: string
+  /** Finer than its version: things it can do that a client may ask about (`has(machine, 'ext:<name>#<capability>')`). */
+  capabilities?: string[]
 }

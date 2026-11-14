@@ -4,7 +4,7 @@ export type MachineId = string
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected'
 import type { MachineConfig } from '@superego/client/shared'
 import type { SettingsStore } from '@superego/settings'
-import { MIGRATIONS, waitingForSignIn, type MachineVersion, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
+import { MIGRATIONS, waitingForSignIn, type ExtensionManifest, type MachineVersion, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
 
 export type { MachineConfig }
 
@@ -13,6 +13,8 @@ export type MachineEntry = {
   /** Who answered, from the last hello: the daemon's identity and hostname, and what it offers. */
   machine?: { id: string; hostname: string }
   features?: string[]
+  /** The extensions it has set up and on, each at its version (absent from a daemon before versions): `has` reads both. */
+  extensions?: ExtensionManifest[]
   /** Absent for this computer, which can't be removed. */
   remote?: { route: string; enabled: boolean }
   /** Which Superego it runs, from the last hello. */

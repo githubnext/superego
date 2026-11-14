@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
+import { extensionVersion, offers } from '@superego/protocol'
 import type { Client, Feature, Json, MethodName, Notifications, Params, Result, ThreadInfo, SettingsSnapshot } from '@superego/protocol'
 import type { MachineEntry, MachineId, SuperegoBridge } from '../shared.ts'
 import { useRegistry } from './extension.tsx'
@@ -20,11 +21,16 @@ export function machine(id: MachineId): Client {
 }
 
 /**
- * Whether a machine's daemon offers `feature`: a protocol feature, or `ext:<name>` for an extension set up there now
- * and not switched off (a profile's from when the profile loads). Kept current as the daemon says (`features.changed`);
+ * Whether a machine's daemon offers `feature`: a protocol feature, `ext:<name>` for an extension set up there now and
+ * not switched off (a profile's from when the profile loads), `ext:<name>@<range>` for one at a version in a range
+ * (`ext:git@^1.2`; one that says no version, as from a daemon before versions, counts as 0.0.0), or
+ * `ext:<name>#<capability>` for one that declares a capability. Kept current as the daemon says (`features.changed`);
  * false until it has connected once.
  */
-export const has = (machine: MachineEntry | undefined, feature: Feature | `ext:${string}`) => machine?.features?.includes(feature) ?? false
+export const has = (machine: MachineEntry | undefined, feature: Feature | `ext:${string}`) => offers(machine, feature)
+
+/** The version of a machine's `name` extension: `0.0.0` when it says none, undefined when it isn't there or is off. */
+export const version = (machine: MachineEntry | undefined, name: string) => extensionVersion(machine, name)
 
 /** The machines from the main process, live. The shell holds one subscription; extensions use `useMachines`. */
 export function useMachineList(): MachineEntry[] {

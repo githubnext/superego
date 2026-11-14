@@ -12,4 +12,4 @@ export type Worktree = { path: string; branch: string; root?: string; removed?: 
  * threads are asked for with `worktree: true` (`options.worktrees`), or by their profile (`worktree: true`, or
  * `options: { worktrees: true }`).
  */
-export const about = { name: 'worktrees', title: 'Worktrees', description: 'Give a thread a git worktree of its own.', required: true } satisfies ExtensionAbout
+export const about = { name: 'worktrees', version: '1.0.0', api: '^1', title: 'Worktrees', description: 'Give a thread a git worktree of its own.', required: true } satisfies ExtensionAbout

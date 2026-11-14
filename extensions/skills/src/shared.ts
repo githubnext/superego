@@ -3,7 +3,7 @@
 import type { ExtensionAbout } from '@superego/protocol'
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
-export const about = { name: 'skills', title: 'Skills', description: 'Know the shared skills, use them when they fit, and send one by naming it.' } satisfies ExtensionAbout
+export const about = { name: 'skills', version: '1.0.0', api: '^1', title: 'Skills', description: 'Know the shared skills, use them when they fit, and send one by naming it.' } satisfies ExtensionAbout
 
 /** The skills a message can name on a machine, for completing `$name` as it's typed. */
 export const LIST = 'skills.list'

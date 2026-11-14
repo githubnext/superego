@@ -57,6 +57,20 @@ describe('the UI registry', () => {
     const registry = createRegistry(app, [orders(), twice], () => {})
     expect(toolView(registry, 'find_order', { machine: 'local', thread: thread(false) })).toBe(Order)
   })
+
+  it("refuses an extension that needs an extension API this window isn't, before it runs, and tells machines each one's version", () => {
+    let ran = false
+    const future = defineUiExtension({ name: 'future', version: '2.0.0', api: '^2', setup() { ran = true } })
+    expect(() => createRegistry(app, [future], () => {})).toThrow('Extension future needs extension API ^2, and this Superego has 1.0.0: update Superego')
+    // A profile's is left out, and the rest of the profile set up.
+    const registry = createRegistry(app, [defineUiExtension({ name: 'mine', version: '1.2.0', api: '^1', capabilities: ['x'], setup() {} })], () => {})
+    const errors = console.error
+    console.error = () => {}
+    try { registry.installProfile('box', profile, [future, orders()]) } finally { console.error = errors }
+    expect(ran).toBe(false)
+    expect(toolView(registry, 'find_order', { machine: 'box', thread: thread(true) })).toBe(Order)
+    expect(registry.extensions).toEqual([{ name: 'mine', version: '1.2.0', api: '^1', capabilities: ['x'] }])
+  })
 })
 
 describe('optional and required extensions', () => {

@@ -3,12 +3,15 @@
 import type { ConversationView } from '@earendil-works/pi-durable'
 import type { ActionInfo, ActionLogEntry, Exposure } from './actions.ts'
 import type { ExtensionAbout } from './app.ts'
+import type { ExtensionManifest } from './contract.ts'
 import type { AuthEvent, Json, SettingsSnapshot } from './settings.ts'
 import type { Status } from './status.ts'
 
 /**
  * The protocol's generation. It changes only for a break no feature flag can bridge; a daemon and client of different
- * generations refuse each other. Everything else is additive and announced in `FEATURES`.
+ * generations refuse each other. Within one, the core's methods and features only grow (`released.json` holds what was
+ * released, and a test keeps it there), each new one announced in `FEATURES`. Not the extension API (`EXTENSION_API`)
+ * nor the release (`MachineVersion`): see docs/writing-extensions.md, "Versions and compatibility".
  */
 export const PROTOCOL_VERSION = 1
 
@@ -122,7 +125,13 @@ export type MachineInfo = {
   committedAt?: number
 }
 
-export type Hello = { version: number; features: string[]; machine: MachineInfo; methods: string[] }
+export type Hello = {
+  version: number; features: string[]; machine: MachineInfo; methods: string[]
+  /** The extensions set up and on there (those in `features` as `ext:<name>`), each at its version. Absent from daemons before versions. */
+  extensions?: ExtensionManifest[]
+  /** The extension API it gives extensions (`EXTENSION_API`). Absent from daemons before versions. */
+  api?: string
+}
 
 export type Methods = {
   hello: { params: { client: string; version: number; features?: string[] }; result: Hello }
@@ -205,7 +214,7 @@ export type Notifications = {
   /** A watched file, as it is on disk now (`content: null`: gone). */
   'file.changed': { sub: string; content: string | null }
   /** What the daemon offers now, as `hello` said it: sent to every client whenever it changes (an extension set up, torn down, switched off). */
-  'features.changed': { features: string[] }
+  'features.changed': { features: string[]; extensions?: ExtensionManifest[] }
 }
 
 /** The methods every settings endpoint (a daemon, or the app itself) answers. */

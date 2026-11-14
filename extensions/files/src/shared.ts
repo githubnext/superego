@@ -7,4 +7,4 @@ export const FOLDER = 'folder'
 export type FileList = { files: string[]; truncated: boolean }
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
-export const about = { name: 'files', title: 'Files', description: 'A file tree beside the editor, quick open (⌘P), and folders opened in a pane.' } satisfies ExtensionAbout
+export const about = { name: 'files', version: '1.0.0', api: '^1', title: 'Files', description: 'A file tree beside the editor, quick open (⌘P), and folders opened in a pane.' } satisfies ExtensionAbout

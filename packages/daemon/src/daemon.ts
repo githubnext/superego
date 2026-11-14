@@ -14,7 +14,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  aliasesOf, arr, type Attachment, AUTH_REJECTED, DATA_VIEWS, dataViewProblem, type DataViewInfo, paramsParser, bool, defineAction, deriveStatus, FEATURES, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
+  aliasesOf, arr, type Attachment, AUTH_REJECTED, contractProblem, EXTENSION_API, type ExtensionManifest, manifestOf, DATA_VIEWS, dataViewProblem, type DataViewInfo, paramsParser, bool, defineAction, deriveStatus, FEATURES, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
@@ -117,6 +117,16 @@ const LEGACY: Record<string, { read(meta: ThreadMeta): Json | undefined; drop(me
 const stateOf = (meta: ThreadMeta, name: string): Json | undefined =>
   meta.ext && Object.hasOwn(meta.ext, name) ? meta.ext[name] : LEGACY[name]?.read(meta)
 const clone = <T>(value: T): T => value === undefined ? value : JSON.parse(JSON.stringify(value)) as T
+
+/** What an extension says of itself, and only that: the fields `ExtensionAbout` has, each of its type (a window's declaration is anyone's JSON). */
+function aboutOf(about: ExtensionAbout): ExtensionAbout {
+  const { name, title, description, required, version, api, capabilities } = about
+  return {
+    name, ...(typeof title === 'string' && title ? { title } : {}), ...(typeof description === 'string' && description ? { description } : {}), ...(required === true ? { required } : {}),
+    ...(typeof version === 'string' ? { version } : {}), ...(typeof api === 'string' ? { api } : {}),
+    ...(Array.isArray(capabilities) && capabilities.every((c) => typeof c === 'string') && capabilities.length ? { capabilities } : {}),
+  }
+}
 
 /** What a daemon action gets besides its params: who called, and a way to tell that connection something. */
 export type DaemonContext = { source: string; notify(event: string, params: unknown): void }
@@ -394,14 +404,14 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * can do without it. Set up first, through the same API as the bundled ones.
    */
   const core: DaemonExtension[] = [
-    { name: 'coding-tools', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools()) },
+    { name: 'coding-tools', version: '1.0.0', api: '^1', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools()) },
     {
       // How messages show is the window's, not something to turn off.
-      name: 'markdown', title: 'Markdown', description: 'Know how the thread shows messages, and write for it.', required: true,
+      name: 'markdown', version: '1.0.0', api: '^1', title: 'Markdown', description: 'Know how the thread shows messages, and write for it.', required: true,
       setup: (s) => s.agent(defineExtension({ name: 'markdown', sections: [section('markdown', () => MARKDOWN_PROMPT)] })),
     },
     {
-      name: 'panes', title: 'Panes', description: 'Open panes beside a thread: files, other threads, and the kinds extensions add.',
+      name: 'panes', version: '1.0.0', api: '^1', title: 'Panes', description: 'Open panes beside a thread: files, other threads, and the kinds extensions add.',
       setup(s) {
         s.agent(panesPart)
         // The window's built-in kinds (its panes.tsx); extensions describe their own (git's Changes, web-panes').
@@ -410,7 +420,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       },
     },
     {
-      name: 'agents-md', title: 'AGENTS.md', description: 'Follow the standing instructions in AGENTS.md files.',
+      name: 'agents-md', version: '1.0.0', api: '^1', title: 'AGENTS.md', description: 'Follow the standing instructions in AGENTS.md files.',
       setup: (s) => s.agent(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] })),
     },
   ]
@@ -772,17 +782,21 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * is set up, and a second extension of that name (bundled or a profile's) is refused rather than mixed in.
    */
   const claimed = new Set<string>()
-  /** Names announced as `ext:<name>`: the extensions set up now, bundled and profiles' alike. */
-  const announced = new Set<string>()
+  /** Extensions announced as `ext:<name>`: the extensions set up now, bundled and profiles' alike, each as it declares itself. */
+  const announced = new Map<string, ExtensionManifest>()
+  /** The extensions announced and on: those switched off on this machine aren't offered. */
+  const offered = () => [...announced.values()].filter(({ name }) => extensions.get(name)?.required || settings.get(`extensions.${name}`) !== false)
   /**
-   * What this daemon offers, as `hello` says and `features.changed` keeps current: the protocol's features, and every
-   * extension set up now but those switched off on this machine.
+   * What this daemon offers, as `hello` says and `features.changed` keeps current: the protocol's features, every
+   * extension set up now but those switched off on this machine, and each of those at its version.
    */
-  const features = () => {
-    const on = [...announced].filter((name) => extensions.get(name)?.required || settings.get(`extensions.${name}`) !== false).map((name) => `ext:${name}`)
-    return [...FEATURES, ...on, ...Object.entries(MOVED_FEATURES).filter(([, now]) => on.includes(now)).map(([old]) => old)]
+  const offer = () => {
+    const on = offered()
+    const named = on.map(({ name }) => `ext:${name}`)
+    return { features: [...FEATURES, ...named, ...Object.entries(MOVED_FEATURES).filter(([, now]) => named.includes(now)).map(([old]) => old)], extensions: on }
   }
-  let announcedFeatures = ''
+  const features = () => offer().features
+  let announcedOffer = ''
   let announcing = false
   /** Tell every client what this daemon offers, once it changed (after whatever changed it settles). */
   function announce() {
@@ -790,10 +804,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     announcing = true
     queueMicrotask(() => {
       announcing = false
-      const now = features()
-      if (JSON.stringify(now) === announcedFeatures) return
-      announcedFeatures = JSON.stringify(now)
-      for (const peer of connections) peer.notify('features.changed', { features: now })
+      const now = offer()
+      if (JSON.stringify(now) === announcedOffer) return
+      announcedOffer = JSON.stringify(now)
+      for (const peer of connections) peer.notify('features.changed', now)
     })
   }
 
@@ -808,6 +822,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
     if (RESERVED.has(extension.name)) throw new Error(`The name ${extension.name} is the core's own`)
     if (claimed.has(extension.name)) throw new Error(`An extension named ${extension.name} is already set up`)
+    // One whose versions don't read, or that needs an extension API this host isn't, is refused before it runs.
+    const problem = contractProblem(extension)
+    if (problem) throw new Error(problem)
     claimed.add(extension.name)
     const undo: (() => void)[] = [() => { claimed.delete(extension.name); announced.delete(extension.name); announce() }]
     const ownKey = (key: string) => {
@@ -944,7 +961,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       throw new Error(`Extension ${extension.name} failed to start: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
     }
     // Offered once it's set up: a client that sees `ext:<name>` finds its methods there, and one that fails never shows.
-    announced.add(extension.name)
+    announced.set(extension.name, manifestOf(extension))
     announce()
     return teardown
   }
@@ -958,8 +975,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       registry.install(part)
       return { installed: part, undo: () => registry.uninstall(part) }
     }))
-    const { name, title, description, required } = extension
-    extensions.set(name, { name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}) })
+    extensions.set(extension.name, aboutOf(extension))
   }
   let unregisterSwitches = registerExtensionSettings(settings, [...extensions.values()])
   /**
@@ -1669,7 +1685,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
             throw new RpcError('version_mismatch', `This machine's superego speaks protocol ${PROTOCOL_VERSION}, the client ${version}`, { hint: 'Update superego on the older side.' })
           }
           if (typeof name === 'string') client = name
-          return { version: PROTOCOL_VERSION, features: features(), machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id), ...methods.keys()] }
+          return { version: PROTOCOL_VERSION, ...offer(), api: EXTENSION_API, machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id), ...methods.keys()] }
         },
         'thread.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),
