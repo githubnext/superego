@@ -88,7 +88,7 @@ export async function packageApp(root: string, app: AppConfig, options: PackageO
       ...(existsSync(join(root, 'resources/icon.icns')) ? { icon: join(root, 'resources/icon.icns') } : {}),
       ...(existsSync(icons) ? { extraResources: [{ from: icons, to: '.' }], extendInfo: { CFBundleIconName: app.id } } : {}),
       ...(options.identity
-        ? { identity: options.identity, hardenedRuntime: true, gatekeeperAssess: false, entitlements, entitlementsInherit: entitlements, notarize: false }
+        ? { identity: builderIdentity(options.identity), hardenedRuntime: true, gatekeeperAssess: false, entitlements, entitlementsInherit: entitlements, notarize: false }
         : { identity: null }),
     },
   }
@@ -113,6 +113,11 @@ export async function packageApp(root: string, app: AppConfig, options: PackageO
   rmSync(zip, { force: true })
   execFileSync('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', bundle, zip])
   return [bundle, zip]
+}
+
+/** electron-builder takes a Developer ID by the name after its kind ("Name (TEAM)"), and picks the kind itself. */
+function builderIdentity(identity: string): string {
+  return identity.replace(/^Developer ID Application:\s*/, '')
 }
 
 /** Submit a signed bundle to Apple's notary service, wait for its verdict, and staple the ticket into the bundle. */
