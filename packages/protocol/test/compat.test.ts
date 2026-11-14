@@ -1,6 +1,6 @@
 // The compatibility tables: aliases on the wire go at their milestones, and data migrations are kept apart from them.
 import { describe, expect, it } from 'vitest'
-import { ALIASES, MIGRATIONS, PROTOCOL_VERSION } from '../src/index.ts'
+import { ALIASES, FEATURES, MIGRATIONS, PROTOCOL_VERSION, RELEASED } from '../src/index.ts'
 
 describe('the compatibility tables', () => {
   const today = new Date().toISOString().slice(0, 10)
@@ -20,5 +20,10 @@ describe('the compatibility tables', () => {
       expect(migration, id).not.toHaveProperty('until')
       expect(Object.keys(ALIASES), id).not.toContain(id)
     }
+  })
+  it("doesn't count an alias as released: an old name goes at its milestone", () => {
+    for (const alias of Object.values(ALIASES)) if ('old' in alias) expect(RELEASED.methods as readonly string[]).not.toContain(alias.old)
+    expect(RELEASED.generation).toBe(PROTOCOL_VERSION)
+    for (const feature of RELEASED.features) expect(FEATURES as readonly string[]).toContain(feature)
   })
 })

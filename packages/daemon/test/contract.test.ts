@@ -78,6 +78,15 @@ it('announces each extension at its version, in hello and as it changes', async 
   await close()
 })
 
+it("still answers every method and action protocol generation 1 released, and refuses another generation", async () => {
+  const { peer, hello, close } = await open()
+  expect(RELEASED.generation).toBe(PROTOCOL_VERSION)
+  for (const method of RELEASED.methods) expect(hello.methods, `${method} was released in generation 1`).toContain(method)
+  for (const feature of RELEASED.features) expect(hello.features).toContain(feature)
+  await expect(peer.call('hello', { client: 'test', version: PROTOCOL_VERSION + 1 })).rejects.toMatchObject({ kind: 'version_mismatch' })
+  await close()
+})
+
 /** What the machine's Settings says of `name`: its switch's title, or nothing. */
 async function switchOf(peer: RpcPeer, name: string) {
   const { value } = await peer.call<{ value: { sections: { id: string; settings: { key: string; title: string; description?: string }[] }[] } }>('settings.watch', {})
