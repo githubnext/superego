@@ -53,19 +53,33 @@ export type Placed = Record<Place, string[]>
 
 const list = (placement: Placement | undefined): Place[] => !placement ? [] : Array.isArray(placement) ? placement : [placement]
 
-/** Where each view goes, place by place, in order: the views' defaults, then the user's layout; narrow: its own on top. */
-export function resolveLayout(views: readonly Placeable[], layout: Layout | undefined, { narrow = false }: { narrow?: boolean } = {}): Placed {
+/**
+ * Where `view` goes, and whether the user said so: the narrow layer's change (when `narrow` and `layers` say), else
+ * on a phone the view's own narrow places (unless the user hid it), else the user's wide change, else its default.
+ */
+function placesOf(view: Placeable, layout: Layout | undefined, narrow: boolean, layers = true): { places: Place[]; chosen: boolean } {
   const user = layout?.place ?? {}
-  const small = narrow ? layout?.narrow?.place ?? {} : {}
-  /** Where a view goes, and whether the user said so (in the layer that applies). */
-  const placesOf = (view: Placeable): { places: Place[]; chosen: boolean } => {
-    if (view.id in small) return { places: list(small[view.id]), chosen: true }
-    if (narrow && view.narrow !== undefined) return { places: list(view.narrow), chosen: false }
-    if (view.id in user) return { places: list(user[view.id]), chosen: true }
-    return { places: list(view.default), chosen: false }
-  }
-  const resolved = views.map((view) => {
-    const { places, chosen } = placesOf(view)
+  const small = narrow && layers ? layout?.narrow?.place ?? {} : {}
+  if (view.id in small) return { places: list(small[view.id]), chosen: true }
+  // Hidden wide is hidden on a phone too: the view's own narrow places are where it goes instead of its wide default.
+  if (narrow && view.narrow !== undefined && user[view.id] !== null) return { places: list(view.narrow), chosen: false }
+  if (view.id in user) return { places: list(user[view.id]), chosen: true }
+  return { places: list(view.default), chosen: false }
+}
+
+/** `views` with one of each id: the first declared (an id declared in several scopes, a profile on two machines, is one view to place). */
+const once = <V extends Placeable>(views: readonly V[]): V[] => {
+  const seen = new Set<string>()
+  return views.filter((view) => !seen.has(view.id) && Boolean(seen.add(view.id)))
+}
+
+/**
+ * Where each view goes, place by place, in order: the views' defaults, then the user's layout; narrow: its own on top.
+ * An id is placed once, however many declare it: as the first declared says.
+ */
+export function resolveLayout(views: readonly Placeable[], layout: Layout | undefined, { narrow = false }: { narrow?: boolean } = {}): Placed {
+  const resolved = once(views).map((view) => {
+    const { places, chosen } = placesOf(view, layout, narrow)
     return { view, chosen, places: [...new Set(places)].filter((place) => view.fits.includes(place)) }
   })
   // With no space placed, the views that stand in for one go where they say (unless the user placed them).
@@ -84,23 +98,43 @@ export function resolveLayout(views: readonly Placeable[], layout: Layout | unde
   return placed
 }
 
+/** The places `view` is in now. */
+export const placesNow = (views: readonly Placeable[], layout: Layout | undefined, view: string, { narrow = false }: { narrow?: boolean } = {}): Place[] =>
+  Object.entries(resolveLayout(views, layout, { narrow })).filter(([, ids]) => ids.includes(view)).map(([p]) => p as Place)
+
+type Layer = Omit<Layout, 'narrow'>
+
+/** `layout` with `layer` as its wide (or narrow) layer, empty parts left out. */
+function withLayer(layout: Layout | undefined, layer: Layer, narrow: boolean): Layout {
+  const place = layer.place && Object.keys(layer.place).length ? layer.place : undefined
+  const order = layer.order ? Object.fromEntries(Object.entries(layer.order).filter(([, ids]) => ids?.length)) : undefined
+  const tidy: Layer = { ...(place ? { place } : {}), ...(order && Object.keys(order).length ? { order } : {}) }
+  const { narrow: small, ...wide } = layout ?? {}
+  if (!narrow) return { ...tidy, ...(small ? { narrow: small } : {}) }
+  return { ...wide, ...(Object.keys(tidy).length ? { narrow: tidy } : {}) }
+}
+
 /**
- * The layout with `view` put in `place` (`on`), or taken out of it; unset, toggled. Changes the wide layout (the narrow
- * one's own changes stay), and keeps only what differs from the view's default.
+ * The layout with `view` put in `place` (`on`) or taken out of it (unset: toggled); with `from`, taken out of that place
+ * in the same change (moved). `narrow` changes the phone's layer, on top of the wide one; else the wide one (the narrow
+ * one's own changes stay). Only what differs from where the view would go anyway is kept. As `layout.place` does.
  */
-export function placeIn(views: readonly Placeable[], layout: Layout | undefined, view: string, place: Place, on?: boolean): Layout {
-  const found = views.find((v) => v.id === view)
+export function placeView(views: readonly Placeable[], layout: Layout | undefined, view: string, place: Place,
+  { on, from, narrow = false }: { on?: boolean; from?: Place; narrow?: boolean } = {}): Layout {
+  const found = once(views).find((v) => v.id === view)
   if (!found) return layout ?? {}
-  const now = Object.entries(resolveLayout(views, layout)).filter(([, ids]) => ids.includes(view)).map(([p]) => p as Place)
+  if (from && from !== place) return placeView(views, placeView(views, layout, view, place, { on: true, narrow }), view, from, { on: false, narrow })
+  const now = placesNow(views, layout, view, { narrow })
   const want = on ?? !now.includes(place)
   const next = want ? [...new Set([...now, place])] : now.filter((p) => p !== place)
-  const { [view]: _old, ...others } = layout?.place ?? {}
-  const same = (a: Place[], b: Place[]) => a.length === b.length && a.every((p) => b.includes(p))
-  // Back to its default, nothing is kept; but a view standing in for a space is kept where it's put, space or not.
-  const kept = same(next, list(found.default)) && !found.withoutSpaces ? others
-    : { ...others, [view]: next.length === 0 ? null : next.length === 1 ? next[0]! : next }
-  const { place: _place, ...rest } = layout ?? {}
-  return { ...rest, ...(Object.keys(kept).length ? { place: kept } : {}) }
+  const layer: Layer = (narrow ? layout?.narrow : layout) ?? {}
+  const { [view]: _old, ...others } = layer.place ?? {}
+  // Where it goes with this layer saying nothing of it: the default wide, the wide layout's on a phone.
+  const base = (narrow ? placesOf(found, layout, true, false).places : list(found.default)).filter((p) => found.fits.includes(p))
+  const same = next.length === base.length && next.every((p) => base.includes(p))
+  // Back where it goes anyway, nothing is kept; but a view standing in for a space is kept where it's put, space or not.
+  const kept = same && !found.withoutSpaces ? others : { ...others, [view]: next.length === 0 ? null : next.length === 1 ? next[0]! : next }
+  return withLayer(layout, { ...layer, place: kept }, narrow)
 }
 
 /** Whether `value` is shaped as a layout (ids and places aren't checked: unknown ones are ignored). */

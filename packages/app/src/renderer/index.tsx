@@ -5,10 +5,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@superego/ui/styles.css'
 import './app.css'
-import { bool, obj, opt, str, type AppConfig } from '@superego/protocol'
+import { bool, obj, opt, str, type AppConfig, type SettingsSnapshot } from '@superego/protocol'
+import { watched } from './client.ts'
 import { createRegistry, layoutOf, RegistryProvider, type UiExtension } from './extension.tsx'
-import { LAYOUT, type Place } from './layout.ts'
-import { placeView } from './layout-edit.ts'
+import { LAYOUT, placeView, type Place } from './layout.ts'
 import { registerLayoutText } from './layout-text.tsx'
 import { Profiles, Providers } from './SettingsView.tsx'
 import { WebAccess } from './web-access.tsx'
@@ -51,11 +51,14 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
     // The user's layout keeps it; `narrow`, the phone's layer of it.
     core.action(defineWindowAction({
       id: 'layout.place', title: 'Put a view in a place', params: obj({ view: str(), place: str(), on: opt(bool()), from: opt(str()), narrow: opt(bool()) }),
-      run: ({ view, place, on, from, narrow }, c) => c.dispatch('app.settings.set', {
-        key: LAYOUT, value: placeView(registry.views, layoutOf(c.appSetting(LAYOUT)), view, place as Place, {
+      run({ view, place, on, from, narrow }, c) {
+        // Changed from the settings as last heard: before they're heard, there's nothing to change it from.
+        if (!watched<SettingsSnapshot>('app', 'settings.watch', {})) throw new Error("The layout isn't loaded yet")
+        const value = placeView(registry.views, layoutOf(c.appSetting(LAYOUT)), view, place as Place, {
           ...(on === undefined ? {} : { on }), ...(from ? { from: from as Place } : {}), ...(narrow ? { narrow } : {}),
-        }),
-      }, { machine: 'app', source: 'layout' }),
+        })
+        return c.dispatch('app.settings.set', { key: LAYOUT, value }, { machine: 'app', source: 'layout' })
+      },
     }))
     registerLayoutText(core)
   })
@@ -72,7 +75,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
 }
 
 export {
-  defineUiExtension, fileKind, Slot, urlKind, useApp, usePlacement, useRegistry,
+  defineUiExtension, fileKind, Slot, urlKind, useApp, useNarrow, usePlacement, useRegistry,
   type BehaviourSlot, type EditorSlotProps, type SpaceRailProps, type View, type ViewContext, type ViewProps, type EntryProps, type WindowEvent, type WindowEvents, type WindowState, type LinkAttributes, type LinkHandler, type LinkProps, type LinkWhere, type NewThreadField, type NewThreadFieldProps, type PaneKind, type PaneProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type ToolRow, type ToolRowCall, type ToolState, type UiApi, type UiExtension,
   type WorkBlock, type WorkPart, type WorkRun, type WorkStatus,
 } from './extension.tsx'

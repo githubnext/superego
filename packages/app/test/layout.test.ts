@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { defineApp, type Json, type ThreadInfo } from '@superego/protocol'
 import { MemorySettingsStore } from '@superego/settings'
 import { createRegistry, defineUiExtension, paneMenu, viewsIn, type UiExtension } from '../src/renderer/extension.tsx'
-import { isLayout, placeIn, resolveLayout, type Layout, type Placeable } from '../src/renderer/layout.ts'
+import { isLayout, placesNow, placeView, resolveLayout, type Layout, type Placeable } from '../src/renderer/layout.ts'
 import { withMovedLayout } from '../src/shared.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
@@ -70,28 +70,30 @@ describe('resolving the layout', () => {
     expect(narrow.drawer).toEqual(['ego.button', 'unread.bell'])
     expect(narrow.rail).toEqual([])
     expect(narrow.space).toEqual(['threads.list'])
-    // The wide changes apply narrow too, unless the view has narrow places of its own or the narrow layout says.
-    const layout: Layout = { place: { 'threads.details': 'aside', 'ego.button': null }, narrow: { place: { 'unread.bell': null }, order: { drawer: [] } } }
+    // The wide changes apply narrow too, unless the view has narrow places of its own or the narrow layout says; a view
+    // hidden wide is hidden there too.
+    const layout: Layout = { place: { 'threads.details': 'aside', 'ego.button': 'rail' }, narrow: { place: { 'unread.bell': null }, order: { drawer: [] } } }
     const changed = resolveLayout(bundled, layout, { narrow: true })
     expect(changed.aside).toEqual(['threads.details'])
     expect(changed.drawer).toEqual(['ego.button'])
+    expect(resolveLayout(bundled, { place: { 'ego.button': null } }, { narrow: true }).drawer).not.toContain('ego.button')
   })
 })
 
 describe('placing a view', () => {
   it('toggles a view in a place, keeping only what differs from its default', () => {
-    const on = placeIn(bundled, undefined, 'threads.details', 'aside')
+    const on = placeView(bundled, undefined, 'threads.details', 'aside')
     expect(on).toEqual({ place: { 'threads.details': 'aside' } })
-    expect(placeIn(bundled, on, 'threads.details', 'aside')).toEqual({})
+    expect(placeView(bundled, on, 'threads.details', 'aside')).toEqual({})
     // Already there: on stays on.
-    expect(placeIn(bundled, on, 'threads.details', 'aside', true)).toEqual(on)
+    expect(placeView(bundled, on, 'threads.details', 'aside', { on: true })).toEqual(on)
     // Into a second place, and out of a default one.
-    expect(placeIn(bundled, on, 'threads.details', 'pane').place).toEqual({ 'threads.details': ['aside', 'pane'] })
-    expect(placeIn(bundled, { order: { pane: ['git.changes'] } }, 'git.changes', 'pane', false)).toEqual({ order: { pane: ['git.changes'] }, place: { 'git.changes': null } })
+    expect(placeView(bundled, on, 'threads.details', 'pane').place).toEqual({ 'threads.details': ['aside', 'pane'] })
+    expect(placeView(bundled, { order: { pane: ['git.changes'] } }, 'git.changes', 'pane', { on: false })).toEqual({ order: { pane: ['git.changes'] }, place: { 'git.changes': null } })
   })
 
   it('leaves the layout alone for a view it does not know', () => {
-    expect(placeIn(bundled, { place: { x: 'aside' } }, 'nothing.here', 'aside')).toEqual({ place: { x: 'aside' } })
+    expect(placeView(bundled, { place: { x: 'aside' } }, 'nothing.here', 'aside')).toEqual({ place: { x: 'aside' } })
   })
 
   it('reads only layouts', () => {
@@ -100,6 +102,56 @@ describe('placing a view', () => {
     expect(isLayout({ narrow: { narrow: {} } })).toBe(false)
     expect(isLayout({ spaces: [] })).toBe(false)
     expect(isLayout([])).toBe(false)
+  })
+})
+
+// Moving a view, as `layout.place` does for ⌘I and the views' "Move to…" menus: in, out, from one place to another,
+// wide and on a phone, keeping only what differs from the views' defaults.
+const moving: Placeable[] = [
+  { id: 'threads.list', fits: ['space'], default: 'space' },
+  { id: 'threads.details', fits: ['aside', 'pane'] },
+  { id: 'ego.button', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10 },
+  { id: 'files.folder', fits: ['space', 'aside', 'pane'] },
+  { id: 'git.changes', fits: ['pane'], default: 'pane' },
+]
+const resolvedMoving = (layout: Layout, narrow = false) => resolveLayout(moving, layout, { narrow })
+
+describe('moving a view', () => {
+  it('puts a view in a place and takes it out again, leaving nothing stored', () => {
+    const added = placeView(moving, {}, 'threads.details', 'aside', { on: true })
+    expect(added).toEqual({ place: { 'threads.details': 'aside' } })
+    expect(placeView(moving, added, 'threads.details', 'aside', { on: false })).toEqual({})
+  })
+
+  it('keeps a view in its other places when it is put in one more', () => {
+    const both = placeView(moving, { place: { 'files.folder': 'aside' } }, 'files.folder', 'pane', { on: true })
+    expect(placesNow(moving, both, 'files.folder')).toEqual(['aside', 'pane'])
+  })
+
+  it('moves the details from the aside to the pane menu and back, in one change each', () => {
+    const inAside: Layout = { place: { 'threads.details': 'aside' } }
+    const inPane = placeView(moving, inAside, 'threads.details', 'pane', { from: 'aside' })
+    expect(inPane).toEqual({ place: { 'threads.details': 'pane' } })
+    expect(resolvedMoving(inPane).pane).toEqual(['threads.details', 'git.changes'])
+    expect(resolvedMoving(inPane).aside).toEqual([])
+    expect(placeView(moving, inPane, 'threads.details', 'aside', { from: 'pane' })).toEqual(inAside)
+  })
+
+  it('moves a view back where it was by default, leaving nothing stored', () => {
+    const moved = placeView(moving, {}, 'ego.button', 'drawer', { from: 'rail' })
+    expect(moved).toEqual({ place: { 'ego.button': 'drawer' } })
+    expect(placeView(moving, moved, 'ego.button', 'rail', { from: 'drawer' })).toEqual({})
+  })
+
+  it("changes the phone's layer when narrow, leaving the wide one", () => {
+    const layout: Layout = { place: { 'threads.details': 'aside' } }
+    const moved = placeView(moving, layout, 'ego.button', 'rail', { from: 'drawer', narrow: true })
+    expect(moved).toEqual({ place: { 'threads.details': 'aside' }, narrow: { place: { 'ego.button': 'rail' } } })
+    expect(resolvedMoving(moved, true).rail).toEqual(['ego.button'])
+    expect(placeView(moving, moved, 'ego.button', 'drawer', { from: 'rail', narrow: true })).toEqual(layout)
+    const off = placeView(moving, layout, 'threads.details', 'aside', { on: false, narrow: true })
+    expect(off.narrow).toEqual({ place: { 'threads.details': null } })
+    expect(resolvedMoving(off).aside).toEqual(['threads.details'])
   })
 })
 
@@ -146,6 +198,25 @@ describe('views in the registry', () => {
     expect(viewsIn(registry, placed, 'pane', { machine: 'local', thread }).map((v) => v.id)).toEqual([])
     registry.installProfile('local', profile, [])
     expect(registry.views).toEqual([])
+  })
+
+  it('draws and lists a view once, however many scopes declare it, as the thread\'s own declares it', () => {
+    const registry = createRegistry(app, [], () => {})
+    const profile = { scope: 'user' as const, name: 'shop', dir: '/home/me/.superego/profiles/shop' }
+    registry.installProfile('local', profile, [orders])
+    registry.installProfile('box', profile, [orders])
+    const placed = resolveLayout(registry.views, undefined)
+    expect(placed.pane).toEqual(['orders.order', 'orders.log'])
+    const onBox = { machine: 'box', thread: { ...thread, profile } }
+    const drawn = viewsIn(registry, placed, 'pane', onBox)
+    expect(drawn.map((v) => v.id)).toEqual(['orders.order', 'orders.log'])
+    expect(drawn.every((v) => v.owner.profile?.startsWith('box'))).toBe(true)
+    expect(paneMenu(registry, placed, onBox).map((m) => m.kind)).toEqual(['orders.order', 'orders.log'])
+    // A profile's data view, on two machines.
+    registry.setDataViews('local', [{ id: 'shop.board', extension: 'shop', title: 'Board', context: 'thread', fits: ['aside'], default: 'aside', value: 'shop.board', profiles: [profile.dir] }])
+    registry.setDataViews('box', [{ id: 'shop.board', extension: 'shop', title: 'Board', context: 'thread', fits: ['aside'], default: 'aside', value: 'shop.board', profiles: [profile.dir] }])
+    expect(resolveLayout(registry.views, undefined).aside).toEqual(['shop.board'])
+    expect(viewsIn(registry, resolveLayout(registry.views, undefined), 'aside', onBox).map((v) => v.machines)).toEqual([['box']])
   })
 })
 
