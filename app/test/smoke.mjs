@@ -316,6 +316,22 @@ if (phase === 'first') {
   await until(`Boolean(document.querySelector('.palette__input'))`, 'palette')
   await until(`[...document.querySelectorAll('.palette__list li')].every((li) => !li.textContent.includes('hello from smoke'))`, 'no threads in the palette')
   await key('Escape', [])
+  // ⌘K shows a view where it fits and isn't, and resets the layout.
+  const pick = async (query, title) => {
+    await key('k')
+    await until(`Boolean(document.querySelector('.palette__input'))`, `palette for ${query}`)
+    await run(`(() => {
+      const input = document.querySelector('.palette__input')
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(query)})
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })()`)
+    await until(`document.querySelector('.palette__list li.is-active')?.textContent.includes(${JSON.stringify(title)})`, title)
+    await key('Enter', [])
+  }
+  await pick('show thread details beside', 'Show Thread details beside the thread')
+  await until(`Boolean(document.querySelector('.app__aside .threads-details'))`, 'details shown beside the thread from ⌘K')
+  await pick('reset layout', 'Reset layout')
+  await until(`!document.querySelector('.app__aside') && ${layoutNow()}.then((l) => l === '{}')`, 'the layout reset from ⌘K')
   await key('l')
   await until(`Boolean(document.querySelector('.navigator .palette__input'))`, 'navigator')
   await run(`(() => {
