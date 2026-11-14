@@ -1,6 +1,14 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import { versionedImport } from './packages/daemon/src/module-graph.ts'
+
+// Where ssh's master sockets go when a test's data dir is too long for one (see @superego/client's ssh.ts): a
+// directory of this run's own, not the shared /tmp.
+const runtime = mkdtempSync(join(tmpdir(), 'superego-test-run-'))
+process.on('exit', () => rmSync(runtime, { recursive: true, force: true }))
 
 export default defineConfig({
   // Profiles import from 'superego'; under vitest that is the daemon's SDK through a shim (packages/daemon/src/profiles.ts).
@@ -17,5 +25,8 @@ export default defineConfig({
       return url.includes('superego-v=') ? `${resolved.id}?${url.split('?')[1]}` : resolved
     },
   }],
-  test: { include: ['packages/*/test/**/*.test.ts', 'extensions/*/test/**/*.test.ts', 'packages/app/test/**/*.test.ts'], testTimeout: 20_000 },
+  test: {
+    include: ['packages/*/test/**/*.test.ts', 'extensions/*/test/**/*.test.ts', 'packages/app/test/**/*.test.ts'], testTimeout: 20_000,
+    env: { XDG_RUNTIME_DIR: runtime },
+  },
 })

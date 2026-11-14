@@ -38,7 +38,8 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
   it with `wait: true`), messages one (`thread_send`), lists those around (`thread_list`), and archives one
   (`thread_archive`): a finished child, or its own thread once its turn ends, but not a thread still working. A message
   names a thread as `[its title](thread:<id>)`, shown as that thread to open (⌘-click: beside). `thread.create` takes
-  `parent` too.
+  `parent` too. The same tools take `machine`, any machine its daemon reaches (`thread_machines` lists them): a thread
+  started there is that machine's own, not nested under its parent, whose catalog is elsewhere.
 - **Panes** sit beside the thread as a row of columns that scrolls sideways (Dinky's scrolling layout); the thread
   and its panes are kept with the thread, so every client sees the same. The agent opens them too (`open_pane`).
   Built in: the file editor (Markdown rendered, in live preview as Obsidian shows it, or as source) and another thread.
@@ -166,6 +167,22 @@ older (or newer) than this computer's gets a dot beside its name in the sidebar 
 (⌘K *Update Superego on a machine*, or `superego machines update <host>`) runs its install-machine.sh over the same ssh
 and reconnects, asking first if agents are working there, since the daemon restarts.
 
+ssh runs without a terminal (`BatchMode`) and rides one shared ControlMaster connection per target under the data dir. A host
+that wants a password, a code or a hardware key shows as "needs login": `superego machines login <machine>` (or Log in in
+Settings → Machines, which opens Terminal) logs in once and leaves a master that links ride for four hours. A changed or
+unknown host key is its own state, with ssh's message.
+
+`superego daemon install` (on a machine) runs its daemon as a service, a systemd user unit (with lingering) or a launchd
+agent, so it outlives logouts and reboots; `hello` reports `keepsRunning`, and `superego machines` and Settings warn when a
+remote daemon will end at logout or reboot. Under a service, `superego daemon stop` stays stopped until the next connection
+starts it; a crash or a restart brings it back. A daemon the service started has only the unit's environment (plus what a
+restart brought): without an ssh agent there, its links to other machines may need `superego machines login <machine>`
+on that computer.
+
+Each computer's daemon links to the machines in its `machines.json` too (the list the app and `superego machines` keep),
+with the same identity checks, so a browser or an agent there reaches them through it. It never links to itself. After
+Log in or Trust this machine, the app tells its daemon to reconnect as well.
+
 The daemon takes model keys from the providers' own variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) when none is
 stored in Settings. A restart keeps the environment it was started with and adds that of the shell asking for it. Where
 those keys are sealed, as on a [workbox](https://github.com/githubnext/workboxes), restart it from a terminal on the box,
@@ -209,8 +226,8 @@ with the window's full authority, over every machine. Revoking takes out what it
 already did or left going: the window offers a reload to clear that. A data-only view (a daemon extension's
 `superego.view`) runs no code in the window, so it needs no allowing, and the window checks what it sends; its buttons
 still run that machine's actions. This computer's own
-profiles keep their daemon's rules. A browser or phone talks only to the daemon that served it (it is `local` there), so
-no other machine's UI reaches it.
+profiles keep their daemon's rules. A browser or phone talks only to the daemon that served it (it is `local` there; other machines through it), and
+runs no other machine's profile UI.
 
 ## In a browser or on a phone
 
@@ -227,3 +244,8 @@ the model, archiving), the panes to open beside it, and what the layout puts bes
 pane is a screen wide, and a swipe moves between the thread and its panes. A browser notifies like the
 desktop app once allowed: the first time a thread works, a pill over the composer offers it. A phone's browser shows
 them only from a service worker, which there isn't yet.
+
+The page shows every machine the serving daemon reaches, through it (`machines.watch`, `relay.call`, `relay.event`);
+Settings → Machines there lists them with Reconnect, while adding, removing, logging in and updating stay in the desktop
+app. Settings → a machine → Connected lists who is using it right now: windows, browsers, command lines and other
+machines' daemons.

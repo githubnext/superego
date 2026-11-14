@@ -906,7 +906,7 @@ if (phase === 'first') {
   if (!new RegExp(`^http://127\\.0\\.0\\.1:${port}/#pair=`).test(url)) { await fail(`pairing link ${url}`); throw new Error('failed') }
   const main = BrowserWindow.getAllWindows()[0]
   const browser = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } })
-  await browser.loadURL(url)
+  await browser.loadURL(pairing.url)
   const inBrowser = async (js, label) => {
     for (let i = 0; i < 150; i++) { if (await browser.webContents.executeJavaScript(js).catch(() => false)) return; await new Promise((r) => setTimeout(r, 100)) }
     await fail(`web: waiting for ${label}`); throw new Error('failed')

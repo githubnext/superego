@@ -36,7 +36,8 @@ export function defineAction<S extends JsonSchema | undefined, R, C = any>(
 }
 
 /** One dispatch, as the log keeps it. */
-export type ActionLogEntry = { at: number; id: string; source: string; ms: number; ok: boolean; params?: Json; error?: string }
+/** `client` names the connection that dispatched it, on a daemon: who, not only how (`source`). */
+export type ActionLogEntry = { at: number; id: string; source: string; ms: number; ok: boolean; params?: Json; error?: string; client?: { id: string; kind: string; label: string } }
 
 /**
  * Check parameters against `schema` (coercing strings, as the command line sends them): the parsed parameters, or an
@@ -79,11 +80,11 @@ export class Router<C = unknown> {
     return [...this.#actions.values()].map(({ def }) => info(def)).filter((a) => !exposure || a.expose.includes(exposure))
   }
 
-  async dispatch(id: string, params: unknown, context: C, { source = 'ui', exposure }: { source?: string; exposure?: Exposure } = {}): Promise<unknown> {
+  async dispatch(id: string, params: unknown, context: C, { source = 'ui', exposure, client }: { source?: string; exposure?: Exposure; client?: ActionLogEntry['client'] } = {}): Promise<unknown> {
     const started = Date.now()
     const action = this.#actions.get(id)
     const record = (ok: boolean, error?: string) => {
-      const entry: ActionLogEntry = { at: started, id, source, ms: Date.now() - started, ok, ...(params !== undefined ? { params: params as Json } : {}), ...(error ? { error } : {}) }
+      const entry: ActionLogEntry = { at: started, id, source, ms: Date.now() - started, ok, ...(params !== undefined ? { params: params as Json } : {}), ...(error ? { error } : {}), ...(client ? { client } : {}) }
       this.#log.push(entry)
       if (this.#log.length > this.logSize) this.#log.splice(0, this.#log.length - this.logSize)
       for (const listener of this.#listeners) listener(entry)

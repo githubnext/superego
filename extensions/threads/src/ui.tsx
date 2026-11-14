@@ -28,6 +28,8 @@ export type View = 'list' | 'rail'
  * while (until the window is wide again). Shared by the list and the rail.
  */
 let unfolded: Store<boolean>
+/** How a session's machine is described while it isn't connected; anything else is offline. */
+const STATE_WORDS: Partial<Record<MachineEntry['state'], string>> = { connecting: 'connecting', 'needs-login': 'needs login', 'host-key': 'host key to check', disabled: 'off' }
 
 /** Settings and commands act through the app's settings, so every window and the menu agree. */
 const set = (c: Pick<WindowContext, 'dispatch'>, key: string, value: string | boolean) =>
@@ -85,7 +87,7 @@ function Threads() {
   // The machine is a fact about a session, said where it isn't this computer (or there are several to tell apart).
   const several = machines.length > 1
   const where = (session: Session) => session.machine.state !== 'connected'
-    ? `${session.machine.label} · ${session.machine.state === 'connecting' ? 'connecting' : 'offline'}`
+    ? `${session.machine.label} · ${STATE_WORDS[session.machine.state] ?? 'offline'}`
     : several || session.machine.id !== 'local' ? session.machine.label : undefined
   const local = machines.find((m) => m.id === 'local')
   const ready = local?.state === 'connected'

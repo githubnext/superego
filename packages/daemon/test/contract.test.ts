@@ -1,7 +1,7 @@
 // The extension contract as a daemon keeps it: an extension the host's API can't serve is refused, what each extension
 // set up is at is announced (hello, features.changed), windows' declarations are settled the same whatever order they
 // come in, and the core still answers all protocol generation 1 released.
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -50,7 +50,7 @@ it("refuses a profile's extension that needs a newer extension API, when the pro
   writeFileSync(join(profile, 'profile.ts'), `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./next.ts'] })\n`)
   writeFileSync(join(profile, 'next.ts'), `import { defineDaemonExtension } from 'superego'\nexport default defineDaemonExtension({ name: 'next', version: '3.0.0', api: '^1.9', setup() {} })\n`)
   const { peer, close } = await open([], home)
-  await expect(peer.call('thread.create', { cwd: dir })).rejects.toThrow(/Extension next needs extension API \^1.9, and this Superego has 1.3.0/)
+  await expect(peer.call('thread.create', { cwd: dir })).rejects.toThrow(/Extension next needs extension API \^1.9, and this Superego has 1.4.0/)
   await close()
 })
 
@@ -161,4 +161,54 @@ it('has every bundled extension say its version and the API it needs, which this
     expect(about.api, about.name).toBeDefined()
     expect(contractProblem(about), about.name).toBeUndefined()
   }
+})
+
+// The params of the core's released actions (packages/protocol/src/released-actions.json, as a bare daemon's
+// action.list gave them): a released action may gain optional fields, never lose one, change one's type, or require one
+// a caller of the released schema wouldn't send.
+type Schema = { type?: string; properties?: Record<string, Schema>; required?: string[]; items?: Schema; anyOf?: Schema[]; enum?: unknown[]; const?: unknown }
+const FROZEN = new URL('../../protocol/src/released-actions.json', import.meta.url)
+
+/** How `now` breaks a caller written against `frozen`: each a path and what changed. Nothing when it only grew. */
+function breaks(frozen: Schema | null, now: Schema | null, at = 'params'): string[] {
+  const was = frozen ?? { type: 'object', properties: {} }
+  const is = now ?? { type: 'object', properties: {} }
+  const found: string[] = []
+  if (was.type !== is.type && (was.type !== undefined || is.type !== undefined)) found.push(`${at}: was ${was.type ?? 'anything'}, is ${is.type ?? 'anything'}`)
+  if ('const' in was && was.const !== is.const) found.push(`${at}: was ${JSON.stringify(was.const)}, is ${JSON.stringify(is.const)}`)
+  for (const value of was.enum ?? []) if (!is.enum?.includes(value)) found.push(`${at}: no longer takes ${JSON.stringify(value)}`)
+  for (const option of was.anyOf ?? []) {
+    if (!is.anyOf?.some((other) => breaks(option, other, at).length === 0)) found.push(`${at}: no longer takes ${JSON.stringify(option)}`)
+  }
+  for (const [key, schema] of Object.entries(was.properties ?? {})) {
+    const next = is.properties?.[key]
+    if (!next) found.push(`${at}.${key}: gone`)
+    else found.push(...breaks(schema, next, `${at}.${key}`))
+  }
+  for (const key of is.required ?? []) if (!(was.required ?? []).includes(key)) found.push(`${at}.${key}: now required`)
+  if (was.items) found.push(...breaks(was.items, is.items ?? null, `${at}[]`))
+  return found
+}
+
+it('keeps the params of every released action: fields are only ever added, and optional', async () => {
+  const frozen = JSON.parse(readFileSync(FROZEN, 'utf8')) as Record<string, Schema | null>
+  const { peer, close } = await open()
+  const list = await peer.call<{ id: string; params?: Schema }[]>('action.list', {})
+  await close()
+  const actions = Object.fromEntries(list.map((a) => [a.id, a.params ?? null]))
+  const broken = Object.entries(frozen).flatMap(([id, schema]) => id in actions ? breaks(schema, actions[id]!, id) : [`${id}: gone`])
+  expect(broken, 'Changes to released params that break callers. Add an optional field instead.').toEqual([])
+  expect(Object.keys(actions).filter((id) => !(id in frozen)).sort(), 'New core actions: add them, with their params from action.list, to packages/protocol/src/released-actions.json').toEqual([])
+})
+
+it('tells growing params from breaking them', () => {
+  const frozen: Schema = { type: 'object', properties: { id: { type: 'string' }, kind: { anyOf: [{ const: 'a' }, { const: 'b' }] }, n: { type: 'number' } }, required: ['id'] }
+  expect(breaks(frozen, { ...frozen, properties: { ...frozen.properties, extra: { type: 'boolean' } } })).toEqual([])
+  expect(breaks(frozen, { ...frozen, properties: { ...frozen.properties, kind: { anyOf: [{ const: 'a' }, { const: 'b' }, { const: 'c' }] } } })).toEqual([])
+  expect(breaks(frozen, { ...frozen, properties: { id: { type: 'string' }, kind: frozen.properties!.kind! } })).toEqual(['params.n: gone'])
+  expect(breaks(frozen, { ...frozen, properties: { ...frozen.properties, n: { type: 'string' } } })).toEqual(['params.n: was number, is string'])
+  expect(breaks(frozen, { ...frozen, properties: { ...frozen.properties, kind: { anyOf: [{ const: 'a' }] } } })).toEqual(['params.kind: no longer takes {"const":"b"}'])
+  expect(breaks(frozen, { ...frozen, properties: { ...frozen.properties, extra: { type: 'string' } }, required: ['id', 'extra'] })).toEqual(['params.extra: now required'])
+  expect(breaks(null, { type: 'object', properties: { x: { type: 'string' } } })).toEqual([])
+  expect(breaks(null, { type: 'object', properties: { x: { type: 'string' } }, required: ['x'] })).toEqual(['params.x: now required'])
 })

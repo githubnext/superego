@@ -2,11 +2,12 @@
 // directory and opens it in the app. Everything else (threads, machines, settings, sign-in, the daemon itself) works on
 // this computer or, with `-m <machine>`, on any machine the app knows. `<id> connect` is what `ssh <host> <id> connect`
 // runs on the far side. An app's bin calls `runCli(app, { appDir, bin })`.
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, openSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { createConnection } from 'node:net'
-import { join, resolve } from 'node:path'
+import { hostname } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { renderUnicodeCompact } from 'uqr'
@@ -14,10 +15,11 @@ import { devApp } from './dev-app.ts'
 import { newExtension, testExtension } from './extensions.ts'
 import { formatReport } from './inspect.ts'
 import {
-  checkIdentity, collectProfileUi, filesOf, hashProfileUi, MachineStore, openLocal, openMachine, routeOf, runUpdate, UiAllowStore, updateScript, type MachineConfig, type Transport,
+  checkIdentity, collectProfileUi, controlPath, filesOf, hashProfileUi, loginArgs, machineHub, MachineStore, masterAlive, openLocal, openMachine, routeOf, runUpdate, UiAllowStore, updateScript,
+  type MachineConfig, type Transport,
 } from '@superego/client'
 // The daemon itself only for `daemon run`: loading it costs every other command most of its start.
-import { appEnv, daemonStarting, defaultDataDir, isListening, readBuild, socketPath } from '@superego/daemon/client'
+import { appEnv, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, startService, uninstallService } from '@superego/daemon/client'
 import {
   AUTH_REJECTED, compareVersions, driftPhrase, FEATURES, PROTOCOL_VERSION, RpcError, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ProfileRef, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
@@ -74,6 +76,7 @@ Usage:
   ${app.id} machines add <ssh-target> [--name N] [--command C]
   ${app.id} machines add --via '<cmd>' [--name N]
                                 Add a machine reached by any command piping stdio to it
+  ${app.id} machines login <machine>   Log in with ssh in this terminal (a password, a code), so connections can ride it
   ${app.id} machines rm|enable|disable|trust <machine>
   ${app.id} machines update <machine> [--now]
                                 Update ${app.name} there (its scripts/install-machine.sh) and restart its daemon;
@@ -100,6 +103,7 @@ Usage:
 
   ${app.id} daemon [status|stop]       Run this computer's daemon in the foreground, or check on it
   ${app.id} daemon restart [--now]     Restart it onto the installed code; --now interrupts working agents
+  ${app.id} daemon install|uninstall   Run it as a service (systemd user unit, launchd agent) that outlives logouts and reboots
   ${app.id} connect [--start]          Bridge stdio to this computer's daemon (ssh runs this)
 
   ${app.id} --skill [topic]            How to use and extend ${app.name}, for agents: an overview and its topics
@@ -159,6 +163,8 @@ function installedDaemon(): { dir: string; command: string[]; env: NodeJS.Proces
 /** Start this computer's daemon in the background, logging next to its data. */
 function startDaemon() {
   if (daemonStarting(dataDir)) return
+  // A service, when one is installed, is what starts it: it then lives and restarts as the service says.
+  if (startService({ app })) return
   mkdirSync(dataDir, { recursive: true, mode: 0o700 })
   const log = openSync(`${dataDir}/daemon.log`, 'a')
   const { command: [program, ...args], env } = installedDaemon()
@@ -176,9 +182,9 @@ function resolveMachine(name: string | undefined): Machine {
 
 /** Connect to a machine, say hello, and check it is who it should be. */
 async function connect(machine: Machine): Promise<{ transport: Transport; hello: Hello }> {
-  const transport = machine.config ? await openMachine(machine.config, app) : await openLocal(socket, startDaemon)
+  const transport = machine.config ? await openMachine(machine.config, app, dataDir) : await openLocal(socket, startDaemon)
   try {
-    const hello = await transport.peer.call<Hello>('hello', { client: `${app.id}-cli`, version: PROTOCOL_VERSION, features: [...FEATURES] })
+    const hello = await transport.peer.call<Hello>('hello', { client: `${app.id}-cli`, version: PROTOCOL_VERSION, features: [...FEATURES], label: hostname() })
     if (machine.config) checkIdentity(hello, { target: routeOf(machine.config, app), ...(machine.config.daemonId ? { expected: machine.config.daemonId } : {}) }, [])
     return { transport, hello }
   } catch (error) {
@@ -252,9 +258,10 @@ async function listMachines() {
     try {
       const { transport, hello } = await withTimeout(connect(machine), 15_000)
       transport.close()
-      return { ...machine, state: 'answers', hostname: hello.machine.hostname, features: hello.features, version: versionOf(hello) }
+      return { ...machine, state: 'answers', hostname: hello.machine.hostname, features: hello.features, version: versionOf(hello), keepsRunning: hello.machine.keepsRunning }
     } catch (error) {
-      return { ...machine, state: 'error', error: error instanceof Error ? error.message : String(error) }
+      const kind = error instanceof RpcError ? error.kind : 'error'
+      return { ...machine, state: kind === 'needs_login' ? 'needs login' : kind.startsWith('host_key') ? 'host key' : 'error', error: error instanceof Error ? error.message : String(error), kind }
     }
   }))
   // Each machine's Superego next to this computer's.
@@ -265,14 +272,39 @@ async function listMachines() {
   })
   print(described, () => table(described.map((row) => [
     row.id === 'local' ? 'local' : row.id.slice(0, 8), row.label, row.config ? routeOf(row.config, app) : 'this computer',
-    ('error' in row ? `error: ${row.error}` : 'hostname' in row ? `${row.state} (${row.hostname})` : row.state)
+    ((row as { kind?: string }).kind === 'needs_login' ? `needs login: ${app.id} machines login ${row.label}` : 'error' in row ? `${row.state === 'error' ? 'error' : row.state}: ${row.error}`
+      : 'hostname' in row ? `${row.state} (${row.hostname})${row.config && stopsEarly(row.keepsRunning) ? ` - stops at logout or reboot: run ${app.id} daemon install there` : ''}` : row.state)
       + ('drift' in row && driftPhrase(row.drift, app.name) ? ` · runs ${driftPhrase(row.drift, app.name)}` : ''),
   ])))
 }
 
+/** Whether a daemon's `keepsRunning` says it will go away. Unknown (an older daemon, a launchd agent) is not a warning. */
+const stopsEarly = (keeps: Hello['machine']['keepsRunning']) => Boolean(keeps && (keeps.service === null || keeps.afterLogout === false))
+
 const withTimeout = <T>(promise: Promise<T>, ms: number) => Promise.race([
   promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`no answer in ${ms / 1000}s`)), ms).unref()),
 ])
+
+/** Run ssh in this terminal, so it can ask, and leave a master behind that links and commands ride. */
+async function loginCommand(machine: Machine) {
+  const config = machine.config!
+  if (config.via) throw new RpcError('invalid', `${machine.label} is reached with a command, not ssh: there is no login`)
+  const control = controlPath(dataDir, config.target)
+  if (!(await masterAlive(control, config.target))) {
+    mkdirSync(dirname(control), { recursive: true, mode: 0o700 })
+    const result = spawnSync('ssh', [...loginArgs(control), '--', config.target], { stdio: 'inherit' })
+    if (result.status !== 0) throw new RpcError('login_failed', `ssh did not log in to ${config.target}`)
+  }
+  // The master is what they ride now: check it gets to a daemon.
+  try {
+    const { transport, hello } = await withTimeout(connect(machine), 30_000)
+    transport.close()
+    if (!config.daemonId) await machines.update(config.id, { daemonId: hello.machine.id })
+    return print({ ok: true, hostname: hello.machine.hostname }, () => console.log(`Logged in to ${machine.label} (${hello.machine.hostname}).`))
+  } catch (error) {
+    return print({ ok: true, answers: false }, () => console.log(`Logged in to ${machine.label}, but ${app.name} doesn't answer there yet: ${(error as Error).message}`))
+  }
+}
 
 async function machinesCommand(sub: string | undefined, rest: string[], options: { name?: string; command?: string; via?: string; now?: boolean }) {
   if (!sub || sub === 'ls' || sub === 'list') return listMachines()
@@ -293,6 +325,7 @@ async function machinesCommand(sub: string | undefined, rest: string[], options:
     throw new RpcError('invalid', `This computer's ${app.name} is updated by hand: pull its checkout, then ${app.id} daemon restart.`)
   }
   if (!machine.config) throw new RpcError('invalid', rest[0] ? 'This computer is always there.' : `Which machine? ${app.id} machines ${sub} <machine>`)
+  if (sub === 'login') return loginCommand(machine)
   if (sub === 'update') return updateMachine(machine as Machine & { config: MachineConfig }, Boolean(options.now))
   // Its profiles' UI allowed here goes with it: a machine added again is asked again.
   if (sub === 'rm' || sub === 'remove') { await machines.remove(machine.id); await new UiAllowStore(dataDir).revoke(machine.id) }
@@ -421,7 +454,7 @@ async function authCommand(sub: string | undefined, rest: string[], machineName?
 async function daemonCommand(sub: string | undefined, now: boolean) {
   // The app's own daemon entry (Superego's sets up its bundled extensions); without one, a plain daemon: the core only,
   // as this package knows no app's extensions.
-  if (!sub) return options.daemon ? void await import(pathToFileURL(options.daemon).href) : (await import('@superego/daemon')).serveDaemon({ app, dataDir, socket })
+  if (!sub) return options.daemon ? void await import(pathToFileURL(options.daemon).href) : (await import('@superego/daemon')).serveDaemon({ app, dataDir, socket, reach: (dir, self) => machineHub({ app, dataDir: dir, self }) })
   const local: Machine = { id: 'local', label: 'This computer' }
   const running = await isListening(socket)
   if (sub === 'status') {
@@ -465,6 +498,27 @@ async function daemonCommand(sub: string | undefined, now: boolean) {
     const after = await on(local, async (_call, hello) => hello)
     return print({ restarted: true, from: before.machine.build, build: after.machine.build }, () =>
       console.log(`Restarted: build ${before.machine.build} → ${after.machine.build}, pid ${after.machine.pid}.`))
+  }
+  if (sub === 'install') {
+    const { command, env } = installedDaemon()
+    const installed = installService({ app }, {
+      command, log: join(dataDir, 'daemon.log'), ...(env.ELECTRON_RUN_AS_NODE ? { env: { ELECTRON_RUN_AS_NODE: env.ELECTRON_RUN_AS_NODE } } : {}),
+    })
+    // A daemon already running (started on demand) is handed over to the service, unless agents are working in it.
+    let handover = 'It starts with the next connection.'
+    if (running) {
+      handover = await daemonCommand('restart', false).then(() => 'The running daemon now runs under it.', (error: unknown) =>
+        error instanceof RpcError && error.kind === 'busy' ? `Agents are working, so the running daemon is not under it yet: ${app.id} daemon restart` : Promise.reject(error))
+    } else if (!startService({ app })) handover = `Could not start it now; ${app.id} connect --start will.`
+    return print({ ...installed, handover }, () => {
+      console.log(`Installed the ${installed.kind} service ${installed.file}. ${handover}`)
+      if (installed.lingering === true) console.log('Lingering is on: it starts at boot and keeps running after you log out.')
+      for (const note of installed.notes) console.log(note)
+    })
+  }
+  if (sub === 'uninstall') {
+    const removed = uninstallService({ app })
+    return print({ removed }, () => console.log(removed ? 'Removed the service, and stopped the daemon it ran.' : 'No service is installed.'))
   }
   throw new RpcError('usage', `Unknown: ${app.id} daemon ${sub}`)
 }

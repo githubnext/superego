@@ -1,0 +1,479 @@
+{
+  "auth.cancel": {
+    "type": "object",
+    "properties": {
+      "flow": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "flow"
+    ],
+    "additionalProperties": false
+  },
+  "auth.login": {
+    "type": "object",
+    "properties": {
+      "provider": {
+        "type": "string"
+      },
+      "type": {
+        "anyOf": [
+          {
+            "const": "api_key"
+          },
+          {
+            "const": "oauth"
+          }
+        ]
+      },
+      "key": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "provider",
+      "type"
+    ],
+    "additionalProperties": false
+  },
+  "auth.logout": {
+    "type": "object",
+    "properties": {
+      "provider": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "provider"
+    ],
+    "additionalProperties": false
+  },
+  "auth.respond": {
+    "type": "object",
+    "properties": {
+      "flow": {
+        "type": "string"
+      },
+      "prompt": {
+        "type": "string"
+      },
+      "value": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "flow",
+      "prompt",
+      "value"
+    ],
+    "additionalProperties": false
+  },
+  "auth.retry": {
+    "type": "object",
+    "properties": {
+      "provider": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "daemon.restart": {
+    "type": "object",
+    "properties": {
+      "build": {
+        "type": "string"
+      },
+      "interrupt": {
+        "type": "boolean"
+      },
+      "env": {}
+    },
+    "required": [
+      "build"
+    ],
+    "additionalProperties": false
+  },
+  "file.write": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string",
+        "minLength": 1
+      },
+      "content": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "path",
+      "content"
+    ],
+    "additionalProperties": false
+  },
+  "machines.reconnect": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "additionalProperties": false
+  },
+  "pane.close": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "pane": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "pane"
+    ],
+    "additionalProperties": false
+  },
+  "pane.focus": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "pane": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "additionalProperties": false
+  },
+  "pane.open": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "minLength": 1
+      },
+      "title": {
+        "type": "string"
+      },
+      "params": {}
+    },
+    "required": [
+      "id",
+      "kind"
+    ],
+    "additionalProperties": false
+  },
+  "pane.update": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "pane": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "params": {}
+    },
+    "required": [
+      "id",
+      "pane"
+    ],
+    "additionalProperties": false
+  },
+  "profile.allow": {
+    "type": "object",
+    "properties": {
+      "cwd": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "profile.list": {
+    "type": "object",
+    "properties": {
+      "cwd": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "profile.reload": {
+    "type": "object",
+    "properties": {
+      "cwd": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "settings.set": {
+    "type": "object",
+    "properties": {
+      "key": {
+        "type": "string"
+      },
+      "value": {}
+    },
+    "required": [
+      "key",
+      "value"
+    ],
+    "additionalProperties": false
+  },
+  "thread.abort": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "additionalProperties": false
+  },
+  "thread.archive": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "additionalProperties": false
+  },
+  "thread.create": {
+    "type": "object",
+    "properties": {
+      "cwd": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "model": {
+        "type": "string"
+      },
+      "thinking": {
+        "type": "string"
+      },
+      "prompt": {
+        "type": "string"
+      },
+      "attachments": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "mimeType": {
+              "type": "string"
+            },
+            "data": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "mimeType",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "profile": {
+        "type": "string"
+      },
+      "worktree": {
+        "type": "boolean"
+      },
+      "parent": {
+        "type": "string"
+      },
+      "options": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    "additionalProperties": false
+  },
+  "thread.rename": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "id",
+      "title"
+    ],
+    "additionalProperties": false
+  },
+  "thread.seen": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "additionalProperties": false
+  },
+  "thread.submit": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "text": {
+        "type": "string"
+      },
+      "attachments": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "mimeType": {
+              "type": "string"
+            },
+            "data": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "mimeType",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "requestId": {
+        "type": "string"
+      },
+      "whenBusy": {
+        "anyOf": [
+          {
+            "const": "steer"
+          },
+          {
+            "const": "followUp"
+          }
+        ]
+      }
+    },
+    "required": [
+      "id",
+      "text"
+    ],
+    "additionalProperties": false
+  },
+  "thread.unarchive": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "additionalProperties": false
+  },
+  "thread.withdraw": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "submission": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "submission"
+    ],
+    "additionalProperties": false
+  },
+  "web.devices": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "web.pair": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "web.rename": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "web.revoke": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "additionalProperties": false
+  }
+}

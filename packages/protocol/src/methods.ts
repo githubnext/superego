@@ -6,6 +6,7 @@ import type { ExtensionAbout } from './app.ts'
 import type { ExtensionManifest } from './contract.ts'
 import type { AuthEvent, Json, SettingsSnapshot } from './settings.ts'
 import type { Status } from './status.ts'
+import type { MachineVersion } from './version.ts'
 
 /**
  * The protocol's generation. It changes only for a break no feature flag can bridge; a daemon and client of different
@@ -22,7 +23,7 @@ export const PROTOCOL_VERSION = 1
 /** A line Superego writes in a thread's transcript itself, for the user, not the model: an entry of this kind, `{ text }`. */
 export const NOTE_ENTRY = 'superego.note'
 
-export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'hidden-threads', 'data-views', 'scoped-values'] as const
+export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'hidden-threads', 'data-views', 'scoped-values', 'heartbeat', 'channels', 'uploads', 'keeps-running', 'clients', 'relay'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -89,6 +90,8 @@ export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean 
 
 /** A file sent with a message: images go to the model as images; any file is saved on the thread's machine. */
 export type Attachment = { name: string; mimeType: string; /** Base64. */ data: string }
+/** An attachment as a message carries it: inline, or (with the `uploads` feature) by an upload on the same connection. */
+export type AttachmentRef = Attachment | { name: string; mimeType: string; upload: string }
 
 /** What a new thread starts with. Unset: this machine's defaults. */
 export type NewThread = {
@@ -101,7 +104,7 @@ export type NewThread = {
   /** A first message, sent right away. */
   prompt?: string
   /** Files sent with the first message. */
-  attachments?: Attachment[]
+  attachments?: AttachmentRef[]
   /** In a git repository: a worktree of its own, rather than the checkout (its profile's choice when unset; else no). */
   worktree?: boolean
   /** The profile to run with; unset takes the folder's default (the project's, else the user's). */
@@ -115,9 +118,18 @@ export type NewThread = {
   options?: Record<string, Json>
 }
 
+/**
+ * Whether a daemon will still be there after the user logs out or the machine reboots: the service that runs it (systemd
+ * or launchd; null when it is only a process the first connection started), and whether that service survives a logout
+ * (lingering on Linux; null when not known, as for a launchd agent, which lasts as long as the login session).
+ */
+export type KeepsRunning = { service: 'systemd' | 'launchd' | null; afterLogout: boolean | null }
+
 /** `id` is the machine's identity: stable across restarts and routes, so a client can tell it is the same machine. */
 export type MachineInfo = {
   id: string; hostname: string; platform: string; pid: number; dataDir: string
+  /** With the `keeps-running` feature. */
+  keepsRunning?: KeepsRunning
   /** The build of the code this daemon runs (see `readBuild`); clients compare it with what is on disk now. */
   build: string
   /** The git commit of the checkout it runs from, and when it was made (ms); absent from older daemons and outside git. */
@@ -131,10 +143,52 @@ export type Hello = {
   extensions?: ExtensionManifest[]
   /** The extension API it gives extensions (`EXTENSION_API`). Absent from daemons before versions. */
   api?: string
+  /** The id this connection has in the daemon's client list (see `clients.watch`), with the `clients` feature. */
+  client?: string
+}
+
+/**
+ * A connection to a daemon, as its client list shows it. `kind` is what the client said it is in `hello` (`superego-app`,
+ * `web`, `superego-cli`); `label` names it for people: the computer it runs on, a browser's device name, a Tailscale login.
+ */
+export type ClientInfo = {
+  id: string; kind: string; label: string; connectedAt: number; activeAt: number
+  /** How it came in: the unix socket (or ssh to it), a paired browser, or Tailscale. */
+  via: 'socket' | 'web' | 'tailscale'
+  /** The paired browser it is, for `web`. */
+  device?: string
+}
+
+/**
+ * How a client's connection to a machine stands. `needs-login`: ssh wants a password, a code or a key it doesn't have,
+ * so the link waits for a login instead of retrying. `host-key`: the host key is unknown or changed (the error says
+ * which), and it waits for that to be put right.
+ */
+export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'needs-login' | 'host-key'
+
+/** A machine as a client shows it: its link's state, and what the last hello said. */
+export type MachineEntry = {
+  id: string; label: string; state: ConnectionState | 'disabled'; error?: string; errorKind?: string
+  /** Who answered, from the last hello: the daemon's identity and hostname, and what it offers. */
+  machine?: { id: string; hostname: string }
+  /** Whether its daemon will outlive a logout and a reboot, from the last hello. */
+  keepsRunning?: KeepsRunning
+  features?: string[]
+  /** The extensions it offers, each at its version (see `Hello.extensions`). */
+  extensions?: ExtensionManifest[]
+  /** What it runs, to tell it from what this computer runs (see `compareVersions`). */
+  version?: MachineVersion
+  /** Absent for this computer, which can't be removed. */
+  remote?: { route: string; enabled: boolean; /** Reached with ssh, so it can log in. */ ssh: boolean }
 }
 
 export type Methods = {
-  hello: { params: { client: string; version: number; features?: string[] }; result: Hello }
+  /** `label` names this client in others' client lists: the app and CLI send their computer's hostname. */
+  hello: { params: { client: string; version: number; features?: string[]; label?: string }; result: Hello }
+  /** Nothing, answered at once: a client pinging every few seconds notices a dead link in seconds (`heartbeat`). */
+  ping: { params: {}; result: null }
+  /** Open a channel (see channels.ts). The daemon accepts `upload` {name, mimeType, size}; its id names the upload. */
+  'ch.open': { params: { ch: string; kind: string; params?: unknown; window: number }; result: { window: number } }
   /** The threads, newest first; `archived` lists the ones put away instead. */
   'thread.list': { params: { archived?: boolean }; result: ThreadInfo[] }
   'thread.create': { params: NewThread; result: ThreadInfo }
@@ -156,7 +210,7 @@ export type Methods = {
   /** One module of a profile's UI, as JavaScript (types stripped); its own imports are left for the window to load. */
   'profile.module': { params: ProfileRef & { path: string }; result: { path: string; code: string } }
   'thread.rename': { params: { id: ThreadId; title: string }; result: null }
-  'thread.submit': { params: { id: ThreadId; text: string; attachments?: Attachment[]; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
+  'thread.submit': { params: { id: ThreadId; text: string; attachments?: AttachmentRef[]; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
   'thread.abort': { params: { id: ThreadId }; result: null }
   /** Take back a message sent while the agent was busy, still waiting its turn (an item of the thread's `pi.inbox`). */
   'thread.withdraw': { params: { id: ThreadId; submission: string }; result: null }
@@ -210,6 +264,27 @@ export type Methods = {
    * its successor: `box run superego daemon restart` adds its keys.
    */
   'daemon.restart': { params: { build: string; interrupt?: boolean; env?: Record<string, string> }; result: { restarted: boolean; busy: boolean } }
+
+  /** Who is connected to this machine, then `clients.changed` with the whole list. */
+  'clients.watch': { params: {}; result: { sub: string; value: ClientInfo[] } }
+  /**
+   * Ask another client (by id) to run one of its window actions: it gets `client.perform` and dispatches it itself.
+   * Only the navigation in PERFORMABLE; anything else is refused here and ignored there.
+   */
+  'client.perform': { params: { client: string; action: string; params?: Json }; result: null }
+
+  /**
+   * The machines this daemon reaches (`relay`): itself as `local`, then those in `machines.json` on its computer, with
+   * their links' states; then `machines.changed` with the whole list.
+   */
+  'machines.watch': { params: {}; result: { sub: string; value: MachineEntry[] } }
+  /**
+   * Call a method on a machine this daemon reaches, through its link there. Its notifications come back to this
+   * connection as `relay.event`, and watches it opened there end when this connection does.
+   */
+  'relay.call': { params: { machine: string; method: string; params?: unknown }; result: unknown }
+  /** Drop a link and connect again, as after a login or a reinstall there. */
+  'machines.reconnect': { params: { id: string }; result: null }
 }
 
 /** An extension as `extensions.inspect` reports it. */
@@ -253,6 +328,17 @@ export type Notifications = {
   'file.changed': { sub: string; content: string | null }
   /** What the daemon offers now, as `hello` said it: sent to every client whenever it changes (an extension set up, torn down, switched off). */
   'features.changed': { features: string[]; extensions?: ExtensionManifest[] }
+  /** Channels (see channels.ts). */
+  'ch.data': { ch: string; data: string }
+  'ch.ack': { ch: string; bytes: number }
+  'ch.end': { ch: string }
+  'ch.abort': { ch: string; message: string }
+  'clients.changed': { sub: string; value: ClientInfo[] }
+  /** Another client asks this one to run a window action. A client that has no such action ignores it. */
+  'client.perform': { from: ClientInfo; action: string; params?: Json }
+  'machines.changed': { sub: string; value: MachineEntry[] }
+  /** A notification from a machine reached through this daemon, for a connection that has called it. */
+  'relay.event': { machine: string; method: string; params: unknown }
 }
 
 /** The methods every settings endpoint (a daemon, or the app itself) answers. */
@@ -267,3 +353,12 @@ export type Client = {
   call<M extends MethodName>(method: M, params: Params<M>): Promise<Result<M>>
   on<N extends keyof Notifications>(event: N, listener: (params: Notifications[N]) => void): () => void
 }
+
+/**
+ * The window actions another client may ask a window to run (`client.perform`): moving around, nothing that changes,
+ * sends, opens or shows anything beyond the threads and panes already there. A window takes them only from its own
+ * machine's daemon (see the app's perform.ts).
+ */
+export const PERFORMABLE: ReadonlySet<string> = new Set([
+  'thread.select', 'thread.next', 'thread.previous', 'thread.unread', 'session.next', 'session.previous', 'pane.next', 'pane.previous',
+])

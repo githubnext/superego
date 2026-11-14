@@ -9,7 +9,7 @@
 // stops, or (a profile's) when the profile's files change. Torn down, its `signal` aborts, what it registers after is
 // refused, and its live values' `set` and `update` do nothing.
 import type { Conversation, EntryRecord, Extension, Harness } from '@earendil-works/pi-durable'
-import type { ActionDef, ActionInfo, AppConfig, Attachment, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, NewThread, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
+import type { ActionDef, ActionInfo, AppConfig, Attachment, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, MachineEntry, NewThread, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
 import type { DaemonContext } from './daemon.ts'
 import type { ProfileRef, ProfileSpec } from './profiles.ts'
@@ -312,5 +312,13 @@ export type DaemonApi = {
      * again), its panes closed. The thread, its title and its state stay.
      */
     clear(id: string): Promise<void>
+  }
+  /**
+   * The other machines this daemon reaches (its `machines.json`, see relay.ts), and a call to one of them: its methods
+   * and actions as a client calls them (`thread.list`, `thread.create`, …). None when the daemon reaches no others. 1.4.
+   */
+  machines: {
+    list(): MachineEntry[]
+    call(machine: string, method: string, params?: unknown): Promise<unknown>
   }
 }

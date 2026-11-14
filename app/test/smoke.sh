@@ -12,6 +12,8 @@ export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_MODEL=faux SUPEREGO_HEADLESS=1
 export SUPEREGO_REPLAY="$SUPEREGO_HOME/ask.jsonl" SUPEREGO_REPLAY_SPEED=0
 # Skills from a folder of the test's own, not this machine's ~/.agents.
 export SUPEREGO_AGENTS="$SUPEREGO_HOME/agents"
+# ssh's socket directory, when the data dir's path is too long for one: the test's own, not the shared /tmp.
+export XDG_RUNTIME_DIR="$SUPEREGO_HOME/run"
 mkdir -p "$SUPEREGO_AGENTS/skills/smoke-skill"
 printf -- '---\nname: smoke-skill\ndescription: Checks the smoke.\n---\n\nSay smoke.\n' > "$SUPEREGO_AGENTS/skills/smoke-skill/SKILL.md"
 # A user profile: every thread here starts with it, loaded by the daemon on Electron's own Node.

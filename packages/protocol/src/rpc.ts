@@ -1,5 +1,9 @@
 // JSON-RPC 2.0, one message per line. Transport-agnostic: a unix socket, ssh stdio, or Electron IPC all carry the
 // same lines. Both ends use the same `RpcPeer`: either side may call, handle, or notify.
+//
+// The writer has two queues. Calls, results and notifications (control) are written at once. Bulk data (a channel's
+// chunks, see channels.ts) waits in its source and is pulled only while the transport takes more, so a control message
+// never queues behind more than the one chunk already handed over.
 
 export type RpcErrorData = { kind: string; hint?: string }
 export type RpcErrorObject = { code: number; message: string; data?: RpcErrorData }
@@ -24,22 +28,38 @@ export class RpcError extends Error {
 export type Handler = (params: any) => unknown
 export type NotificationHandler = (params: any) => void
 
+/**
+ * Writes one line. Return false when the transport's buffer is full (as `socket.write` does), then call `drain()` on
+ * the peer once it empties; a transport that can't tell returns nothing and is never considered full.
+ */
+export type Send = (line: string) => boolean | void
+
+/** Bulk data waiting to be written: `next()` gives its next line when it may send one now (it has credit), else nothing. */
+export type DataSource = { next(): string | undefined }
+
 export class RpcPeer {
-  #send: (line: string) => void
+  #send: Send
   #next = 1
+  #full = false
+  #sources: DataSource[] = []
+  #turn = 0
+  /** When the last line came from the other end (`Date.now()`), for heartbeats. */
+  lastReceived = Date.now()
   #pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>()
   #handlers = new Map<string, Handler>()
   #resolve: ((method: string) => Handler | undefined) | undefined
   #listeners = new Map<string, Set<NotificationHandler>>()
   #any = new Set<(method: string, params: unknown) => void>()
   #closed: Error | undefined
+  #closeListeners = new Set<(reason: Error) => void>()
 
-  constructor(send: (line: string) => void) {
+  constructor(send: Send) {
     this.#send = send
   }
 
   /** Feed one line received from the other end. Malformed lines are ignored. */
   receive(line: string): void {
+    this.lastReceived = Date.now()
     if (!line.trim()) return
     let message: Message
     try { message = JSON.parse(line) } catch { return }
@@ -96,10 +116,49 @@ export class RpcPeer {
     this.#closed = reason
     for (const pending of this.#pending.values()) pending.reject(reason)
     this.#pending.clear()
+    for (const listener of this.#closeListeners) listener(reason)
+    this.#closeListeners.clear()
+  }
+
+  get closed(): boolean { return Boolean(this.#closed) }
+
+  /** Called once, when the peer closes. */
+  onClose(listener: (reason: Error) => void): () => void {
+    if (this.#closed) { listener(this.#closed); return () => {} }
+    this.#closeListeners.add(listener)
+    return () => this.#closeListeners.delete(listener)
+  }
+
+  /** The transport took what it held: write more data. */
+  drain(): void {
+    this.#full = false
+    this.pump()
+  }
+
+  /** Add a source of bulk data; it is pulled from whenever the transport has room (see `pump`). */
+  addSource(source: DataSource): () => void {
+    this.#sources.push(source)
+    return () => { this.#sources = this.#sources.filter((s) => s !== source) }
+  }
+
+  /** Write data from the sources, taking turns, until the transport is full or none may send. */
+  pump(): void {
+    while (!this.#full && !this.#closed) {
+      let line: string | undefined
+      for (let tried = 0; tried < this.#sources.length && line === undefined; tried++) {
+        line = this.#sources[this.#turn++ % this.#sources.length]!.next()
+      }
+      if (line === undefined) return
+      this.#line(line)
+    }
+  }
+
+  #line(line: string) {
+    if (this.#send(line) === false) this.#full = true
   }
 
   #write(message: Message) {
-    this.#send(JSON.stringify(message) + '\n')
+    this.#line(JSON.stringify(message) + '\n')
   }
 
   #settle(response: Response) {

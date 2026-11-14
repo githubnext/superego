@@ -16,6 +16,7 @@ import { extname, join, normalize, sep } from 'node:path'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { RpcPeer } from '@superego/protocol'
 import { DEVICE_COOKIE, type WebDevices } from './web-devices.ts'
+import type { Via } from './clients.ts'
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
@@ -70,11 +71,16 @@ const hostname = (host: string) => host.startsWith('[') ? host.slice(0, host.ind
 
 /** Serve `root` (the window's build) and the protocol on 127.0.0.1:port, each connection a peer handed to `serve`. */
 export async function serveWeb({ root, port, devices, tailscale, serve, artifact }: {
-  root: string; port: number; devices: WebDevices; serve(peer: RpcPeer): () => void
+  root: string; port: number; devices: WebDevices
+  /** Serve a connection: `via` names who it is in the client list, `hangUp` closes it. */
+  serve(peer: RpcPeer, transport: { via: Via; hangUp: () => void }): () => void
   /** Tailscale serve in front, while it is. */
   tailscale?: () => ServedByTailscale | undefined
-  /** A file of an artifact (an HTML page in a thread's folder, and what it links to), at /artifact/<thread>/<path>. */
-  artifact?(thread: string, path: string): Promise<Buffer>
+  /**
+   * A file of an artifact (an HTML page in a thread's folder, and what it links to), at /artifact/<thread>/<path>; of a
+   * thread on another machine this daemon reaches, at /artifact/<thread>@<machine>/<path>.
+   */
+  artifact?(thread: string, path: string, machine?: string): Promise<Buffer>
 }): Promise<WebServer> {
   /** Where a request came in, or undefined if it names a host the daemon isn't served at. */
   const callerOf = (request: IncomingMessage): Caller | undefined => {
@@ -170,7 +176,8 @@ export async function serveWeb({ root, port, devices, tailscale, serve, artifact
       const who = holder(first.slice(1), thread ?? '')
       if (!who || !(who.startsWith('tailscale:') ? caller.serve?.owner && !caller.serve.pairOwner : devices.has(who))) { response.writeHead(401).end(); return }
       try {
-        const content = await artifact(thread!, rest.join('/'))
+        const [id, machine] = thread!.split('@')
+        const content = await artifact(id!, rest.join('/'), machine)
         response.writeHead(200, {
           'content-type': TYPES[extname(path)] ?? 'application/octet-stream',
           'content-security-policy': "sandbox allow-scripts allow-forms allow-popups; default-src 'self' data: blob: https: 'unsafe-inline' 'unsafe-eval'",
@@ -207,10 +214,20 @@ export async function serveWeb({ root, port, devices, tailscale, serve, artifact
     const who = await identify(caller, cookieOf(request))
     if (who === 'limited') return deny('429 Too Many Requests')
     if (!who) return deny('401 Unauthorized')
+    // For the client list: a paired device by its name, the owner by their login.
+    const via: Via = who.startsWith('tailscale:')
+      ? { via: 'tailscale', label: caller.login ?? who.slice('tailscale:'.length) }
+      : { via: 'web', device: who, label: devices.list().find((d) => d.id === who)?.name ?? 'A browser' }
     sockets.handleUpgrade(request, socket, head, (ws) => {
       live.set(ws, who)
-      const peer = new RpcPeer((line) => { if (ws.readyState === ws.OPEN) ws.send(line.trimEnd()) })
-      const cleanup = serve(peer)
+      // Full past 1 MiB unsent, as a socket's write says; each sent message checks whether there's room again.
+      const room = () => ws.bufferedAmount < 1024 * 1024
+      const peer = new RpcPeer((line) => {
+        if (ws.readyState !== ws.OPEN) return true
+        ws.send(line.trimEnd(), () => { if (room()) peer.drain() })
+        return room()
+      })
+      const cleanup = serve(peer, { via, hangUp: () => ws.terminate() })
       ws.on('message', (data) => peer.receive(String(data)))
       ws.on('close', () => { live.delete(ws); peer.close(); cleanup() })
       ws.on('error', () => {})

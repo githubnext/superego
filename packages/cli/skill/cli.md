@@ -91,13 +91,16 @@ superego profile revoke-ui <name> -m <machine>
 ```sh
 superego machines                              # each, whether it answers, and if it runs an older or newer Superego
 superego machines add <ssh-target> [--name N] [--command C]
+superego machines login <machine>     # ssh in this terminal: a password or code; links then ride that connection
 superego machines add --via '<command>' [--name N]   # any command piping stdio to the far side
 superego machines rm|enable|disable|trust <machine>
 superego machines update <machine> [--now]     # run its install-machine.sh there; --now even while agents work
 ```
 
 A remote machine needs `superego` installed there (`scripts/install-machine.sh` in the Superego repo); the app reaches it
-with `ssh <target> superego connect --start`.
+with `ssh <target> superego connect --start`. `superego daemon install` on a machine runs its daemon as a service (systemd
+user unit, launchd agent) so it outlives logouts and reboots. A host that needs a password or code shows as "needs login"
+until `machines login`.
 
 ## Settings and sign-in
 

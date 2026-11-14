@@ -23,6 +23,7 @@ import { SettingsView } from './SettingsView.tsx'
 import { Palette } from './Palette.tsx'
 import { Navigator } from './Navigator.tsx'
 import { ActionLog, runsBare } from './actions.tsx'
+import { performed } from './perform.ts'
 import { NewThreadDialog } from './NewThread.tsx'
 import { bound, KEYMAP, shortcutOf, useActions, useShortcut, type Keymap } from './keys.ts'
 import { useAllThreads, useHistory, useMachines, useNewThreadDialog, useSelection, useSessions, useSettingsDialog, useShell, useSidebar, type Selection } from './state.tsx'
@@ -366,6 +367,13 @@ function useAppEffects() {
       if (settings) openSettings()
     }
     const off = window.superego.onEvent((event) => {
+      // Another client asks for one of this window's own actions (see perform.ts). Every window of the app hears it;
+      // the ones on screen run it.
+      if (event.method === 'client.perform') {
+        const asked = document.visibilityState === 'visible' ? performed(event) : undefined
+        if (asked && registry.router.router.has(asked.action)) void registry.router.dispatch(asked.action, asked.params, { source: asked.source }).catch((error) => console.error(error))
+        return
+      }
       if (event.machine !== 'app') return
       if (event.method === 'app.select') show({ open: event.params as Selection })
       if (event.method === 'app.settings') show({ settings: true })

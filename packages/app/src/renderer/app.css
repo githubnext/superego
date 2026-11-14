@@ -743,6 +743,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 @keyframes machine-drift-pulse { 50% { opacity: .35; } }
 .machine-row__drift { display: flex; align-items: baseline; gap: 6px; }
 .machine-row__log { margin: 6px 0 0; padding: 6px 8px; max-height: 14em; overflow: auto; font-family: var(--superego-mono); font-size: var(--superego-text-xs); line-height: 1.45; white-space: pre-wrap; color: var(--superego-muted); background: color-mix(in srgb, var(--superego-text) 4%, transparent); border-radius: 6px; }
+.machine-row__warning { color: var(--superego-warning, #b45309); }
 
 /* Data views: a machine's extensions' content, drawn by the core. Quiet rows like the sidebar's; facts as thread details
    lay theirs out. */

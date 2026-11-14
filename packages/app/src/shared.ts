@@ -1,24 +1,12 @@
 // The contract between the main process and the renderer, exposed as `window.superego` by the preload.
-
-export type MachineId = string
-export type ConnectionState = 'connecting' | 'connected' | 'disconnected'
-import type { MachineConfig } from '@superego/client/shared'
+import type { ConnectionState, MachineConfig, MachineEntry as Base, MachineId } from '@superego/client/shared'
 import type { SettingsStore } from '@superego/settings'
-import { MIGRATIONS, waitingForSignIn, type ExtensionManifest, type MachineVersion, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
+import { MIGRATIONS, waitingForSignIn, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
 
-export type { MachineConfig }
+export type { ConnectionState, MachineConfig, MachineId }
 
-export type MachineEntry = {
-  id: MachineId; label: string; state: ConnectionState | 'disabled'; error?: string; errorKind?: string
-  /** Who answered, from the last hello: the daemon's identity and hostname, and what it offers. */
-  machine?: { id: string; hostname: string }
-  features?: string[]
-  /** The extensions it has set up and on, each at its version (absent from a daemon before versions): `has` reads both. */
-  extensions?: ExtensionManifest[]
-  /** Absent for this computer, which can't be removed. */
-  remote?: { route: string; enabled: boolean }
-  /** Which Superego it runs, from the last hello. */
-  version?: MachineVersion
+/** A machine as the window shows it: what its link says (see @superego/client), and what this computer adds. */
+export type MachineEntry = Base & {
   /** A remote machine's Superego next to this computer's; absent when this computer can't tell. */
   drift?: VersionDrift
   /** Its Superego being updated (Update), or how that last went: the script's output so far. */

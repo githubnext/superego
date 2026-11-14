@@ -16,12 +16,15 @@ export const RELEASED = {
     'thread.archive', 'thread.create', 'thread.history', 'thread.list', 'thread.rename', 'thread.seen',
     'thread.submit', 'thread.unarchive', 'thread.watch', 'thread.withdraw', 'threads.watch', 'unwatch', 'value.watch',
     'web.devices', 'web.pair', 'web.rename', 'web.revoke',
+    'ping', 'ch.open', 'clients.watch', 'client.perform', 'machines.watch', 'machines.reconnect', 'relay.call',
   ],
   notifications: [
     'watch.ops', 'watch.end', 'threads.changed', 'settings.changed', 'auth.event', 'value.changed', 'file.changed',
-    'features.changed',
+    'features.changed', 'ch.data', 'ch.ack', 'ch.end', 'ch.abort', 'clients.changed', 'client.perform', 'machines.changed',
+    'relay.event',
   ] satisfies (keyof Notifications)[],
   features: [
-    'threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'hidden-threads', 'data-views', 'scoped-values',
+    'threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'hidden-threads', 'data-views', 'scoped-values', 'heartbeat', 'channels', 'uploads',
+    'keeps-running', 'clients', 'relay',
   ] satisfies Feature[],
 } as const

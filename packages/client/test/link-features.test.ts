@@ -1,8 +1,8 @@
-// A machine link (main/link.ts) against a fake daemon: what it offers follows `features.changed` after hello, and the
+// A machine link (link.ts) against a fake daemon: what it offers follows `features.changed` after hello, and the
 // renderer is told.
 import { expect, it } from 'vitest'
 import { PROTOCOL_VERSION, RpcPeer, type Hello } from '@superego/protocol'
-import { Link } from '../src/main/link.ts'
+import { Link } from '../src/link.ts'
 import type { MachineEntry } from '../src/shared.ts'
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))

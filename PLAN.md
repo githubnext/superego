@@ -8,11 +8,11 @@ Superego was a framework with a generator (`superego new`, each app its own buil
 
 - **One app** (`app/`): the desktop app, its daemon and the `superego` command. No generator, no per-app builds.
 - **Profiles** (§3b): `profile.ts` (`defineProfile` from `'superego'`) in `~/.superego/profiles/<name>` or `<repo>/.superego/profiles/<name>`, with a model, a prompt, agent extensions (tools, prompt sections, hooks) and UI extensions. A thread takes its folder's profile when it starts; a project's profile runs only once allowed.
-- **Web and phone** (§3c): a machine's daemon serves the same window to browsers (Web access), over a WebSocket guarded by a token; narrow windows get a phone layout, and it installs as a PWA.
+- **Web and phone** (§3c): a machine's daemon serves the same window to browsers (Web access), over a WebSocket open to paired devices and the owner's Tailscale login; narrow windows get a phone layout, and it installs as a PWA.
 - **Sessions, threads, panes** (§3d, 2026-11-09): a session is a project on a machine; it holds threads (conversations, each in the folder or a worktree of its own); a thread holds panes beside it. Navigation follows Fut; focus follows Tremolo.
 - Packaging the one app (`pnpm --filter superego package`) builds a signed `superego.app`.
 
-Principle 6 below (no network listener) gave way: Web access is a network listener, off by default, with a token. Real auth (accounts, TLS) is still to come.
+Principle 6 below (no network listener) gave way: Web access is a network listener, off by default, on loopback; `tailscale serve` takes it to the tailnet with HTTPS. Devices pair one by one; the owner's Tailscale login gets in by name.
 
 Research sources: `~/dev/fut`, `~/dev/wt`, `~/dev/gh/tremolo`, pi-mono (`~/.cache/checkouts/github.com/badlogic/pi-mono`, v1.5.0), herdr / herdr-core / herdr-app (`~/.cache/checkouts/github.com/herdrdev/*`), pi-pocket, durable-pi.
 
@@ -76,31 +76,45 @@ The niche is real. We should borrow herdr-core's protocol hygiene wholesale, and
 - owns one pi-durable `Harness` on node SQLite (one storage per daemon; durable allows a single writer)
 - owns the thread catalog, the extension host and the doc store
 - exposes JSON-RPC 2.0 over NDJSON on a mode-0600 unix socket; `superego connect` bridges stdio to it
-- streaming uses notifications on subscription ids for v0; herdr-style framed channels later, if terminals need them
+- streaming uses notifications on subscription ids; bulk bytes (uploads now, terminals later) go on channels: still JSON-RPC lines, base64 chunks within credit the receiver grants, and the peer's writer sends them only behind every control message (`packages/protocol/src/channels.ts`)
+- a client that pings (`heartbeat`) notices a dead link in seconds on any transport, and the daemon hangs up on one that stops
 
 **Electron main:** thin. Window management, machine catalog (`~/.superego/machines.json`: `{id,label,target,enabled}`), spawning ssh links, and relaying one generic `call/on` (no hand-maintained channel lists; that was a tremolo regret). Each machine link reconnects with backoff, and a disconnected machine stays visible but stale (fut).
+
+**The daemon as a hub:** a daemon keeps links of its own to the machines in its data dir's `machines.json` (the same `MachineLinks` from `@superego/client` the app uses: identity remembered, a machine reached twice refused, never itself), following the file. The app's daemon gets them through `serveDaemon({ reach })` (`machineHub`), so the daemon package doesn't depend on the client one. Its clients reach them through it: `machines.watch` lists them (itself as `local`), `relay.call` passes a call on (uploads it holds go onward on the link's own channels), and their notifications come back as `relay.event`, a watch's to the connection that opened it, anything else to every connection that has called that machine; watches end when their connection does. The desktop app keeps its own links as before; a browser and agents (`thread_*` with `machine`) go through the hub, which therefore holds every machine's access (pair browsers with care, §3c).
+
+```
+browser ──ws── daemon (hub) ──ssh/via── daemon (box)        agent on the hub ─ thread_start {machine: box}
+```
 
 **Renderer:** React 19, plain CSS on `@superego/ui` tokens, Base UI for overlays, electron-vite. The shell provides slots, the thread and its panes, Settings, the ⌘L navigator, the ⌘K palette and extensions' commands.
 
 ### Protocol surface (as built)
 
 ```
-hello {client, version, features}         → {version, features, machine{id, build, …}, methods}
+hello {client, version, features, label} → {version, features, machine{id, build, …}, methods, client}
+clients.watch                             → snapshot + clients.changed (id, kind, label, via, connectedAt, activeAt)
+client.perform {client, action, params}   → the other client gets client.perform and runs its own window action (navigation only)
 thread.list {archived?}                   agent.models
 thread.watch {id}                         → snapshot + watch.ops (Chord delta ops)
 threads.watch                             → snapshot + threads.changed (status, model, cost, activeAt, session, worktree, panes)
 file.read / file.find / file.watch {id, path} → file.changed      git.diff {id} (git)
 profile.ui / profile.module               settings.watch          value.watch {key} → value.changed
 action.list / action.run {id, params, exposure} / action.log            unwatch {sub}
+ping                                      ch.open {ch, kind, params, window} → ch.data / ch.ack / ch.end / ch.abort
+                                          (kind `upload`: an attachment named by its id, `{name, mimeType, upload}`)
 
 actions, each also served under its id:
 thread.create {cwd, prompt, attachments, profile, worktree} / submit {text, attachments} / abort / rename / seen
 thread.archive / unarchive (its worktree removed if clean, and back)
 pane.open / update / focus / close        file.write              profile.list / allow
 settings.set   auth.login / respond / cancel / logout   daemon.restart   <extension>.<name>
+web.pair → {link, code, expires}          web.devices / web.rename {id, name} / web.revoke {id}
+machines.watch → snapshot + machines.changed     relay.call {machine, method, params} → relay.event {machine, method, params}
+machines.reconnect {id}
 ```
 
-Reads and streams (`*.list`, `*.watch`) stay plain methods. Everything that changes something is an action (§3a). The protocol version stays 1 until a release; after it, peers negotiate by `features`, not by version.
+Reads and streams (`*.list`, `*.watch`) stay plain methods. Everything that changes something is an action (§3a). The protocol version is a generation and stays 1; peers negotiate by `features`, not by version. The method table only grows: `RELEASED` (packages/protocol/src/released.ts) names what generation 1 released, `released-actions.json` beside it the params of its actions, and a test fails when a daemon no longer answers one or an action's params break a caller.
 
 ### Entities
 
@@ -184,10 +198,11 @@ Every intent is an action: an id, a title, a params schema (pi-schema), where it
 
 ## 3c. Web and phone
 
-- **Web access** (a machine setting: off, to this computer, to the local network; a port): the daemon serves the window's build over HTTP and the protocol over a WebSocket at `/rpc`, guarded by a token in its data dir. Settings shows the address with the token.
-- **In a browser** the window has no preload: `window.superego` is a WebSocket bridge to that daemon (the one machine, "local"); app settings live in the browser; machines and folder picking are desktop-only.
+- **Web access** (a machine setting: off; to this computer; over Tailscale; a port): the daemon serves the window's build over HTTP on loopback and the protocol over a WebSocket at `/rpc`, to paired devices (an HttpOnly cookie each, from a one-time link or code; Settings lists them to rename and revoke) and, through `tailscale serve`, to the owner's own login. Nothing secret is ever in an address; every request must name a host it is served at, and the WebSocket must come from the page's origin. An artifact loads in its sandbox from an address carrying a capability for that thread and device; one on a machine the daemon reaches is `<thread>@<machine>`.
+- **Who's connected:** the daemon lists its connections (`clients.watch`: kind from `hello`, a label: the computer's name, a browser's device name, a Tailscale login), the action log names who dispatched, and `client.perform` passes a window action to another client. Only navigation may be asked for (`PERFORMABLE` in the protocol: `thread.select`, `thread.next`/`previous`, `thread.unread`, `session.next`/`previous`, `pane.next`/`previous`); the daemon refuses anything else, and a window takes them only from its own machine's daemon ("local" on the desktop, the serving daemon in a browser), only while it is on screen, never relayed from a machine it merely reaches. Settings → a machine → Connected shows them.
+- **In a browser** the window has no preload: `window.superego` is a WebSocket bridge to that daemon ("local") and, through it, every machine it reaches (`relay`, §2): calls for them go as `relay.call`, their news comes back as theirs. It pings (`heartbeat`), sends large attachments ahead as uploads, and holds back while the socket's buffer is full. App settings live in the browser; no other machine's profile UI runs there. Settings → Machines lists the machines with Reconnect; adding, removing, logging in and updating, and folder picking, are desktop-only.
 - **Phones:** under 760px wide, one column: a bar with the threads in a drawer, the composer at the bottom, full-screen dialogs. A web manifest and icons for the home screen.
-- Not yet: accounts and TLS (put it behind Tailscale or a proxy for now), a service worker for offline, the desktop app as a wrapper of a remote daemon's web UI.
+- Not yet: a service worker for offline, the desktop app as a wrapper of a remote daemon's web UI.
 
 ## 3d. Sessions, threads, panes
 
@@ -278,7 +293,8 @@ Styled over eight rounds of impartial review of the showcase screenshots (scores
 6. **Base UI** for the kit's overlays: portals, positioning, focus and Escape done right, instead of hand-rolled.
 
 Still open:
-- **Remote install.** v0 expects `node` and Superego on the remote PATH. Later: self-install over ssh.
+- **Remote install.** A machine runs a checkout installed by `scripts/install-machine.sh`, and Update (or `superego machines update`) runs that again over ssh. `superego daemon install` keeps the daemon alive as a systemd user unit (with lingering) or a launchd agent, and `hello` reports `keepsRunning`. ssh rides a shared ControlMaster, and a failed login (read from ssh's stderr only when ssh itself exited 255) is the `needs-login` state, fixed with `machines login`. Later: install over ssh without a checkout.
+- **The service's lifecycle.** The unit and agent bring the daemon back after a crash or a restart, not after a stop: `Restart=on-failure` with `RestartForceExitStatus=75`, and `KeepAlive` with `SuccessfulExit=false`; a restart under a service exits 75, so `daemon stop` stays stopped (the next `connect --start` starts it). A daemon handing over to a service it doesn't run under starts the service, or spawns its successor when that fails. The service starts the successor with the unit's environment only, so the restart's own (and what earlier ones carried) is left in `restart-env.json` (0600) for it to take when it starts. Such a daemon has no `SSH_AUTH_SOCK` unless the service manager gives it one (macOS's launchd does; on Linux, a desktop session's agent usually is imported into the user manager), or a restart carried one: its links to other machines that need the agent show "needs login", and `superego machines login <machine>` on that computer leaves a master they ride without one.
 - **Name and package scope.** `@superego/*` for now; publishing decides it.
 
 ## 8. Progress
@@ -324,6 +340,7 @@ Still open:
 - **Sessions, threads, panes (2026-11-09).** The rename (a conversation is a thread), sessions, worktrees on request, Fut's navigation, the scrolling pane row, Tremolo's focus, attachments, the window's state kept across reloads, tests that stay off the screen.
 - **Superego and Ego (2026-11-11).** The app, formerly mu, is Superego all the way down: the app, its id (`~/.superego`, `superego.sock`, the `superego` command, `SUPEREGO_*` variables, `superego/<slug>` branches, `.superego/profiles`), the packages (`@superego/*`, profiles import from `'superego'`), the window's bridge (`window.superego`), and the `--superego-*` tokens and `superego-*` classes. Its own agent is Ego: `AppConfig.agent` names it, for the ⌘K action, the rail and its prompt.
 - **The halo icon (2026-11-11).** The first icon, a serif letter, gives way to a tilted halo over a dot: `resources/superego.icon` (halo and head layers), copied to `app/resources/superego.icon`, with the Dock, `.icns`, PWA and menu bar images made from it. The menu bar's halo is drawn heavier (`resources/superego-menubar.svg`) to hold at 16px; `resources/ego.svg` is Ego's mark, the dot alone. Explorations in `design-explorations/superego-*.html`.
+- **One daemon reaches the others (2026-11-12).** The daemon as a hub (§2): its own links to `machines.json`, `machines.watch`, `relay.call` and `relay.event`; every machine in a browser; agents start, read and message threads on other machines. The app and CLI name their computer in `hello`.
 
 ## 9. Next
 
@@ -335,4 +352,4 @@ Still open:
 - **Types for profile authors** (`superego profile new` writing a tsconfig and declarations).
 - **The code, support and readonly profiles**, as further proofs of profiles.
 - **Publishing the packages**, so new apps don't need this checkout; then runtime-installed extensions.
-- **Remote install** over ssh.
+- **Remote install** over ssh, without a checkout there.

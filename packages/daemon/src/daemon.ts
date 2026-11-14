@@ -34,6 +34,10 @@ import { WebDevices } from './web-devices.ts'
 import { startServe, stopServe, tailnetNames, type TailscaleState } from './tailscale.ts'
 import { agentsInstructions } from './agents-md.ts'
 import { defineProfile, findProfile, RENAMED, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileDaemonExtension, type ProfileRef } from './profiles.ts'
+import { serveConnection, versionMismatch } from './connection.ts'
+import { Clients, type Via } from './clients.ts'
+import { keepsRunning } from './service.ts'
+import { createRelay, type MachineReach } from './relay.ts'
 
 const context = BACKGROUND_CONTEXT
 
@@ -66,6 +70,8 @@ const MOVED = Object.fromEntries(Object.entries(RENAMED).map(([old, now]) => [`e
 export const RESERVED = new Set([
   'action', 'agent', 'app', 'auth', 'core', 'daemon', 'extensions', 'file', 'hello', 'meta', 'model', 'pane', 'profile', 'profiles',
   'providers', 'settings', 'skill', 'thread', 'threads', 'unwatch', 'value', 'view', 'watch', 'web',
+  // A connection's own (heartbeat, channels), who is connected, and the machines this one reaches.
+  'ping', 'ch', 'clients', 'client', 'machines', 'relay',
   // `skill` is no longer the core's, but older windows still call skill.list (see MOVED_METHODS).
 ])
 
@@ -190,6 +196,11 @@ export type DaemonOptions = {
    * down, so one that hangs doesn't hold up every profile after it. 15s by default.
    */
   setupTimeout?: number
+  /**
+   * The other machines this daemon reaches (see relay.ts), given its own identity so it never links to itself. The host
+   * builds it from @superego/client (the app's daemon: `machineHub`); without it, this daemon reaches only itself.
+   */
+  reach?: (self: MachineInfo) => MachineReach
 }
 
 /** One mounted thread: its conversation and a small watch that keeps its status current. */
@@ -214,8 +225,11 @@ const costOf = (usage: { models?: Record<string, Usage>; tools?: Record<string, 
 export type Daemon = {
   machine: MachineInfo
   settings: SettingsRegistry
-  /** Register this daemon's methods on a connection's peer; returns a cleanup for when it disconnects. */
-  serve(peer: RpcPeer): () => void
+  /**
+   * Register this daemon's methods on a connection's peer; returns a cleanup for when it disconnects. `via`: what the
+   * transport knows of it. `hangUp` closes the transport, for a peer that stopped answering its heartbeat.
+   */
+  serve(peer: RpcPeer, transport?: { via?: Via; hangUp?: () => void }): () => void
   close(): Promise<void>
 }
 
@@ -779,6 +793,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   // ── Extensions ──────────────────────────────────────────────────────────────────────────────────────────────────
 
   const connections = new Set<RpcPeer>()
+  /** Who is connected, for `clients.watch` and the action log (see clients.ts). */
+  const clients = new Clients()
   /** Every intent this daemon answers, its own and its extensions'. Reads and watches are plain methods. */
   const router = new Router<DaemonContext>()
   /**
@@ -1073,7 +1089,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         conversation: async (id) => (await get(id)).conversation,
         of: (conversationId) => mounted.has(String(conversationId)) ? String(conversationId) : undefined,
         attachments: attachmentsOf,
-        create: ({ hidden, ...params }) => startThread({ ...params, ...(hidden ? { hidden: extension.name } : {}), by: extension.name }),
+        // An extension's attachments are inline: it has no connection to upload on.
+        create: ({ hidden, ...params }) => startThread({ ...params as Omit<NewThread, 'attachments'> & { attachments?: Attachment[] }, ...(hidden ? { hidden: extension.name } : {}), by: extension.name }),
         async submit(id, text, { whenBusy = 'followUp' } = {}) { await submit(id, text, randomUUID(), whenBusy, [], extension.name) },
         lastAnswer: (id) => answerOf(id),
         entries: (id, limit = 20) => newest(id, limit),
@@ -1084,6 +1101,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         },
         async unarchive(id) { await unarchive(id) },
         clear: (id) => clear(id),
+      },
+      machines: {
+        list: () => relay.entries().slice(1),
+        call: (machine, method, params) => relay.call(machine, method, params ?? {}),
       },
     }
     /** Keep something it registered about threads in `list`, as its own, until it's torn down. */
@@ -1120,6 +1141,30 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     announce()
     return teardown
   }
+  // Whether this daemon outlives a logout, for hello: asked now, then again in the background at most once a minute,
+  // so hello never waits on loginctl.
+  let keeps = { at: Date.now(), value: await keepsRunning(options.app), asking: false }
+  const kept = () => {
+    if (Date.now() - keeps.at > 60_000 && !keeps.asking) {
+      keeps.asking = true
+      void keepsRunning(options.app).then((value) => { keeps = { at: Date.now(), value, asking: false } }, () => { keeps = { ...keeps, at: Date.now(), asking: false } })
+    }
+    return keeps.value
+  }
+
+  // The other machines, reached through links this daemon keeps (see relay.ts); this one first, as 'local'.
+  const relay = createRelay(options.reach?.(machine), () => ({
+    id: 'local', label: machine.hostname, state: 'connected', machine: { id: machine.id, hostname: machine.hostname }, features: features(),
+    keepsRunning: kept(),
+  }))
+  daemonLife.add(() => relay.close())
+  router.register(defineAction({
+    id: 'machines.reconnect', title: 'Reconnect a machine', runs: 'machine', expose: ['ui', 'cli'],
+    description: 'Drop the link to a machine this one reaches and connect again, as after logging in there.',
+    params: obj({ id: str() }),
+    run({ id }) { relay.reconnect(id); return null },
+  }))
+
   // The core's own, then the bundled ones: for the daemon's life, each giving every thread its agent parts unless the
   // thread goes without it.
   // Before any extension looks for its hidden threads.
@@ -1173,6 +1218,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     changed()
     announce()
   })
+
 
   // ── Profiles ────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -1503,14 +1549,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), attachments: opt(arr(ATTACHMENT)), profile: opt(str()),
       worktree: opt(bool()), parent: opt(str()), options: opt(obj({}, { open: true })),
     }),
-    run: (params) => startThread(params as NewThread),
+    // Uploads are inline again by now (see connection.ts).
+    run: (params) => startThread(params as Omit<NewThread, 'attachments'> & { attachments?: Attachment[] }),
   }))
   /**
    * A new thread as asked for: where, with what; a child of `parent` when a thread starts it (top-level when that one is
    * hidden, an extension's own); `hidden`, in no list and the extension's of that name. Extensions' `creating` hooks
    * may move it (a worktree) and give it state.
    */
-  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree, parent, options: asked, hidden, by }: NewThread & { hidden?: string; by?: string }) {
+  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree, parent, options: asked, hidden, by }: Omit<NewThread, 'attachments'> & { attachments?: Attachment[]; hidden?: string; by?: string }) {
+    // Uploads are inline again by now (see connection.ts).
     const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
     if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${machine.hostname}`)
     if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
@@ -1914,19 +1962,38 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const daemon: Daemon = {
     machine,
     settings,
-    serve(peer) {
+    serve(peer, { via, hangUp } = {}) {
       const subs = new Map<string, () => unknown>()
+      const connection = serveConnection(peer, { ...(hangUp ? { hangUp } : {}) })
       const notify = <N extends keyof Notifications>(event: N, params: Notifications[N]) => peer.notify(event, params)
       let client = 'client'
+      const self = clients.add(peer, via)
+      /** Who dispatched, for the action log. */
+      const by = () => { const info = clients.get(self); return info && { id: info.id, kind: info.kind, label: info.label } }
+      const relayed = relay.connect((machine, method, params) => notify('relay.event', { machine, method, params }))
       // Reads and watches; every intent is an action, served below under its id.
       const handlers: Record<string, (params: any) => unknown> = {
-        async hello({ version, client: name }: Methods['hello']['params']) {
-          if (version !== PROTOCOL_VERSION) {
-            throw new RpcError('version_mismatch', `This machine's superego speaks protocol ${PROTOCOL_VERSION}, the client ${version}`, { hint: 'Update superego on the older side.' })
-          }
+        async hello({ version, client: name, label }: Methods['hello']['params']) {
+          if (version !== PROTOCOL_VERSION) throw versionMismatch(options.app, machine.hostname, version)
           if (typeof name === 'string') client = name
-          return { version: PROTOCOL_VERSION, ...offer(), api: EXTENSION_API, machine, methods: [...Object.keys(handlers), ...router.list().map((a) => a.id), ...methods.keys()] }
+          clients.hello(self, client, typeof label === 'string' ? label : undefined)
+          return { version: PROTOCOL_VERSION, ...offer(), api: EXTENSION_API, machine: { ...machine, keepsRunning: kept() }, client: self, methods: [...new Set([...peer.methods, ...router.list().map((a) => a.id), ...methods.keys()])] }
         },
+        async 'clients.watch'() {
+          const sub = randomUUID()
+          subs.set(sub, clients.watch((value) => notify('clients.changed', { sub, value })))
+          return { sub, value: clients.list() }
+        },
+        async 'client.perform'({ client: target, action, params }: Methods['client.perform']['params']) {
+          clients.perform(self, target, action, params)
+          return null
+        },
+        async 'machines.watch'() {
+          const sub = randomUUID()
+          subs.set(sub, relay.watch((value) => notify('machines.changed', { sub, value })))
+          return { sub, value: relay.entries() }
+        },
+        'relay.call': ({ machine: target, method, params }: Methods['relay.call']['params']) => relayed.call(target, method, params),
         'thread.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
         'agent.models': async () => agent.catalog(),
         'file.read': async ({ id, path, base64 }: { id: string; path: string; base64?: boolean }) => {
@@ -2034,12 +2101,13 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         'action.list': async () => router.list(),
         /** Run an action by id, as `exposure` (the command line passes `cli`); params may be strings to coerce. */
         'action.run': ({ id, params, exposure }: { id: string; params?: unknown; exposure?: Exposure }) =>
-          router.dispatch(router.has(id) ? id : MOVED_METHODS[id] ?? id, params, { notify, source: client }, { source: exposure ?? client, ...(exposure ? { exposure } : {}) }),
+          router.dispatch(router.has(id) ? id : MOVED_METHODS[id] ?? id, params, { notify, source: client }, { source: exposure ?? client, client: by(), ...(exposure ? { exposure } : {}) }),
         /** The newest dispatches on this machine, oldest first. */
         'action.log': async () => router.log(),
         /** The window's extensions, as each declares itself: those without a daemon half become known here (see declare). */
         'extensions.declare': async ({ extensions: abouts }: Methods['extensions.declare']['params']) => { declare(Array.isArray(abouts) ? abouts : []); return null },
         'extensions.inspect': ({ thread }: Methods['extensions.inspect']['params'] = {}) => inspect(thread),
+        ...connection.handlers,
       }
       /** A live value (or its part in `scope`), then `tell` with each new one, until unwatched. */
       function watchValue(key: string, scope: string | undefined, tell: (sub: string, value: Json) => void) {
@@ -2072,7 +2140,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       const ctx = (): DaemonContext => ({ notify: (event, params) => notify(event as keyof Notifications, params as never), source: client })
       const open = (method: string, handler: (params: unknown) => unknown) => (params: unknown) => {
         if (restarting && method !== 'hello') throw new RpcError('restarting', 'The daemon is restarting. Try again in a moment.')
-        return handler(params)
+        clients.touch(self)
+        return handler(connection.resolve(method, params))
       }
       connections.add(peer)
       for (const [method, handler] of Object.entries(handlers)) peer.handle(method, open(method, handler))
@@ -2080,12 +2149,15 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       // this connection opened are there too.
       peer.handleOthers((method) => {
         const name = router.has(method) || methods.has(method) ? method : MOVED_METHODS[method] ?? method
-        if (router.has(name)) return open(method, (params) => router.dispatch(name, params, ctx(), { source: client }))
+        if (router.has(name)) return open(method, (params) => router.dispatch(name, params, ctx(), { source: client, client: by() }))
         const read = methods.get(name)
         return read && open(method, read)
       })
       return () => {
         connections.delete(peer)
+        connection.close()
+        clients.remove(self)
+        relayed.close()
         for (const stop of subs.values()) void stop()
         subs.clear()
       }
@@ -2140,7 +2212,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       try {
         web = await serveWeb({ root: options.webRoot!, port, devices: webDevices, serve: daemon.serve,
           tailscale: () => served && { ...served, pairOwner: pairOwner(), nodeAt },
-          artifact: async (thread, path) => readFile(inFolder((await get(thread)).meta.cwd, path)) })
+          artifact: async (thread, path, elsewhere) => elsewhere
+            ? Buffer.from((await relay.call(elsewhere, 'file.read', { id: thread, path, base64: true }) as { content: string }).content, 'base64')
+            : readFile(inFolder((await get(thread)).meta.cwd, path)) })
       } catch (error) {
         webError = (error as Error).message
       }
@@ -2223,9 +2297,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     async run({ id, name }) {
       const device = await webDevices.rename(id, name)
       if (!device) throw new RpcError('not_found', `No device ${id}`)
+      clients.relabel(id, device.name)
       return device
     },
   }))
+  settings.register({ id: 'clients', title: 'Connected', order: 85, ui: 'clients', settings: [], description: 'Who is using this machine right now.' })
   settings.onChange(() => void applyWeb())
   await applyWeb()
   return daemon

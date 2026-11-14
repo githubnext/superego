@@ -13,3 +13,6 @@ export type MachineConfig = {
 
 /** How a machine is reached, as the user would type it. `ssh <target>` runs the app's remote command unless it says. */
 export const routeOf = (config: MachineConfig, app: AppConfig) => config.via ?? `ssh ${config.target} ${config.command ?? remoteCommand(app)}`
+
+export type MachineId = string
+export type { ConnectionState, MachineEntry } from '@superego/protocol'

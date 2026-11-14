@@ -12,6 +12,7 @@ import { LAYOUT, placeView, type Place } from './layout.ts'
 import { registerLayoutText } from './layout-text.tsx'
 import { Profiles, Providers } from './SettingsView.tsx'
 import { WebAccess } from './web-access.tsx'
+import { ConnectedClients } from './connected.tsx'
 import { Shell, ThreadPicker } from './Shell.tsx'
 import { SORT } from './sessions.ts'
 import { ShellStateProvider } from './state.tsx'
@@ -45,6 +46,7 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
   const registry = createRegistry(app, extensions, (core) => {
     core.settings('providers', Providers)
     core.settings('web', WebAccess)
+    core.settings('clients', ConnectedClients)
     core.settings('profiles', Profiles)
     core.appSettings({
       id: 'navigation', title: 'Navigation', order: 60,

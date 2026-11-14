@@ -27,7 +27,8 @@ function ProfileUiNotice({ machine, thread }: { machine: MachineEntry; thread: T
   const dispatch = useRegistry().router.dispatch
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string>()
-  if (!pending || pending.declined || thread.archived) return null
+  // A browser runs no other machine's profile UI: it has no say of this computer's to ask for (see web-bridge.ts).
+  if (!pending || pending.declined || thread.archived || window.superego.web) return null
   const total = pending.files.reduce((sum, file) => sum + file.size, 0)
   const say = (id: 'profiles.allowUi' | 'profiles.declineUi') => {
     setError(undefined)

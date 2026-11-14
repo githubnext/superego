@@ -41,7 +41,9 @@ afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 describe('daemon', () => {
   it('rejects a client speaking another protocol version', async () => {
     const { peer, close } = await open()
-    await expect(peer.call('hello', { client: 'test', version: 999 })).rejects.toMatchObject({ kind: 'version_mismatch' })
+    await expect(peer.call('hello', { client: 'test', version: 999 })).rejects.toMatchObject({
+      kind: 'version_mismatch', message: expect.stringContaining('generation 1, and this client speaks generation 999'), hint: expect.stringMatching(/^Update superego on /),
+    })
     await close()
   })
 
@@ -122,7 +124,7 @@ describe('daemon', () => {
   it('serves settings: sections, validated values, persisted across restarts', async () => {
     const first = await open()
     const { value } = await first.peer.call<{ value: SettingsSnapshot }>('settings.watch', {})
-    expect(value.sections.map((s) => s.id)).toEqual(['model', 'providers', 'extensions', 'profiles', 'web'])
+    expect(value.sections.map((s) => s.id)).toEqual(['model', 'providers', 'extensions', 'profiles', 'web', 'clients'])
     const model = value.sections[0]!.settings.find((s) => s.key === 'agent.model')!
     expect(model.type === 'choice' && model.options.map((o) => o.value)).toContain('faux/faux-1')
     await expect(first.peer.call('settings.set', { key: 'agent.model', value: 'nope/nope' })).rejects.toMatchObject({ kind: 'invalid_setting' })

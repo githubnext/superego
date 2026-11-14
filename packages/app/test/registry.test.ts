@@ -64,7 +64,7 @@ describe('the UI registry', () => {
   it("refuses an extension that needs an extension API this window isn't, before it runs, and tells machines each one's version", () => {
     let ran = false
     const future = defineUiExtension({ name: 'future', version: '2.0.0', api: '^2', setup() { ran = true } })
-    expect(() => createRegistry(app, [future], () => {})).toThrow('Extension future needs extension API ^2, and this Superego has 1.3.0: update Superego')
+    expect(() => createRegistry(app, [future], () => {})).toThrow('Extension future needs extension API ^2, and this Superego has 1.4.0: update Superego')
     // A profile's is left out, and the rest of the profile set up.
     const registry = createRegistry(app, [defineUiExtension({ name: 'mine', version: '1.2.0', api: '^1', capabilities: ['x'], setup() {} })], () => {})
     const errors = console.error
