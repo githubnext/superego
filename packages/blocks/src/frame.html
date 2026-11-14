@@ -1,0 +1,50 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>html block</title>
+<script>
+// The host of an html block: a page of the window's own, loaded in a sandboxed frame (scripts only, an opaque origin).
+// It's a page of its own because the window's policy forbids inline scripts, and a frame made from a string (srcdoc,
+// a blob or data: URL) inherits that policy; this page has none. The window sends it the agent's HTML and the theme;
+// it writes them in as the frame's document and gives its scripts `superego`, which talks back over postMessage.
+(() => {
+  const post = (message) => parent.postMessage({ superego: true, ...message }, '*')
+  const height = () => Math.ceil(document.documentElement.getBoundingClientRect().height)
+  // Replies speak for the user, so only as they act (a click, a key): a page can't answer or message on its own.
+  const acting = (what) => {
+    if (!navigator.userActivation || navigator.userActivation.isActive) return true
+    console.warn(`superego.${what}() works only in response to the user (a click or a key press)`)
+    return false
+  }
+  // Kept on the window, so it outlives document.open() below and the agent's scripts find it as they run.
+  window.superego = {
+    reply: (value) => acting('reply') && post({ kind: 'reply', value: JSON.parse(JSON.stringify(value ?? null)) }),
+    send: (text) => acting('send') && post({ kind: 'send', text: String(text) }),
+    resize: () => post({ kind: 'resize', height: height() }),
+  }
+  const BASE = 'html,body{margin:0}body{font:var(--superego-text-body)/var(--superego-leading-body) var(--superego-font);color:var(--superego-text);background:transparent;padding:1px 0}'
+  const theme = (css) => `:root{color-scheme:light dark;${css}}${BASE}`
+  const receive = (event) => {
+    const data = event.data
+    if (event.source !== parent || !data || !data.superego) return
+    if (data.kind === 'theme') {
+      const style = document.getElementById('superego-theme')
+      if (style) style.textContent = theme(data.css)
+    }
+    if (data.kind === 'render') {
+      // The theme first, so the agent's own styles win and its scripts can read the variables.
+      const html = String(data.html).replace(/^\s*<!doctype[^>]*>/i, '')
+      document.open()
+      document.write(`<!doctype html><style id="superego-theme">${theme(data.css)}</style>${html}`)
+      document.close()
+      // document.open() took the listeners with it.
+      addEventListener('message', receive)
+      const observer = new ResizeObserver(() => window.superego.resize())
+      observer.observe(document.documentElement)
+      if (document.body) observer.observe(document.body)
+      window.superego.resize()
+    }
+  }
+  addEventListener('message', receive)
+  post({ kind: 'ready' })
+})()
+</script>

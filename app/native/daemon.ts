@@ -9,6 +9,8 @@ import ego from '@superego/ego/daemon'
 import files from '@superego/files/daemon'
 import git from '@superego/git/daemon'
 import images from '@superego/images/daemon'
+import paneUi from '@superego/pane-ui/daemon'
+import replyUi from '@superego/reply-ui/daemon'
 import skills from '@superego/skills/daemon'
 import tasks from '@superego/tasks/daemon'
 import threadReports from '@superego/threads/reports'
@@ -22,7 +24,7 @@ const dataDir = process.env.SUPEREGO_HOME
 if (!dataDir) throw new Error('Native spike requires an explicit SUPEREGO_HOME')
 const root = join(dirname(process.execPath), '../Resources/renderer')
 const daemon = await openDaemon({ app, dataDir, defaultCwd: process.env.SUPEREGO_CWD ?? dataDir,
-  agentsDir: process.env.SUPEREGO_AGENTS, extensions: [worktrees, askUser, ego, files, git, images, skills, tasks, threadTools, threadReports, suggestions, webPanes] })
+  agentsDir: process.env.SUPEREGO_AGENTS, extensions: [worktrees, askUser, ego, files, git, images, paneUi, replyUi, skills, tasks, threadTools, threadReports, suggestions, webPanes] })
 const socket = await listen(daemon, join(dataDir, 'superego.sock'))
 const devices = await WebDevices.open(dataDir)
 const web = await serveWeb({ root, port: 0, devices, serve: (peer) => daemon.serve(peer) })

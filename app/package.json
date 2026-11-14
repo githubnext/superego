@@ -19,6 +19,8 @@
     "@superego/images": "workspace:*",
     "@superego/links": "workspace:*",
     "@superego/notifications": "workspace:*",
+    "@superego/pane-ui": "workspace:*",
+    "@superego/reply-ui": "workspace:*",
     "@superego/skills": "workspace:*",
     "@superego/suggestions": "workspace:*",
     "@superego/tasks": "workspace:*",
