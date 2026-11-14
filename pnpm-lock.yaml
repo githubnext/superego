@@ -201,12 +201,15 @@ importers:
       '@types/node':
         specifier: ^24
         version: 24.19.2
+      happy-dom:
+        specifier: ^21.0.4
+        version: 21.0.4
       typescript:
         specifier: ^6
         version: 6.0.3
       vitest:
         specifier: ^5
-        version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2))
+        version: 5.0.5(@types/node@24.19.2)(happy-dom@21.0.4)(vite@8.3.5(@types/node@24.19.2))
 
   app:
     dependencies:
@@ -808,6 +811,34 @@ importers:
       '@earendil-works/pi-schema':
         specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
         version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+
+  packages/sdk:
+    dependencies:
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../app
+      '@superego/client':
+        specifier: workspace:*
+        version: link:../client
+      '@superego/daemon':
+        specifier: workspace:*
+        version: link:../daemon
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.3.0(@types/react@19.3.0)
+      react:
+        specifier: ^19
+        version: 19.3.1
+      react-dom:
+        specifier: ^19
+        version: 19.3.1(react@19.3.1)
 
   packages/settings:
     dependencies:
@@ -1477,6 +1508,12 @@ packages:
   '@types/unist@3.0.3':
     resolution: {integrity: sha1-rKqw+RnOaczmKcLU7S60rcG2wgw=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@types/unist/-/unist-3.0.3.tgz}
 
+  '@types/whatwg-mimetype@3.0.2':
+    resolution: {integrity: sha1-5eBtzT6S1OYi7wEpY3cH1mwo1qQ=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@types/whatwg-mimetype/-/whatwg-mimetype-3.0.2.tgz}
+
+  '@types/ws@8.18.2':
+    resolution: {integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@types/ws/-/ws-8.18.2.tgz}
+
   '@ungap/structured-clone@1.4.0':
     resolution: {integrity: sha1-Xi4TdMCjC1pC6LCDUjoiXGlF+Io=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@ungap/structured-clone/-/structured-clone-1.4.0.tgz}
 
@@ -1549,6 +1586,10 @@ packages:
 
   buffer-equal-constant-time@1.0.1:
     resolution: {integrity: sha1-+OcRMvf/5uAaXJaXpMbz5I1cyBk=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/buffer-equal-constant-time/-/buffer-equal-constant-time-1.0.1.tgz}
+
+  buffer-image-size@0.6.4:
+    resolution: {integrity: sha1-NX6Bc+lRztO1onhcaVmTqinbysQ=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/buffer-image-size/-/buffer-image-size-0.6.4.tgz}
+    engines: {node: '>=4.0'}
 
   cac@7.1.0:
     resolution: {integrity: sha512-LMDU/U2yA4IPIY8KT0NsNPWEYZvAMkbgyspxJ6btJaYV+WMDOHAZCmB0lsTObiHaRS1V/ztKAl7+TSkTqXyeoA==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/cac/-/cac-7.1.0.tgz}
@@ -1652,6 +1693,10 @@ packages:
     resolution: {integrity: sha1-wow0pDN5yn9h0HQTCy9fcCCjBpQ=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/entities/-/entities-6.0.1.tgz}
     engines: {node: '>=0.12'}
 
+  entities@7.0.1:
+    resolution: {integrity: sha1-JuioiInbY0F9y5oeeaPxvJK1l2s=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/entities/-/entities-7.0.1.tgz}
+    engines: {node: '>=0.12'}
+
   env-paths@3.0.0:
     resolution: {integrity: sha1-Lx6Jwvbb00COGxcR3YLWLjF/WNo=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/env-paths/-/env-paths-3.0.0.tgz}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
@@ -1727,6 +1772,10 @@ packages:
 
   graceful-fs@4.2.11:
     resolution: {integrity: sha1-QYPk6L8Iu24Fu7L30uDI9xLKQOM=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/graceful-fs/-/graceful-fs-4.2.11.tgz}
+
+  happy-dom@21.0.4:
+    resolution: {integrity: sha512-tFm+GaLBgo6o0awHnvHaNoraVo27qJ+2tZEtZ+cIa08hXbeitrxAJajLI05hsUy/2/YTKcUjQYzHe5mCcraLBw==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/happy-dom/-/happy-dom-21.0.4.tgz}
+    engines: {node: '>=20.0.0'}
 
   hast-util-from-parse5@8.0.4:
     resolution: {integrity: sha512-Yq7XlXor0Cpb71sI2E0zpv8QxQ5a6rfhDEETk4bcgrFX2SvJAY2PHocWwFtL6U9qyfiyByW3wZ6sZEfP2kW81g==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/hast-util-from-parse5/-/hast-util-from-parse5-8.0.4.tgz}
@@ -2426,6 +2475,10 @@ packages:
   web-streams-polyfill@3.3.3:
     resolution: {integrity: sha1-IHO5Gi/bH7+9QB594KyfghTOy0s=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/web-streams-polyfill/-/web-streams-polyfill-3.3.3.tgz}
     engines: {node: '>= 8'}
+
+  whatwg-mimetype@3.0.0:
+    resolution: {integrity: sha1-X6GnYjhn/xr2yj3HKta4pCCL66c=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/whatwg-mimetype/-/whatwg-mimetype-3.0.0.tgz}
+    engines: {node: '>=12'}
 
   why-is-node-running@3.2.1:
     resolution: {integrity: sha512-Tb2FUhB4vUsGQlfSquQLYkApkuPAFQXGFzxWKHHumVz2dK+X1RUm/HnID4+TfIGYJ1kTcwOaCk/buYCEJr6YjQ==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/why-is-node-running/-/why-is-node-running-3.2.1.tgz}
@@ -3394,6 +3447,12 @@ snapshots:
 
   '@types/unist@3.0.3': {}
 
+  '@types/whatwg-mimetype@3.0.2': {}
+
+  '@types/ws@8.18.2':
+    dependencies:
+      '@types/node': 24.19.2
+
   '@ungap/structured-clone@1.4.0': {}
 
   '@vitejs/plugin-react@6.1.2(vite@8.3.5(@types/node@24.19.2))':
@@ -3439,6 +3498,10 @@ snapshots:
       update-browserslist-db: 1.3.4(browserslist@4.29.5)
 
   buffer-equal-constant-time@1.0.1: {}
+
+  buffer-image-size@0.6.4:
+    dependencies:
+      '@types/node': 24.19.2
 
   cac@7.1.0: {}
 
@@ -3524,6 +3587,8 @@ snapshots:
 
   entities@6.0.1: {}
 
+  entities@7.0.1: {}
+
   env-paths@3.0.0: {}
 
   es-module-lexer@2.3.2: {}
@@ -3592,6 +3657,19 @@ snapshots:
   google-logging-utils@1.1.3: {}
 
   graceful-fs@4.2.11: {}
+
+  happy-dom@21.0.4:
+    dependencies:
+      '@types/node': 24.19.2
+      '@types/whatwg-mimetype': 3.0.2
+      '@types/ws': 8.18.2
+      buffer-image-size: 0.6.4
+      entities: 7.0.1
+      whatwg-mimetype: 3.0.0
+      ws: 8.22.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   hast-util-from-parse5@8.0.4:
     dependencies:
@@ -4506,7 +4584,7 @@ snapshots:
       '@types/node': 24.19.2
       fsevents: 2.3.3
 
-  vitest@5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)):
+  vitest@5.0.5(@types/node@24.19.2)(happy-dom@21.0.4)(vite@8.3.5(@types/node@24.19.2)):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/mocker': 5.0.5(vite@8.3.5(@types/node@24.19.2))
@@ -4524,6 +4602,7 @@ snapshots:
       why-is-node-running: 3.2.1
     optionalDependencies:
       '@types/node': 24.19.2
+      happy-dom: 21.0.4
     transitivePeerDependencies:
       - msw
 
@@ -4532,6 +4611,8 @@ snapshots:
   web-namespaces@2.0.1: {}
 
   web-streams-polyfill@3.3.3: {}
+
+  whatwg-mimetype@3.0.0: {}
 
   why-is-node-running@3.2.1: {}
 

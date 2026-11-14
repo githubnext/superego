@@ -6,7 +6,7 @@
 // (`files.folder`), offered for a space, the aside or the pane menu: not placed until the user puts it somewhere.
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import {
-  call, defineAction, defineUiExtension, fileKind, Picker, score, useAllThreads, useDispatch, useMachines, useRegistry, useSelection,
+  defineAction, defineUiExtension, fileKind, Picker, score, useAllThreads, useDispatch, useMachines, useMethod, useRegistry, useSelection,
   type EditorSlotProps, type MachineEntry, type PaneProps, type Store, type ViewProps,
 } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
@@ -23,14 +23,7 @@ let expanded: Store<Record<string, string[]>>
 
 /** A thread's files, again whenever it moves on. */
 function useFiles(machine: string | undefined, thread: ThreadInfo | undefined) {
-  const [list, setList] = useState<FileList>()
-  useEffect(() => {
-    if (!machine || !thread) return
-    let live = true
-    call<FileList>(machine, LIST, { id: thread.id }).then((l) => { if (live) setList(l) }, () => {})
-    return () => { live = false }
-  }, [machine, thread?.id, thread?.activeAt])
-  return list
+  return useMethod<FileList>(machine ?? '', LIST, { id: thread?.id }, { enabled: Boolean(machine && thread), refresh: thread?.activeAt }).data
 }
 
 export default defineUiExtension({

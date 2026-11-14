@@ -2,8 +2,7 @@
 // git, UI half: Changes, a pane beside the thread (from its pane menu, ⌘⇧D, or the agent's open_pane "diff") with what
 // changed in its folder, file by file, refreshed as the thread moves on. Its tab in the strip says how much: +N −N.
 // Files git doesn't track yet are listed under it, each to open beside.
-import { useEffect, useState } from 'react'
-import { call, defineAction, defineUiExtension, Diff, fileKind, has, PaneHeader, parseDiff, useDispatch, useRegistry, useTabNote, type PaneProps } from '@superego/app/ui'
+import { defineAction, defineUiExtension, Diff, fileKind, has, PaneHeader, parseDiff, useDispatch, useMethod, useRegistry, useTabNote, type PaneProps } from '@superego/app/ui'
 import { ArrowsLeftRightIcon } from '@superego/ui'
 import './styles.css'
 import { about, CHANGES, DIFF, type Changes } from './shared.ts'
@@ -28,17 +27,14 @@ const SPEAKS = 'ext:git@<2'
 function ChangesPane({ machine, thread }: PaneProps) {
   const registry = useRegistry()
   const dispatch = useDispatch()
-  const [changes, setChanges] = useState<Changes>()
-  const [error, setError] = useState<string>()
   const able = has(machine, SPEAKS)
-  const load = () => !able ? Promise.resolve() : call<Changes>(machine.id, DIFF, { id: thread.id }).then((c) => { setChanges(c); setError(undefined) }, (e: Error) => setError(e.message))
-  useEffect(() => { void load() }, [thread.id, thread.activeAt, thread.status.state, able])
+  const { data: changes, error, refetch } = useMethod<Changes>(machine.id, DIFF, { id: thread.id }, { enabled: able, refresh: `${thread.activeAt}/${thread.status.state}` })
   const files = changes?.repo ? parseDiff(changes.diff) : []
   const added = files.reduce((sum, f) => sum + f.added, 0)
   const removed = files.reduce((sum, f) => sum + f.removed, 0)
   useTabNote(added || removed ? <span className="strip__note"><span className="stat--add">+{added}</span> <span className="stat--del">−{removed}</span></span> : null, `${added}/${removed}`)
   if (!able) return <div className="pane-empty">Superego on {machine.label} is too old to show changes.</div>
-  if (error) return <div className="pane-empty">{error}</div>
+  if (error) return <div className="pane-empty">{error.message}</div>
   if (!changes) return <div className="pane-empty">Loading…</div>
   if (!changes.repo) return <div className="pane-empty">{thread.cwd} isn't a git repository.</div>
   const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
@@ -50,7 +46,7 @@ function ChangesPane({ machine, thread }: PaneProps) {
     <div className="pane-scroll diff-pane">
       <PaneHeader>
         <span className="pane-header__note">{count(files.length, 'file')}{changes.untracked.length ? ` · ${changes.untracked.length} new` : ''}</span>
-        <button type="button" className="pane-header__button" onClick={() => void load()}>Refresh</button>
+        <button type="button" className="pane-header__button" onClick={refetch}>Refresh</button>
       </PaneHeader>
       {!files.length && !changes.untracked.length && <div className="pane-empty">No changes.</div>}
       <Diff diff={files} />

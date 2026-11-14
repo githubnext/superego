@@ -1,6 +1,6 @@
 // The renderer's view of the daemons: typed calls per machine, and hooks that subscribe to live state and resubscribe
 // whenever a machine reconnects.
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { extensionVersion, offers } from '@superego/protocol'
@@ -211,6 +211,51 @@ export const useValue = <T,>(machineId: MachineId, connected: boolean, key: stri
 
 /** Call any method on a machine, including an extension's own (`<extension>.<method>`). */
 export const call = <R = unknown,>(machineId: MachineId, method: string, params: unknown = {}) => window.superego.call(machineId, method, params) as Promise<R>
+
+/** A method's answer as a component has it: the last one, why the last call failed, and whether one is under way. */
+export type MethodState<R> = {
+  /** The last answer (kept while it's read again, and after a call that failed). */
+  data: R | undefined
+  /** Why the last call failed; cleared by the next answer. */
+  error: Error | undefined
+  /** A call is under way. */
+  loading: boolean
+  /** Call it again now (after a button changed what it reads, say). */
+  refetch(): void
+}
+
+/**
+ * Call a method on a machine (an extension's own: `<extension>.<method>`) and keep its answer, for a component: called
+ * as it mounts, again whenever the machine, the method, `params` (compared as JSON) or `refresh` change, and on
+ * `refetch()`. An answer to a call made before the latest is dropped, as is one that comes after unmounting.
+ * `enabled: false` (the machine not connected, the extension not there: `has(machine, 'ext:x@^1')`) calls nothing and
+ * keeps what it had; once it's true again, it calls.
+ *
+ *   const { data, error, loading } = useMethod<{ text: string }>(machine.id, 'notes.read', { id: thread.id },
+ *     { enabled: has(machine, 'ext:notes@^1'), refresh: thread.activeAt })
+ */
+export function useMethod<R = unknown>(
+  machineId: MachineId, method: string, params: object = {},
+  { enabled = true, refresh }: { enabled?: boolean; refresh?: unknown } = {},
+): MethodState<R> {
+  const [state, setState] = useState<{ data: R | undefined; error: Error | undefined; loading: boolean }>({ data: undefined, error: undefined, loading: enabled })
+  const [asked, setAsked] = useState(0)
+  const latest = useRef(0)
+  const key = JSON.stringify(params)
+  useEffect(() => {
+    if (!enabled) { setState((s) => s.loading ? { ...s, loading: false } : s); return }
+    const ask = ++latest.current
+    setState((s) => s.loading ? s : { ...s, loading: true })
+    window.superego.call(machineId, method, JSON.parse(key) as unknown).then(
+      (data) => { if (ask === latest.current) setState({ data: data as R, error: undefined, loading: false }) },
+      (error: unknown) => { if (ask === latest.current) setState((s) => ({ ...s, error: error instanceof Error ? error : new Error(String(error)), loading: false })) },
+    )
+    // Unmounted or asked again: what this call answers is dropped.
+    return () => { if (latest.current === ask) latest.current++ }
+  }, [machineId, method, key, enabled, refresh, asked])
+  const refetch = useMemo(() => () => setAsked((n) => n + 1), [])
+  return { ...state, refetch }
+}
 
 export const useThreadView = (machineId: MachineId, connected: boolean, id: string | undefined) =>
   useWatch<ConversationView>(machineId, connected, 'thread.watch', id === undefined ? undefined : { id },
