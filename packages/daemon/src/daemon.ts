@@ -1575,6 +1575,19 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   }))
   router.register(defineAction({
+    id: 'profile.reload', title: 'Load a profile again', runs: 'machine', expose: ['ui', 'cli'],
+    params: obj({ cwd: opt(str()), name: opt(str()) }),
+    // What changed in its files loads now, as its next turn would load it (not under a thread that's running it); its
+    // extensions torn down and set up again. Fails with why it doesn't load.
+    async run({ cwd, name }) {
+      const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
+      const ref = findProfile(dir, userProfiles, name?.trim() || undefined)
+      if (!ref) throw new RpcError('not_found', `No profile ${name ?? ''} in ${dir}`.replace('  ', ' '))
+      await profileOf(ref)
+      return ref
+    },
+  }))
+  router.register(defineAction({
     id: 'thread.submit', title: 'Send a message', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str(), text: str(), attachments: opt(arr(ATTACHMENT)), requestId: opt(str()), whenBusy: opt(union([lit('steer'), lit('followUp')])) }),
     run: async ({ id, text, attachments, requestId, whenBusy }) => ({ submission: await submit(id, text, requestId ?? randomUUID(), whenBusy, attachments) }),
