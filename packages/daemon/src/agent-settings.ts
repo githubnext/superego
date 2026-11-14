@@ -166,8 +166,11 @@ export type AgentSettings = {
   /**
    * A run failed: when for its credentials, its thread waits on its provider (`task`, the task it failed in), and it
    * is true. Turns for that provider then fail at once, without asking it, until its credentials change or it's retried.
+   * `ranWith` is the credentials the run started with (credentialOf): changed since, it's retried with the new ones.
    */
-  rejected(provider: string, thread: string, task: number, error: string | undefined): boolean
+  rejected(provider: string, thread: string, task: number, error: string | undefined, ranWith?: string): boolean
+  /** A provider's credentials as stored now, as a hash: what a run starting now runs with. */
+  credentialOf(provider: string): string
   /** Hear a provider's credentials change: stored or removed here, or auth.json edited by hand. */
   onCredentials(listener: (provider: string) => void): () => void
   /** The rejected providers whose credentials changed since (while the daemon was down, say): to retry. */
@@ -395,15 +398,19 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
       await refreshAuth()
     },
     rejections,
-    rejected(provider, thread, task, error) {
+    rejected(provider, thread, task, error, ranWith) {
       if (!authFailure(error)) return false
       const name = models.getProviders().find((p) => p.id === provider)?.name ?? provider
       // A turn refused here keeps the rejection it was refused for; only the provider's own word starts one.
       const known = rejections.get(provider)
       const detail = error!.startsWith(WAITING) && known ? known.detail : error!
-      rejections.fail(provider, thread, task, { name, summary: rejectionSummary(name, authed.get(provider)?.type, detail), detail, credential: storedNow(provider) })
+      const now = storedNow(provider)
+      rejections.fail(provider, thread, task, { name, summary: rejectionSummary(name, authed.get(provider)?.type, detail), detail, credential: ranWith ?? now })
+      // Changed while it ran (and maybe heard of before this): rejected for the ones it had, so it's tried with these.
+      if (ranWith !== undefined && ranWith !== now) queueMicrotask(() => credentialsChanged(provider))
       return true
     },
+    credentialOf: storedNow,
     changedSinceRejected: () => rejections.all().filter((r) => r.credential !== (seen.get(r.provider) ?? '')).map((r) => r.provider),
     onCredentials(listener) {
       credentialListeners.add(listener)

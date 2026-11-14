@@ -390,8 +390,13 @@ describe('record and replay', () => {
     peer.on('file.changed', (params: { content: string | null }) => { seen.push(params.content) })
     const { content } = await peer.call<{ sub: string; content: string }>('file.watch', { id: thread.id, path: 'note.md' })
     expect(content).toBe('one\n')
-    await writeFile(join(dir, 'note.md'), 'two\n')
-    await until(() => seen.at(-1) === 'two\n')
+    // On a Mac a watch is heard from only once FSEvents has started it again with the new folder, a moment after it's
+    // made: a change before then goes unheard (by every watch in the process), so the first is made again until it's heard.
+    let tries = 0
+    await until(async () => {
+      if (tries++ % 25 === 0) await writeFile(join(dir, 'note.md'), 'two\n')
+      return seen.at(-1) === 'two\n'
+    })
     await writeFile(join(dir, '.note.md.tmp'), 'three\n')
     await rename(join(dir, '.note.md.tmp'), join(dir, 'note.md'))
     await until(() => seen.at(-1) === 'three\n')

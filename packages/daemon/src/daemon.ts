@@ -198,6 +198,8 @@ type Mounted = {
   model?: string; provider?: string; cost?: number; activeAt?: number
   /** The task of the last failed run it heard of (null: none), so each failure is looked at once. */
   failure?: number | null
+  /** The credentials (a hash) its provider had as its run started: a rejection is for those, not any stored since. */
+  ranWith?: string
   /** Its session, found from its folder, for a thread from before threads kept it. */
   root?: string
   stop(): Promise<unknown>
@@ -540,9 +542,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         entry.activeAt = (last?.model?.at(-1) as { timestamp?: number } | undefined)?.timestamp ?? Date.now()
       } else if (entry.live?.run && !wasRunning) entry.activeAt = Date.now()
       entry.lastEntryId = last?.id
-      const agent = view.docs['pi.agent'] as { model?: { modelId?: string; provider?: string } } | undefined
-      entry.model = agent?.model?.modelId
-      entry.provider = agent?.model?.provider
+      const ran = view.docs['pi.agent'] as { model?: { modelId?: string; provider?: string } } | undefined
+      entry.model = ran?.model?.modelId
+      entry.provider = ran?.model?.provider
+      if (entry.live?.run && !wasRunning) entry.ranWith = entry.provider === undefined ? undefined : agent.credentialOf(entry.provider)
       entry.cost = costOf(view.docs['pi.usage'] as Parameters<typeof costOf>[0])
       heedFailure(key, entry)
       changed()
@@ -587,7 +590,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const failure = m.live?.run ? undefined : m.live?.runFailure
     const fresh = failure && m.failure !== undefined && failure.taskId !== m.failure
     m.failure = failure?.taskId ?? null
-    if (fresh && failure.reason === 'model_error' && m.provider && agent.rejected(m.provider, id, failure.taskId, failure.detail)) return
+    if (fresh && failure.reason === 'model_error' && m.provider && agent.rejected(m.provider, id, failure.taskId, failure.detail, m.ranWith)) return
     if (!agent.rejections.waiting(id, failure?.taskId)) agent.rejections.release(id)
   }
   const waitingOn = (id: string, m: Mounted) => m.live?.run ? undefined : agent.rejections.waiting(id, m.live?.runFailure?.taskId)
