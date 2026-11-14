@@ -275,6 +275,38 @@ if (phase === 'first') {
   await until(`!document.querySelector('.threads-details') && !document.querySelector('.threads-model').classList.contains('is-on')`, 'and off')
   await key('/')
   await until(`Boolean(document.querySelector('.app__sidebar'))`, 'sidebar back')
+  // Moving a view from its menu: the details from beside the thread into a pane and back, then Settings → Layout's reset.
+  const layoutNow = () => `window.superego.call('app', 'settings.watch', {}).then((r) => JSON.stringify(r.value.values['app.layout'] ?? {}))`
+  const moveTo = async (button, place) => {
+    await run(`document.querySelector('${button}').click()`)
+    await until(`[...document.querySelectorAll('.view-menu .superego-menu__item')].some((i) => i.textContent === 'Move to')`, 'the view menu')
+    await run(`[...document.querySelectorAll('.view-menu .superego-menu__item')].find((i) => i.textContent === 'Move to').click()`)
+    await until(`Boolean(document.querySelector('.view-menu__places [data-place="${place}"]'))`, `Move to ${place}`)
+    await run(`document.querySelector('.view-menu__places [data-place="${place}"]').click()`)
+  }
+  await key('i')
+  await until(`Boolean(document.querySelector('.app__aside .threads-details'))`, 'details beside the thread')
+  await moveTo('.placed-view[data-view="threads.details"] .view-menu__button', 'pane')
+  await until(`Boolean(document.querySelector('.panes__column .threads-details')) && !document.querySelector('.app__aside')`, 'details moved into a pane')
+  await until(`${layoutNow()}.then((l) => l === JSON.stringify({ place: { 'threads.details': 'pane' } }))`, 'the layout keeping it in the pane menu')
+  await moveTo('.panes__tab .view-menu__button', 'aside')
+  await until(`Boolean(document.querySelector('.app__aside .threads-details')) && !document.querySelector('.panes__column .threads-details')`, 'details moved back beside the thread')
+  await run(`document.querySelector('.placed-view[data-view="threads.details"] .view-menu__button').click()`)
+  await until(`[...document.querySelectorAll('.view-menu .superego-menu__item')].some((i) => i.textContent.startsWith('Customise layout'))`, 'the view menu again')
+  await run(`[...document.querySelectorAll('.view-menu .superego-menu__item')].find((i) => i.textContent.startsWith('Customise layout')).click()`)
+  await until(`Boolean(document.querySelector('.layout-place[data-place="aside"] .layout-row[data-view="threads.details"]'))`, 'Settings → Layout, the details beside the thread')
+  // From the keys: ⌥↓ moves the row the focus is on (and the focus with it), ⌫ removes it.
+  await run(`document.querySelector('.layout-place[data-place="header"] .layout-row[data-view="threads.model"]').focus()`)
+  await key('Down', ['alt'])
+  await until(`${layoutNow()}.then((l) => JSON.parse(l).order?.header?.indexOf('threads.model') === 1) && document.activeElement?.dataset.view === 'threads.model'`, 'the model moved down a place by ⌥↓')
+  await key('Backspace', [])
+  await until(`${layoutNow()}.then((l) => JSON.parse(l).place?.['threads.model'] === null) && !document.querySelector('.app__titlebar .threads-model')`, 'the model removed by ⌫')
+  await run(`[...document.querySelectorAll('.layout-settings button')].find((b) => b.textContent === 'Reset all').click()`)
+  await until(`${layoutNow()}.then((l) => l === '{}') && !document.querySelector('.app__aside') && !document.querySelector('.layout-row[data-view="threads.details"]')`, 'the layout reset')
+  // Settings opens where it was left: back to General for the steps after.
+  await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent === 'General').click()`)
+  await key('Escape', [])
+  await until(`!document.querySelector('.settings')`, 'Settings closed')
   await run(`window.superego.call('app', 'app.settings.set', { key: 'app.sort', value: 'created' })`)
   // ⌘K is commands only; ⌘L finds a thread by name and opens it.
   await key('k')

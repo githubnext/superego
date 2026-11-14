@@ -9,7 +9,7 @@
 // Everything an extension registers is owned by it: the registry keeps who added each thing, and an extension's
 // teardown removes all of it at once. A profile's UI is owned by that profile on its machine too, and draws only in
 // that profile's threads there.
-import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type ReactNode } from 'react'
+import { createContext, Fragment, useContext, useEffect, useMemo, useState, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type ReactNode } from 'react'
 import type { AppConfig, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, ProviderRejection, SectionInfo, SettingsSnapshot, Status, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import type { Selection } from './state.tsx'
@@ -698,15 +698,18 @@ export function viewsIn(registry: Registry, placed: Placed, place: Place, where?
   })
 }
 
-/** Draw the views in a place: a thread's (`machine`, `thread`), or the window's. */
-export function PlacedViews({ place, machine, thread }: { place: Place; machine?: MachineEntry; thread?: ThreadInfo }) {
+/** Draw the views in a place: a thread's (`machine`, `thread`), or the window's; each in its `frame`, if given (its menu). */
+export function PlacedViews({ place, machine, thread, frame }: {
+  place: Place; machine?: MachineEntry; thread?: ThreadInfo; frame?: (view: View & { id: string }, drawn: ReactNode) => ReactNode
+}) {
   const registry = useRegistry()
   const { placed } = useLayout()
   const where = machine && thread ? { machine: machine.id, thread } : undefined
   // A view that needs a thread isn't drawn without one.
-  return <>{viewsIn(registry, placed, place, where).filter((view) => view.context === 'window' || where).map(({ id, component, owner }) => {
-    const Component = component as ComponentType<ViewProps>
-    return <Component key={`${owner.profile ?? ''}/${id}`} place={place} {...(machine && thread ? { machine, thread } : {})} />
+  return <>{viewsIn(registry, placed, place, where).filter((view) => view.context === 'window' || where).map((view) => {
+    const Component = view.component as ComponentType<ViewProps>
+    const drawn = <Component place={place} {...(machine && thread ? { machine, thread } : {})} />
+    return <Fragment key={`${view.owner.profile ?? ''}/${view.id}`}>{frame ? frame(view, drawn) : drawn}</Fragment>
   })}</>
 }
 

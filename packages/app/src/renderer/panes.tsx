@@ -15,6 +15,7 @@ import { fileKind, paneKind, paneTitle, shownPanes, useRegistry, type PaneKind, 
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
 import { PaneMenu, ThreadBody } from './ThreadView.tsx'
+import { ViewMenuButton } from './view-menu.tsx'
 import { FileEditor } from './file-editor.tsx'
 import { focusRegion } from './focus.ts'
 
@@ -33,6 +34,8 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
   const panes = shownPanes(registry, { machine: machine.id, thread })
+  // A pane of a view's kind can move to the other places the view fits, from its ···.
+  const isView = (pane: Pane) => registry.views.some((v) => v.id === pane.kind && v.fits.includes('pane'))
   const [narrow, setNarrow] = useState(() => matchMedia(narrowQuery).matches)
   useEffect(() => {
     const list = matchMedia(narrowQuery)
@@ -207,7 +210,8 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
         {panes.map((pane, index) => (
           <Fragment key={pane.id}>
           <PaneColumn pane={pane} title={title(pane)} focused={pane.id === focused} width={widthOf(pane)}
-            onFocus={() => focus(pane.id)} onClick={takeFocus} onClose={() => close(pane)}>
+            onFocus={() => focus(pane.id)} onClick={takeFocus} onClose={() => close(pane)}
+            menu={isView(pane) && <ViewMenuButton view={pane.kind} title={title(pane)} place="pane" machine={machine.id} thread={thread} pane={pane.id} />}>
             <TabNote.Provider value={setNoteFor(pane.id)}><PaneBody machine={machine} thread={thread} pane={pane} /></TabNote.Provider>
           </PaneColumn>
           {gap(index + 1)}
@@ -236,8 +240,8 @@ export function PaneHeader({ children }: { children: ReactNode }) {
   return at ? createPortal(children, at) : <div className="pane-bar">{children}</div>
 }
 
-function PaneColumn({ pane, title, focused, width, onFocus, onClick, onClose, children }: {
-  pane: Pane; title: string; focused: boolean; width: number; onFocus(): void; onClick(event: React.MouseEvent<HTMLElement>): void; onClose(): void; children: ReactNode
+function PaneColumn({ pane, title, focused, width, onFocus, onClick, onClose, menu, children }: {
+  pane: Pane; title: string; focused: boolean; width: number; onFocus(): void; onClick(event: React.MouseEvent<HTMLElement>): void; onClose(): void; menu?: ReactNode; children: ReactNode
 }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   return (
@@ -246,6 +250,7 @@ function PaneColumn({ pane, title, focused, width, onFocus, onClick, onClose, ch
       <div className={`panes__tab ${focused ? 'is-active' : ''}`}>
         <button className="panes__label" title={title}>{title}</button>
         <span className="panes__tools" ref={setSlot} />
+        {menu}
         <button className="panes__close" aria-label={`Close ${title}`} onClick={onClose}><XIcon size={12} aria-hidden /></button>
       </div>
       <div className="panes__body"><HeaderSlot.Provider value={slot}>{children}</HeaderSlot.Provider></div>

@@ -13,6 +13,7 @@ import { takeProviderFocus } from './provider-focus.ts'
 import { waitingPhrase } from '../shared.ts'
 import { mergeSettings, type MergedSetting } from './merge-settings.ts'
 import { Keymap } from './Keymap.tsx'
+import { LayoutSettings } from './LayoutSettings.tsx'
 import { driftNote, MachineDrift } from './machine-drift.tsx'
 import { settingsView, useApp, useRegistry } from './extension.tsx'
 import { useAllowedUi, useDeclinedUi } from './profile-ui.ts'
@@ -22,15 +23,17 @@ const APP = 'app'
 /** Settings → Machines (also opened by Update: see actions.tsx). */
 const MACHINES = '$machines'
 const ALL = '$all'
+/** Settings → Layout (also opened by a view's "Customise layout…"). */
+export const LAYOUT_TARGET = '$layout'
 
 export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; onClose(): void }) {
   const [kept, setTarget] = useLocalState('settings.target', APP)
   // The section kept from last time, unless its machine has gone since.
-  const target = kept === APP || kept === MACHINES || kept === ALL || machines.some((m) => m.id === kept) ? kept : APP
+  const target = kept === APP || kept === MACHINES || kept === ALL || kept === LAYOUT_TARGET || machines.some((m) => m.id === kept) ? kept : APP
   const machine = machines.find((m) => m.id === target)
-  const connected = target === APP || machine?.state === 'connected'
-  const supported = target === APP || has(machine, 'settings')
-  const snapshot = useSettings(target, target !== MACHINES && target !== ALL && connected && supported)
+  const connected = target === APP || target === LAYOUT_TARGET || machine?.state === 'connected'
+  const supported = target === APP || target === LAYOUT_TARGET || has(machine, 'settings')
+  const snapshot = useSettings(target, target !== MACHINES && target !== ALL && target !== LAYOUT_TARGET && connected && supported)
   const editable = machines.filter((m) => m.state === 'connected' && has(m, 'settings'))
 
   return (
@@ -38,6 +41,7 @@ export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; 
       <div className="settings__body">
         <nav className="settings__nav">
           <button className={target === APP ? 'is-selected' : ''} onClick={() => setTarget(APP)}>General</button>
+          <button className={target === LAYOUT_TARGET ? 'is-selected' : ''} onClick={() => setTarget(LAYOUT_TARGET)}>Layout</button>
           {!window.superego.web && <button className={target === MACHINES ? 'is-selected' : ''} onClick={() => setTarget(MACHINES)}>Machines</button>}
           {editable.length > 1 && <button className={target === ALL ? 'is-selected' : ''} onClick={() => setTarget(ALL)}>All machines</button>}
           {machines.filter((m) => m.state !== 'disabled').map((m) => (
@@ -48,6 +52,7 @@ export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; 
         </nav>
         <div className="settings__content">
           {target === MACHINES ? <Machines machines={machines} onOpen={setTarget} />
+            : target === LAYOUT_TARGET ? <LayoutSettings />
             : target === ALL ? <AllMachines machines={editable} />
             : !connected ? <p className="settings__note">{machine?.label} is {machine?.state}. Its settings live on it, so they show once it is back.</p>
             : !supported ? <p className="settings__note">The superego on {machine?.label} is too old to change its settings from here. Update it there.</p>
@@ -101,7 +106,7 @@ function Setting({ setting, value, apply, mixed, note }: {
       nullLabel={setting.nullLabel} fonts={knownFonts} loadFonts={loadFonts} onChange={set} />; break
     case 'color': control = <ColorField label={setting.title} value={typeof value === 'string' ? value : String(setting.default ?? '')} fallback={String(setting.default ?? '')} disabled={disabled} onChange={set} onInvalid={setError} />; break
     case 'keymap': return <Keymap setting={setting} value={value} apply={apply} />
-    // Changed where the views are, and kept out of sight here.
+    // Settings → Layout's own.
     case 'layout': return null
     case 'string': control = <TextField type={setting.secret ? 'password' : 'text'} aria-label={setting.title} defaultValue={typeof value === 'string' ? value : ''}
       placeholder={setting.placeholder} disabled={disabled} onBlur={(e) => set(e.target.value)} />; break

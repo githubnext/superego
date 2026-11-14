@@ -7,8 +7,10 @@ import '@superego/ui/styles.css'
 import './app.css'
 import { bool, obj, opt, str, type AppConfig } from '@superego/protocol'
 import { createRegistry, layoutOf, RegistryProvider, type UiExtension } from './extension.tsx'
-import { LAYOUT, placeIn, type Place } from './layout.ts'
-import { Profiles, Providers } from './SettingsView.tsx'
+import { LAYOUT, type Place } from './layout.ts'
+import { placeView } from './layout-edit.ts'
+import { setLocalState } from './local-state.ts'
+import { LAYOUT_TARGET, Profiles, Providers } from './SettingsView.tsx'
 import { WebAccess } from './web-access.tsx'
 import { Shell, ThreadPicker } from './Shell.tsx'
 import { SORT } from './sessions.ts'
@@ -45,12 +47,19 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
     for (const action of coreActions(app)) core.action(action)
     // Every thread in a menu, and a new one: at the title bar's start while there's no space (no sidebar).
     core.view('core.picker', { title: 'Threads', context: 'window', fits: ['titlebar'], withoutSpaces: 'titlebar', component: ThreadPicker })
-    // A view put in a place, or taken out (toggled, unless `on` says): the user's layout keeps it.
+    // A view put in a place, or taken out (toggled, unless `on` says); `from`: taken out of that one too, moved there.
+    // The user's layout keeps it; `narrow`, the phone's layer of it.
     core.action(defineWindowAction({
-      id: 'layout.place', title: 'Put a view in a place', params: obj({ view: str(), place: str(), on: opt(bool()) }),
-      run: ({ view, place, on }, c) => c.dispatch('app.settings.set', {
-        key: LAYOUT, value: placeIn(registry.views, layoutOf(c.appSetting(LAYOUT)), view, place as Place, on),
+      id: 'layout.place', title: 'Put a view in a place', params: obj({ view: str(), place: str(), on: opt(bool()), from: opt(str()), narrow: opt(bool()) }),
+      run: ({ view, place, on, from, narrow }, c) => c.dispatch('app.settings.set', {
+        key: LAYOUT, value: placeView(registry.views, layoutOf(c.appSetting(LAYOUT)), view, place as Place, {
+          ...(on === undefined ? {} : { on }), ...(from ? { from: from as Place } : {}), ...(narrow ? { narrow } : {}),
+        }),
       }, { machine: 'app', source: 'layout' }),
+    }))
+    core.action(defineWindowAction({
+      id: 'layout.customise', title: 'Customise layout…',
+      run: (_p, c) => { setLocalState('settings.target', LAYOUT_TARGET, 'app'); c.openSettings() },
     }))
   })
   void registry.router.load('app')

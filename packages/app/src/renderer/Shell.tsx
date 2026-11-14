@@ -11,6 +11,7 @@ import { machine as client, useSettings, watched } from './client.ts'
 import { PlacedViews, shownPanes, Slot, useLayout, useRegistry, viewsIn, type SpaceRailProps, type View, type ViewProps } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
 import { ServiceNotice } from './ServiceNotice.tsx'
+import { ViewContextMenu, withContextMenu, withMenuButton } from './view-menu.tsx'
 import { refreshFontsSoon } from './fonts.ts'
 import { AuthNotice } from './AuthNotice.tsx'
 import { ThreadTitle, ThreadTools, ThreadView } from './ThreadView.tsx'
@@ -88,7 +89,7 @@ export function Shell() {
       {!narrow && (
         <header className="app__drag app__titlebar">
           <BackForward />
-          <PlacedViews place="titlebar" />
+          <PlacedViews place="titlebar" frame={withContextMenu('titlebar')} />
           {selection && thread && machine && <ThreadTitle machine={machine} thread={thread} />}
           <span className="app__titlebar-end">
             {!spaces.length && <><AuthNotice /><ServiceNotice /></>}
@@ -101,10 +102,12 @@ export function Shell() {
         {!narrow && (
           <nav className="app__rail" aria-label="App">
             <div className="app__rail-group">
-              <PlacedViews place="rail" />
+              <PlacedViews place="rail" frame={withContextMenu('rail')} />
               {spaces.map((view) => (
-                <SpaceButton key={view.id} view={view} open={sidebar.open && view.id === space?.id}
-                  show={(open = true) => { setSpace(view.id); sidebar.toggle(open) }} />
+                <ViewContextMenu key={view.id} view={view.id} place="space">
+                  <SpaceButton view={view} open={sidebar.open && view.id === space?.id}
+                    show={(open = true) => { setSpace(view.id); sidebar.toggle(open) }} />
+                </ViewContextMenu>
               ))}
             </div>
             <div className="app__rail-group">{settingsButton}</div>
@@ -115,7 +118,7 @@ export function Shell() {
           <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) setDrawer(false) } : undefined}>
             {narrow && <div className="app__drag" />}
             {space && <SpaceView key={space.id} view={space} {...(where ? { machine, thread } : {})} />}
-            <div className="app__footer"><AuthNotice /><ServiceNotice />{narrow && <>{settingsButton}<PlacedViews place="drawer" /></>}</div>
+            <div className="app__footer"><AuthNotice /><ServiceNotice />{narrow && <>{settingsButton}<PlacedViews place="drawer" frame={withContextMenu('drawer')} /></>}</div>
           </aside>
         )}
         <main className="app__main">
@@ -131,7 +134,7 @@ export function Shell() {
             : <div className="app__empty">{spaces.length ? 'Select or start a thread.' : `Start a thread with: ${registry.app.id}`}</div>}
         </main>
         {!narrow && where && viewsIn(registry, placed, 'aside', where).length > 0 && (
-          <aside className="app__aside"><PlacedViews place="aside" machine={machine} thread={thread} /></aside>
+          <aside className="app__aside"><PlacedViews place="aside" machine={machine} thread={thread} frame={withMenuButton('aside', where)} /></aside>
         )}
       </div>
       {settings.open && <SettingsView machines={machines} onClose={settings.close} />}

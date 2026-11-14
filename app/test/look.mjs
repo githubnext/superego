@@ -1,6 +1,6 @@
 // Screenshots of the window's layout (run by test/look.sh): the sidebar open, folded to dots and closed; the thread
 // alone (and dragged narrower) and with Changes beside it (and a file past it); a long title, parent and branch; thread
-// details; a phone, its drawer open; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
+// details, their menu and Settings → Layout; a phone, its drawer open; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { threads } from './showcase/threads.mjs'
@@ -61,6 +61,14 @@ void (async () => {
     }
   }
   await both('open')
+  // A right-click on a space in the rail: its menu.
+  await run(`(() => { const b = document.querySelector('.app__rail .superego-context[data-view="threads.list"] button'); const r = b.getBoundingClientRect()
+    b.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })) })()`)
+  await until(`!!document.querySelector('.view-menu')`, 'rail menu')
+  await sleep(200)
+  await both('rail-menu')
+  await run(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
+  await until(`!document.querySelector('.view-menu')`, 'rail menu closed')
   // The thread alone, dragged narrower from its handle at the row's end, then put back with a double click.
   const handle = `[...document.querySelectorAll('.panes__gap')].at(-1)`
   const dragBy = (dx) => run(`(() => { const h = ${handle}; const r = h.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2
@@ -130,6 +138,22 @@ void (async () => {
   await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i', metaKey: true, bubbles: true }))`)
   await until(`!!document.querySelector('.threads-details')`, 'details')
   await both('details')
+  // Its ··· menu, then Settings → Layout from there.
+  await run(`document.querySelector('.placed-view .view-menu__button').click()`)
+  await until(`[...document.querySelectorAll('.view-menu .superego-menu__item')].some((i) => i.textContent === 'Move to')`, 'view menu')
+  await run(`[...document.querySelectorAll('.view-menu .superego-menu__item')].find((i) => i.textContent === 'Move to').focus()`)
+  await run(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))`)
+  await sleep(300)
+  await both('details-menu')
+  await run(`[...document.querySelectorAll('.view-menu .superego-menu__item')].find((i) => i.textContent.startsWith('Customise layout')).click()`)
+  await until(`!!document.querySelector('.layout-settings .layout-row')`, 'Settings → Layout')
+  await sleep(300)
+  await both('settings-layout')
+  await run(`[...document.querySelectorAll('.layout-settings__tabs button')].find((b) => b.textContent === 'Phone').click()`)
+  await sleep(200)
+  await both('settings-layout-phone')
+  await run(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
+  await until(`!document.querySelector('.layout-settings')`, 'Settings closed')
   await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i', metaKey: true, bubbles: true }))`)
   await until(`!document.querySelector('.threads-details')`, 'details hidden')
   // The window goes no narrower than 600: zoomed, its page is a phone's 375.
