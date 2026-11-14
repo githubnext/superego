@@ -51,7 +51,7 @@ Copy `extensions/ask-user/package.json` for dependencies.
 **Required or optional.** An extension says what it is once, in `src/shared.ts`, and spreads that into both halves:
 
 ```ts
-export const about = { name: 'orders', title: 'Orders', description: 'Look orders up.' } satisfies ExtensionAbout
+export const about = { name: 'orders', version: '1.0.0', api: '^1', title: 'Orders', description: 'Look orders up.' } satisfies ExtensionAbout
 // daemon.ts: defineDaemonExtension({ ...about, setup(superego) { … } })
 // ui.tsx:    defineUiExtension({ ...about, setup(superego) { … } })
 ```
@@ -102,9 +102,11 @@ Bundled extensions get more than a profile's:
 - A feature flag: the daemon announces `ext:<name>` for each extension set up and switched on there, and tells clients
   again whenever that changes, so `has(machine, 'ext:orders')` says whether a machine has it now (a profile's once the
   profile loads). Watching a value needs no check: it's null until the extension publishes it. Check it before calling the
-  daemon half's methods: a machine running an older Superego may not have them. Renaming a method or action keeps the old name as
-  an alias for a release (`MOVED_METHODS` in daemon.ts; a watch that became a value, `MOVED_WATCHES`; a feature,
-  `MOVED_FEATURES`).
+  daemon half's methods: a machine running an older Superego may not have them, or a newer one a major ahead
+  (`has(machine, 'ext:orders@<2')`; `about` says the extension's `version` and the extension `api` it needs). Renaming
+  a method or action keeps the old name as an alias until a milestone: an entry in `ALIASES`
+  (`packages/protocol/src/compat.ts`), from which the daemon's `MOVED_*` are read. See "Versions and compatibility" in
+  `docs/writing-extensions.md`.
 
 ## Tests
 

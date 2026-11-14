@@ -126,14 +126,93 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 
 Names: everything is `<extension>.<something>`, except tool and pane kind names. In components: `useSelection`,
 `useMachines`, `useSessions`, `useValue`, `useDispatch`, `call`, `has(machine, 'ext:x')` (whether a machine has an
-extension set up and switched on now, kept current; UI-only extensions never appear); in panes `<PaneHeader>` and
+extension set up and switched on now, kept current; UI-only extensions never appear; `'ext:x@^1.2'` at a version in
+a range, see [Versions and compatibility](#versions-and-compatibility)), `version(machine, 'x')`; in panes `<PaneHeader>` and
 `useTabNote`; in rows `<ThreadRef machine id>`; `transcriptLinks(machine, thread)`, the links a transcript shows; for a list to pick from (quick open, say), `<Picker label placeholder items filter row onPick onClose digits>`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](../packages/cli/skill/daemon.md), [ui.md](../packages/cli/skill/ui.md).
 
-Machines update at different times, so a window can meet an older or newer daemon. A UI half that calls its daemon
-half checks `has(machine, 'ext:x')` first and says so, or offers nothing, when it's missing. A method or action that's
-renamed or moved keeps its old name as an alias on the daemon for one release (`MOVED_METHODS` in daemon.ts; a watch
-that became a value, `MOVED_WATCHES`; a feature, `MOVED_FEATURES`), so older windows keep working: Ego's `thread.meta`,
-`thread.meta.clear` and `meta.watch` answer as `ego.ask`, `ego.clear` and the value `ego.thread`.
+Machines update at different times, so a window can meet an older or newer daemon: a UI half that calls its daemon
+half checks `has(machine, 'ext:x@<range>')` first, and says so, or offers nothing, when it's missing. See
+[Versions and compatibility](#versions-and-compatibility).
+
+## Versions and compatibility
+
+Three versions, each for its own question:
+
+| Version | What it versions | Where it's said | Who checks it |
+|---|---|---|---|
+| **The release** | the code a machine runs: its git commit (the packages are `0.0.0`) | `hello.machine.commit`, Settings → Machines ("an older Superego") | the user, who updates |
+| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`1.0.0`) | `hello.api` | the host, setting an extension up |
+| **The protocol** | the wire: a generation, `PROTOCOL_VERSION` (`1`), and in it the features each side announces | `hello.version`, `hello.features` | both ends, at `hello` |
+
+And each extension's own **version**, semver, which its other half, profiles and scripts rely on.
+
+### Declaring them
+
+An extension says its version and the extension API it needs in `about` (bundled), or in its definition (a profile's):
+
+```ts
+export const about = { name: 'orders', version: '1.2.0', api: '^1', title: 'Orders' } satisfies ExtensionAbout
+```
+
+- `version`: a **major** when something relying on its methods, actions, values or data views could no longer follow
+  (a method's result changes shape, an action goes); a **minor** when something's added; a patch otherwise. Bundled
+  extensions started at `1.0.0`. Unset: it counts as `0.0.0`.
+- `api`: the range of extension APIs it works with: `^1` for any 1.x, `^1.3` once it uses something 1.3 added. A host
+  outside the range refuses it before `setup` runs, with why: *Extension orders needs extension API ^2, and this
+  Superego has 1.0.0: update Superego*. A bundled one fails the build's tests; a profile's fails its profile's load
+  (the thread says so); a profile UI's is left out, the rest of the profile set up. Unset: any.
+- `capabilities`: optional, finer than a version: things it can do that a client may ask about (`['stat']`).
+
+The host's `EXTENSION_API` goes up a minor when the API grows, and a major when something an extension could rely on
+changes or goes, which also moves every bundled extension's `api`.
+
+### Checking them
+
+Each daemon announces, for every extension set up and on there, `ext:<name>` in `features` (as before) and its
+manifest (`{ name, version, api, capabilities }`) in `hello.extensions`, both kept current by `features.changed`. In
+the window:
+
+```ts
+has(machine, 'ext:git')          // set up and on there, at any version
+has(machine, 'ext:git@^1.2')     // at 1.2 or later in 1.x
+has(machine, 'ext:git@<2')       // any version this UI half speaks, a daemon from before versions too
+has(machine, 'ext:git#stat')     // one that declares the capability
+version(machine, 'git')          // '1.3.0'; '0.0.0' when it says none; undefined when it isn't there or is off
+```
+
+Ranges are the usual ones: `^1.2`, `~1.2`, `>=1.2 <3`, `1.2` (1.2.x), `*`, joined with `||`. A UI half checks the
+daemon half by the majors it speaks (`git` and `skills` ask for `@<2`); a shape that changed in a minor, by `@^1.<minor>`.
+`ask-user` takes options as objects only from `@^1`, and from a daemon from before versions maps plain labels too.
+
+Windows declare their extensions to each machine (`extensions.declare`), so one with no daemon half is listed there.
+When two windows declare one differently, the newest version's word is taken, whatever order they connect in (at the
+same version, the two are settled by what they say, the same way each time); an older window's never takes it back.
+
+### The skew policy
+
+What a window and a daemon of different releases do with each other:
+
+- **Another protocol generation:** refused at `hello` (`version_mismatch`: *Update superego on the older side*).
+  A generation changes only for a break nothing can bridge, and starts with no aliases.
+- **The same generation:** they work together. The core's methods, actions, notifications and features only grow in
+  a generation: `RELEASED` (`packages/protocol/src/released.ts`) lists what generation 1 released, and a test holds
+  the daemon to answering all of it. Add to it as things are released; nothing leaves it but with a new generation.
+  Anything newer is announced in `FEATURES` and checked with `has` before it's used.
+- **A newer window, an older daemon:** the window checks what it uses (`has(machine, 'threads')`,
+  `has(machine, 'ext:git@<2')`), and offers nothing, or says so, where the daemon lacks it. A daemon from before
+  versions announces no manifests: its extensions are there, at `0.0.0`.
+- **An older window, a newer daemon:** the daemon keeps what it moved or renamed answering by the old name, for a
+  while: the aliases in `ALIASES` (`packages/protocol/src/compat.ts`: `thread.diff` as `git.diff`, the `ego` feature,
+  `ThreadInfo.worktree`…). An extension a major ahead of what the window's UI half speaks is left alone by it.
+- **How long aliases live:** each has a milestone (`until`), three months or so after the move, and goes then, or
+  with the next generation if that's sooner. A test fails once one is past it: take the entry out, and the code that
+  keeps it (the daemon's `MOVED_*` are read from the table). So the skew supported is a window and a daemon of the
+  same generation released within an alias's lifetime of each other; further apart, the newer side's checks still
+  hold, but what moved is gone.
+- **Stored data is not the wire:** what an older release stored (a thread's state in the core's old fields, Ego's
+  thread from before hidden threads, a setting or a shortcut under an old name, a profile's `without: ['threads']`)
+  is read through by the migrations in `MIGRATIONS`, kept for as long as data from before may still be opened. A
+  protocol generation doesn't remove one.
 
 ## Links
 
