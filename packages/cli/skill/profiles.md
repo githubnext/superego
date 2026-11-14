@@ -57,8 +57,10 @@ Every field is optional.
   threads get none of their tools or prompt sections, and the window shows none of their UI there. Required ones (the
   sidebar) can't be left out.
 
-Profile files are TypeScript (types are stripped; no type checking) or JavaScript. They may import each other and
-Node's built-ins (`node:fs/promises`, …). `'superego'` is the only package they get; there is no `npm install`.
+Profile files are TypeScript (the daemon strips the types as it loads them) or JavaScript. They may import each other
+and Node's built-ins (`node:fs/promises`, …). `'superego'` is the only package they get (and `'superego/ui'` in UI
+modules); there is no `npm install`. `superego extension new <name>` writes a tsconfig.json beside profile.ts that
+resolves them against this Superego, so `superego extension test` and an editor check the types.
 
 ## What 'superego' exports
 
@@ -67,7 +69,7 @@ import {
   defineProfile,                                     // profile.ts
   defineExtension, defineTool, section,              // agent extensions
   wrapTool, wrapSection, hook,                       // decorating other extensions' tools and sections
-  defineDaemonExtension, defineAction, RpcError,     // daemon extensions
+  defineDaemonExtension, defineAction, RpcError,     // daemon extensions (`runs: 'machine'` is implied)
   obj, str, num, int, bool, arr, opt, lit, union, nullable, unknown,   // JSON Schema for parameters
 } from 'superego'
 ```

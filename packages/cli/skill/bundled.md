@@ -110,11 +110,10 @@ Bundled extensions get more than a profile's:
 
 ## Tests
 
-Daemon halves are tested against a real daemon with a scripted model. See `extensions/tasks/test/daemon.test.ts`:
-
-- write the model's turns to a JSONL file and set `<APPID>_MODEL=replay:<file>` and `<APPID>_REPLAY_SPEED=0`;
-- `openDaemon({ app, dataDir, defaultCwd, extensions: [yours] })`, `listen(daemon, socket)`, connect, call methods;
-- wait for the thread's status and assert on the transcript, live values or action results.
+Use `superego/testing` (`@superego/sdk/testing`; "Testing" in `docs/writing-extensions.md`): `testDaemon({ extensions:
+[yours], model: [callTool(…), say(…)] })` runs the daemon half against a real daemon with a scripted model, and
+`mountUi({ extensions: [yours], machines: [fakeMachine({ … }) or daemonMachine(daemon)] })` the UI half in the window's
+own registry and shell. Older tests set up the same by hand (`extensions/tasks/test/daemon.test.ts`).
 
 Pure logic (parsing, dividing work, a composer provider's `word`, a `sentWith` reader) gets plain unit tests; see
 `extensions/skills/test/names.test.ts`. `pnpm test` runs everything under `packages/*/test` and

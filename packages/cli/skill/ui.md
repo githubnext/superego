@@ -9,19 +9,13 @@ window loads them again.
 
 ```tsx
 // .superego/profiles/support/ui/order.tsx
-import { useEffect, useState } from 'react'
-import { call, defineUiExtension, PaneHeader, FileTextIcon, type PaneProps } from 'superego/ui'
+import { defineUiExtension, PaneHeader, FileTextIcon, useMethod, type PaneProps } from 'superego/ui'
 
 function OrderPane({ machine, thread, pane }: PaneProps) {
   const { id } = (pane.params ?? {}) as { id?: string }
-  const [order, setOrder] = useState<any>()
-  const [error, setError] = useState<string>()
-  useEffect(() => {
-    if (!id) return
-    // A read: the daemon half's method (superego.method), not an action.
-    call(machine.id, 'orders.find', { number: id }).then(setOrder, (e: Error) => setError(e.message))
-  }, [id, thread.activeAt])           // again as the thread moves on
-  if (error) return <div className="pane-empty">{error}</div>
+  // A read: the daemon half's method (superego.method), not an action; again as the thread moves on.
+  const { data: order, error } = useMethod<any>(machine.id, 'orders.find', { number: id }, { enabled: Boolean(id), refresh: thread.activeAt })
+  if (error) return <div className="pane-empty">{error.message}</div>
   if (!order) return <div className="pane-empty">Loading…</div>
   return <div className="order-pane"><PaneHeader><span>{order.status}</span></PaneHeader><h2>Order {id}</h2>…</div>
 }
@@ -48,7 +42,8 @@ a daemon extension, `superego.pane('order', '…')`). The agent opens it with `o
 ## What a module can import
 
 - `'react'` and `'react/jsx-runtime'`: the window's own React (19).
-- `'superego/ui'`: the hooks and components below.
+- `'superego/ui'`: the hooks and components below: the stable surface. `'superego/unstable'`: the window's own
+  workings (`useRegistry`, `useShell`, …), which change with it.
 - Its own files, by relative path (`'./chart.ts'`).
 
 Nothing else: no npm packages, no CSS imports. TSX and TS are compiled by the daemon (types stripped, JSX for React);

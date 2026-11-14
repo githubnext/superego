@@ -32,6 +32,24 @@ A profile's halves import `'superego'` and `'superego/ui'`. A bundled extension'
 On a `DaemonApi`, `harness` (pi-durable itself) and `threads.entries`' records are pi-durable's shapes, unstable too.
 Everything else in the tables below is stable.
 
+## Starting one
+
+```sh
+superego extension new notes          # data-only: a daemon half whose view the window draws from data
+superego extension new notes --ui     # with a UI half that draws it itself
+superego extension test notes         # check its types and run its tests
+```
+
+`new` makes the extension in a folder of its own in this project's profile (`.superego/profiles/default`; `-P name`
+for another, `--user` for yours in `~/.superego/profiles`), making the profile if there's none, and lists it there.
+It's a working one to change: a tool that adds an item to the thread's list, the thread's items as a scoped value, an
+action to clear them, and a view of them beside the thread; `shared.ts` with its `version` and the extension `api` it
+needs; a test on [`superego/testing`](#testing); a README; and the profile's `tsconfig.json`, which resolves
+`'superego'`, `'superego/ui'` and `'superego/testing'` against this Superego's own source, so `test` (and an editor)
+checks the types. Send one of the profile's threads a message and it's there; after an edit, the next turn loads it
+again (`superego extension reload` loads it now). A project's profile runs as it was allowed: allow it again after
+editing (`superego profile allow`).
+
 ## A first extension, end to end
 
 A profile, `~/.superego/profiles/default/`, whose agent keeps notes and whose window shows them in a pane:
@@ -89,12 +107,145 @@ export default defineUiExtension({ name: 'notes', version: '1.0.0', api: '^1.2',
 Send a thread a message: the daemon loads the profile and the agent has `add_note`; the window loads its UI when it
 shows the thread. After an edit, the daemon half reloads on the thread's next turn, the UI once the thread moves on.
 
+## The build queue, two ways
+
+A project's build queue: a tool the agent queues work with, the thread's queue beside it, a Cancel button on each
+build, and a shortcut to show it. Both versions are in [`docs/examples`](examples), each a profile folder to copy,
+with its tests; a test builds both from there as an author would.
+
+The queue is per thread, so it's a **scoped value**: each thread's in its own scope, and a window showing a thread
+watches that scope alone, never another thread's queue.
+
+<!-- check: daemon -->
+```ts
+const queue = superego.scopedValue<Build[]>('builds.queue', [])
+superego.agent(defineExtension({
+  name: 'builds',
+  tools: [defineTool({
+    name: 'enqueue_build', description: "Queue a build in this thread's folder.", parameters: obj({ command: str() }),
+    async execute({ command }, api) {
+      const thread = superego.threads.of(api.conversationId)!
+      queue.update(thread, (builds) => [...builds, { id: api.callId, command, state: 'queued', at: Date.now() }])
+      return { output: [{ type: 'text', text: `Queued: ${command}` }] }
+    },
+  })],
+}))
+superego.action(defineAction({
+  id: 'builds.cancel', title: 'Cancel a build', runs: 'machine', params: obj({ thread: str(), id: str() }),
+  run({ thread, id }) { queue.update(thread, (builds) => builds.map((b) => b.id === id ? { ...b, state: 'cancelled' } : b)); return null },
+}))
+```
+
+**Data-only** ([`build-queue`](examples/build-queue/builds/daemon.ts)): no UI code. The daemon half keeps a second
+scoped value, what the view shows, with a Cancel button on each build; the view reads it, each thread its own scope.
+The shortcut is a machine action with `keys`, offered while one of that machine's threads is shown (`thread: true`
+fills in its `id`); it opens the view as a pane, which a `thread` view that fits `pane` is.
+
+<!-- check: daemon; declare const queue: import('superego').ScopedValue<Build[]> -->
+```ts
+const view = superego.scopedValue<ViewContent>('builds.view', { empty: 'No builds queued.' })
+const show = (thread: string) => view.set(thread, {
+  empty: 'No builds queued.',
+  items: queue.get(thread).map((b) => ({ id: b.id, title: b.command, subtitle: b.state,
+    actions: [{ title: 'Cancel', action: 'builds.cancel', params: { thread, id: b.id } }] })),
+})
+superego.view('builds.view', { title: 'Builds', icon: 'terminal', context: 'thread', fits: ['aside', 'pane'], default: 'aside', value: 'builds.view' })
+superego.action(defineAction({
+  id: 'builds.open', title: 'Show the build queue', runs: 'machine', keys: 'mod+shift+b', thread: true, params: obj({ id: str() }),
+  run: ({ id }) => superego.dispatch('pane.open', { id, kind: 'builds.view' }),
+}))
+```
+
+**With a UI half** ([`build-queue-ui`](examples/build-queue-ui/builds/ui.tsx)): the window draws the queue with a
+component of its own, watching the thread's scope, and the shortcut is a window action of the profile's UI, offered in
+its own threads, that shows or hides the view in the aside.
+
+<!-- check: ui -->
+```tsx
+function Queue({ machine, thread }: ViewProps<'thread'>) {
+  const builds = useValue<Build[]>(machine, 'builds.queue', { scope: thread.id }) ?? []
+  const dispatch = useDispatch()
+  if (!has(machine, 'ext:builds@^1')) return <p className="pane-empty">No build queue on {machine.label}.</p>
+  return <ul>{builds.map((b) => (
+    <li key={b.id}>{b.command} {b.state}
+      <button type="button" onClick={() => void dispatch('builds.cancel', { thread: thread.id, id: b.id }, { machine: machine.id })}>Cancel</button></li>
+  ))}</ul>
+}
+superego.view('builds.list', { title: 'Builds', context: 'thread', fits: ['aside', 'pane'], default: 'aside', component: Queue })
+superego.action(defineAction({
+  id: 'builds.toggle', title: 'Show or hide the build queue', keys: 'mod+shift+b',
+  run: (_params, context) => context.dispatch('layout.place', { view: 'builds.list', place: 'aside' }),
+}))
+```
+
+## Testing
+
+`'superego/testing'` runs an extension as it runs in Superego: the daemon half in a real daemon with a scripted model,
+the UI half in the window's own registry and shell, in a DOM of its own, over a fake machine or that daemon.
+`superego extension test` runs a profile's `*.test.ts` with it, after checking the types.
+
+```ts
+// builds.test.ts, beside the extension in its profile
+import { afterEach, expect, it } from 'vitest'
+import { callTools, daemonMachine, mountUi, say, testDaemon, type TestDaemon } from 'superego/testing'
+
+const profile = new URL('..', import.meta.url).pathname   // the profile this file is in: copied for the test
+let daemon: TestDaemon | undefined
+afterEach(async () => { await daemon?.close() })
+
+it('queues builds and shows the thread its own', async () => {
+  daemon = await testDaemon({ profile, model: [callTools({ name: 'enqueue_build', args: { command: 'sleep 30' } }), say('Queued.')] })
+  const thread = await daemon.thread('Build it')                   // with the profile; sent, and its run waited out
+  const queue = await daemon.watch<{ state: string }[]>('builds.queue', { scope: thread.id })
+  await queue.until((builds) => builds[0]?.state === 'running')
+  const window = await mountUi({ machines: [daemonMachine(daemon)], select: { thread: thread.id } })
+  const aside = await window.render({ place: 'aside', thread: thread.id })
+  await window.until(() => aside.text().includes('sleep 30'))
+  await aside.click('Cancel')
+  expect(await window.press('mod+shift+b')).toBe('builds.open')
+  await window.unmount()
+})
+```
+
+- **`testDaemon({ profile, extensions, model })`**: `profile` is a folder (copied) or files by path; `extensions` are
+  set up as the app's own. `model` is the model's turns in order: `say(text)`, `callTool(name, args)`,
+  `callTools(…)`. It has `thread(prompt)`, `send`, `idle`, `transcript`, `call`, `dispatch`, `watch(key, { scope })`,
+  `features`; `edit(path, content)` then `reload()` to load a change (a helper edited alone loads too);
+  `restart({ model })` on the same folder; `close()`.
+- **`mountUi({ extensions, profile, machines, layout, narrow, select })`**: `extensions` are set up as the app's,
+  `profile: { ref, extensions }` as that profile's (drawn only in its threads). `machines` are test daemons
+  (`daemonMachine(daemon, id)`) or fakes: `fakeMachine({ threads, values, methods, extensions, features })`, whose
+  `setValue(key, value, scope)` changes a live value, and whose `calls` say what the window asked. It has
+  `render({ view, place, thread })` (`text()`, `find(selector)`, `click(text)`), `placed(place, { thread })`,
+  `press(keys)`, `dispatch`, `select`, `setMachine(id, { state: 'disconnected' })`, `installProfile`, `until`, and
+  `unmount()`, which tears every extension down (their `signal`s abort).
+- The cases worth a test each, in [the kit's own](../packages/sdk/test/kit.test.ts): teardown (`unmount`, an edit and
+  `reload`), set up twice (`installProfile` again), a helper edited, one profile on two machines (two daemons in one
+  window), a machine away or older (`setMachine`, `fakeMachine({ features: [], extensions: [{ name, version: '0.9.0' }] })`),
+  and a phone with no spaces (`mountUi({ narrow: true })`).
+
+## When it doesn't show
+
+```sh
+superego extensions                   # every extension here: its version and the API it needs, where it's from, how it stands
+superego extensions --thread 12       # and what thread 12 goes without, and why
+superego extension reload             # load the profile's changes now
+```
+
+For each extension: where it's from (the core, bundled, a profile and its file, or a window, with no daemon half), its
+state (`set up`, `off`, or `failed`, `refused` or `timed out` with the error), what it registered (methods, actions with
+their keys, values, views and what they read, hooks), and who watches its values, whole or in how many scopes. Then
+each profile's load (a project's not allowed says so), and with `--thread`, each extension that thread goes without:
+switched off here, its profile's `without`, another extension's `agentFor`, or a profile's of another profile. `--json`
+for all of it as data (`extensions.inspect`). What a UI half draws is the window's: one that throws says so in its
+place, and the window's console has why.
+
 ## Cheat sheet
 
 | Daemon half (`superego.` in `setup`) | For |
 |---|---|
 | `agent(defineExtension({ tools, sections, hooks }))` | the agent's tools, prompt sections and hooks |
-| `action(defineAction({ id: 'x.y', params, run }))` | an intent: logged, in ⌘K; `expose: ['ui', 'cli']` for `superego do` |
+| `action(defineAction({ id: 'x.y', params, run }))` | an intent: logged, in ⌘K; `expose: ['ui', 'cli']` for `superego do`; `keys` binds it in the window while one of the machine's threads is shown (`thread: true`: its `id` filled in) |
 | `method('x.y', run, { params })` | a read for the UI; params checked first |
 | `value('x.y', initial)` → `get`, `set`, `update` | live state the UI watches; in memory |
 | `scopedValue('x.y', initial)` → `get(scope)`, `set(scope, next)`, `update(scope, edit)`, `delete(scope)`, `scopes()` | live state kept per scope (a thread's id): a window watching one scope hears only its changes, never another thread's; in memory, so `delete` a thread's when it's done |
@@ -162,6 +313,7 @@ And each extension's own **version**, semver, which its other half, profiles and
 
 An extension says its version and the extension API it needs in `about` (bundled), or in its definition (a profile's):
 
+<!-- check: daemon -->
 ```ts
 export const about = { name: 'orders', version: '1.2.0', api: '^1', title: 'Orders' } satisfies ExtensionAbout
 ```
@@ -184,6 +336,7 @@ Each daemon announces, for every extension set up and on there, `ext:<name>` in 
 manifest (`{ name, version, api, capabilities }`) in `hello.extensions`, both kept current by `features.changed`. In
 the window:
 
+<!-- check: ui -->
 ```ts
 has(machine, 'ext:git')          // set up and on there, at any version
 has(machine, 'ext:git@^1.2')     // at 1.2 or later in 1.x
@@ -243,6 +396,7 @@ links your own way, claim them: nothing else to switch off. `[[Note#Heading|alia
 `wikilink:Note#Heading` (each part URI-encoded), saying "alias"; `parseWikilink(href)` gives
 `{ target: 'Note', heading: 'Heading' }` (or `block` for `#^id`). A profile that keeps notes its own way, say:
 
+<!-- check: ui -->
 ```tsx
 // In a profile's ui/note.tsx: [[wikilinks]] open the vault's own note pane, found by the vault's rules.
 superego.link({
@@ -269,6 +423,7 @@ An extension declares **views**: what it offers, and the kinds of place each fit
 no extension. The **layout** decides what goes where: each view's `default`, then the user's changes, kept in the app
 setting `app.layout` as `app.keys` keeps shortcuts.
 
+<!-- check: ui; import { ChatsIcon, LifebuoyIcon, type SpaceRailProps } from 'superego/ui'; declare const Threads: (props: ViewProps<'window'>) => null, DetailsPane: (props: ViewProps<'thread'>) => null, EgoButton: (props: ViewProps<'window'>) => null, ThreadsRail: (props: SpaceRailProps) => null -->
 ```ts
 superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: Threads, rail: ThreadsRail })
 superego.view('threads.details', { title: 'Thread details', context: 'thread', fits: ['aside', 'pane'], component: DetailsPane })
@@ -340,6 +495,7 @@ any of them, top to bottom: a `note`, `facts` (label and value), `items` (a list
 `empty` for when there's none. A button runs one of the extension's own actions (`<extension>.<name>`) on that
 machine, as the window may (one exposed to `ui`); a button naming any other is left out.
 
+<!-- check: daemon; type Order = { id: string; customer: string; late: boolean }; declare function ship(id: string): Promise<Order[]> -->
 ```ts
 // orders.ts, a daemon half: the open orders, as a space, with a button on each
 const open = superego.value<ViewContent>('orders.open', { items: [], empty: 'No open orders.' })
@@ -380,6 +536,7 @@ drawer: `titlebar` views (the thread picker) and Settings are in the bar at the 
 `on` tells a UI half what happens in the window, whatever it draws. Listening is owned like everything else, and stops
 at teardown. A thread that goes without the extension isn't heard of; a profile hears only its own threads.
 
+<!-- check: ui; import { threadNotice } from 'superego/unstable' -->
 ```ts
 // notifications: a thread wants a look while the window is in the background.
 superego.on('thread.status', ({ machine, thread, before }) => {
@@ -463,10 +620,11 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/thread-life-dark.svg"><img src="writing-extensions/thread-life.svg" alt="creating makes a thread (a hook may move where it works and give it state, or refuse); created; turnStart and turnEnd around each run; archiving then archived on the way to archived, unarchiving then unarchived on the way back"></picture>
 
+<!-- check: daemon; declare function makeWorktree(top: string): Promise<{ path: string; branch: string }>; declare function removeWorktree(path: string): Promise<void>; declare function removeIfClean(path: string): Promise<boolean> -->
 ```ts
 const state = superego.state<{ path: string; branch: string }>()
 superego.facts(({ state }) => state)                   // thread.ext.worktrees
-superego.thread({
+superego.thread<{ path: string; branch: string }>({   // the state its creating gives a thread
   async creating(draft) {                              // draft.options: what thread.create asked for, by extension
     if (draft.options.worktrees !== true || !draft.checkout) return
     const { path, branch } = await makeWorktree(draft.checkout.top)  // yours: git worktree add
@@ -548,6 +706,7 @@ to each machine, which lists it and lets profiles do without it.
 | [`notifications`](../extensions/notifications/src) | UI only: `on('thread.status')`, `on('auth.rejected')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
 | [`threads`](../extensions/threads/src) | the required one: views (the list a `space` with a `rail` of its own, details in the `aside` with ⌘I, the model in the `header`), app settings, tool rows and a `link`; its daemon half is two other, optional extensions: `thread-tools`, on `superego.threads`, and `thread-reports`, report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by a submit transform's `by`) |
 | [`worktrees`](../extensions/worktrees/src) | `thread` hooks (`creating` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `thread.crumb` chip and a `newThreadField` |
+| [`build-queue`](examples/build-queue), [`build-queue-ui`](examples/build-queue-ui) | a profile's extension both ways: a tool, a `scopedValue` per thread, a Cancel action, a data view or a UI half's view, a shortcut; tests on `superego/testing` |
 | [`ego`](../extensions/ego/src) | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `value` older windows follow (the rail button reads the selection); a view in the `rail`, and in a phone's `drawer` |
 
 Diagram sources are the `.mmd` files in [writing-extensions/](writing-extensions/); re-render with the `diagram` skill
