@@ -82,9 +82,9 @@ Bundled extensions get more than a profile's:
   bar's start. `default` is where it starts (none: offered, the user places it), `narrow` where it goes on a phone,
   `withoutSpaces` where it goes while no view is in `space` (Unread's bell in the rail). The user's layout decides in
   the end: read where it is with `usePlacement(id, place)`, never keep a setting of your own for it. `slot()` in the
-  old places (`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) is sugar for a view of that place, named
-  `<extension>.<slot>`, with no icon; so `slot('sidebar')` plus `slot('rail')` is two rail buttons now (a lettered
-  space button, and its own): declare one `view` with `rail` instead. And **`superego.work(divide)`** to group a run of
+  old places (`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) is deprecated, and goes after 2027-03-01
+  (`ALIASES['ui:view-slots']`): until then it declares a view of that place, `<extension>.<slot>`, with a warning.
+  Declare the `view`. And **`superego.work(divide)`** to group a run of
   work in the transcript (as `tasks` does).
 - **New thread fields**: `superego.newThreadField({ component, from })`. `component` gets `{ machine, cwd, value,
   onChange }` and draws a field in the dialog (a checkbox: `<label className="new-thread__check">`); its value goes to

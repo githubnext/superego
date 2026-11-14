@@ -16,6 +16,8 @@ export type Alias = { side: 'daemon' | 'window'; since: string; until: string; n
   | { kind: 'feature'; old: string; now: string }
   | { kind: 'fact'; old: string; now: string }
   | { kind: 'shape'; where: string }
+  /** An author's API kept under its old name: an extension written against it still sets up, with a warning. */
+  | { kind: 'api'; old: string; now: string; where: string }
 )
 
 /** How long a moved name is kept on the wire: windows and daemons this far apart keep working together. */
@@ -32,6 +34,14 @@ export const ALIASES = {
   'fact:worktree': { side: 'daemon', kind: 'fact', old: 'worktree', now: 'worktrees', since: '2026-11-13', until: KEPT, note: "ThreadInfo.worktree: the worktrees extension's facts (the branch chip)" },
   'fact:meta': { side: 'daemon', kind: 'fact', old: 'meta', now: 'ego', since: '2026-11-12', until: KEPT, note: "ThreadInfo.meta: the ego extension's facts (Ego's Clear)" },
   'thread.archive:worktree': { side: 'daemon', kind: 'shape', where: 'daemon.ts, thread.archive', since: '2026-11-13', until: KEPT, note: "thread.archive's `worktree`, for windows older than its `notes`" },
+  'ui:view-slots': {
+    side: 'window', kind: 'api', old: "slot('sidebar' | 'rail' | 'footer' | 'thread.header' | 'thread.aside', …)", now: "view('<extension>.<name>', { fits, default, … })",
+    where: 'packages/app/src/renderer/extension.tsx (VIEW_SLOTS)', since: '2026-11-14', until: KEPT, note: 'slots that became places: each declares a view, with a warning',
+  },
+  'superego/ui:unstable': {
+    side: 'window', kind: 'api', old: "the window's workings from 'superego/ui'", now: "'superego/unstable'",
+    where: 'packages/app/src/renderer/profile-ui.ts (sharedModules)', since: '2026-11-14', until: KEPT, note: "a profile's UI still finds them in 'superego/ui', without types",
+  },
   'ask-user:labels': { side: 'window', kind: 'shape', where: 'extensions/ask-user/src/ui.tsx', since: '2026-11-12', until: KEPT, note: 'options as plain labels, from a daemon whose ask-user says no version' },
 } as const satisfies Record<string, Alias>
 export type AliasId = keyof typeof ALIASES

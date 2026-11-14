@@ -107,7 +107,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | UI half (`superego.` in `setup`) | For |
 |---|---|
 | `view('x.y', { title, icon, context, fits, default, narrow, withoutSpaces, order, component, rail, width })` | UI the layout puts in places (below): a space, a rail button, beside the thread, the pane menu, the title bar; `default` where it goes unless the user moves it |
-| `slot(name, Component, { order })` | a component in a slot whose place behaviour decides (below): `thread.crumb` for a chip where the title bar says where a thread works, `composer.above`, `editor.side`, `editor.bar`, `overlay`. The old places (`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) still work: each declares a view of that place, `<extension>.<slot>` |
+| `slot(name, Component, { order })` | a component in a slot whose place behaviour decides (below): `thread.crumb` for a chip where the title bar says where a thread works, `composer.above`, `editor.side`, `editor.bar`, `overlay`. The old places (`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) are deprecated: declare a `view` |
 | `newThreadField({ component, from })` | a field in the New thread dialog: its value goes to `thread.create` as `options.<name>`, for the daemon half's `creating`; `from(thread)` its value for one started like `thread`; bundled only |
 | `signal` | aborted at teardown (its profile's UI reloaded or revoked): for its own timers, listeners and fetches (below) |
 | `on(event, listener)` → off; `window` | hear the window: `thread.status` (`{ machine, thread, before }`; `before` undefined the first time it's seen), `select` (`{ selection, before }`), `focus` (`{ focused }`), `visibility` (`{ visible }`); `window` is `{ focused, visible, selection, thread }` now. In Electron and browsers alike |
@@ -317,8 +317,8 @@ superego.view('ego.button', { title: 'Ask Ego', icon: LifebuoyIcon, context: 'wi
 
 Slots are places that behaviour decides, so the layout doesn't move them: a question card sits on the composer it asks
 for. They get `{ machine, thread }`; the editor's also `path` and `open(path)`. `superego.slot` in one of the old places
-(`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) declares a view of that place, `<extension>.<slot>`,
-placed there by default: its `sidebar` is a space, its `footer` the `drawer`.
+(`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) is deprecated, and goes after 2027-03-01
+(`ALIASES['ui:view-slots']`): until then it declares a view of that place, `<extension>.<slot>`, with a warning.
 
 ### Data-only views
 
