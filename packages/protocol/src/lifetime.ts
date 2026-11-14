@@ -10,6 +10,7 @@
 /** One owned lifetime: its disposers, a signal aborted when it ends, and a guard for work that outlives it. */
 export class Lifetime {
   readonly #controller = new AbortController()
+  readonly #signal = contained(this.#controller.signal, () => this.name)
   #steps: (() => unknown)[] = []
   readonly #warned = new Set<string>()
   /** Who it is, in what it says: `Extension notes`. */
@@ -17,7 +18,7 @@ export class Lifetime {
   constructor(name: string) { this.name = name }
 
   /** Aborted when it ends, before its disposers run: for timers, watchers and fetches of the owner's own. */
-  get signal(): AbortSignal { return this.#controller.signal }
+  get signal(): AbortSignal { return this.#signal }
   get disposed(): boolean { return this.#controller.signal.aborted }
 
   /** Own `dispose`, run when it ends (last added first). Refused once it has ended: `what` says what came late. */
@@ -66,4 +67,44 @@ export class Lifetime {
     for (const error of errors) console.error(`${this.name}: a cleanup failed`, error)
     return errors
   }
+}
+
+/**
+ * `signal`, its listeners each kept apart: one that throws is logged with whose it is, and the others still hear it. A
+ * listener's throw would otherwise escape `abort()`: in the daemon, an uncaught error that takes the process down.
+ */
+type Listener = ((event: Event) => unknown) | { handleEvent(event: Event): unknown }
+function contained(signal: AbortSignal, whose: () => string): AbortSignal {
+  const wrapped = new WeakMap<object, (event: Event) => void>()
+  const wrap = (listener: Listener) => {
+    let safe = wrapped.get(listener)
+    if (!safe) {
+      safe = (event: Event) => {
+        try {
+          if (typeof listener === 'function') listener.call(signal, event)
+          else listener.handleEvent(event)
+        } catch (error) {
+          console.error(`${whose()}: a listener on its signal failed`, error)
+        }
+      }
+      wrapped.set(listener, safe)
+    }
+    return safe
+  }
+  const add = signal.addEventListener.bind(signal) as (type: string, listener: (event: Event) => void, options?: unknown) => void
+  const remove = signal.removeEventListener.bind(signal) as (type: string, listener: Listener, options?: unknown) => void
+  Object.defineProperties(signal, {
+    addEventListener: { value: (type: string, listener: Listener | null, options?: unknown) => { if (listener) add(type, wrap(listener), options) } },
+    removeEventListener: { value: (type: string, listener: Listener | null, options?: unknown) => { if (listener) remove(type, wrapped.get(listener) ?? listener, options) } },
+  })
+  let onabort: ((this: AbortSignal, event: Event) => unknown) | null = null
+  Object.defineProperty(signal, 'onabort', {
+    get: () => onabort,
+    set(listener: typeof onabort) {
+      if (onabort) remove('abort', wrap(onabort))
+      onabort = listener
+      if (listener) add('abort', wrap(listener))
+    },
+  })
+  return signal
 }

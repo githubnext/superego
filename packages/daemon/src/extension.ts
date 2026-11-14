@@ -162,7 +162,7 @@ export type DaemonApi = {
   harness: Harness
   /**
    * Aborted when this extension is torn down, before its registrations go: for its own timers, watchers and fetches
-   * (`fetch(url, { signal })`, `watch(path, { signal })`, `signal.addEventListener('abort', …)`, which mustn't throw).
+   * (`fetch(url, { signal })`, `watch(path, { signal })`, `signal.addEventListener('abort', …)`; one that throws is logged, not fatal).
    */
   signal: AbortSignal
   /**

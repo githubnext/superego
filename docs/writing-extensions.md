@@ -399,16 +399,16 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
   name too, so the next version sets up. Torn down twice, nothing more happens.
 - Registrations need no cleanup. What isn't a registration does: a timer, a watcher, a fetch, a listener on something
   of its own. Give it the signal (`setInterval` cleared on `abort`, `watch(path, { signal })`, `fetch(url, { signal })`,
-  `addEventListener(…, { signal })`), or return a cleanup that stops it. A listener on the signal mustn't throw: in the
-  daemon, that's an uncaught error.
+  `addEventListener(…, { signal })`), or return a cleanup that stops it. A listener on the signal that throws is logged as
+  the extension's, and the others are still told.
 - What it registers after teardown is refused: the call throws, and nothing is left behind. A live value's `set` and
   `update` from work that outlived it (a reply that came late) do nothing, with a warning once, so they never change
   what the next version publishes; its `get` reads what it last set.
 - A daemon half's `setup` that takes longer than 15s is given up on: torn down (its signal aborted), and the profile
   it's in fails to load with a message saying so, so profiles behind it load. A profile whose modules hang as they load
   is given up on the same way.
-- What a UI half draws is drawn apart: each view, slot, space, pane, tool row, entry, settings component and New
-  thread field in a boundary of its own. One that throws shows "<extension> failed to draw", its error and Retry, in
+- What a UI half draws is drawn apart: each view, slot, space, pane, tool row, entry, settings component, New
+  thread field and link a handler `render`s in a boundary of its own. One that throws shows "<extension> failed to draw", its error and Retry, in
   its place; the rest of the window carries on.
 - A name is claimed while set up: a second extension of the same name is refused. The core's namespaces (`thread`,
   `value`, `settings`, …) are never free.

@@ -8,7 +8,8 @@
 // A thread's transcript keeps the links it draws, in order, for ⌃O's list (`transcriptLinks`).
 import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { SquareSplitHorizontalIcon } from '@superego/ui'
-import type { LinkAttributes, LinkHandler, LinkProps, LinkWhere, UiApi } from './extension.tsx'
+import { whose, type LinkAttributes, type LinkHandler, type LinkProps, type LinkWhere, type UiApi } from './extension.tsx'
+import { Contained } from './contained.tsx'
 import { looksLikePath } from './markdown-html.ts'
 import { parseWikilink, WIKILINK } from './wikilinks.ts'
 
@@ -130,7 +131,12 @@ export function Claimed({ handler, href, kind, text, title, attributes, children
     return collect({ element: ref.current, text: text || href, href, target: handler.target?.(href, kind) ?? href, open })
   }, [collect, open, text])
   const Render = handler.render ?? PlainLink
-  const drawn = <Render href={href} code={kind === 'code'} where={where} open={open} {...(title ? { title } : {})} {...(attributes ? { attributes } : {})}>{children}</Render>
+  // Drawn apart: a handler's drawing that throws takes only its own link.
+  const drawn = (
+    <Contained name={whose(handler)} inline>
+      <Render href={href} code={kind === 'code'} where={where} open={open} {...(title ? { title } : {})} {...(attributes ? { attributes } : {})}>{children}</Render>
+    </Contained>
+  )
   // A box-less wrapper: its place in the document orders the list.
   return collect ? <span ref={ref} style={{ display: 'contents' }}>{drawn}</span> : drawn
 }

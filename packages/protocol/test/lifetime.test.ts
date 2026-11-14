@@ -41,3 +41,27 @@ it('makes guarded work a no-op once it ends, warning once', () => {
   expect(warn).toHaveBeenCalledTimes(1)
   warn.mockRestore()
 })
+
+it('keeps a listener on its signal that throws apart: logged with whose it is, the others still told', () => {
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const uncaught = vi.fn()
+  process.on('uncaughtException', uncaught)
+  const life = new Lifetime('Extension x')
+  const heard: string[] = []
+  life.signal.addEventListener('abort', () => { throw new Error('listener broke') })
+  life.signal.onabort = () => { throw new Error('onabort broke') }
+  life.signal.addEventListener('abort', () => heard.push('after'))
+  const gone = () => heard.push('removed')
+  life.signal.addEventListener('abort', gone)
+  life.signal.removeEventListener('abort', gone)
+  life.dispose()
+  expect(heard).toEqual(['after'])
+  expect(error).toHaveBeenCalledWith('Extension x: a listener on its signal failed', expect.objectContaining({ message: 'listener broke' }))
+  expect(error).toHaveBeenCalledWith('Extension x: a listener on its signal failed', expect.objectContaining({ message: 'onabort broke' }))
+  return new Promise<void>((resolve) => setTimeout(() => {
+    process.off('uncaughtException', uncaught)
+    expect(uncaught).not.toHaveBeenCalled()
+    error.mockRestore()
+    resolve()
+  }, 10))
+})
