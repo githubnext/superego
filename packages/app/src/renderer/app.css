@@ -300,27 +300,8 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .keymap__keys kbd { font: var(--superego-text-sm) var(--superego-mono); }
 .keymap__none { color: var(--superego-muted); }
 .keymap__reset { width: 24px; }
-.layout-settings__head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 8px 0 4px; }
-.layout-settings__tabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--superego-hover); }
-.layout-settings__tabs button { font: inherit; font-size: var(--superego-text-sm); color: var(--superego-muted); background: none; border: 0; padding: 3px 12px; border-radius: 5px; }
-.layout-settings__tabs button.is-selected { background: var(--superego-bg); color: var(--superego-text); box-shadow: 0 0 0 .5px var(--superego-line), 0 1px 2px rgb(0 0 0 / .06); }
-.layout-settings__tabs button:focus-visible { outline: 2px solid var(--superego-ring); outline-offset: 1px; }
-.layout-place__head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 18px 0 2px; min-height: 24px; }
-.layout-place__head h3 { font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); text-transform: uppercase; letter-spacing: .04em; margin: 0; }
-.layout-place__reset, .layout-place__add { min-height: 22px; padding: 0 8px; font-size: var(--superego-text-sm); box-shadow: none; background: none; color: var(--superego-muted); }
-.layout-place__reset:hover, .layout-place__add:hover { background: var(--superego-hover); color: var(--superego-text); }
-.layout-place__add { margin-top: 4px; gap: 4px; }
-.layout-place__empty { padding: 6px 0; color: var(--superego-faint); font-size: var(--superego-text-sm); border-bottom: 1px solid var(--superego-border); }
-.layout-row { display: grid; grid-template-columns: 20px auto 1fr auto; align-items: center; gap: 8px; padding: 4px 4px 4px 2px; border-bottom: 1px solid var(--superego-border); border-radius: 0; outline: none; cursor: grab; }
-.layout-row:focus-visible { border-radius: var(--superego-radius); box-shadow: inset 0 0 0 2px var(--superego-ring); }
-.layout-row.is-dragging { opacity: .4; }
-.layout-row__icon { display: inline-flex; justify-content: center; color: var(--superego-muted); }
-.layout-row__from { color: var(--superego-faint); font-size: var(--superego-text-sm); }
-.layout-row__tools { display: inline-flex; gap: 2px; opacity: 0; }
-.layout-row:hover .layout-row__tools, .layout-row:focus-visible .layout-row__tools, .layout-row:focus-within .layout-row__tools { opacity: 1; }
-.layout-row__tools .superego-icon-button { width: 22px; height: 22px; min-height: 22px; box-shadow: none; background: none; color: var(--superego-muted); }
-.layout-row__tools .superego-icon-button:hover:not(:disabled) { background: var(--superego-hover); color: var(--superego-text); }
-.layout-row__tools .superego-icon-button:disabled { opacity: .3; }
+.layout-note { font-size: var(--superego-text-sm); color: var(--superego-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.layout-note.is-problem { color: var(--superego-status-error); white-space: normal; }
 /* A view beside the thread, with its ··· at its top right. */
 .placed-view { position: relative; }
 .placed-view > .view-menu__button { position: absolute; top: 6px; right: 6px; z-index: 1; }
