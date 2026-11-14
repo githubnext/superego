@@ -116,6 +116,12 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const onThreads = useCallback((machine: string, list: ThreadInfo[] | undefined) => {
     setThreads((all) => all[machine] === list ? all : { ...all, [machine]: list })
   }, [])
+  // Every machine's hidden threads (extensions' own, like Ego's), followed live: one is shown while it's selected, and
+  // back and forward reach it, on whichever machine it is.
+  const [hiddenAll, setHidden] = useState<Record<string, ThreadInfo[] | undefined>>({})
+  const onHidden = useCallback((machine: string, list: ThreadInfo[] | undefined) => {
+    setHidden((all) => all[machine] === list ? all : { ...all, [machine]: list })
+  }, [])
   const [rejections, setRejections] = useState<Record<string, ProviderRejection[] | undefined>>({})
   const onRejections = useCallback((machine: string, list: ProviderRejection[] | undefined) => {
     setRejections((all) => all[machine] === list ? all : { ...all, [machine]: list })
@@ -140,8 +146,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [archived, setArchived] = useState<ThreadInfo>()
   const list = selection ? threads[selection.machine] : undefined
   const selectedMachine = machines.find((m) => m.id === selection?.machine)
-  // The selected machine's hidden threads, followed live: one is shown while it's selected, and back and forward reach it.
-  const hidden = useHiddenThreads(selection?.machine ?? 'local', selectedMachine?.state === 'connected' && has(selectedMachine, 'hidden-threads'))
+  const hidden = selection ? hiddenAll[selection.machine] : undefined
   const isHidden = Boolean(selection && hidden?.some((t) => t.id === selection.thread))
   useEffect(() => {
     if (!selection || !list || shown || isHidden || selectedMachine?.state !== 'connected') return setArchived(undefined)
@@ -151,19 +156,19 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     return () => { alive = false }
   }, [selection?.machine, selection?.thread, list, Boolean(shown), isHidden, selectedMachine?.state])
   // History: every place shown is visited, whoever showed it; back and forward move along it first, so showing what
-  // they went to is where history already is. Threads no longer listed (archived, deleted; hidden ones on another
-  // machine) are stepped over.
+  // they went to is where history already is. Threads no longer listed (archived, deleted) are stepped over; hidden
+  // ones are listed, on every machine.
   // What extensions hear of it (`superego.on`): statuses changing, the thread shown, the window's focus.
   const registry = useRegistry()
   useWindowEvents(registry, {
     threads, rejections, selection,
-    ...(selection && hidden ? { hidden: { machine: selection.machine, threads: hidden } } : {}),
+    hidden: hiddenAll,
     shown: shown ?? (archived?.id === selection?.thread ? archived : undefined) ?? hidden?.find((t) => t.id === selection?.thread),
   })
   const [history, setHistory] = useState<History>(emptyHistory)
   const place: Place | undefined = settingsOpen ? { settings: true } : selection ? { thread: { machine: selection.machine, thread: selection.thread } } : undefined
   useEffect(() => { if (place) setHistory((h) => visit(h, place)) }, [settingsOpen, selection?.machine, selection?.thread])
-  const exists = (p: Place) => 'settings' in p || (p.thread.machine === selection?.machine && Boolean(hidden?.some((t) => t.id === p.thread.thread)))
+  const exists = (p: Place) => 'settings' in p || Boolean(hiddenAll[p.thread.machine]?.some((t) => t.id === p.thread.thread))
     || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread))
   const value = useMemo<ShellState>(() => ({
     machines, threads, rejections, selection, settingsOpen, newThread, sessions, hold, lastThread, sidebarOpen, archived, hidden,
@@ -182,20 +187,23 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     openSettings: (open = true) => setSettingsOpen(open),
     openNewThread: (start = {}) => setNewThread(start === false ? undefined : start),
     toggleSidebar: (open) => setSidebarOpen((was) => open ?? !was),
-  }), [machines, threads, rejections, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived, hidden, history])
+  }), [machines, threads, rejections, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived, hidden, hiddenAll, history])
   return (
     <Context.Provider value={value}>
-      {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onRejections={onRejections} />)}
+      {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onHidden={onHidden} onRejections={onRejections} />)}
       {children}
     </Context.Provider>
   )
 }
 
 /** One threads subscription per machine, kept while it is connected; the last list stays while it isn't. */
-function MachineThreads({ machine, onThreads, onRejections }: {
-  machine: MachineEntry; onThreads(machine: string, list: ThreadInfo[] | undefined): void; onRejections(machine: string, list: ProviderRejection[] | undefined): void
+function MachineThreads({ machine, onThreads, onHidden, onRejections }: {
+  machine: MachineEntry; onThreads(machine: string, list: ThreadInfo[] | undefined): void; onHidden(machine: string, list: ThreadInfo[] | undefined): void
+  onRejections(machine: string, list: ProviderRejection[] | undefined): void
 }) {
   const threads = useThreadsWatch(machine.id, machine.state === 'connected' && has(machine, 'threads'))
+  const hidden = useHiddenThreads(machine.id, machine.state === 'connected' && has(machine, 'hidden-threads'))
+  useEffect(() => { if (hidden) onHidden(machine.id, hidden) }, [hidden])
   // Null from a daemon that doesn't say (one older than the value): as good as none rejected.
   const rejected = useValue<ProviderRejection[] | null>(machine.id, machine.state === 'connected' && has(machine, 'threads'), AUTH_REJECTED)
   useEffect(() => { onRejections(machine.id, rejected ?? undefined) }, [rejected])
