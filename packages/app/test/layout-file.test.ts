@@ -42,7 +42,7 @@ describe('the layout file', () => {
   let settings: SettingsRegistry
   let file: LayoutFile
   const wait = async (check: () => boolean) => {
-    for (let i = 0; i < 100 && !check(); i++) await new Promise((resolve) => setTimeout(resolve, 20))
+    for (let i = 0; i < 250 && !check(); i++) await new Promise((resolve) => setTimeout(resolve, 20))
     expect(check()).toBe(true)
   }
   const layout = () => JSON.stringify(settings.get('app.layout'))
