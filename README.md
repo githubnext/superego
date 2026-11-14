@@ -10,6 +10,7 @@ pnpm install
 pnpm test               # unit + daemon/CLI e2e (scripted models)
 pnpm typecheck          # tsc -b, incremental
 pnpm dev                # the app; its daemon lives in ~/.superego
+pnpm dev --fresh        # the app as it comes: a new, empty data dir (or --home <dir> for one of your own)
 pnpm smoke              # e2e of the app, headless: nothing reaches the screen
 pnpm --filter superego showcase /tmp/shots   # scripted threads, screenshotted
 pnpm --filter superego package               # superego.app in app/dist
