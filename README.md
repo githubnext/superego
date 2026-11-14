@@ -64,8 +64,8 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
   as you type) sends that skill's instructions with it. `disable-model-invocation: true` keeps a skill to being named.
   `~/.agents/AGENTS.md`, and any `AGENTS.md` from the root down to the thread's folder, are standing instructions.
   A profile can do without either (`without: ['skills', 'agents-md']`), and a machine can turn either off. Skills are
-  the `skills` extension; `AGENTS.md` is the core's. *Skills* lists every machine's to browse, once placed in Settings →
-  Layout (a space, or beside the thread).
+  the `skills` extension; `AGENTS.md` is the core's. *Skills* lists every machine's to browse, once the layout places it
+  (`skills.view`: a space, or beside the thread).
 
 ## Keys
 
