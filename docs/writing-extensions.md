@@ -10,14 +10,27 @@ Either can be left out. Everything either half registers is its own, and goes wh
 | The UI half wants to… | The daemon half offers | The UI uses |
 |---|---|---|
 | change something | `action(defineAction({ id, run }))`: logged, in ⌘K, on the command line | `useDispatch()(id, params, { machine })` |
-| read something | `method(name, run, { params })`: a plain request | `call(machine, name, params)` |
-| follow something | `value(key, initial)` | `useValue(machine, connected, key)` |
+| read something | `method(name, run, { params })`: a plain request | `useMethod(machine.id, name, params)` in a component, `call(machine, name, params)` elsewhere |
+| follow something | `value(key, initial)` | `useValue(machine, key)` |
+| follow something per thread | `scopedValue(key, initial)` | `useValue(machine, key, { scope: thread.id })` |
 
 Where they come from:
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/loading-dark.svg"><img src="writing-extensions/loading.svg" alt="Bundled extensions are built into the app; profiles in ~/.superego/profiles or a project's .superego/profiles name their extensions and UI modules"></picture>
 
 A profile's halves import `'superego'` and `'superego/ui'`. A bundled extension's halves import the packages directly (`@superego/daemon`, `@superego/app/ui`, …), see [bundled.md](../packages/cli/skill/bundled.md).
+
+### What to import
+
+| Import | What | Stability |
+|---|---|---|
+| `'superego'` | the daemon half and a profile: `defineDaemonExtension`, `defineProfile`, `defineExtension`, `defineTool`, `defineAction`, the schema helpers (`obj`, `str`, …), `RpcError`, and their types (`DaemonApi`, `ScopedValue`, `ViewContent`, …) | stable: follows the extension API's version |
+| `'superego/ui'` | the UI half: `defineUiExtension`, `defineAction`, hooks (`useMethod`, `useValue`, `useDispatch`, `useSelection`, …), `call`, `has`, `version`, components to build from (`Markdown`, `PaneHeader`, `Picker`, `Diff`, `FileEditor`, `Button`, the icons), and their types | stable |
+| `'superego/testing'` | test helpers: a daemon with a scripted model, a window with a fake bridge (see [Testing](#testing)) | stable |
+| `'superego/unstable'` | the window's workings the bundled extensions build on: `useRegistry`, `useShell`, `useSidebar`, `fileKind`, the session list, `useWatch`, `useThreadView`, … | none: changes with the window. A profile's UI still finds these in `'superego/ui'` until 2027-03-01, without types |
+
+On a `DaemonApi`, `harness` (pi-durable itself) and `threads.entries`' records are pi-durable's shapes, unstable too.
+Everything else in the tables below is stable.
 
 ## A first extension, end to end
 
@@ -36,7 +49,7 @@ import { join } from 'node:path'
 import { defineDaemonExtension, defineExtension, defineTool, obj, str } from 'superego'
 
 export default defineDaemonExtension({
-  name: 'notes',
+  name: 'notes', version: '1.0.0', api: '^1.2',
   setup(superego) {
     const fileOf = async (id: string) => join((await superego.threads.get(id)).cwd, 'NOTES.md')
     const read = async (id: string) => readFile(await fileOf(id), 'utf8').catch(() => '')
@@ -59,22 +72,18 @@ export default defineDaemonExtension({
 
 ```tsx
 // ui.tsx: the UI half. A pane, offered in the thread's pane menu.
-import { useEffect, useState } from 'react'
-import { call, defineUiExtension, type PaneProps } from 'superego/ui'
+import { defineUiExtension, has, useMethod, type PaneProps } from 'superego/ui'
 
 function Notes({ machine, thread }: PaneProps) {
-  const [text, setText] = useState('')
-  // Read again as the thread moves on. Until its profile has loaded, `notes.read` isn't there yet: the call fails, and
-  // the next one (the thread's next turn) finds it.
-  useEffect(() => {
-    let live = true
-    call<{ text: string }>(machine.id, 'notes.read', { id: thread.id }).then((r) => { if (live) setText(r.text) }, () => {})
-    return () => { live = false }
-  }, [machine.id, thread.id, thread.activeAt])
-  return <pre className="pane-scroll">{text || 'No notes yet.'}</pre>
+  // Read again as the thread moves on; nothing until the machine has the daemon half (its profile loads with the
+  // thread's first turn), then at once.
+  const { data, error } = useMethod<{ text: string }>(machine.id, 'notes.read', { id: thread.id },
+    { enabled: has(machine, 'ext:notes@^1'), refresh: thread.activeAt })
+  if (error) return <div className="pane-empty">{error.message}</div>
+  return <pre className="pane-scroll">{data?.text || 'No notes yet.'}</pre>
 }
 
-export default defineUiExtension({ name: 'notes', setup: (superego) => superego.pane('notes', { title: 'Notes', component: Notes, menu: true }) })
+export default defineUiExtension({ name: 'notes', version: '1.0.0', api: '^1.2', setup: (superego) => superego.pane('notes', { title: 'Notes', component: Notes, menu: true }) })
 ```
 
 Send a thread a message: the daemon loads the profile and the agent has `add_note`; the window loads its UI when it
@@ -88,6 +97,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `action(defineAction({ id: 'x.y', params, run }))` | an intent: logged, in ⌘K; `expose: ['ui', 'cli']` for `superego do` |
 | `method('x.y', run, { params })` | a read for the UI; params checked first |
 | `value('x.y', initial)` → `get`, `set`, `update` | live state the UI watches; in memory |
+| `scopedValue('x.y', initial)` → `get(scope)`, `set(scope, next)`, `update(scope, edit)`, `delete(scope)`, `scopes()` | live state kept per scope (a thread's id): a window watching one scope hears only its changes, never another thread's; in memory, so `delete` a thread's when it's done |
 | `signal` | aborted at teardown: for its own timers, watchers and fetches (below) |
 | `pane(kind, about)` | tell the agent about a pane kind, for `open_pane` |
 | `view('x.y', { title, icon, context, fits, default, value \| method })` | a view drawn from data (below): no UI code, so a remote machine's or a project profile's runs no code in the window; its buttons still have that machine's authority |
@@ -120,14 +130,14 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `composer.complete({ title, word(text, caret), items(word, { machine, thread }) })` | complete the word being typed: `word` finds it (`{ start, query }`), `items` offers `{ label, detail, insert }` |
 | `composer.sentWith({ read(blocks), component })` | draw what its `submit` put in sent messages under them (a chip): `read` returns `{ items, blocks }`, and those blocks leave the text |
 | `work(divide)` | split a run of work into titled parts (tasks); bundled only |
-| `action(defineAction({ id, keys, when, run }))` | a window action with keys, in ⌘K while `when(context)` holds; bundled only |
+| `action(defineAction({ id, keys, when, run }))` | a window action with keys, in ⌘K while `when(context)` holds; a profile's only while one of its threads is shown |
 | `store('x.y', initial, { persist })` → `get`, `set`, `use()` | window state its actions and components share |
 | `appSettings({ id, settings })` | per-user settings; `useAppSetting(key)`, `context.appSetting(key)`; bundled only |
 | `settings(ui, Component)` | draw under a settings section that names `ui` |
 | `dispatch(id, params, { machine })` | run any action outside React |
 
 Names: everything is `<extension>.<something>`, except tool and pane kind names. In components: `useSelection`,
-`useMachines`, `useSessions`, `useValue`, `useDispatch`, `call`, `has(machine, 'ext:x')` (whether a machine has an
+`useMachines`, `useSessions`, `useValue(machine, key, { scope })`, `useMethod(machine.id, method, params, { enabled, refresh })` (a method's answer, with `error`, `loading` and `refetch`; called again as `params` or `refresh` change, answers to stale calls dropped), `useDispatch`, `call`, `has(machine, 'ext:x')` (whether a machine has an
 extension set up and switched on now, kept current; UI-only extensions never appear; `'ext:x@^1.2'` at a version in
 a range, see [Versions and compatibility](#versions-and-compatibility)), `version(machine, 'x')`; in panes `<PaneHeader>` and
 `useTabNote`; in rows `<ThreadRef machine id>`; `transcriptLinks(machine, thread)`, the links a transcript shows; for a list to pick from (quick open, say), `<Picker label placeholder items filter row onPick onClose digits>`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](../packages/cli/skill/daemon.md), [ui.md](../packages/cli/skill/ui.md).
@@ -143,7 +153,7 @@ Three versions, each for its own question:
 | Version | What it versions | Where it's said | Who checks it |
 |---|---|---|---|
 | **The release** | the code a machine runs: its git commit (the packages are `0.0.0`) | `hello.machine.commit`, Settings → Machines ("an older Superego") | the user, who updates |
-| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`1.1.0`; 1.1 added `signal`, a UI `setup`'s cleanup and `unarchiveAbandoned`) | `hello.api` | the host, setting an extension up |
+| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`1.2.0`; 1.1 added `signal`, a UI `setup`'s cleanup and `unarchiveAbandoned`; 1.2 `scopedValue` and `useValue`'s `scope`, `useMethod`, a profile's window actions, and `'superego/unstable'` apart) | `hello.api` | the host, setting an extension up |
 | **The protocol** | the wire: a generation, `PROTOCOL_VERSION` (`1`), and in it the features each side announces | `hello.version`, `hello.features` | both ends, at `hello` |
 
 And each extension's own **version**, semver, which its other half, profiles and scripts rely on.
@@ -161,7 +171,7 @@ export const about = { name: 'orders', version: '1.2.0', api: '^1', title: 'Orde
   extensions started at `1.0.0`. Unset: it counts as `0.0.0`.
 - `api`: the range of extension APIs it works with: `^1` for any 1.x, `^1.3` once it uses something 1.3 added. A host
   outside the range refuses it before `setup` runs, with why: *Extension orders needs extension API ^2, and this
-  Superego has 1.1.0: update Superego*. A bundled one fails the build's tests; a profile's fails its profile's load
+  Superego has 1.2.0: update Superego*. A bundled one fails the build's tests; a profile's fails its profile's load
   (the thread says so); a profile UI's is left out, the rest of the profile set up. Unset: any.
 - `capabilities`: optional, finer than a version: things it can do that a client may ask about (`['stat']`).
 
@@ -343,7 +353,7 @@ superego.view('orders.open', { title: 'Orders', icon: 'list', context: 'window',
 ```
 
 - The source is a live value of the extension's (`value`), or a method of its (`method`), read again as the thread
-  moves on and after a button ran. A `thread` view's value holds each thread's content by its id, and its method is
+  moves on and after a button ran. A `thread` view's value is a `scopedValue`, each thread's content in its scope (or a plain value holding each thread's by its id: the window watches only that entry), and its method is
   called with `{ id }`.
 - Data views fit `space`, `aside` and `pane` (a `window` view: `space` and `aside`), and the layout places them as any
   other. A `thread` view in `pane` is a pane kind of its id; with `about`, the agent is told it can open it.
@@ -526,8 +536,8 @@ to each machine, which lists it and lets profiles do without it.
 | Extension | Shows |
 |---|---|
 | [`tasks`](../extensions/tasks/src) | the smallest: two tools and a prompt section; a `work` divider |
-| [`suggestions`](../extensions/suggestions/src) | a hook, a side call, a live value, a `composer.above` slot |
-| [`ask-user`](../extensions/ask-user/src) | a tool that waits on you: `status`, an action to answer, a `tool` view |
+| [`suggestions`](../extensions/suggestions/src) | a hook, a side call, a `scopedValue` per thread, a `composer.above` slot |
+| [`ask-user`](../extensions/ask-user/src) | a tool that waits on you: `status`, an action to answer, a `scopedValue` per thread (and the old list kept for older windows), a `tool` view |
 | [`images`](../extensions/images/src) | a tool with `{ fold: false }`, files kept with `threads.attachments` |
 | [`git`](../extensions/git/src) | Changes: a `method` (a read), a `pane` the agent is told of, built on the kit's `Diff`, an `action` with keys |
 | [`web-panes`](../extensions/web-panes/src) | two pane kinds and nothing else; `urls: true` makes web links open in one |

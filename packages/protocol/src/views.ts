@@ -20,8 +20,9 @@ export type DataIcon = (typeof DATA_ICONS)[number]
  * A data view, as a daemon extension declares it (`superego.view`). Its content is a `ViewContent`, read from a live
  * value of the extension's or a method of its:
  * - a `window` view (a space): the value is the content; the method is called with `{}`
- * - a `thread` view (a space shows the selected thread): the value holds each thread's content by its id; the method
- *   is called with `{ id }`
+ * - a `thread` view (a space shows the selected thread): the value is a scoped value, each thread's content in its
+ *   scope (or a plain value holding each thread's by its id; the window watches only that thread's); the method is
+ *   called with `{ id }`
  * A method is read again as the thread moves on (a window view: as any thread on the machine does), and after one of
  * the view's buttons ran.
  */
