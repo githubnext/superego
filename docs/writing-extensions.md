@@ -168,10 +168,21 @@ superego.view('ego.button', { title: 'Ask Ego', icon: LifebuoyIcon, context: 'wi
 - To put a view in a place or take it out, dispatch `layout.place` with `{ view, place, on? }` (toggled without
   `on`); `from` takes it out of that place in the same change (moved), `narrow` changes the phone's layer. In a
   component, `usePlacement(view, place)` gives `[placed, toggle]`. ⌘I is `threads.details` in the `aside`, or not.
-  `layout.customise` opens Settings → Layout.
-- The user moves views: Settings → Layout lists every place with what's there, to reorder, remove, add what fits and
-  reset; a right-click on a view in the window (its ··· beside the thread or in a pane) has *Move to*, *Remove from
-  here* and *Customise layout…*. So `default` is only where a view starts. Draw it to work in every place it `fits`
+- The user edits the layout as text: *Edit layout…* (⌘K) opens `~/.superego/layout.json`, `app.layout` as a file,
+  applied as it's saved; a mistake (bad JSON, a view or place there isn't, a place a view doesn't fit) is noted and the
+  last good layout stays. Its head of `//` comments lists the views the window declared and the places each fits, and
+  `superego layout` prints it. For example:
+
+  ```jsonc
+  {
+    "place": { "threads.details": "aside", "files.folder": ["space", "pane"], "ego.button": null },
+    "order": { "pane": ["files.folder", "git.changes"] },
+    "narrow": { "place": { "threads.details": "pane" } }
+  }
+  ```
+
+  A right-click on a view in the window (its ··· beside the thread or in a pane) has *Move to*, *Remove from here* and
+  *Edit layout…*. So `default` is only where a view starts. Draw it to work in every place it `fits`
   (read `place` when it must differ: a menu's side, a button's size), never assume another view sits beside it, and
   don't keep a setting of your own for where it shows: `usePlacement` and `layout.place` are that setting. Declare
   only the places it can really be drawn in.
