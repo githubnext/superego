@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { DATA_VIEWS, defineAction, defineApp, obj, PROTOCOL_VERSION, str, type ActionInfo, type DataViewInfo, type Hello, type RpcPeer, type ThreadInfo, type ViewContent } from '@superego/protocol'
-import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonExtension } from '../src/index.ts'
+import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonExtension, type LiveValue, type ScopedValue } from '../src/index.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
 const SUPEREGO = defineApp({ name: 'superego', id: 'superego' })
@@ -204,5 +204,49 @@ it('announces data views, fed by a value, whose buttons run its actions: a round
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
   const { value } = await peer.call<{ value: unknown }>('thread.watch', { id: thread.id })
   expect(JSON.stringify(value)).toContain(`\\"orders.notes\\": the thread's order notes; no params`)
+  await close()
+})
+
+it('publishes a scoped value: a watcher of one scope hears only its changes; whole, every scope by scope', async () => {
+  let queue!: ScopedValue<string[]>
+  let plain!: LiveValue<Record<string, number>>
+  const builds = defineDaemonExtension({
+    name: 'builds',
+    setup(superego) {
+      queue = superego.scopedValue<string[]>('builds.queue', [])
+      plain = superego.value<Record<string, number>>('builds.counts', { a: 1 })
+      expect(() => superego.scopedValue('builds.queue', [])).toThrow(/already published/)
+      expect(() => queue.set('', ['x'])).toThrow(/non-empty/)
+    },
+  })
+  const { peer, hello, close } = await open([builds])
+  expect(hello.features).toContain('scoped-values')
+  const heard: { sub: string; value: unknown }[] = []
+  peer.on('value.changed', (p: { sub: string; value: unknown }) => { heard.push(p) })
+  const a = await peer.call<{ sub: string; value: string[] }>('value.watch', { key: 'builds.queue', scope: 'a' })
+  const whole = await peer.call<{ sub: string; value: unknown }>('value.watch', { key: 'builds.queue' })
+  expect(a.value).toEqual([])
+  expect(whole.value).toEqual({})
+  queue.set('b', ['other thread'])
+  queue.update('a', (list) => [...list, 'first'])
+  queue.set('b', ['other thread'])
+  await until(async () => heard.filter((h) => h.sub === whole.sub).length >= 2)
+  // a heard only its own change; whole heard both, as every scope by scope.
+  expect(heard.filter((h) => h.sub === a.sub).map((h) => h.value)).toEqual([['first']])
+  expect(heard.filter((h) => h.sub === whole.sub).at(-1)!.value).toEqual({ b: ['other thread'], a: ['first'] })
+  expect(queue.get('a')).toEqual(['first'])
+  expect(queue.get('nowhere')).toEqual([])
+  expect(queue.scopes().sort()).toEqual(['a', 'b'])
+  // Forgotten, a scope reads its start again.
+  queue.delete('a')
+  await until(async () => heard.filter((h) => h.sub === a.sub).length === 2)
+  expect(heard.filter((h) => h.sub === a.sub).at(-1)!.value).toEqual([])
+  // A plain value watched in a scope: its entry of that key, told only as that entry changes.
+  const count = await peer.call<{ sub: string; value: unknown }>('value.watch', { key: 'builds.counts', scope: 'a' })
+  expect(count.value).toBe(1)
+  plain.set({ a: 1, b: 2 })
+  plain.set({ a: 3, b: 2 })
+  await until(async () => heard.some((h) => h.sub === count.sub))
+  expect(heard.filter((h) => h.sub === count.sub).map((h) => h.value)).toEqual([3])
   await close()
 })

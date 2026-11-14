@@ -203,11 +203,29 @@ export const useHiddenThreads = (machineId: MachineId, connected: boolean) =>
   useWatch<ThreadInfo[]>(machineId, connected, 'threads.watch', { hidden: true }, replace, ['threads.changed'])
 
 /**
- * A live value an extension's daemon half publishes (`superego.value`), on `machineId`: null until the extension that
- * publishes it is set up there (a profile's, before the profile loads).
+ * A live value an extension's daemon half publishes (`superego.value`, `superego.scopedValue`), on a machine while it's
+ * connected: undefined until heard, null until the extension that publishes it is set up there (a profile's, before the
+ * profile loads). `scope`: only its part in that scope (a thread's, by its id), heard only as that part changes: a
+ * scoped value's value there, a plain value's entry of that key. From a daemon without `scoped-values` (an older
+ * Superego), the value is watched whole and the part picked here.
+ *
+ *   const queue = useValue<Build[]>(machine, 'builds.queue', { scope: thread.id })
+ *   const all = useValue<Status>(machine.id, machine.state === 'connected', 'builds.status')   // by id, unscoped
  */
-export const useValue = <T,>(machineId: MachineId, connected: boolean, key: string) =>
-  useWatch<T>(machineId, connected, 'value.watch', { key }, (value, _method, params: Notifications['value.changed']) => params.key === key ? params.value as T : value, ['value.changed'])
+export function useValue<T>(machine: MachineEntry, key: string, options?: { scope?: string }): T | null | undefined
+export function useValue<T>(machineId: MachineId, connected: boolean, key: string): T | undefined
+export function useValue<T>(first: MachineEntry | MachineId, second: boolean | string, third?: string | { scope?: string }): T | null | undefined {
+  const entry = typeof first === 'string' ? undefined : first
+  const machineId = entry ? entry.id : first as MachineId
+  const connected = entry ? entry.state === 'connected' : second as boolean
+  const key = entry ? second as string : third as string
+  const scope = entry ? (third as { scope?: string } | undefined)?.scope : undefined
+  const scoped = scope !== undefined && offers(entry, 'scoped-values')
+  const live = useWatch<Json>(machineId, connected, 'value.watch', scoped ? { key, scope } : { key },
+    (value, _method, params: Notifications['value.changed']) => params.key === key ? params.value : value, ['value.changed'])
+  if (scope === undefined || scoped || live === undefined) return live as T | undefined
+  return (live && typeof live === 'object' && !Array.isArray(live) && Object.hasOwn(live, scope) ? live[scope] : null) as T | null
+}
 
 /** Call any method on a machine, including an extension's own (`<extension>.<method>`). */
 export const call = <R = unknown,>(machineId: MachineId, method: string, params: unknown = {}) => window.superego.call(machineId, method, params) as Promise<R>

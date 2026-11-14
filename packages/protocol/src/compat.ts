@@ -42,6 +42,7 @@ export const ALIASES = {
     side: 'window', kind: 'api', old: "the window's workings from 'superego/ui'", now: "'superego/unstable'",
     where: 'packages/app/src/renderer/profile-ui.ts (sharedModules)', since: '2026-11-14', until: KEPT, note: "a profile's UI still finds them in 'superego/ui', without types",
   },
+  'ask-user:pending': { side: 'daemon', kind: 'shape', where: 'extensions/ask-user/src/daemon.ts', since: '2026-11-14', until: KEPT, note: "every thread's questions in one list (ask-user.pending), for windows older than its scoped ask-user.asking" },
   'ask-user:labels': { side: 'window', kind: 'shape', where: 'extensions/ask-user/src/ui.tsx', since: '2026-11-12', until: KEPT, note: 'options as plain labels, from a daemon whose ask-user says no version' },
 } as const satisfies Record<string, Alias>
 export type AliasId = keyof typeof ALIASES

@@ -22,6 +22,6 @@ export const RELEASED = {
     'features.changed',
   ] satisfies (keyof Notifications)[],
   features: [
-    'threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'hidden-threads', 'data-views',
+    'threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'hidden-threads', 'data-views', 'scoped-values',
   ] satisfies Feature[],
 } as const

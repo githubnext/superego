@@ -22,7 +22,7 @@ export const PROTOCOL_VERSION = 1
 /** A line Superego writes in a thread's transcript itself, for the user, not the model: an entry of this kind, `{ text }`. */
 export const NOTE_ENTRY = 'superego.note'
 
-export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'hidden-threads', 'data-views'] as const
+export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'hidden-threads', 'data-views', 'scoped-values'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -184,9 +184,11 @@ export type Methods = {
 
   /**
    * Snapshot of an extension's live value, then `value.changed` with each new one. Watched by name: null until an
-   * extension publishes it, then its value.
+   * extension publishes it, then its value. `scope` (feature `scoped-values`): only that part of it, told only when
+   * that part changes: a scoped value's (`superego.scopedValue`) value in that scope (a thread's, by its id); a plain
+   * value's entry of that key, if it's an object (else null). Unscoped, a scoped value is every scope's, by scope.
    */
-  'value.watch': { params: { key: string }; result: { sub: string; value: Json } }
+  'value.watch': { params: { key: string; scope?: string }; result: { sub: string; value: Json } }
   /** Every action on this machine, as data. */
   'action.list': { params: {}; result: ActionInfo[] }
   /** Run any action by id; `exposure` says who is asking (the command line passes `cli`), and params are coerced. */

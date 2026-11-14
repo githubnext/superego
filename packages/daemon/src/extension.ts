@@ -33,6 +33,21 @@ export const defineDaemonExtension = (extension: DaemonExtension) => extension
 /** A value an extension publishes; clients watch it with `value.watch` and get every change. Kept in memory only. */
 export type LiveValue<T extends Json> = { get(): T; set(next: T): void; update(edit: (current: T) => T): void }
 
+/**
+ * A value an extension publishes in scopes (each thread's, by its id): a client watches one scope (`useValue(machine,
+ * key, { scope })`) and hears only that scope's changes. Watched whole, it's every scope's by scope. Kept in memory only.
+ */
+export type ScopedValue<T extends Json> = {
+  /** Its value in `scope`: `initial` until set there. */
+  get(scope: string): T
+  set(scope: string, next: T): void
+  update(scope: string, edit: (current: T) => T): void
+  /** Forget `scope`: it reads `initial` again (forget a thread's once it's done with, so memory doesn't grow). */
+  delete(scope: string): void
+  /** The scopes it holds something in now. */
+  scopes(): string[]
+}
+
 export type StatusContribution = { kind: BlockedKind; msg?: string }
 
 /** A block of what a message gives the model: text, or an image (base64). */
@@ -198,8 +213,14 @@ export type DaemonApi = {
   method<S extends JsonSchema | undefined = undefined, R extends Json = Json>(
     name: string, run: (params: S extends JsonSchema ? Static<S> : Record<string, unknown>) => R | Promise<R>, options?: { params?: S },
   ): void
-  /** A live value named `<name>.<key>`, starting at `initial`. */
+  /** A live value named `<name>.<key>`, starting at `initial`. Every watcher hears every change. */
   value<T extends Json>(key: string, initial: T): LiveValue<T>
+  /**
+   * A live value named `<name>.<key>` kept in scopes (a thread's id, say), each `initial` until set: a watcher of one
+   * scope hears only its changes. For anything per thread, rather than a value holding every thread's by its id.
+   * A `thread` data view (`view`) reading it shows each thread its own scope.
+   */
+  scopedValue<T extends Json>(key: string, initial: T): ScopedValue<T>
   /** Say a thread needs the user (it shows as blocked) while `contribute` returns something for it. */
   status(contribute: (threadId: string) => StatusContribution | undefined): void
   /** Something `status` depends on changed: recompute and tell clients. */

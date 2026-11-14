@@ -12,7 +12,7 @@ import {
   SparkleIcon, StatusGlyph, TableIcon, TerminalIcon, WrenchIcon,
 } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
-import { call, useValue } from './client.ts'
+import { call, useMethod, useValue } from './client.ts'
 import { checkContent, warnDropped } from './data-view-check.ts'
 import { useRegistry, type Registry } from './extension.tsx'
 import type { Place } from './layout.ts'
@@ -93,12 +93,13 @@ function Source({ info, machine, thread }: { info: DataViewInfo; machine: Machin
     : <FromMethod info={info} method={info.method!} machine={machine} thread={thread} />
 }
 
-/** Fed by a live value: a thread view's holds each thread's content by its id. */
+/** Fed by a live value: a thread view's by the thread's scope (a scoped value's, or a plain one's entry by its id). */
 function FromValue({ info, value, machine, thread }: { info: DataViewInfo; value: string; machine: MachineEntry; thread?: ThreadInfo }) {
   // Undefined until it's heard; null when it's never been set, and a thread view's with nothing for this thread: none.
-  const live = useValue<Json>(machine.id, machine.state === 'connected', value)
-  const content = info.context === 'thread' ? (thread && live && typeof live === 'object' && !Array.isArray(live) ? live[thread.id] ?? null : live === undefined ? undefined : null) : live
-  return <DataContent content={content} extension={info.extension} machine={machine} />
+  // A thread view with no thread (a space with none shown) has nothing to show.
+  const scope = info.context === 'thread' ? thread?.id ?? '' : undefined
+  const live = useValue<Json>(machine, value, scope === undefined ? {} : { scope })
+  return <DataContent content={scope === '' && live !== undefined ? null : live} extension={info.extension} machine={machine} />
 }
 
 /** Fed by a method: read again as the thread moves on (a window view: any thread on the machine), and after a button ran. */
@@ -106,17 +107,9 @@ function FromMethod({ info, method, machine, thread }: { info: DataViewInfo; met
   const connected = machine.state === 'connected'
   const threads = useAllThreads()[machine.id]
   const moved = info.context === 'thread' ? `${thread?.id}:${thread?.activeAt}:${thread?.status.state}` : (threads ?? []).map((t) => `${t.id}:${t.activeAt}:${t.status.state}`).join()
-  const [read, setRead] = useState<{ content?: Json; error?: string }>({})
+  const { data, error, refetch } = useMethod<Json>(machine.id, method, info.context === 'thread' ? { id: thread?.id } : {}, { enabled: connected, refresh: moved })
   // Answered, it's read: null (or nothing) is none.
-  const [again, setAgain] = useState(0)
-  useEffect(() => {
-    if (!connected) return
-    let live = true
-    call<Json>(machine.id, method, info.context === 'thread' ? { id: thread?.id } : {})
-      .then((content) => { if (live) setRead({ content: content ?? null }) }, (error: Error) => { if (live) setRead((r) => ({ ...r, error: error.message })) })
-    return () => { live = false }
-  }, [machine.id, connected, method, moved, again])
-  return <DataContent content={read.content} error={read.error} extension={info.extension} machine={machine} ran={() => setAgain((n) => n + 1)} />
+  return <DataContent content={data === undefined ? undefined : data ?? null} error={error?.message} extension={info.extension} machine={machine} ran={refetch} />
 }
 
 /**

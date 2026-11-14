@@ -21,7 +21,7 @@ import { FileSettingsStore } from '@superego/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import {
-  defineDaemonExtension, type AgentChoice, type ArchiveNote, type ArchiveNotes, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type OutgoingMessage, type StatusContribution, type SubmitTransform,
+  defineDaemonExtension, type AgentChoice, type ArchiveNote, type ArchiveNotes, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type OutgoingMessage, type ScopedValue, type StatusContribution, type SubmitTransform,
   type ThreadCreating, type ThreadDraft, type ThreadHooks,
 } from './extension.ts'
 import { titleOf } from './names.ts'
@@ -117,6 +117,37 @@ const LEGACY: Record<string, { read(meta: ThreadMeta): Json | undefined; drop(me
 /** An extension's state with a thread. */
 const stateOf = (meta: ThreadMeta, name: string): Json | undefined =>
   meta.ext && Object.hasOwn(meta.ext, name) ? meta.ext[name] : LEGACY[name]?.read(meta)
+/**
+ * A live value by name, as the daemon keeps it: a plain one's `value`, or a scoped one's value in each scope (`scopes`);
+ * who watches it whole (`listeners`), and who watches one scope of it (`watchers`, by scope).
+ */
+type ValueEntry = {
+  value: Json
+  owned: boolean
+  listeners: Set<(value: Json) => void>
+  watchers: Map<string, Set<(value: Json) => void>>
+  scopes?: { values: Map<string, Json>; initial: Json }
+}
+/** A value whole: a scoped one's, every scope's by scope. */
+const wholeOf = (entry: ValueEntry): Json => entry.scopes ? Object.fromEntries(entry.scopes.values) : entry.value
+/** A value's part in `scope`: a scoped one's value there (or what an unset scope reads); a plain one's entry of that key. */
+const partOf = (entry: ValueEntry, scope: string): Json => {
+  if (entry.scopes) return entry.scopes.values.get(scope) ?? entry.scopes.initial
+  const value = entry.value
+  return value && typeof value === 'object' && !Array.isArray(value) && Object.hasOwn(value, scope) ? value[scope]! : null
+}
+/** Tell everyone watching it: whole, and in each scope watched (each watcher hears only a change to its part). */
+function tellAll(entry: ValueEntry) {
+  if (entry.listeners.size) { const whole = wholeOf(entry); for (const listener of entry.listeners) listener(whole) }
+  for (const [scope, watchers] of entry.watchers) { const part = partOf(entry, scope); for (const listener of watchers) listener(part) }
+}
+/** Tell those watching one scope of it, and those watching it whole. */
+function tellScope(entry: ValueEntry, scope: string) {
+  const watchers = entry.watchers.get(scope)
+  if (watchers) { const part = partOf(entry, scope); for (const listener of watchers) listener(part) }
+  if (entry.listeners.size) { const whole = wholeOf(entry); for (const listener of entry.listeners) listener(whole) }
+}
+
 const clone = <T>(value: T): T => value === undefined ? value : JSON.parse(JSON.stringify(value)) as T
 
 /** What an extension says of itself, and only that: the fields `ExtensionAbout` has, each of its type (a window's declaration is anyone's JSON). */
@@ -750,16 +781,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * Live values by name. A name is watched, not a value: a watch on one no extension has set up yet (a profile's, before
    * the profile loads) waits on null, and takes the value when it comes. `owned` while an extension publishes it.
    */
-  const values = new Map<string, { value: Json; owned: boolean; listeners: Set<(value: Json) => void> }>()
+  const values = new Map<string, ValueEntry>()
   const valueOf = (name: string) => {
     let entry = values.get(name)
-    if (!entry) values.set(name, entry = { value: null, owned: false, listeners: new Set() })
+    if (!entry) values.set(name, entry = { value: null, owned: false, listeners: new Set(), watchers: new Map() })
     return entry
   }
   /** Forget a value nobody publishes or watches. */
   const prune = (name: string) => {
     const entry = values.get(name)
-    if (entry && !entry.owned && !entry.listeners.size) values.delete(name)
+    if (entry && !entry.owned && !entry.listeners.size && !entry.watchers.size) values.delete(name)
   }
   // The core's own: which providers rejected this machine's credentials, and how many threads wait (ProviderRejection).
   const rejectedValue = valueOf(AUTH_REJECTED)
@@ -771,7 +802,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (json === rejectedJson) return
     rejectedJson = json
     rejectedValue.value = now
-    for (const listener of rejectedValue.listeners) listener(now)
+    tellAll(rejectedValue)
   }
   // The core's own: extensions' data views (`superego.view`), as the window draws them (DataViewInfo[]).
   const viewsValue = valueOf(DATA_VIEWS)
@@ -782,7 +813,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** Tell watchers the views as they are now: a profile's only once a profile has it. */
   const publishViews = () => {
     viewsValue.value = dataViews.filter((v) => !v.profiles || v.profiles.size).map((v) => v.profiles ? { ...v.info, profiles: [...v.profiles] } : v.info)
-    for (const listener of viewsValue.listeners) listener(viewsValue.value)
+    tellAll(viewsValue)
   }
   const contributors: { contribute: (threadId: string) => StatusContribution | undefined; owner: string }[] = []
   /** Status contributors that threw once: logged then, not on every thread's info after. */
@@ -938,7 +969,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         undo(() => {
           entry.owned = false
           entry.value = null
-          for (const listener of entry.listeners) listener(null)
+          tellAll(entry)
           prune(name)
         }, 'a value')
         // Its own: what it last published, which a later set-up of the same name (the next generation) never sees, nor
@@ -947,10 +978,40 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         const set = life.guard(`a change to ${name}`, (next: T) => {
           mine = next
           entry.value = next
-          for (const listener of entry.listeners) listener(next)
+          tellAll(entry)
         })
         set(initial)
         return { get: () => mine, set, update: life.guard(`a change to ${name}`, (edit: (current: T) => T) => set(edit(mine))) }
+      },
+      scopedValue<T extends Json>(key: string, initial: T): ScopedValue<T> {
+        const name = named(extension.name, key)
+        life.live(`the value ${name}`)
+        const entry = valueOf(name)
+        if (entry.owned) throw new Error(`Value ${name} is already published`)
+        entry.owned = true
+        // Its own, as a plain value's is: a later set-up of the same name starts from nothing.
+        const mine = new Map<string, T>()
+        entry.scopes = { values: mine as Map<string, Json>, initial }
+        tellAll(entry)
+        undo(() => {
+          entry.owned = false
+          delete entry.scopes
+          entry.value = null
+          tellAll(entry)
+          prune(name)
+        }, 'a value')
+        const scopeOf = (scope: string) => {
+          if (typeof scope !== 'string' || !scope) throw new Error(`Value ${name}: a scope is a non-empty string (a thread's id, say)`)
+          return scope
+        }
+        const set = life.guard(`a change to ${name}`, (scope: string, next: T) => { mine.set(scopeOf(scope), next); tellScope(entry, scope) })
+        return {
+          get: (scope) => mine.get(scope) ?? initial,
+          set,
+          update: life.guard(`a change to ${name}`, (scope: string, edit: (current: T) => T) => set(scope, edit(mine.get(scope) ?? initial))),
+          delete: life.guard(`a change to ${name}`, (scope: string) => { if (mine.delete(scope)) tellScope(entry, scope) }),
+          scopes: () => [...mine.keys()],
+        }
       },
       status(contribute) {
         life.live('a status')
@@ -1865,10 +1926,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           subs.set(sub, () => { clearTimeout(timer); watcher.close() })
           return { sub, content: last }
         },
-        'value.watch': ({ key }: { key: string }) => watchValue(key, (sub, value) => notify('value.changed', { sub, key, value })),
+        'value.watch': ({ key, scope }: Methods['value.watch']['params']) => watchValue(key, scope, (sub, value) => notify('value.changed', { sub, key, value })),
         // Watches that moved into an extension's value, under their old names and notifications.
         ...Object.fromEntries(Object.entries(MOVED_WATCHES).map(([method, { value: key, event }]) =>
-          [method, () => watchValue(key, (sub, value) => peer.notify(event, { sub, value }))])),
+          [method, () => watchValue(key, undefined, (sub, value) => peer.notify(event, { sub, value }))])),
         async unwatch({ sub }: { sub: string }) {
           const stop = subs.get(sub)
           subs.delete(sub)
@@ -1885,14 +1946,33 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         /** The window's extensions, as each declares itself: those without a daemon half become known here (see declare). */
         'extensions.declare': async ({ extensions: abouts }: Methods['extensions.declare']['params']) => { declare(Array.isArray(abouts) ? abouts : []); return null },
       }
-      /** A live value, then `tell` with each new one, until unwatched. */
-      function watchValue(key: string, tell: (sub: string, value: Json) => void) {
+      /** A live value (or its part in `scope`), then `tell` with each new one, until unwatched. */
+      function watchValue(key: string, scope: string | undefined, tell: (sub: string, value: Json) => void) {
         const entry = valueOf(key)
         const sub = randomUUID()
-        const listener = (value: Json) => tell(sub, value)
-        entry.listeners.add(listener)
-        subs.set(sub, () => { entry.listeners.delete(listener); prune(key) })
-        return { sub, value: entry.value }
+        if (typeof scope !== 'string') {
+          const listener = (value: Json) => tell(sub, value)
+          entry.listeners.add(listener)
+          subs.set(sub, () => { entry.listeners.delete(listener); prune(key) })
+          return { sub, value: wholeOf(entry) }
+        }
+        // Told only when its part changes.
+        const value = partOf(entry, scope)
+        let last = JSON.stringify(value)
+        const listener = (next: Json) => {
+          const json = JSON.stringify(next)
+          if (json === last) return
+          last = json
+          tell(sub, next)
+        }
+        const watchers = entry.watchers.get(scope) ?? new Set()
+        entry.watchers.set(scope, watchers.add(listener))
+        subs.set(sub, () => {
+          watchers.delete(listener)
+          if (!watchers.size && entry.watchers.get(scope) === watchers) entry.watchers.delete(scope)
+          prune(key)
+        })
+        return { sub, value }
       }
       const ctx = (): DaemonContext => ({ notify: (event, params) => notify(event as keyof Notifications, params as never), source: client })
       const open = (method: string, handler: (params: unknown) => unknown) => (params: unknown) => {
