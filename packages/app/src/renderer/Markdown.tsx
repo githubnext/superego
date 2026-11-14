@@ -281,6 +281,8 @@ const components: Components = {
 /** An image's data, blob or file:// address kept (read as the others, in a thread). */
 const imageUrl = (url: string, key: string) => key === 'src' && /^(data:image\/|blob:|file:)/i.test(url)
 
+const noSubscribe = () => () => {}
+
 /** Footnotes' ids are prefixed once, by the sanitizing, not again before it. */
 const noPrefix = { clobberPrefix: '' }
 
@@ -293,6 +295,9 @@ const gfmWithBreaks = [remarkGfm, remarkBreaks]
  */
 export const Markdown = memo(function Markdown({ text, html = false, breaks = false }: { text: string; html?: boolean; breaks?: boolean }) {
   const registry = useOptionalRegistry()
+  // Drawn again when extensions come or go: a profile's UI, loaded once its thread shows, claims links drawn before.
+  const version = () => registry?.version ?? 0
+  useSyncExternalStore(registry?.subscribe ?? noSubscribe, version, version)
   const where = useContext(LinkPlace)
   const images = useContext(Images)
   // Links a handler claims keep their scheme (thread:, wikilink:); [[wikilinks]] are links where one claims them.
