@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./client": "./src/client.ts"
+    "./client": "./src/client.ts",
+    "./sdk": "./src/sdk.ts"
   },
   "dependencies": {
     "@earendil-works/chord": "1.5.0",

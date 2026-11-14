@@ -10,7 +10,7 @@ export type ProfileModule = { path: string; code: string }
 export type ProfileUiSources = { entries: string[]; modules: Map<string, ProfileModule> }
 
 /** What a profile's modules may import by name; anything else is one of its own files, by a relative path. */
-export const SHARED_MODULES = ['react', 'react/jsx-runtime', 'superego/ui']
+export const SHARED_MODULES = ['react', 'react/jsx-runtime', 'superego/ui', 'superego/unstable']
 
 /** Every import and re-export in a module, with the specifier as its third group. */
 export const SPECIFIER = /(\bfrom\s*|\bimport\s*\(?\s*)(['"])([^'"]+)\2/g

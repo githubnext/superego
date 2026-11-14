@@ -198,6 +198,9 @@ it("keeps the test shim for 'superego' in step with the SDK", async () => {
   const { SDK_EXPORTS } = await import('../src/profiles.ts')
   const shim = await import('../src/sdk-shim.ts')
   expect(Object.keys(shim).filter((key) => key !== 'default').sort()).toEqual([...SDK_EXPORTS].sort())
+  // And with the stable surface authors' types resolve against: what profiles get at run time is exactly that.
+  const sdk = await import('../src/sdk.ts')
+  expect(Object.keys(sdk).sort()).toEqual([...SDK_EXPORTS].sort())
 })
 
 it("serves a profile's UI modules, types stripped, only from inside it and only once allowed", async () => {

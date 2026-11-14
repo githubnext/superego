@@ -1,7 +1,8 @@
 // A profile's UI, loaded while the app runs. The daemon serves the profile's modules (types stripped, after checking the
 // profile is allowed there); here every module its entries need is fetched, then each one's imports are rewritten and
 // it is loaded from a blob URL:
-//   'react', 'react/jsx-runtime', 'superego/ui'  → this window's own copies, so a profile's components share its React
+//   'react', 'react/jsx-runtime', 'superego/ui', 'superego/unstable'
+//                                         → this window's own copies, so a profile's components share its React
 //   './other.ts'                          → that module of the profile, loaded the same way
 // Their default exports are UI extensions, installed for that profile's threads only (see Registry.installProfile).
 //
@@ -25,10 +26,12 @@ import { useRegistry, type Registry, type UiExtension } from './extension.tsx'
 let shared: Promise<Map<string, string>> | undefined
 function sharedModules() {
   return shared ??= (async () => {
-    const [react, jsx, ui, kit] = await Promise.all([import('react'), import('react/jsx-runtime'), import('./index.tsx'), import('@superego/ui')])
-    const superego = { ...kit, ...ui, h: react.createElement, Fragment: react.Fragment }
+    const [react, jsx, stable, unstable] = await Promise.all([import('react'), import('react/jsx-runtime'), import('./sdk-ui.ts'), import('./sdk-unstable.ts')])
+    // 'superego/ui' still answers for the window's workings it had before they were 'superego/unstable', until the
+    // alias's milestone (ALIASES['superego/ui:unstable']); its types have only the stable surface.
+    const ui = { ...unstable, ...stable }
     const g = globalThis as { __superegoShared?: Record<string, Record<string, unknown>> }
-    g.__superegoShared = { react: { ...react }, 'react/jsx-runtime': { ...jsx }, 'superego/ui': superego }
+    g.__superegoShared = { react: { ...react }, 'react/jsx-runtime': { ...jsx }, 'superego/ui': ui, 'superego/unstable': { ...unstable } }
     const urls = new Map<string, string>()
     for (const [name, exports] of Object.entries(g.__superegoShared)) {
       const names = Object.keys(exports).filter((key) => /^[A-Za-z_$][\w$]*$/.test(key) && key !== 'default')

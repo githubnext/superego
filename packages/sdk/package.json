@@ -1,0 +1,28 @@
+{
+  "name": "@superego/sdk",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "What an extension's author imports: 'superego', 'superego/ui', 'superego/testing', and 'superego/unstable'",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ui": "./src/ui.ts",
+    "./unstable": "./src/unstable.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "dependencies": {
+    "@superego/app": "workspace:*",
+    "@superego/client": "workspace:*",
+    "@superego/daemon": "workspace:*",
+    "@superego/protocol": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "react": "^19",
+    "react-dom": "^19"
+  }
+}

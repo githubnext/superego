@@ -79,37 +79,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
   )
 }
 
-export {
-  defineUiExtension, fileKind, Slot, urlKind, useApp, useNarrow, usePlacement, useRegistry,
-  type BehaviourSlot, type EditorSlotProps, type SpaceRailProps, type View, type ViewContext, type ViewProps, type EntryProps, type WindowEvent, type WindowEvents, type WindowState, type LinkAttributes, type LinkHandler, type LinkProps, type LinkWhere, type NewThreadField, type NewThreadFieldProps, type PaneKind, type PaneProps, type SettingsComponentProps, type SlotName, type SlotProps, type ToolCallProps, type ToolRow, type ToolRowCall, type ToolState, type UiApi, type UiExtension,
-  type WorkBlock, type WorkPart, type WorkRun, type WorkStatus,
-} from './extension.tsx'
-export { useAppSetting } from './client.ts'
-export { LAYOUT, type Layout, type Place, type Placement } from './layout.ts'
-export { useDispatch } from './Shell.tsx'
-export type { Dispatch } from './actions.tsx'
-export { keyLabel, useActions, useKeymap, useShortcut } from './keys.ts'
-export { defineWindowAction as defineAction, runsBare, type WindowAction, type WindowContext } from './actions.tsx'
-export { useAllThreads, useMachines, useSelection, useSessions, useSidebar, useThreads, useShell, type Selection } from './state.tsx'
-export { groupSessions, nest, sessionKey, SORT, unread, type Session, type Sort } from './sessions.ts'
-export { showSession } from './actions.tsx'
-export { useComposer, useComposerClaim, type Composer, type ComposerClaim } from './ThreadView.tsx'
-export type { Completion, CompletionProvider, CompletionWord, ComposerWhere, SentBlock, SentWith } from './composer.ts'
-export { Markdown } from './Markdown.tsx'
-export { ThreadRef } from './thread-ref.tsx'
-export { transcriptLinks, type TranscriptLink } from './links.tsx'
-export { parseWikilink, WIKILINK, wikilinkHref, type Wikilink } from './wikilinks.ts'
-export { Picker, type PickerProps, type PickerRow } from './picker.tsx'
-export { useLocalState, type Store } from './local-state.ts'
-export { score } from './score.ts'
-export { PaneHeader, useTabNote } from './panes.tsx'
-export { Diff, parseDiff, type DiffFile } from './diff.tsx'
-export { FileEditor, type FileEditorProps } from './file-editor.tsx'
-export { livePreview } from './live-markdown.ts'
-export { call, has, loadFonts, machine, useMethod, useThreadView, useSettings, useValue, useWatch, version, type MethodState } from './client.ts'
-export { EXTENSION_API } from '@superego/protocol'
-export type { MachineEntry, MachineUpdate } from '../shared.ts'
-export { NOTIFY, signInNotice, threadNotice, type ThreadNotice } from '../shared.ts'
-export { describeImage, ImageFrame, imageFileName, imageSourceOf, useImageSource, useNear, type ImageItem, type LoadedImage } from './images.tsx'
-export { Lightbox } from './lightbox.tsx'
-export { driftNote, MachineDrift } from './machine-drift.tsx'
+// Everything an extension can import: the stable author surface (what profiles get as 'superego/ui') and the window's
+// own workings (their 'superego/unstable'). Bundled extensions take both from here.
+export * from './sdk-ui.ts'
+export * from './sdk-unstable.ts'

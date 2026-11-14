@@ -25,6 +25,7 @@ import {
   type ThreadCreating, type ThreadDraft, type ThreadHooks,
 } from './extension.ts'
 import { titleOf } from './names.ts'
+import * as sdk from './sdk.ts'
 import { readCommit } from './build.ts'
 import { git } from './git.ts'
 import { serveWeb, type ServedByTailscale, type WebServer } from './web.ts'
@@ -448,10 +449,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return undefined
   }
   // Profiles and their extensions import from 'superego'; this is what they get.
-  provideSdk({
-    defineProfile, defineExtension, defineTool, section, hook, wrapTool, wrapSection, defineDaemonExtension, defineAction, RpcError,
-    arr, bool, int, lit, nullable, num, obj, opt, str, union, unknown,
-  })
+  provideSdk({ ...sdk })
   const trust = new Trust(options.dataDir)
   const userProfiles = join(options.dataDir, 'profiles')
 
