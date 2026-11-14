@@ -5,27 +5,49 @@
 // Electron already installed (nothing is downloaded). electron-builder runs through npx, outside the workspace, so its
 // own dependencies stay out of the lockfile. The daemon runs from inside the bundle, on the app's own Electron as Node.
 //
-// The icon: an Icon Composer document, resources/<id>.icon, is compiled with actool into the bundle's Assets.car and
-// named by CFBundleIconName, so macOS draws its light, dark, tinted and clear variants itself. resources/icon.icns is the
-// fallback older macOS shows. The bundle is then signed again (ad hoc unless an identity is given) and zipped.
+// The icon: an Icon Composer document, resources/<id>.icon, is compiled with actool into an Assets.car that
+// electron-builder copies into the bundle, named by CFBundleIconName, so macOS draws its light, dark, tinted and clear
+// variants itself. resources/icon.icns is the fallback older macOS shows.
+//
+// Signing: with an identity ("Developer ID Application: …"), electron-builder signs every nested piece of code, inside
+// out, with the hardened runtime and the entitlements Electron needs (its JIT, and the daemon on it as Node). Without
+// one, the bundle is signed ad hoc, for this computer. Notarizing (which needs an identity) submits the signed app to
+// Apple, waits for it, and staples the ticket into the bundle before it's zipped, so it opens offline too.
 import { execFileSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { AppConfig } from '@superego/protocol'
+
+/** How notarytool signs in: a profile it stored in the keychain (`notarytool store-credentials`), or an API key. */
+export type NotaryAuth = { profile: string } | { key: string; keyId: string; issuer: string }
 
 export type PackageOptions = {
   /** Reverse-DNS bundle id; defaults to `dev.superego.<id>`. */
   bundleId?: string
   /** Code signing identity ("Developer ID Application: …"); unset signs ad hoc, for this computer. */
   identity?: string | null
+  /** Notarize and staple the signed app; needs `identity`. */
+  notarize?: NotaryAuth | null
 }
 
 const BUILDER = 'electron-builder@26'
 
+/** Electron's V8 writes executable memory, in the app and in the daemon it runs as Node; nothing else is asked for. */
+const ENTITLEMENTS = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>com.apple.security.cs.allow-jit</key><true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+</dict></plist>
+`
+
 export async function packageApp(root: string, app: AppConfig, options: PackageOptions = {}): Promise<string[]> {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version?: string; description?: string }
   if (!existsSync(join(root, 'out/main/main.js'))) throw new Error('Nothing built: run electron-vite build first')
+  if (options.notarize && !options.identity) throw new Error('Notarizing needs a signing identity')
+  const version = pkg.version ?? '0.0.0'
 
   // Stage: what the app is, and nothing else.
   const stage = join(root, 'dist/app')
@@ -35,8 +57,18 @@ export async function packageApp(root: string, app: AppConfig, options: PackageO
   cpSync(join(root, 'out'), join(stage, 'out'), { recursive: true })
   if (existsSync(join(root, 'resources'))) cpSync(join(root, 'resources'), join(stage, 'resources'), { recursive: true, filter: (path) => !path.endsWith('.icon') && !path.includes('.icon/') })
   writeFileSync(join(stage, 'package.json'), JSON.stringify({
-    name: app.id, productName: app.name, version: pkg.version ?? '0.0.0', description: pkg.description ?? app.name, main: 'out/main/main.js', type: 'module',
+    name: app.id, productName: app.name, version, description: pkg.description ?? app.name, main: 'out/main/main.js', type: 'module',
   }, null, 2))
+  const entitlements = join(stage, 'entitlements.plist')
+  writeFileSync(entitlements, ENTITLEMENTS)
+
+  // The .icon, compiled for electron-builder to copy in, so it's inside what gets signed.
+  const iconDoc = join(root, 'resources', `${app.id}.icon`)
+  const icons = join(stage, 'icon')
+  if (existsSync(iconDoc)) {
+    mkdirSync(icons)
+    compileIcon(iconDoc, icons, app.id)
+  }
 
   // The Electron this app runs on, as installed: its version and its unpacked dist.
   const electron = dirname(createRequire(join(root, 'package.json')).resolve('electron/package.json'))
@@ -54,28 +86,57 @@ export async function packageApp(root: string, app: AppConfig, options: PackageO
       target: ['dir'],
       category: 'public.app-category.developer-tools',
       ...(existsSync(join(root, 'resources/icon.icns')) ? { icon: join(root, 'resources/icon.icns') } : {}),
-      identity: null,
+      ...(existsSync(icons) ? { extraResources: [{ from: icons, to: '.' }], extendInfo: { CFBundleIconName: app.id } } : {}),
+      ...(options.identity
+        ? { identity: options.identity, hardenedRuntime: true, gatekeeperAssess: false, entitlements, entitlementsInherit: entitlements, notarize: false }
+        : { identity: null }),
     },
   }
   writeFileSync(join(stage, 'electron-builder.json'), JSON.stringify(config, null, 2))
-  execFileSync('npx', ['--yes', BUILDER, '--mac', '--projectDir', stage, '--config', join(stage, 'electron-builder.json')], { stdio: 'inherit' })
+  execFileSync('npx', ['--yes', BUILDER, '--mac', '--projectDir', stage, '--config', join(stage, 'electron-builder.json')], {
+    stdio: 'inherit',
+    // Only the identity given: no certificate electron-builder might otherwise find in the environment.
+    env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' },
+  })
 
   // electron-builder names the folder by architecture (mac-arm64, mac): find the bundle it made.
   const folder = readdirSync(output).map((name) => join(output, name)).find((path) => existsSync(join(path, `${app.name}.app`)))
   if (!folder) throw new Error(`No ${app.name}.app in ${output}`)
   const bundle = join(folder, `${app.name}.app`)
 
-  // The .icon, compiled into the bundle, then a fresh signature over the result.
-  const iconDoc = join(root, 'resources', `${app.id}.icon`)
-  if (existsSync(iconDoc)) {
-    compileIcon(iconDoc, join(bundle, 'Contents/Resources'), app.id)
-    execFileSync('plutil', ['-replace', 'CFBundleIconName', '-string', app.id, join(bundle, 'Contents/Info.plist')])
-  }
-  execFileSync('codesign', ['--force', '--deep', '--sign', options.identity ?? '-', ...(options.identity ? ['--options', 'runtime'] : []), bundle], { stdio: 'inherit' })
-  const zip = join(output, `${app.name}-${pkg.version ?? '0.0.0'}-${folder.split('-').at(-1)}.zip`)
+  // Unsigned, Electron's own ad hoc signature no longer matches what was changed around it: sign it again.
+  if (!options.identity) execFileSync('codesign', ['--force', '--deep', '--sign', '-', bundle], { stdio: 'inherit' })
+  execFileSync('codesign', ['--verify', '--deep', '--strict', bundle], { stdio: 'inherit' })
+  if (options.notarize) notarize(bundle, options.notarize)
+
+  const zip = join(output, `${app.name}-${version}-${folder.split('-').at(-1)}.zip`)
   rmSync(zip, { force: true })
-  execFileSync('ditto', ['-c', '-k', '--keepParent', bundle, zip])
+  execFileSync('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', bundle, zip])
   return [bundle, zip]
+}
+
+/** Submit a signed bundle to Apple's notary service, wait for its verdict, and staple the ticket into the bundle. */
+export function notarize(bundle: string, auth: NotaryAuth) {
+  const credentials = 'profile' in auth
+    ? ['--keychain-profile', auth.profile]
+    : ['--key', auth.key, '--key-id', auth.keyId, '--issuer', auth.issuer]
+  const work = mkdtempSync(join(tmpdir(), 'superego-notary-'))
+  try {
+    const upload = join(work, 'upload.zip')
+    execFileSync('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', bundle, upload])
+    console.log('Notarizing… (this usually takes a few minutes)')
+    const result = JSON.parse(execFileSync('xcrun', ['notarytool', 'submit', upload, '--wait', '--output-format', 'json', ...credentials], {
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'],
+    })) as { id: string; status: string }
+    if (result.status !== 'Accepted') {
+      const log = execFileSync('xcrun', ['notarytool', 'log', result.id, ...credentials], { encoding: 'utf8' })
+      throw new Error(`Notarization ${result.status} (${result.id}):\n${log}`)
+    }
+    execFileSync('xcrun', ['stapler', 'staple', bundle], { stdio: 'inherit' })
+    execFileSync('spctl', ['--assess', '--type', 'execute', '-vv', bundle], { stdio: 'inherit' })
+  } finally {
+    rmSync(work, { recursive: true, force: true })
+  }
 }
 
 /** `<name>.icon` → Assets.car (and <name>.icns) in `into`, as Xcode would. */
@@ -87,4 +148,3 @@ export function compileIcon(iconDoc: string, into: string, name: string) {
   ], { stdio: 'pipe' })
   rmSync(partial, { force: true })
 }
-
