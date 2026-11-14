@@ -1,8 +1,11 @@
 // The UI registry: what an extension registers is its own, a profile's is scoped to that profile on its machine, and
 // installing a profile again replaces everything it registered before.
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { defineApp, type ThreadInfo } from '@superego/protocol'
 import { defineWindowAction } from '../src/renderer/actions.tsx'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { createElement } from 'react'
+import { Contained } from '../src/renderer/contained.tsx'
 import { createRegistry, defineUiExtension, entryView, paneKind, fileKind, seenIn, settingsView, shownPanes, toolView, urlKind, type UiExtension } from '../src/renderer/extension.tsx'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
@@ -154,5 +157,55 @@ describe('names', () => {
   it("refuses entry kinds and settings sections outside the extension's name", () => {
     expect(() => createRegistry(app, [defineUiExtension({ name: 'a', setup(superego) { superego.entry('b.note', Order) } })], () => {})).toThrow(/must name its entry kinds/)
     expect(() => createRegistry(app, [defineUiExtension({ name: 'a', setup(superego) { superego.settings('b', Order) } })], () => {})).toThrow(/must name its settings sections/)
+  })
+})
+
+describe('lifetime', () => {
+  it("runs a UI setup's cleanup on revoke and on remount, aborts its signal, and refuses what it registers after", () => {
+    const heard: string[] = []
+    let generation = 0
+    const apis: { signal: AbortSignal; tool(name: string, view: () => null): void }[] = []
+    const timer = defineUiExtension({
+      name: 'timer',
+      setup(superego) {
+        const mine = ++generation
+        apis.push(superego)
+        superego.tool('tick', Order)
+        return () => { heard.push(`cleanup ${mine}`) }
+      },
+    })
+    const broken = defineUiExtension({ name: 'broken', setup() { return () => { throw new Error('a broken cleanup') } } })
+    const registry = createRegistry(app, [], () => {})
+    const there = { machine: 'box', thread: thread(true) }
+    registry.installProfile('box', profile, [broken, timer])
+    expect(toolView(registry, 'tick', there)).toBe(Order)
+    // Installed again (its files changed): the first goes, cleanup and all, before the second sets up; another's
+    // cleanup that throws stops none of it.
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    registry.installProfile('box', profile, [broken, timer])
+    expect(heard).toEqual(['cleanup 1'])
+    expect(apis[0]!.signal.aborted).toBe(true)
+    expect(apis[1]!.signal.aborted).toBe(false)
+    // Revoked: nothing of it left.
+    registry.installProfile('box', profile, [])
+    expect(heard).toEqual(['cleanup 1', 'cleanup 2'])
+    expect(toolView(registry, 'tick', there)).toBeUndefined()
+    error.mockRestore()
+    // Late: refused, not left behind.
+    expect(() => apis[1]!.tool('late', Order)).toThrow(/torn down/)
+    expect(toolView(registry, 'late', there)).toBeUndefined()
+  })
+})
+
+describe('what an extension draws, drawn apart', () => {
+  it('says whose failed to draw, with the error and a retry, in its place', () => {
+    const boundary = new Contained({ name: 'orders', children: null })
+    boundary.state = Contained.getDerivedStateFromError(new Error('boom'))
+    const html = renderToStaticMarkup(boundary.render() as never)
+    expect(html).toContain('orders failed to draw')
+    expect(html).toContain('boom')
+    expect(html).toContain('Retry')
+    // Until it throws, it's only what it holds.
+    expect(renderToStaticMarkup(createElement(Contained, { name: 'orders', children: 'fine' }))).toBe('fine')
   })
 })

@@ -7,7 +7,8 @@
 // exports.
 //
 // Everything an extension registers is owned by it: the registry keeps who added each thing, and an extension's
-// teardown removes all of it at once. A profile's UI is owned by that profile on its machine too, and draws only in
+// teardown removes all of it at once (a `Lifetime`: its signal aborts, its setup's cleanup runs, and what it registers
+// after is refused). What it draws is drawn apart (`Contained`): a component that throws takes only its own place. A profile's UI is owned by that profile on its machine too, and draws only in
 // that profile's threads there.
 import { createContext, Fragment, useContext, useEffect, useMemo, useState, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type ReactNode } from 'react'
 import { contractProblem } from '@superego/protocol'
@@ -20,6 +21,8 @@ import { createStore, type Store } from './local-state.ts'
 import { isLayout, LAYOUT, PLACES, resolveLayout, THREAD_PLACES, type Layout, type Place, type Placed, type Placement } from './layout.ts'
 import type { CompletionProvider, CompletionWord, SentWith } from './composer.ts'
 import { dataIcon, DataViewBody } from './data-views.tsx'
+import { Contained } from './contained.tsx'
+import { Lifetime } from '@superego/protocol'
 
 /**
  * Where an extension can put UI by itself: places whose occupant behaviour decides, so the layout doesn't move them (a
@@ -291,6 +294,11 @@ export type WindowState = {
 export type UiApi = {
   app: AppConfig
   /**
+   * Aborted when this extension is torn down (a profile's UI reloaded or revoked, the window closing), before what it
+   * registered goes: for its own timers, listeners and fetches (`fetch(url, { signal })`, `addEventListener(…, { signal })`).
+   */
+  signal: AbortSignal
+  /**
    * A view, `<extension>.<name>`: UI that the layout puts in the places it fits (a space in the rail, beside the thread,
    * the pane menu, the title bar), by default where `default` says. The user's layout (`app.layout`) can move or hide
    * it. A profile's views fit only the places that show a thread, and only its own threads.
@@ -377,7 +385,8 @@ export type UiApi = {
  * and its actions aren't offered while one is shown.
  */
 export type UiExtension = ExtensionAbout & {
-  setup(superego: UiApi): void
+  /** Set it up. May return a cleanup, run first at teardown: when its profile's UI reloads or is revoked. */
+  setup(superego: UiApi): void | (() => void)
 }
 
 /** Identity for type inference: `export default defineUiExtension({ name, setup(superego) { … } })`. */
@@ -497,11 +506,13 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     const owner: Owner = { extension: extension.name, optional: !profile && extension.name !== 'core' && !extension.required, ...(profile ? { profile } : {}) }
     // A name is the extension's prefix: one of each among the app's, and a profile's can't take one of theirs.
     if (teardowns.has(ownerKey(owner)) || (profile && teardowns.has(`/${extension.name}`))) throw new Error(`An extension named ${extension.name} is already set up`)
-    const undo: (() => void)[] = []
+    // Everything it registers goes through its lifetime: undone together at teardown, and refused after.
+    const life = new Lifetime(`${profile ? 'Profile extension' : 'Extension'} ${extension.name}`)
     const add = <T,>(list: Owned<T>[], item: T) => {
+      life.live('anything')
       const entry = { ...item, owner } as Owned<T>
       list.push(entry)
-      undo.push(() => { const at = list.indexOf(entry); if (at >= 0) list.splice(at, 1) })
+      life.add(() => { const at = list.indexOf(entry); if (at >= 0) list.splice(at, 1) })
       return entry
     }
     /** A name of its own: `<extension>` or `<extension>.<more>` (the core's are any). */
@@ -510,6 +521,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     }
     /** One of a kind per scope: a second registration of the same name is refused (the first stays), with a warning. */
     const unique = <T extends Record<K, string>, K extends keyof T>(list: Owned<T>[], key: K, item: T, what: string) => {
+      life.live(`the ${what} ${item[key]}`)
       const taken = list.find((e) => e[key] === item[key] && e.owner.profile === profile)
       if (taken) return console.warn(`Extension ${extension.name}: ${what} ${item[key]} is already drawn by ${taken.owner.extension}; keeping that one`)
       add(list, item)
@@ -523,6 +535,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     }
     const api: UiApi = {
       app,
+      signal: life.signal,
       view(id, view) {
         own(id, 'views')
         declare(id, view as View)
@@ -593,7 +606,8 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         // Not offered while a thread that goes without this extension is shown.
         const { when } = action
         const has = (c: WindowContext) => !(owner.optional && c.selection && c.threadOf(c.selection)?.without?.includes(owner.extension))
-        undo.push(registry.router.register(owner.optional ? { ...action, when: (c) => has(c) && (when?.(c) ?? true) } : action))
+        life.live(`the action ${action.id}`)
+        life.add(registry.router.register(owner.optional ? { ...action, when: (c) => has(c) && (when?.(c) ?? true) } : action))
       },
       appSettings(section) {
         if (profile) return console.warn(`Profile extension ${extension.name}: app settings from a profile's UI aren't supported yet`)
@@ -603,6 +617,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         add(registry.appSettings, section)
       },
       store(key, initial, options) {
+        life.live(`the store ${key}`)
         if (!key.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its state "${extension.name}.<key>", not "${key}"`)
         // A profile's is kept apart for each profile on each machine: the same profile folder elsewhere is another.
         return createStore(profile ? `profile.${encodeURIComponent(profile)}.${key}` : key, initial, options)
@@ -613,11 +628,14 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       },
     }
     const teardown = () => {
-      for (const step of undo.splice(0).reverse()) step()
+      life.dispose()
       teardowns.delete(ownerKey(owner))
     }
     teardowns.set(ownerKey(owner), teardown)
-    try { extension.setup(api) } catch (error) { teardown(); throw error }
+    try {
+      const cleanup = extension.setup(api)
+      if (typeof cleanup === 'function') life.add(cleanup, 'a cleanup')
+    } catch (error) { teardown(); throw error }
   }
 
   /**
@@ -674,6 +692,9 @@ export function useRegistry(): Registry {
   return registry
 }
 
+/** The extension a registration is of, by name: what "<extension> failed to draw" says. */
+export const whose = (entry: object | undefined, otherwise = 'An extension') => (entry as { owner?: Owner } | undefined)?.owner?.extension ?? otherwise
+
 /** The registry, where there is one (Markdown drawn outside the app has none). */
 export const useOptionalRegistry = () => useContext(RegistryContext)
 
@@ -714,7 +735,8 @@ export function Slot<S extends BehaviourSlot>({ name, props }: { name: S; props:
   useSyncExternalStore(registry.subscribe, () => registry.version)
   const { machine, thread } = props as { machine?: MachineEntry; thread?: ThreadInfo }
   const entries = seenIn(registry.slots[name] as Owned<{ component: ComponentType<SlotProps[S]> }>[], machine && thread ? { machine: machine.id, thread } : undefined)
-  return <>{entries.map(({ component: Component, owner }, index) => <Component key={`${owner.profile ?? ''}/${owner.extension}-${index}`} {...props} />)}</>
+  return <>{entries.map(({ component: Component, owner }, index) =>
+    <Contained key={`${owner.profile ?? ''}/${owner.extension}-${index}`} name={owner.extension} inline={name === 'thread.crumb' || name === 'editor.bar'}><Component {...props} /></Contained>)}</>
 }
 
 // ── Views in places ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -785,7 +807,7 @@ export function PlacedViews({ place, machine, thread, frame }: {
   // A view that needs a thread isn't drawn without one.
   return <>{viewsIn(registry, placed, place, where).filter((view) => view.context === 'window' || where).map((view) => {
     const Component = view.component as ComponentType<ViewProps>
-    const drawn = <Component place={place} {...(machine && thread ? { machine, thread } : {})} />
+    const drawn = <Contained name={view.owner.extension} inline={place === 'header' || place === 'titlebar' || place === 'rail'}><Component place={place} {...(machine && thread ? { machine, thread } : {})} /></Contained>
     return <Fragment key={`${view.owner.profile ?? ''}/${view.id}`}>{frame ? frame(view, drawn) : drawn}</Fragment>
   })}</>
 }
@@ -801,6 +823,9 @@ export function usePlacement(view: string, place: Place): [boolean, (on?: boolea
 
 /** How calls to the tool `name` are drawn for `where`, if an extension draws them whole. */
 export const toolView = (registry: Registry, name: string, where: Where) => lookUp(registry.tools, where, (t) => t.name === name)?.component
+
+/** The extension that says how calls to the tool `name` look for `where`, if one does. */
+export const toolOwner = (registry: Registry, name: string, where: Where) => lookUp(registry.tools, where, (t) => t.name === name)?.owner.extension
 
 /** How calls to the tool `name` are described for `where`: what an extension (or the core) said, else nothing (the defaults). */
 export const toolRow = (registry: Registry, name: string, where: Where): ToolRow => lookUp(registry.tools, where, (t) => t.name === name)?.row ?? {}
@@ -833,6 +858,9 @@ export const linkSchemes = (registry: Registry, where: LinkWhere) => [...new Set
 
 /** How entries of `kind` are drawn for `where`, if an extension draws them. */
 export const entryView = (registry: Registry, kind: string, where: Where) => lookUp(registry.entries, where, (e) => e.kind === kind)?.component
+
+/** The extension that draws entries of `kind` for `where`, if one does. */
+export const entryOwner = (registry: Registry, kind: string, where: Where) => lookUp(registry.entries, where, (e) => e.kind === kind)?.owner.extension
 
 /** The component under the settings section that names `ui`, on `target` (a machine, or 'app'): a profile's there first, as lookups take it. */
 export function settingsView(registry: Registry, ui: string, target: string) {
