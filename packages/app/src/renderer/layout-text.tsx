@@ -7,7 +7,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { SettingsSnapshot } from '@superego/protocol'
 import { Button, Dialog, TextArea } from '@superego/ui'
 import { useAppSetting, useSettings, watched } from './client.ts'
-import { isLayout, LAYOUT, PLACES } from './layout.ts'
+import { isLayout, LAYOUT, PLACES, type Place, type Placement } from './layout.ts'
 import { defineWindowAction } from './actions.tsx'
 import { useRegistry, type EditorSlotProps, type UiApi } from './extension.tsx'
 
@@ -35,9 +35,14 @@ const useLayoutData = () => window.superego.web ? undefined : dataOf(useSettings
 /** Tell the layout file the views there are, as they come and go. */
 export function LayoutViews() {
   const registry = useRegistry()
-  const views = new Map(registry.views.map(({ id, title, fits, default: initial, narrow }) => [id, {
-    id, title, fits, ...(initial !== undefined ? { default: initial } : {}), ...(narrow !== undefined ? { narrow } : {}),
-  }]))
+  // One entry an id, as the layout keeps it: declared in several scopes (a profile's on two machines), it fits where
+  // any of them does, and goes by default where the first says.
+  const views = new Map<string, { id: string; title: string; fits: Place[]; default?: Placement; narrow?: Placement }>()
+  for (const { id, title, fits, default: initial, narrow } of registry.views) {
+    const had = views.get(id)
+    if (had) had.fits = PLACES.filter((p) => had.fits.includes(p) || fits.includes(p))
+    else views.set(id, { id, title, fits, ...(initial !== undefined ? { default: initial } : {}), ...(narrow !== undefined ? { narrow } : {}) })
+  }
   const key = JSON.stringify([...views.values()])
   useEffect(() => {
     if (window.superego.web) return

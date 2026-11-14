@@ -5,7 +5,7 @@ import { useMemo } from 'react'
 import { StatusGlyph } from '@superego/ui'
 import type { Status } from '@superego/protocol'
 import { score } from './score.ts'
-import { scopedViews, useLayout, useRegistry } from './extension.tsx'
+import { placingIn, scopedViews, usePlaced, useRegistry } from './extension.tsx'
 import { NARROW_PLACES, WIDE_PLACES } from './layout.ts'
 import { PLACE_PHRASES } from './view-menu.tsx'
 import { useSelection } from './state.tsx'
@@ -29,12 +29,12 @@ export function Palette({ onClose }: { onClose(): void }) {
   })), [actions, keymap])
   // The views the selected thread sees (its profile's too), and the window's.
   const where = selection && machine && thread ? { machine: machine.id, thread } : undefined
-  const { placed, narrow } = useLayout(where)
+  const { placed, narrow } = usePlaced(where)
   const placings = useMemo<Item[]>(() => {
     return scopedViews(registry, where).flatMap((view) =>
       view.fits.filter((place) => (narrow ? NARROW_PLACES : WIDE_PLACES).includes(place) && !placed[place].includes(view.id)).map((place): Item => ({
         id: `layout.place:${view.id}:${place}`, title: `Show ${view.title} ${PLACE_PHRASES[place]}`,
-        run: () => void registry.router.dispatch('layout.place', { view: view.id, place, on: true, ...(narrow ? { narrow } : {}) }, { source: 'palette' }).catch((error) => console.error(error)),
+        run: () => void registry.router.dispatch('layout.place', { view: view.id, place, on: true, ...(narrow ? { narrow } : {}), ...placingIn(where) }, { source: 'palette' }).catch((error) => console.error(error)),
       })))
   }, [placed, narrow])
 

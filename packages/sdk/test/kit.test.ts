@@ -4,7 +4,7 @@
 import { createElement as h } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { defineDaemonExtension } from '../src/index.ts'
-import { defineAction, defineUiExtension, useValue, type ViewProps } from '../src/ui.ts'
+import { defineAction, defineUiExtension, usePlacement, useValue, type ViewProps } from '../src/ui.ts'
 import { callTool, fakeMachine, mountUi, say, testDaemon, testThread, type TestDaemon, type TestWindow } from '../src/testing.ts'
 
 const open: (TestDaemon | TestWindow)[] = []
@@ -144,6 +144,46 @@ describe('a window for a UI half', () => {
     expect(aside.text()).not.toContain('x')
     await ui.setMachine('local', { state: 'disconnected' })
     expect(aside.text()).toContain('local is away.')
+  })
+
+  it('reads and changes a view declared on two machines as the thread it is drawn for has it', async () => {
+    // One profile on two machines, its notes beside the thread on the box and in the header on the laptop.
+    const ref = { scope: 'user' as const, name: 'default', dir: '/profiles/default' }
+    const a = testThread({ id: 'a', profile: ref }), b = testThread({ id: 'b', profile: ref })
+    const notes = (place: 'aside' | 'header', name: string) => defineUiExtension({
+      name: 'notes', setup(superego) {
+        superego.view('notes.list', { title: 'Notes', context: 'thread', fits: ['aside', 'header'], default: place, component: () => {
+          const [on, toggle] = usePlacement('notes.list', place)
+          return h('button', { type: 'button', onClick: () => toggle() }, `${name}:${on}`)
+        } })
+      },
+    })
+    const ui = keep(await mountUi({ machines: [fakeMachine({ id: 'box', threads: [a] }), fakeMachine({ id: 'laptop', threads: [b] })], select: { machine: 'box', thread: 'a' } }))
+    await ui.installProfile('box', ref, [notes('aside', 'BOX')])
+    await ui.installProfile('laptop', ref, [notes('header', 'LAPTOP')])
+    const box = await ui.render({ place: 'aside', machine: 'box', thread: 'a' })
+    const laptop = await ui.render({ place: 'header', machine: 'laptop', thread: 'b' })
+    // The probe that read BOX:false: the hook reads the place as its thread's is drawn, not the window's.
+    expect(box.text()).toBe('BOX:true')
+    expect(laptop.text()).toBe('LAPTOP:true')
+    // Toggled in the laptop's header, with the box's thread selected: worked out from the laptop's declaration, it
+    // hides (it was put in the aside and the header, as the box's said). Kept by id, so it's hidden in every thread.
+    await laptop.click('LAPTOP:true')
+    expect(ui.placed('header', { machine: 'laptop', thread: 'b' })).toEqual([])
+    expect(ui.placed('aside', { machine: 'box', thread: 'a' })).toEqual([])
+    expect(laptop.text()).toBe('')
+    // Moved there from the laptop's header (back where it was first): into its aside, out of its header.
+    await ui.dispatch('layout.place', { view: 'notes.list', place: 'header', on: true, machine: 'laptop', thread: 'b' })
+    expect(ui.placed('header', { machine: 'laptop', thread: 'b' })).toEqual(['notes.list'])
+    await ui.dispatch('layout.place', { view: 'notes.list', place: 'aside', from: 'header', machine: 'laptop', thread: 'b' })
+    expect(ui.placed('aside', { machine: 'laptop', thread: 'b' })).toEqual(['notes.list'])
+    expect(ui.placed('header', { machine: 'laptop', thread: 'b' })).toEqual([])
+    expect(ui.placed('aside', { machine: 'box', thread: 'a' })).toEqual(['notes.list'])
+    // Without a thread named (⌘I's way), the selected one's: the laptop's thread, its header toggled on.
+    await ui.select({ machine: 'laptop', thread: 'b' })
+    await ui.dispatch('layout.place', { view: 'notes.list', place: 'header' })
+    expect(ui.placed('header', { machine: 'laptop', thread: 'b' })).toEqual(['notes.list'])
+    await expect(ui.dispatch('layout.place', { view: 'notes.list', place: 'aside', machine: 'laptop', thread: 'gone' })).rejects.toThrow('No thread gone on laptop')
   })
 
   it('places views on a phone with no spaces: nothing in a rail, the thread picker in the bar', async () => {

@@ -14,7 +14,7 @@ import { createContext, Fragment, useContext, useEffect, useMemo, useState, useS
 import { ALIASES, contractProblem } from '@superego/protocol'
 import type { AppConfig, DataViewInfo, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, ProviderRejection, SectionInfo, SettingsSnapshot, Status, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
-import type { Selection } from './state.tsx'
+import { useSelection, type Selection } from './state.tsx'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowContext, type WindowRouter } from './actions.tsx'
 import { useSettings, watched } from './client.ts'
 import { createStore, type Store } from './local-state.ts'
@@ -850,6 +850,10 @@ export function viewsIn(registry: Registry, placed: Placed, place: Place, where?
   return placed[place].flatMap((id) => views.get(id) ?? [])
 }
 
+/** The thread a view is drawn for: `PlacedViews` and a view's pane say, so its hooks read and change its own scope. */
+const ViewScope = createContext<Where | undefined>(undefined)
+export const ViewScopeProvider = ViewScope.Provider
+
 /** Draw the views in a place: a thread's (`machine`, `thread`), or the window's; each in its `frame`, if given (its menu). */
 export function PlacedViews({ place, machine, thread, frame }: {
   place: Place; machine?: MachineEntry; thread?: ThreadInfo; frame?: (view: View & { id: string }, drawn: ReactNode) => ReactNode
@@ -860,17 +864,47 @@ export function PlacedViews({ place, machine, thread, frame }: {
   // A view that needs a thread isn't drawn without one.
   return <>{viewsIn(registry, placed, place, where).filter((view) => view.context === 'window' || where).map((view) => {
     const Component = view.component as ComponentType<ViewProps>
-    const drawn = <Contained name={view.owner.extension} inline={place === 'header' || place === 'titlebar' || place === 'rail'}><Component place={place} {...(machine && thread ? { machine, thread } : {})} /></Contained>
+    const drawn = <ViewScope.Provider value={where}><Contained name={view.owner.extension} inline={place === 'header' || place === 'titlebar' || place === 'rail'}><Component place={place} {...(machine && thread ? { machine, thread } : {})} /></Contained></ViewScope.Provider>
     return <Fragment key={`${view.owner.profile ?? ''}/${view.id}`}>{frame ? frame(view, drawn) : drawn}</Fragment>
   })}</>
 }
 
-/** Whether `view` is in `place` now, and a way to put it there or take it out (toggled, unless `on` is given). */
-export function usePlacement(view: string, place: Place): [boolean, (on?: boolean) => void] {
+/**
+ * The scope a view's placement is read and changed in: the scope its place is drawn in. A thread's places (`aside`,
+ * `pane`, `header`) are that thread's (`where`); the window's places are the window's, whatever thread asks.
+ */
+export const placeScope = (place: Place, where: Where | undefined): Where | undefined => THREAD_PLACES.includes(place) ? where : undefined
+
+/**
+ * Where every view is now, each place as it's drawn: a thread's places for `where`, else for the thread the asking
+ * view is drawn for, else the selected thread's (the window's aside is its); the window's places for the window.
+ * `where` is that thread, to change them in (`layout.place`'s `machine` and `thread`).
+ */
+export function usePlaced(where?: Where): { placed: Placed; narrow: boolean; where: Where | undefined } {
+  const drawnFor = useContext(ViewScope)
+  const { selection, machine, thread } = useSelection()
+  const scope = where ?? drawnFor ?? (selection && machine && thread ? { machine: machine.id, thread } : undefined)
+  const inThread = useLayout(scope)
+  const inWindow = useLayout()
+  const placed = useMemo(() => Object.fromEntries(PLACES.map((p) => [p, (THREAD_PLACES.includes(p) ? inThread : inWindow).placed[p]])) as Placed, [inThread.placed, inWindow.placed])
+  return { placed, narrow: inWindow.narrow, where: scope }
+}
+
+/** `layout.place`'s params for the thread `where` (see `usePlaced`): its place is changed as it's drawn there. */
+export const placingIn = (where: Where | undefined) => where ? { machine: where.machine, thread: where.thread.id } : {}
+
+/**
+ * Whether `view` is in `place` now, and a way to put it there or take it out (toggled, unless `on` is given): as the
+ * place is drawn (see `usePlaced`: for `where`, the thread the view is drawn for, or the selected one). The layout
+ * keeps it by id: put in a thread's place, it's there in every thread that has the view.
+ */
+export function usePlacement(view: string, place: Place, where?: Where): [boolean, (on?: boolean) => void] {
   const registry = useRegistry()
-  const { placed, narrow } = useLayout()
+  const { placed, narrow, where: scope } = usePlaced(where)
   // The layer it's seen in: on a phone, the narrow one.
-  const toggle = (on?: boolean) => void registry.router.dispatch('layout.place', { view, place, ...(on === undefined ? {} : { on }), ...(narrow ? { narrow } : {}) }, { source: 'layout' }).catch((error) => console.error(error))
+  const toggle = (on?: boolean) => void registry.router.dispatch('layout.place', {
+    view, place, ...(on === undefined ? {} : { on }), ...(narrow ? { narrow } : {}), ...placingIn(scope),
+  }, { source: 'layout' }).catch((error) => console.error(error))
   return [placed[place].includes(view), toggle]
 }
 

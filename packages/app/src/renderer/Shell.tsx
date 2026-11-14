@@ -71,9 +71,10 @@ export function Shell() {
     toggleNavigator: () => { setPalette(false); setNavigator((open) => !open) },
     showLog: () => setLog(true),
     // With the panes it shows (not those of an extension it goes without), as the window has it.
+    // The selected one too while it's not among them (Ego's, hidden; an archived one).
     threadOf: (s) => {
-      const thread = allThreads[s.machine]?.find((x) => x.id === s.thread)
-      return thread?.panes ? { ...thread, panes: shownPanes(registry, { machine: s.machine, thread }) } : thread
+      const found = allThreads[s.machine]?.find((x) => x.id === s.thread) ?? (s.machine === selection?.machine && s.thread === selection.thread ? thread : undefined)
+      return found?.panes ? { ...found, panes: shownPanes(registry, { machine: s.machine, thread: found }) } : found
     },
     sessions, lastThread, appSetting: (key) => watched<SettingsSnapshot>('app', 'settings.watch', {})?.values[key] as never,
     toggleSidebar: () => narrow ? setDrawer((open) => !open) : sidebar.toggle(),

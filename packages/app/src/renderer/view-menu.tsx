@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import { ContextMenu, DotsThreeIcon, IconButton, Menu } from '@superego/ui'
-import { scopedViews, useLayout, useRegistry } from './extension.tsx'
+import { placeScope, placingIn, scopedViews, usePlaced, useRegistry } from './extension.tsx'
 import { NARROW_PLACES, WIDE_PLACES, type Place } from './layout.ts'
 
 /** What each place is called, wherever the user moves views. */
@@ -30,15 +30,17 @@ export type ViewMenuProps = {
 /** The menu's items: Move to → the other places it fits, Remove from here (on a pane's tab, from the pane menu), Edit layout…. */
 export function ViewMenuItems({ view, place, machine, thread, pane }: ViewMenuProps) {
   const registry = useRegistry()
-  const where = machine && thread ? { machine, thread } : undefined
-  const { placed, narrow } = useLayout(where)
-  const found = scopedViews(registry, where).find((v) => v.id === view)
+  const { placed, narrow, where } = usePlaced(machine && thread ? { machine, thread } : undefined)
+  // As it's declared where it's shown: a thread's place, for that thread; the window's, for the window.
+  const found = scopedViews(registry, placeScope(place, where)).find((v) => v.id === view)
   if (!found) return null
+  // The layout keeps a view by id: declared in more than one scope (a profile's on two machines), it moves in each.
+  const shared = registry.views.filter((v) => v.id === view).length > 1
   const dispatch = registry.router.dispatch
   const fail = (error: unknown) => console.error(error)
   const targets = found.fits.filter((p) => (narrow ? NARROW_PLACES : WIDE_PLACES).includes(p) && !placed[p].includes(view))
   const change = async (params: { place: Place; on?: boolean; from?: Place }) => {
-    await dispatch('layout.place', { view, ...params, ...(narrow ? { narrow } : {}) }, { source: 'layout' })
+    await dispatch('layout.place', { view, ...params, ...(narrow ? { narrow } : {}), ...placingIn(where) }, { source: 'layout' })
     if (!machine || !thread) return
     // Moved out of a pane it's open in: that pane goes. Moved into the pane menu: it opens, so the move shows.
     if (pane && params.on !== true) await dispatch('pane.close', { id: thread.id, pane }, { machine, source: 'layout' })
@@ -46,6 +48,7 @@ export function ViewMenuItems({ view, place, machine, thread, pane }: ViewMenuPr
   }
   return (
     <>
+      {shared && <Menu.Group><Menu.GroupLabel data-shared>For every thread with {found.title}</Menu.GroupLabel></Menu.Group>}
       {targets.length > 0 && (
         <Menu.SubmenuRoot>
           <Menu.SubmenuTrigger>Move to</Menu.SubmenuTrigger>

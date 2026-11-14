@@ -7,7 +7,7 @@ import '@superego/ui/styles.css'
 import './app.css'
 import { bool, obj, opt, str, type AppConfig, type SettingsSnapshot } from '@superego/protocol'
 import { watched } from './client.ts'
-import { createRegistry, layoutOf, RegistryProvider, type UiExtension } from './extension.tsx'
+import { createRegistry, layoutOf, placeScope, RegistryProvider, scopedViews, type UiExtension } from './extension.tsx'
 import { LAYOUT, placeView, type Place } from './layout.ts'
 import { registerLayoutText } from './layout-text.tsx'
 import { Profiles, Providers } from './SettingsView.tsx'
@@ -63,13 +63,20 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
     // Every thread in a menu, and a new one: at the title bar's start while there's no space (no sidebar).
     core.view('core.picker', { title: 'Threads', context: 'window', fits: ['titlebar'], withoutSpaces: 'titlebar', component: ThreadPicker })
     // A view put in a place, or taken out (toggled, unless `on` says); `from`: taken out of that one too, moved there.
-    // The user's layout keeps it; `narrow`, the phone's layer of it.
+    // The user's layout keeps it; `narrow`, the phone's layer of it. Worked out from the view as the place is drawn
+    // for `machine` and `thread` (else the selected thread): its declaration there, where it is there now.
     core.action(defineWindowAction({
-      id: 'layout.place', title: 'Put a view in a place', params: obj({ view: str(), place: str(), on: opt(bool()), from: opt(str()), narrow: opt(bool()) }),
-      run({ view, place, on, from, narrow }, c) {
+      id: 'layout.place', title: 'Put a view in a place',
+      params: obj({ view: str(), place: str(), on: opt(bool()), from: opt(str()), narrow: opt(bool()), machine: opt(str()), thread: opt(str()) }),
+      run({ view, place, on, from, narrow, machine, thread }, c) {
         // Changed from the settings as last heard: before they're heard, there's nothing to change it from.
         if (!watched<SettingsSnapshot>('app', 'settings.watch', {})) throw new Error("The layout isn't loaded yet")
-        const value = placeView(registry.views, layoutOf(c.appSetting(LAYOUT)), view, place as Place, {
+        const at = machine && thread ? { machine, thread } : c.selection
+        const info = at && c.threadOf(at)
+        if (machine && thread && !info) throw new Error(`No thread ${thread} on ${machine} here`)
+        const where = at && info ? { machine: at.machine, thread: info } : undefined
+        const scope = placeScope(place as Place, where) ?? (from ? placeScope(from as Place, where) : undefined)
+        const value = placeView(scopedViews(registry, scope), layoutOf(c.appSetting(LAYOUT)), view, place as Place, {
           ...(on === undefined ? {} : { on }), ...(from ? { from: from as Place } : {}), ...(narrow ? { narrow } : {}),
         })
         return c.dispatch('app.settings.set', { key: LAYOUT, value }, { machine: 'app', source: 'layout' })

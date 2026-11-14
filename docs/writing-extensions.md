@@ -455,6 +455,13 @@ superego.view('ego.button', { title: 'Ask Ego', icon: LifebuoyIcon, context: 'wi
 - To put a view in a place or take it out, dispatch `layout.place` with `{ view, place, on? }` (toggled without
   `on`); `from` takes it out of that place in the same change (moved), `narrow` changes the phone's layer. In a
   component, `usePlacement(view, place)` gives `[placed, toggle]`. ⌘I is `threads.details` in the `aside`, or not.
+- Both read and change a place as it's drawn: a thread's place (`aside`, `pane`, `header`) for a thread, as the views
+  that thread sees declare them; the window's places for the window. `layout.place` takes the thread as `machine` and
+  `thread` (its id), else the selected one; `usePlacement` the thread its view is drawn for (in a thread's place or
+  pane), else the selected one, or `usePlacement(view, place, { machine, thread })`. The change is kept by view id, as
+  the layout keeps it, so it applies in every thread that has the view: a profile's view taken out of one machine's
+  header is out of the other's too. The view's menu says so (*For every thread with Notes*) when the id is declared
+  in more than one scope; and the layout file's list gives such an id every place any of them fits.
 - The user edits the layout as text: *Edit layout…* (⌘K) opens `~/.superego/layout.json`, `app.layout` as a file,
   applied as it's saved; a mistake (bad JSON, a place there isn't, a place a view doesn't fit) is noted and the last
   good layout stays, and the file is left as typed until it reads. A view it names that no window has now is applied

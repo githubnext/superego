@@ -14,7 +14,7 @@ import {
 } from '@superego/protocol'
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '@superego/app/shared'
 import {
-  bound, LAYOUT, layoutOf, normalize, placedFor, PlacedViews, RegistryProvider, scopedViews, setLocalState, ShellStateProvider,
+  bound, LAYOUT, layoutOf, normalize, placedFor, PlacedViews, RegistryProvider, scopedViews, setLocalState, ShellStateProvider, ViewScopeProvider,
   useAllThreads, useMachines, useSelection, windowRegistry, type Layout, type Place, type Registry, type UiExtension, type ViewProps,
 } from '@superego/app/internals'
 import type { TestDaemon } from './daemon.ts'
@@ -386,5 +386,5 @@ function Draw({ view, place, machine, thread, registry }: { view?: string; place
   const found = scopedViews(registry, where).find((v) => v.id === view)
   if (!found) return null
   const Component = found.component as (props: ViewProps) => ReactNode
-  return <Component place={place} {...(entry && info ? { machine: entry, thread: info } : {})} />
+  return <ViewScopeProvider value={where}><Component place={place} {...(entry && info ? { machine: entry, thread: info } : {})} /></ViewScopeProvider>
 }
