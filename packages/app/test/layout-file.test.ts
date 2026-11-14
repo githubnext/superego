@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MemorySettingsStore, SettingsRegistry } from '@superego/settings'
-import { LayoutFile, layoutHead, parseLayout, type LayoutView } from '../src/main/layout-file.ts'
+import { bodyOf, LayoutFile, layoutHead, parseLayout, withComments, type LayoutView } from '../src/main/layout-file.ts'
 import { LAYOUT_SETTING } from '../src/shared.ts'
 
 const views: LayoutView[] = [
@@ -19,14 +19,25 @@ describe('reading a layout', () => {
     expect(parseLayout('// just comments\n', views)).toEqual({ layout: {} })
   })
 
-  it('says what is wrong: bad JSON, not a layout, an unknown view or place, a place a view does not fit', () => {
+  it('says what is wrong: bad JSON, not a layout, an unknown place, a place a view does not fit', () => {
     expect(parseLayout('{ "place": ', views)).toMatchObject({ problem: expect.stringMatching(/^Not JSON/) })
     expect(parseLayout('{ "rail": [] }', views)).toMatchObject({ problem: expect.stringMatching(/^Not a layout/) })
-    expect(parseLayout('{ "place": { "nope.view": "aside" } }', views)).toEqual({ problem: 'no view "nope.view"' })
     expect(parseLayout('{ "order": { "sidebar": [] } }', views)).toEqual({ problem: 'no place "sidebar"' })
     expect(parseLayout('{ "narrow": { "place": { "ego.button": "aside" } } }', views)).toEqual({ problem: `ego.button doesn't fit "aside" (only rail, drawer)` })
     // Not knowing the views yet, any id goes.
     expect(parseLayout('{ "place": { "nope.view": "aside" } }')).toEqual({ layout: { place: { 'nope.view': 'aside' } } })
+  })
+
+  it('applies a view that is not there now, noting it, so it is placed again when it is back', () => {
+    expect(parseLayout('{ "place": { "nope.view": "aside" }, "order": { "pane": ["gone.too", "threads.details"] } }', views))
+      .toEqual({ layout: { place: { 'nope.view': 'aside' }, order: { pane: ['gone.too', 'threads.details'] } }, missing: ['nope.view', 'gone.too'] })
+  })
+
+  it('keeps the comments typed in the body, by the line they were above', () => {
+    const body = '// mine\n{\n  "place": {\n    // the details beside\n    "threads.details": "aside"\n  }\n}\n// the end\n'
+    expect(withComments(body, { place: { 'threads.details': 'pane', 'ego.button': null } }))
+      .toBe('// mine\n{\n  "place": {\n    // the details beside\n    "threads.details": "pane",\n    "ego.button": null\n  }\n}\n// the end\n')
+    expect(bodyOf(`${layoutHead(views)}\n// mine\n{}`)).toBe('// mine\n{}')
   })
 
   it('lists the views and the places each fits at the head', () => {
@@ -52,7 +63,7 @@ describe('the layout file', () => {
     settings.register({ id: 'appearance', title: 'Appearance', settings: [LAYOUT_SETTING] })
     file = new LayoutFile(dir, settings)
     await file.start()
-    await file.setViews(views)
+    await file.setViews(1, views)
   })
   afterEach(() => { file.stop(); rmSync(dir, { recursive: true, force: true }) })
 
@@ -68,9 +79,16 @@ describe('the layout file', () => {
     writeFileSync(file.path, '{ "place": { "threads.details": "asid')
     await wait(() => file.problem?.startsWith('Not JSON') ?? false)
     expect(layout()).toBe('{"place":{"threads.details":"aside"}}')
-    writeFileSync(file.path, '{ "place": { "threads.detail": "aside" } }')
-    await wait(() => file.problem === 'no view "threads.detail"')
+    writeFileSync(file.path, '{ "place": { "threads.details": "rail" } }')
+    await wait(() => file.problem?.startsWith(`threads.details doesn't fit`) ?? false)
     expect(layout()).toBe('{"place":{"threads.details":"aside"}}')
+    // A view no window has now: applied, and noted.
+    writeFileSync(file.path, '{ "place": { "threads.detail": "aside" } }')
+    await wait(() => layout() === '{"place":{"threads.detail":"aside"}}')
+    expect(file.problem).toBeUndefined()
+    expect(file.missing).toEqual(['threads.detail'])
+    await file.setViews(2, [{ id: 'threads.detail', title: 'Another window\'s', fits: ['aside'] }])
+    expect(file.missing).toBeUndefined()
     writeFileSync(file.path, '{}')
     await wait(() => layout() === '{}')
     expect(file.problem).toBeUndefined()
@@ -82,10 +100,27 @@ describe('the layout file', () => {
     expect(readFileSync(file.path, 'utf8')).toContain('// Views')
   })
 
+  it('leaves a file that does not read as typed when the window changes the layout', async () => {
+    writeFileSync(file.path, '{ "place": { "threads.details": "asi')
+    await wait(() => file.problem?.startsWith('Not JSON') ?? false)
+    await settings.set('app.layout', { place: { 'threads.details': 'pane' } })
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(readFileSync(file.path, 'utf8')).toBe('{ "place": { "threads.details": "asi')
+    expect(file.problem).toMatch(/^Not JSON/)
+  })
+
+  it('keeps comments typed in the file when the window changes the layout', async () => {
+    writeFileSync(file.path, `${layoutHead(views)}\n// mine\n{ "place": { "ego.button": null } }\n`)
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    await settings.set('app.layout', { place: { 'threads.details': 'pane' } })
+    await wait(() => readFileSync(file.path, 'utf8').includes('"threads.details": "pane"'))
+    expect(readFileSync(file.path, 'utf8')).toContain('\n\n// mine\n{\n')
+  })
+
   it('keeps what was typed when the views change, putting only the head anew', async () => {
     writeFileSync(file.path, '// mine\n{ "place": { "threads.details": "aside" } }  ')
     await wait(() => layout() === '{"place":{"threads.details":"aside"}}')
-    await file.setViews([...views, { id: 'files.folder', title: 'Files', fits: ['space', 'aside', 'pane'] }])
+    await file.setViews(1, [...views, { id: 'files.folder', title: 'Files', fits: ['space', 'aside', 'pane'] }])
     const text = readFileSync(file.path, 'utf8')
     expect(text).toContain('//   files.folder')
     expect(text.endsWith('{ "place": { "threads.details": "aside" } }  ')).toBe(true)

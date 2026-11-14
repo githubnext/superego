@@ -1,8 +1,10 @@
 // The layout as text: `<data dir>/layout.json`, the app setting `app.layout` as a file to edit by hand (Edit layout…, in
-// ⌘K). Saving it applies at once, in every window. What doesn't read as a layout (bad JSON, a view no window knows, a
-// place a view doesn't fit) is noted, and the last good layout stays. Changes made in the window (⌘I, a view's Move to…)
-// are written back to it. Its head is comments: what goes in it, and the views the windows declare, the places each
-// fits (`superego layout` prints it too). Comments are whole lines starting with `//`.
+// ⌘K). Saving it applies at once, in every window. What doesn't read as a layout (bad JSON, a place there isn't, a place
+// a view doesn't fit) is noted, and the last good layout stays; a view no window has now (an extension switched off, a
+// machine away) is only noted, and kept for when it's back. Changes made in the window (⌘I, a view's Move to…) are
+// written back to it, keeping the comments typed in it, unless it doesn't read: then it's left as typed. Its head is
+// comments: what goes in it, and the views the windows declare, the places each fits (`superego layout` prints it too).
+// Comments are whole lines starting with `//`.
 import { watch, type FSWatcher } from 'node:fs'
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -42,38 +44,77 @@ export function layoutHead(views: readonly LayoutView[] | undefined): string {
 
 const isComment = (line: string) => line.trim().startsWith('//')
 
-/** The file's text past its head of comments. */
-const bodyOf = (text: string) => {
+/**
+ * The file's text past its head of comments, and a blank line after it: the head is the run of comments at the start
+ * of a file that starts as one does. A file that doesn't is all body.
+ */
+export const bodyOf = (text: string) => {
   const lines = text.split('\n')
-  const at = lines.findIndex((line) => line.trim() && !isComment(line))
-  return at < 0 ? '' : lines.slice(at).join('\n')
+  if (lines[0]?.trim() !== `// ${HELP[0]}`) return text
+  let at = lines.findIndex((line) => !isComment(line))
+  if (at < 0) return ''
+  if (!lines[at]!.trim()) at++
+  return lines.slice(at).join('\n')
+}
+
+/** What a line of JSON is about, for keeping comments by it: its key, else its text. */
+const anchorOf = (line: string) => /^\s*("(?:[^"\\]|\\.)*")\s*:/.exec(line)?.[1] ?? line.trim().replace(/,$/, '')
+
+/**
+ * `layout` as the body of the file, keeping the comments `body` has: each above the line it was above (by its key),
+ * those of a line that's gone at the start, those after everything at the end.
+ */
+export function withComments(body: string, layout: Json | undefined): string {
+  const json = JSON.stringify(layout ?? {}, null, 2).split('\n')
+  const before = new Map<number, string[]>()
+  const lost: string[] = []
+  const trailing: string[] = []
+  let block: string[] = []
+  const used = new Set<number>()
+  for (const line of body.split('\n')) {
+    if (isComment(line)) { block.push(line.trim()); continue }
+    if (!line.trim() || !block.length) continue
+    const anchor = anchorOf(line)
+    const at = json.findIndex((l, i) => !used.has(i) && anchorOf(l) === anchor)
+    if (at < 0) lost.push(...block)
+    else { used.add(at); before.set(at, [...before.get(at) ?? [], ...block]) }
+    block = []
+  }
+  trailing.push(...block)
+  const indent = (line: string) => /^\s*/.exec(line)![0]
+  const lines = json.flatMap((line, i) => [...(before.get(i) ?? []).map((c) => indent(line) + c), line])
+  return [...lost, ...lines, ...trailing].join('\n') + '\n'
 }
 
 /**
- * The layout `text` holds, or what's wrong with it. With `views`, the ids it names and the places it puts them are
- * checked against them too.
+ * The layout `text` holds, or what's wrong with it. With `views`, the places it puts the views it knows are checked
+ * against where they fit, and the ids it names that aren't among them are noted (`missing`): applied all the same, as
+ * an extension switched off or a machine away comes back.
  */
-export function parseLayout(text: string, views?: readonly LayoutView[]): { layout: Layout } | { problem: string } {
+export function parseLayout(text: string, views?: readonly LayoutView[]): { layout: Layout; missing?: string[] } | { problem: string } {
   const json = text.split('\n').map((line) => isComment(line) ? '' : line).join('\n')
   if (!json.trim()) return { layout: {} }
   let value: Json
   try { value = JSON.parse(json) } catch (error) { return { problem: `Not JSON: ${(error as Error).message}` } }
   if (!isLayout(value)) return { problem: 'Not a layout: an object of "place", "order" and "narrow", with view ids and place names' }
   const problems: string[] = []
+  const missing = new Set<string>()
   const byId = new Map(views?.map((v) => [v.id, v]))
+  const known = (id: string) => !views || byId.has(id) || void missing.add(id)
   const knownPlace = (place: string) => (PLACES as string[]).includes(place) || void problems.push(`no place "${place}"`)
   for (const layer of [value, value.narrow ?? {}]) {
     for (const [id, placed] of Object.entries(layer.place ?? {})) {
       const places = placed === null ? [] : Array.isArray(placed) ? placed : [placed]
-      for (const place of places) if (knownPlace(place) && views && byId.has(id) && !byId.get(id)!.fits.includes(place)) problems.push(`${id} doesn't fit "${place}" (only ${byId.get(id)!.fits.join(', ')})`)
-      if (views && !byId.has(id)) problems.push(`no view "${id}"`)
+      const view = known(id) ? byId.get(id) : undefined
+      for (const place of places) if (knownPlace(place) && view && !view.fits.includes(place)) problems.push(`${id} doesn't fit "${place}" (only ${view.fits.join(', ')})`)
     }
     for (const [place, ids] of Object.entries(layer.order ?? {})) {
       knownPlace(place)
-      if (views) for (const id of ids ?? []) if (!byId.has(id)) problems.push(`no view "${id}"`)
+      for (const id of ids ?? []) known(id)
     }
   }
-  return problems.length ? { problem: [...new Set(problems)].join('; ') } : { layout: value }
+  if (problems.length) return { problem: [...new Set(problems)].join('; ') }
+  return { layout: value, ...(missing.size ? { missing: [...missing] } : {}) }
 }
 
 const text = (layout: Json | undefined) => JSON.stringify(layout ?? {})
@@ -84,9 +125,13 @@ const text = (layout: Json | undefined) => JSON.stringify(layout ?? {})
  */
 export class LayoutFile {
   readonly path: string
-  /** What's wrong with the file as last saved, if anything: the layout before it stays. */
+  /** What's wrong with the file as last saved, if anything: the layout before it stays, and the file isn't written. */
   problem: string | undefined
+  /** The views the file names that no window has now: applied all the same. */
+  missing: string[] | undefined
   #settings: SettingsRegistry
+  /** The views each window declares (by its id), listed at the head together. */
+  #windows = new Map<number, LayoutView[]>()
   #views: LayoutView[] | undefined
   /** The file's text as last read or written, so our own writes aren't read back in. */
   #text: string | undefined
@@ -116,13 +161,23 @@ export class LayoutFile {
 
   stop() { this.#watcher?.close(); clearTimeout(this.#timer) }
 
-  /** The views the window declares: listed at the file's head, and what layouts in it are checked against. */
-  async setViews(views: LayoutView[]): Promise<void> {
-    if (JSON.stringify(views) === JSON.stringify(this.#views)) return
-    this.#views = views
+  /**
+   * The views a window declares (`undefined`: it closed): every window's are listed at the file's head, and what
+   * layouts in it are checked against.
+   */
+  async setViews(window: number, views: LayoutView[] | undefined): Promise<void> {
+    if (views) this.#windows.set(window, views)
+    else this.#windows.delete(window)
+    const all = new Map<string, LayoutView>()
+    for (const list of this.#windows.values()) for (const view of list) if (!all.has(view.id)) all.set(view.id, view)
+    const union = [...all.values()].sort((a, b) => a.id.localeCompare(b.id))
+    if (JSON.stringify(union) === JSON.stringify(this.#views)) return
+    this.#views = union
     const current = await readFile(this.path, 'utf8').catch(() => undefined)
     if (current === undefined) return this.#write()
-    await this.#save(layoutHead(views) + bodyOf(current))
+    await this.#save(layoutHead(union) + '\n' + bodyOf(current))
+    // Checked again: a view that's come may fit where the file puts it, one that's gone is noted.
+    await this.#apply(current)
   }
 
   /** The file as saved now: applied when it reads as a layout, noted when not. */
@@ -131,25 +186,38 @@ export class LayoutFile {
     if (current === undefined) return this.#write()
     if (current === this.#text) return
     this.#text = current
+    await this.#apply(current)
+  }
+
+  async #apply(current: string): Promise<void> {
     const parsed = parseLayout(current, this.#views)
-    this.#note('problem' in parsed ? parsed.problem : undefined)
+    this.#note('problem' in parsed ? parsed.problem : undefined, 'missing' in parsed ? parsed.missing : undefined)
     if ('problem' in parsed) return
     this.#applied = text(parsed.layout)
     if (this.#applied !== text(this.#settings.get(LAYOUT))) await this.#settings.set(LAYOUT, parsed.layout as Json)
   }
 
-  #note(problem: string | undefined) {
-    if (problem === this.problem) return
+  #note(problem: string | undefined, missing: string[] | undefined) {
+    if (problem === this.problem && JSON.stringify(missing) === JSON.stringify(this.missing)) return
     this.problem = problem
+    this.missing = missing
     this.#changed()
   }
 
-  /** Write the setting out, over whatever the file held. */
+  /**
+   * Write the setting out, keeping the comments typed in the body. Not while the file doesn't read: what's typed there
+   * stays as it is, and applies over this once it does.
+   */
   async #write(): Promise<void> {
+    if (this.problem) return
+    const current = await readFile(this.path, 'utf8').catch(() => undefined)
+    // Saved since it was last read (and not yet heard of): what's saved is the newer change.
+    if (current !== undefined && current !== this.#text) return this.read()
     const layout = this.#settings.get(LAYOUT)
     this.#applied = text(layout)
-    this.#note(undefined)
-    await this.#save(layoutHead(this.#views) + JSON.stringify(layout ?? {}, null, 2) + '\n')
+    await this.#save(layoutHead(this.#views) + '\n' + withComments(current === undefined ? '' : bodyOf(current), layout))
+    const parsed = parseLayout(this.#text!, this.#views)
+    this.#note(undefined, 'missing' in parsed ? parsed.missing : undefined)
   }
 
   async #save(content: string): Promise<void> {

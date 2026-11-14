@@ -169,9 +169,10 @@ superego.view('ego.button', { title: 'Ask Ego', icon: LifebuoyIcon, context: 'wi
   `on`); `from` takes it out of that place in the same change (moved), `narrow` changes the phone's layer. In a
   component, `usePlacement(view, place)` gives `[placed, toggle]`. ⌘I is `threads.details` in the `aside`, or not.
 - The user edits the layout as text: *Edit layout…* (⌘K) opens `~/.superego/layout.json`, `app.layout` as a file,
-  applied as it's saved; a mistake (bad JSON, a view or place there isn't, a place a view doesn't fit) is noted and the
-  last good layout stays. Its head of `//` comments lists the views the window declared and the places each fits, and
-  `superego layout` prints it. For example:
+  applied as it's saved; a mistake (bad JSON, a place there isn't, a place a view doesn't fit) is noted and the last
+  good layout stays, and the file is left as typed until it reads. A view it names that no window has now is applied
+  all the same and only noted, for when it's back. Its head of `//` comments lists the views the windows declared and
+  the places each fits, and `superego layout` prints it; comments of your own below it are kept. For example:
 
   ```jsonc
   {

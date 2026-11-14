@@ -1,7 +1,7 @@
 // The layout as text, in the window: Edit layout… (⌘K) opens `layout.json` (see main/layout-file.ts) beside the thread
 // shown when it's on this computer, else in the file's own app; the views declared are told to the file, which lists them
 // and checks layouts against them; and what's wrong with the file as last saved is noted, in the title bar (or the
-// sidebar's foot) and in the file's editor. The desktop app's only: a browser keeps its layout itself.
+// sidebar's foot) and in the file's editor, with the views it names that aren't here now. The desktop app's only: a browser keeps its layout itself.
 import { useEffect } from 'react'
 import type { SettingsSnapshot } from '@superego/protocol'
 import { Button } from '@superego/ui'
@@ -9,7 +9,7 @@ import { useSettings, watched } from './client.ts'
 import { defineWindowAction } from './actions.tsx'
 import { useRegistry, type EditorSlotProps, type UiApi } from './extension.tsx'
 
-type LayoutData = { file: string; problem?: string }
+type LayoutData = { file: string; problem?: string; missing?: string[] }
 
 const dataOf = (snapshot: SettingsSnapshot | undefined) => snapshot?.sections.find((s) => s.id === 'layout')?.data as LayoutData | undefined
 
@@ -63,5 +63,5 @@ function LayoutFileNote({ path }: EditorSlotProps) {
   if (!data || path !== data.file) return null
   return data.problem
     ? <span className="layout-note is-problem" role="status">Not applied, the last good layout stays: {data.problem}</span>
-    : <span className="layout-note">Applied as you save</span>
+    : <span className="layout-note">Applied as you save{data.missing ? `; not here now, kept for when they're back: ${data.missing.join(', ')}` : ''}</span>
 }

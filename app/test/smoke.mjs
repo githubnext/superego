@@ -305,7 +305,7 @@ if (phase === 'first') {
   writeFileSync(layoutFile, '{ "place": { "threads.details": ')
   await until(`document.querySelector('.layout-note.is-problem')?.textContent.includes('Not JSON') && Boolean(document.querySelector('.layout-notice')) && Boolean(document.querySelector('.app__aside .threads-details'))`, 'bad JSON noted, the details kept')
   writeFileSync(layoutFile, '{ "place": { "threads.detail": "aside" } }')
-  await until(`document.querySelector('.layout-note.is-problem')?.textContent.includes('no view "threads.detail"')`, 'an unknown view noted')
+  await until(`document.querySelector('.layout-note:not(.is-problem)')?.textContent.includes('not here now, kept for when they\\'re back: threads.detail') && !document.querySelector('.layout-notice')`, 'a view not here applied, and noted')
   writeFileSync(layoutFile, '{}')
   await until(`${layoutNow()}.then((l) => l === '{}') && !document.querySelector('.app__aside') && !document.querySelector('.layout-notice')`, 'the layout reset from the file')
   await run(`window.superego.call('local', 'thread.list', {}).then((list) => Promise.all(list.flatMap((t) => (t.panes ?? []).filter((p) => p.params?.path === ${JSON.stringify(layoutFile)}).map((p) => window.superego.call('local', 'pane.close', { id: t.id, pane: p.id })))))`)

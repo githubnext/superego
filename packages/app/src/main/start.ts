@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, protocol, session, shell, type MenuItemConstructorOptions } from 'electron'
 import { appEnv, daemonStarting, defaultDataDir, readBuild, socketPath } from '@superego/daemon/client'
 import {
-  arr, bool, compareVersions, defineAction, int, lit, obj, opt, Router, RpcError, str, union, unknown, waitingForSignIn,
+  arr, bool, compareVersions, defineAction, int, lit, nullable, obj, opt, Router, RpcError, str, union, unknown, waitingForSignIn,
   type AppConfig, type DeclaredSection, type Json, type Notifications, type ProfileRef, type ThreadInfo, type SettingType,
 } from '@superego/protocol'
 import { serveSettings } from '@superego/settings'
@@ -50,7 +50,7 @@ export function startApp(appConfig: AppConfig) {
   const layoutFile = new LayoutFile(dataDir, appSettings, () => appSettings.invalidate())
   appSettings.register({
     id: 'layout', title: 'Layout', order: 1000, settings: [],
-    data: async () => ({ file: layoutFile.path, ...(layoutFile.problem ? { problem: layoutFile.problem } : {}) }),
+    data: async () => ({ file: layoutFile.path, ...(layoutFile.problem ? { problem: layoutFile.problem } : {}), ...(layoutFile.missing ? { missing: layoutFile.missing } : {}) }),
   })
   void layoutFile.start().catch((error) => console.error('layout.json:', error))
 
@@ -120,7 +120,7 @@ export function startApp(appConfig: AppConfig) {
       'action.log': async () => appRouter.log(),
     }
     // The app's intents, served under their ids like a daemon's.
-    for (const action of appRouter.list()) handlers[action.id] = (params) => appRouter.dispatch(action.id, params, {}, { source: 'window' })
+    for (const action of appRouter.list()) handlers[action.id] = (params) => appRouter.dispatch(action.id, params, { window: contents }, { source: 'window' })
     return handlers
   }
 
@@ -390,7 +390,8 @@ export function startApp(appConfig: AppConfig) {
 
   // ── The app's actions ──────────────────────────────────────────────────────────────────────────────────────────
 
-  const appRouter = new Router<Record<string, never>>()
+  /** The app's actions run for a window (its own, from its endpoint), or for none (the CLI's). */
+  const appRouter = new Router<{ window?: Electron.WebContents }>()
   appRouter.register(defineAction({
     id: 'app.settings.set', title: 'Change an app setting', runs: 'app', expose: ['ui', 'cli'],
     params: obj({ key: str(), value: unknown() }),
@@ -461,10 +462,22 @@ export function startApp(appConfig: AppConfig) {
     params: obj({ action: union([lit('restart'), lit('interrupt'), lit('later'), lit('review')]) }),
     async run({ action }) { await service.act(action as ServiceAction); return service.state },
   }))
+  /** Where a view goes, as a window tells the layout file. */
+  const placement = nullable(union([str(), arr(str()), lit(false)]))
+  const layoutWindows = new Set<number>()
   appRouter.register(defineAction({
-    id: 'app.layout.views', title: 'Tell the layout file the views there are', runs: 'app', expose: ['ui'],
-    params: obj({ views: unknown() }),
-    async run({ views }) { await layoutFile.setViews(views as LayoutView[]); return null },
+    id: 'app.layout.views', title: 'Tell the layout file the views a window has', runs: 'app', expose: ['ui'],
+    params: obj({ views: arr(obj({ id: str(), title: str(), fits: arr(str()), default: opt(placement), narrow: opt(placement) })) }),
+    async run({ views }, { window }) {
+      if (!window) throw new RpcError('invalid', 'Only a window has views')
+      // Each window's, until it closes.
+      if (!layoutWindows.has(window.id)) {
+        layoutWindows.add(window.id)
+        window.once('destroyed', () => { layoutWindows.delete(window.id); void layoutFile.setViews(window.id, undefined).catch((error) => console.error('layout.json:', error)) })
+      }
+      await layoutFile.setViews(window.id, views as LayoutView[])
+      return null
+    },
   }))
   appRouter.register(defineAction({
     id: 'app.layout.open', title: 'Open the layout file in its own app', runs: 'app', expose: ['ui'],
