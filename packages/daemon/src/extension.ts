@@ -103,12 +103,19 @@ export type ThreadHooks = {
   /** About to be archived: may refuse. Nothing is done yet; do cleanup in `archived`. A `note` is said with it, as `archived`'s. */
   archiving?(thread: ThreadInfo): ArchiveNote | void | Promise<ArchiveNote | void>
   /**
-   * Being archived, past refusing: clean up (remove a worktree, say). Done before clients see it archived. A `note` says
+   * Being archived, past refusing: clean up (remove a worktree, say). Done before clients see it archived. Not a
+   * transaction: a throw is logged and archiving goes on, and archiving may be tried again (a restart between), so make
+   * cleanup idempotent, and safe to find half done. A `note` says
    * what it did, in a line ("Removed its worktree; branch x kept"): `thread.archive` answers with each extension's.
    */
   archived?(thread: ThreadInfo): ArchiveNote | void | Promise<ArchiveNote | void>
   /** About to be brought back: may refuse, or put back what `archived` took away (a worktree). */
   unarchiving?(thread: ThreadInfo): void | Promise<void>
+  /**
+   * The unarchiving its `unarchiving` took part in isn't happening after all: a later hook refused, or bringing it back
+   * failed. Undo what `unarchiving` put back. Told in reverse order; the thread stays archived.
+   */
+  unarchiveAbandoned?(thread: ThreadInfo): void | Promise<void>
   /** Brought back, taking messages again. */
   unarchived?(thread: ThreadInfo): void | Promise<void>
 }

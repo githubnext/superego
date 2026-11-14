@@ -667,14 +667,33 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const { profile } = (await get(id)).meta
     if (profile) await profileOf(profile).catch((error: Error) => console.error(`Profile ${profile.name}: ${error.message}`))
   }
-  /** Ask the hooks that may refuse (`archiving`, `unarchiving`): the first to throw stops it, with its error. */
+  /**
+   * Ask the hooks that may refuse (`archiving`, `unarchiving`): the first to throw stops it, with its error. Those whose
+   * hook ran already, for `unarchiving`, are returned, to be told if it doesn't happen after all (`unarchiveAbandoned`);
+   * a refusal tells them itself.
+   */
   async function ask(hook: 'archiving' | 'unarchiving', id: string, notes: ArchiveNotes = {}) {
     const m = await get(id)
-    for (const { value, owner } of hooksOf(id, m)) {
+    const asked: Owned<ThreadHooks>[] = []
+    for (const owned of hooksOf(id, m)) {
       try {
-        noted(notes, owner, await value[hook]?.(info(id, m)))
+        noted(notes, owned.owner, await owned.value[hook]?.(info(id, m)))
+        if (owned.value[hook]) asked.push(owned)
       } catch (error) {
-        throw refusal(owner, error)
+        if (hook === 'unarchiving') await abandonUnarchive(id, asked)
+        throw refusal(owned.owner, error)
+      }
+    }
+    return asked
+  }
+  /** Tell the hooks whose `unarchiving` ran that the thread stays archived, in reverse: each undoes what it put back. */
+  async function abandonUnarchive(id: string, asked: Owned<ThreadHooks>[]) {
+    const m = await get(id)
+    for (const { value, owner } of [...asked].reverse()) {
+      try {
+        await value.unarchiveAbandoned?.(info(id, m))
+      } catch (error) {
+        console.error(`Extension ${owner}: unarchiveAbandoned of thread ${id} failed:`, error)
       }
     }
   }
@@ -1492,8 +1511,13 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   async function unarchive(id: string) {
     if (!(await get(id)).meta.archived) return
     await withProfile(id)
-    await ask('unarchiving', id)
-    await updateMeta(id, (m) => { delete m.archived; delete m.archiveWhenDone })
+    const asked = await ask('unarchiving', id)
+    try {
+      await updateMeta(id, (m) => { delete m.archived; delete m.archiveWhenDone })
+    } catch (error) {
+      await abandonUnarchive(id, asked)
+      throw error
+    }
     await tell('unarchived', id)
   }
   /**

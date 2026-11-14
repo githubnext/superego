@@ -133,6 +133,27 @@ it('tells blocked once each time a thread comes to need the user, as the status 
   await close()
 })
 
+it("tells those whose unarchiving ran, in reverse, when a later one refuses: what they put back is undone", async () => {
+  const heard: string[] = []
+  const part = (name: string, refuse = false) => defineDaemonExtension({
+    name,
+    setup(superego) {
+      superego.thread({
+        unarchiving() { if (refuse) throw new Error('nope'); heard.push(`${name} put back`) },
+        unarchiveAbandoned() { heard.push(`${name} undone`) },
+      })
+    },
+  })
+  const { peer, close } = await open([part('first'), part('second'), part('third', true)])
+  const thread = await peer.call<ThreadInfo>('thread.create', {})
+  await peer.call('thread.archive', { id: thread.id })
+  await expect(peer.call('thread.unarchive', { id: thread.id })).rejects.toMatchObject({ kind: 'refused', message: 'third: nope' })
+  // The refusing hook did nothing to undo; the others undo in reverse, and it stays archived.
+  expect(heard).toEqual(['first put back', 'second put back', 'second undone', 'first undone'])
+  expect((await find(peer, thread.id))!.archived).toBe(true)
+  await close()
+})
+
 it('refuses when an -ing hook says no; a hook that throws otherwise is logged, and wedges nothing', async () => {
   let refuse = true
   const guard = defineDaemonExtension({
