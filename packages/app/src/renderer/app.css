@@ -783,3 +783,12 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .setting__buttons { display: flex; gap: 6px; }
 .layout-editor__text { width: 100%; min-height: 12em; font: var(--superego-text-sm) var(--superego-mono); }
 .layout-editor__actions { display: flex; justify-content: flex-end; margin-top: var(--superego-space-3); }
+
+/* What an extension draws that threw: a quiet line in its own place, with the error and a retry (contained.tsx). */
+.extension-failed { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px var(--superego-space-2); padding: var(--superego-space-2) var(--superego-space-3); color: var(--superego-muted); font-size: var(--superego-text-sm); min-width: 0; }
+.extension-failed--inline { display: inline-flex; padding: 0 4px; flex-wrap: nowrap; }
+.extension-failed__what { color: var(--superego-status-error); }
+.extension-failed__error { font: var(--superego-text-xs) var(--superego-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100%; -webkit-user-select: text; user-select: text; }
+.extension-failed--inline .extension-failed__error { max-width: 16em; }
+.extension-failed__retry { all: unset; cursor: pointer; text-decoration: underline; color: var(--superego-muted); }
+.extension-failed__retry:hover { color: var(--superego-text); }

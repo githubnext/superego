@@ -4,7 +4,7 @@ import { NOTE_ENTRY, waitingForSignIn, type Attachment, type ThreadInfo } from '
 import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CheckIcon, FileIcon, type Icon as PhosphorIcon, IconButton, ListIcon, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TextArea, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
-import { completionsIn, divideWork, entryView, fileKind, folderKind, paneMenu, PlacedViews, sentWithIn, Slot, shownPanes, toolRow, toolView, unfoldedTool, urlKind, useLayout, useRegistry, type ToolRowCall, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
+import { completionsIn, divideWork, entryOwner, entryView, fileKind, folderKind, paneMenu, PlacedViews, sentWithIn, Slot, shownPanes, toolOwner, toolRow, toolView, unfoldedTool, urlKind, useLayout, useRegistry, type ToolRowCall, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useRejections, useShell } from './state.tsx'
 import { useShortcut } from './keys.ts'
 import { withContextMenu } from './view-menu.tsx'
@@ -18,6 +18,7 @@ import { readAttachment, splitMessage } from './attachments.ts'
 import { askFor, complete, completing, menuFor, readSent, type Completion, type Offered, type SentBlock } from './composer.ts'
 import { useProfileUi } from './profile-ui.ts'
 import { ThreadPanes } from './panes.tsx'
+import { Contained } from './contained.tsx'
 import { startRename, stopRename, useRenaming } from './rename.ts'
 
 type Message = { role: string; content: string | Block[]; toolCallId?: string; isError?: boolean; details?: unknown; timestamp?: number }
@@ -436,7 +437,7 @@ function Sent({ blocks, className, children }: { blocks: SentBlock[]; className:
       {text && <Markdown text={text} breaks />}
       {(found.length > 0 || files.length > 0) && (
         <div className="msg__files">
-          {found.map(({ reader: { component: Component, owner }, items }) => <Component key={`${owner.profile ?? ''}/${owner.extension}`} {...here} items={items} />)}
+          {found.map(({ reader: { component: Component, owner }, items }) => <Contained key={`${owner.profile ?? ''}/${owner.extension}`} name={owner.extension} inline><Component {...here} items={items} /></Contained>)}
           <Files files={files} />
         </div>
       )}
@@ -564,8 +565,10 @@ function useRows() {
 
 function Entry({ entry }: { entry: EntryRecord }) {
   const here = useContext(Here)
-  const custom = entryView(useRegistry(), entry.kind, { machine: here.machine.id, thread: here.thread })
-  if (custom) { const Custom = custom; return <Custom {...here} entry={{ id: entry.id, kind: entry.kind, data: entry.data }} /> }
+  const registry = useRegistry()
+  const where = { machine: here.machine.id, thread: here.thread }
+  const custom = entryView(registry, entry.kind, where)
+  if (custom) { const Custom = custom; return <Contained name={entryOwner(registry, entry.kind, where) ?? entry.kind}><Custom {...here} entry={{ id: entry.id, kind: entry.kind, data: entry.data }} /></Contained> }
   const message = entry.model?.[0] as Message | undefined
   if (message?.role === 'user') {
     return <Sent className="msg msg--user" blocks={blocks(message)} />
@@ -693,8 +696,10 @@ function ToolCall({ block, result, slot }: { block: Block; result: Message | und
   const where = { machine: here.machine.id, thread: here.thread }
   const call = callOf(here, block, result, slot)
   const Custom = toolView(registry, call.call.name, where)
-  if (Custom) { const { state: _state, ...props } = call; return <Custom {...props} /> }
-  return <DescribedCall row={toolRow(registry, call.call.name, where)} call={call} />
+  // Its row's parts are the extension's code too: drawn apart, whole or described.
+  const name = toolOwner(registry, call.call.name, where) ?? call.call.name
+  if (Custom) { const { state: _state, ...props } = call; return <Contained name={name}><Custom {...props} /></Contained> }
+  return <Contained name={name}><DescribedCall row={toolRow(registry, call.call.name, where)} call={call} /></Contained>
 }
 
 /** A call, its result and how it runs, as tool rows (and an extension's view of the call) see them. */

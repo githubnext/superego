@@ -71,6 +71,9 @@ if (phase === 'first') {
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: hello from smoke')`, 'answer rendered')
   await until(`document.querySelector('.thread__profile')?.textContent === 'default'`, "the user's default profile, shown in the header")
   await until(`document.querySelector('.smoke-badge')?.textContent === 'profile ui: hello from smoke'`, "the profile's own UI, loaded at runtime")
+  await until(`[...document.querySelectorAll('.extension-failed')].some((e) => e.textContent.includes('badge failed to draw') && e.textContent.includes('smoke crash'))`, 'a view that throws, contained in its place')
+  await run(`globalThis.__smokeFixed = true; [...document.querySelectorAll('.extension-failed')].find((e) => e.textContent.includes('badge failed')).querySelector('button').click()`)
+  await until(`document.querySelector('.smoke-fixed') && !document.querySelector('.extension-failed')`, 'drawn again on Retry')
   await shot('main')
   // Type into the composer like a user: React needs the native setter and an input event.
   await run(`(() => {

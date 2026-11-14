@@ -11,7 +11,8 @@ import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef
 import { createPortal } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
 import { ArrowRightIcon, ChatTextIcon, FileTextIcon, XIcon } from '@superego/ui'
-import { fileKind, paneKind, paneTitle, shownPanes, useNarrow, useRegistry, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
+import { fileKind, paneKind, paneTitle, shownPanes, useNarrow, useRegistry, whose, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
+import { Contained } from './contained.tsx'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
 import { PaneMenu, ThreadBody } from './ThreadView.tsx'
@@ -256,7 +257,7 @@ function PaneBody({ machine, thread, pane }: PaneProps) {
   const kind = paneKind(registry, pane.kind, { machine: machine.id, thread })
   if (!kind) return <div className="pane-empty">No pane of kind “{pane.kind}” here{thread.profile ? '' : ' (a profile may add it)'}.</div>
   const Component = kind.component
-  return <Component machine={machine} thread={thread} pane={pane} />
+  return <Contained name={whose(kind, pane.kind)}><Component machine={machine} thread={thread} pane={pane} /></Contained>
 }
 
 // ── Built-in panes ──────────────────────────────────────────────────────────────────────────────────────────────

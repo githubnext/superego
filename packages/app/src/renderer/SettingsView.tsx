@@ -15,6 +15,7 @@ import { mergeSettings, type MergedSetting } from './merge-settings.ts'
 import { Keymap } from './Keymap.tsx'
 import { driftNote, MachineDrift } from './machine-drift.tsx'
 import { settingsView, useApp, useRegistry } from './extension.tsx'
+import { Contained } from './contained.tsx'
 import { useSettingsDialog } from './state.tsx'
 import { useAllowedUi, useDeclinedUi } from './profile-ui.ts'
 import { RevokedUiNotice, sizeOf } from './profile-ui-notice.tsx'
@@ -72,7 +73,7 @@ function Section({ target, section, values }: { target: string; section: Section
         <Setting key={setting.key} setting={setting} value={values[setting.key] ?? null}
           apply={(value) => dispatch(target === APP ? 'app.settings.set' : 'settings.set', { key: setting.key, value }, { machine: target, source: 'settings' })} />
       ))}
-      {Custom && <Custom target={target} section={section} />}
+      {Custom && <Contained name={section.ui!}><Custom target={target} section={section} /></Contained>}
     </section>
   )
 }

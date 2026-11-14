@@ -8,7 +8,8 @@ import type { SettingsSnapshot, ThreadInfo } from '@superego/protocol'
 import { ArrowLeftIcon, ArrowRightIcon, Button, CaretDownIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select, StatusGlyph } from '@superego/ui'
 import { textScale, type MachineEntry } from '../shared.ts'
 import { machine as client, useSettings, watched } from './client.ts'
-import { paneMenu, PlacedViews, shownPanes, Slot, useLayout, useRegistry, viewsIn, type SpaceRailProps, type View, type ViewProps } from './extension.tsx'
+import { paneMenu, PlacedViews, shownPanes, Slot, useLayout, useRegistry, viewsIn, whose, type SpaceRailProps, type View, type ViewProps } from './extension.tsx'
+import { Contained } from './contained.tsx'
 import { useLocalState } from './local-state.ts'
 import { ServiceNotice } from './ServiceNotice.tsx'
 import { RevokedUiNotice } from './profile-ui-notice.tsx'
@@ -199,7 +200,7 @@ function BackForward() {
 
 /** A space's button in the rail: its own (`rail`), else its icon, lit while it's the open one. In a phone's drawer, always its icon. */
 function SpaceButton({ view, open, show, narrow = false }: { view: View; narrow?: boolean } & SpaceRailProps) {
-  if (view.rail && !narrow) return <view.rail open={open} show={show} />
+  if (view.rail && !narrow) return <Contained name={whose(view)} inline><view.rail open={open} show={show} /></Contained>
   const Icon = view.icon
   return (
     <IconButton label={view.title} className={`app__rail-button ${open ? 'is-on' : ''}`} onClick={() => show(!open)}>
@@ -252,7 +253,7 @@ function ThreadSheet({ machine, thread, onClose }: { machine: MachineEntry; thre
 function SpaceView({ view, machine, thread }: { view: View; machine?: MachineEntry; thread?: ThreadInfo }) {
   const Component = view.component as ComponentType<ViewProps>
   if (view.context === 'thread' && !(machine && thread)) return null
-  return <Component place="space" {...(machine && thread ? { machine, thread } : {})} />
+  return <Contained name={whose(view)}><Component place="space" {...(machine && thread ? { machine, thread } : {})} /></Contained>
 }
 
 /** Without a space (the core's `core.picker`, at the title bar's start): every thread in a menu, and a new one. */

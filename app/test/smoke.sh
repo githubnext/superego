@@ -26,7 +26,15 @@ import { defineUiExtension, h } from 'superego/ui'
 import { label } from './label.ts'
 export default defineUiExtension({
   name: 'badge',
-  setup(superego) { superego.slot('thread.header', ({ thread }) => h('span', { className: 'smoke-badge' }, `${label}: ${thread.title}`)) },
+  setup(superego) {
+    superego.slot('thread.header', ({ thread }) => h('span', { className: 'smoke-badge' }, `${label}: ${thread.title}`))
+    // One that throws as it draws until the smoke says otherwise: it shows that it failed, in its own place, and the
+    // rest of the window carries on.
+    superego.slot('thread.header', () => {
+      if (!globalThis.__smokeFixed) throw new Error('smoke crash')
+      return h('span', { className: 'smoke-fixed' }, 'fixed')
+    })
+  },
 })
 UI
 printf "export const label: string = 'profile ui'\n" > "$SUPEREGO_HOME/profiles/default/ui/label.ts"

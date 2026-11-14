@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { Json, ModelCatalog, ProfileInfo, ThreadInfo } from '@superego/protocol'
 import { useRegistry, type Registry } from './extension.tsx'
+import { Contained } from './contained.tsx'
 import { Button, Dialog, Select, TextArea, TextField } from '@superego/ui'
 import { has, machine as client } from './client.ts'
 import { shortPath } from './ThreadView.tsx'
@@ -185,8 +186,8 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
           </div>
 
           {machine && fields.map(({ name, component: Field }) => (
-            <Field key={name} machine={machine} cwd={cwd.trim()} value={options[name]}
-              onChange={(value) => setOptions(({ [name]: _was, ...rest }) => value === undefined ? rest : { ...rest, [name]: value })} />
+            <Contained key={name} name={name}><Field machine={machine} cwd={cwd.trim()} value={options[name]}
+              onChange={(value) => setOptions(({ [name]: _was, ...rest }) => value === undefined ? rest : { ...rest, [name]: value })} /></Contained>
           ))}
 
           <label className="new-thread__field">
