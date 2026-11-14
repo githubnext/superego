@@ -8,7 +8,7 @@
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are its daemon half's.
 import { Fragment, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import {
-  call, defineAction, defineUiExtension, MachineDrift, showSession, SORT, unread, useAppSetting, useLocalState, useMachines, usePlacement, useSelection, useSessions, useThreadView, useShell, useShortcut,
+  call, defineAction, defineUiExtension, MachineDrift, showSession, SORT, unread, useAppSetting, useLocalState, useMachines, useNarrow, usePlacement, useSelection, useSessions, useThreadView, useShell, useShortcut,
   type MachineEntry, type Session, type Sort, type SpaceRailProps, type Store, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
@@ -62,13 +62,12 @@ export default defineUiExtension({
 })
 
 const NARROW = '(min-width: 600px) and (max-width: 760px)'
-/** A phone (as the app's own layout takes it): the list is a drawer there, never folded. */
-const PHONE = '(max-width: 599px)'
 function useFolded(view: View | undefined) {
   const narrow = useSyncExternalStore((change) => { const list = matchMedia(NARROW); list.addEventListener('change', change); return () => list.removeEventListener('change', change) }, () => matchMedia(NARROW).matches)
   const open = unfolded.use()
   useEffect(() => { if (!narrow) unfolded.set(false) }, [narrow])
-  const phone = useSyncExternalStore((change) => { const list = matchMedia(PHONE); list.addEventListener('change', change); return () => list.removeEventListener('change', change) }, () => matchMedia(PHONE).matches)
+  // A phone: the list is a drawer there, never folded.
+  const phone = useNarrow()
   return { folded: !phone && ((view ?? 'list') === 'rail' || (narrow && !open)), narrow }
 }
 

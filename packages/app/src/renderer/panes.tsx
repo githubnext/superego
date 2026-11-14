@@ -11,7 +11,7 @@ import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef
 import { createPortal } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
 import { ArrowRightIcon, ChatTextIcon, FileTextIcon, XIcon } from '@superego/ui'
-import { fileKind, paneKind, paneTitle, shownPanes, useRegistry, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
+import { fileKind, paneKind, paneTitle, shownPanes, useNarrow, useRegistry, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
 import { PaneMenu, ThreadBody } from './ThreadView.tsx'
@@ -19,7 +19,6 @@ import { ViewMenuButton } from './view-menu.tsx'
 import { FileEditor } from './file-editor.tsx'
 import { focusRegion } from './focus.ts'
 
-const narrowQuery = '(max-width: 599px)'
 /** A pane's width (a share of the row) until it's dragged, unless its kind says otherwise. */
 const DEFAULT_SHARE = 0.5
 /** Wide, the room after each column (the last too): its handle, to drag it wider or narrower. */
@@ -36,13 +35,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   const panes = shownPanes(registry, { machine: machine.id, thread })
   // A pane of a view's kind can move to the other places the view fits, from its ···.
   const isView = (pane: Pane) => registry.views.some((v) => v.id === pane.kind && v.fits.includes('pane'))
-  const [narrow, setNarrow] = useState(() => matchMedia(narrowQuery).matches)
-  useEffect(() => {
-    const list = matchMedia(narrowQuery)
-    const change = () => setNarrow(list.matches)
-    list.addEventListener('change', change)
-    return () => list.removeEventListener('change', change)
-  }, [])
+  const narrow = useNarrow()
   // Each pane's width, as a share of the row, by pane; kept in this window.
   const [shares, setShares] = useLocalState<Record<string, number>>('pane.widths', {})
   const row = useRef<HTMLDivElement>(null)

@@ -530,9 +530,10 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       slot(slot, component, options) {
         if (slot in VIEW_SLOTS) {
           const place = VIEW_SLOTS[slot as ViewSlot]
-          const taken = registry.views.filter((v) => v.owner === owner && v.id.startsWith(`${extension.name}.${slot}`)).length
+          const base = `${extension.name}.${slot}`
+          const taken = registry.views.filter((v) => v.owner === owner && (v.id === base || v.id.startsWith(`${base}.`))).length
           const Component = component as ComponentType<object>
-          return declare(`${extension.name}.${slot}${taken ? `.${taken + 1}` : ''}`, {
+          return declare(`${base}${taken ? `.${taken + 1}` : ''}`, {
             title: extension.title ?? extension.name, context: THREAD_PLACES.includes(place) ? 'thread' : 'window', fits: [place], default: place,
             ...(options?.order !== undefined ? { order: options.order } : {}),
             component: ({ place: _place, ...props }: ViewProps) => <Component {...props} />,
@@ -637,7 +638,8 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
             ...(info.default !== undefined ? { default: info.default } : {}), ...(info.narrow !== undefined ? { narrow: info.narrow } : {}),
             ...(info.order !== undefined ? { order: info.order } : {}), component, machines: [machine], owner,
           })
-          if (info.context === 'thread' && info.fits.includes('pane')) {
+          // A pane kind of its id, unless one (a UI half's, with no view of the id) is drawn already.
+          if (info.context === 'thread' && info.fits.includes('pane') && !registry.panes.some((p) => p.kind === info.id && p.owner.profile === profile)) {
             registry.panes.push({ kind: info.id, title: info.title, ...(icon ? { icon } : {}), component: ({ machine, thread }: PaneProps) => <DataViewBody id={info.id} place="pane" machine={machine} thread={thread} />, owner })
           }
         }
@@ -737,8 +739,9 @@ export function useLayout(): { placed: Placed; narrow: boolean } {
 }
 
 /**
- * The views in `place` for `where` (a thread's places), in the layout's order: the app's, but not those of an optional
- * extension its thread goes without, and that thread's profile's own (first, by the same id).
+ * The views in `place` for `where` (a thread's places), in the layout's order, one of each id: the app's, but not those
+ * of an optional extension its thread goes without, and that thread's profile's own (first, by the same id). An id
+ * declared in several scopes (a profile on two machines, a data view on each) is drawn as `where`'s own declares it.
  */
 export function viewsIn(registry: Registry, placed: Placed, place: Place, where?: Where) {
   // A data view shows a thread only from that thread's machine: another's has nothing to say of it.
@@ -767,8 +770,9 @@ export function PlacedViews({ place, machine, thread, frame }: {
 /** Whether `view` is in `place` now, and a way to put it there or take it out (toggled, unless `on` is given). */
 export function usePlacement(view: string, place: Place): [boolean, (on?: boolean) => void] {
   const registry = useRegistry()
-  const { placed } = useLayout()
-  const toggle = (on?: boolean) => void registry.router.dispatch('layout.place', { view, place, ...(on === undefined ? {} : { on }) }, { source: 'layout' }).catch((error) => console.error(error))
+  const { placed, narrow } = useLayout()
+  // The layer it's seen in: on a phone, the narrow one.
+  const toggle = (on?: boolean) => void registry.router.dispatch('layout.place', { view, place, ...(on === undefined ? {} : { on }), ...(narrow ? { narrow } : {}) }, { source: 'layout' }).catch((error) => console.error(error))
   return [placed[place].includes(view), toggle]
 }
 
