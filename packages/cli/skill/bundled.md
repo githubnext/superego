@@ -75,9 +75,17 @@ Then wire it in:
 
 Bundled extensions get more than a profile's:
 
-- **Every slot**, including `sidebar`, `rail` and `footer` (a phone's, beside Settings) (`{ order }`: lower comes first; `fallback: true` only while nothing fills it, `fills: false` drawn but not counted;
-  Ego's button is 10, the threads' 100), and **`superego.work(divide)`** to group a run of work in the transcript (as
-  `tasks` does).
+- **Views in the window's places**, not only a thread's: `superego.view(id, { title, icon, context, fits, default,
+  narrow, withoutSpaces, order, component })` (see "Views and the layout" in `docs/writing-extensions.md`). A `space`
+  is a rail button (its `icon`, or its own `rail` component) and the sidebar while open; `rail` is a button there that
+  isn't a space (Ego's, `order: 10`); `drawer` the foot of a phone's drawer, beside Settings; `titlebar` the title
+  bar's start. `default` is where it starts (none: offered, the user places it), `narrow` where it goes on a phone,
+  `withoutSpaces` where it goes while no view is in `space` (Unread's bell in the rail). The user's layout decides in
+  the end: read where it is with `usePlacement(id, place)`, never keep a setting of your own for it. `slot()` in the
+  old places (`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) is sugar for a view of that place, named
+  `<extension>.<slot>`, with no icon; so `slot('sidebar')` plus `slot('rail')` is two rail buttons now (a lettered
+  space button, and its own): declare one `view` with `rail` instead. And **`superego.work(divide)`** to group a run of
+  work in the transcript (as `tasks` does).
 - **New thread fields**: `superego.newThreadField({ component, from })`. `component` gets `{ machine, cwd, value,
   onChange }` and draws a field in the dialog (a checkbox: `<label className="new-thread__check">`); its value goes to
   `thread.create` as `options.<name>`, for the daemon half's `creating` hook. `from(thread)` is its value for a thread
