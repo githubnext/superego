@@ -11,7 +11,7 @@ import { machine as client, useSettings, watched } from './client.ts'
 import { paneMenu, PlacedViews, shownPanes, Slot, useLayout, useRegistry, viewsIn, type SpaceRailProps, type View, type ViewProps } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
 import { ServiceNotice } from './ServiceNotice.tsx'
-import { LayoutNotice, LayoutViews } from './layout-text.tsx'
+import { LayoutEditor, LayoutNotice, LayoutViews } from './layout-text.tsx'
 import { ViewContextMenu, withContextMenu, withMenuButton } from './view-menu.tsx'
 import { refreshFontsSoon } from './fonts.ts'
 import { AuthNotice } from './AuthNotice.tsx'
@@ -170,6 +170,7 @@ export function Shell() {
       {navigator && <Navigator onClose={() => setNavigator(false)} />}
       <Slot name="overlay" props={{}} />
       <LayoutViews />
+      <LayoutEditor />
       {log && <ActionLog router={registry.router.router} onClose={() => setLog(false)} />}
       {newThread.start && <NewThreadDialog start={newThread.start} onClose={newThread.close} />}
     </div>

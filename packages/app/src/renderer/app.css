@@ -778,3 +778,6 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .data-view__markdown { font-size: var(--superego-text-body); line-height: var(--superego-leading-body); overflow-wrap: anywhere; }
 .data-view__actions { display: flex; flex-wrap: wrap; gap: var(--superego-space-2); margin-top: var(--superego-space-2); }
 .data-view__actions .data-view__button { display: inline-flex; align-items: center; gap: 6px; }
+.setting__buttons { display: flex; gap: 6px; }
+.layout-editor__text { width: 100%; min-height: 12em; font: var(--superego-text-sm) var(--superego-mono); }
+.layout-editor__actions { display: flex; justify-content: flex-end; margin-top: var(--superego-space-3); }

@@ -56,7 +56,8 @@ export function ViewMenuItems({ view, place, machine, thread, pane }: ViewMenuPr
       )}
       {/* On a pane's tab, beside the ✕ that only closes it: this takes it out of the menu too. */}
       <Menu.Item data-remove onClick={() => void change({ place, on: false }).catch(fail)}>{pane ? 'Remove from pane menu' : 'Remove from here'}</Menu.Item>
-      {!window.superego.web && <><Menu.Separator /><Menu.Item onClick={() => void dispatch('layout.edit', {}, { source: 'layout' }).catch(fail)}>Edit layout…</Menu.Item></>}
+      <Menu.Separator />
+      <Menu.Item onClick={() => void dispatch('layout.edit', {}, { source: 'layout' }).catch(fail)}>Edit layout…</Menu.Item>
     </>
   )
 }

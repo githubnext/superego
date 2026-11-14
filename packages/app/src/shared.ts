@@ -79,11 +79,12 @@ export const ACTIONS_MOVED: Record<string, string> = {
 }
 
 /**
- * Where the window's views go (see renderer/layout.ts): edited as text (layout.json, see main/layout-file.ts) and from
- * the views' own menus, so hidden among the other settings (the one way Settings leaves it out).
+ * Where the window's views go (see renderer/layout.ts): edited as text (layout.json, see main/layout-file.ts; in a
+ * browser, in the window) and from the views' own menus. In Settings, the way to both and back to the defaults, which
+ * no layout can take away.
  */
 export const LAYOUT_SETTING = {
-  key: 'app.layout', title: 'Layout', default: {}, type: { type: 'layout' }, hidden: () => true,
+  key: 'app.layout', title: 'Layout', default: {}, description: 'Where views go. Each view\'s menu moves it too.', type: { type: 'layout' },
 } as const
 
 /**

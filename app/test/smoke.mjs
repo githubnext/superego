@@ -961,6 +961,30 @@ if (phase === 'first') {
   await browser.webContents.executeJavaScript(`document.querySelector('.thread-sheet .threads-model').click()`)
   await browser.webContents.executeJavaScript(`document.querySelector('.app__scrim--sheet').click()`)
   await inBrowser(`!document.querySelector('.thread-sheet')`, 'the sheet closed')
+  // No space and no picker on a phone: the bar stays, with the thread's sheet and Settings, and Settings has the layout
+  // to edit (in a browser, in a dialog) back to the defaults.
+  await browser.webContents.executeJavaScript(`window.superego.call('app', 'app.settings.set', { key: 'app.layout', value: { place: { 'threads.list': null, 'core.picker': null } } })`)
+  await inBrowser(`Boolean(document.querySelector('.app__mobilebar .app__settings')) && Boolean(document.querySelector('.app__mobilebar button.app__mobiletitle')) && !document.querySelector('.app__mobilebar [aria-label="Threads"]')`, 'a phone with no space keeps its bar and Settings')
+  await browser.webContents.executeJavaScript(`document.querySelector('.app__mobilebar .app__settings').click()`)
+  await inBrowser(`Boolean(document.querySelector('.settings__nav button'))`, 'Settings on a phone')
+  await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent === 'General').click()`)
+  await inBrowser(`[...document.querySelectorAll('.setting[data-key="app.layout"] button')].some((b) => b.textContent === 'Edit layout…')`, 'the layout in Settings')
+  await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.setting[data-key="app.layout"] button')].find((b) => b.textContent === 'Edit layout…').click()`)
+  await inBrowser(`Boolean(document.querySelector('.layout-editor__text')) && !document.querySelector('.settings')`, "the browser's layout in a dialog")
+  await browser.webContents.executeJavaScript(`(() => {
+    const text = document.querySelector('.layout-editor__text')
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(text, '{ "place": { "threads.list": "sidebar" } }')
+    text.dispatchEvent(new Event('input', { bubbles: true }))
+    ;[...document.querySelectorAll('.layout-editor button')].find((b) => b.textContent === 'Save').click()
+  })()`)
+  await inBrowser(`document.querySelector('.layout-editor .layout-note.is-problem')?.textContent.includes('No place "sidebar"')`, 'a layout that does not read, noted')
+  await browser.webContents.executeJavaScript(`(() => {
+    const text = document.querySelector('.layout-editor__text')
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(text, '{}')
+    text.dispatchEvent(new Event('input', { bubbles: true }))
+  })()`)
+  await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.layout-editor button')].find((b) => b.textContent === 'Save').click()`)
+  await inBrowser(`!document.querySelector('.layout-editor') && Boolean(document.querySelector('.app__mobilebar [aria-label="Threads"]'))`, 'the layout back from the dialog')
   await browser.webContents.executeJavaScript(`window.superego.call('app', 'app.settings.set', { key: 'app.layout', value: {} })`)
   // Images over the WebSocket, on a phone: the thread's images load, and the lightbox fills the screen.
   await browser.webContents.executeJavaScript(`document.querySelector('.app__mobilebar button').click()`)

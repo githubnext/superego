@@ -15,6 +15,7 @@ import { mergeSettings, type MergedSetting } from './merge-settings.ts'
 import { Keymap } from './Keymap.tsx'
 import { driftNote, MachineDrift } from './machine-drift.tsx'
 import { settingsView, useApp, useRegistry } from './extension.tsx'
+import { useSettingsDialog } from './state.tsx'
 import { useAllowedUi, useDeclinedUi } from './profile-ui.ts'
 import { sizeOf } from './profile-ui-notice.tsx'
 
@@ -76,6 +77,19 @@ function Section({ target, section, values }: { target: string; section: Section
   )
 }
 
+/** The layout's row: to its text, and back to the defaults. Always here, whatever the layout hides. */
+function LayoutControl() {
+  const dispatch = useRegistry().router.dispatch
+  const { close } = useSettingsDialog()
+  const run = (id: string) => void dispatch(id, {}, { source: 'settings' }).catch((error) => console.error(error))
+  return (
+    <span className="setting__buttons">
+      <Button onClick={() => { close(); run('layout.edit') }}>Edit layout…</Button>
+      <Button onClick={() => run('layout.reset')}>Reset</Button>
+    </span>
+  )
+}
+
 /** One setting's row. `apply` changes it wherever it lives; `mixed` shows that the machines it spans disagree. */
 function Setting({ setting, value, apply, mixed, note }: {
   setting: SettingInfo; value: Json; apply(value: Json): Promise<unknown>; mixed?: boolean; note?: string
@@ -101,6 +115,7 @@ function Setting({ setting, value, apply, mixed, note }: {
       nullLabel={setting.nullLabel} fonts={knownFonts} loadFonts={loadFonts} onChange={set} />; break
     case 'color': control = <ColorField label={setting.title} value={typeof value === 'string' ? value : String(setting.default ?? '')} fallback={String(setting.default ?? '')} disabled={disabled} onChange={set} onInvalid={setError} />; break
     case 'keymap': return <Keymap setting={setting} value={value} apply={apply} />
+    case 'layout': control = <LayoutControl />; break
     case 'string': control = <TextField type={setting.secret ? 'password' : 'text'} aria-label={setting.title} defaultValue={typeof value === 'string' ? value : ''}
       placeholder={setting.placeholder} disabled={disabled} onBlur={(e) => set(e.target.value)} />; break
   }
