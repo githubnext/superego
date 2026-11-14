@@ -499,6 +499,42 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     },
   }
 
+  /**
+   * Window actions of profiles' UI, by id: one action in the router per id, however many profiles (or one profile on
+   * several machines) define it, offered while a thread of one of them is shown and run as that profile's.
+   */
+  const profileActions = new Map<string, { entries: { action: WindowAction; scope: string }[]; off: () => void }>()
+  function registerProfileAction(action: WindowAction, scope: string): () => void {
+    const shown = (c: WindowContext) => {
+      const thread = c.selection && c.threadOf(c.selection)
+      return thread?.profile ? profileScope(c.selection!.machine, thread.profile) : undefined
+    }
+    let held = profileActions.get(action.id)
+    if (!held) {
+      const entries: { action: WindowAction; scope: string }[] = []
+      const { when: _when, run: _run, ...info } = action
+      const own = (c: WindowContext) => entries.find((e) => e.scope === shown(c))
+      const off = registry.router.register({
+        ...info,
+        when: (c) => { const e = own(c); return Boolean(e) && (e!.action.when?.(c) ?? true) },
+        run: (params, c) => {
+          const e = own(c)
+          if (!e) throw new Error(`${action.id} is a profile's: show one of its threads to run it`)
+          return e.action.run(params, c)
+        },
+      })
+      profileActions.set(action.id, held = { entries, off })
+    }
+    if (held.entries.some((e) => e.scope === scope)) throw new Error(`Action ${action.id} is already defined`)
+    const entry = { action, scope }
+    held.entries.push(entry)
+    const it = held
+    return () => {
+      it.entries.splice(it.entries.indexOf(entry), 1)
+      if (!it.entries.length) { it.off(); if (profileActions.get(action.id) === it) profileActions.delete(action.id) }
+    }
+  }
+
   /** Set up one extension: everything it adds is owned by it, and its teardown takes all of it away again. */
   function setUp(extension: UiExtension, profile?: string) {
     if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
@@ -605,8 +641,13 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       },
       dispatch: (id, params, options) => registry.router.dispatch(id, params, { source: extension.name, ...options }),
       action(action) {
-        if (profile) return console.warn(`Profile extension ${extension.name}: actions from a profile's UI aren't supported yet`)
         if (extension.name !== 'core' && !action.id.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its actions "${extension.name}.<name>", not "${action.id}"`)
+        // A profile's: offered (keys, the palette) only while one of its threads is shown, and run as that one's.
+        if (profile) {
+          life.live(`the action ${action.id}`)
+          life.add(registerProfileAction(action, profile))
+          return
+        }
         // Not offered while a thread that goes without this extension is shown.
         const { when } = action
         const has = (c: WindowContext) => !(owner.optional && c.selection && c.threadOf(c.selection)?.without?.includes(owner.extension))

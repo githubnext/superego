@@ -8,11 +8,12 @@ import type { ExtensionAbout } from './app.ts'
 
 /**
  * The extension API this build gives extensions, both halves alike. 1.1: `superego.signal` in both halves, a UI
- * `setup`'s cleanup, and the `unarchiveAbandoned` hook. Minor: something added (an extension that uses it
+ * `setup`'s cleanup, and the `unarchiveAbandoned` hook. 1.2: `scopedValue` and `useValue`'s `scope`, `useMethod`,
+ * window actions from a profile's UI, and the stable surface apart from `superego/unstable`. Minor: something added (an extension that uses it
  * asks for `^1.<minor>`); major: something an extension could rely on changed or went. An extension whose `api` range
  * this doesn't satisfy is refused when it's set up.
  */
-export const EXTENSION_API = '1.1.0'
+export const EXTENSION_API = '1.2.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api' | 'capabilities'>

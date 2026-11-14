@@ -64,7 +64,7 @@ describe('the UI registry', () => {
   it("refuses an extension that needs an extension API this window isn't, before it runs, and tells machines each one's version", () => {
     let ran = false
     const future = defineUiExtension({ name: 'future', version: '2.0.0', api: '^2', setup() { ran = true } })
-    expect(() => createRegistry(app, [future], () => {})).toThrow('Extension future needs extension API ^2, and this Superego has 1.1.0: update Superego')
+    expect(() => createRegistry(app, [future], () => {})).toThrow('Extension future needs extension API ^2, and this Superego has 1.2.0: update Superego')
     // A profile's is left out, and the rest of the profile set up.
     const registry = createRegistry(app, [defineUiExtension({ name: 'mine', version: '1.2.0', api: '^1', capabilities: ['x'], setup() {} })], () => {})
     const errors = console.error
@@ -142,6 +142,34 @@ describe('actions of optional extensions', () => {
     open = true
     shown({ ...thread(false), without: ['files'] })
     expect([registry.router.offered('files.open'), registry.router.offered('files.close')]).toEqual([false, false])
+  })
+})
+
+describe("a profile's window actions", () => {
+  it('are offered only while one of its threads is shown, and run as the shown thread\'s profile on its machine', async () => {
+    const ran: string[] = []
+    const builds = (said: string) => defineUiExtension({
+      name: 'builds',
+      setup(superego) { superego.action(defineWindowAction({ id: 'builds.open', title: 'Show the build queue', keys: 'mod+shift+b', run: () => { ran.push(said) } })) },
+    })
+    const registry = createRegistry(app, [], () => {})
+    registry.installProfile('box', profile, [builds('box')])
+    registry.installProfile('laptop', profile, [builds('laptop')])
+    const shown = (machine: string, t: ThreadInfo) => registry.router.setContext({ selection: { machine, thread: t.id }, threadOf: () => t } as never)
+    expect(registry.router.all().find((a) => a.id === 'builds.open')).toMatchObject({ keys: 'mod+shift+b' })
+    shown('box', thread(false))
+    expect(registry.router.offered('builds.open')).toBe(false)
+    shown('laptop', thread(true))
+    expect(registry.router.offered('builds.open')).toBe(true)
+    await registry.router.dispatch('builds.open')
+    shown('box', thread(true))
+    await registry.router.dispatch('builds.open')
+    expect(ran).toEqual(['laptop', 'box'])
+    // Gone with the profile's UI on each machine; the action with the last.
+    registry.installProfile('box', profile, [])
+    expect(registry.router.offered('builds.open')).toBe(false)
+    registry.installProfile('laptop', profile, [])
+    expect(registry.router.all().some((a) => a.id === 'builds.open')).toBe(false)
   })
 })
 
