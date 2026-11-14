@@ -16,6 +16,9 @@ import type { Json } from '@superego/protocol'
  */
 export type Place = 'space' | 'rail' | 'drawer' | 'titlebar' | 'aside' | 'pane' | 'header'
 export const PLACES: Place[] = ['space', 'rail', 'drawer', 'titlebar', 'aside', 'pane', 'header']
+/** The places a wide window draws, and a phone's (its aside in the thread's sheet; its title bar only while there's no space). */
+export const WIDE_PLACES: Place[] = ['space', 'rail', 'titlebar', 'aside', 'pane', 'header']
+export const NARROW_PLACES: Place[] = ['space', 'drawer', 'aside', 'pane', 'header']
 /** The places that show a thread: a view drawn there gets it. */
 export const THREAD_PLACES: Place[] = ['aside', 'pane', 'header']
 
@@ -54,16 +57,23 @@ export type Placed = Record<Place, string[]>
 const list = (placement: Placement | undefined): Place[] => !placement ? [] : Array.isArray(placement) ? placement : [placement]
 
 /**
- * Where `view` goes, and whether the user said so: the narrow layer's change (when `narrow` and `layers` say), else
- * on a phone the view's own narrow places (unless the user hid it), else the user's wide change, else its default.
+ * Where `view` goes, and whether the user said so. What the user says beats what the view says, and on a phone the
+ * phone's beats the wide:
+ * 1. on a phone, the user's narrow layer (when `layers`);
+ * 2. the user's wide layout: hidden is hidden everywhere; places are kept on a phone if it draws any of them;
+ * 3. on a phone, the view's own `narrow`;
+ * 4. the view's `default`.
  */
 function placesOf(view: Placeable, layout: Layout | undefined, narrow: boolean, layers = true): { places: Place[]; chosen: boolean } {
   const user = layout?.place ?? {}
   const small = narrow && layers ? layout?.narrow?.place ?? {} : {}
   if (view.id in small) return { places: list(small[view.id]), chosen: true }
-  // Hidden wide is hidden on a phone too: the view's own narrow places are where it goes instead of its wide default.
-  if (narrow && view.narrow !== undefined && user[view.id] !== null) return { places: list(view.narrow), chosen: false }
-  if (view.id in user) return { places: list(user[view.id]), chosen: true }
+  if (view.id in user) {
+    const places = list(user[view.id])
+    // Put where a phone has no room (the rail), it goes where the view goes on a phone instead.
+    if (!narrow || !places.length || view.narrow === undefined || places.some((p) => NARROW_PLACES.includes(p))) return { places, chosen: true }
+  }
+  if (narrow && view.narrow !== undefined) return { places: list(view.narrow), chosen: false }
   return { places: list(view.default), chosen: false }
 }
 

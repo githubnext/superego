@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { defineApp, type Json, type ThreadInfo } from '@superego/protocol'
 import { MemorySettingsStore } from '@superego/settings'
-import { createRegistry, defineUiExtension, paneMenu, viewsIn, type UiExtension } from '../src/renderer/extension.tsx'
+import { createRegistry, defineUiExtension, paneMenu, placedFor, viewsIn, type UiExtension } from '../src/renderer/extension.tsx'
 import { isLayout, placesNow, placeView, resolveLayout, type Layout, type Placeable } from '../src/renderer/layout.ts'
 import { withMovedLayout } from '../src/shared.ts'
 
@@ -76,7 +76,17 @@ describe('resolving the layout', () => {
     const changed = resolveLayout(bundled, layout, { narrow: true })
     expect(changed.aside).toEqual(['threads.details'])
     expect(changed.drawer).toEqual(['ego.button'])
+  })
+
+  it("narrow: what the user says beats what the view says, hidden included", () => {
+    // Hidden wide is hidden on a phone, though Ego goes in the drawer there by default.
     expect(resolveLayout(bundled, { place: { 'ego.button': null } }, { narrow: true }).drawer).not.toContain('ego.button')
+    // Put in a place a phone draws, it's there on a phone too; in one it doesn't (the rail), where the view goes on a phone.
+    expect(resolveLayout(bundled, { place: { 'unread.bell': 'drawer' } }, { narrow: false }).drawer).toEqual(['unread.bell'])
+    expect(resolveLayout(bundled, { place: { 'files.folder': 'aside' } }, { narrow: true }).aside).toEqual(['files.folder'])
+    expect(resolveLayout(bundled, { place: { 'ego.button': 'rail' } }, { narrow: true }).drawer).toEqual(['ego.button', 'unread.bell'])
+    // The phone's own layer beats the wide one.
+    expect(resolveLayout(bundled, { place: { 'ego.button': null }, narrow: { place: { 'ego.button': 'drawer' } } }, { narrow: true }).drawer).toContain('ego.button')
   })
 })
 
@@ -200,23 +210,38 @@ describe('views in the registry', () => {
     expect(registry.views).toEqual([])
   })
 
-  it('draws and lists a view once, however many scopes declare it, as the thread\'s own declares it', () => {
+  it('resolves a view declared in several scopes from the scope a thread is in, once', () => {
+    // The same profile on two machines, its notes beside the thread on one and in the pane menu on the other.
+    const notes = (where: 'aside' | 'pane'): UiExtension => defineUiExtension({
+      name: 'notes', setup(superego) { superego.view('notes.list', { title: `Notes (${where})`, context: 'thread', fits: ['aside', 'pane'], default: where, component: None }) },
+    })
     const registry = createRegistry(app, [], () => {})
-    const profile = { scope: 'user' as const, name: 'shop', dir: '/home/me/.superego/profiles/shop' }
-    registry.installProfile('local', profile, [orders])
-    registry.installProfile('box', profile, [orders])
-    const placed = resolveLayout(registry.views, undefined)
-    expect(placed.pane).toEqual(['orders.order', 'orders.log'])
+    const profile = { scope: 'user' as const, name: 'notes', dir: '/home/me/.superego/profiles/notes' }
+    registry.installProfile('local', profile, [notes('aside')])
+    registry.installProfile('box', profile, [notes('pane')])
+    // The probe that gave {"aside":["notes.list","notes.list"]}: each id once, whatever is passed.
+    expect(resolveLayout(registry.views, undefined).aside).toEqual(['notes.list'])
+    const onLocal = { machine: 'local', thread: { ...thread, profile } }
     const onBox = { machine: 'box', thread: { ...thread, profile } }
-    const drawn = viewsIn(registry, placed, 'pane', onBox)
-    expect(drawn.map((v) => v.id)).toEqual(['orders.order', 'orders.log'])
-    expect(drawn.every((v) => v.owner.profile?.startsWith('box'))).toBe(true)
-    expect(paneMenu(registry, placed, onBox).map((m) => m.kind)).toEqual(['orders.order', 'orders.log'])
-    // A profile's data view, on two machines.
-    registry.setDataViews('local', [{ id: 'shop.board', extension: 'shop', title: 'Board', context: 'thread', fits: ['aside'], default: 'aside', value: 'shop.board', profiles: [profile.dir] }])
-    registry.setDataViews('box', [{ id: 'shop.board', extension: 'shop', title: 'Board', context: 'thread', fits: ['aside'], default: 'aside', value: 'shop.board', profiles: [profile.dir] }])
-    expect(resolveLayout(registry.views, undefined).aside).toEqual(['shop.board'])
-    expect(viewsIn(registry, resolveLayout(registry.views, undefined), 'aside', onBox).map((v) => v.machines)).toEqual([['box']])
+    const local = placedFor(registry, undefined, { where: onLocal })
+    expect(local.aside).toEqual(['notes.list'])
+    expect(local.pane).toEqual([])
+    expect(viewsIn(registry, local, 'aside', onLocal).map((v) => [v.title, v.owner.profile?.split('\u0000')[0]])).toEqual([['Notes (aside)', 'local']])
+    const box = placedFor(registry, undefined, { where: onBox })
+    expect(box.aside).toEqual([])
+    expect(paneMenu(registry, box, onBox)).toEqual([{ kind: 'notes.list', title: 'Notes (pane)' }])
+    // The user's layout names the view, not a scope: it applies in both.
+    expect(placedFor(registry, { place: { 'notes.list': null } }, { where: onBox }).pane).toEqual([])
+    // Not the profile's thread, nor the window: none of it.
+    expect(placedFor(registry, undefined, { where: { machine: 'local', thread } }).aside).toEqual([])
+    expect(placedFor(registry, undefined).aside).toEqual([])
+    // A profile's data view, on two machines: once, from the thread's own machine.
+    const board = { id: 'notes.board', extension: 'notes', title: 'Board', context: 'thread' as const, fits: ['aside' as const], default: 'aside' as const, value: 'notes.board', profiles: [profile.dir] }
+    registry.setDataViews('local', [board])
+    registry.setDataViews('box', [board])
+    const withBoard = placedFor(registry, undefined, { where: onBox })
+    expect(withBoard.aside).toEqual(['notes.board'])
+    expect(viewsIn(registry, withBoard, 'aside', onBox).map((v) => v.machines)).toEqual([['box']])
   })
 })
 

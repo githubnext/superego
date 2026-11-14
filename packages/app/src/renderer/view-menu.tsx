@@ -4,8 +4,8 @@
 import type { ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import { ContextMenu, DotsThreeIcon, IconButton, Menu } from '@superego/ui'
-import { useLayout, useRegistry } from './extension.tsx'
-import type { Place } from './layout.ts'
+import { scopedViews, useLayout, useRegistry } from './extension.tsx'
+import { NARROW_PLACES, WIDE_PLACES, type Place } from './layout.ts'
 
 /** What each place is called, wherever the user moves views. */
 export const PLACE_TITLES: Record<Place, string> = {
@@ -15,9 +15,6 @@ export const PLACE_TITLES: Record<Place, string> = {
 export const PLACE_PHRASES: Record<Place, string> = {
   space: 'as a space', rail: 'in the rail', drawer: 'in the drawer', titlebar: 'in the title bar', aside: 'beside the thread', pane: 'in the pane menu', header: 'in the thread header',
 }
-/** The places a wide window shows, and a phone's (its aside in the thread's sheet): views move only among those there are. */
-export const WIDE_PLACES: Place[] = ['space', 'rail', 'titlebar', 'aside', 'pane', 'header']
-export const NARROW_PLACES: Place[] = ['space', 'drawer', 'aside', 'pane', 'header']
 
 export type ViewMenuProps = {
   view: string
@@ -33,8 +30,9 @@ export type ViewMenuProps = {
 /** The menu's items: Move to → the other places it fits, Remove from here (on a pane's tab, from the pane menu), Edit layout…. */
 export function ViewMenuItems({ view, place, machine, thread, pane }: ViewMenuProps) {
   const registry = useRegistry()
-  const { placed, narrow } = useLayout()
-  const found = registry.views.find((v) => v.id === view)
+  const where = machine && thread ? { machine, thread } : undefined
+  const { placed, narrow } = useLayout(where)
+  const found = scopedViews(registry, where).find((v) => v.id === view)
   if (!found) return null
   const dispatch = registry.router.dispatch
   const fail = (error: unknown) => console.error(error)

@@ -727,29 +727,44 @@ export function useNarrow() {
 /** The user's layout (`app.layout`), as stored; anything not shaped as one is none. */
 export const layoutOf = (value: Json | undefined): Layout | undefined => isLayout(value) ? value : undefined
 
-/** Where every view goes now, place by place: the views' defaults and the user's layout, narrow on a phone. */
-export function useLayout(): { placed: Placed; narrow: boolean } {
+/**
+ * The views `where` sees (a thread's places), one of each id, as its own scope declares it: its profile's (that profile
+ * on that machine) over the app's, a data view only from its machine, none of an optional extension its thread goes
+ * without. Without `where` (the window's places), the app's. An id is a view's name, one in the layout whatever the
+ * scope; what it is, where it fits and goes by default are its declaration's here.
+ */
+export function scopedViews(registry: Registry, where?: Where): Registry['views'] {
+  // A data view shows a thread only from that thread's machine: another's has nothing to say of it.
+  const on = (view: Registry['views'][number]) => !where || !view.machines || view.machines.includes(where.machine)
+  const byId = new Map<string, Registry['views'][number]>()
+  for (const view of seenIn(registry.views, where)) {
+    if (!on(view)) continue
+    const had = byId.get(view.id)
+    if (!had || (!had.owner.profile && view.owner.profile)) byId.set(view.id, view)
+  }
+  return [...byId.values()]
+}
+
+/** Where every view `where` sees goes, place by place (see `scopedViews`): resolved from those, so each is there once. */
+export const placedFor = (registry: Registry, layout: Layout | undefined, { narrow = false, where }: { narrow?: boolean; where?: Where | undefined } = {}): Placed =>
+  resolveLayout(scopedViews(registry, where), layout, { narrow })
+
+/** Where every view goes now for `where` (the window's, without), place by place: the views' defaults and the user's layout, narrow on a phone. */
+export function useLayout(where?: Where): { placed: Placed; narrow: boolean } {
   const registry = useRegistry()
   const version = useSyncExternalStore(registry.subscribe, () => registry.version)
   const stored = useSettings('app', true)?.values[LAYOUT]
   const narrow = useNarrow()
   const key = JSON.stringify(stored ?? null)
-  const placed = useMemo(() => resolveLayout(registry.views, layoutOf(stored), { narrow }), [version, key, narrow])
+  const scope = where ? `${where.machine}\u0000${where.thread.profile?.dir ?? ''}\u0000${where.thread.without?.join() ?? ''}` : ''
+  const placed = useMemo(() => placedFor(registry, layoutOf(stored), { narrow, where }), [version, key, narrow, scope])
   return { placed, narrow }
 }
 
-/**
- * The views in `place` for `where` (a thread's places), in the layout's order, one of each id: the app's, but not those
- * of an optional extension its thread goes without, and that thread's profile's own (first, by the same id). An id
- * declared in several scopes (a profile on two machines, a data view on each) is drawn as `where`'s own declares it.
- */
+/** The views in `place` for `where` (see `scopedViews`), in the layout's order; `placed` resolved for the same `where`. */
 export function viewsIn(registry: Registry, placed: Placed, place: Place, where?: Where) {
-  // A data view shows a thread only from that thread's machine: another's has nothing to say of it.
-  const on = (view: Registry['views'][number]) => !where || !view.machines || view.machines.includes(where.machine)
-  return placed[place].flatMap((id) => {
-    const found = lookUp(registry.views.filter(on), where, (view) => view.id === id)
-    return found ? [found] : []
-  })
+  const views = new Map(scopedViews(registry, where).map((view) => [view.id, view]))
+  return placed[place].flatMap((id) => views.get(id) ?? [])
 }
 
 /** Draw the views in a place: a thread's (`machine`, `thread`), or the window's; each in its `frame`, if given (its menu). */
@@ -757,8 +772,8 @@ export function PlacedViews({ place, machine, thread, frame }: {
   place: Place; machine?: MachineEntry; thread?: ThreadInfo; frame?: (view: View & { id: string }, drawn: ReactNode) => ReactNode
 }) {
   const registry = useRegistry()
-  const { placed } = useLayout()
   const where = machine && thread ? { machine: machine.id, thread } : undefined
+  const { placed } = useLayout(where)
   // A view that needs a thread isn't drawn without one.
   return <>{viewsIn(registry, placed, place, where).filter((view) => view.context === 'window' || where).map((view) => {
     const Component = view.component as ComponentType<ViewProps>

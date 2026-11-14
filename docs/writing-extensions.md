@@ -160,11 +160,17 @@ superego.view('ego.button', { title: 'Ask Ego', icon: LifebuoyIcon, context: 'wi
 | `header` | right of the thread's title: a button, a badge | `{ place, machine, thread }` |
 
 - `default` is a place, several, or none (offered, not placed: the user puts it somewhere). `narrow` is where it goes
-  on a phone instead (unless the user hid it: hidden wide is hidden there too). `withoutSpaces` is where it goes while no view is in `space` (Unread's bell in the rail, the core's
+  on a phone instead. `withoutSpaces` is where it goes while no view is in `space` (Unread's bell in the rail, the core's
   picker in the title bar).
 - `app.layout` holds only what the user changed: `{ place: { 'threads.details': 'aside', 'ego.button': null }, order:
   { pane: ['git.changes'] }, narrow: { place: { … } } }`. A view it names that isn't there (an extension removed) is
   ignored, and a place a view doesn't fit is too. A view can be in two places at once.
+- What the user says beats what a view says, and on a phone the phone's layer beats the wide one. On a phone a view
+  goes where `narrow` in the layout puts it; else where `place` does (hidden is hidden everywhere; a place a phone
+  doesn't draw, the rail, gives way to the view's own `narrow`); else its `narrow`; else its `default`.
+- The layout names views by id, whatever scope declares them: a profile's view on two machines is one entry. A
+  thread's places are resolved from the views that thread sees, its profile's (on its machine) over the app's, so each
+  id is there once, as that scope declares it.
 - To put a view in a place or take it out, dispatch `layout.place` with `{ view, place, on? }` (toggled without
   `on`); `from` takes it out of that place in the same change (moved), `narrow` changes the phone's layer. In a
   component, `usePlacement(view, place)` gives `[placed, toggle]`. ⌘I is `threads.details` in the `aside`, or not.

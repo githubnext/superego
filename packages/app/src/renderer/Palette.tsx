@@ -5,8 +5,9 @@ import { useMemo } from 'react'
 import { StatusGlyph } from '@superego/ui'
 import type { Status } from '@superego/protocol'
 import { score } from './score.ts'
-import { useLayout, useRegistry } from './extension.tsx'
-import { NARROW_PLACES, PLACE_PHRASES, WIDE_PLACES } from './view-menu.tsx'
+import { scopedViews, useLayout, useRegistry } from './extension.tsx'
+import { NARROW_PLACES, WIDE_PLACES } from './layout.ts'
+import { PLACE_PHRASES } from './view-menu.tsx'
 import { useSelection } from './state.tsx'
 import { runsBare } from './actions.tsx'
 import { bound, useActions, useKeymap } from './keys.ts'
@@ -16,7 +17,7 @@ type Item = { id: string; title: string; detail?: string; status?: Status; keys?
 
 export function Palette({ onClose }: { onClose(): void }) {
   const registry = useRegistry()
-  const { selection } = useSelection()
+  const { selection, machine, thread } = useSelection()
   const actions = useActions(selection?.machine)
   const [keymap] = useKeymap()
 
@@ -26,10 +27,11 @@ export function Palette({ onClose }: { onClose(): void }) {
     id: a.id, title: a.title, ...(bound(a, keymap) ? { keys: bound(a, keymap) } : {}), ...(a.thread && selection ? { detail: 'this thread' } : {}),
     run: () => void registry.router.dispatch(a.id, {}, { source: 'palette' }).catch((error) => console.error(error)),
   })), [actions, keymap])
-  const { placed, narrow } = useLayout()
+  // The views the selected thread sees (its profile's too), and the window's.
+  const where = selection && machine && thread ? { machine: machine.id, thread } : undefined
+  const { placed, narrow } = useLayout(where)
   const placings = useMemo<Item[]>(() => {
-    const seen = new Set<string>()
-    return registry.views.filter((view) => !seen.has(view.id) && Boolean(seen.add(view.id))).flatMap((view) =>
+    return scopedViews(registry, where).flatMap((view) =>
       view.fits.filter((place) => (narrow ? NARROW_PLACES : WIDE_PLACES).includes(place) && !placed[place].includes(view.id)).map((place): Item => ({
         id: `layout.place:${view.id}:${place}`, title: `Show ${view.title} ${PLACE_PHRASES[place]}`,
         run: () => void registry.router.dispatch('layout.place', { view: view.id, place, on: true, ...(narrow ? { narrow } : {}) }, { source: 'palette' }).catch((error) => console.error(error)),

@@ -948,7 +948,8 @@ function Composer({ machine, thread, busy, inbox, onJump }: { machine: MachineEn
 /** Open a pane beside the thread: the kinds that show something without being told what (Changes, a profile's own). */
 export function PaneMenu({ machine, thread, add = false }: { machine: MachineEntry; thread: ThreadInfo; add?: boolean }) {
   const registry = useRegistry()
-  const kinds = paneMenu(registry, useLayout().placed, { machine: machine.id, thread })
+  const where = { machine: machine.id, thread }
+  const kinds = paneMenu(registry, useLayout(where).placed, where)
   if (!kinds.length) return null
   const open = (kind: string) => void registry.router.dispatch('pane.open', { id: thread.id, kind }, { machine: machine.id, source: 'header' })
   return (

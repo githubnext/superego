@@ -55,6 +55,8 @@ export function Shell() {
   const [spaceId, setSpace] = useLocalState<string | undefined>('space', undefined)
   const space = spaces.find((view) => view.id === spaceId) ?? spaces[0]
   const where = selection && thread && machine ? { machine: machine.id, thread } : undefined
+  // The thread's places, as the views it sees resolve.
+  const threadPlaced = useLayout(where).placed
   // Where the thread's columns show their tabs: in the title bar, wide.
   const [strip, setStrip] = useState<HTMLElement | null>(null)
   useEffect(() => { setDrawer(false); setSheet(false) }, [selection?.machine, selection?.thread, narrow])
@@ -158,7 +160,7 @@ export function Shell() {
             ? <StripSlot.Provider value={narrow ? null : strip}><ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} /></StripSlot.Provider>
             : <div className="app__empty">{spaces.length ? 'Select or start a thread.' : `Start a thread with: ${registry.app.id}`}</div>}
         </main>
-        {!narrow && where && viewsIn(registry, placed, 'aside', where).length > 0 && (
+        {!narrow && where && viewsIn(registry, threadPlaced, 'aside', where).length > 0 && (
           <aside className="app__aside"><PlacedViews place="aside" machine={machine} thread={thread} frame={withMenuButton('aside', where)} /></aside>
         )}
       </div>
@@ -210,8 +212,8 @@ function SpaceButton({ view, open, show, narrow = false }: { view: View; narrow?
  */
 function ThreadSheet({ machine, thread, onClose }: { machine: MachineEntry; thread: ThreadInfo; onClose(): void }) {
   const registry = useRegistry()
-  const { placed } = useLayout()
   const where = { machine: machine.id, thread }
+  const { placed } = useLayout(where)
   const kinds = paneMenu(registry, placed, where)
   const asides = viewsIn(registry, placed, 'aside', where)
   useEffect(() => {
