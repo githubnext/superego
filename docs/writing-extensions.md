@@ -89,7 +89,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 | `method('x.y', run, { params })` | a read for the UI; params checked first |
 | `value('x.y', initial)` → `get`, `set`, `update` | live state the UI watches; in memory |
 | `pane(kind, about)` | tell the agent about a pane kind, for `open_pane` |
-| `view('x.y', { title, icon, context, fits, default, value \| method })` | a view drawn from data (below): no UI code, so a remote machine's or a project profile's needs no trust |
+| `view('x.y', { title, icon, context, fits, default, value \| method })` | a view drawn from data (below): no UI code, so a remote machine's or a project profile's runs no code in the window; its buttons still have that machine's authority |
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
 | `submit(({ thread, text, attachments, content, by }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it. `by`: the extension that sent it (`threads.submit`, `threads.create`'s prompt), absent for the user's |
 | `settings.register({ id: 'x', settings })`, `settings.get`, `settings.snapshot`, `settings.onChange` | machine settings of its own (`x.…`); read any |
@@ -242,7 +242,8 @@ placed there by default: its `sidebar` is a space, its `footer` the `drawer`.
 ### Data-only views
 
 A daemon half can declare a view as data, and the window draws it with its own components: no UI code ships, so a
-remote machine's, or a project profile's, needs none of the trust its UI code would. The content is a few fixed parts,
+remote machine's, or a project profile's, needs no consent to run code in the window, as its UI code would. That's
+not no authority: its buttons run that machine's actions. The content is a few fixed parts,
 any of them, top to bottom: a `note`, `facts` (label and value), `items` (a list: `title`, `subtitle`, `detail`,
 `status`, a `thread` to link, `actions`), a `table` (`columns`, `rows`), `markdown`, and `actions` (buttons), with
 `empty` for when there's none. A button runs one of the extension's own actions (`<extension>.<name>`) on that
@@ -268,6 +269,11 @@ superego.view('orders.open', { title: 'Orders', icon: 'list', context: 'window',
 - The window hears of them as every daemon's live value `view.list`. A view a machine's extension declares shows a
   thread only from that machine, and a `window` view gathers every machine's, each under its name. A profile's fit only
   `aside` and `pane`, in its own threads. An extension's UI half that declares a view of the same id draws it instead.
+- The window checks what it's sent as it lands, not on the machine's word: a declaration must be of one of that
+  machine's extensions that's on, named for it (its id and its source `<extension>.<name>`), in places there are (a
+  profile's never a space), and within bounds (how many views, items, rows and columns, how long a string, how deep
+  and big a button's params). Content is held to the same. What isn't is left out, with a warning on the console and,
+  for content, a quiet word in the view; a view that throws as it draws says so in its place, with Try again.
 - The `skills` extension's *Skills* is one (`extensions/skills/src/daemon.ts`).
 
 ### On a phone
@@ -317,9 +323,22 @@ says it once for all.
   is gone, or that no longer loads or is allowed, is torn down, and its UI with it. A value torn down reads null.
 - A profile's UI from another machine runs in the window only once allowed on this computer (the thread's notice, or
   `superego profile allow-ui <name> -m <machine>`), for a hash the window takes of the sources it received; any change
-  to them asks again, and Revoke (Settings → Machines) tears it down at once. Once running it has the window's full
+  to them asks again, and Revoke (Settings → Machines) takes out what it registered at once. Once running it has the window's full
   reach, every machine's `call` and `dispatch` included: it runs in the window's own JavaScript, where narrowing its API
   wouldn't stop it calling `window.superego` directly. Real isolation is the sandboxed tier PLAN.md plans.
+
+### What each trust level means
+
+- **A data-only view** (`superego.view` in a daemon half): no code of the extension's runs in the window, so it asks
+  no consent to, and what it sends is checked where it lands. Its buttons still have that machine's authority: they
+  run its extension's actions there, as the window may.
+- **A remote profile's UI**, once allowed: runs in the window's own JavaScript, with the window's full authority over
+  every machine it reaches. Allowing it is trusting that code as much as the window itself.
+- **Revoke** takes out what that UI registered (views, panes, actions, slots), but can't undo what its code already
+  did or stop what it left going (a timer, a listener, a global, a request). The window offers a reload, which does;
+  what was done stays done.
+- A **daemon half** (a profile's or the app's) runs with Node's full access on its machine, as this computer's profiles
+  trust their daemon (a project's once `superego profile allow`ed).
 
 ## A thread's life
 

@@ -202,7 +202,11 @@ Adding a machine gives it no say over this computer: a profile's UI from another
 allowed here, for the exact sources the window received (it hashes them itself; any change asks again). Until then its
 threads work without it, and a notice over the composer offers Allow, with its files to read. Not now is remembered
 for those sources, a quiet "UI not allowed" in the thread's header that asks again when clicked. Settings → Machines lists
-what's allowed, with Revoke (which asks again too), and what's put off, with Allow; `superego profile allow-ui <name> -m <machine>` allows from a shell. This computer's own
+what's allowed, with Revoke (which asks again too), and what's put off, with Allow; `superego profile allow-ui <name> -m <machine>` allows from a shell. Allowed, it runs
+with the window's full authority, over every machine. Revoking takes out what it registered, but not what its code
+already did or left going: the window offers a reload to clear that. A data-only view (a daemon extension's
+`superego.view`) runs no code in the window, so it needs no allowing, and the window checks what it sends; its buttons
+still run that machine's actions. This computer's own
 profiles keep their daemon's rules. A browser or phone talks only to the daemon that served it (it is `local` there), so
 no other machine's UI reaches it.
 

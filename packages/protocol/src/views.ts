@@ -1,6 +1,7 @@
 // Data-only views: UI a daemon extension declares as data, which the window draws with its own components. No code of
-// the extension's runs in the window, so a view from a remote machine or a project's profile needs no trust: it can
-// show facts, a list, a table and Markdown, and offer buttons that run the machine's own actions.
+// the extension's runs in the window, so a view from a remote machine or a project's profile needs no consent to run
+// code there: it can show facts, a list, a table and Markdown, and offer buttons that run the machine's own actions,
+// with that machine's authority. The window checks what it is sent as it lands (packages/app data-view-check.ts).
 import type { Json } from './settings.ts'
 import type { Status } from './status.ts'
 
