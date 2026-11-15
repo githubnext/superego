@@ -672,7 +672,13 @@ if (phase === 'first') {
   // Cleared from its title bar: the same thread, empty again.
   await run(`window.superego.call('local', 'thread.submit', { id: '${ego}', text: 'what is a profile?' })`)
   await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('what is a profile?'))`, 'asked Ego')
-  await run(`document.querySelector('.thread__clear').click()`)
+  // An outside agent's message shows as one; the user's doesn't.
+  await run(`window.superego.call('local', 'action.run', { id: 'ego.ask', params: { prompt: 'and from an agent?' }, exposure: 'mcp' })`)
+  await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('and from an agent?') && m.querySelector('.ego__outside') && !m.textContent.includes('<outside-agent>'))`, "an outside agent's message to Ego, marked")
+  if (await run(`[...document.querySelectorAll('.msg--user')].find((m) => m.textContent.includes('what is a profile?')).querySelector('.ego__outside') !== null`)) { await fail("the user's message marked as an outside agent's"); throw new Error('failed') }
+  await until(`(document.querySelector('.transcript')?.textContent.split('echo:').length ?? 0) > 2`, 'Ego answered both')
+  await shot('ego-outside')
+  await run(`document.querySelector('.ego__clear').click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'Ego' && !document.querySelector('.msg--user')`, 'Ego cleared')
   await run(`${elsewhereItem}.click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'back to a listed thread')
@@ -967,7 +973,7 @@ if (phase === 'first') {
   await browser.webContents.executeJavaScript(`document.querySelector('.app__footer .ego__button').click()`)
   await inBrowser(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('button.app__mobiletitle'))`, "Ego's thread shown on a phone")
   await browser.webContents.executeJavaScript(`document.querySelector('button.app__mobiletitle').click()`)
-  await inBrowser(`Boolean(document.querySelector('.thread-sheet .thread__clear')) && !document.querySelector('.thread-sheet .thread__archive')`, "Ego's Clear in the thread's sheet")
+  await inBrowser(`Boolean(document.querySelector('.thread-sheet .ego__clear')) && !document.querySelector('.thread-sheet .thread__archive')`, "Ego's Clear in the thread's sheet")
   if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-ego-sheet.png`, (await browser.webContents.capturePage()).toPNG())
   // The model button there shows the details (the aside's) in the sheet.
   await browser.webContents.executeJavaScript(`document.querySelector('.thread-sheet .threads-model').click()`)

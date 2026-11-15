@@ -19,6 +19,7 @@ export {
   ArrowRightIcon,
   BellIcon,
   BroomIcon,
+  PlugsConnectedIcon,
   CaretDownIcon,
   CaretLeftIcon,
   CaretRightIcon,

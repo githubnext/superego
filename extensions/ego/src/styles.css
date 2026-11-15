@@ -1,3 +1,9 @@
 /* Whose Ego this is, in its title bar: a small pop-up button, as macOS draws one in a toolbar. */
 .ego__machine { flex: 0 1 auto; min-width: 0; max-width: 180px; min-height: 22px; height: 22px; padding: 0 24px 0 8px; font-size: var(--superego-text-sm); background-position: right 8px center; text-overflow: ellipsis; }
 .ego__machine:focus:not(:focus-visible) { outline: none; }
+/* Clear, in its title bar: flat, as the header's other icon buttons (the core's .thread__archive). */
+.ego__clear { width: 28px; height: 28px; min-height: 28px; border-radius: 6px; box-shadow: none; background: none; color: var(--superego-muted); }
+.ego__clear:hover { background: var(--superego-hover); color: var(--superego-text); }
+/* A message from an outside agent: a chip like a file's (the core's .attachment). */
+.ego__outside { padding-left: 8px; }
+.ego__outside .attachment__icon { width: auto; height: auto; }

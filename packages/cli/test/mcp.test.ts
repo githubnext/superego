@@ -118,4 +118,8 @@ it("asks this machine's Ego, whose answer reads as any thread's, and which stays
   await until(async () => JSON.parse(text(await client.callTool({ name: 'thread_read', arguments: { id: ego.id, wait: true } }))).answer !== undefined)
   const listed = JSON.parse(text(await client.callTool({ name: 'thread_list', arguments: {} })))
   expect(listed.some((t: { id: string }) => t.id === ego.id)).toBe(false)
+  // Told that an outside agent asked: what its thread_start goes by (see extensions/ego's tests).
+  const { value } = await direct<{ value: { entries: { model?: { role: string; content: unknown }[] }[] } }>('thread.watch', { id: ego.id })
+  const asked = value.entries.find((e) => e.model?.[0]?.role === 'user')!.model![0]!.content
+  expect(JSON.stringify(asked)).toMatch(/<outside-agent>[\s\S]*how is this machine set up\?/)
 }, 60_000)

@@ -3,11 +3,16 @@
 // thread alone (`agentFor`): what Superego is (tools.ts's prompt) and tools that read and set up, instead of the coding
 // tools and the threads' own. Its thread is the hidden one it owns (`owner`), with this extension's state set (and the
 // fact `ext.ego` for windows); an older Ego (the core's, marked `meta`) is taken up as one by the core.
+//
+// Outside agents (`superego mcp`) ask it too (`ego.ask`, or `thread.submit` to its thread), but start threads through it
+// no more than they may themselves: each message one sends goes with a block saying so (`OUTSIDE`), and while
+// `mcp.startThreads` is off, thread_start refuses when the message it's answering, the newest, has it. A turn the user
+// asks for in the window, in the same conversation, still starts threads.
 import { hostname } from 'node:os'
 import { MachineStore } from '@superego/client'
-import { defineDaemonExtension, type DaemonExtension } from '@superego/daemon'
+import { defineDaemonExtension, MCP_THREADS, type DaemonExtension } from '@superego/daemon'
 import { agentName, defineAction, obj, opt, RpcError, str, type ThreadInfo } from '@superego/protocol'
-import { about, ASK, CLEAR, THREAD } from './shared.ts'
+import { about, ASK, CLEAR, OUTSIDE, outsideBlocks, THREAD } from './shared.ts'
 import { metaExtension, metaPrompt, type MachineDirectory } from './tools.ts'
 
 /** What Ego goes without, of what every thread has: it changes nothing itself, and starts threads its own way. */
@@ -23,6 +28,15 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
     setup(superego) {
       const name = agentName(superego.app)
       const { dataDir, threads } = superego
+      const isEgo = (thread: ThreadInfo) => thread.owner === about.name
+      /** Whether the newest message in a thread (the one a turn answers) came from an outside agent; none to be found counts. */
+      async function fromOutside(id: string) {
+        for (const entry of await threads.entries(id, 500)) {
+          const message = entry.model?.[0] as { role?: string; content?: unknown } | undefined
+          if (message?.role === 'user') return Array.isArray(message.content) && outsideBlocks(message.content as { type: string; text?: string }[]).length > 0
+        }
+        return true
+      }
       const tools = metaExtension({
         dir: dataDir,
         dispatch: (id, params) => superego.dispatch(id, params),
@@ -31,7 +45,16 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         ...(machines ? { machines: () => machines(dataDir) } : {}),
         // The threads it starts are ordinary ones, top-level in their projects.
         threads: { info: (id) => threads.get(id).catch(() => undefined), list: () => threads.list(), answer: (id) => threads.lastAnswer(id), start: (params) => threads.create(params) },
+        // Read as it's called: the setting may have changed since the message came.
+        async refuseStart(conversation) {
+          if (superego.settings.get(MCP_THREADS) === true) return undefined
+          const at = threads.of(conversation)
+          if (at && !await fromOutside(at)) return undefined
+          return "An outside agent asked for this, and outside agents can't start threads on this machine. The user can allow it in Settings → Outside agents → Can start threads."
+        },
       })
+      // An outside agent's message to Ego says so.
+      superego.submit(({ thread, exposure, content }) => exposure === 'mcp' && isEgo(thread) ? [{ type: 'text', text: OUTSIDE }, ...content] : undefined)
       // Its tools are for its thread only.
       superego.agent(tools, { always: false })
       const state = superego.state<true>()
@@ -49,7 +72,6 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
       // set again as a run starts, ends or waits on the user, and when it's asked or cleared; not as it's read.
       const live = superego.value<ThreadInfo | null>(THREAD, null)
       const refresh = async () => { if (id) live.set(await threads.get(id)) }
-      const isEgo = (thread: ThreadInfo) => thread.owner === about.name
       async function find(): Promise<string | undefined> {
         const all = [...await threads.list({ hidden: true }), ...await threads.list({ hidden: true, archived: true })].filter(isEgo)
         // Newest first as listed; the one used last wins, so a second Ego made while the first was missed is no
@@ -89,9 +111,9 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         id: ASK, title: `Ask ${name} about ${superego.app.name} and how it's set up`, runs: 'machine', expose: ['ui', 'cli', 'mcp'],
         description: `Send \`prompt\` to ${name}, this machine's own agent, in its one thread (made the first time). That thread comes back; read its answer as any thread's.`,
         params: obj({ prompt: opt(str()) }),
-        async run({ prompt }) {
+        async run({ prompt }, { exposure }) {
           const at = await thread()
-          if (prompt?.trim()) await threads.submit(at, prompt, { whenBusy: 'followUp' })
+          if (prompt?.trim()) await threads.submit(at, prompt, { whenBusy: 'followUp', ...(exposure ? { exposure } : {}) })
           await refresh()
           return threads.get(at)
         },

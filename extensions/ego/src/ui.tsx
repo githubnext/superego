@@ -2,13 +2,14 @@
 // ego, UI half: Ego's button (`ego.button`: at the top of the rail, and at the foot of a phone's drawer) and "Ask Ego"
 // in ⌘K, which open its thread on the machine last chosen (this computer to start with; made the first time); and in
 // its thread's title bar, Clear instead of archiving and, where more than one machine has an Ego, which one's this is,
-// to switch to another's. Its thread is a hidden one: the window shows it while it's selected, as any.
+// to switch to another's. Its thread is a hidden one: the window shows it while it's selected, as any. A message an
+// outside agent sent it shows a chip saying so.
 import { defineAction, defineUiExtension, has, useApp, useDispatch, useMachines, useSelection, type ViewProps } from '@superego/app/ui'
 import { agentName, obj, opt, str, type ThreadInfo } from '@superego/protocol'
-import { BroomIcon, IconButton, LifebuoyIcon, Select } from '@superego/ui'
+import { BroomIcon, IconButton, LifebuoyIcon, PlugsConnectedIcon, Select } from '@superego/ui'
 import type { MachineEntry } from '@superego/app/ui'
 import './styles.css'
-import { about, ASK, CLEAR } from './shared.ts'
+import { about, ASK, CLEAR, outsideBlocks } from './shared.ts'
 
 /** Open Ego's thread on a machine: the one given (then remembered), else the one last chosen, else this computer. */
 const OPEN = 'ego.open'
@@ -32,6 +33,10 @@ export default defineUiExtension({
     })
     superego.view('ego.machine', { title: 'Machine', context: 'thread', fits: ['header'], default: 'header', component: MachineSwitch })
     superego.view('ego.clear', { title: 'Clear', context: 'thread', fits: ['header'], default: 'header', component: ClearButton })
+    superego.composer.sentWith({
+      read: (blocks) => { const at = outsideBlocks(blocks); return at.length ? { items: [true], blocks: at } : undefined },
+      component: OutsideChip,
+    })
     superego.action(defineAction({
       id: OPEN, title: `Ask ${agentName(superego.app)}`,
       params: obj({ machine: opt(str()) }),
@@ -80,8 +85,18 @@ function ClearButton({ machine, thread }: ViewProps<'thread'>) {
   const dispatch = useDispatch()
   if (!isEgo(thread)) return null
   return (
-    <IconButton label="Clear" className="thread__clear" onClick={() => void dispatch(CLEAR, {}, { machine: machine.id, source: 'header' }).catch((error) => console.error(error))}>
+    <IconButton label="Clear" className="ego__clear" onClick={() => void dispatch(CLEAR, {}, { machine: machine.id, source: 'header' }).catch((error) => console.error(error))}>
       <BroomIcon size={15} aria-hidden />
     </IconButton>
+  )
+}
+
+/** Under a message an outside agent sent (`superego mcp`), not the user. */
+function OutsideChip() {
+  return (
+    <span className="attachment ego__outside" title="Sent by an outside agent, over MCP">
+      <span className="attachment__icon"><PlugsConnectedIcon size={13} aria-hidden /></span>
+      <span className="attachment__name">Outside agent</span>
+    </span>
   )
 }

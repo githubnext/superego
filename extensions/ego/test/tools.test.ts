@@ -90,4 +90,17 @@ describe('Ego, the meta agent', () => {
     expect(await text(tools, 'thread_start', { prompt: 'Add a profile', cwd: 'profiles', title: 'Profile' })).toBe('Started [Profile](thread:3) (id 3), in /data/profiles.')
     expect(started).toEqual([{ prompt: 'Add a profile', title: 'Profile', cwd: '/data/profiles' }])
   })
+
+  it('starts none when told why not, for the conversation asking, as the call is made', async () => {
+    const started: Parameters<EgoThreads['start']>[0][] = []
+    const asked: number[] = []
+    let why: string | undefined = 'Not for outside agents.'
+    const { tools = [] } = metaExtension({ dir: '/data', ...on(new Router()), snapshot, threads: threads(started), refuseStart: async (conversation) => { asked.push(conversation); return why } })
+    await expect(text(tools, 'thread_start', { prompt: 'Add a profile', cwd: 'profiles' })).rejects.toThrow('Not for outside agents.')
+    expect(started).toEqual([])
+    why = undefined
+    await text(tools, 'thread_start', { prompt: 'Add a profile', cwd: 'profiles' })
+    expect(started).toHaveLength(1)
+    expect(asked).toEqual([1, 1])
+  })
 })

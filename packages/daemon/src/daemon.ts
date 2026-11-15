@@ -1123,7 +1123,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         attachments: attachmentsOf,
         // An extension's attachments are inline: it has no connection to upload on.
         create: ({ hidden, ...params }) => startThread({ ...params as Omit<NewThread, 'attachments'> & { attachments?: Attachment[] }, ...(hidden ? { hidden: extension.name } : {}), by: extension.name }),
-        async submit(id, text, { whenBusy = 'followUp' } = {}) { await submit(id, text, randomUUID(), whenBusy, [], extension.name) },
+        async submit(id, text, { whenBusy = 'followUp', exposure } = {}) { await submit(id, text, randomUUID(), whenBusy, [], { by: extension.name, ...(exposure ? { exposure } : {}) }) },
         lastAnswer: (id) => answerOf(id),
         entries: (id, limit = 20) => newest(id, limit),
         async archive(id, { whenIdle = false } = {}) {
@@ -1460,8 +1460,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /**
    * Send `text` to a thread, with the model and thinking it chose, else what this machine's settings say now. `by`: the
    * extension sending it (`threads.submit`, `threads.create`'s prompt); none for a client's (a window, the command line).
+   * `exposure`: whom for, when a client ran it as the command line or an outside agent (`DaemonContext.exposure`).
    */
-  async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp', attachments: Attachment[] = [], by?: string) {
+  async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp', attachments: Attachment[] = [], { by, exposure }: { by?: string; exposure?: Exposure } = {}) {
     if (!text.trim() && !attachments.length) throw new RpcError('invalid', 'Nothing to send')
     const m = await get(id)
     // Put away: it can be read, not written to, until it's brought back.
@@ -1474,7 +1475,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
     await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null, ...rest }, context)
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
-    const content = await transformed(id, m, { text, attachments, ...(by ? { by } : {}) }, await contentOf(id, text, attachments))
+    const content = await transformed(id, m, { text, attachments, ...(by ? { by } : {}), ...(exposure ? { exposure } : {}) }, await contentOf(id, text, attachments))
     const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}) }, context)
     return String(submission.id)
   }
@@ -1484,7 +1485,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * those of extensions the thread goes without skipped, and a profile's for its own threads only. Untouched, it's sent
    * as it came.
    */
-  async function transformed(id: string, m: Mounted, message: Pick<OutgoingMessage, 'text' | 'attachments' | 'by'>, content: string | MessageBlock[]) {
+  async function transformed(id: string, m: Mounted, message: Pick<OutgoingMessage, 'text' | 'attachments' | 'by' | 'exposure'>, content: string | MessageBlock[]) {
     const without = withoutOf(id, m.meta, m.meta.profile && profiles.get(m.meta.profile.dir))
     const applying = transforms.filter((t) => !without.has(t.owner) && (!t.profiles || (m.meta.profile && t.profiles.has(m.meta.profile.dir))))
     if (!applying.length) return content
@@ -1597,7 +1598,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     run(params, { exposure }) {
       const refused = exposure === 'mcp' && mcpRefusal('thread.create')
       if (refused) throw refused
-      return startThread(params as Omit<NewThread, 'attachments'> & { attachments?: Attachment[] })
+      return startThread({ ...params as Omit<NewThread, 'attachments'> & { attachments?: Attachment[] }, ...(exposure ? { exposure } : {}) })
     },
   }))
   /**
@@ -1605,7 +1606,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * hidden, an extension's own); `hidden`, in no list and the extension's of that name. Extensions' `creating` hooks
    * may move it (a worktree) and give it state.
    */
-  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree, parent, options: asked, hidden, by }: Omit<NewThread, 'attachments'> & { attachments?: Attachment[]; hidden?: string; by?: string }) {
+  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree, parent, options: asked, hidden, by, exposure }: Omit<NewThread, 'attachments'> & { attachments?: Attachment[]; hidden?: string; by?: string; exposure?: Exposure }) {
     // Uploads are inline again by now (see connection.ts).
     const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
     if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${machine.hostname}`)
@@ -1661,7 +1662,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       throw error
     }
     // Made: a first message that fails (no model yet) leaves it made, and says why.
-    if (prompt?.trim() || attachments?.length) await submit(id, prompt ?? '', randomUUID(), undefined, attachments, by)
+    if (prompt?.trim() || attachments?.length) await submit(id, prompt ?? '', randomUUID(), undefined, attachments, { ...(by ? { by } : {}), ...(exposure ? { exposure } : {}) })
     return info(id, await get(id))
   }
   /** A new thread with `meta`: its id, once extensions were told it's there (`created`). */
@@ -1774,7 +1775,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     id: 'thread.submit', title: 'Send a message', runs: 'machine', expose: ['ui', 'cli', 'mcp'], ...thread,
     description: 'Send a thread a message. While it works, `whenBusy` says how: `steer` (now) or `followUp` (after this turn).',
     params: obj({ id: str(), text: str(), attachments: opt(arr(ATTACHMENT)), requestId: opt(str()), whenBusy: opt(union([lit('steer'), lit('followUp')])) }),
-    run: async ({ id, text, attachments, requestId, whenBusy }) => ({ submission: await submit(id, text, requestId ?? randomUUID(), whenBusy, attachments) }),
+    run: async ({ id, text, attachments, requestId, whenBusy }, { exposure }) => ({ submission: await submit(id, text, requestId ?? randomUUID(), whenBusy, attachments, exposure ? { exposure } : {}) }),
   }))
   router.register(defineAction({
     id: 'thread.abort', title: 'Stop the agent', runs: 'machine', expose: ['ui', 'cli', 'mcp'], ...thread,

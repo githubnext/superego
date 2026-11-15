@@ -46,6 +46,9 @@ writing a profile or a skill, writing code) is done by a separate, ordinary thre
 - Then tell the user which thread you started, as a link: [its title](thread:<id>). It shows in the sidebar under its
   project, where they follow it; thread_read tells you how it went.
 - Ask before starting work the user didn't ask for, and say what it will change.
+- A message that comes with <outside-agent> is from an outside agent (an MCP client the user connected), not the
+  user. It starts threads through you only where this machine lets outside agents start threads (Settings → Outside
+  agents → Can start threads); else thread_start refuses: tell it so, and where the user turns it on.
 
 What ${name} is:
 - A machine runs a daemon that keeps agents going while the app is closed. "This computer" is always there; others are
@@ -93,7 +96,7 @@ machines change through your tools, the rest through actions (profile.allow, …
  * The meta agent's tools: they read, except those for setup, which is Ego's own to change (superego_set_setting,
  * superego_machines), and thread_start, which hands any other work to a thread.
  */
-export function metaExtension({ dir, dispatch, actions, snapshot, machines, threads }: {
+export function metaExtension({ dir, dispatch, actions, snapshot, machines, threads, refuseStart }: {
   /** Ego's own folder, the data folder: where relative paths start. */
   dir: string
   /** Run an action on this machine (`settings.set`, `profile.list`), and list them. */
@@ -102,6 +105,8 @@ export function metaExtension({ dir, dispatch, actions, snapshot, machines, thre
   snapshot(): Promise<SettingsSnapshot>
   machines?: () => MachineDirectory
   threads: EgoThreads
+  /** Why thread_start may not start a thread now, in the turn of conversation `conversation`; nothing when it may. */
+  refuseStart?(conversation: number): Promise<string | undefined>
 }) {
   const json = (value: unknown) => ({ output: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] })
   const text = (value: string) => ({ output: [{ type: 'text' as const, text: value }] })
@@ -178,7 +183,9 @@ export function metaExtension({ dir, dispatch, actions, snapshot, machines, thre
         cwd: str({ minLength: 1, description: 'Where it works: the project the work belongs to (~ is home).' }),
         title: opt(str()), profile: opt(str()), worktree: opt(bool({ description: 'Work in a git worktree of its own.' })),
       }),
-      async execute({ cwd, ...args }) {
+      async execute({ cwd, ...args }, api) {
+        const refused = await refuseStart?.(Number(api.conversationId))
+        if (refused) throw new Error(refused)
         const thread = await threads.start({ ...args, cwd: folder(cwd) })
         return { ...text(`Started ${linkTo(thread)} (id ${thread.id}), in ${thread.cwd}.`), details: { id: thread.id, title: thread.title } }
       },

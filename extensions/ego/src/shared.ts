@@ -9,6 +9,15 @@ export const CLEAR = 'ego.clear'
 export const THREAD = 'ego.thread'
 
 /**
+ * What a message to Ego from an outside agent (`superego mcp`) goes with, a block of its own: Ego is told who's asking,
+ * the window shows it as a chip, and thread_start finds it in the message it's answering (see daemon.ts).
+ */
+export const OUTSIDE = '<outside-agent>This message is from an outside agent (an MCP client), not the user.</outside-agent>'
+/** The blocks of a sent message that say it came from an outside agent. */
+export const outsideBlocks = (blocks: readonly { type: string; text?: string }[]) =>
+  blocks.flatMap((block, index) => block.type === 'text' && block.text === OUTSIDE ? [index] : [])
+
+/**
  * Optional: switched off, a machine has no Ego (its thread stays, hidden and taking no messages, until it's back).
  * Its thread says so in its facts: `ext.ego` is true.
  */

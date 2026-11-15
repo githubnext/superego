@@ -71,6 +71,12 @@ export type OutgoingMessage = {
   thread: ThreadInfo; text: string; attachments: Attachment[]; content: MessageBlock[]
   /** The extension that sent it (`threads.submit`, or `threads.create`'s prompt): absent for a client's, the user's. */
   by?: string
+  /**
+   * Whom it was sent for, when that's said: a client running as the command line (`cli`) or an outside agent (`mcp`,
+   * through `superego mcp`), as `DaemonContext.exposure`; or what an extension's `threads.submit` passed on. Absent
+   * for a window's.
+   */
+  exposure?: Exposure
 }
 
 /** Changes what a message gives the model: returns the blocks to send instead, or nothing to leave them. */
@@ -302,8 +308,12 @@ export type DaemonApi = {
      * in `list({ hidden: true })`: its facts aren't there while the extension is off.
      */
     create(params: NewThread & { hidden?: boolean }): Promise<ThreadInfo>
-    /** Send a thread a message, as a user would; when it's working, `whenBusy` says how (default: after this run). */
-    submit(id: string, text: string, options?: { whenBusy?: 'steer' | 'followUp' }): Promise<void>
+    /**
+     * Send a thread a message, as a user would; when it's working, `whenBusy` says how (default: after this run).
+     * `exposure`: whom for, when an action of this extension's sends it on a client's behalf (its context's `exposure`),
+     * for submit transforms to see.
+     */
+    submit(id: string, text: string, options?: { whenBusy?: 'steer' | 'followUp'; exposure?: Exposure }): Promise<void>
     /** Its last answer, as text, if it has one. */
     lastAnswer(id: string): Promise<string | undefined>
     /**
