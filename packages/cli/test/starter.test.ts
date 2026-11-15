@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { newExtension, testExtension } from '../src/extensions.ts'
+import { authorTypes, newExtension, testExtension } from '../src/extensions.ts'
 import { addToProfile } from '../src/starter.ts'
 
 describe('adding to a profile', () => {
@@ -22,20 +22,24 @@ describe('adding to a profile', () => {
 
 describe('a new extension', () => {
   let dir: string
-  beforeAll(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-starter-')) })
+  let types: string
+  beforeAll(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'superego-starter-'))
+    types = await authorTypes(join(dir, 'data'))
+  }, 240_000)
   afterAll(async () => { await rm(dir, { recursive: true, force: true }) })
 
   it('is data-only, or has a UI half, and type-checks and passes its tests as made', async () => {
     const profile = join(dir, 'profiles', 'default')
-    const data = newExtension(profile, 'builds', 'data-only')
+    const data = newExtension(profile, 'builds', 'data-only', types)
     expect(data.madeProfile).toBe(true)
-    const ui = newExtension(profile, 'notes', 'ui')
+    const ui = newExtension(profile, 'notes', 'ui', types)
     expect(ui.missing).toEqual([])
     const spec = await readFile(join(profile, 'profile.ts'), 'utf8')
     expect(spec).toContain(`extensions: ['./builds/daemon.ts', './notes/daemon.ts']`)
     expect(spec).toContain(`ui: ['./notes/ui.tsx']`)
     expect(await readFile(join(profile, 'notes', 'shared.ts'), 'utf8')).toMatch(/version: '0\.1\.0', api: '\^1\.\d+'/)
-    expect(() => newExtension(profile, 'builds', 'ui')).toThrow(/there already/)
-    expect(await testExtension(profile)).toBe(0)
+    expect(() => newExtension(profile, 'builds', 'ui', types)).toThrow(/there already/)
+    expect(await testExtension(profile, undefined, types)).toBe(0)
   }, 240_000)
 })

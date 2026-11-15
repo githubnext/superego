@@ -13,6 +13,7 @@ import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, NOTIFY, signInNotice, threadN
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
 import { LayoutFile, type LayoutView } from './layout-file.ts'
 import { Link, loginInTerminal, MachineLinks, MachineStore, openLocal as openLocalSocket, runUpdate, UiAllowStore } from '@superego/client'
+import { installTypes } from '@superego/client/author-types'
 import { MenuBar } from './tray.ts'
 import { commandLine } from './command-line.ts'
 import { ServiceRestart, type ServiceAction } from './restart.ts'
@@ -60,6 +61,10 @@ export function startApp(appConfig: AppConfig) {
     app: appConfig, appPath: join(import.meta.dirname, '..', '..'), packaged: app.isPackaged, executable: process.execPath,
     ...(headless ? {} : { shell: process.env.SHELL || '/bin/zsh' }),
   })
+  // Types for profile authors, from this build (out/types) to <dataDir>/types, where profiles link to them: an upgrade
+  // brings its own without anyone asking. Not for tests.
+  const types = join(import.meta.dirname, '..', 'types')
+  if (!headless && existsSync(join(types, 'stamp.json'))) setImmediate(() => { try { installTypes(types, dataDir) } catch (error) { console.error('author types:', error) } })
   appSettings.register({
     id: 'command-line', title: 'Command line', order: 80, ui: 'command-line', settings: [],
     data: () => cli.info(),

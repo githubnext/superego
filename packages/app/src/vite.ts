@@ -2,10 +2,10 @@
 // Main and daemon come from the app's src/main.ts and src/daemon.ts, the preload from @superego/app, the renderer from
 // src/renderer. Everything is bundled (only Electron itself stays out), so a packaged app carries no node_modules: the
 // daemon, run by the app's own Electron as Node, finds all it needs in out/.
-import { cpSync, existsSync } from 'node:fs'
+import { cpSync, existsSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'electron-vite'
 import { writeCommit } from '@superego/daemon/client'
@@ -26,6 +26,9 @@ export function superegoConfig(root: string) {
         { name: 'superego-commit', writeBundle: (options) => writeCommit(root, options.dir!) },
         // The CLI's skill pages, where its build looks for them (out/main/cli.js → out/skill).
         { name: 'superego-cli-skill', writeBundle: (options) => { if (existsSync(cli)) cpSync(skill(root), resolve(options.dir!, '../skill'), { recursive: true }) } },
+        // Types for profile authors (out/types), which the app keeps current in <dataDir>/types and `<id> profile types`
+        // links profiles to: built from the SDK's sources, again only when those changed.
+        { name: 'superego-author-types', writeBundle: async (options) => { if (existsSync(cli)) await authorTypes(root, resolve(options.dir!, '../types')) } },
       ],
     },
     preload: {
@@ -39,6 +42,16 @@ export function superegoConfig(root: string) {
       plugins: [react(), newPackages(root)],
     },
   })
+}
+
+/** Build the author types (@superego/sdk/types.ts, through the app's @superego/cli) into `to`, unless they're there. */
+async function authorTypes(root: string, to: string) {
+  const cliRequire = createRequire(createRequire(resolve(root, 'package.json')).resolve('@superego/cli'))
+  const { builtTypes, stampOf } = await import(pathToFileURL(cliRequire.resolve('@superego/sdk/types')).href) as { builtTypes(): Promise<string>; stampOf(dir: string): { hash: string } | undefined }
+  const from = await builtTypes()
+  if (stampOf(to)?.hash === stampOf(from)?.hash) return
+  rmSync(to, { recursive: true, force: true })
+  cpSync(from, to, { recursive: true })
 }
 
 /** The skill pages of the @superego/cli the app at `root` depends on. */

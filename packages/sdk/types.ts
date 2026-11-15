@@ -6,10 +6,12 @@
 //   <dir>/node_modules/@superego/*/       the workspace packages those declarations reach, emitted the same way
 //   <dir>/node_modules/<package>/         every outside package they reach (pi-durable, React's types, Node's, …):
 //                                         its declaration files and package.json, copied as installed
-//   <dir>/stamp.json                      a hash of all of it, to tell an old copy from this one
+//   <dir>/stamp.json                      a hash of all of it, to tell an old copy from this one, and of the sources
+//                                         it was made from, to tell when it's out of date
 //
-// A profile's folder links its node_modules to such a folder (cli: profile-types.ts), so 'superego' and 'react' resolve
-// as any package would, with no paths in its tsconfig.
+// The app's build puts them in out/types; a checkout's command line builds them into .types here (`builtTypes`). A
+// profile's folder links its node_modules to a copy of them (@superego/client's author-types.ts), so 'superego' and
+// 'react' resolve as any package would, with no paths in its tsconfig.
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -23,28 +25,22 @@ const ENTRIES = ['index.ts', 'ui.ts', 'unstable.ts', 'testing.ts']
 /** Outside packages an author's files import themselves, beyond what the declarations reach. */
 const ALSO = ['@types/react', '@types/react-dom', '@types/node']
 
-/** `hash`: of the declarations; `source`: of what they were made from (`sourceHash`). */
-export type Stamp = { hash: string; source: string }
+/** `hash`: of the declarations; `source`: of the files they were made from, `sources` (`sourceHash`). */
+export type Stamp = { hash: string; source: string; sources: string[] }
 
 /** The stamp of the declarations in `dir`, if there are any. */
 export function stampOf(dir: string): Stamp | undefined {
   try { return JSON.parse(readFileSync(join(dir, 'stamp.json'), 'utf8')) as Stamp } catch { return undefined }
 }
 
-/** What the declarations are made from, hashed: the workspace's sources and its lockfile. A cheap key for a cache. */
-export function sourceHash(): string {
+/** What the declarations were made from: each of the workspace's files the build read (and the lockfile, for the rest). */
+function sourceHash(files: string[]): string {
   const hash = createHash('sha256')
-  const walk = (dir: string) => {
-    for (const entry of readdirSync(dir).sort()) {
-      if (entry === 'node_modules' || entry.startsWith('.') || entry === 'test' || entry === 'out') continue
-      const path = join(dir, entry)
-      const stat = statSync(path)
-      if (stat.isDirectory()) walk(path)
-      else if (/\.(ts|tsx|json)$/.test(entry)) hash.update(relative(repo, path)).update('\0').update(readFileSync(path)).update('\0')
-    }
+  for (const file of [...files, join(repo, 'pnpm-lock.yaml')].sort()) {
+    hash.update(relative(repo, file)).update('\0')
+    try { hash.update(readFileSync(file)) } catch { hash.update('gone') }
+    hash.update('\0')
   }
-  walk(join(repo, 'packages'))
-  hash.update(readFileSync(join(repo, 'pnpm-lock.yaml')))
   return hash.digest('hex').slice(0, 16)
 }
 
@@ -79,7 +75,6 @@ function typesExports(exports: unknown): unknown {
  * (a type an export uses that can't be named outside, say).
  */
 export async function buildTypes(dir: string): Promise<Stamp> {
-  const source = sourceHash()
   const ts = (await import('typescript')).default
   const config = ts.getParsedCommandLineOfConfigFile(join(sdk, 'tsconfig.json'), {}, { ...ts.sys, onUnRecoverableConfigFileDiagnostic: (d) => { throw new Error(ts.flattenDiagnosticMessageText(d.messageText, '\n')) } })!
   const options: import('typescript').CompilerOptions = {
@@ -96,6 +91,9 @@ export async function buildTypes(dir: string): Promise<Stamp> {
     return resolved
   })
   const program = ts.createProgram({ rootNames: ENTRIES.map((entry) => join(sdk, 'src', entry)), options, host })
+  // What it's made from, to tell later when it's out of date: what the program read of ours, as it read it.
+  const sources = program.getSourceFiles().map((file) => file.fileName).filter((file) => !inNodeModules(file)).map((file) => relative(repo, file))
+  const made = { source: sourceHash(sources.map((file) => join(repo, file))), sources }
   const emitted = new Map<string, string>()
   const result = program.emit(undefined, (file, text) => emitted.set(join(repo, relative(options.outDir!, file)), text), undefined, true)
   const errors = result.diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error)
@@ -198,16 +196,42 @@ export async function buildTypes(dir: string): Promise<Stamp> {
     }
   }
   walk(temp)
-  const stamp: Stamp = { hash: hash.digest('hex').slice(0, 16), source }
+  const stamp: Stamp = { hash: hash.digest('hex').slice(0, 16), ...made }
   writeFileSync(join(temp, 'stamp.json'), JSON.stringify(stamp, null, 2) + '\n')
-  rmSync(dir, { recursive: true, force: true })
-  renameSync(temp, dir)
+  // Swapped in whole; when another build got there first, theirs stays (built from the same sources).
+  const old = `${dir}.${process.pid}.old`
+  try { renameSync(dir, old) } catch {}
+  try { renameSync(temp, dir) } catch { rmSync(temp, { recursive: true, force: true }) }
+  rmSync(old, { recursive: true, force: true })
   return stamp
+}
+
+/**
+ * The types as this checkout's sources are now, built again when those changed (a few seconds): a folder in
+ * `packages/sdk/.types` that `latest` names. Each build goes in a folder of its own and is never changed, so a copy
+ * being made from an older one finishes; those are cleared a while later.
+ */
+export async function builtTypes(): Promise<string> {
+  const cache = join(sdk, '.types')
+  const latest = join(cache, 'latest')
+  let dir: string | undefined
+  try { dir = join(cache, readFileSync(latest, 'utf8').trim()) } catch {}
+  const stamp = dir ? stampOf(dir) : undefined
+  if (dir && stamp && stamp.source === sourceHash(stamp.sources.map((file) => join(repo, file)))) return dir
+  const name = `${Date.now().toString(36)}-${process.pid}`
+  await buildTypes(join(cache, name))
+  writeFileSync(`${latest}.${process.pid}`, name)
+  renameSync(`${latest}.${process.pid}`, latest)
+  for (const entry of readdirSync(cache)) {
+    const path = join(cache, entry)
+    if (entry !== name && entry !== 'latest' && Date.now() - statSync(path).mtimeMs > 10 * 60_000) rmSync(path, { recursive: true, force: true })
+  }
+  return join(cache, name)
 }
 
 // `node packages/sdk/types.ts <dir>`: build them there.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const started = Date.now()
-  const stamp = await buildTypes(process.argv[2] ?? join(sdk, '.types'))
+  const stamp = await buildTypes(process.argv[2] ?? join(sdk, '.types', 'built'))
   console.log(`Built the author types (${stamp.hash}) in ${Date.now() - started}ms`)
 }

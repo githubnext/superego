@@ -1,5 +1,6 @@
 // The guide's code, compiled: every ```ts and ```tsx block in docs/writing-extensions.md is type-checked against the
-// stable surface ('superego', 'superego/ui', 'superego/testing'), as an author's profile is. A block that's a fragment
+// stable surface ('superego', 'superego/ui', 'superego/testing'), as an author's profile is: against the author types,
+// with the tsconfig `superego profile types` writes. A block that's a fragment
 // of a setup says so in a comment just before it, `<!-- check: daemon -->` or `<!-- check: ui -->` (`superego` is then
 // that half's API, the stable names are imported, and anything after a `;` is added: declarations of what the
 // fragment takes as given), or `<!-- check: skip -->`. So the guide can't drift from the API.
@@ -10,8 +11,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, expect, it } from 'vitest'
-import { sdkPaths } from '../src/extensions.ts'
-import { tsconfig } from '../src/starter.ts'
+import { setUpProfileTypes } from '@superego/client/author-types'
+import { authorTypes, sdkPaths } from '../src/extensions.ts'
 
 const GUIDE = fileURLToPath(new URL('../../../docs/writing-extensions.md', import.meta.url))
 
@@ -55,7 +56,11 @@ export function blocksOf(markdown: string): Block[] {
 }
 
 let dir: string
-beforeAll(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-docs-')) })
+let types: string
+beforeAll(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'superego-docs-'))
+  types = await authorTypes(join(dir, '.data'))
+}, 240_000)
 afterAll(async () => { await rm(dir, { recursive: true, force: true }) })
 
 it("finds the guide's blocks, each checked or skipped on purpose", async () => {
@@ -75,8 +80,8 @@ it("type-checks every TypeScript block in the guide against the stable surface",
     offsets.set(name, { line: block.line, prelude: head.length })
     await writeFile(join(dir, name), `${head.join('\n')}\n${block.code}\n`)
   }
-  const { sdkDir, repoDir } = sdkPaths()
-  await writeFile(join(dir, 'tsconfig.json'), tsconfig(sdkDir, repoDir))
+  const { repoDir } = sdkPaths()
+  setUpProfileTypes(dir, types)
   const tsc = join(dirname(createRequire(join(repoDir, 'package.json')).resolve('typescript/package.json')), 'bin', 'tsc')
   const output = await new Promise<string>((resolve) => {
     let out = ''

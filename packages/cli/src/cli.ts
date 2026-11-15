@@ -12,7 +12,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { renderUnicodeCompact } from 'uqr'
 import { devApp } from './dev-app.ts'
-import { newExtension, testExtension } from './extensions.ts'
+import { authorTypes, newExtension, testExtension } from './extensions.ts'
+import { setUpProfileTypes, type ProfileTypes } from '@superego/client/author-types'
 import { formatReport } from './inspect.ts'
 import {
   checkIdentity, collectProfileUi, controlPath, filesOf, hashProfileUi, loginArgs, machineHub, MachineStore, masterAlive, openLocal, openMachine, routeOf, runUpdate, UiAllowStore, updateScript,
@@ -40,6 +41,8 @@ export type CliOptions = {
    * and opens the app. Without it, the checkout's development bundle (see dev-app.ts).
    */
   executable?: string
+  /** The types for profile authors this build carries (a packaged app's out/types); without, built from the checkout. */
+  types?: string
 }
 
 // One CLI run serves one app; `runCli` sets these before anything else runs.
@@ -62,6 +65,9 @@ Usage:
 
   ${app.id} profile                    List the profiles a thread here could start with
   ${app.id} profile new [name] [--user] Make a profile in this project's .superego/profiles (or yours, ~/.${app.id}/profiles)
+  ${app.id} profile types [name] [--user]
+                                Give this project's profiles (or one, or yours) types for an editor: a tsconfig.json,
+                                and node_modules linked to this computer's ~/.${app.id}/types
   ${app.id} profile allow [name]       Let this project's profile run (again, after it changed)
   ${app.id} profile allow-ui <name|dir> -m <machine>
                                 Let that machine's profile UI run in this computer's window, as it is now
@@ -568,6 +574,34 @@ export default defineProfile({
 })
 `
 
+/**
+ * Types for profiles that are there already: each of this project's (and with `--user`, yours), or the one named. A
+ * project's profile allowed as it was is allowed again: what changed is only the tsconfig.json written here.
+ */
+async function profileTypesCommand(name: string | undefined, values: { machine?: string; user?: boolean }, run: (id: string, params: Record<string, unknown>) => Promise<unknown>) {
+  if (resolveMachine(values.machine).config) throw new RpcError('usage', `${app.id} profile types sets up profiles here; on another machine, run it there`)
+  const list = (await run('profile.list', { cwd: process.cwd() }) as ProfileInfo[])
+    .filter((p) => (values.user ? p.scope === 'user' : p.scope === 'project') && (!name || p.name === name))
+  if (!list.length) {
+    const where = values.user ? join(dataDir, 'profiles') : 'this project'
+    throw new RpcError('not_found', name ? `No profile ${name} in ${where}` : `No profiles in ${where}. Make one: ${app.id} profile new${values.user ? ' --user' : ''}`)
+  }
+  const typesDir = await authorTypes(dataDir, options.types)
+  const done: (ProfileTypes & { name: string; dir: string })[] = []
+  for (const profile of list) {
+    const types = setUpProfileTypes(profile.dir, typesDir)
+    if (profile.scope === 'project' && profile.allowed && types.written.some((file) => file.endsWith('tsconfig.json'))) await run('profile.allow', { cwd: process.cwd(), name: profile.name })
+    done.push({ name: profile.name, dir: profile.dir, ...types })
+  }
+  return print(done, () => {
+    for (const profile of done) {
+      console.log(`${profile.name} (${profile.dir}): ${profile.written.length ? `wrote ${profile.written.map((file) => file.slice(profile.dir.length + 1)).join(', ')}` : 'had its types already'}`)
+      for (const note of profile.notes) console.log(`  ${note}`)
+    }
+    console.log(`Types: ${typesDir}`)
+  })
+}
+
 async function profileCommand(sub: string | undefined, rest: string[], values: { machine?: string; user?: boolean }) {
   const machine = resolveMachine(values.machine)
   const run = (id: string, params: Record<string, unknown>) => on(machine, (call) => call('action.run', { id, params, exposure: 'cli' }))
@@ -584,13 +618,18 @@ async function profileCommand(sub: string | undefined, rest: string[], values: {
     const name = rest[0] ?? 'default'
     if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) throw new RpcError('usage', 'A profile name is lowercase letters, digits and dashes')
     const dir = values.user ? join(dataDir, 'profiles', name) : join(process.cwd(), '.superego', 'profiles', name)
-    if (existsSync(join(dir, 'profile.ts'))) throw new RpcError('exists', `${join(dir, 'profile.ts')} is there already`)
+    if (existsSync(join(dir, 'profile.ts'))) throw new RpcError('exists', `${join(dir, 'profile.ts')} is there already (types for it: ${app.id} profile types ${name}${values.user ? ' --user' : ''})`)
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'profile.ts'), PROFILE_TEMPLATE(name))
+    const types = setUpProfileTypes(dir, await authorTypes(dataDir, options.types))
     // You wrote it, so it may run.
     if (!values.user) await run('profile.allow', { cwd: process.cwd(), name })
-    return print({ name, dir }, () => console.log(`Made ${join(dir, 'profile.ts')}`))
+    return print({ name, dir, ...types }, () => {
+      console.log(`Made ${join(dir, 'profile.ts')}, with types for an editor (tsconfig.json; node_modules links to ${join(dataDir, 'types')})`)
+      for (const note of types.notes) console.log(`  ${note}`)
+    })
   }
+  if (sub === 'types') return profileTypesCommand(rest[0], values, run)
   if (sub === 'allow') {
     const allowed = await run('profile.allow', { ...(cwd ? { cwd } : {}), ...(rest[0] ? { name: rest[0] } : {}) }) as ProfileInfo
     return print(allowed, () => console.log(`Allowed ${allowed.name} (${allowed.dir}) as it is now`))
@@ -622,7 +661,7 @@ async function extensionCommand(sub: string | undefined, rest: string[], values:
     if (values.ui && values['data-only']) throw new RpcError('usage', 'Either --ui or --data-only')
     const dir = await profileHere(values, true)
     const kind = values.ui ? 'ui' : 'data-only'
-    const { written, madeProfile, missing } = newExtension(dir, name, kind)
+    const { written, madeProfile, missing, notes } = newExtension(dir, name, kind, await authorTypes(dataDir, options.types))
     // You wrote it, so it may run: a project's profile is allowed as it is now.
     const project = !values.user && dir.startsWith(join(process.cwd(), '.superego'))
     if (project) await on(resolveMachine(undefined), (call) => call('action.run', { id: 'profile.allow', params: { cwd: process.cwd(), name: values.profile ?? 'default' }, exposure: 'cli' }))
@@ -630,6 +669,7 @@ async function extensionCommand(sub: string | undefined, rest: string[], values:
       console.log(`Made ${name} (${kind === 'ui' ? 'a daemon half and a UI half' : 'data-only'}) in ${dir}${madeProfile ? ', a new profile' : ''}:`)
       for (const file of written) console.log(`  ${file}`)
       if (missing.length) console.log(`Add to its profile.ts's defineProfile({ … }): ${missing.join(', ')}`)
+      for (const note of notes) console.log(note)
       console.log(`\nNext: ${app.id} extension test ${name}${values.profile ? ` -P ${values.profile}` : ''}${values.user ? ' --user' : ''}, then send one of the profile's threads a message.`)
       if (project) console.log(`After you edit it: ${app.id} profile allow${values.profile ? ` ${values.profile}` : ''} (a project's profile runs as it was allowed).`)
     })
@@ -638,7 +678,7 @@ async function extensionCommand(sub: string | undefined, rest: string[], values:
     const dir = await profileHere(values)
     const target = rest[0] ? join(dir, rest[0]) : undefined
     if (target && !existsSync(target)) throw new RpcError('not_found', `No ${rest[0]} in ${dir}`)
-    process.exitCode = await testExtension(dir, target)
+    process.exitCode = await testExtension(dir, target, await authorTypes(dataDir, options.types))
     return
   }
   if (sub === 'reload') {

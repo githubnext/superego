@@ -1,8 +1,7 @@
 // `superego extension new <name>`: a ready-to-run extension in a profile. Data-only by default (a daemon half whose
 // view the window draws from data); `--ui` adds a UI half that draws it with code of its own. Each comes with its
-// version and the extension API it needs, a test on superego/testing, a README, and a tsconfig that resolves
-// 'superego', 'superego/ui' and 'superego/testing' against this Superego's own source, for `superego extension test`
-// (and an editor) to check the types.
+// version and the extension API it needs, a test on superego/testing, and a README. Its profile gets types as
+// `superego profile types` gives them (extensions.ts), for `superego extension test` and an editor to check it.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { EXTENSION_API } from '@superego/protocol'
@@ -170,29 +169,6 @@ Send one of this profile's threads a message: it loads with the turn${kind === '
 [Writing extensions](https://github.com/mikker/superego/blob/main/docs/writing-extensions.md).
 `
 
-/** A tsconfig for a profile's folder: its files checked against this Superego's own source, as `superego extension test` does. */
-export const tsconfig = (sdkDir: string, repoDir: string) => JSON.stringify({
-  compilerOptions: {
-    target: 'es2023', module: 'esnext', moduleResolution: 'bundler', jsx: 'react-jsx', lib: ['es2023', 'dom'],
-    strict: true, noUncheckedIndexedAccess: true, allowImportingTsExtensions: true, noEmit: true, skipLibCheck: true,
-    types: ['node'], typeRoots: [join(repoDir, 'node_modules', '@types')],
-    paths: {
-      superego: [join(sdkDir, 'src', 'index.ts')],
-      'superego/ui': [join(sdkDir, 'src', 'ui.ts')],
-      'superego/testing': [join(sdkDir, 'src', 'testing.ts')],
-      'superego/unstable': [join(sdkDir, 'src', 'unstable.ts')],
-      // What a profile's files import besides: React's types, and vitest for its tests (there's no node_modules here).
-      react: [join(sdkDir, 'node_modules', '@types', 'react')],
-      'react/*': [join(sdkDir, 'node_modules', '@types', 'react', '*')],
-      'react-dom/*': [join(sdkDir, 'node_modules', '@types', 'react-dom', '*')],
-      vitest: [join(repoDir, 'node_modules', 'vitest')],
-    },
-    incremental: true, tsBuildInfoFile: './.tsbuildinfo',
-  },
-  include: ['**/*.ts', '**/*.tsx'],
-  exclude: ['node_modules'],
-}, null, 2) + '\n'
-
 const PROFILE = (name: string) => `import { defineProfile } from 'superego'
 
 export default defineProfile({
@@ -233,7 +209,7 @@ export function addToProfile(source: string, field: 'extensions' | 'ui', entry: 
 }
 
 /** Write a new extension into the profile at `profileDir` (making the profile if there's none): what was written. */
-export function writeStarter(profileDir: string, name: string, kind: StarterKind, paths: { sdkDir: string; repoDir: string }) {
+export function writeStarter(profileDir: string, name: string, kind: StarterKind) {
   if (!/^[a-z][a-z0-9-]*$/.test(name)) throw new Error('An extension name is lowercase letters, digits and dashes, starting with a letter')
   if (existsSync(join(profileDir, name))) throw new Error(`${join(profileDir, name)} is there already`)
   const written: string[] = []
@@ -257,6 +233,5 @@ export function writeStarter(profileDir: string, name: string, kind: StarterKind
     else source = next
   }
   writeFileSync(profileFile, source)
-  if (!existsSync(join(profileDir, 'tsconfig.json'))) write('tsconfig.json', tsconfig(paths.sdkDir, paths.repoDir))
   return { written, madeProfile: made, missing }
 }

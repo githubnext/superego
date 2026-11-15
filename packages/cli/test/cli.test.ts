@@ -1,11 +1,12 @@
 import { execFile } from 'node:child_process'
-import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
+import { builtTypes } from '@superego/sdk/types'
 
 const CLI = fileURLToPath(new URL('../../../app/bin/superego.ts', import.meta.url))
 let home: string
@@ -28,7 +29,11 @@ const until = async (check: () => Promise<boolean>) => {
   throw new Error('timed out')
 }
 
-beforeAll(async () => { home = await mkdtemp(join(tmpdir(), 'superego-cli-')) })
+beforeAll(async () => {
+  home = await mkdtemp(join(tmpdir(), 'superego-cli-'))
+  // The author types `profile new` links a profile to, built before any command waits on them.
+  await builtTypes()
+}, 240_000)
 afterAll(async () => {
   // Each daemon, gone before its files are: one still shutting down writes as the folder is removed.
   for (const dir of [home, join(home, 'second'), join(home, 'third')]) {
@@ -85,6 +90,7 @@ describe('superego', () => {
     const project = realpathSync(join(home, 'acme'))
     const made = await superegoJson(['profile', 'new', 'support'], undefined, project)
     expect(made.dir).toBe(join(project, '.superego', 'profiles', 'support'))
+    expect(lstatSync(join(made.dir, 'node_modules')).isSymbolicLink()).toBe(true)
     expect(await superegoJson(['profile'], undefined, project)).toMatchObject([{ name: 'support', scope: 'project', allowed: true }])
     // A prompt and a tool, imported from 'superego' as a profile does: Node's loader in the daemon answers it.
     writeFileSync(join(made.dir, 'profile.ts'), `import { defineProfile } from 'superego'\nexport default defineProfile({ prompt: 'Answer customers.', extensions: ['./orders.ts'] })\n`)
@@ -96,6 +102,12 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     const thread = await superegoJson(['create', project, '-P', 'support', '-p', 'hello'])
     expect(thread.profile).toMatchObject({ name: 'support', scope: 'project' })
     await until(async () => (await superegoJson(['threads'])).find((s: any) => s.id === thread.id)?.status.state === 'done')
+    // Its types again, as after a fresh clone: still allowed, since only its tsconfig.json was written.
+    rmSync(join(made.dir, 'node_modules'))
+    rmSync(join(made.dir, 'tsconfig.json'))
+    expect(await superegoJson(['profile', 'types'], undefined, project)).toMatchObject([{ name: 'support', written: [join(made.dir, 'node_modules'), join(made.dir, 'tsconfig.json')] }])
+    expect(existsSync(join(made.dir, 'tsconfig.json'))).toBe(true)
+    expect(await superegoJson(['profile'], undefined, project)).toMatchObject([{ name: 'support', allowed: true }])
   })
 
   it('manages machines and works on them with -m', async () => {
