@@ -509,6 +509,13 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .panes__body { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .panes--narrow { scroll-snap-type: x mandatory; scrollbar-width: none; }
 .panes--narrow .panes__column { scroll-snap-align: start; scroll-snap-stop: always; }
+/* Stacked: the thread, its handle, the panes in one cell on top of each other (the one in front shown), room at the end. */
+.panes--stack { display: grid; grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+.panes--stack > .panes__column { grid-area: 1 / 3; }
+.panes--stack > .panes__column--thread { grid-area: 1 / 1; }
+.panes--stack > .panes__gap { grid-area: 1 / 2; }
+.panes__end { grid-area: 1 / 4; box-shadow: inset 1px 0 0 var(--superego-line); }
+.panes__column.is-behind { visibility: hidden; }
 .pane-empty { margin: auto; color: var(--superego-muted); padding: var(--superego-space-5); text-align: center; }
 .pane-scroll { flex: 1; overflow: auto; }
 .pane-bar { display: flex; align-items: center; gap: var(--superego-space-3); padding: 6px var(--superego-space-3); border-bottom: 1px solid color-mix(in srgb, var(--superego-border) 60%, transparent); font-size: var(--superego-text-sm); color: var(--superego-muted); flex: none; min-height: 38px; }
@@ -710,6 +717,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .app__strip .strip__tab.is-away { color: var(--superego-faint); }
 .app__strip .strip__tab:not(.is-focused):hover { background: var(--superego-hover); color: var(--superego-text); }
 .app__strip .strip .thread__panes { width: 28px; height: 28px; min-height: 28px; border-radius: 6px; }
+.strip__layout { margin-left: 2px; }
 /* Narrow: a switcher, one column at a time. */
 .strip--narrow { height: 40px; border-bottom: 0; padding: 0 8px; }
 .strip--narrow .strip__tabs { padding: 2px; border-radius: 7px; background: var(--superego-fill); }

@@ -1,6 +1,6 @@
 // The contract between the main process and the renderer, exposed as `window.superego` by the preload.
 import type { ConnectionState, MachineConfig, MachineEntry as Base, MachineId } from '@superego/client/shared'
-import type { SettingsStore } from '@superego/settings'
+import type { SettingSpec, SettingsStore } from '@superego/settings'
 import { MIGRATIONS, waitingForSignIn, type Channel, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
 
 export type { ConnectionState, MachineConfig, MachineId }
@@ -74,6 +74,17 @@ export const ACTIONS_MOVED: Record<string, string> = MIGRATIONS['action-keys'].r
 export const LAYOUT_SETTING = {
   key: 'app.layout', title: 'Layout', default: {}, description: 'Where views go. Each view\'s menu moves it too.', type: { type: 'layout' },
 } as const
+
+/**
+ * How a thread's panes are laid out beside it (see renderer/panes.tsx): `scroll`, a column each, the row scrolling past
+ * the window's edge; `stack`, one column they share, one shown at a time. The pane strip's switch and an action change it.
+ */
+export const PANE_LAYOUT = 'app.panes.layout'
+export type PaneLayout = 'scroll' | 'stack'
+export const PANE_LAYOUT_SETTING: SettingSpec = {
+  key: PANE_LAYOUT, title: 'Panes', default: 'scroll', description: 'Stacked, they share one column, as tabs.',
+  type: { type: 'choice', options: [{ value: 'scroll', label: 'Scroll' }, { value: 'stack', label: 'Stack' }] },
+}
 
 /**
  * `store` with the placement settings there were before views were placed by `app.layout` read into it (and saved so,

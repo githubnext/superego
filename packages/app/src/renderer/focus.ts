@@ -3,7 +3,11 @@
 // it, the aside. ⌘⌥← and ⌘⌥→ move between them, ⌃I goes to the prompt (esc leaves it for the thread); going to a region focuses
 // what's used there (the selected thread in the sidebar, the thread's transcript, an editor's text, what a pane marks
 // `data-focus` (a terminal), a page, else the pane itself). Focus moving into a pane makes it the thread's focused pane; a pane brought forward from the keyboard
-// (⌃Tab, the navigator) takes the focus with it.
+// (⌃Tab, the navigator) takes the focus with it. A pane at the back of a stack (see panes.tsx) is a region too: going
+// there brings it to the front.
+
+/** Sent to a pane's column at the back of a stack, as the focus goes there: brought to the front, it can take it. */
+export const BRING_FORWARD = 'superego:bring-forward'
 
 /** The regions, left to right, as the window shows them now. */
 function regions(): HTMLElement[] {
@@ -37,6 +41,7 @@ function target(region: HTMLElement): HTMLElement | null {
  * in a page, or a click before it, leaves that wrong. Moved there by a click (`visible: false`), it doesn't.
  */
 export function focusRegion(region: HTMLElement | null | undefined, { visible = true }: { visible?: boolean } = {}): boolean {
+  if (region?.inert && region.matches('[data-column]')) region.dispatchEvent(new Event(BRING_FORWARD, { bubbles: true }))
   const el = region && target(region)
   if (!el) return false
   // Focus never scrolls what's read: an editor keeps its place (the browser would bring its caret into view), and

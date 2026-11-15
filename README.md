@@ -44,8 +44,10 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
   names a thread as `[its title](thread:<id>)`, shown as that thread to open (⌘-click: beside). `thread.create` takes
   `parent` too. The same tools take `machine`, any machine its daemon reaches (`thread_machines` lists them): a thread
   started there is that machine's own, not nested under its parent, whose catalog is elsewhere.
-- **Panes** sit beside the thread as a row of columns that scrolls sideways (Dinky's scrolling layout); the thread
-  and its panes are kept with the thread, so every client sees the same. The agent opens them too (`open_pane`).
+- **Panes** sit beside the thread as a row of columns that scrolls sideways (Dinky's scrolling layout), or stacked in
+  one column beside it, as tabs, so nothing passes the window's edge (Settings → Appearance → Panes, the strip's
+  switch, `⌘⇧\`); the thread and its panes are kept with the thread, so every client sees the same. The agent opens
+  them too (`open_pane`).
   Built in: the file editor (Markdown rendered, in live preview as Obsidian shows it, or as source) and another thread.
   Bundled extensions add Changes (git's diff, `git`), Preview (a web page) and Artifact (an HTML file the agent wrote,
   sandboxed) (`web-panes`); a pane of an extension a thread goes without isn't shown.
@@ -87,6 +89,7 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
 | `⌘⇧[` `⌘⇧]` | Previous / next thread: up or down the sidebar's rows as shown (threads a thread started sit under it), across sessions and around |
 | `⌘[` `⌘]` | Back / forward through the threads (and Settings) this window has shown, as a browser goes; the arrows in the title bar and the mouse's back and forward buttons too |
 | `⌃Tab` `⌃⇧Tab` | The thread and its panes, in turn |
+| `⌘⇧\` | Panes scrolled or stacked |
 | `⌘⌥←` `⌘⌥→` | Focus the region beside: the sidebar, the thread, each pane (every one can hold the focus) |
 | `⌃I` | Focus the prompt (`Esc` there leaves it for the thread, to read and scroll; typing goes back to the prompt) |
 | `⌃D` `⌃U` | Scroll what has the focus (the thread, from its prompt) half a page down / up |

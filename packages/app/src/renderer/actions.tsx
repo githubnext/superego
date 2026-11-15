@@ -2,10 +2,10 @@
 // forwarded to where they run (see `dispatch`). Every dispatch from this window is logged, and the log is one action
 // away (Show action log).
 import { useEffect, useState } from 'react'
-import { obj, opt, Router, str, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
+import { lit, obj, opt, Router, str, union, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
 import { Dialog } from '@superego/ui'
 import type { ThreadInfo } from '@superego/protocol'
-import type { MachineEntry } from '../shared.ts'
+import { PANE_LAYOUT, type MachineEntry, type PaneLayout } from '../shared.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
 import { threadBeside, type Session } from './sessions.ts'
 import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
@@ -159,6 +159,14 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
   // Within a thread: the thread itself, then each pane beside it.
   defineWindowAction({ id: 'pane.next', title: 'Next pane', keys: 'ctrl+tab', run: (_p, c) => stepPane(c, 1) }),
   defineWindowAction({ id: 'pane.previous', title: 'Previous pane', keys: 'ctrl+shift+tab', run: (_p, c) => stepPane(c, -1) }),
+  // The panes side by side, scrolling past the window's edge, or stacked in one column: `layout`, else the other one.
+  defineWindowAction({
+    id: 'panes.layout', title: 'Toggle stacked panes', keys: 'mod+shift+\\',
+    params: obj({ layout: opt(union([lit('scroll'), lit('stack')])) }),
+    run: ({ layout }, c) => c.dispatch('app.settings.set', {
+      key: PANE_LAYOUT, value: layout ?? (c.appSetting<PaneLayout>(PANE_LAYOUT) === 'stack' ? 'scroll' : 'stack'),
+    }, { machine: 'app', source: 'panes' }),
+  }),
   // Another window (in a browser, another tab), showing what this one does.
   defineWindowAction({
     id: 'app.newWindow', title: 'New window', keys: 'mod+shift+n',

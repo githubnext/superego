@@ -1,16 +1,23 @@
 // Panes: views beside a thread. A thread keeps which are open and which has focus (pane.open, pane.focus, pane.close),
-// so they follow it to every client; the agent opens them too (open_pane). The thread and its panes are a row of
-// columns with room between, scrolled as Dinky's (and niri's) scrolling layout is. Each column has its own width, a
-// share of the row: the thread's half to start, a pane's its kind's; the room after a column (the last one's too, at
-// the row's end) is its handle, and the last column takes what's left over until it's dragged. Past the edge the row
-// scrolls, and the focused column scrolls just far enough to show whole. ⌃Tab moves the focus along. On a phone each
-// column is the screen's width, and a swipe moves between them.
+// so they follow it to every client; the agent opens them too (open_pane). Wide, they're laid out one of two ways (the
+// app setting `app.panes.layout`, switched from the strip):
+// - Scroll: the thread and its panes are a row of columns with room between, scrolled as Dinky's (and niri's)
+//   scrolling layout is. Each column has its own width, a share of the row: the thread's half to start, a pane's its
+//   kind's; the room after a column (the last one's too, at the row's end) is its handle, and the last column takes
+//   what's left over until it's dragged. Past the edge the row scrolls, and the focused column scrolls just far enough
+//   to show whole.
+// - Stack: the thread, and beside it one column its panes share, one in front at a time; the row never passes the
+//   window's edge. The strip's tabs bring one to the front; so does its getting the focus (a click, ⌃Tab, ⌘⌥←/→, the
+//   navigator, pane.focus from anywhere) and its opening. The thread's handle drags the line between the two.
+// ⌃Tab moves the focus along. On a phone each column is the screen's width, and a swipe moves between them.
 // Built in: editor and thread. Extensions and profiles add kinds with superego.pane(kind, …) (Changes is git's; a web
 // page and an artifact, web-panes'). A pane of a kind only an extension the thread goes without draws isn't shown.
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
-import { ArrowRightIcon, ChatTextIcon, FileTextIcon, XIcon } from '@superego/ui'
+import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, FileTextIcon, SegmentedControl, XIcon, type SegmentedOption } from '@superego/ui'
+import { PANE_LAYOUT, type PaneLayout } from '../shared.ts'
+import { useAppSetting } from './client.ts'
 import { fileKind, paneKind, paneTitle, shownPanes, useNarrow, useRegistry, ViewScopeProvider, whose, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
 import { Contained } from './contained.tsx'
 import { useLocalState } from './local-state.ts'
@@ -18,14 +25,14 @@ import { useAllThreads, useMachines } from './state.tsx'
 import { PaneMenu, ThreadBody } from './ThreadView.tsx'
 import { ViewMenuButton } from './view-menu.tsx'
 import { FileEditor } from './file-editor.tsx'
-import { focusRegion } from './focus.ts'
+import { BRING_FORWARD, focusRegion } from './focus.ts'
+import { DEFAULT_SHARE, frontOf, GAP, roomFor, scrollWidths, stackWidths } from './pane-layout.ts'
 
-/** A pane's width (a share of the row) until it's dragged, unless its kind says otherwise. */
-const DEFAULT_SHARE = 0.5
-/** Wide, the room after each column (the last too): its handle, to drag it wider or narrower. */
-const GAP = 8
-/** No column narrower than this, however many: the row scrolls instead. */
-const MIN_COLUMN = 380
+/** The strip's switch between the layouts. */
+const LAYOUTS: SegmentedOption<PaneLayout>[] = [
+  { value: 'scroll', label: 'Scroll panes', icon: ColumnsPlusRightIcon },
+  { value: 'stack', label: 'Stack panes', icon: CardsIcon },
+]
 
 /** Where the strip goes, when the window has a place for it (the title bar); without one, it heads the columns. */
 export const StripSlot = createContext<HTMLElement | null>(null)
@@ -37,6 +44,9 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   // A pane of a view's kind can move to the other places the view fits, from its ···.
   const isView = (pane: Pane) => registry.views.some((v) => v.id === pane.kind && v.fits.includes('pane'))
   const narrow = useNarrow()
+  const [layout] = useAppSetting<PaneLayout>(PANE_LAYOUT)
+  // On a phone each column is the screen's width either way.
+  const stacked = layout === 'stack' && !narrow && panes.length > 0
   // Each pane's width, as a share of the row, by pane; kept in this window.
   const [shares, setShares] = useLocalState<Record<string, number>>('pane.widths', {})
   const row = useRef<HTMLDivElement>(null)
@@ -53,6 +63,31 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
 
   // The focused column: a pane, or (none, or one that closed) the thread.
   const focused = panes.find((p) => p.id === thread.pane)?.id
+
+  // The pane in front of the stack, by thread, kept in this window (in either layout, for when it's stacked).
+  const [fronts, setFronts] = useLocalState<Record<string, string>>('pane.front', {})
+  const threadKey = `${machine.id}/${thread.id}`
+  const ids = panes.map((pane) => pane.id)
+  const front = frontOf(ids, fronts[threadKey], focused)
+  const bringForward = (id: string) => setFronts((all) => all[threadKey] === id ? all : { ...all, [threadKey]: id })
+  // A pane comes to the front as it gets the focus, here or from anywhere (pane.focus), and as it opens.
+  useLayoutEffect(() => { if (focused) bringForward(focused) }, [focused])
+  const known = useRef(ids)
+  useLayoutEffect(() => {
+    const opened = ids.filter((id) => !known.current.includes(id)).at(-1)
+    known.current = ids
+    if (opened) bringForward(opened)
+  }, [ids.join()])
+  // One at the back the focus is going to (see focus.ts) comes to the front first, so it can take it.
+  useEffect(() => {
+    const el = row.current
+    const bring = (event: Event) => {
+      const id = (event.target as HTMLElement).dataset.column
+      if (id && id !== 'thread') flushSync(() => bringForward(id))
+    }
+    el?.addEventListener(BRING_FORWARD, bring)
+    return () => el?.removeEventListener(BRING_FORWARD, bring)
+  }, [panes.length > 0])
   const columnOf = (id: string | undefined) => row.current?.querySelector<HTMLElement>(`[data-column="${id ?? 'thread'}"]`)
   // Brought into view as it gets the focus: just far enough to show it whole.
   useEffect(() => {
@@ -73,26 +108,27 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   const where = { machine: machine.id, thread }
   const title = (pane: Pane) => paneTitle(registry, pane, where)
 
-  // The room the columns share: the row less the gap after each.
-  const room = narrow ? rowWidth : Math.max(0, rowWidth - GAP * (panes.length + 1))
   // The columns, left to right: the thread, then its panes, each by the key its width is kept under. The last one's
   // width is kept apart (`<key>:end`): dragged from its own handle at the end, it's its width while it is last.
+  // Stacked, the thread's is the only one: its panes' column takes the rest.
   const keys = ['thread', ...panes.map((pane) => pane.id)]
-  const last = keys.length - 1
+  const last = stacked ? 1 : keys.length - 1
   const shareOf = (key: string, index: number) => index === last
     ? shares[`${key}:end`]
     : shares[key] ?? (index === 0 ? DEFAULT_SHARE : paneKind(registry, panes[index - 1]!.kind, where)?.width ?? DEFAULT_SHARE)
-  const widthFor = (share: number) => Math.min(room, Math.max(MIN_COLUMN, Math.round(share * room)))
-  const widths = keys.map((key, i) => narrow ? rowWidth : widthFor(shareOf(key, i) ?? 0))
-  // Unless dragged, the last column takes the room the others leave.
-  const used = widths.slice(0, last).reduce((sum, w) => sum + w, 0)
-  if (!narrow && shareOf(keys[last]!, last) === undefined) widths[last] = Math.max(MIN_COLUMN, room - used)
-  const threadWidth = widths[0]!
+  // The room the columns share: the row less the gap after each (stacked, the thread's and the stack's).
+  const room = narrow ? rowWidth : roomFor(rowWidth, stacked ? 2 : keys.length)
+  const [threadWidth, stackWidth] = stackWidths(room, shares.thread)
+  const widths = narrow ? keys.map(() => rowWidth)
+    : stacked ? [threadWidth, ...panes.map(() => stackWidth)]
+    : scrollWidths(room, keys.map((key, i) => shareOf(key, i)))
   const widthOf = (pane: Pane) => widths[panes.indexOf(pane) + 1]!
-  // How much of each column is in view, and on which side the rest are: for the strip.
+  // How much of each column is in view, and on which side the rest are: for the strip. Stacked, the thread and the
+  // pane in front are; the rest are behind.
   const starts = widths.map((_, i) => widths.slice(0, i).reduce((sum, w) => sum + w + GAP, 0))
-  const shown = widths.map((w, i) => w ? Math.max(0, Math.min(starts[i]! + w, scrolled + rowWidth) - Math.max(starts[i]!, scrolled)) / w : 0)
-  const side = (i: number) => shown[i]! >= 0.5 ? undefined : starts[i]! < scrolled ? 'left' : 'right'
+  const shown = widths.map((w, i) => stacked ? Number(i === 0 || keys[i] === front)
+    : w ? Math.max(0, Math.min(starts[i]! + w, scrolled + rowWidth) - Math.max(starts[i]!, scrolled)) / w : 0)
+  const side = (i: number) => shown[i]! >= 0.5 ? undefined : stacked ? 'behind' : starts[i]! < scrolled ? 'left' : 'right'
 
   // The gap after a column resizes it (`index`): its share of the row, kept for next time. The last one's, dragged out
   // to the row's end, takes what's left again; a double click puts any back as it was.
@@ -102,6 +138,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     const startX = event.clientX
     const start = widths[index]!
     const key = keyOf(index)
+    const used = widths.slice(0, last).reduce((sum, w) => sum + w, 0)
     const move = (e: PointerEvent) => {
       const width = start + e.clientX - startX
       const fills = index === last && width >= room - used
@@ -158,6 +195,8 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   ]
   const total = widths.reduce((sum, w) => sum + w, 0) || 1
   const stripSlot = useContext(StripSlot)
+  // The tab raised: the focused column's; stacked, the one in front once a pane opening covers the focused one.
+  const current = stacked && focused && focused !== front ? front : focused
 
   const strip = panes.length > 0 && (
     <div className={`strip ${narrow ? 'strip--narrow' : ''}`} role="tablist" aria-label="The thread and its panes">
@@ -169,8 +208,8 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
           const { path, url } = (tab.pane?.params ?? {}) as { path?: string; url?: string }
           const full = path ?? url ?? tab.label
           return (
-            <button key={tab.id ?? 'thread'} type="button" role="tab" aria-selected={tab.id === focused}
-              className={`strip__tab ${tab.id === focused ? 'is-focused' : away ? 'is-away' : 'is-shown'}`}
+            <button key={tab.id ?? 'thread'} type="button" role="tab" aria-selected={tab.id === current}
+              className={`strip__tab ${tab.id === current ? 'is-focused' : away ? 'is-away' : 'is-shown'}`}
               title={full}
               onClick={() => show(tab.pane)}>
               {Icon && <Icon size={14} aria-hidden />}
@@ -184,10 +223,14 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
       {!narrow && (
         <>
           {/* The row in small: each column a bar as wide as it is, the ones in view darker. */}
-          <span className="strip__map" aria-hidden>
-            {widths.map((w, i) => <i key={i} className={shown[i]! >= 0.5 ? 'is-in' : ''} style={{ width: Math.max(4, Math.round((w / total) * 52)) }} />)}
-          </span>
+          {!stacked && (
+            <span className="strip__map" aria-hidden>
+              {widths.map((w, i) => <i key={i} className={shown[i]! >= 0.5 ? 'is-in' : ''} style={{ width: Math.max(4, Math.round((w / total) * 52)) }} />)}
+            </span>
+          )}
           <PaneMenu machine={machine} thread={thread} add />
+          <SegmentedControl label="Pane layout" className="strip__layout" options={LAYOUTS} value={stacked ? 'stack' : 'scroll'}
+            onChange={(next) => void dispatch('panes.layout', { layout: next }, { source: 'strip' })} />
         </>
       )}
     </div>
@@ -195,22 +238,25 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   return (
     <div className={`sheet ${panes.length ? 'has-panes' : ''}`}>
       {stripSlot ? strip && createPortal(strip, stripSlot) : strip}
-      <div className={`panes ${narrow ? 'panes--narrow' : ''}`} ref={row} onScroll={onScroll}>
+      {/* Stacked, a grid: the thread, its handle, the panes on top of each other, the room at the end. */}
+      <div className={`panes ${narrow ? 'panes--narrow' : ''} ${stacked ? 'panes--stack' : ''}`} ref={row} onScroll={onScroll}
+        style={stacked ? { gridTemplateColumns: `${threadWidth}px ${GAP}px ${stackWidth}px ${GAP}px` } : undefined}>
         {/* Focus moving into a column (a click, a key) makes it the focused one: the app and the keyboard agree. */}
         <div data-column="thread" tabIndex={-1} className="panes__column panes__column--thread"
-          style={{ width: threadWidth }} onPointerDownCapture={() => focus(undefined)} onFocusCapture={() => focus(undefined)}>{main}</div>
+          style={{ width: widths[0] }} onPointerDownCapture={() => focus(undefined)} onFocusCapture={() => focus(undefined)}>{main}</div>
         {/* The gap after each column is its handle: drag it to make that one wider or narrower. */}
         {gap(0)}
         {panes.map((pane, index) => (
           <Fragment key={pane.id}>
-          <PaneColumn pane={pane} title={title(pane)} focused={pane.id === focused} width={widthOf(pane)}
+          <PaneColumn pane={pane} title={title(pane)} focused={pane.id === focused} width={widthOf(pane)} behind={stacked && pane.id !== front}
             onFocus={() => focus(pane.id)} onClick={takeFocus} onClose={() => close(pane)}
             menu={isView(pane) && <ViewMenuButton view={pane.kind} title={title(pane)} place="pane" machine={machine.id} thread={thread} pane={pane.id} />}>
             <TabNote.Provider value={setNoteFor(pane.id)}><PaneBody machine={machine} thread={thread} pane={pane} /></TabNote.Provider>
           </PaneColumn>
-          {gap(index + 1)}
+          {!stacked && gap(index + 1)}
           </Fragment>
         ))}
+        {stacked && <div className="panes__end" aria-hidden />}
       </div>
     </div>
   )
@@ -234,12 +280,13 @@ export function PaneHeader({ children }: { children: ReactNode }) {
   return at ? createPortal(children, at) : <div className="pane-bar">{children}</div>
 }
 
-function PaneColumn({ pane, title, focused, width, onFocus, onClick, onClose, menu, children }: {
-  pane: Pane; title: string; focused: boolean; width: number; onFocus(): void; onClick(event: React.MouseEvent<HTMLElement>): void; onClose(): void; menu?: ReactNode; children: ReactNode
+function PaneColumn({ pane, title, focused, width, behind, onFocus, onClick, onClose, menu, children }: {
+  pane: Pane; title: string; focused: boolean; width: number; behind: boolean; onFocus(): void; onClick(event: React.MouseEvent<HTMLElement>): void; onClose(): void; menu?: ReactNode; children: ReactNode
 }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
+  // At the back of a stack it's kept (its page, its place in a file), out of sight and out of reach.
   return (
-    <div data-column={pane.id} tabIndex={-1} className="panes__column"
+    <div data-column={pane.id} tabIndex={-1} className={`panes__column ${behind ? 'is-behind' : ''}`} inert={behind}
       style={{ width }} onPointerDownCapture={onFocus} onFocusCapture={onFocus} onClick={onClick}>
       <div className={`panes__tab ${focused ? 'is-active' : ''}`}>
         <button className="panes__label" title={title}>{title}</button>

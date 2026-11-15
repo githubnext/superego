@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { SettingsRegistry, withMovedKeys } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import type { AppConfig } from '@superego/protocol'
-import { APP_MOVED, LAYOUT_SETTING, TEXT_SIZES, withMovedActions, withMovedLayout } from '../shared.ts'
+import { APP_MOVED, LAYOUT_SETTING, PANE_LAYOUT_SETTING, TEXT_SIZES, withMovedActions, withMovedLayout } from '../shared.ts'
 
 export const APP = 'app'
 export const APP_KEYS = {
@@ -30,6 +30,7 @@ export function createAppSettings(dataDir: string, app: AppConfig) {
         key: APP_KEYS.accent, title: 'Accent colour', default: 'color(display-p3 0.155 0.319 0.654)',
         description: 'Focus rings, primary buttons, links and selection. Any CSS colour.', type: { type: 'color' },
       },
+      PANE_LAYOUT_SETTING,
       LAYOUT_SETTING,
     ],
   })

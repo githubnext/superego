@@ -1,6 +1,7 @@
 #!/bin/sh
-# The window's layout in the states the design covers, screenshotted: `test/look.sh <dir> [focus|composer]`;
-# `focus`: each region holding the focus; `composer`: the composer and what's around it; `web`: Settings → Web access,
+# The window's layout in the states the design covers, screenshotted: `test/look.sh <dir> [focus|panes|composer|web]`;
+# `focus`: each region holding the focus; `panes`: a thread's panes scrolled and stacked; `composer`: the composer and
+# what's around it; `web`: Settings → Web access,
 # pairing and devices and each Tailscale state (a stub `tailscale` on PATH: the machine's own is never touched).
 set -e
 cd "$(dirname "$0")/.."
