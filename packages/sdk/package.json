@@ -10,7 +10,8 @@
     "./unstable": "./src/unstable.ts",
     "./testing": "./src/testing.ts",
     "./package.json": "./package.json",
-    "./vitest.author": "./vitest.author.ts"
+    "./vitest.author": "./vitest.author.ts",
+    "./types": "./types.ts"
   },
   "dependencies": {
     "@superego/app": "workspace:*",
