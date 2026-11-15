@@ -15,6 +15,7 @@ import { devApp } from './dev-app.ts'
 import { authorTypes, newExtension, testExtension } from './extensions.ts'
 import { setUpProfileTypes, type ProfileTypes } from '@superego/client/author-types'
 import { formatReport } from './inspect.ts'
+import { ACTIONS as MCP_ACTIONS, SECTION as MCP_SECTION, type CheckResult as McpCheck, type LogResult as McpLog, type SectionData as McpServers, type ServerInfo as McpServer, type ThreadServers } from '@superego/mcp-servers/shared'
 import {
   checkIdentity, collectProfileUi, controlPath, filesOf, hashProfileUi, loginArgs, machineHub, MachineStore, masterAlive, openLocal, openMachine, routeOf, runUpdate, UiAllowStore, updateScript,
   type MachineConfig, type Transport,
@@ -112,6 +113,12 @@ Usage:
                                 Run an action; values are coerced to the action's schema
   ${app.id} actions log                Its newest dispatches, from anywhere
   ${app.id} mcp                        Serve a machine's actions exposed to MCP as tools, over stdio, for agents elsewhere
+  ${app.id} mcp-servers                The MCP servers a machine's agents use (Settings → MCP servers): how each stands
+  ${app.id} mcp-servers logs <name> [--lines N]
+                                Its log: stderr, log messages, connection errors (secrets hidden)
+  ${app.id} mcp-servers restart <name> Stop it, forget that it failed, and start it again to check it
+  ${app.id} mcp-servers set-secret <name> [VAR]
+                                Store its API key, or the value of a secret env var (prompted, or read from stdin)
 
   ${app.id} daemon [status|stop]       Run this computer's daemon in the foreground, or check on it
   ${app.id} daemon restart [--now]     Restart it onto the installed code; --now interrupts working agents
@@ -652,8 +659,12 @@ async function profileHere(values: { profile?: string; user?: boolean }, make = 
 async function extensionCommand(sub: string | undefined, rest: string[], values: { profile?: string; user?: boolean; ui?: boolean; 'data-only'?: boolean; machine?: string; thread?: string }) {
   if (!sub || sub === 'ls' || sub === 'list' || sub === 'inspect') {
     const machine = resolveMachine(values.machine)
-    const report = await on(machine, (call) => call('extensions.inspect', values.thread ? { thread: values.thread } : {}))
-    return print(report, () => console.log(formatReport(report, machine.label)))
+    const { report, servers } = await on(machine, async (call) => {
+      const report = await call('extensions.inspect', values.thread ? { thread: values.thread } : {})
+      const thread = values.thread ? (await call('thread.list', {})).find((t) => t.id === values.thread) : undefined
+      return { report, servers: thread?.ext?.['mcp-servers'] as ThreadServers | undefined }
+    })
+    return print(servers ? { ...report, mcpServers: servers } : report, () => console.log(formatReport(report, machine.label, servers)))
   }
   if (sub === 'new') {
     const name = rest[0]
@@ -823,6 +834,66 @@ async function mcpCommand(name: string | undefined) {
   process.exit(0)
 }
 
+// ── MCP servers ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** `mcp-servers`: a machine's MCP servers (the extension's settings section), their logs, a restart, a secret set. */
+async function mcpServersCommand(sub: string | undefined, rest: string[], values: { machine?: string; lines?: string }) {
+  const machine = resolveMachine(values.machine)
+  const run = <T>(id: string, params: object) => on(machine, (call) => call('action.run', { id, params, exposure: 'cli' })) as Promise<T>
+  const line = (s: McpServer) => [
+    s.from.type === 'machine' ? s.name : `${s.name} (${s.from.scope}:${s.from.profile})`,
+    s.runs,
+    s.state + (s.tools !== undefined ? ` · ${s.tools} tool${s.tools === 1 ? '' : 's'}${s.deferred ? ', by search' : ''}` : '') + (s.config.unprofiled ? ' · without a profile too' : ''),
+  ]
+  if (!sub || sub === 'ls' || sub === 'list') {
+    const snapshot = await on(machine, (call) => call('settings.watch', {}).then((r) => r.value))
+    const section = snapshot.sections.find((s) => s.id === MCP_SECTION)
+    if (!section) throw new RpcError('not_found', `${machine.label} has no MCP servers: its daemon is older, or the extension is off (Settings → Extensions)`)
+    const data = section.data as McpServers
+    return print(data, () => {
+      if (!data.servers.length && !data.profiles.length) return console.log(`No MCP servers on ${machine.label} yet. Add one in the app's Settings → MCP servers.`)
+      table([...data.servers, ...data.profiles].map(line))
+      for (const s of [...data.servers, ...data.profiles]) if (s.error && (s.state === 'failed' || s.state === 'needs-sign-in' || s.state === 'waiting')) console.log(`\n${s.name}: ${s.error}`)
+    })
+  }
+  const name = rest[0]
+  if (!name) throw new RpcError('usage', `${app.id} mcp-servers ${sub} <name>`)
+  /** A profile's server goes by its id; a name finds it when it's the only one of that name. */
+  const idOf = async (given: string) => {
+    if (given.includes('#')) return given
+    const snapshot = await on(machine, (call) => call('settings.watch', {}).then((r) => r.value))
+    const data = snapshot.sections.find((s) => s.id === MCP_SECTION)?.data as McpServers | undefined
+    const found = [...data?.servers ?? [], ...data?.profiles ?? []].filter((s) => s.name === given)
+    if (found.length > 1 && !found.some((s) => s.id === given)) throw new RpcError('usage', `More than one server is called ${given}: name one by its id (${found.map((s) => s.id).join(', ')})`)
+    return found[0]?.id ?? given
+  }
+  if (sub === 'logs' || sub === 'log') {
+    const lines = values.lines ? Number(values.lines) : 100
+    const log = await run<McpLog>(MCP_ACTIONS.log, { server: await idOf(name), lines })
+    return print(log, () => console.log(log.text || `Nothing in ${log.path} yet.`))
+  }
+  if (sub === 'restart') {
+    const { server } = await run<McpCheck>(MCP_ACTIONS.restart, { server: await idOf(name) })
+    return print(server, () => { table([line(server)]); if (server.error) console.log(server.error) })
+  }
+  if (sub === 'set-secret') {
+    const id = await idOf(name)
+    const snapshot = await on(machine, (call) => call('settings.watch', {}).then((r) => r.value))
+    const data = snapshot.sections.find((s) => s.id === MCP_SECTION)?.data as McpServers | undefined
+    const server = [...data?.servers ?? [], ...data?.profiles ?? []].find((s) => s.id === id)
+    if (!server) throw new RpcError('not_found', `No MCP server ${name} on ${machine.label}`)
+    const names = server.secrets.map((s) => s.name)
+    if (!names.length) throw new RpcError('usage', `${name} takes no secrets: its auth is ${server.config.auth?.type ?? 'none'}`)
+    const which = rest[1] ?? (names.length === 1 ? names[0]! : undefined)
+    if (!which || !names.includes(which)) throw new RpcError('usage', `Which? ${app.id} mcp-servers set-secret ${name} <${names.join('|')}>`)
+    const value = await readSecret(which === 'key' ? `API key for ${name}: ` : `${which} for ${name}: `)
+    if (!value) throw new RpcError('usage', 'Nothing given')
+    const checked = await run<McpCheck>(MCP_ACTIONS.setSecret, { server: id, values: { [which]: value } })
+    return print(checked.server, () => { table([line(checked.server)]); if (checked.server.error) console.log(checked.server.error) })
+  }
+  throw new RpcError('usage', `Unknown: ${app.id} mcp-servers ${sub}. See ${app.id} --help`)
+}
+
 // ── The skill ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
 // A skill for agents, in tiers: `--skill` prints SKILL.md (what Superego is, a quick reference, and an index), which a
@@ -851,7 +922,7 @@ function layoutCommand() {
 
 // ── Dispatch ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const COMMANDS = new Set(['extension', 'extensions', 'open', 'threads', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles', 'web', 'layout', 'mcp'])
+const COMMANDS = new Set(['extension', 'extensions', 'open', 'threads', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles', 'web', 'layout', 'mcp', 'mcp-servers'])
 
 async function main() {
   // `do` takes the action's own --params, which parseArgs would refuse.
@@ -866,6 +937,7 @@ async function main() {
       user: { type: 'boolean' }, archived: { type: 'boolean' }, ui: { type: 'boolean' }, 'data-only': { type: 'boolean' }, thread: { type: 'string' },
       all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
       start: { type: 'boolean' }, update: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, skill: { type: 'boolean' },
+      lines: { type: 'string' },
     },
   })
   json = Boolean(values.json)
@@ -902,6 +974,7 @@ async function main() {
     case 'web': return webCommand(rest[0], rest.slice(1), values)
     case 'layout': return layoutCommand()
     case 'mcp': return mcpCommand(values.machine)
+    case 'mcp-servers': return mcpServersCommand(rest[0], rest.slice(1), values)
   }
 }
 

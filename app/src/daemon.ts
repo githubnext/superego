@@ -11,6 +11,7 @@ import ego from '@superego/ego/daemon'
 import files from '@superego/files/daemon'
 import git from '@superego/git/daemon'
 import images from '@superego/images/daemon'
+import mcpServers from '@superego/mcp-servers/daemon'
 import paneUi from '@superego/pane-ui/daemon'
 import replyUi from '@superego/reply-ui/daemon'
 import skills from '@superego/skills/daemon'
@@ -29,7 +30,7 @@ const webRoot = [join(import.meta.dirname, '../renderer'), join(import.meta.dirn
 // The daemon links to the machines this computer reaches (the same list the app and `superego machines` keep), to serve
 // them to browsers and agents (see the daemon's relay.ts).
 serveDaemon({
-  app, defaultCwd: homedir(), extensions: [worktrees, askUser, ego, files, git, images, paneUi, replyUi, skills, suggestions, tasks, terminal, threadTools, threadReports, webPanes], ...(webRoot ? { webRoot } : {}),
+  app, defaultCwd: homedir(), extensions: [worktrees, askUser, ego, files, git, images, mcpServers, paneUi, replyUi, skills, suggestions, tasks, terminal, threadTools, threadReports, webPanes], ...(webRoot ? { webRoot } : {}),
   reach: (dataDir, self) => machineHub({ app, dataDir, self }),
 }).catch((error) => {
   console.error(error)

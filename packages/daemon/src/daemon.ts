@@ -1737,7 +1737,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   settings.register({
     id: 'mcp', title: 'Outside agents', order: 82,
     description: `Agents using this machine through ${options.app.id} mcp.`,
-    settings: [{ key: MCP_THREADS, title: 'Can start threads', default: false, type: { type: 'boolean' } }],
+    settings: [{
+      key: MCP_THREADS, title: 'Can start threads', default: false, type: { type: 'boolean' },
+      description: "A thread one starts is like any other here: it has its profile's MCP servers, or those for threads without a profile.",
+    }],
   })
   /** Why an outside agent may not run `id` now, of what's exposed to it; nothing when it may. */
   const mcpRefusal = (id: string) => id === 'thread.create' && settings.get(MCP_THREADS) !== true

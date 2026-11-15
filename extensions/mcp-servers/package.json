@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./daemon": "./src/daemon.ts",
     "./shared": "./src/shared.ts"
   },
   "dependencies": {
@@ -12,5 +13,8 @@
     "@modelcontextprotocol/sdk": "1.32.2",
     "@superego/daemon": "workspace:*",
     "@superego/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "zod": "4.6.7"
   }
 }

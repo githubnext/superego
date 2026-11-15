@@ -7,6 +7,7 @@
     "@modelcontextprotocol/sdk": "1.32.2",
     "@superego/client": "workspace:*",
     "@superego/daemon": "workspace:*",
+    "@superego/mcp-servers": "workspace:*",
     "@superego/protocol": "workspace:*",
     "@superego/sdk": "workspace:*",
     "uqr": "0.1.3"

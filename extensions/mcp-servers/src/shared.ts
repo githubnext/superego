@@ -2,7 +2,7 @@
 // `<dataDir>/mcp-servers.json` keeps it, what Settings → MCP servers draws (the section's `data`, kept current as the
 // live value `mcp-servers.servers`), what a thread says of its servers (`thread.ext['mcp-servers']`), and the actions
 // with their params. See docs/mcp.md.
-import { arr, bool, lit, num, obj, opt, str, union, type ExtensionAbout, type Static } from '@superego/protocol'
+import { arr, bool, lit, num, obj, opt, str, union, type ExtensionAbout, type Json, type Static } from '@superego/protocol'
 import { map, oneOf } from '@earendil-works/pi-schema'
 import type { ProfileMcpServer } from '@superego/daemon/sdk'
 
@@ -159,7 +159,7 @@ export type CallDetails = {
   tool: string
   title?: string
   serverTitle?: string
-  annotations?: Record<string, unknown>
+  annotations?: { [key: string]: Json }
   /** Files the result's blobs were saved to, and the full text when it was cut. */
   files?: string[]
 }
