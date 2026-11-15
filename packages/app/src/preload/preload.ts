@@ -1,29 +1,25 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { artifactUrl, CHANNEL, type BridgeChannel, type CallResult, type ChannelEvent, type SuperegoBridge, type SuperegoEvent } from '../shared.ts'
 
-class BridgeError extends Error {
-  kind: string
-  constructor(kind: string, message: string) { super(message); this.kind = kind }
-}
-
-const bridge: SuperegoBridge = {
-  async call(machine, method, params) {
-    const response = await ipcRenderer.invoke(CHANNEL.call, machine, method, params) as CallResult
-    if (!response.ok) throw new BridgeError(response.error.kind, response.error.message)
-    return response.result
-  },
+/**
+ * The bridge as this (isolated) world has it: its calls answer with what happened (CallResult), not by throwing. An error
+ * crosses the context bridge with its message only, and the window acts on an RPC error's `kind` (no_model,
+ * untrusted_profile, profile_missing): `window.superego` is made in the page's own world (below), where it throws
+ * errors that keep it.
+ */
+const bridge = {
+  call: (machine: string, method: string, params: unknown) => ipcRenderer.invoke(CHANNEL.call, machine, method, params) as Promise<CallResult>,
   machines: () => ipcRenderer.invoke(CHANNEL.machines),
   artifactUrl,
   onEvent(listener) {
     listeners.add(listener)
     return () => { listeners.delete(listener) }
   },
-  async channel(machine, kind, params) {
+  async channel(machine: string, kind: string, params: unknown): Promise<CallResult> {
     const response = await ipcRenderer.invoke(CHANNEL.open, machine, kind, params) as CallResult
-    if (!response.ok) throw new BridgeError(response.error.kind, response.error.message)
-    return held(response.result as string)
+    return response.ok ? { ok: true, result: held(response.result as string) } : response
   },
-}
+} satisfies Omit<SuperegoBridge, 'call' | 'channel'> & Record<'call' | 'channel', (machine: string, method: string, params: unknown) => Promise<CallResult>>
 
 // One IPC listener for the window; every watch subscribes here instead.
 const listeners = new Set<(event: SuperegoEvent) => void>()
@@ -69,4 +65,19 @@ function held(id: string): BridgeChannel {
   }
 }
 
-contextBridge.exposeInMainWorld('superego', bridge)
+// Run in the page's world, from its source alone (no closure): `raw` comes over the bridge, its functions proxied.
+contextBridge.executeInMainWorld({
+  func: (raw: typeof bridge) => {
+    const answer = (response: CallResult) => {
+      if (response.ok) return response.result
+      throw Object.assign(new Error(response.error.message), { kind: response.error.kind })
+    }
+    const superego: SuperegoBridge = {
+      ...raw,
+      call: async (machine, method, params) => answer(await raw.call(machine, method, params)),
+      channel: async (machine, kind, params) => answer(await raw.channel(machine, kind, params)) as BridgeChannel,
+    }
+    Object.defineProperty(globalThis, 'superego', { value: Object.freeze(superego), enumerable: true })
+  },
+  args: [bridge],
+})
