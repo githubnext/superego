@@ -1,0 +1,26 @@
+{
+  "name": "@superego/terminal",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./daemon": "./src/daemon.ts",
+    "./ui": "./src/ui.tsx"
+  },
+  "dependencies": {
+    "@earendil-works/pi-schema": "1.5.0",
+    "@lydell/node-pty": "1.2.0-beta.18",
+    "@superego/daemon": "workspace:*",
+    "@superego/protocol": "workspace:*",
+    "@superego/app": "workspace:*",
+    "@superego/ui": "workspace:*",
+    "ghostty-web": "0.4.0"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "react": "^19"
+  }
+}

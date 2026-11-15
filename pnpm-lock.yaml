@@ -611,6 +611,37 @@ importers:
         specifier: ^19
         version: 19.3.1
 
+  extensions/terminal:
+    dependencies:
+      '@earendil-works/pi-schema':
+        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+      '@lydell/node-pty':
+        specifier: 1.2.0-beta.18
+        version: 1.2.0-beta.18
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@superego/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@superego/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      ghostty-web:
+        specifier: 0.4.0
+        version: 0.4.0
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      react:
+        specifier: ^19
+        version: 19.3.1
+
   extensions/threads:
     dependencies:
       '@earendil-works/pi-durable':
@@ -1402,6 +1433,39 @@ packages:
   '@lezer/yaml@1.0.4':
     resolution: {integrity: sha1-ZqYiGI8ZhKcdNFBnWbWAdpkENYk=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lezer/yaml/-/yaml-1.0.4.tgz}
 
+  '@lydell/node-pty-darwin-arm64@1.2.0-beta.18':
+    resolution: {integrity: sha512-gJizeNHkkKCoggtj5Q0yf4btK6dPfr7E063SrOh1jHXp3IyjiErU4KwT7Cn29qb/OY5pBo/Utctenl03MyBtAg==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lydell/node-pty-darwin-arm64/-/node-pty-darwin-arm64-1.2.0-beta.18.tgz}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@lydell/node-pty-darwin-x64@1.2.0-beta.18':
+    resolution: {integrity: sha512-xnJQz+i5v7pkR1xo14ffTwvMm2DoK3KqPACQaJqxtMVkM7ojv14/KmkaV2jte7Q0BIzfU+VbKVUL9Zmf23G8VQ==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lydell/node-pty-darwin-x64/-/node-pty-darwin-x64-1.2.0-beta.18.tgz}
+    cpu: [x64]
+    os: [darwin]
+
+  '@lydell/node-pty-linux-arm64@1.2.0-beta.18':
+    resolution: {integrity: sha512-fM8jRcZDZwG7ihEOx/R7N1aGHdT4Fd6IQj1d6Jp7Qb9FeDWlIwLuVlxUkJOsW4V1ZmJe1xZl2+WR0RjqMvb2+Q==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lydell/node-pty-linux-arm64/-/node-pty-linux-arm64-1.2.0-beta.18.tgz}
+    cpu: [arm64]
+    os: [linux]
+
+  '@lydell/node-pty-linux-x64@1.2.0-beta.18':
+    resolution: {integrity: sha512-LGikvfcvoPrxXO7o1gCsd5ErrRWnQFYLxjJfX0uwBpi0oGPiTERUBLzKspzZs7wjXZqF30mnNB/C09uotu5vRA==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lydell/node-pty-linux-x64/-/node-pty-linux-x64-1.2.0-beta.18.tgz}
+    cpu: [x64]
+    os: [linux]
+
+  '@lydell/node-pty-win32-arm64@1.2.0-beta.18':
+    resolution: {integrity: sha512-S6h4G3zYGe+pPQxhlNxg+MvJNUIwXFxhnUufx1QT45TgratKMxQfoGPidvnwoLwuXQ3hqQ7SsI93rH8RUoL09g==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lydell/node-pty-win32-arm64/-/node-pty-win32-arm64-1.2.0-beta.18.tgz}
+    cpu: [arm64]
+    os: [win32]
+
+  '@lydell/node-pty-win32-x64@1.2.0-beta.18':
+    resolution: {integrity: sha512-wBSMeAwEL04t694ln+QbLnc98YeF3mAwWm/NP8acYDAobPw/WK7KKpk8z07iyxv0gRH2Z2/L/f6vgtnBgxE0Bg==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lydell/node-pty-win32-x64/-/node-pty-win32-x64-1.2.0-beta.18.tgz}
+    cpu: [x64]
+    os: [win32]
+
+  '@lydell/node-pty@1.2.0-beta.18':
+    resolution: {integrity: sha512-ryy4liRcw6QBBKWDIbJgTW7Pw8NI2xjri/5s/LZg/jJ8ZVg8MgA1xI/vjpT5qTvDvPjUpU5NybJBrKRgK/QvlA==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@lydell/node-pty/-/node-pty-1.2.0-beta.18.tgz}
+
   '@marijn/find-cluster-break@1.0.4':
     resolution: {integrity: sha1-QsKuphzaMHzbE0dER5JFLXtdv7Q=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@marijn/find-cluster-break/-/find-cluster-break-1.0.4.tgz}
 
@@ -2014,6 +2078,9 @@ packages:
   get-proto@1.0.1:
     resolution: {integrity: sha1-FQs/J0OGnvPoUewMSdFbHRTQDuE=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/get-proto/-/get-proto-1.0.1.tgz}
     engines: {node: '>= 0.4'}
+
+  ghostty-web@0.4.0:
+    resolution: {integrity: sha1-kC/y/AQjkrk2FBC0WIddOPu4CZ8=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/ghostty-web/-/ghostty-web-0.4.0.tgz}
 
   google-auth-library@10.9.1:
     resolution: {integrity: sha1-r5hSoyimB36P++d2aBtMqUIKFxQ=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/google-auth-library/-/google-auth-library-10.9.1.tgz}
@@ -3748,6 +3815,33 @@ snapshots:
       '@lezer/highlight': 1.2.5
       '@lezer/lr': 1.4.11
 
+  '@lydell/node-pty-darwin-arm64@1.2.0-beta.18':
+    optional: true
+
+  '@lydell/node-pty-darwin-x64@1.2.0-beta.18':
+    optional: true
+
+  '@lydell/node-pty-linux-arm64@1.2.0-beta.18':
+    optional: true
+
+  '@lydell/node-pty-linux-x64@1.2.0-beta.18':
+    optional: true
+
+  '@lydell/node-pty-win32-arm64@1.2.0-beta.18':
+    optional: true
+
+  '@lydell/node-pty-win32-x64@1.2.0-beta.18':
+    optional: true
+
+  '@lydell/node-pty@1.2.0-beta.18':
+    optionalDependencies:
+      '@lydell/node-pty-darwin-arm64': 1.2.0-beta.18
+      '@lydell/node-pty-darwin-x64': 1.2.0-beta.18
+      '@lydell/node-pty-linux-arm64': 1.2.0-beta.18
+      '@lydell/node-pty-linux-x64': 1.2.0-beta.18
+      '@lydell/node-pty-win32-arm64': 1.2.0-beta.18
+      '@lydell/node-pty-win32-x64': 1.2.0-beta.18
+
   '@marijn/find-cluster-break@1.0.4': {}
 
   '@modelcontextprotocol/sdk@1.32.2(zod@4.6.7)':
@@ -4296,6 +4390,8 @@ snapshots:
     dependencies:
       dunder-proto: 1.0.1
       es-object-atoms: 1.1.2
+
+  ghostty-web@0.4.0: {}
 
   google-auth-library@10.9.1:
     dependencies:

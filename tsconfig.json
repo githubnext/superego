@@ -28,6 +28,7 @@
     { "path": "extensions/ego" },
     { "path": "extensions/reply-ui" },
     { "path": "extensions/pane-ui" },
+    { "path": "extensions/terminal" },
     { "path": "app" },
     { "path": "scripts" }
   ]
