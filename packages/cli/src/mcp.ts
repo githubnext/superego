@@ -2,7 +2,8 @@
 // (`thread.create` as `thread_create`, its params schema as the tool's), run through the daemon's `action.run` with
 // `exposure: 'mcp'`, so it is refused if it isn't exposed there and logged with the source `mcp` like any other
 // dispatch. Reads aren't actions (they stay plain methods), so two tools of the server's own read on them: `thread_list`
-// and `thread_read`. One server serves one machine (`-m`); its tools change as that machine's extensions do.
+// and `thread_read`. One server serves one machine (`-m`); its tools change as that machine's extensions and settings
+// do (starting threads is a tool only while the machine lets outside agents: `mcp.startThreads`).
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema, type CallToolResult, type Tool } from '@modelcontextprotocol/sdk/types.js'
@@ -69,7 +70,7 @@ const failed = (error: unknown): CallToolResult => {
 export async function serveMcp({ app, label, connect }: McpOptions): Promise<void> {
   const server = new Server({ name: app.id, title: app.name, version: String(PROTOCOL_VERSION) }, {
     capabilities: { tools: { listChanged: true } },
-    instructions: `${app.name} runs coding agents in threads on ${label}. thread_create starts one, thread_submit sends it a message, ` +
+    instructions: `${app.name} runs coding agents in threads on ${label}. thread_create starts one (where the machine allows it), thread_submit sends it a message, ` +
       'thread_read (wait: true) gets its answer, thread_list lists them. Every other tool is an action of that machine.',
   })
 
@@ -81,12 +82,19 @@ export async function serveMcp({ app, label, connect }: McpOptions): Promise<voi
     // Its extensions changed what it takes; after a reconnect (a restart) it may have too.
     opened.transport.peer.on('features.changed', () => void server.sendToolListChanged().catch(() => {}))
     if (reconnected) void server.sendToolListChanged().catch(() => {})
+    // A setting may have changed what it lets outside agents run: told only when the list did.
+    let offered = ''
+    const ids = async () => (await opened.transport.peer.call<ActionInfo[]>('action.list', { exposure: 'mcp' })).map((a) => a.id).join()
+    opened.transport.peer.on('settings.changed', () => void ids().then((now) => {
+      if (now !== offered) { offered = now; return server.sendToolListChanged() }
+    }).catch(() => {}))
+    void Promise.all([ids(), opened.transport.peer.call('settings.watch', {})]).then(([now]) => { offered = now }).catch(() => {})
     void opened.transport.closed.then(() => { link = undefined; reconnected = true })
     return opened
   })().catch((error: unknown) => { link = undefined; throw error })
   const call = async <T,>(method: string, params: unknown) => (await daemon()).transport.peer.call<T>(method, params)
 
-  const actions = async () => (await call<ActionInfo[]>('action.list', {})).filter((a) => a.expose.includes('mcp'))
+  const actions = async () => (await call<ActionInfo[]>('action.list', { exposure: 'mcp' })).filter((a) => a.expose.includes('mcp'))
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const tools = new Map(READS.map((t) => [t.name, t]))
@@ -96,12 +104,17 @@ export async function serveMcp({ app, label, connect }: McpOptions): Promise<voi
 
   server.setRequestHandler(CallToolRequestSchema, async ({ params: { name, arguments: args = {} } }, { signal }) => {
     try {
-      const action = (await actions()).find((a) => toolName(a.id) === name)
-      if (action) return text(await call('action.run', { id: action.id, params: args, exposure: 'mcp' }) ?? { ok: true })
       if (name === 'thread_list') return text((await call<ThreadInfo[]>('thread.list', { archived: Boolean(args.archived) })).map(brief))
       if (name === 'thread_read') {
         const id = String(args.id ?? '')
-        const find = async () => (await call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id) ?? (await call<ThreadInfo[]>('thread.list', { archived: true })).find((t) => t.id === id)
+        // Listed, archived, or hidden (Ego's, asked with ego_ask).
+        const find = async () => {
+          for (const which of [{}, { archived: true }, { hidden: true }]) {
+            const found = (await call<ThreadInfo[]>('thread.list', which)).find((t) => t.id === id)
+            if (found) return found
+          }
+          return undefined
+        }
         let thread = await find()
         if (!thread) throw new RpcError('not_found', `No thread ${id} on ${label}`)
         while (args.wait && thread.status.state === 'working') {
@@ -113,7 +126,8 @@ export async function serveMcp({ app, label, connect }: McpOptions): Promise<voi
         const answer = lastAnswer(entries)
         return text({ thread: brief(thread), ...(answer ? { answer } : {}) })
       }
-      throw new RpcError('unknown_action', `No tool ${name} here`)
+      // Any other is an action, by its id: the daemon refuses one that isn't exposed, or isn't allowed now, saying why.
+      return text(await call('action.run', { id: name.replaceAll('_', '.'), params: args, exposure: 'mcp' }) ?? { ok: true })
     } catch (error) {
       return failed(error)
     }

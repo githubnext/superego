@@ -86,7 +86,8 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         },
       })
       superego.action(defineAction({
-        id: ASK, title: `Ask ${name} about ${superego.app.name} and how it's set up`, runs: 'machine', expose: ['ui', 'cli'],
+        id: ASK, title: `Ask ${name} about ${superego.app.name} and how it's set up`, runs: 'machine', expose: ['ui', 'cli', 'mcp'],
+        description: `Send \`prompt\` to ${name}, this machine's own agent, in its one thread (made the first time). That thread comes back; read its answer as any thread's.`,
         params: obj({ prompt: opt(str()) }),
         async run({ prompt }) {
           const at = await thread()

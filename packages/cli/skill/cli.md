@@ -84,11 +84,18 @@ superego mcp -m <machine>                       # one server per machine
 
 Each action exposed to `mcp` is a tool named for its id with `_` for `.` (`thread.create` is `thread_create`), its
 schema the action's; it runs through `action.run` with `exposure: 'mcp'`, so `superego actions log` shows it from `mcp`.
-Exposed by default: `thread.create`, `thread.submit`, `thread.abort`, `thread.rename`, `profile.list`. Two tools of the
-server's own read: `thread_list` (`archived?`) and `thread_read` (`id wait?`: its state and last answer, after it stops
-working with `wait`). Nothing that changes settings, signs in, trusts a profile, archives, writes files or restarts
-the daemon is a tool; an extension's action becomes one by adding `'mcp'` to its `expose`. The tools follow the
-machine's extensions as they come and go (`tools/list_changed`).
+Exposed: `thread.submit`, `thread.abort`, `thread.rename`, `thread.archive`, `thread.unarchive`, `pane.open`,
+`profile.list`, `ego.ask` (the machine's Ego; its answer comes as any thread's), and `thread.create` once the machine
+allows it:
+
+```sh
+superego settings set mcp.startThreads true   # Settings → Outside agents → Can start threads; off by default
+```
+
+Two tools of the server's own read: `thread_list` (`archived?`) and `thread_read` (`id wait?`: its state and last
+answer, after it stops working with `wait`; Ego's thread too). Nothing that changes settings, signs in, trusts a
+profile, writes files or restarts the daemon is a tool; an extension's action becomes one by adding `'mcp'` to its
+`expose`. The tools follow the machine's extensions and settings as they change (`tools/list_changed`).
 
 ## Profiles
 

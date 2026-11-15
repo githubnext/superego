@@ -47,6 +47,9 @@ describe('Ego, the meta agent', () => {
       for (const mutating of ['write', 'edit', 'bash', 'superego_run', 'thread_send']) expect(names).not.toContain(mutating)
       expect(await text(tools, 'superego_set_setting', { key: 'web.access', value: 'local' })).toBe('Set web.access to "local".')
       expect(set).toEqual([{ key: 'web.access', value: 'local' }])
+      // Not what outside agents may do: one of them could be asking.
+      await expect(run(tools, 'superego_set_setting', { key: 'mcp.startThreads', value: true })).rejects.toThrow(/Only the user/)
+      expect(set).toHaveLength(1)
       // What it reads.
       expect((await run(tools, 'superego_actions', {}) as { id: string }[]).map((a) => a.id)).toEqual(['echo.say', 'settings.set', 'profile.list'])
       expect(await run(tools, 'superego_settings', {})).toEqual([{ id: 'agent', title: 'Agent', settings: [{ key: 'agent.model', title: 'Model', type: { type: 'string' }, default: null, value: 'faux/faux-1' }] }])

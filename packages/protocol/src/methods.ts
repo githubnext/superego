@@ -189,8 +189,8 @@ export type Methods = {
   ping: { params: {}; result: null }
   /** Open a channel (see channels.ts). The daemon accepts `upload` {name, mimeType, size}; its id names the upload. */
   'ch.open': { params: { ch: string; kind: string; params?: unknown; window: number }; result: { window: number } }
-  /** The threads, newest first; `archived` lists the ones put away instead. */
-  'thread.list': { params: { archived?: boolean }; result: ThreadInfo[] }
+  /** The threads, newest first; `archived` lists the ones put away instead, `hidden` those in no list (extensions' own). */
+  'thread.list': { params: { archived?: boolean; hidden?: boolean }; result: ThreadInfo[] }
   'thread.create': { params: NewThread; result: ThreadInfo }
   'agent.models': { params: {}; result: ModelCatalog }
   /** A file in a thread's folder (not outside it), as text. */
@@ -243,8 +243,8 @@ export type Methods = {
    * value's entry of that key, if it's an object (else null). Unscoped, a scoped value is every scope's, by scope.
    */
   'value.watch': { params: { key: string; scope?: string }; result: { sub: string; value: Json } }
-  /** Every action on this machine, as data. */
-  'action.list': { params: {}; result: ActionInfo[] }
+  /** Every action on this machine, as data; given `exposure`, only those it may run now. */
+  'action.list': { params: { exposure?: Exposure }; result: ActionInfo[] }
   /** Run any action by id; `exposure` says who is asking (the command line passes `cli`), and params are coerced. */
   'action.run': { params: { id: string; params?: unknown; exposure?: Exposure }; result: unknown }
   /** This machine's newest dispatches. */

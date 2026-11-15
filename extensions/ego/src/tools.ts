@@ -138,6 +138,8 @@ export function metaExtension({ dir, dispatch, actions, snapshot, machines, thre
       description: "Change one of this machine's settings, by its key (superego_settings lists them, with their types and choices).",
       parameters: obj({ key: str({ minLength: 1 }), value: unknown() }),
       async execute({ key, value }) {
+        // What outside agents may do here is the user's to say: one could be asking.
+        if (key.startsWith('mcp.')) throw new Error(`Only the user changes ${key}, in Settings → Outside agents.`)
         await dispatch('settings.set', { key, value: (value ?? null) as Json })
         return text(`Set ${key} to ${JSON.stringify(value ?? null)}.`)
       },

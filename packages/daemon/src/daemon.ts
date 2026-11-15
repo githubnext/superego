@@ -167,8 +167,11 @@ function aboutOf(about: ExtensionAbout): ExtensionAbout {
   }
 }
 
-/** What a daemon action gets besides its params: who called, and a way to tell that connection something. */
-export type DaemonContext = { source: string; notify(event: string, params: unknown): void }
+/**
+ * What a daemon action gets besides its params: who called, and a way to tell that connection something; `exposure`,
+ * when a client ran it as the command line or an outside agent (`action.run`).
+ */
+export type DaemonContext = { source: string; notify(event: string, params: unknown): void; exposure?: Exposure }
 
 export type DaemonOptions = {
   app: AppConfig
@@ -267,6 +270,8 @@ function inFolder(folder: string, path: string) {
 }
 
 /** Attachments: what one may weigh, and how small a text file is to be shown to the model whole. */
+/** The setting that lets outside agents (MCP) start threads here. Off unless turned on. */
+export const MCP_THREADS = 'mcp.startThreads'
 const ATTACHMENT_LIMIT = 20 * 1024 * 1024
 const INLINE_LIMIT = 100 * 1024
 const ATTACHMENT = obj({ name: str({ minLength: 1 }), mimeType: str(), data: str() })
@@ -1543,6 +1548,17 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   // ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
   const thread = { thread: true as const }
+  // Outside agents (`superego mcp`) start threads only once this machine lets them: the tool isn't listed until then,
+  // and refused if called anyway.
+  settings.register({
+    id: 'mcp', title: 'Outside agents', order: 82,
+    description: `Agents using this machine through ${options.app.id} mcp.`,
+    settings: [{ key: MCP_THREADS, title: 'Can start threads', default: false, type: { type: 'boolean' } }],
+  })
+  /** Why an outside agent may not run `id` now, of what's exposed to it; nothing when it may. */
+  const mcpRefusal = (id: string) => id === 'thread.create' && settings.get(MCP_THREADS) !== true
+    ? new RpcError('not_allowed', "Outside agents can't start threads on this machine", { hint: 'Turn on Settings → Outside agents → Can start threads.' })
+    : undefined
   router.register(defineAction({
     id: 'thread.create', title: 'Start a thread (no dialog)', runs: 'machine', expose: ['ui', 'cli', 'mcp'],
     description: 'Start a thread: an agent working in `cwd` (default: the machine\'s), with `prompt` as its first message. Its id comes back; thread.submit sends it more.',
@@ -1551,7 +1567,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       worktree: opt(bool()), parent: opt(str()), options: opt(obj({}, { open: true })),
     }),
     // Uploads are inline again by now (see connection.ts).
-    run: (params) => startThread(params as Omit<NewThread, 'attachments'> & { attachments?: Attachment[] }),
+    run(params, { exposure }) {
+      const refused = exposure === 'mcp' && mcpRefusal('thread.create')
+      if (refused) throw refused
+      return startThread(params as Omit<NewThread, 'attachments'> & { attachments?: Attachment[] })
+    },
   }))
   /**
    * A new thread as asked for: where, with what; a child of `parent` when a thread starts it (top-level when that one is
@@ -1743,7 +1763,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   }))
   router.register(defineAction({
-    id: 'thread.archive', title: 'Archive the thread', runs: 'machine', expose: ['ui', 'cli'], keys: 'mod+shift+e', ...thread,
+    id: 'thread.archive', title: 'Archive the thread', runs: 'machine', expose: ['ui', 'cli', 'mcp'], keys: 'mod+shift+e', ...thread,
     params: obj({ id: str() }),
     async run({ id }) {
       const { notes } = await archive(id)
@@ -1808,12 +1828,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     await (await get(id)).conversation.submit({ type: 'write', entry: { kind: NOTE_ENTRY, data: { text } } }, context)
   }
   router.register(defineAction({
-    id: 'thread.unarchive', title: 'Unarchive the thread', runs: 'machine', expose: ['ui', 'cli'], ...thread,
+    id: 'thread.unarchive', title: 'Unarchive the thread', runs: 'machine', expose: ['ui', 'cli', 'mcp'], ...thread,
     params: obj({ id: str() }),
     async run({ id }) { await unarchive(id); return null },
   }))
   router.register(defineAction({
-    id: 'pane.open', title: 'Open a pane', runs: 'machine', expose: ['ui', 'cli'], ...thread,
+    id: 'pane.open', title: 'Open a pane', runs: 'machine', expose: ['ui', 'cli', 'mcp'], ...thread,
     params: obj({ id: str(), kind: str({ minLength: 1 }), title: opt(str()), params: opt(unknown()) }),
     run: ({ id, kind, title, params }) => openPane(id, { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}) }),
   }))
@@ -1998,7 +2018,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           return { sub, value: relay.entries() }
         },
         'relay.call': ({ machine: target, method, params }: Methods['relay.call']['params']) => relayed.call(target, method, params),
-        'thread.list': ({ archived }: { archived?: boolean } = {}) => list({ archived: Boolean(archived) }),
+        'thread.list': ({ archived, hidden }: { archived?: boolean; hidden?: boolean } = {}) => list({ archived: Boolean(archived), hidden: Boolean(hidden) }),
         'agent.models': async () => agent.catalog(),
         'file.read': async ({ id, path, base64 }: { id: string; path: string; base64?: boolean }) => {
           const file = threadFile((await get(id)).meta.cwd, id, path)
@@ -2101,11 +2121,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           await stop?.()
           return null
         },
-        /** Every action here, as data: id, title, params schema, who may run it. */
-        'action.list': async () => router.list(),
+        /** Every action here, as data: id, title, params schema, who may run it; given `exposure`, those it may run now. */
+        'action.list': async ({ exposure }: { exposure?: Exposure } = {}) => router.list(exposure).filter((a) => exposure !== 'mcp' || !mcpRefusal(a.id)),
         /** Run an action by id, as `exposure` (the command line passes `cli`); params may be strings to coerce. */
         'action.run': ({ id, params, exposure }: { id: string; params?: unknown; exposure?: Exposure }) =>
-          router.dispatch(router.has(id) ? id : MOVED_METHODS[id] ?? id, params, { notify, source: client }, { source: exposure ?? client, client: by(), ...(exposure ? { exposure } : {}) }),
+          router.dispatch(router.has(id) ? id : MOVED_METHODS[id] ?? id, params, { notify, source: client, ...(exposure ? { exposure } : {}) }, { source: exposure ?? client, client: by(), ...(exposure ? { exposure } : {}) }),
         /** The newest dispatches on this machine, oldest first. */
         'action.log': async () => router.log(),
         /** The window's extensions, as each declares itself: those without a daemon half become known here (see declare). */
