@@ -10,7 +10,7 @@ import {
   type AppConfig, type Channel, type DeclaredSection, type Json, type Notifications, type ProfileRef, type ThreadInfo,
 } from '@superego/protocol'
 import { declaredSpec, serveSettings } from '@superego/settings'
-import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, NOTIFY, type ChannelEvent, signInNotice, threadNotice, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
+import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, desktopNotice, NOTIFY, type ChannelEvent, signInNotice, threadNotice, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
 import { LayoutFile, type LayoutView } from './layout-file.ts'
 import { Link, loginInTerminal, MachineLinks, MachineStore, openLocal as openLocalSocket, runUpdate, UiAllowStore } from '@superego/client'
@@ -259,7 +259,8 @@ export function startApp(appConfig: AppConfig) {
     noticed.set(key, Date.now())
     if (headless) return void (globalThis as { superegoNotices?: ThreadNotice[] }).superegoNotices?.push(notice)
     if (BrowserWindow.getFocusedWindow() || !Notification.isSupported()) return
-    const notification = new Notification({ title: notice.title, subtitle: linkOf(notice.machine)?.label ?? notice.machine, body: notice.body })
+    const several = allLinks().filter((link) => link.state === 'connected').length > 1
+    const notification = new Notification(desktopNotice(notice, { label: linkOf(notice.machine)?.label ?? notice.machine, several }))
     notification.on('click', () => show({ open: { machine: notice.machine, thread: notice.thread } }))
     notification.show()
   }

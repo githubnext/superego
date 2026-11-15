@@ -3,7 +3,7 @@
 // tools, prompt sections and hooks (pi-durable extensions), register settings, define actions (intents) and methods
 // (reads), publish live values for the UI to watch, describe pane kinds to the agent, add to a thread's status, add to
 // what a message is sent with, take part in a thread's life (creating, turns, archiving), keep state with each thread
-// and say things about it to clients, and choose a thread's agent.
+// and say things about it to clients, say what a run did, and choose a thread's agent.
 //
 // Everything it registers is its own, named `<name>.<something>`, and undone when it's torn down: when the daemon
 // stops, or (a profile's) when the profile's files change. Torn down, its `signal` aborts, what it registers after is
@@ -13,6 +13,9 @@ import type { ActionDef, ActionInfo, AppConfig, Attachment, ChannelAcceptor, Blo
 import type { SectionSpec } from '@superego/settings'
 import type { DaemonContext } from './daemon.ts'
 import type { ProfileRef, ProfileSpec } from './profiles.ts'
+import type { RunRecord } from './recap.ts'
+
+export type { RunRecord }
 
 /**
  * A daemon half: what the extension is (`ExtensionAbout`: its name, title, description, and whether it's required),
@@ -280,6 +283,13 @@ export type DaemonApi = {
    * threads that go without this extension, as for hooks. Nothing for undefined; a throw is logged and counts as nothing.
    */
   facts<T extends Json = Json>(describe: (thread: { id: string; state: T | undefined }) => Json | undefined): void
+  /**
+   * Say in a line what a thread's run did, once it ends: its `done` status carries it (`msg`), and a notification says
+   * it. Given the run's tool calls and its answer (see `RunRecord`); answer nothing to leave it to others. The first to
+   * answer wins, in the order extensions were set up, as plain text cut to about 100 characters; with none, the answer's
+   * first sentence. Not for threads that go without this extension. Quick, without side effects. 1.6.
+   */
+  recap(describe: (run: RunRecord) => string | undefined): void
   /**
    * Choose a thread's agent, from this extension's state with it (no `id` yet while it's made; the state its `creating`
    * gave). Its instructions hold only while it answers. The first chooser to answer wins, in the order extensions were

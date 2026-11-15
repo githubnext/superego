@@ -5,7 +5,7 @@
 import { Channels, FEATURES, offers, PROTOCOL_VERSION, RpcError, RpcPeer, versionOf, type DeclaredSection, type Hello, type Notifications } from '@superego/protocol'
 import { declaredSpec, serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { carriesFiles, uploadAttachments } from '@superego/client/uploads'
-import { APP_MOVED, bridgeChannel, LAYOUT_SETTING, PANE_LAYOUT_SETTING, withMovedActions, withMovedLayout, type MachineEntry, type SuperegoBridge, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
+import { APP_MOVED, bridgeChannel, browserNotice, LAYOUT_SETTING, PANE_LAYOUT_SETTING, withMovedActions, withMovedLayout, type MachineEntry, type SuperegoBridge, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { askPairing, LIMITED, type Pairing } from './pair-gate.ts'
 
 const SETTINGS = 'superego.appSettings'
@@ -203,9 +203,11 @@ export function webBridge(): SuperegoBridge {
     'app.desktop': async () => ({ web: true }),
     // A thread wants a look: a Web Notification, once permission is granted (the notifications extension asks).
     // One per thread (its tag), however many tabs show it; clicking it brings this one forward, showing the thread.
-    'app.notify': async ({ machine, thread, title, body }: ThreadNotice) => {
+    'app.notify': async (notice: ThreadNotice) => {
       if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return null
+      const { machine, thread } = notice
       try {
+        const { title, body } = browserNotice(notice)
         const notification = new Notification(title, { body, tag: `${machine}/${thread}` })
         notification.onclick = () => {
           window.focus()

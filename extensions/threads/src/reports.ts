@@ -7,7 +7,8 @@
 // sends it (thread_send), until the user writes to it themselves (from a window or the command line), which hands it to
 // them: their own conversation with it isn't reported. Runs in between (the child's own children reporting, say) are
 // reported, so a grandchild's result makes its way up. Kept with the child (this extension's state: false, the
-// user's), so it holds across restarts; a child from before this was kept is reported as before.
+// user's), so it holds across restarts; a child from before this was kept is reported as before. Clients are told
+// (`ext['thread-reports']`), so a child working for its parent notifies only when it needs the user.
 //
 // Reports are best-effort, a convenience, not delivery to rely on: the read log and reports waiting to go are in memory
 // (reads.ts), so after a restart a report that was waiting is lost, and a run resumed then may report what the parent
@@ -17,7 +18,7 @@ import { defineDaemonExtension } from '@superego/daemon'
 import { waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { readsOf } from './reads.ts'
 import { fromLine, linkTo, senderOf } from './tools.ts'
-import { reportsAbout, toolsAbout } from './shared.ts'
+import { REPORTED, reportsAbout, toolsAbout } from './shared.ts'
 
 /** What reporting needs of the daemon. */
 export type ReportsHost = {
@@ -104,6 +105,8 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
     }, batching)
     // Whether a child works for its parent (see the top): set by the messages it's sent, false once the user writes.
     const working = s.state<boolean>()
+    // Said to clients, so a child's own finishing or failing doesn't notify too: its parent hears it (see REPORTED).
+    s.facts<boolean>(({ state }) => state === true ? REPORTED : undefined)
     s.submit(async ({ thread, text, by }) => {
       if (!thread.parent) return
       if (by === undefined) await working.set(thread.id, false)

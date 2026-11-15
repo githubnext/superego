@@ -2,6 +2,10 @@
 
 export type StatusState = 'idle' | 'working' | 'done' | 'blocked' | 'error'
 export type BlockedKind = 'permission' | 'question' | 'auth'
+/**
+ * `msg`, in a line or a few: blocked, what it waits on (a question, Markdown); error, why it failed; done, what the run
+ * did (a recap, plain text, short: see recap.ts). Absent when there's nothing to say, and from daemons before recaps for done.
+ */
 export type Status = { state: StatusState; kind?: BlockedKind; msg?: string }
 
 /** Most pressing first: a rollup over many threads shows the highest. */
@@ -31,7 +35,7 @@ export type LiveLike = {
 /**
  * A thread's status from durable state: working while a run is going; waiting for sign-in (`signIn`, why) when its
  * provider rejected the credentials its run failed on; error for a run that failed and was not looked at since; done
- * when there is an answer newer than what was seen; otherwise idle.
+ * when there is an answer newer than what was seen (saying what the run did, `recap`, when there's one); otherwise idle.
  */
 export function deriveStatus(input: {
   live: LiveLike | undefined
@@ -39,8 +43,9 @@ export function deriveStatus(input: {
   seen: { entryId?: number; failureTaskId?: number } | undefined
   blocked?: { kind: BlockedKind; msg?: string }
   signIn?: string
+  recap?: string
 }): Status {
-  const { live, lastEntryId, seen, blocked, signIn } = input
+  const { live, lastEntryId, seen, blocked, signIn, recap } = input
   if (blocked) return { state: 'blocked', kind: blocked.kind, msg: blocked.msg }
   if (live?.run) return { state: 'working' }
   if (signIn !== undefined) return { state: 'blocked', kind: 'auth', msg: signIn }
@@ -48,6 +53,6 @@ export function deriveStatus(input: {
   if (failure && failure.reason !== 'aborted' && failure.taskId !== seen?.failureTaskId) {
     return { state: 'error', msg: failure.detail ?? failure.reason }
   }
-  if (lastEntryId !== undefined && lastEntryId > (seen?.entryId ?? -1)) return { state: 'done' }
+  if (lastEntryId !== undefined && lastEntryId > (seen?.entryId ?? -1)) return recap ? { state: 'done', msg: recap } : { state: 'done' }
   return { state: 'idle' }
 }

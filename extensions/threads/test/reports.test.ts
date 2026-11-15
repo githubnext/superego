@@ -205,17 +205,23 @@ it("reports only what the parent asked for: not the user's own conversation in t
     const child = (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.parent === parent.id)!
     const reports = async () => (await entries(parent.id)).split(`From [Dates](thread:${child.id})`).length - 1
     expect(await reports()).toBe(1)
+    // Clients are told it works for its parent (so its finishing doesn't notify); the parent itself doesn't.
+    const ext = async (id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)?.ext?.['thread-reports']
+    expect(await ext(child.id)).toEqual({ toParent: true })
+    expect(await ext(parent.id)).toBeUndefined()
     // The user's own message to the child, and its answer: not the parent's business.
     await peer.call('thread.submit', { id: child.id, text: 'and the icons?' })
     await until(async () => (await entries(child.id)).includes('zz-icons') && await idle(child.id))
     await new Promise((r) => setTimeout(r, 300))
     expect(await reports()).toBe(1)
+    expect(await ext(child.id)).toBeUndefined()
     // The parent sends it more, after a restart (what the child does is kept): reported again.
     await close()
     await turns(turn([{ type: 'toolCall', id: 'c2', name: 'thread_send', arguments: { id: child.id, text: 'More?' } }], 'toolUse'), say('zz-three'), say('zz-four'), say('zz-thanks'))
     ;({ peer, close } = await open())
     await peer.call('thread.submit', { id: parent.id, text: 'ask it for more' })
     await until(async () => await reports() === 2)
+    expect(await ext(child.id)).toEqual({ toParent: true })
   } finally {
     await close()
     delete process.env.REPORTSTEST_MODEL

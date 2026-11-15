@@ -1,8 +1,10 @@
 /// <reference path="./env.d.ts" />
 // notifications, UI half: a notification when a thread finishes, fails or needs you while the window is in the
-// background, and one when a provider rejects a machine's credentials (not one per thread it stops); clicking it shows the thread. The desktop app shows it (once, however many windows ask, and only while
-// none has the focus); a browser with Web Notifications, once allowed: offered over the composer when you set a thread
-// to work, never on load. With no window open, the desktop app notifies by itself, by this extension's setting.
+// background, saying what it did, asks or failed on (threadNotice; a child working for its parent only when it needs
+// you), and one when a provider rejects a machine's credentials (not one per thread it stops); clicking it shows the
+// thread. The desktop app shows it (once, however many windows ask, and only while none has the focus); a browser with
+// Web Notifications, once allowed: offered over the composer when you set a thread to work, never on load. With no
+// window open, the desktop app notifies by itself, by this extension's setting.
 import { useState } from 'react'
 import { call, defineUiExtension, NOTIFY, useAppSetting, type ComposerWhere, type Store } from '@superego/app/ui'
 import { BellIcon, IconButton, XIcon } from '@superego/ui'

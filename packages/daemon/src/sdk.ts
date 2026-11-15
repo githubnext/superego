@@ -16,7 +16,7 @@ export type {
 export type { ProfileRef, ProfileSpec } from './profiles.ts'
 export type {
   AgentChoice, ArchiveNote, ArchiveNotes, DaemonApi, DaemonExtension, LiveValue, MessageBlock, OutgoingMessage,
-  ScopedValue, StatusContribution, SubmitTransform, ThreadCreating, ThreadDraft, ThreadHooks, ThreadState,
+  RunRecord, ScopedValue, StatusContribution, SubmitTransform, ThreadCreating, ThreadDraft, ThreadHooks, ThreadState,
 } from './extension.ts'
 export type { DaemonContext } from './daemon.ts'
 export type { GroupExit, SpawnedGroup, SpawnGroupOptions } from './process-group.ts'

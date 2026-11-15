@@ -25,6 +25,7 @@ import {
   type ThreadCreating, type ThreadDraft, type ThreadHooks,
 } from './extension.ts'
 import { titleOf } from './names.ts'
+import { lastRun, recapOf, type RunRecord } from './recap.ts'
 import { watchFiles } from './watch-files.ts'
 import * as sdk from './sdk.ts'
 import { readCommit } from './build.ts'
@@ -220,6 +221,8 @@ type Mounted = {
   ranWith?: string
   /** Its session, found from its folder, for a thread from before threads kept it. */
   root?: string
+  /** What its last run did, in a line (see recap.ts): its done status says it. */
+  recap?: string
   stop(): Promise<unknown>
 }
 
@@ -363,6 +366,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   type Owned<T> = { value: T; owner: string; profiles?: Set<string> }
   const threadHooks: Owned<ThreadHooks>[] = []
   const factSources: Owned<(thread: { id: string; state: Json | undefined }) => Json | undefined>[] = []
+  const recaps: Owned<(run: RunRecord) => string | undefined>[] = []
   const choosers: Owned<(thread: { id?: string; state: Json | undefined; profile?: ProfileRef }) => AgentChoice | undefined>[] = []
   /** Agent parts given to no thread but those an `agentFor` of their extension chooses them for: by extension, as given, to as installed. */
   const chosenParts = new Map<string, Map<Extension, Extension>>()
@@ -574,9 +578,15 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       changed()
     }
     absorb(watch.value)
+    // Done when it's mounted (it answered while the daemon was down, or before): what it did, too.
+    if (!entry.meta.archived && lastAnswer(entry) !== undefined && lastAnswer(entry)! > (entry.meta.seen?.entryId ?? -1)) entry.recap = await runRecap(key, entry)
     watch.start(async (call) => {
       if (call.kind !== 'value') return
       const wasRunning = Boolean(entry.live?.run)
+      // A run ending (or an answer coming without one): what it did, worked out before clients hear it's done.
+      if (!(call.value.docs['pi.live'] as LiveState | undefined)?.run && (wasRunning || call.value.entries.at(-1)?.id !== entry.lastEntryId)) {
+        entry.recap = await runRecap(key, entry)
+      }
       absorb(call.value)
       // A run starting or ending, as the extensions' hooks hear it (one resumed after a restart was running already).
       const running = Boolean(entry.live?.run)
@@ -602,8 +612,20 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     ...(m.meta.hidden ? { hidden: true, ...(m.meta.owner ? { owner: m.meta.owner } : {}) } : {}),
     ...(m.meta.parent ? { parent: m.meta.parent } : {}),
     ...(without.size ? { without: [...without].sort() } : {}),
-    status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id), ...signInOf(id, m) }),
+    status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...blockedOf(id), ...signInOf(id, m), ...(m.recap ? { recap: m.recap } : {}) }),
   })
+  /** What a thread's last run did, in a line: its extensions' recap of it (those it doesn't go without), else its answer's first sentence. */
+  async function runRecap(id: string, m: Mounted) {
+    try {
+      const { items } = await m.conversation.entries({ order: 'descending' }, 50, undefined, context)
+      const run = lastRun(items.filter((entry) => Number(entry.id) >= (m.meta.cleared ?? 0)))
+      const without = withoutOf(id, m.meta, loadedProfile(m.meta))
+      return recapOf({ thread: id, ...run }, recaps.filter((r) => appliesTo(r, without, m.meta)).map((r) => ({ owner: r.owner, recap: r.value })))
+    } catch (error) {
+      console.error(`Thread ${id}: its recap failed:`, error)
+      return undefined
+    }
+  }
   /**
    * A run that failed for its credentials: its thread waits for sign-in to the provider (whose turns then fail at once)
    * until those change or someone retries. Each failure once; those there before the thread was watched were heard of
@@ -1149,6 +1171,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         note('facts', 'facts')
         changed()
       },
+      recap(describe) { own(recaps, describe, 'a recap'); note('recap', 'a recap') },
       agentFor(choose) { own(choosers, choose as (typeof choosers)[number]['value'], 'an agentFor'); note('agentFor', 'an agentFor'); changed() },
       threads: {
         list: (options) => list(options),

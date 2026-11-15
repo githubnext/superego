@@ -227,6 +227,36 @@ it('keeps state with each thread, as facts clients see, across a restart', async
   await bare.close()
 })
 
+it("says what a run did in its done status, as clients first hear it's done: an extension's recap, else the answer's first sentence", async () => {
+  const recaps = defineDaemonExtension({
+    name: 'recaps',
+    setup(superego) {
+      superego.recap(({ answer, calls }) => answer?.includes('recap me') ? `**Recapped**, [with](https://x.test) ${calls.length} calls` : undefined)
+      // Asked only when the first says nothing; a throw counts as nothing too.
+      superego.recap(() => { throw new Error('no recap') })
+    },
+  })
+  const first = await open([recaps])
+  const done: Record<string, ThreadInfo['status'][]> = {}
+  await first.peer.call('threads.watch', {})
+  first.peer.on('threads.changed', ({ value }: { value: ThreadInfo[] }) => {
+    for (const t of value) if (t.status.state === 'done') (done[t.id] ??= []).push(t.status)
+  })
+  const plain = await first.peer.call<ThreadInfo>('thread.create', { prompt: 'Fix **the** build. Then the rest of it, which goes on and on.' })
+  const recapped = await first.peer.call<ThreadInfo>('thread.create', { prompt: 'recap me' })
+  await until(() => Boolean(done[plain.id] && done[recapped.id]))
+  expect(done[plain.id]![0]).toEqual({ state: 'done', msg: 'echo: Fix the build.' })
+  expect(done[recapped.id]![0]).toEqual({ state: 'done', msg: 'Recapped, with 0 calls' })
+  await first.close()
+
+  // Answered before a restart, and not seen yet: it says so after.
+  const { peer, close } = await open([recaps])
+  expect((await find(peer, plain.id))!.status).toEqual({ state: 'done', msg: 'echo: Fix the build.' })
+  await peer.call('thread.seen', { id: plain.id })
+  expect((await find(peer, plain.id))!.status).toEqual({ state: 'idle' })
+  await close()
+})
+
 it("lets an extension choose a thread's agent: instructions, tools and what it goes without; the first to answer wins", async () => {
   const tools = defineExtension({ name: 'picked', tools: [defineTool({ name: 'picked_tool', description: 'Picked.', parameters: obj({}), async execute() { return { output: [] } } })] })
   const picker = defineDaemonExtension({

@@ -291,6 +291,7 @@ place, and the window's console has why.
 | `thread({ creating, abandoned, created, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchiveAbandoned, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
 | `state()` → `get(id)`, `set(id, next)`, `update(id, edit)` | state of its own kept with each thread, across restarts; `creating` gives a new one its first |
 | `facts(({ id, state }) => …)` | what clients are told of a thread, as `thread.ext.<name>`: worked out from its state |
+| `recap(({ thread, answer, calls }) => …)` | say in a line what a run did, once it ends: the thread's `done` status carries it (`msg`), and its notification says it. The first to answer wins; with none, the answer's first sentence. 1.6 |
 | `agentFor(({ id, state, profile }) => ({ instructions, model, extensions, without }))` | choose a thread's agent; the first to answer wins. `agent(part, { always: false })` gives a part only through this |
 | `threads.list({ archived, hidden })`, `get(id)`, `of(conversationId)`, `conversation(id)`, `attachments(id)` | reach threads, and the folder a thread keeps files in |
 | `threads.create({ …, parent, hidden, options })`, `submit(id, text)`, `lastAnswer(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)`, `clear(id)` | start and run threads as the thread tools do; `hidden`: in no list, an agent of its own with no profile, that takes no messages while the extension is off (find it by its `owner` in `list({ hidden: true })`, not by its facts, which are gone while the extension is off); `entries`: the newest since it was last cleared, as pi-durable's entry records (not a stable shape); `clear`: start it over |
@@ -337,7 +338,7 @@ Three versions, each for its own question:
 | Version | What it versions | Where it's said | Who checks it |
 |---|---|---|---|
 | **The release** | the code a machine runs: its git commit (the packages are `0.0.0`) | `hello.machine.commit`, Settings → Machines ("an older Superego") | the user, who updates |
-| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`1.4.0`; 1.1 added `signal`, a UI `setup`'s cleanup and `unarchiveAbandoned`; 1.2 `scopedValue` and `useValue`'s `scope`, `useMethod`, a profile's window actions, and `'superego/unstable'` apart; 1.3 `spawnGroup`; 1.4 `machines`) | `hello.api` | the host, setting an extension up |
+| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`1.6.0`; 1.1 added `signal`, a UI `setup`'s cleanup and `unarchiveAbandoned`; 1.2 `scopedValue` and `useValue`'s `scope`, `useMethod`, a profile's window actions, and `'superego/unstable'` apart; 1.3 `spawnGroup`; 1.4 `machines`; 1.5 channels and `paneClosed`; 1.6 `recap`) | `hello.api` | the host, setting an extension up |
 | **The protocol** | the wire: a generation, `PROTOCOL_VERSION` (`1`), and in it the features each side announces | `hello.version`, `hello.features` | both ends, at `hello` |
 
 And each extension's own **version**, semver, which its other half, profiles and scripts rely on.

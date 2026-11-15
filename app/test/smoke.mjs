@@ -638,8 +638,10 @@ if (phase === 'first') {
   await until(`[...document.querySelectorAll('.threads-session__name')].some((n) => n.textContent.startsWith('elsewhere'))`, 'a session per project')
   // ⌘. : the next thread with something unread, here the new one once it has answered.
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('elsewhere') && li.querySelector('.superego-status--done'))`, 'other thread done, in the window')
-  for (let i = 0; i < 50 && !globalThis.superegoNotices.some((n) => n.title === 'elsewhere' && n.body === 'Finished'); i++) await new Promise((r) => setTimeout(r, 100))
-  if (!globalThis.superegoNotices.some((n) => n.title === 'elsewhere' && n.thread === other)) { await fail(`no notification of the thread finishing: ${JSON.stringify(globalThis.superegoNotices)}`); throw new Error('failed') }
+  // What it did, too: its answer's first sentence (the daemon's recap).
+  const finished = (n) => n.title === 'elsewhere' && n.thread === other && n.status === 'Finished' && n.text === 'echo: hi'
+  for (let i = 0; i < 50 && !globalThis.superegoNotices.some(finished); i++) await new Promise((r) => setTimeout(r, 100))
+  if (!globalThis.superegoNotices.some(finished)) { await fail(`no notification of the thread finishing: ${JSON.stringify(globalThis.superegoNotices)}`); throw new Error('failed') }
   await run(`window.dispatchEvent(new Event('focus'))`)
   // Each press goes to the next unread one; looking at it marks it seen, so the presses reach the new one.
   for (let press = 0; press < 6 && await run(`document.querySelector('.thread__title')?.textContent`) !== 'elsewhere'; press++) {

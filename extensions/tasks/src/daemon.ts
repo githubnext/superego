@@ -3,8 +3,17 @@
 // The tools only echo; the UI half reads the task boundaries back out of the transcript.
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { obj, oneOf, str } from '@earendil-works/pi-schema'
-import { defineDaemonExtension } from '@superego/daemon'
+import { defineDaemonExtension, type RunRecord } from '@superego/daemon'
 import { about, ENDINGS, FINISH, START } from './shared.ts'
+
+/** The outcome of the last task a run finished (a call that didn't fail), if it finished any. */
+export function lastOutcome(calls: RunRecord['calls']): string | undefined {
+  for (const call of [...calls].reverse()) {
+    const outcome = call.name === FINISH && !call.failed && call.arguments && typeof call.arguments === 'object' && !Array.isArray(call.arguments) ? call.arguments.outcome : undefined
+    if (typeof outcome === 'string' && outcome.trim()) return outcome
+  }
+  return undefined
+}
 
 const PROMPT = `Report your work as short, human-scale tasks using ${START} and ${FINISH}.
 Before investigating, reading, editing, or testing, call ${START} with a concise action-oriented title such as "Reading up on billing", "Investigating duplicate charges", or "Improving authentication". Wait for its returned task_id before working.
@@ -43,5 +52,7 @@ export default defineDaemonExtension({
       ],
       sections: [section('task_reporting', () => PROMPT)],
     }))
+    // What a run did: the outcome of the last task it finished, which the prompt makes the recap.
+    superego.recap(({ calls }) => lastOutcome(calls))
   },
 })

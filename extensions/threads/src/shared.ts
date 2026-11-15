@@ -26,3 +26,6 @@ export const toolsAbout = {
 export const reportsAbout = {
   name: 'thread-reports', version: '1.0.0', api: '^1', title: 'Thread reports', description: 'Tell the thread that started one when it finishes, fails or waits on a question.',
 } satisfies ExtensionAbout
+
+/** What clients are told of a child working for its parent (`ext['thread-reports']`): its runs are reported to it. */
+export const REPORTED = { toParent: true }
