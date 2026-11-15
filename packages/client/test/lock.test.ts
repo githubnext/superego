@@ -47,19 +47,26 @@ it("passes over a lock whose holder died, and lets go when what it ran throws", 
 })
 
 it('installs author types from processes at once: each finds them whole', async () => {
-  // Built types: enough files that copying them takes a while.
   const from = join(dir, 'built')
-  for (let i = 0; i < 300; i++) {
+  for (let i = 0; i < 60; i++) {
     mkdirSync(join(from, 'node_modules', `p${i % 30}`), { recursive: true })
-    writeFileSync(join(from, 'node_modules', `p${i % 30}`, `f${i}.d.ts`), `export declare const x${i}: number\n`.repeat(50))
+    writeFileSync(join(from, 'node_modules', `p${i % 30}`, `f${i}.d.ts`), `export declare const x${i}: number\n`)
   }
   writeFileSync(join(from, 'stamp.json'), JSON.stringify({ hash: 'one' }))
   const data = join(dir, 'data')
-  const outs = await inProcesses(4, `
-    import { installTypes } from '../src/author-types.ts'
-    console.log(await installTypes(${JSON.stringify(from)}, ${JSON.stringify(data)}))
-  `)
-  expect(outs.map((out) => out.trim())).toEqual(Array(4).fill(join(data, 'types')))
+  mkdirSync(data)
+  // All at once: the lock held here until each of them waits for it (each names itself beside it as it does).
+  let outs: Promise<string[]> | undefined
+  let ended = false
+  await withLock(join(data, 'types.lock'), async () => {
+    outs = inProcesses(4, `
+      import { installTypes } from '../src/author-types.ts'
+      console.log(await installTypes(${JSON.stringify(from)}, ${JSON.stringify(data)}))
+    `)
+    outs.finally(() => { ended = true }).catch(() => {})
+    while (!ended && readdirSync(data).filter((entry) => entry.startsWith('types.lock.')).length < 4) await new Promise((resolve) => setTimeout(resolve, 20))
+  })
+  expect((await outs!).map((out) => out.trim())).toEqual(Array(4).fill(join(data, 'types')))
   expect(JSON.parse(readFileSync(join(data, 'types', 'stamp.json'), 'utf8'))).toEqual({ hash: 'one' })
   expect(readdirSync(join(data, 'types', 'node_modules'))).toHaveLength(30)
   expect(readdirSync(data)).toEqual(['types'])
