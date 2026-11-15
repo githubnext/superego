@@ -19,6 +19,8 @@ pnpm release 0.1.0      # bundle, tag, push and publish it as a GitHub release
 pnpm link:cli           # `superego` on your PATH (~/.local/bin/superego -> app/bin/superego.ts)
 ```
 
+Releasing, and what a Mac needs to sign and notarize: [docs/releasing.md](docs/releasing.md).
+
 Tests, typecheck, smoke and showcase take turns across the machine (two at a time; `SUPEREGO_CHECK_SLOTS`), and smoke
 and showcase build the app only when its sources changed. See [AGENTS.md](AGENTS.md) for when to run which.
 
