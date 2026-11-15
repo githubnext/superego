@@ -183,6 +183,8 @@ const transcriptOf = (prompt: Element) => prompt.closest('.dock')?.parentElement
 
 /** How far from its end a transcript still counts as at its end, and follows what comes in. */
 const PINNED = 80
+/** Far enough up from the end to be offered the way back down. */
+const isAway = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight > 200
 
 /** A thread's transcript and composer. Also what a "thread" pane draws. */
 export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
@@ -281,6 +283,8 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
     const observer = new ResizeObserver(() => {
       el.parentElement!.style.setProperty('--dock', `${dock.offsetHeight}px`)
       if (pinned.current) { el.scrollTop = el.scrollHeight; end.current = el.scrollTop }
+      // Its end can move away without a scroll (a reply coming in below where it was left): offer the way back then too.
+      setAway(isAway(el))
     })
     observer.observe(column)
     observer.observe(dock)
@@ -310,7 +314,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
           if (atEnd) end.current = el.scrollHeight - el.clientHeight
           // Not scrolled up from where its end was: the transcript shrinking moves it too, heard only once it's grown back.
           pinned.current = atEnd || (pinned.current && el.scrollTop >= end.current - PINNED)
-          setAway(el.scrollHeight - el.scrollTop - el.clientHeight > 200)
+          setAway(isAway(el))
           el.parentElement?.classList.toggle('is-scrolled', el.scrollTop > 8)
           if (el.scrollTop < el.clientHeight) loadOlder()
         }}>
