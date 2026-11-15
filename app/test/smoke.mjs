@@ -147,8 +147,14 @@ if (phase === 'first') {
   await until(`document.querySelectorAll('.queued-row').length === 2`, 'second follow-up queued')
   await run(`[...document.querySelectorAll('.queued-row')].find((row) => row.textContent.includes('never mind this')).querySelector('.queued-row__remove').click()`)
   await until(`document.querySelectorAll('.queued-row').length === 1`, 'follow-up taken back')
+  // One sent now steers: it goes in after the step (the question answered), ahead of the follow-up.
+  await run(`window.superego.call('local', 'thread.submit', { id: '${asking}', text: 'make it bold', whenBusy: 'followUp' })`)
+  await until(`Boolean([...document.querySelectorAll('.queued-row')].find((row) => row.textContent.includes('make it bold'))?.querySelector('.queued-row__now'))`, 'follow-up offered to send now')
+  await run(`[...document.querySelectorAll('.queued-row')].find((row) => row.textContent.includes('make it bold')).querySelector('.queued-row__now').click()`)
+  await until(`(() => { const row = [...document.querySelectorAll('.queued-row')].find((r) => r.textContent.includes('make it bold')); return row?.textContent.includes('Steers after this step') && !row.querySelector('.queued-row__now') })()`, 'sent now: steers')
   await run(`[...document.querySelectorAll('.ask-user button')].find((b) => b.querySelector('.ask-user__option-label')?.textContent === 'blue').click()`)
   await until(`!document.querySelector('.ask-user') && document.querySelector('.ask-user-asked')?.textContent.includes('blue') && document.querySelector('.transcript').textContent.includes('Blue it is.')`, 'answered, agent carried on')
+  await until(`(() => { const text = document.querySelector('.transcript').textContent; return text.includes('make it bold') && text.indexOf('make it bold') < text.indexOf('Blue it is.') })()`, 'the one sent now went in after the step, before the answer')
   await until(`!document.querySelector('.queued-row') && document.querySelector('.transcript').textContent.includes('then paint it') && document.querySelector('.transcript').textContent.includes('Noted for later.') && !document.querySelector('.transcript').textContent.includes('never mind this')`, 'queued follow-up went in, the one taken back not')
   // images: a replayed agent shows images (show_images), drawn in the thread: one alone, a grid, a carousel; a file
   // gone by then shows as broken; any opens in the lightbox, which zooms, goes through the set, and closes on Escape.

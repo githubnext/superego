@@ -261,8 +261,9 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .queued-row > svg { flex: none; color: var(--superego-faint); }
 .queued-row__text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .queued-row__when { flex: none; font-size: var(--superego-text-xs); color: var(--superego-faint); }
-.queued-row__remove { width: 18px; height: 18px; min-height: 18px; padding: 0; border-radius: 4px; box-shadow: none; background: none; color: var(--superego-faint); }
-.queued-row__remove:hover { color: var(--superego-text); background: var(--superego-hover); }
+.queued-row__action { width: 18px; height: 18px; min-height: 18px; padding: 0; border-radius: 4px; box-shadow: none; background: none; color: var(--superego-faint); }
+.queued-row__action:hover { color: var(--superego-text); background: var(--superego-hover); }
+.queued-row__now + .queued-row__remove { margin-left: -6px; }
 .composer__error { color: var(--superego-status-error); display: flex; gap: var(--superego-space-2); align-items: center; font-size: var(--superego-text-ui); margin-bottom: var(--superego-space-2); }
 
 .settings__body { display: grid; grid-template-columns: 180px 1fr; height: 100%; }
@@ -450,11 +451,11 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .app.is-narrow .app__sidebar .app__drag { height: 12px; }
 .app.is-narrow .thread__column { width: auto; max-width: none; padding: var(--superego-space-4) var(--superego-space-4) calc(var(--dock, 100px) + 50px); }
 .app.is-narrow .dock { left: var(--superego-space-2); right: var(--superego-space-2); bottom: calc(env(safe-area-inset-bottom) + var(--superego-space-1)); width: auto; max-width: none; transform: none; }
-/* Under a finger: the status bar's actions and the queued rows' × get room to be hit. */
+/* Under a finger: the status bar's actions and the queued rows' buttons get room to be hit. */
 .app.is-narrow .dock__footer { margin-top: 2px; }
 .app.is-narrow .dock__action { height: 32px; min-height: 32px; padding: 0 8px; }
 .app.is-narrow .queued-row { height: 32px; }
-.app.is-narrow .queued-row__remove { width: 28px; height: 28px; min-height: 28px; }
+.app.is-narrow .queued-row__action { width: 28px; height: 28px; min-height: 28px; }
 /* 16px keeps iOS from zooming into the field. */
 .app.is-narrow .composer, .app.is-narrow .superego-field, .app.is-narrow .new-thread__prompt { font-size: calc(16px * var(--superego-text-scale)); }
 .app.is-narrow .msg--user { max-width: 88%; }

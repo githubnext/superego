@@ -357,6 +357,22 @@
     ],
     "additionalProperties": false
   },
+  "thread.steer": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "submission": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "submission"
+    ],
+    "additionalProperties": false
+  },
   "thread.submit": {
     "type": "object",
     "properties": {

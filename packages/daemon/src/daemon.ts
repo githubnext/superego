@@ -7,7 +7,7 @@ import { homedir, hostname, platform } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
 import {
-  type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, defineExtension, defineTool, type EntryId, type Extension, Harness, hook, type SubmissionId,
+  type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, defineExtension, defineTool, type EntryId, type Extension, Harness, hook, InboxDoc, type SubmissionId,
   type LiveState, section, type Storage, wrapSection, wrapTool,
 } from '@earendil-works/pi-durable'
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
@@ -1791,6 +1791,28 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       await get(id)
       await harness.abortSubmission(Number(submission) as SubmissionId, context, Number(id) as ConversationId)
       return null
+    },
+  }))
+  router.register(defineAction({
+    id: 'thread.steer', title: 'Send a waiting message now', runs: 'machine', expose: ['ui', 'cli'], ...thread,
+    description: 'Send a follow-up waiting for the agent to finish now: it becomes a steer, going in after the current step. The agent isn\'t stopped. `status`: `steers`, or what became of it first (`placed`: gone in already; `settled`: taken back or done).',
+    params: obj({ id: str(), submission: str() }),
+    async run({ id, submission }) {
+      const m = await get(id)
+      const sid = Number(submission) as SubmissionId
+      if (!Number.isInteger(sid)) throw new RpcError('invalid', `No message ${submission} in this thread`)
+      // The same item, its place in the queue and all, now a steer: in one commit, so it can't be placed meanwhile.
+      // What isn't in the inbox has gone in, or been taken back, already.
+      const steers = await m.conversation.commit(async (tx) => {
+        const item = (await tx.doc(InboxDoc, m.conversation.id)).items.find((i) => i.id === sid)
+        if (!item || item.mode === 'write') return false
+        item.mode = 'steer'
+        return true
+      }, context)
+      if (steers) return { status: 'steers' as const }
+      const record = await (await harness.submission(sid, context))?.status(context)
+      if (!record || record.conversationId !== m.conversation.id) throw new RpcError('not_found', `No message ${submission} in this thread`)
+      return { status: record.status === 'placed' ? 'placed' as const : 'settled' as const }
     },
   }))
   router.register(defineAction({

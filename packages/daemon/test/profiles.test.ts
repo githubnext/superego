@@ -368,6 +368,45 @@ export default defineExtension({ name: 'slow', tools: [${slowTool(started, gate)
   await second.close()
 })
 
+it('sends a waiting follow-up now: the same message steers, going in after the step, the agent not stopped', async () => {
+  const profile = join(home, 'profiles', 'default')
+  const gate = join(dir, 'gate')
+  const started = join(dir, 'started')
+  write(profile, {
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./slow.ts'] })\n`,
+    'slow.ts': `import { defineExtension, defineTool, obj } from 'superego'
+import { existsSync, writeFileSync } from 'node:fs'
+export default defineExtension({ name: 'slow', tools: [${slowTool(started, gate)}] })
+`,
+  })
+  const { peer, close } = await openSlow()
+  const { id } = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'go' })
+  await until(async () => existsSync(started))
+  const submit = async (text: string) => (await peer.call<{ submission: string }>('thread.submit', { id, text, whenBusy: 'followUp' })).submission
+  const now = await submit('now please')
+  const later = await submit('later please')
+  const gone = await submit('never mind')
+  expect(await peer.call('thread.steer', { id, submission: now })).toEqual({ status: 'steers' })
+  // Taken back first: nothing to send.
+  await peer.call('thread.withdraw', { id, submission: gone })
+  expect(await peer.call('thread.steer', { id, submission: gone })).toEqual({ status: 'settled' })
+  await expect(peer.call('thread.steer', { id, submission: '999999' })).rejects.toMatchObject({ kind: 'not_found' })
+  const inbox = async () => ((await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { id })).value.docs['pi.inbox'] as { items: { id: number; mode: string }[] }).items
+  expect((await inbox()).map(({ id, mode }) => ({ id: String(id), mode }))).toEqual([{ id: now, mode: 'steer' }, { id: later, mode: 'followUp' }])
+
+  writeFileSync(gate, '')
+  await done(peer, id)
+  const { value } = await peer.call<{ value: { entries: unknown[] } }>('thread.watch', { id })
+  const at = (text: string) => value.entries.findIndex((e) => JSON.stringify(e).includes(text))
+  // In after the step, before the turn's answer; the follow-up after it, as before.
+  const step = at('slow done')
+  expect([at('now please'), at('All done.'), at('later please'), at('Replay finished')]).toEqual([step + 1, step + 2, step + 3, step + 4])
+  expect(at('never mind')).toBe(-1)
+  // Gone in already, it stays as it went.
+  expect((await peer.call<{ status: string }>('thread.steer', { id, submission: now })).status).not.toBe('steers')
+  await close()
+})
+
 it("doesn't load a profile again under a run: a change waits for the run to end", async () => {
   const profile = join(home, 'profiles', 'default')
   const gate = join(dir, 'gate')

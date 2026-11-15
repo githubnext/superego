@@ -106,7 +106,8 @@ ping                                      ch.open {ch, kind, params, window} →
                                            an extension's `<name>.<kind>`: `terminal.io`, a terminal pane's bytes)
 
 actions, each also served under its id:
-thread.create {cwd, prompt, attachments, profile, worktree} / submit {text, attachments} / abort / rename / seen
+thread.create {cwd, prompt, attachments, profile, worktree} / submit {text, attachments, whenBusy} / abort / rename / seen
+thread.withdraw {submission} / steer {submission} (a queued message taken back, or sent now: a follow-up becomes a steer)
 thread.archive / unarchive (its worktree removed if clean, and back)
 pane.open / update / focus / close        file.write              profile.list / allow
 settings.set   auth.login / respond / cancel / logout   daemon.restart   <extension>.<name>
@@ -253,6 +254,7 @@ How a thread reads. One list of your turns, the agent's text and runs of work:
 - **Runs of work:** tool calls and thinking back to back, even across the agent's turns, fold into one row that says what was done: "Edited `src/dates.mjs` and ran a command +3 −1". Open while running, closed once the agent moves on.
 - **Rows:** an icon on the text's edge, a verb ("Read", "Ran", "Edited", "Edit failed"), what it acted on in mono. Chevrons hang in the gutter and show on hover.
 - **Output** is capped at a dozen lines ("Show all N lines"); edits show their diff with old and new line numbers; code never wraps, it scrolls and fades only while a line overflows.
+- **While it works,** what you send waits over the composer, a row each, until it goes in: a **steer** (⏎) after the current step (once its tool calls finish, so a long one holds it), a **follow-up** (⌃⏎, Queue) when the agent is done. × takes one back (`thread.withdraw`); on a follow-up, Send now makes it a steer (`thread.steer`: the same message, in one commit), without stopping the agent.
 - **Turns:** your messages are tinted bubbles with clear air above; a turn that did work ends with what it did ("5 steps · +3 −1"). The title is the first message's first sentence or clause; the bubble shows the rest.
 
 Styled over eight rounds of impartial review of the showcase screenshots (scores 5.75 → 6.75 of 10, flat for the last rounds as reviewers began contradicting each other). Pacing is the weakest point left.

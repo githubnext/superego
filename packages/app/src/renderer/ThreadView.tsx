@@ -6,7 +6,7 @@ import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
 import { completionsIn, divideWork, entryOwner, entryView, fileKind, folderKind, paneMenu, PlacedViews, sentWithIn, Slot, shownPanes, toolOwner, toolRow, toolView, unfoldedTool, urlKind, useLayout, useRegistry, type ToolRowCall, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useRejections, useShell } from './state.tsx'
-import { useShortcut } from './keys.ts'
+import { useActions, useShortcut } from './keys.ts'
 import { withContextMenu } from './view-menu.tsx'
 import { ctrlDigit } from './shortcuts.ts'
 import { Images, imagesIn, Markdown } from './Markdown.tsx'
@@ -397,13 +397,15 @@ function WaitingForSignIn() {
 /**
  * What you sent while the agent was busy, waiting its turn: a row each over the composer, shown as soon as it's sent,
  * saying when it goes in (a steer after the current step, a follow-up when the agent is done), and taken back with ×.
- * Placed, it becomes an entry in the transcript like any other.
+ * A follow-up can be sent now: it becomes a steer (`thread.steer`; not from a daemon without it). Placed, it becomes
+ * an entry in the transcript like any other.
  */
 function Queued({ machine, thread, inbox }: { machine: MachineEntry; thread: ThreadInfo; inbox: InboxState | undefined }) {
   const dispatch = useRegistry().router.dispatch
+  const steerable = useActions(machine.id).some((action) => action.id === 'thread.steer')
   const items = (inbox?.items ?? []).filter((item) => item.mode !== 'write')
   if (!items.length) return null
-  const withdraw = (submission: string) => void dispatch('thread.withdraw', { id: thread.id, submission }, { machine: machine.id, source: 'composer' })
+  const act = (id: 'thread.withdraw' | 'thread.steer', submission: string) => void dispatch(id, { id: thread.id, submission }, { machine: machine.id, source: 'composer' })
     .catch((error) => console.error(error))
   const firstFollowUp = items.find((item) => item.mode === 'followUp')
   return (
@@ -417,7 +419,12 @@ function Queued({ machine, thread, inbox }: { machine: MachineEntry; thread: Thr
             <ListIcon size={13} aria-hidden />
             <span className="queued-row__text" title={text}>{words}</span>
             <span className="queued-row__when">{item.mode === 'steer' ? 'Steers after this step' : item === firstFollowUp ? 'Queued · next' : 'Queued'}</span>
-            <IconButton label="Take back" className="queued-row__remove" onClick={() => withdraw(String(item.id))}>
+            {item.mode === 'followUp' && steerable && (
+              <IconButton label="Send now" className="queued-row__action queued-row__now" onClick={() => act('thread.steer', String(item.id))}>
+                <ArrowElbowRightIcon size={12} aria-hidden />
+              </IconButton>
+            )}
+            <IconButton label="Take back" className="queued-row__action queued-row__remove" onClick={() => act('thread.withdraw', String(item.id))}>
               <XIcon size={11} aria-hidden />
             </IconButton>
           </div>

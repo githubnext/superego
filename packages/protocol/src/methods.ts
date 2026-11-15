@@ -214,6 +214,11 @@ export type Methods = {
   'thread.abort': { params: { id: ThreadId }; result: null }
   /** Take back a message sent while the agent was busy, still waiting its turn (an item of the thread's `pi.inbox`). */
   'thread.withdraw': { params: { id: ThreadId; submission: string }; result: null }
+  /**
+   * Send a follow-up waiting for the agent to finish now: the same item becomes a steer, going in after the current
+   * step. `steers`, or what became of it first: `placed` (gone in already), `settled` (taken back, or done).
+   */
+  'thread.steer': { params: { id: ThreadId; submission: string }; result: { status: 'steers' | 'placed' | 'settled' } }
   /** The user looked at the thread: its done/error status clears. */
   'thread.seen': { params: { id: ThreadId }; result: null }
   /** Entries older than `before` (an entry id), oldest first: scrolling back past a watch's window. */

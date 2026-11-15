@@ -1,5 +1,5 @@
 // Screenshots of the composer and what's around it (run by `test/look.sh <dir> composer`): idle with suggestions, a
-// file waiting, the agent working with a message queued and one typed to steer, a question waiting, archived, and the
+// file waiting, the agent working with messages queued and one typed to steer, a question waiting, archived, and the
 // narrow layout; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import { writeFileSync } from 'node:fs'
@@ -104,13 +104,15 @@ void (async () => {
   await run(`document.querySelector('.attachment__remove')?.click()`)
 
   await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: 'replay/replay' })`)
-  // Working, a follow-up queued and words typed to steer with.
+  // Working, a follow-up queued (to send now), a steer waiting for the step, and words typed to steer with.
   const working = await create('Focus ring disappears')
   await submit(working, 'The focus ring disappears when a pane opens beside. Find out why and fix it')
   await until(`window.superego.call('local', 'thread.list', {}).then(async (list) => list.find((s) => s.id === '${working}')?.status.state === 'working')`, 'working')
   await open('Focus ring disappears')
   await until(`document.querySelector('.transcript')?.textContent.includes('Running the whole suite')`, 'long step running')
   await submit(working, 'Then run the smoke test on main', 'followUp')
+  await submit(working, 'Leave the e2e suite out of it', 'steer')
+  await until(`document.querySelectorAll('.queued-row').length === 2`, 'a follow-up and a steer waiting')
   await sleep(500)
   await type('also check split panes, not just beside')
   await both('working-queued')
