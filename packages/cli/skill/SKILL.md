@@ -83,7 +83,8 @@ Read only the topics the task needs. A profile with a tool needs `profiles` and 
   install: the daemon and the window provide those modules. Other npm packages are not available to profiles.
 - Their declarations, for an editor and `extension test`, are in `~/.superego/types/node_modules` (`superego`,
   `superego/ui`, `superego/testing`, React, Node, vitest). The app puts them there as it starts, and `superego profile
-  new`, `extension new` and `profile types` link a profile's `node_modules` to them.
+  new`, `extension new` and `profile types` link a profile's `node_modules` to them. To learn the API, read
+  `node_modules/superego/index.d.ts`, `ui.d.ts` and `testing.d.ts`: one documented file per entry.
 - Names are namespaced: an extension called `vault` names its actions and live values `vault.<something>`.
 - A profile's UI from another machine runs in this computer's window only once allowed here:
   `superego profile allow-ui <name> -m <machine>`.

@@ -88,7 +88,6 @@ types [name]` gives it to profiles that were there before (all of this project's
 - `node_modules`: a link to `~/.superego/types/node_modules`, declarations only, for `superego`, `superego/ui`,
   `superego/unstable`, `superego/testing`, React, Node and vitest. They're built from Superego's own sources with each
   build, and the app copies its own there whenever it starts, so an upgrade brings new ones; the link stays.
-  To read the API, read `node_modules/superego/index.d.ts`, `ui.d.ts` and `testing.d.ts`: one documented file each.
 - `.gitignore`: `node_modules`, since the link is this computer's.
 
 The daemon doesn't load from `node_modules`, and neither it nor the `.gitignore` counts toward a project profile's
