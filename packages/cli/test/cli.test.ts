@@ -24,6 +24,11 @@ function superego(args: string[], input?: string, cwd?: string, extraEnv: Record
   })
 }
 const superegoJson = async <T = any>(args: string[], input?: string, cwd?: string): Promise<T> => JSON.parse(await superego([...args, '--json'], input, cwd))
+/**
+ * A test's time for the daemons it starts, from source (some 700 modules): under a second each on an idle machine, but
+ * ten seconds and more on a busy one, where every file a process opens waits on the machine's file scanning.
+ */
+const starting = (daemons: number) => 20_000 + daemons * 20_000
 const until = async (check: () => Promise<boolean>) => {
   for (let i = 0; i < 100; i++) { if (await check()) return; await new Promise((r) => setTimeout(r, 100)) }
   throw new Error('timed out')
@@ -57,7 +62,7 @@ describe('superego', () => {
     await superego(['send', created.id, 'again'])
     expect((await superego(['ls'])).split('\n')[0]).toContain('hi from the cli')
     expect(await superegoJson(['daemon', 'status'])).toMatchObject({ running: true })
-  })
+  }, starting(1))
 
   it('reads and changes settings, and stores API keys', async () => {
     await superego(['settings', 'set', 'agent.model', 'faux/faux-1'])
@@ -152,7 +157,7 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     expect(await superegoJson(['machines'])).toHaveLength(1)
     expect(await kept()).toEqual([])
     await expect(superego(['threads', '-m', 'Second'])).rejects.toThrow(/No machine called Second/)
-  })
+  }, starting(1))
 
   it('says which Superego each machine runs, and updates one through its own command', async () => {
     // A machine behind a stub: it connects as `connect --start` does, and for `connect --update` says what an install
@@ -186,7 +191,7 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     expect((await superegoJson(['daemon', 'status'])).pid).toBe(before)
     await expect(superego(['machines', 'update', 'local'])).rejects.toThrow(/updated by hand/)
     await superego(['machines', 'rm', 'Third'])
-  })
+  }, starting(2))
 
   it('restarts the daemon onto the installed code, keeping threads and its environment', async () => {
     // Started with a key in its environment (as by `box run superego daemon restart`); restarted from a client without one.
@@ -206,7 +211,7 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     const auth = await superegoJson(['auth'])
     expect(auth.find((p: any) => p.id === 'anthropic')).toMatchObject({ auth: { source: 'ANTHROPIC_API_KEY' } })
     expect(auth.find((p: any) => p.id === 'openai')).toMatchObject({ auth: { source: 'OPENAI_API_KEY' } })
-  })
+  }, starting(3))
 
   it('marks threads waiting for sign-in, and says how to sign in again', async () => {
     // The scripted model rejects a key that starts with "reject", as Anthropic does one it doesn't know.
