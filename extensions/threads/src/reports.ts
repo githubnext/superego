@@ -8,7 +8,9 @@
 // them: their own conversation with it isn't reported. Runs in between (the child's own children reporting, say) are
 // reported, so a grandchild's result makes its way up. Kept with the child (this extension's state: false, the
 // user's), so it holds across restarts; a child from before this was kept is reported as before. Clients are told
-// (`ext['thread-reports']`), so a child working for its parent notifies only when it needs the user.
+// (`ext['thread-reports']`), so a child working for its parent notifies only when it needs the user; but only while
+// its parent hears (it's there, not archived, and not without thread-reports): a child whose report would reach no one
+// notifies for itself.
 //
 // Reports are best-effort, a convenience, not delivery to rely on: the read log and reports waiting to go are in memory
 // (reads.ts), so after a restart a report that was waiting is lost, and a run resumed then may report what the parent
@@ -46,6 +48,9 @@ export function excerpt(answer: string) {
 
 type Report = { thread: ThreadInfo; text: string }
 
+/** Whether a thread hears its children's reports: it's there, in use, and not without them. */
+const hears = (parent: ThreadInfo | undefined): parent is ThreadInfo => Boolean(parent && !parent.archived && !parent.without?.includes(reportsAbout.name))
+
 /** A thread's run ended, or it waits on a question, as its parent hears it. */
 async function describe(thread: ThreadInfo, host: ReportsHost): Promise<string> {
   const from = fromLine(thread)
@@ -64,8 +69,7 @@ export function reporter(host: ReportsHost, { quietMs, maxMs }: Batching = BATCH
     const batch = batches.get(parent)
     batches.delete(parent)
     if (!batch) return
-    const to = await host.info(parent)
-    if (!to || to.archived || to.without?.includes(reportsAbout.name)) return
+    if (!hears(await host.info(parent))) return
     // Read since (by waiting on it, say): the parent has it already.
     const texts = [...batch.reports.values()].filter((r) => !host.read(r.thread)).map((r) => r.text)
     if (texts.length) await host.send(parent, texts.join('\n\n---\n\n'))
@@ -105,8 +109,21 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
     }, batching)
     // Whether a child works for its parent (see the top): set by the messages it's sent, false once the user writes.
     const working = s.state<boolean>()
+    // The children whose parent doesn't hear them (archived, say), as last looked: checked for each in use from the
+    // start, as a run starts (its parent's profile may have changed), and for a parent's children as it's archived or
+    // brought back.
+    const unheard = new Set<string>()
+    const settle = (id: string, heard: boolean) => {
+      if (heard !== unheard.has(id)) return
+      if (heard) unheard.delete(id)
+      else unheard.add(id)
+      s.invalidate()
+    }
+    const check = async (thread: ThreadInfo) => { if (thread.parent) settle(thread.id, hears(await info(thread.parent))) }
+    const childrenOf = async (id: string) => (await s.threads.list()).filter((t) => t.parent === id)
+    s.threads.list().then((all) => Promise.all(all.map(check))).catch((error) => console.error('thread-reports: checking parents failed:', error))
     // Said to clients, so a child's own finishing or failing doesn't notify too: its parent hears it (see REPORTED).
-    s.facts<boolean>(({ state }) => state === true ? REPORTED : undefined)
+    s.facts<boolean>(({ id, state }) => state === true && !unheard.has(id) ? REPORTED : undefined)
     s.submit(async ({ thread, text, by }) => {
       if (!thread.parent) return
       if (by === undefined) await working.set(thread.id, false)
@@ -116,7 +133,12 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
     const report = async (thread: ThreadInfo) => {
       if (thread.parent && await working.get(thread.id) !== false) await reports.report(thread)
     }
-    s.thread({ turnEnd: report, blocked: report })
+    s.thread({
+      turnStart: check, turnEnd: report, blocked: report,
+      // Told before it shows archived: its children are settled, not checked (they'd find it in use still).
+      archived: async (thread) => { for (const child of await childrenOf(thread.id)) settle(child.id, false) },
+      unarchived: async (thread) => { await Promise.all([thread, ...await childrenOf(thread.id)].map(check)) },
+    })
     s.agent(defineExtension({
       name: 'thread-reports',
       sections: [section('thread_reports', async ({ conversationId }) => {
@@ -126,7 +148,7 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
         return [
           !self.without?.includes('thread-tools') && 'Threads you start usually report back on their own: a message from each when it ' +
             'finishes, fails or waits on a question. You needn\'t wait on them with thread_read: carry on, or end your turn.',
-          parent && !parent.archived && !parent.without?.includes(reportsAbout.name) && await working.get(self.id) !== false && `When a turn of yours ` +
+          hears(parent) && await working.get(self.id) !== false && `When a turn of yours ` +
             `ends, its answer (the first lines) is relayed to ${linkTo(parent)} for you: you needn't thread_send it your result. Put the outcome first.`,
         ].filter(Boolean).join('\n') || undefined
       })],
