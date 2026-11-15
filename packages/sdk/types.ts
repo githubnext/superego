@@ -13,7 +13,7 @@
 // profile's folder links its node_modules to a copy of them (@superego/client's author-types.ts), so 'superego' and
 // 'react' resolve as any package would, with no paths in its tsconfig.
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -247,7 +247,7 @@ export async function buildTypes(dir: string): Promise<Stamp> {
  * The types as this checkout's sources are now, built again when those changed (a few seconds): a folder in
  * `packages/sdk/.types` that `latest` names. One process builds them at a time; another finding them out of date too
  * waits for its build and has that. Each build goes in a folder of its own and is never changed, so a copy being made
- * from an older one finishes; those are cleared a while later.
+ * from an older one finishes; those are cleared ten minutes after they were replaced.
  */
 export async function builtTypes(): Promise<string> {
   const cache = join(sdk, '.types')
@@ -263,8 +263,12 @@ export async function builtTypes(): Promise<string> {
     if (built) return built
     const name = `${Date.now().toString(36)}-${process.pid}`
     await buildTypes(join(cache, name))
+    const replaced = (() => { try { return readFileSync(latest, 'utf8').trim() } catch { return undefined } })()
     writeFileSync(`${latest}.${process.pid}`, name)
     renameSync(`${latest}.${process.pid}`, latest)
+    // The one this replaces is cleared a while from now, not from when it was made: a copy begun from it just before
+    // finishes (on a busy machine, seconds).
+    if (replaced) try { utimesSync(join(cache, replaced), new Date(), new Date()) } catch {}
     for (const entry of readdirSync(cache)) {
       if (entry === name || !/^[0-9a-z]+-\d+$/.test(entry)) continue
       const path = join(cache, entry)
