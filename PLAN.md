@@ -68,7 +68,7 @@ The niche is real. We should borrow herdr-core's protocol hygiene wholesale, and
 │  • thread catalog          │                  │
 │  • daemon-side extensions   │                  │
 │  • docs (CAS key/value)     │                  │
-│  • [pty host — optional]    │                  │
+│  • pty host (terminal ext.) │                  │
 └──────────────────┘          └──────────────────┘
 ```
 
@@ -76,7 +76,7 @@ The niche is real. We should borrow herdr-core's protocol hygiene wholesale, and
 - owns one pi-durable `Harness` on node SQLite (one storage per daemon; durable allows a single writer)
 - owns the thread catalog, the extension host and the doc store
 - exposes JSON-RPC 2.0 over NDJSON on a mode-0600 unix socket; `superego connect` bridges stdio to it
-- streaming uses notifications on subscription ids; bulk bytes (uploads now, terminals later) go on channels: still JSON-RPC lines, base64 chunks within credit the receiver grants, and the peer's writer sends them only behind every control message (`packages/protocol/src/channels.ts`)
+- streaming uses notifications on subscription ids; bulk bytes (uploads, terminals) go on channels: still JSON-RPC lines, base64 chunks within credit the receiver grants, and the peer's writer sends them only behind every control message (`packages/protocol/src/channels.ts`)
 - a client that pings (`heartbeat`) notices a dead link in seconds on any transport, and the daemon hangs up on one that stops
 
 **Electron main:** thin. Window management, machine catalog (`~/.superego/machines.json`: `{id,label,target,enabled}`), spawning ssh links, and relaying one generic `call/on` (no hand-maintained channel lists; that was a tremolo regret). Each machine link reconnects with backoff, and a disconnected machine stays visible but stale (fut).
@@ -102,7 +102,8 @@ file.read / file.find / file.watch {id, path} → file.changed      git.diff {id
 profile.ui / profile.module               settings.watch          value.watch {key} → value.changed
 action.list / action.run {id, params, exposure} / action.log            unwatch {sub}
 ping                                      ch.open {ch, kind, params, window} → ch.data / ch.ack / ch.end / ch.abort
-                                          (kind `upload`: an attachment named by its id, `{name, mimeType, upload}`)
+                                          (kind `upload`: an attachment named by its id, `{name, mimeType, upload}`;
+                                           an extension's `<name>.<kind>`: `terminal.io`, a terminal pane's bytes)
 
 actions, each also served under its id:
 thread.create {cwd, prompt, attachments, profile, worktree} / submit {text, attachments} / abort / rename / seen
@@ -141,6 +142,10 @@ As built (2026-11-04). An extension is a package with up to two halves, imported
 - `superego.method('<name>.<m>', run, { params })`: reads, called by name, not actions
 - `superego.value(key, initial)`: live values, watched by name with `value.watch`
 - `superego.pane(kind, about)`: pane kinds told to the agent for open_pane
+- `superego.channel(kind, accept)`: byte streams clients open (`<name>.<kind>`), on the protocol's channels; the window
+  opens one with `channel(machine, kind, params)` (`window.superego.channel`: in the desktop app the main process holds
+  it on the machine's link and passes each chunk on once the window has read the last, so credit runs to the reader; in
+  a browser, only to the serving daemon, not relayed)
 - `superego.status(fn)`: mark a thread blocked
 - `superego.harness`, `superego.threads` (list, get, conversation, `of(conversationId)`)
 - Everything registered is owned and undone with the extension. Each one announces `ext:<name>` in `hello`.
@@ -167,6 +172,7 @@ As built (2026-11-04). An extension is a package with up to two halves, imported
 - `threads`: the sidebar (sessions and their threads), with sort, rail and details modes
 - `files`: the file tree beside the editor, and quick open (⌘P)
 - `ask-user`: a tool, the blocked status, and the question in the composer
+- `terminal`: a shell beside a thread (below)
 
 **Layout:** the shell's slots, and panes beside a thread (§3d).
 
@@ -234,7 +240,8 @@ The window's model, after Fut: **session → thread → pane**.
   "Seen" is stored per thread, so every client agrees.
 - **Asking the user** is the `ask-user` extension, not core. A restart re-asks the question (the tool is `replay: "safe"`).
 - **Subagents and background jobs** are still to come, as an extension.
-- **External agents** (Claude Code, Codex) in terminals report via OSC 7501, once a terminal extension exists.
+- **External agents** (Claude Code, Codex, pi) in terminals report via OSC 7501: the terminal extension reads it from
+  the PTY (and answers `7501;?`), shows it on the pane's tab, and a terminal blocked on something blocks its thread.
 
 ---
 
@@ -292,7 +299,10 @@ Styled over eight rounds of impartial review of the showcase screenshots (scores
 
 1. **Own protocol, own TS daemon.** We never wait on or adapt to anyone else's roadmap (no `hc`, no fut protocol). We borrow their ideas.
 2. **Electron, not Tauri.** Tauri's wins are bundle size and idle memory, because it uses the system webview. Rendering isn't faster, and WebKitGTK on Linux is slower. Its Rust backend would still need a Node sidecar for pi-durable, and extension authors would have to test three engines instead of Chromium. The daemon is UI-independent, so the shell stays swappable.
-3. **Terminals wait** until after the PoC, as a bundled extension.
+3. **Terminals are a bundled extension** (`extensions/terminal`, 2026-11-15), not core: the daemon hosts the PTYs
+   (node-pty, `@lydell/node-pty`'s N-API prebuilds, which load in Electron as Node and in plain Node alike, shipped
+   beside the bundle in `out/node_modules` and unpacked from `app.asar`); the window draws them with ghostty-web
+   (Ghostty's emulator as WebAssembly, xterm.js's API), the same on desktop and web. Native libghostty is later (§9).
 4. **Chord:** delta ops only (`applyImmutable` in the renderer), not the facet/plugin system.
 5. **A framework with a generator**, Rails-style: apps depend on Superego's packages; extensions are packages any app imports.
 6. **Base UI** for the kit's overlays: portals, positioning, focus and Escape done right, instead of hand-rolled.
@@ -348,6 +358,18 @@ Still open:
 - **The halo icon (2026-11-11).** The first icon, a serif letter, gives way to a tilted halo over a dot: `resources/superego.icon` (halo and head layers), copied to `app/resources/superego.icon`, with the Dock, `.icns`, PWA and menu bar images made from it. The menu bar's halo is drawn heavier (`resources/superego-menubar.svg`) to hold at 16px; `resources/ego.svg` is Ego's mark, the dot alone. Explorations in `design-explorations/superego-*.html`.
 - **MCP server from actions (2026-11-15).** `superego mcp` (§3a): opt-in exposure, one server per machine, and a test that drives it with an MCP client against a real daemon.
 - **One daemon reaches the others (2026-11-12).** The daemon as a hub (§2): its own links to `machines.json`, `machines.watch`, `relay.call` and `relay.event`; every machine in a browser; agents start, read and message threads on other machines. The app and CLI name their computer in `hello`.
+- **A terminal pane (2026-11-15).** The `terminal` extension: a `terminal` pane kind (the pane menu, ⌃` *Open a
+  terminal*, *New terminal*, the agent's open_pane), a login shell in the thread's folder or worktree, run by the daemon.
+  - **Lifetime:** a pane's shell starts when a window first attaches and runs, attached or not, until its pane closes,
+    its thread is archived or cleared (the new `paneClosed` hook), or the daemon stops. `exit` (0) closes the pane;
+    any other end says so, and a key starts it again.
+  - **Bytes:** on a channel (`terminal.io`): a header (`<length> <cols> <rows>`), the last 1 MB it printed (replayed at
+    the size it was printed at, typing held back meanwhile so replayed queries aren't answered), then live output; keys
+    back. Size by `terminal.resize` (a method, not an action: the last window to resize wins). A window far behind
+    pauses the PTY, as a real screen would.
+  - **Status:** OSC 7501 read from the output (`terminal.status`, a scoped value per thread), a glyph on the tab.
+  - Tests over the real socket; a smoke step; `app/test/look.sh <dir> terminal` screenshots it in light, dark and a
+    browser, across a reload.
 
 ## 9. Next
 
@@ -355,7 +377,12 @@ Still open:
 - **Web and mobile:** accounts and TLS, a service worker, native shells as wrappers.
 - **MCP, more:** watches as resources (a thread's transcript, the thread list); more actions exposed as they prove safe.
 - **More bundled extensions:** git/diff, background jobs and subagents, suggestions.
-- **A terminal pane**, with a bridge per platform: libghostty on desktop and mobile, something simpler on the web.
+- **The terminal, next** (built: ghostty-web in every window, node-pty in the daemon): native libghostty on desktop
+  (and mobile), drawn by the app instead of WASM in the page; the daemon keeping each terminal's screen with a headless
+  emulator (ghostty-vt in Node), so a window attaching is sent the screen as it is rather than raw output replayed (which
+  can garble when clients differ in width); terminals that survive a daemon restart (a PTY holder process, as herdr's);
+  channels relayed by the hub, so a browser reaches terminals on the machines it reaches; a terminal's tab title from
+  the shell (OSC 0/2).
 - **The code, support and readonly profiles**, as further proofs of profiles.
 - **Publishing the packages**, so new apps don't need this checkout; then runtime-installed extensions.
 - **Remote install** over ssh, without a checkout there.
