@@ -178,7 +178,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
             {levels.length > 0 && (
               <label className="new-thread__field"><span>Thinking</span>
                 <Select aria-label="Thinking" options={levels.map((l) => ({ value: l, label: l }))} value={thinking}
-                  nullLabel={catalog?.default.thinking ? `Default · ${catalog.default.thinking}` : 'Model default'} onChange={setThinking} />
+                  nullLabel={catalog?.default.thinking ? `Default · ${catalog.default.thinking}` : 'Default'} onChange={setThinking} />
               </label>
             )}
           </div>

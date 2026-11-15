@@ -253,9 +253,17 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
         },
       },
       {
-        key: KEYS.thinking, title: 'Thinking', default: null,
-        description: 'How much the model reasons before answering, where it supports a choice.',
-        type: () => ({ type: 'choice', nullable: true, nullLabel: 'Model default', options: levels().map((level) => ({ value: level, label: level })) }),
+        key: KEYS.thinking, title: 'Thinking', default: 'medium',
+        description: 'How much the model reasons before answering. A level the model lacks moves to the nearest it has.',
+        type: () => {
+          const options: SettingOption[] = levels().map((level) => ({ value: level, label: level }))
+          // A level this model lacks still shows, as what it runs with here.
+          const current = settings.get<string>(KEYS.thinking), model = chosenModel()
+          if (model && options.length && !options.some((o) => o.value === current)) {
+            options.unshift({ value: current, label: `${current} (${clampThinkingLevel(model, current as ModelThinkingLevel)} on this model)` })
+          }
+          return { type: 'choice', options }
+        },
         hidden: () => levels().length === 0,
       },
       {
