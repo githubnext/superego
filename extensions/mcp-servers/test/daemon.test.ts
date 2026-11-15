@@ -28,8 +28,8 @@ beforeEach(async () => {
 })
 afterEach(async () => { await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }); delete process.env.SUPEREGO_REPLAY_SPEED })
 
-const until = async (check: () => boolean | Promise<boolean>, what = 'it') => {
-  for (let i = 0; i < 400; i++) { if (await check()) return; await new Promise((r) => setTimeout(r, 25)) }
+const until = async (check: () => boolean | Promise<boolean>, what = 'it', ms = 10_000) => {
+  for (const end = Date.now() + ms; Date.now() < end;) { if (await check()) return; await new Promise((r) => setTimeout(r, 25)) }
   throw new Error(`timed out waiting for ${what}`)
 }
 
@@ -39,9 +39,12 @@ async function open(turns: string[] = [], options: McpServersOptions = {}, more:
   writeFileSync(recording, turns.join(''))
   process.env.SUPEREGO_MODEL = `replay:${recording}`
   process.env.SUPEREGO_REPLAY_SPEED = '0'
+  // A thread's first turn waits for its servers' tools a few seconds (`firstListing`, within the core's `agentPartsLimit`)
+  // before going on without them; the fixture is Node loading the MCP SDK, which on a busy machine takes longer. Here the
+  // tools are wanted on the first turn, so it gets the time that takes.
   const daemon = await openDaemon({
-    app: SUPEREGO, dataDir: dir, defaultCwd: work, agentsDir: join(dir, 'agents'),
-    extensions: [mcpServersExtension({ checkWait: 15_000, ...options }), ...more],
+    app: SUPEREGO, dataDir: dir, defaultCwd: work, agentsDir: join(dir, 'agents'), agentPartsLimit: 65_000,
+    extensions: [mcpServersExtension({ checkWait: 15_000, firstListing: 60_000, ...options }), ...more],
   })
   const server = await listen(daemon, join(dir, 'superego.sock'))
   const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
@@ -57,7 +60,7 @@ const act = <T = CheckResult>(peer: RpcPeer, id: string, params: object) => peer
 const fixture = (more: Partial<ServerConfig> = {}): ServerConfig => ({ command: process.execPath, args: [FIXTURE], env: { FIXTURE_CALLS: calls }, ...more })
 const callsMade = async () => existsSync(calls) ? (await readFile(calls, 'utf8')).split('\n').filter(Boolean) : []
 const find = async (peer: RpcPeer, id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)
-const done = (peer: RpcPeer, id: string) => until(async () => (await find(peer, id))?.status.state === 'done', 'the thread to be done')
+const done = (peer: RpcPeer, id: string, ms?: number) => until(async () => (await find(peer, id))?.status.state === 'done', 'the thread to be done', ms)
 const serversOf = async (peer: RpcPeer, id: string) => (await find(peer, id))?.ext?.['mcp-servers'] as ThreadServers | undefined
 async function partsOf(peer: RpcPeer, id: string) {
   const { value } = await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { id })
@@ -163,7 +166,8 @@ it('starts a server again after it crashes, and three crashes in a minute fail i
   ])
   await act(peer, 'add', { name: 'fx', server: fixture({ unprofiled: true }) })
   const thread = await peer.call<ThreadInfo>('thread.create', { prompt: 'go' })
-  await done(peer, thread.id)
+  // The fixture starts again after each crash, Node and the MCP SDK each time: seconds on a busy machine.
+  await done(peer, thread.id, 40_000)
   const [first, back, , third, again] = await results(peer, thread.id)
   expect(first).toMatch(/^error: fx\.crash failed: fx exited with code 3\. Its last words on stderr:\n[\s\S]*boom: the fixture fell over/)
   expect(back).toBe('back')
@@ -179,7 +183,7 @@ it('starts a server again after it crashes, and three crashes in a minute fail i
   expect(log.text).toContain('stderr: boom: the fixture fell over')
   expect(log.text).toContain('failed 3 times within a minute')
   await close()
-})
+}, 60_000)
 
 it('offers a changed tool list from the next request of the same run, and keeps it in the cache', async () => {
   const { peer, close } = await open([calling('mcp__fx__change'), calling('mcp__fx__added'), calling('mcp__fx__change'), answer('Done.')])
