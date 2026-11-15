@@ -11,7 +11,8 @@
     "link:cli": "ln -sf \"$PWD/app/bin/superego.ts\" \"$HOME/.local/bin/superego\" && echo \"Linked $HOME/.local/bin/superego\"",
     "smoke": "pnpm --filter superego smoke",
     "bundle": "pnpm --filter superego bundle",
-    "release": "pnpm --filter superego release"
+    "release": "pnpm --filter superego release",
+    "eval": "node evals/run.ts"
   },
   "devDependencies": {
     "@types/node": "^24",
