@@ -751,6 +751,7 @@ if (phase === 'first') {
   await key('`', ['control'])
   await until(`Boolean(document.querySelector('.terminal-pane__screen canvas')) && document.activeElement?.closest('.terminal-pane') !== null`, 'ctrl+`: a terminal with the focus')
   await ringed('Terminal')
+  await until(`document.querySelector('.terminal-pane__screen').text().trim().length > 0`, 'the shell\'s prompt')
   await run(`(() => { const screen = document.querySelector('.terminal-pane__screen')
     for (const ch of 'echo "smoke-$((2*21))"\\n') screen.dispatchEvent(new KeyboardEvent('keydown', { key: ch === '\\n' ? 'Enter' : ch, code: ch === '\\n' ? 'Enter' : '', bubbles: true, cancelable: true })) })()`)
   await until(`document.querySelector('.terminal-pane__screen').text().includes('smoke-42')`, 'the shell\'s answer in the terminal')
