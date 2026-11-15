@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
-import { builtTypes } from '@superego/sdk/types'
+import { authorTypes } from '../src/extensions.ts'
 
 const CLI = fileURLToPath(new URL('../../../app/bin/superego.ts', import.meta.url))
 let home: string
@@ -31,8 +31,9 @@ const until = async (check: () => Promise<boolean>) => {
 
 beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), 'superego-cli-'))
-  // The author types `profile new` links a profile to, built before any command waits on them.
-  await builtTypes()
+  // The author types `profile new` links a profile to, built and installed in this home before any command waits on
+  // them: installing is a copy of some 2,000 files, seconds on a busy machine (profile-types.test.ts covers it).
+  await authorTypes(home)
 }, 240_000)
 afterAll(async () => {
   // Each daemon, gone before its files are: one still shutting down writes as the folder is removed.
