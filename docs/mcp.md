@@ -1,6 +1,6 @@
 # MCP servers for Superego's agents
 
-A design, 2026-11-15. Lane 1 (the core seams) is built; lanes 2–4 are not yet. It covers how agents in Superego threads use MCP servers: what the
+A design, 2026-11-15. Lanes 1 (the core seams) and 2 (the runtime) are built; lanes 3 and 4 are not yet. It covers how agents in Superego threads use MCP servers: what the
 user sets up, where it lives, how it runs, and four lanes to build it in.
 
 ## Two MCPs, named apart
@@ -601,6 +601,64 @@ Files:
 `shared.ts` (the config, the section's `data` and the action params) lands first, so Lane 4 can start on it.
 
 Depends on Lane 1.
+
+**Built.** As above, except:
+- The runtime is in `servers.ts` (`Runtime`: the servers, their parts, sessions, idle stop, crashes, the cache);
+  `daemon.ts` wires it to the API. Tests: `test/connections.test.ts`, `test/daemon.test.ts` (against a real daemon,
+  the fixture `test/fixture.ts` as a command and over HTTP), `test/tools.test.ts`, and
+  `packages/cli/test/mcp-servers.test.ts`.
+- **Settings' data is also a live value.** An extension can't tell the settings registry its section's `data` changed,
+  so the section's `data` is right when Settings is read, and the live value `mcp-servers.servers` (the same
+  `SectionData`) is kept current as servers start, stop and fail. Draw from the value.
+- **Actions:** `add`, `edit` (whole config; `rename`), `remove`, `set` (`unprofiled` or `enabled` alone), `allow`,
+  `set-secret` (`{ server, values }`, `null` forgets one), `logout` (forgets the server's stored secrets),
+  `restart`, `log`. `login` is named in `ACTIONS` for lane 3. Add, edit, allow, set-secret and restart start the
+  server to check it (up to 30s) and answer `{ server: ServerInfo }`. All are `['ui', 'cli']`; none `mcp`.
+- **Who added a command isn't guessed.** An action can't tell Ego from the window (`context.source` is a name either
+  way), so `add` and `edit` take `allowed: false`, and Ego's tool must pass it for a command. An edit without it keeps
+  what the server had: a waiting server stays waiting until `allow`.
+- **The prompt section leaves out running and stopped.** The section renders before every request, so a state that
+  flips would break the prompt cache. A server reads as its tool count (and "find them with tool_search" when
+  deferred), or as unavailable with why (off, waiting, needs sign-in, failed), or "still starting" before its first
+  listing.
+- **Names on disk:** the cache is `<dataDir>/mcp/cache/<name>.json` for the machine's servers and
+  `<name>@<hash>.json` for a profile's (`<hash>`: eight hex of its id); logs are `<dataDir>/logs/mcp/` by the same
+  names. Agent parts are `mcp:<name>` and `mcp:<name>@<hash>`, the shared one `mcp-servers`, and `tool_search` comes
+  in `mcp-servers-search`.
+- **A profile's server's config is kept in its cache**, as the profile said when it was last loaded (so allowed then).
+  A run resumed after a restart can start it before the profile's next turn.
+- **Where commands run:** a machine server in `cwd` or the home folder; a profile's in the folder holding its
+  `.superego` (the project's root; for a user profile, the data folder's parent), `cwd` resolved against it; a
+  thread's own in the thread's folder.
+- **API keys:** `scheme` defaults to `Bearer` only for the `Authorization` header; another header gets the bare key.
+- **A `401`** (a refused key, or a server that wants OAuth) puts the server in `needs-sign-in`, its calls failing at
+  once, until its secrets change or it's restarted.
+- **A thread's own server** stops when the thread is archived and after 10 idle minutes. Clearing a thread has no
+  hook, so it doesn't stop it.
+- **`superego extensions --thread`** prints the thread's servers from its facts (`thread.ext['mcp-servers']`); the
+  core's report has no seam for extensions, and none was added.
+- **The interrupted rewrite** keeps the call's partial output and puts the message in the result's diagnostic, its code
+  still `interrupted`.
+- `Settings → Outside agents → Can start threads` says that a thread one starts has its servers like any other.
+
+Lane 3 should know:
+- `connections.ts`'s `Launch.oauth` is an `OAuthClientProvider`, passed to the HTTP transports. Nothing sets it yet:
+  `Runtime.connect` (servers.ts) builds the launch, and should give one for `auth.type === 'oauth'`.
+- A `401` sets `server.refused` (`needs-sign-in`); `Runtime.secretsChanged(server)` clears it and restarts the
+  sessions. Call that once a sign-in or sign-out changes the store.
+- `SecretStore.modify(key, edit)` runs under the store's lock, for refresh. Every stored string is hidden in logs
+  (`SecretStore.secrets()`), tokens included.
+- `logout` forgets `server:<id>`; add the server's `oauth:<resource>` tokens.
+
+Lane 4 should know:
+- Settings: draw `SectionData` from the live value `mcp-servers.servers` (`servers`: the machine's in the file's
+  order; `profiles`: those seen from profiles). `ServerInfo.error` is why it's failed, waiting or needs sign-in, else
+  its last error. The section is `order: 25`, just after Providers.
+- The thread's chip and details: `thread.ext['mcp-servers']` (`ThreadServers`), with `LEFT_OUT` for the reasons.
+- Rows: a call's `details` are `CallDetails` (server, tool, titles, annotations, saved files), set as the call starts,
+  so an interrupted call's row has them too. An interrupted call is an `mcp__*` result with an `interrupted`
+  diagnostic. `tool_search`'s details are `{ loaded }`.
+- Ego's tool passes `allowed: false` to `add` and `edit` for a command.
 
 ### Lane 3: OAuth
 

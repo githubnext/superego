@@ -38,7 +38,7 @@ afterAll(async () => {
       await new Promise((r) => setTimeout(r, 50))
     }
   }
-  await rm(home, { recursive: true, force: true })
+  await rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 it('lists, keys, logs and restarts MCP servers, and says which a thread has', { timeout: 120_000 }, async () => {

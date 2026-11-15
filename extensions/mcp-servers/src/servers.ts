@@ -6,15 +6,15 @@
 import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { defineExtension, defineTool, type Extension, type ToolExecutionApi, type ToolExecutionResult } from '@earendil-works/pi-durable'
 import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
-import { ErrorCode, McpError, type Tool } from '@modelcontextprotocol/sdk/types.js'
+import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
 import type { DaemonApi, AgentPart } from '@superego/daemon'
 import type { ProfileRef } from '@superego/daemon/sdk'
 import { RpcError } from '@superego/protocol'
 import { configProblem, profileConfig, runKey, runsOf, secretNames } from './config.ts'
-import { Connection, crashed, ServerLog, sessionGone, type Exit, type Listing } from './connections.ts'
+import { Connection, ServerLog, sessionGone, type Exit, type Listing } from './connections.ts'
 import { contentOf } from './results.ts'
 import { DEFAULTS, type CallDetails, type ServerConfig, type ServerInfo, type ServerSource, type ServerState } from './shared.ts'
 import { serverKey, type SecretStore, type ServerSecrets } from './store.ts'
@@ -73,6 +73,8 @@ export type Server = {
   relisting?: ReturnType<typeof setTimeout>
   /** A listing its `list_changed` asked for, until it's done: a call that saw the change waits for it. */
   listed?: Promise<void>
+  /** Settles `listed`, until its listing starts. */
+  settleListed?: () => void
 }
 
 export type RuntimeOptions = {
@@ -214,7 +216,7 @@ export class Runtime {
     this.#changed()
   }
 
-  /** Every server a thread could name: its profile's of that name first, else the machine's. */
+  /** The machine's server of that name (a profile's `mcp` names those). */
   machine(name: string) { const server = this.servers.get(name); return server?.from.type === 'machine' ? server : undefined }
 
   /** Its secrets changed (set, or forgotten). */
@@ -458,11 +460,15 @@ export class Runtime {
    */
   #relistSoon(server: Server, slot: Slot) {
     clearTimeout(server.relisting)
-    let settle!: () => void
-    const listed = new Promise<void>((resolve) => { settle = resolve })
-    const before = server.listed
-    server.listed = listed
+    // One listing for a burst of changes; a call waits for it, and for one already going.
+    if (!server.settleListed) {
+      const next = new Promise<void>((resolve) => { server.settleListed = resolve })
+      server.listed = Promise.all([server.listed, next]).then(() => {})
+    }
+    const settle = server.settleListed!
+    const listed = server.listed!
     server.relisting = setTimeout(() => {
+      delete server.settleListed
       const connection = slot.connection
       const listing = connection && !connection.closed ? this.#list(server, connection) : Promise.resolve()
       void listing.catch((error) => server.log.write(`listing tools failed: ${errorText(error)}`)).finally(() => {
@@ -470,7 +476,6 @@ export class Runtime {
         if (server.listed === listed) delete server.listed
       })
     }, 20)
-    void before?.then(() => listed)
   }
 
   /** A session ended by itself: a crash, counted (three in a minute and it's failed); the next need starts it again. */
@@ -593,8 +598,6 @@ export class Runtime {
     clearTimeout(timer)
   }
 
-  /** Whether a server's tools are found by search, and its prompt line. */
+  /** Whether a server's tools are found by search (a thread with it gets `tool_search`). */
   isDeferred(server: Server) { return server.deferred && server.offered.length > 0 }
-
-  cwdOf(given: string | undefined, base: string) { return given ? (isAbsolute(given) ? given : resolve(base, given)) : base }
 }

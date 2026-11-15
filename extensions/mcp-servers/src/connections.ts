@@ -309,7 +309,7 @@ export class Connection {
       const said = exit.stderr.length ? `. Its last words on stderr:\n${exit.stderr.join('\n')}` : ''
       const failure = new Error(redact(`${this.launch.name} ${how}${said}`, Object.values(this.launch.secrets)))
       this.launch.log.write(`failed: ${failure.message.split('\n')[0]}`)
-      return Object.assign(failure, { crashed: true })
+      return failure
     }
     if (error instanceof StreamableHTTPError) this.launch.log.write(`HTTP ${error.code ?? '?'}`)
     else this.launch.log.write(`error: ${message}`)
@@ -320,6 +320,3 @@ export class Connection {
     return new Error(redact(message, Object.values(this.launch.secrets)))
   }
 }
-
-/** Whether a call's or a start's failure was its command exiting. */
-export const crashed = (error: unknown) => Boolean((error as { crashed?: boolean })?.crashed)

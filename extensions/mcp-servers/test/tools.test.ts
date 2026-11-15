@@ -9,7 +9,7 @@ import { normalizeSchema, offerTools, toolName } from '../src/tools.ts'
 
 let dir: string
 beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-mcp-tools-')) })
-afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+afterEach(async () => { await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }) })
 
 it('names tools mcp__<server>__<tool>, within 64 characters and the characters providers take', () => {
   expect(toolName('linear', 'create_issue')).toBe('mcp__linear__create_issue')

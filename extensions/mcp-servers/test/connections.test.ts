@@ -10,7 +10,7 @@ import { serveHttp } from './fixture.ts'
 const FIXTURE = join(import.meta.dirname, 'fixture.ts')
 let dir: string
 beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-mcp-conn-')) })
-afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+afterEach(async () => { await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }) })
 
 const until = async (check: () => boolean | Promise<boolean>) => {
   for (let i = 0; i < 200; i++) { if (await check()) return; await new Promise((r) => setTimeout(r, 25)) }
