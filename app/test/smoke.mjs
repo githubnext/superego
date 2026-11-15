@@ -874,7 +874,9 @@ if (phase === 'first') {
   }
   await run(`window.superego.call('local', 'thread.seen', { id: '${long}' }).then(() => null)`)
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('long')).click()`)
-  await until(`document.querySelector('.thread__title')?.textContent === 'long' && document.querySelector('.transcript')?.textContent.includes('message 29')`, 'the long thread, at its end')
+  // At its end once the view has kept it there (the frame after its entries are drawn): scrolled before that, the
+  // scroll below moves nothing and the view, rightly, still counts itself at its end.
+  await until(`document.querySelector('.thread__title')?.textContent === 'long' && document.querySelector('.transcript')?.textContent.includes('message 29') && (() => { const el = document.querySelector('[data-column="thread"] .thread__scroll'); return el.scrollTop > 0 && el.scrollHeight - el.scrollTop - el.clientHeight < 40 })()`, 'the long thread, at its end')
   if (await run(`document.querySelector('.transcript').textContent.includes('echo: message 0')`)) { await fail('the whole long thread came at once'); throw new Error('failed') }
   for (let i = 0; i < 20 && !(await run(`document.querySelector('.transcript').textContent.includes('echo: message 0')`)); i++) {
     await run(`(() => { const el = document.querySelector('[data-column="thread"] .thread__scroll'); el.scrollTop = 0; el.dispatchEvent(new Event('scroll')) })()`)
