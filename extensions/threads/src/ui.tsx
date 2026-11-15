@@ -2,13 +2,14 @@
 // threads: the sidebar. Sessions (a project on a machine) and the threads in each; the machine is said on the session,
 // where it isn't this computer. Its views:
 // - the list (`threads.list`), a space: sorted recently active, newest first, or needs you first; shown as a list, or
-//   folded into a rail of status glyphs (both kept as app settings)
+//   folded into a rail of status glyphs (both kept as app settings). A row's title is followed by other extensions'
+//   marks (the `thread.badge` slot: a worktree's branch, say)
 // - details (`threads.details`): what the thread runs with, spent and touched; beside it (in the aside) or not, ⌘I
 // - the model (`threads.model`), in the title bar: a button that shows or hides the details
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are its daemon half's.
 import { Fragment, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import {
-  call, defineAction, defineUiExtension, MachineDrift, showSession, SORT, unread, useAppSetting, useLocalState, useMachines, useNarrow, usePlacement, useSelection, useSessions, useThreadView, useShell, useShortcut,
+  call, defineAction, defineUiExtension, MachineDrift, showSession, Slot, SORT, unread, useAppSetting, useLocalState, useMachines, useNarrow, usePlacement, useSelection, useSessions, useThreadView, useShell, useShortcut,
   type MachineEntry, type Session, type Sort, type SpaceRailProps, type Store, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
@@ -122,7 +123,8 @@ function Threads() {
                 <ListItem key={thread.id} selected={isOn(session, thread)} leading={<StatusGlyph status={thread.status} />}
                   {...(level ? { className: 'threads-child', style: { '--depth': level } as CSSProperties } : {})}
                   trailing={waitingForSignIn(thread.status) ? <span className="threads__why threads__why--quiet">waiting</span> : thread.status.state === 'blocked' ? <span className="threads__why">needs you</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">failed</span> : ago(activity(thread))} onClick={() => select({ machine: session.machine.id, thread: thread.id })}>
-                  {thread.title}
+                  <span className="threads__title">{thread.title}</span>
+                  <Slot name="thread.badge" props={{ machine: session.machine, thread }} />
                 </ListItem>
               )
             })}

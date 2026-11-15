@@ -36,6 +36,7 @@ export {
   FileTextIcon,
   FolderSimpleIcon,
   GearSixIcon,
+  GitBranchIcon,
   LifebuoyIcon,
   ListIcon,
   MagnifyingGlassIcon,

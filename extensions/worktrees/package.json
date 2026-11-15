@@ -8,9 +8,9 @@
     "./ui": "./src/ui.tsx"
   },
   "dependencies": {
+    "@superego/app": "workspace:*",
     "@superego/daemon": "workspace:*",
     "@superego/protocol": "workspace:*",
-    "@superego/app": "workspace:*",
     "@superego/ui": "workspace:*"
   },
   "peerDependencies": {
@@ -22,6 +22,8 @@
     "@earendil-works/pi-durable": "1.5.0",
     "@superego/threads": "workspace:*",
     "@types/react": "^19",
-    "react": "^19"
+    "@types/react-dom": "^19.3.0",
+    "react": "^19",
+    "react-dom": "^19.3.1"
   }
 }

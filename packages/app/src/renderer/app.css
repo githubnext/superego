@@ -76,6 +76,8 @@
 @container (max-width: 720px) { .thread__crumb, .titlebar__go { display: none; } }
 @container (max-width: 520px) { .titlebar__archived { display: none; } }
 .titlebar__chip { flex: 0 1 auto; min-width: 4em; overflow: hidden; text-overflow: ellipsis; }
+/* A mark after a thread's title in the sidebar (the thread.badge slot): an icon, quiet, kept while the title truncates. */
+.thread-badge { flex: none; display: inline-flex; align-items: center; color: var(--superego-muted); }
 .thread__parent { display: flex; align-items: baseline; gap: 4px; min-width: 6em; }
 .titlebar__chip + .titlebar__chip::before { content: '·'; margin: 0 6px; }
 .thread__cost { font-size: var(--superego-text-sm); color: var(--superego-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }

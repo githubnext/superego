@@ -31,6 +31,11 @@ import { Lifetime } from '@superego/protocol'
 export type BehaviourSlot =
   /** Among the chips that say where a thread works, after the title's: a branch, say. Draw a `titlebar__chip`. */
   | 'thread.crumb'
+  /**
+   * After a thread's title in the sidebar's list: a small mark of something about it (its own branch, say). Draw a
+   * `thread-badge`, an icon (about 12px) with a `title` for its tooltip; or nothing, as for most threads.
+   */
+  | 'thread.badge'
   /** Above the composer: things waiting on the user, suggestions. */
   | 'composer.above'
   /** Beside a file being edited: a file tree, an outline. `open` shows another file there (`beside`: in a pane of its own). */
@@ -59,6 +64,7 @@ export type SlotProps = {
   'footer': Record<string, never>
   'thread.header': { machine: MachineEntry; thread: ThreadInfo }
   'thread.crumb': { machine: MachineEntry; thread: ThreadInfo }
+  'thread.badge': { machine: MachineEntry; thread: ThreadInfo }
   'composer.above': { machine: MachineEntry; thread: ThreadInfo }
   'thread.aside': { machine: MachineEntry; thread: ThreadInfo }
   'editor.side': EditorSlotProps
@@ -464,7 +470,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}),
       ...(version ? { version } : {}), ...(api ? { api } : {}), ...(capabilities?.length ? { capabilities } : {}),
     })),
-    slots: { 'thread.crumb': [], 'composer.above': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
+    slots: { 'thread.crumb': [], 'thread.badge': [], 'composer.above': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
     views: [], dataViews: {}, tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
@@ -789,7 +795,7 @@ export function Slot<S extends BehaviourSlot>({ name, props }: { name: S; props:
   const { machine, thread } = props as { machine?: MachineEntry; thread?: ThreadInfo }
   const entries = seenIn(registry.slots[name] as Owned<{ component: ComponentType<SlotProps[S]> }>[], machine && thread ? { machine: machine.id, thread } : undefined)
   return <>{entries.map(({ component: Component, owner }, index) =>
-    <Contained key={`${owner.profile ?? ''}/${owner.extension}-${index}`} name={owner.extension} inline={name === 'thread.crumb' || name === 'editor.bar'}><Component {...props} /></Contained>)}</>
+    <Contained key={`${owner.profile ?? ''}/${owner.extension}-${index}`} name={owner.extension} inline={name === 'thread.crumb' || name === 'thread.badge' || name === 'editor.bar'}><Component {...props} /></Contained>)}</>
 }
 
 // ── Views in places ──────────────────────────────────────────────────────────────────────────────────────────────────
