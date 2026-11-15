@@ -1,5 +1,5 @@
 // Screenshots of MCP servers (run by `test/look.sh <dir> mcp`): Settings → MCP servers with a server in each state
-// (running, needing a key, needing sign-in, switched off, waiting for Allow), the Add dialog filled from the catalogue,
+// (running, needing a key, needing sign-in, signed in, switched off, waiting for Allow), an OAuth client's secret, the Add dialog filled from the catalogue,
 // and a thread that called a server's tools: its rows (one open, with its arguments, result and image), its chip's list
 // and thread details. Light and dark, into $SUPEREGO_SHOWCASE_OUT.
 import { app, BrowserWindow, nativeTheme } from 'electron'
@@ -74,13 +74,19 @@ void (async () => {
   await run(`document.querySelector('.app__settings').click()`)
   await until(`Boolean(document.querySelector('.settings__nav'))`, 'Settings')
   await click('.settings__nav button', 'This computer')
-  await until(`document.querySelectorAll('.mcp-server').length >= 5`, 'the servers')
+  await until(`document.querySelectorAll('.mcp-server').length >= 6`, 'the servers')
   await both('mcp-settings', `document.querySelector('.mcp-servers')?.closest('.settings-section')?.scrollIntoView({ block: 'start' })`)
   await both('mcp-settings-end', `document.querySelector('.mcp-servers__add')?.scrollIntoView({ block: 'end' })`)
   // Set key, open under its row.
   await run(`[...document.querySelectorAll('.mcp-server')].find((r) => r.textContent.includes('github'))?.querySelector('.provider__actions button')?.click()`)
   await until(`!!document.querySelector('.mcp-secrets')`, 'the key field')
   await both('mcp-set-key', `document.querySelector('.mcp-secrets')?.scrollIntoView({ block: 'center' })`)
+  // A signed-in OAuth server's client secret, optional, from its menu.
+  await run(`[...document.querySelectorAll('.mcp-server')].find((r) => r.textContent.includes('atlassian'))?.querySelector('.mcp-server__more')?.click()`)
+  await until(`[...document.querySelectorAll('[role=menuitem]')].some((i) => i.textContent === 'Client secret…')`, 'the menu')
+  await click('[role=menuitem]', 'Client secret…')
+  await until(`!!document.querySelector('.mcp-secrets input[placeholder="Optional"]')`, 'the client secret field')
+  await both('mcp-client-secret', `document.querySelector('.mcp-secrets')?.scrollIntoView({ block: 'center' })`)
 
   // Add server, filled from the catalogue.
   await click('.mcp-servers__add button', 'Add server')

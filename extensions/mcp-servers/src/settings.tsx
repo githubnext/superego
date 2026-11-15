@@ -1,12 +1,12 @@
-// Settings → MCP servers: a machine's servers, a row each (its state, what it runs, Use in threads without a profile,
-// and a menu: Edit, Restart, Show log, Sign out, Remove), Sign in or Set key where it needs them, Allow for a command
+// Settings → MCP servers: a machine's servers, a row each (its state and sign-in, what it runs, Use in threads without a
+// profile, and a menu: Edit, Restart, Show log, Client secret, Sign out, Remove), Sign in or Set key where it needs them, Allow for a command
 // someone else added, and Add server. Then From profiles: the servers of profiles seen here, to sign in to, not to edit.
 // Everything goes through the extension's actions on that machine (`target`), so a remote one works the same.
 import { useEffect, useState, type ReactNode } from 'react'
 import { SignInFlow, useDispatch, useValue, type SettingsComponentProps } from '@superego/app/ui'
 import { Button, CaretRightIcon, Dialog, DotsThreeIcon, IconButton, Menu, SegmentedControl, Select, Switch, TextField } from '@superego/ui'
 import { CATALOG } from './catalog.ts'
-import { checkText, commandLine, configOf, DOT, emptyForm, formOf, nameFrom, needs, splitCommandLine, stateText, type ServerForm } from './describe.ts'
+import { authMenu, checkText, commandLine, configOf, DOT, emptyForm, formOf, nameFrom, needs, secretLabel, secretPlaceholder, signInDetails, signInText, splitCommandLine, stateText, type ServerForm } from './describe.ts'
 import { ACTIONS, type CheckResult, type LogResult, type SectionData, type ServerInfo, SERVERS_VALUE } from './shared.ts'
 
 type Act = (id: string, params: Record<string, unknown>) => Promise<unknown>
@@ -23,15 +23,15 @@ export function ServersSection({ target, section }: SettingsComponentProps) {
   const act = useAct(target)
   const [editing, setEditing] = useState<ServerInfo | 'new'>()
   const [log, setLog] = useState<ServerInfo>()
-  // A sign-in going on under a row, or its secrets' fields open: each new one drawn afresh (`n`).
-  const [helping, setHelping] = useState<{ id: string; n: number }>()
+  // A sign-in going on under a row, or its secrets' fields open (`secrets`: an OAuth server's): each drawn afresh (`n`).
+  const [helping, setHelping] = useState<{ id: string; n: number; secrets?: boolean }>()
   const [error, setError] = useState<string>()
   const run = (id: string, params: Record<string, unknown>) => { setError(undefined); void act(id, params).catch((e: Error) => setError(e.message)) }
-  const help = (server: ServerInfo) => setHelping((was) => ({ id: server.id, n: (was?.n ?? 0) + 1 }))
+  const help = (server: ServerInfo, secrets?: boolean) => setHelping((was) => ({ id: server.id, n: (was?.n ?? 0) + 1, ...(secrets ? { secrets } : {}) }))
   if (!data) return null
   const row = (server: ServerInfo, own: boolean) => (
-    <ServerRow key={server.id} server={server} own={own} run={run} onEdit={() => setEditing(server)} onLog={() => setLog(server)} onHelp={() => help(server)}>
-      {helping?.id === server.id && <SignIn key={helping.n} machine={target} server={server} onClose={() => setHelping(undefined)} />}
+    <ServerRow key={server.id} server={server} own={own} run={run} onEdit={() => setEditing(server)} onLog={() => setLog(server)} onHelp={(secrets) => help(server, secrets)}>
+      {helping?.id === server.id && <SignIn key={helping.n} machine={target} server={server} secrets={helping.secrets} onClose={() => setHelping(undefined)} />}
     </ServerRow>
   )
   return (
@@ -63,11 +63,14 @@ export function ServerRow({ server, own, run, onEdit, onLog, onHelp, children }:
   run(id: string, params: Record<string, unknown>): void
   onEdit(): void
   onLog(): void
-  onHelp(): void
+  /** Sign in or Set key; `secrets`: an OAuth server's client secret. */
+  onHelp(secrets?: boolean): void
   children?: ReactNode
 }) {
   const { name, config, state } = server
   const how = needs(server)
+  const menu = authMenu(server)
+  const signedIn = signInText(server.oauth)
   const from = server.from.type === 'profile' ? server.from : undefined
   return (
     <div className={`mcp-server is-${state}`}>
@@ -80,6 +83,7 @@ export function ServerRow({ server, own, run, onEdit, onLog, onHelp, children }:
           </div>
           <div className="settings__note mcp-server__runs">
             <code title={config.command ? commandLine(config) : config.url}>{server.runs}</code> · {stateText(server)}
+            {signedIn && <> · <span title={signInDetails(server.oauth)}>{signedIn}</span></>}
             {from && <> · profile <b>{from.profile}</b>{from.scope === 'project' ? ` in ${from.project.replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, '~')}` : ''}</>}
           </div>
           {/* Why it failed, or the last error of one that runs: what the state and the buttons don't say already. */}
@@ -87,8 +91,8 @@ export function ServerRow({ server, own, run, onEdit, onLog, onHelp, children }:
           {server.skipped?.length ? <div className="settings__note">Skipped: {server.skipped.map((s) => `${s.tool} (${s.why})`).join(', ')}</div> : null}
         </div>
         <div className="provider__actions">
-          {how === 'sign-in' && <Button variant="primary" onClick={onHelp}>Sign in</Button>}
-          {how === 'key' && <Button variant="primary" onClick={onHelp}>Set key</Button>}
+          {how === 'sign-in' && <Button variant="primary" onClick={() => onHelp()}>Sign in</Button>}
+          {how === 'key' && <Button variant="primary" onClick={() => onHelp()}>Set key</Button>}
           {state === 'failed' && <Button onClick={onLog}>Show log</Button>}
           {own && (
             <span className="mcp-server__unprofiled" title="Use in threads without a profile">
@@ -102,8 +106,9 @@ export function ServerRow({ server, own, run, onEdit, onLog, onHelp, children }:
               {own && <Menu.Item onClick={() => run(ACTIONS.set, { name, enabled: config.enabled === false })}>{config.enabled === false ? 'Switch on' : 'Switch off'}</Menu.Item>}
               <Menu.Item disabled={state === 'off' || state === 'waiting'} onClick={() => run(ACTIONS.restart, { server: server.id })}>Restart</Menu.Item>
               <Menu.Item onClick={onLog}>Show log</Menu.Item>
-              {config.auth && <Menu.Item onClick={onHelp}>{config.auth.type === 'oauth' ? 'Sign in again…' : 'Set key…'}</Menu.Item>}
-              {config.auth && <Menu.Item onClick={() => run(ACTIONS.logout, { server: server.id })}>Sign out</Menu.Item>}
+              {menu.help && <Menu.Item onClick={() => onHelp()}>{menu.help}</Menu.Item>}
+              {menu.clientSecret && <Menu.Item onClick={() => onHelp(true)}>Client secret…</Menu.Item>}
+              {menu.signOut && <Menu.Item onClick={() => run(ACTIONS.logout, { server: server.id })}>Sign out</Menu.Item>}
               {own && <><Menu.Separator /><Menu.Item onClick={() => run(ACTIONS.remove, { name })}>Remove</Menu.Item></>}
             </Menu.Popup>
           </Menu.Root>
@@ -125,11 +130,14 @@ export function ServerRow({ server, own, run, onEdit, onLog, onHelp, children }:
   )
 }
 
-/** Signing in to a server: its OAuth flow (`mcp-servers.login`), or its key's and secret env values' fields. */
-export function SignIn({ machine, server, onClose }: { machine: string; server: ServerInfo; onClose(): void }) {
+/**
+ * Signing in to a server: its OAuth flow (`mcp-servers.login`), or its secrets' fields (a key, secret env values, or an
+ * OAuth client's secret: `secrets`).
+ */
+export function SignIn({ machine, server, secrets, onClose }: { machine: string; server: ServerInfo; secrets?: boolean; onClose(): void }) {
   const act = useAct(machine)
   const name = server.config.title ?? server.name
-  if (server.config.auth?.type === 'oauth') {
+  if (server.config.auth?.type === 'oauth' && !secrets) {
     return <SignInFlow machine={machine} title={`Signing in to ${name}`} start={() => act(ACTIONS.login, { server: server.id }) as Promise<{ flow: string }>} onClose={onClose} />
   }
   return <Secrets machine={machine} server={server} onClose={onClose} />
@@ -156,8 +164,8 @@ function Secrets({ machine, server, onClose }: { machine: string; server: Server
     }}>
       {server.secrets.map((secret, index) => (
         <label key={secret.name} className="mcp-secrets__field">
-          <span>{secret.name === 'key' ? 'API key' : <code>{secret.name}</code>}</span>
-          <TextField name={secret.name} type="password" autoFocus={index === 0} autoComplete="off" placeholder={secret.set ? 'Set (type to replace)' : ''}
+          <span>{secretLabel(secret.name) ?? <code>{secret.name}</code>}</span>
+          <TextField name={secret.name} type="password" autoFocus={index === 0} autoComplete="off" placeholder={secretPlaceholder(secret)}
             onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }} />
         </label>
       ))}

@@ -11,7 +11,7 @@ import { DescribedCall, describeRun, registerToolRows } from '../../../packages/
 import mcpServers, { Chip, NoticeFor } from '../src/ui.tsx'
 import { ServerRow } from '../src/settings.tsx'
 import { CATALOG, fromCatalog } from '../src/catalog.ts'
-import { checkText, commandLine, configOf, emptyForm, formOf, interrupted, nameFrom, splitCommandLine, stateText, toolOf } from '../src/describe.ts'
+import { ago, authMenu, checkText, commandLine, configOf, emptyForm, formOf, interrupted, nameFrom, secretLabel, secretPlaceholder, signInDetails, signInText, splitCommandLine, stateText, toolOf } from '../src/describe.ts'
 import { ADD_PARAMS, type ServerInfo, type ThreadServers } from '../src/shared.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
@@ -65,6 +65,45 @@ describe('words', () => {
     expect(checkText(info({ state: 'stopped', listedAt: 1 }))).toEqual({ ok: true, text: 'Connected · 23 tools' })
     expect(checkText(info({ state: 'needs-sign-in' }))).toEqual({ ok: true, text: 'Saved; sign in to connect' })
     expect(checkText(info({ state: 'failed', error: 'exited with code 1' }))).toEqual({ ok: false, text: 'exited with code 1' })
+  })
+
+  it("says how an OAuth server's sign-in stands, briefly, and the rest for its tooltip", () => {
+    const now = 10 * 86_400_000
+    expect(ago(now - 30_000, now)).toBe('just now')
+    expect(ago(now - 5 * 60_000, now)).toBe('5 min ago')
+    expect(ago(now - 3 * 3_600_000, now)).toBe('3 h ago')
+    expect(ago(now - 3 * 86_400_000, now)).toBe('3 days ago')
+    expect(signInText(undefined, now)).toBeUndefined()
+    expect(signInText({ signedIn: false }, now)).toBeUndefined()
+    expect(signInText({ signedIn: true }, now)).toBe('Signed in')
+    expect(signInText({ signedIn: true, since: now - 3 * 86_400_000, expires: now + 40 * 60_000, refreshes: true }, now)).toBe('Signed in 3 days ago')
+    // Close to running out, and nothing to renew it with.
+    expect(signInText({ signedIn: true, since: now - 3_600_000, expires: now + 40 * 60_000 }, now)).toBe('Signed in, expires in 40 min')
+    expect(signInText({ signedIn: true, since: now - 3_600_000, expires: now + 5 * 86_400_000 }, now)).toBe('Signed in 1 h ago')
+    expect(signInText({ signedIn: true, since: now - 3_600_000, expires: now - 1 }, now)).toBe('Sign-in expired')
+    const date = (ms: number) => `@${ms}`
+    expect(signInDetails({ signedIn: true, since: 1, expires: 2, refreshes: true, scope: 'read write' }, date)).toBe('Signed in @1\nRenews on its own\nScope: read write')
+    expect(signInDetails({ signedIn: true, since: 1, expires: 2 }, date)).toBe('Signed in @1\nExpires @2')
+    expect(signInDetails({ signedIn: true }, date)).toBeUndefined()
+    expect(signInDetails({ signedIn: false, since: 1 }, date)).toBeUndefined()
+  })
+
+  it("labels a server's secrets, an OAuth client's as optional, and offers what fits in its menu", () => {
+    expect(secretLabel('key')).toBe('API key')
+    expect(secretLabel('client-secret')).toBe('Client secret')
+    expect(secretLabel('SENTRY_ACCESS_TOKEN')).toBeUndefined()
+    expect(secretPlaceholder({ name: 'client-secret', set: false, optional: true })).toBe('Optional')
+    expect(secretPlaceholder({ name: 'client-secret', set: true, optional: true })).toBe('Set (type to replace)')
+    expect(secretPlaceholder({ name: 'key', set: false })).toBe('')
+    const oauth = info().config
+    const hand = { ...oauth, auth: { type: 'oauth' as const, clientId: 'abc' } }
+    expect(authMenu({ config: oauth, secrets: [], oauth: { signedIn: false } })).toEqual({ help: 'Sign in…', clientSecret: false, signOut: false })
+    expect(authMenu({ config: oauth, secrets: [], oauth: { signedIn: true } })).toEqual({ clientSecret: false, signOut: true })
+    expect(authMenu({ config: hand, secrets: [{ name: 'client-secret', set: true, optional: true }], oauth: { signedIn: false } }))
+      .toEqual({ help: 'Sign in…', clientSecret: true, signOut: true })
+    expect(authMenu({ config: { url: 'https://x', auth: { type: 'api-key' } }, secrets: [{ name: 'key', set: false }] })).toEqual({ help: 'Set key…', clientSecret: false, signOut: false })
+    expect(authMenu({ config: { url: 'https://x', auth: { type: 'api-key' } }, secrets: [{ name: 'key', set: true }] })).toEqual({ help: 'Set key…', clientSecret: false, signOut: true })
+    expect(authMenu({ config: { command: 'x' }, secrets: [] })).toEqual({ clientSecret: false, signOut: false })
   })
 
   it('reads a call by its name, and an interrupted one by its result', () => {
@@ -200,6 +239,9 @@ describe('what it draws', () => {
     expect(running).toContain('Running · 23 tools')
     expect(running).toContain('aria-label="Use in threads without a profile"')
     expect(running).not.toContain('Sign in')
+    const signedIn = rowOf(info({ oauth: { signedIn: true, since: Date.now() - 3 * 86_400_000, refreshes: true, scope: 'read' } }))
+    expect(signedIn).toContain('Running · 23 tools · <span title="Signed in ')
+    expect(signedIn).toContain('Scope: read">Signed in 3 days ago</span>')
     expect(rowOf(info({ state: 'needs-sign-in' }))).toContain('>Sign in<')
     expect(rowOf(info({ state: 'needs-sign-in', config: { command: 'npx', auth: { type: 'env', names: ['T'] } }, secrets: [{ name: 'T', set: false }] }))).toContain('>Set key<')
     const failed = rowOf(info({ state: 'failed', error: 'exited with code 1: boom' }))

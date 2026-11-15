@@ -720,6 +720,9 @@ Depends on Lanes 1 and 2.
   keeps the registration. `remove` forgets the tokens too, unless another server signs in to the same resource.
 - **Settings:** `ServerInfo.oauth` (`SignInInfo`): `signedIn`, `since`, `expires`, `refreshes`, `scope`. Never a token.
   "Signed in as …" isn't there: tokens don't carry who, and nothing more is fetched to find out.
+  The row says "Signed in 3 days ago" ("Signed in, expires in 40 min" when the token won't renew and runs out within a
+  day), with when, renewal and scope in its tooltip. Its menu has Sign in… when not signed in, Sign out when it is, and
+  Client secret… (the field marked Optional) for a client registered by hand.
 - **The command line:** `superego mcp-servers login <name> [-m machine]` prints the page and asks for the address on
   stdin. It answers the prompt itself when the redirect is caught: by the machine's daemon, or for `-m` by its own
   listener on this computer (`catchRedirect`, from `@superego/mcp-servers/loopback`), as the desktop app does.

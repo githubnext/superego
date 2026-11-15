@@ -1,6 +1,6 @@
 // What the UI half says of servers and calls, in words: a server's state and command line, a name for a new one, and
 // whose tool a call is. Plain functions, apart from React, so they're tested as such.
-import { SERVER_NAME, TOOL_PREFIX, type ServerConfig, type ServerInfo, type ServerState } from './shared.ts'
+import { CLIENT_SECRET, SERVER_NAME, TOOL_PREFIX, type SecretInfo, type ServerConfig, type ServerInfo, type ServerState, type SignInInfo } from './shared.ts'
 
 /** An argument as a shell would need it: bare when it can be, else in single quotes. */
 export const quote = (arg: string) => /^[\w@%+=:,./-]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`
@@ -95,6 +95,63 @@ export const DOT: Record<ServerState, string> = {
 export function needs(server: Pick<ServerInfo, 'state' | 'config' | 'secrets'>): 'sign-in' | 'key' | undefined {
   if (server.state !== 'needs-sign-in') return undefined
   return server.config.auth?.type === 'oauth' ? 'sign-in' : 'key'
+}
+
+const MINUTE = 60_000
+const HOUR = 60 * MINUTE
+const DAY = 24 * HOUR
+
+/** A span in short: "5 min", "3 h", "12 days", as Settings says it elsewhere. */
+function span(ms: number): string {
+  if (ms < HOUR) return `${Math.max(1, Math.floor(ms / MINUTE))} min`
+  if (ms < 2 * DAY) return `${Math.floor(ms / HOUR)} h`
+  return `${Math.floor(ms / DAY)} days`
+}
+
+/** "just now", "5 min ago", "3 h ago", "12 days ago". */
+export const ago = (time: number, now = Date.now()) => now - time < MINUTE ? 'just now' : `${span(now - time)} ago`
+
+/**
+ * An OAuth server's sign-in, in a few words, once it's signed in: "Signed in 3 days ago"; "Signed in, expires in 40 min"
+ * when its token won't renew and runs out within a day. Nothing when it isn't signed in: its state says so.
+ */
+export function signInText(oauth: SignInInfo | undefined, now = Date.now()): string | undefined {
+  if (!oauth?.signedIn) return undefined
+  if (oauth.expires !== undefined && !oauth.refreshes) {
+    const left = oauth.expires - now
+    if (left <= 0) return 'Sign-in expired'
+    if (left < DAY) return `Signed in, expires in ${span(left)}`
+  }
+  return oauth.since !== undefined ? `Signed in ${ago(oauth.since, now)}` : 'Signed in'
+}
+
+/** The rest of it, a line each, for the tooltip: when, whether it renews (or when it runs out), the scope granted. */
+export function signInDetails(oauth: SignInInfo | undefined, date = (ms: number) => new Date(ms).toLocaleString()): string | undefined {
+  if (!oauth?.signedIn) return undefined
+  return [
+    oauth.since !== undefined && `Signed in ${date(oauth.since)}`,
+    oauth.refreshes ? 'Renews on its own' : oauth.expires !== undefined && `Expires ${date(oauth.expires)}`,
+    oauth.scope && `Scope: ${oauth.scope}`,
+  ].filter(Boolean).join('\n') || undefined
+}
+
+/** A secret's field label: "API key", "Client secret"; none for an env var's, drawn as its name. */
+export const secretLabel = (name: string) => name === 'key' ? 'API key' : name === CLIENT_SECRET ? 'Client secret' : undefined
+
+/** A secret's field placeholder: whether it's set, else whether it may be left blank. */
+export const secretPlaceholder = (secret: SecretInfo) => secret.set ? 'Set (type to replace)' : secret.optional ? 'Optional' : ''
+
+/**
+ * What a row's menu offers for signing in: Sign in (OAuth, not signed in) or Set key; Client secret, for an OAuth
+ * client registered by hand; and Sign out, when there's something to forget.
+ */
+export function authMenu(server: Pick<ServerInfo, 'config' | 'secrets' | 'oauth'>): { help?: 'Sign in…' | 'Set key…'; clientSecret: boolean; signOut: boolean } {
+  const auth = server.config.auth
+  if (!auth) return { clientSecret: false, signOut: false }
+  const anySet = server.secrets.some((s) => s.set)
+  if (auth.type !== 'oauth') return { help: 'Set key…', clientSecret: false, signOut: anySet }
+  const signedIn = server.oauth?.signedIn === true
+  return { ...(signedIn ? {} : { help: 'Sign in…' as const }), clientSecret: server.secrets.some((s) => s.name === CLIENT_SECRET), signOut: signedIn || anySet }
 }
 
 /** A call's server and tool, from its name (`mcp__linear__create_issue`), until its result says them exactly. */
