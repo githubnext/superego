@@ -254,7 +254,7 @@ it('gives a thread the servers its profile names, unprofiled ones to threads wit
   // Outside agents can't reach any of it.
   expect(api.actions('mcp').filter((a: ActionInfo) => a.id.startsWith('mcp-servers.'))).toEqual([])
   expect(api.actions('cli').filter((a: ActionInfo) => a.id.startsWith('mcp-servers.')).map((a) => a.id).sort()).toEqual([
-    'mcp-servers.add', 'mcp-servers.allow', 'mcp-servers.edit', 'mcp-servers.log', 'mcp-servers.logout', 'mcp-servers.remove', 'mcp-servers.restart', 'mcp-servers.set', 'mcp-servers.set-secret',
+    'mcp-servers.add', 'mcp-servers.allow', 'mcp-servers.edit', 'mcp-servers.log', 'mcp-servers.login', 'mcp-servers.logout', 'mcp-servers.remove', 'mcp-servers.restart', 'mcp-servers.set', 'mcp-servers.set-secret',
   ])
   await close()
 })

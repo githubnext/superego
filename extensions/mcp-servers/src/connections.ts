@@ -8,9 +8,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { StreamableHTTPClientTransport, StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import type { OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js'
 import { ReadBuffer, serializeMessage } from '@modelcontextprotocol/sdk/shared/stdio.js'
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import type { FetchLike, Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import {
   CallToolResultSchema, ListRootsRequestSchema, LoggingMessageNotificationSchema, ToolListChangedNotificationSchema,
   type CallToolResult, type JSONRPCMessage, type Progress, type Tool,
@@ -143,8 +142,8 @@ export type Launch = {
   /** A thread's own server: the thread's folder, its one root. Shared servers are told of none. */
   root?: string
   log: ServerLog
-  /** Lane 3: OAuth for a URL server signing in with it. */
-  oauth?: OAuthClientProvider
+  /** A URL server signing in with OAuth: a `fetch` that carries its token, refreshed as needed (oauth.ts). */
+  fetch?: FetchLike
   /** Its tools changed (`notifications/tools/list_changed`). */
   onToolsChanged?(): void
   /** It closed: a command exited (`exit`), or an HTTP session ended. Not called for `close()`. */
@@ -226,7 +225,7 @@ export class Connection {
     const url = new URL(config.url!)
     const requestInit = { headers: headersOf(config, launch.secrets) }
     log.write(`connecting: ${url.href}`)
-    const streamable = new StreamableHTTPClientTransport(url, { requestInit, ...(launch.oauth ? { authProvider: launch.oauth } : {}) })
+    const streamable = new StreamableHTTPClientTransport(url, { requestInit, ...(launch.fetch ? { fetch: launch.fetch } : {}) })
     let client = make()
     let connection = new Connection(launch, client, streamable)
     try {
@@ -236,7 +235,7 @@ export class Connection {
       // An older server speaks SSE: it refuses the POST that Streamable HTTP starts with.
       if (!(error instanceof StreamableHTTPError) || !error.code || error.code < 400 || error.code >= 500 || error.code === 401 || error.code === 403) throw connection.#failure(error)
       log.write(`no Streamable HTTP (${error.code}); trying SSE`)
-      const sse = new SSEClientTransport(url, { requestInit, ...(launch.oauth ? { authProvider: launch.oauth } : {}) })
+      const sse = new SSEClientTransport(url, { requestInit, ...(launch.fetch ? { fetch: launch.fetch } : {}) })
       client = make()
       connection = new Connection(launch, client, sse)
       try {

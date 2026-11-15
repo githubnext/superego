@@ -1,12 +1,13 @@
 // `superego mcp-servers`, against a daemon started from this checkout (with the bundled mcp-servers): a server added
 // (through `do`, as Ego's tool or a script would), listed, its secret set from stdin, its log read, and restarted; and
-// a thread's servers in `superego extensions --thread`.
-import { execFile } from 'node:child_process'
+// a thread's servers in `superego extensions --thread`; and an OAuth sign-in (`login`, the address pasted), and `logout`.
+import { execFile, spawn } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, expect, it } from 'vitest'
+import { serveOAuth } from '../../../extensions/mcp-servers/test/auth-server.ts'
 
 const CLI = fileURLToPath(new URL('../../../app/bin/superego.ts', import.meta.url))
 const FIXTURE = fileURLToPath(new URL('../../../extensions/mcp-servers/test/fixture.ts', import.meta.url))
@@ -60,4 +61,28 @@ it('lists, keys, logs and restarts MCP servers, and says which a thread has', { 
   const thread = await json(['create', home, '-p', 'hi'])
   await until(async () => (await json(['threads']))[0]?.status.state === 'done')
   expect(await superego(['extensions', '--thread', thread.id])).toMatch(/MCP servers \(as of its last turn\):\n\s+fx: this machine's, \w+, 6 tools/)
+})
+
+it('signs in to an OAuth server, the address pasted, and signs out', { timeout: 120_000 }, async () => {
+  const as = await serveOAuth()
+  try {
+    await superego(['do', 'mcp-servers.add', '--params', JSON.stringify({ name: 'remote', server: { url: as.url, auth: { type: 'oauth' } } })])
+    expect(await superego(['mcp-servers'])).toMatch(/remote: remote needs you to sign in/)
+    const child = spawn(process.execPath, [CLI, 'mcp-servers', 'login', 'remote'], { env: env(), stdio: ['pipe', 'pipe', 'pipe'] })
+    let out = ''
+    let err = ''
+    child.stdout.on('data', (chunk) => { out += chunk })
+    child.stderr.on('data', (chunk) => { err += chunk })
+    const exited = new Promise<number | null>((resolve) => child.on('exit', resolve))
+    await until(async () => /paste its whole address here/.test(err))
+    const page = /Open this page to sign in to remote:\n\n {2}(\S+)/.exec(err)![1]!
+    child.stdin.write(`${await as.approve(page)}\n`)
+    expect(await exited).toBe(0)
+    expect(out).toMatch(/Signed in to remote on This computer\.\n^remote\s+127\.0\.0\.1:\d+\/mcp\s+(stopped|running) · 6 tools$/m)
+    expect(as.seen.grants).toEqual([expect.objectContaining({ grant: 'code', resource: as.url })])
+    expect(await superego(['mcp-servers', 'logout', 'remote'])).toMatch(/Signed out of remote on This computer/)
+    expect(await json(['mcp-servers'])).toMatchObject({ servers: expect.arrayContaining([expect.objectContaining({ name: 'remote', state: 'needs-sign-in', oauth: { signedIn: false } })]) })
+  } finally {
+    await as.close()
+  }
 })

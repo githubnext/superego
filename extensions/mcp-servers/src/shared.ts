@@ -67,7 +67,7 @@ export const SERVER_CONFIG = obj({
  * - `waiting`: a command waiting for the user's Allow
  * - `stopped`: not running now (its tools are still offered, from the cache); started when a thread needs it
  * - `starting`, `running`
- * - `needs-sign-in`: no key or secret value set yet (or, lane 3, signed out or refused)
+ * - `needs-sign-in`: no key or secret value set yet, not signed in (OAuth), or its key or sign-in was refused
  * - `failed`: crashed three times within a minute, or couldn't start; until Restart or a change to its config
  */
 export type ServerState = 'off' | 'waiting' | 'stopped' | 'starting' | 'running' | 'needs-sign-in' | 'failed'
@@ -83,6 +83,23 @@ export type SecretInfo = {
   /** `key` for an API key; the variable's name for `auth: { type: 'env' }`. */
   name: string
   set: boolean
+  /** It may be set, and needn't be: `client-secret`, for an OAuth client registered by hand. */
+  optional?: true
+}
+
+/** The secret of an OAuth client registered by hand (`auth.clientId`), when it has one: set with `set-secret`. */
+export const CLIENT_SECRET = 'client-secret'
+
+/** How an OAuth server's sign-in stands (never its tokens). */
+export type SignInInfo = {
+  signedIn: boolean
+  /** When it was signed in (ms). */
+  since?: number
+  /** When its access token runs out (ms), when the server said; it's refreshed before then when `refreshes`. */
+  expires?: number
+  refreshes?: true
+  /** The scope it was granted, as the server said. */
+  scope?: string
 }
 
 /** A server, as Settings → MCP servers draws it. */
@@ -104,8 +121,10 @@ export type ServerInfo = {
   deferred?: boolean
   /** Tools it lists that can't be offered (a schema that won't go), and why. */
   skipped?: { tool: string; why: string }[]
-  /** The secrets its `auth` needs (API key or env), each set or not. */
+  /** The secrets its `auth` needs (API key or env), each set or not; and `client-secret`, which it may have. */
   secrets: SecretInfo[]
+  /** For `auth: { type: 'oauth' }`: whether it's signed in, since when, until when. */
+  oauth?: SignInInfo
   /** What it says it is (`initialize`), once it ran. */
   server?: { name: string; version?: string }
   /** When its tools were last listed (ms). */
@@ -181,11 +200,14 @@ export const ACTIONS = {
   set: 'mcp-servers.set',
   allow: 'mcp-servers.allow',
   setSecret: 'mcp-servers.set-secret',
-  /** Forget its stored secrets (and, lane 3, its OAuth tokens). */
+  /** Forget its stored secrets, and its OAuth tokens. */
   logout: 'mcp-servers.logout',
   restart: 'mcp-servers.restart',
   log: 'mcp-servers.log',
-  /** Lane 3: sign in with OAuth, through `superego.auth.flow`. */
+  /**
+   * Sign in with OAuth (`{ server }`), in the browser: answers `{ flow }` at once, which says how it goes (`auth.event`;
+   * draw it with `SignInFlow`). Done once it's signed in and connected.
+   */
   login: 'mcp-servers.login',
 } as const
 

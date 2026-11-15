@@ -16,6 +16,7 @@ import { authorTypes, newExtension, testExtension } from './extensions.ts'
 import { setUpProfileTypes, type ProfileTypes } from '@superego/client/author-types'
 import { formatReport } from './inspect.ts'
 import { skill } from './skill.ts'
+import { catchRedirect } from '@superego/mcp-servers/loopback'
 import { ACTIONS as MCP_ACTIONS, SECTION as MCP_SECTION, type CheckResult as McpCheck, type LogResult as McpLog, type SectionData as McpServers, type ServerInfo as McpServer, type ThreadServers } from '@superego/mcp-servers/shared'
 import {
   checkIdentity, collectProfileUi, controlPath, filesOf, hashProfileUi, loginArgs, machineHub, MachineStore, masterAlive, openLocal, openMachine, routeOf, runUpdate, UiAllowStore, updateScript,
@@ -24,7 +25,7 @@ import {
 // The daemon itself only for `daemon run`: loading it costs every other command most of its start.
 import { appEnv, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
 import {
-  AUTH_REJECTED, compareVersions, driftPhrase, FEATURES, PROTOCOL_VERSION, RpcError, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
+  AUTH_REJECTED, compareVersions, driftPhrase, FEATURES, PROTOCOL_VERSION, RpcError, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Notifications, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ProfileRef, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
@@ -122,6 +123,8 @@ Usage:
   ${app.id} mcp-servers restart <name> Stop it, forget that it failed, and start it again to check it
   ${app.id} mcp-servers set-secret <name> [VAR]
                                 Store its API key, or the value of a secret env var (prompted, or read from stdin)
+  ${app.id} mcp-servers login <name>   Sign in to it with OAuth: open the page it prints, or paste where the browser ends up
+  ${app.id} mcp-servers logout <name>  Forget its secrets and its sign-in
 
   ${app.id} daemon [status|stop]       Run this computer's daemon in the foreground, or check on it
   ${app.id} daemon restart [--now]     Restart it onto the installed code; --now interrupts working agents
@@ -898,7 +901,76 @@ async function mcpServersCommand(sub: string | undefined, rest: string[], values
     const checked = await run<McpCheck>(MCP_ACTIONS.setSecret, { server: id, values: { [which]: value } })
     return print(checked.server, () => { table([line(checked.server)]); if (checked.server.error) console.log(checked.server.error) })
   }
+  if (sub === 'login') {
+    const id = await idOf(name)
+    const { transport } = await connect(machine)
+    try { await mcpLogin(transport, machine, id, name) } finally { transport.close() }
+    const snapshot = await on(machine, (call) => call('settings.watch', {}).then((r) => r.value))
+    const data = snapshot.sections.find((s) => s.id === MCP_SECTION)?.data as McpServers | undefined
+    const server = [...data?.servers ?? [], ...data?.profiles ?? []].find((s) => s.id === id)
+    return print(server ?? { id }, () => { console.log(`Signed in to ${name} on ${machine.label}.`); if (server) table([line(server)]) })
+  }
+  if (sub === 'logout') {
+    const { server } = await run<McpCheck>(MCP_ACTIONS.logout, { server: await idOf(name) })
+    return print(server, () => console.log(`Signed out of ${name} on ${machine.label}.`))
+  }
   throw new RpcError('usage', `Unknown: ${app.id} mcp-servers ${sub}. See ${app.id} --help`)
+}
+
+/**
+ * Sign in to a server with OAuth from here (`mcp-servers.login`): the page to open is printed, and the address the
+ * browser ends up on is caught by the machine's daemon (this computer's), by this command (another machine's: it
+ * listens where the browser is sent, as the desktop app does), or pasted.
+ */
+async function mcpLogin(transport: Transport, machine: Machine, server: string, name: string) {
+  let flow: string | undefined
+  const early: Notifications['auth.event'][] = []
+  let hear = (_event: AuthEvent) => {}
+  transport.peer.on('auth.event', (params: Notifications['auth.event']) => {
+    if (flow === undefined) early.push(params)
+    else if (params.flow === flow) hear(params.event)
+  })
+  const stop = new AbortController()
+  let rl: ReturnType<typeof createInterface> | undefined
+  /** The prompt waiting for the address, and the address once this command caught it. */
+  let waiting: { id: string; asked: AbortController } | undefined
+  let caught: string | undefined
+  const respond = (prompt: string, value: string) => transport.peer.call('auth.respond', { flow: flow!, prompt, value }).catch((error: Error) => console.error(error.message))
+  const ended = new Promise<AuthEvent>((resolve) => {
+    hear = (event) => {
+      if (event.type === 'auth_url') {
+        console.error(`Open this page to sign in to ${name}:\n\n  ${event.url}\n`)
+        if (machine.config && event.callback) {
+          void catchRedirect(event.callback, stop.signal).then((url) => {
+            caught = url
+            if (waiting) respond(waiting.id, url)
+          }, () => {})
+        }
+      } else if (event.type === 'prompt' && event.prompt.type === 'manual_code') {
+        if (caught) return void respond(event.id, caught)
+        waiting = { id: event.id, asked: new AbortController() }
+        const { id, asked } = waiting
+        rl ??= createInterface({ input: process.stdin, output: process.stderr })
+        rl.question(`${event.prompt.message}\n> `, { signal: asked.signal }, (value) => { if (value.trim()) respond(id, value.trim()) })
+      } else if (event.type === 'prompt_closed') {
+        if (waiting?.id === event.id) { waiting.asked.abort(); waiting = undefined }
+      } else if (event.type === 'progress' || event.type === 'info') {
+        console.error(event.message)
+      } else if (event.type === 'done' || event.type === 'failed') {
+        resolve(event)
+      }
+    }
+  })
+  try {
+    ({ flow } = await transport.peer.call('action.run', { id: MCP_ACTIONS.login, params: { server }, exposure: 'cli' }) as { flow: string })
+    for (const params of early.splice(0)) if (params.flow === flow) hear(params.event)
+    const end = await ended
+    if (end.type === 'failed') throw new RpcError('auth_failed', end.message)
+  } finally {
+    stop.abort()
+    waiting?.asked.abort()
+    rl?.close()
+  }
 }
 
 /**

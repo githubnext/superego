@@ -1,6 +1,6 @@
 # MCP servers for Superego's agents
 
-A design, 2026-11-15. Lanes 1 (the core seams), 2 (the runtime) and 4 (UI, Ego and docs) are built; lane 3 (OAuth) is not yet. It covers how agents in Superego threads use MCP servers: what the
+A design, 2026-11-15. All four lanes are built: 1 (the core seams), 2 (the runtime), 3 (OAuth), and 4 (UI, Ego and docs). It covers how agents in Superego threads use MCP servers: what the
 user sets up, where it lives, how it runs, and four lanes to build it in.
 
 ## Two MCPs, named apart
@@ -109,16 +109,19 @@ serialised, replaced atomically. It's a sibling file, not `auth.json` itself:
 
 - pi-ai owns `auth.json`'s shape and reads every entry as a provider. An MCP token there would get into provider
   listings, and its rewrites would set off provider re-checks and retries (`rereadCredentials`).
-- MCP needs more than a credential per server: a client registration, discovery state, and a PKCE verifier while a
-  sign-in is going on.
+- MCP needs more than a credential per server: tokens with what refreshing them takes, and a client registration per
+  authorization server.
 
 Entries:
 
 | Key | What |
 |---|---|
-| `server:<id>` | an API key, or the values of `auth.names` |
-| `oauth:<resource>` | tokens (access, refresh, expiry, scope), keyed by the server's canonical URL (its OAuth resource) |
-| `client:<issuer> <redirect>` | the client registration with that authorization server (from DCR), and its discovery state |
+| `server:<id>` | an API key, or the values of `auth.names`; `client-secret` for a client registered by hand |
+| `oauth:<resource>` | tokens (access, refresh, expiry, scope), keyed by the server's canonical URL (its OAuth resource), with what refreshing them takes: the discovery state, the client they were issued to, the `resource` asked for |
+| `client:<issuer> <redirect>` | the client registration with that authorization server (from DCR) |
+
+A sign-in's PKCE verifier and `state` stay in the daemon's memory while its flow runs: a flow doesn't outlive the
+daemon.
 
 `<id>` is the server's name for one of the machine's own, and `<profile dir>#<name>` for one a project defines. A
 project's server therefore never gets a key the user typed for a machine server of the same name. OAuth tokens are
@@ -367,7 +370,7 @@ committed.
   over the store:
   - *Discovery.* A `401` with `WWW-Authenticate` leads to the server's protected resource metadata (RFC 9728), and
     from there to its authorization server's metadata (RFC 8414, or OpenID discovery). The discovery state is kept
-    with the client registration.
+    with the tokens, for refreshing them.
   - *Registration*, in this order:
     1. a `clientId` in the config, with an optional secret in the store, for servers that want a registered app
     2. dynamic client registration (RFC 7591), registered once per authorization server and redirect URI, and
@@ -612,7 +615,7 @@ Depends on Lane 1.
   `SectionData`) is kept current as servers start, stop and fail. Draw from the value.
 - **Actions:** `add`, `edit` (whole config; `rename`), `remove`, `set` (`unprofiled` or `enabled` alone), `allow`,
   `set-secret` (`{ server, values }`, `null` forgets one), `logout` (forgets the server's stored secrets),
-  `restart`, `log`. `login` is named in `ACTIONS` for lane 3. Add, edit, allow, set-secret and restart start the
+  `restart`, `log`; and lane 3's `login`. Add, edit, allow, set-secret and restart start the
   server to check it (up to 30s) and answer `{ server: ServerInfo }`. All are `['ui', 'cli']`; none `mcp`.
 - **Who added a command isn't guessed.** An action can't tell Ego from the window (`context.source` is a name either
   way), so `add` and `edit` take `allowed: false`, and Ego's tool must pass it for a command. An edit without it keeps
@@ -680,6 +683,58 @@ Files:
 
 Depends on Lanes 1 and 2.
 
+**Built.** As above, except:
+- **Tokens reach the server through a `fetch`, not the SDK's `authProvider`.** `Launch.oauth` became `Launch.fetch`:
+  `OAuthAccess.fetchFor(resource)` (oauth.ts) puts the access token on every request to the resource's origin, and only
+  there. It refreshes a token with under a minute left first, under the store's lock: it reads without the lock, and
+  takes it only to refresh, checking again inside, so a call that waited finds the token another call refreshed. A
+  `401` refreshes once (only if the stored token is still the one refused) and tries again. The SDK's own `401`
+  handling would refresh outside the lock, and would start a browser sign-in from inside a tool call; neither is
+  wanted. So the SDK's `auth()` and an `OAuthClientProvider` (`SignInProvider`) are used for signing in only.
+- **Signing in** (`signIn`): the server is first asked without a token, and its `WWW-Authenticate` gives the
+  resource metadata URL and scope. Then `auth()` runs discovery, registration, PKCE and `state`. The scope is the
+  config's `scopes`, else what the `401` asked for, else the metadata's `scopes_supported`. `resource` is what the
+  protected resource metadata names, sent as written, as the SDK does: a server without that metadata (an older spec)
+  gets none. A sign-in always goes to the browser; tokens kept from before aren't refreshed by it. Registration is a
+  configured `clientId`, with its secret as the optional secret `client-secret` (`set-secret`; `SecretInfo.optional`),
+  else DCR, kept under `client:<issuer> <redirect>`. It's used again on the next sign-in, and dropped and made again
+  when the authorization server says `invalid_client`. An authorization server without registration fails the flow
+  with "give the server a client id (auth.clientId)".
+- **The redirect** is `http://127.0.0.1:<port>/mcp/callback`, with `port` the new `AppConfig.callbackPort` (Superego's
+  is 1456, also the default). `loopback.ts`'s `Callbacks` is one listener for the daemon while any flow waits. It
+  hands each flow its redirect by `state`, and answers `Connection: close` so a kept-alive browser connection can't
+  outlive it. A taken port is logged and left: pasting, or the app's catcher, is how then. The flow emits `auth_url`
+  (with `callback`), then a `manual_code` prompt, closed through its `signal` when the listener catches the redirect.
+  A pasted address (or its query) with the wrong `state` asks again and says why. An `error=` from the authorization
+  server fails the flow with it.
+- **`mcp-servers.login {server}`** answers `{ flow }`. The flow is done once the tokens are kept, every server
+  signing in to the same resource has been restarted on them (`secretsChanged`), and the server was checked. If the
+  server still refuses, the flow fails with why.
+- **Not signed in** is `needs-sign-in` without trying the server: `missing` is `['sign-in']` for an OAuth server with
+  no `oauth:<resource>`. A refresh refused (`invalid_grant`, `invalid_client`, `unauthorized_client`) forgets the
+  tokens, and a `401` that a refresh doesn't fix (or no refresh token) is an `UnauthorizedError`. Either way the
+  runtime sets `refused` with the reason, so a call answers "fx needs you to sign in again (Settings → MCP servers):
+  refreshing its sign-in was refused (…)". When the authorization server can't be reached, a token with time left is
+  still used.
+- **`logout`** forgets `server:<id>` and the `oauth:<resource>` tokens, and restarts every server sharing them. It
+  keeps the registration. `remove` forgets the tokens too, unless another server signs in to the same resource.
+- **Settings:** `ServerInfo.oauth` (`SignInInfo`): `signedIn`, `since`, `expires`, `refreshes`, `scope`. Never a token.
+  "Signed in as …" isn't there: tokens don't carry who, and nothing more is fetched to find out.
+- **The command line:** `superego mcp-servers login <name> [-m machine]` prints the page and asks for the address on
+  stdin. It answers the prompt itself when the redirect is caught: by the machine's daemon, or for `-m` by its own
+  listener on this computer (`catchRedirect`, from `@superego/mcp-servers/loopback`), as the desktop app does.
+  `superego mcp-servers logout <name>` signs out.
+- Tests: `test/oauth.test.ts` against `test/auth-server.ts` (the SDK's `mcpAuthRouter` and `requireBearerAuth` over an
+  in-memory provider whose refresh tokens work once), with the daemon's own flow and a remote machine's (its port
+  taken, answered by `auth.respond`). The CLI's `login` (the address pasted) and `logout` are in
+  `packages/cli/test/mcp-servers.test.ts`.
+- **Tried against real servers.** End to end against the MCP project's example server
+  (`https://example-server.modelcontextprotocol.io/mcp`, whose mock identity provider approves anyone): discovery,
+  DCR, PKCE, the listener catching the redirect, the code exchanged, tools listed and called over the token, and a
+  refresh. Linear, Sentry and Notion (`mcp.linear.app`, `mcp.sentry.dev`, `mcp.notion.com`) go as far as the
+  sign-in page: discovery, DCR, and an authorize URL with S256, `state`, `scope` and `resource`. Signing in there
+  takes an account.
+
 ### Lane 4: UI, Ego and docs
 
 Owns everything the user sees and reads:
@@ -699,7 +754,7 @@ Files:
 - `app/test/look.sh` shots of the section and a transcript with MCP rows
 
 Depends on Lane 1 (prefix rows, `SignInFlow`) and on Lane 2's `shared.ts`. It runs alongside Lane 3, with OAuth
-rows working once Lane 3 lands.
+rows working once Lane 3 lands (they do).
 
 **Built.** As above, except:
 - `extensions/mcp-servers/src/settings.tsx` holds the section and its dialogs, `describe.ts` the words and the Add

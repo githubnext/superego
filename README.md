@@ -200,8 +200,8 @@ with its state and why any were left out), and a server needing sign-in puts a n
 servers up too ("connect Linear"), but never takes a key in chat, and a command it adds waits for **Allow** in
 Settings, which shows the whole command line. Outside agents can't set servers up, through Ego or otherwise; a thread
 one starts (where *Can start threads* is on) uses its profile's servers like any other. From a shell:
-`superego mcp-servers` (how each stands), `logs <name>`, `restart <name>`, `set-secret <name>` (from stdin). Design:
-[docs/mcp.md](docs/mcp.md).
+`superego mcp-servers` (how each stands), `logs <name>`, `restart <name>`, `set-secret <name>` (from stdin),
+`login <name>` (OAuth: open the page it prints), `logout <name>`. Design: [docs/mcp.md](docs/mcp.md).
 
 ssh runs without a terminal (`BatchMode`) and rides one shared ControlMaster connection per target under the data dir. A host
 that wants a password, a code or a hardware key shows as "needs login": `superego machines login <machine>` (or Log in in

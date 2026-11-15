@@ -2,7 +2,7 @@
 // of a config without running it: whether it'll do, what it runs in a line, and the secrets it needs.
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { RpcError } from '@superego/protocol'
-import { SERVER_NAME, type ServerConfig, type ServersFile } from './shared.ts'
+import { CLIENT_SECRET, SERVER_NAME, type ServerConfig, type ServersFile } from './shared.ts'
 
 /** The file, read whole and written whole (atomically), one change at a time. */
 export class ConfigFile {
@@ -82,6 +82,11 @@ export function secretNames(config: ServerConfig): string[] {
   if (config.auth?.type === 'api-key') return ['key']
   if (config.auth?.type === 'env') return [...config.auth.names]
   return []
+}
+
+/** Secrets it may have but doesn't need: `client-secret` for an OAuth client registered by hand (`auth.clientId`). */
+export function optionalSecretNames(config: ServerConfig): string[] {
+  return config.auth?.type === 'oauth' && config.auth.clientId ? [CLIENT_SECRET] : []
 }
 
 /** What makes a server run differently: a change to any of it restarts it. Not its title or how threads use it. */

@@ -17,6 +17,11 @@ export type AppConfig = {
   url?: string
   /** macOS bundle identifier, reverse-DNS (`com.githubnext.superego`). Running from source it gets `.dev` added. */
   bundleId?: string
+  /**
+   * The loopback port sign-in pages send the browser back to, `http://127.0.0.1:<port>/…`: MCP servers' OAuth
+   * (`/mcp/callback`). Fixed per app, since an authorization server registers the address. Unset: 1456.
+   */
+  callbackPort?: number
 }
 
 export function defineApp(config: AppConfig): AppConfig {

@@ -6,6 +6,7 @@
   "exports": {
     "./daemon": "./src/daemon.ts",
     "./shared": "./src/shared.ts",
+    "./loopback": "./src/loopback.ts",
     "./catalog": "./src/catalog.ts",
     "./ui": "./src/ui.tsx"
   },

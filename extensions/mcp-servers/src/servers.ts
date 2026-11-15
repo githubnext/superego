@@ -13,8 +13,9 @@ import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
 import type { DaemonApi, AgentPart } from '@superego/daemon'
 import type { ProfileRef } from '@superego/daemon/sdk'
 import { RpcError } from '@superego/protocol'
-import { configProblem, profileConfig, runKey, runsOf, secretNames } from './config.ts'
+import { configProblem, optionalSecretNames, profileConfig, runKey, runsOf, secretNames } from './config.ts'
 import { Connection, ServerLog, sessionGone, type Exit, type Listing } from './connections.ts'
+import { OAuthAccess, resourceOf } from './oauth.ts'
 import { contentOf } from './results.ts'
 import { DEFAULTS, type CallDetails, type ServerConfig, type ServerInfo, type ServerSource, type ServerState } from './shared.ts'
 import { serverKey, type SecretStore, type ServerSecrets } from './store.ts'
@@ -60,7 +61,7 @@ export type Server = {
   deferred: boolean
   slots: Map<string, Slot>
   log: ServerLog
-  /** Secrets its auth needs that aren't set. */
+  /** Secrets its auth needs that aren't set; for OAuth, `sign-in` when it isn't signed in. */
   missing: string[]
   /** Why its config won't do (a hand-edited file, a profile's server), if it won't. */
   invalid?: string
@@ -89,6 +90,9 @@ const CRASH_WINDOW = 60_000
 const hash = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 8)
 const text = (value: string) => [{ type: 'text' as const, text: value }]
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error)
+/** An OAuth server's resource (its canonical URL): where its tokens are kept. */
+export const oauthResource = (config: ServerConfig) => config.auth?.type === 'oauth' && config.url ? safeResource(config.url) : undefined
+const safeResource = (url: string) => { try { return resourceOf(url) } catch { return undefined } }
 /** The folder that holds a profile's `.superego` (or, for the user's, the data folder): its servers run there. */
 export const projectOf = (ref: ProfileRef) => dirname(dirname(dirname(ref.dir)))
 
@@ -100,6 +104,8 @@ export class Runtime {
   readonly working = new Set<string>()
   #api: DaemonApi
   #store: SecretStore
+  /** OAuth servers' tokens, as their sessions use them. */
+  readonly oauth: OAuthAccess
   #idle: number
   #firstListing: number
   #changed: () => void
@@ -109,6 +115,7 @@ export class Runtime {
   constructor(api: DaemonApi, store: SecretStore, changed: () => void, options: RuntimeOptions = {}) {
     this.#api = api
     this.#store = store
+    this.oauth = new OAuthAccess(store)
     this.#changed = changed
     this.#idle = options.idle ?? 10 * 60_000
     this.#firstListing = options.firstListing ?? 4_000
@@ -229,6 +236,8 @@ export class Runtime {
   }
 
   async #missing(server: Server) {
+    const resource = oauthResource(server.config)
+    if (resource) return await this.oauth.signedIn(resource) ? [] : ['sign-in']
     const stored = await this.#store.read<ServerSecrets>(serverKey(server.id)) ?? {}
     return secretNames(server.config).filter((name) => !stored[name])
   }
@@ -243,6 +252,7 @@ export class Runtime {
     if (server.invalid) return { state: 'failed', why: `${name}'s config won't do: ${server.invalid}` }
     if (config.enabled === false) return { state: 'off', why: `${name} is switched off (Settings → MCP servers)` }
     if (config.allowed === false && config.command) return { state: 'waiting', why: `${name} hasn't been allowed to run yet: the user allows it in Settings → MCP servers` }
+    if (server.missing.length && oauthResource(config)) return { state: 'needs-sign-in', why: `${name} needs you to sign in (Settings → MCP servers → ${name} → Sign in)` }
     if (server.missing.length) {
       const what = config.auth?.type === 'api-key' ? 'its API key' : `its secret${server.missing.length > 1 ? 's' : ''} ${server.missing.join(', ')}`
       return { state: 'needs-sign-in', why: `${name} needs ${what} set first (Settings → MCP servers → ${name})` }
@@ -266,6 +276,7 @@ export class Runtime {
 
   async info(server: Server): Promise<ServerInfo> {
     const stored = await this.secretsOf(server)
+    const resource = oauthResource(server.config)
     const state = this.stateOf(server)
     const error = this.#gate(server)?.why ?? server.error
     const running = [...server.slots.values()].filter((s) => s.thread && s.connection && !s.connection.closed).length
@@ -277,7 +288,23 @@ export class Runtime {
       ...(server.skipped.length ? { skipped: server.skipped } : {}),
       ...(server.listing?.server ? { server: server.listing.server } : {}),
       ...((server.config.lifetime ?? DEFAULTS.lifetime) === 'thread' ? { running } : {}),
-      secrets: secretNames(server.config).map((name) => ({ name, set: Boolean(stored[name]) })),
+      secrets: [
+        ...secretNames(server.config).map((name) => ({ name, set: Boolean(stored[name]) })),
+        ...optionalSecretNames(server.config).map((name) => ({ name, set: Boolean(stored[name]), optional: true as const })),
+      ],
+      ...(resource ? { oauth: await this.#signIn(resource) } : {}),
+    }
+  }
+
+  /** How an OAuth server's sign-in stands, for Settings: never its tokens. */
+  async #signIn(resource: string): Promise<NonNullable<ServerInfo['oauth']>> {
+    const signedIn = await this.oauth.signedIn(resource)
+    if (!signedIn) return { signedIn: false }
+    return {
+      signedIn: true, since: signedIn.at,
+      ...(signedIn.expiresAt ? { expires: signedIn.expiresAt } : {}),
+      ...(signedIn.tokens.refresh_token ? { refreshes: true } : {}),
+      ...(signedIn.tokens.scope ? { scope: signedIn.tokens.scope } : {}),
     }
   }
 
@@ -382,7 +409,10 @@ export class Runtime {
   #refused(server: Server, error: unknown) {
     const status = (error as { code?: unknown })?.code
     if (!(error instanceof UnauthorizedError) && !(status === 401 && /HTTP|401|nauthori/i.test(errorText(error)))) return false
-    server.refused = server.config.auth?.type === 'api-key' ? 'its API key was refused' : server.config.auth?.type === 'oauth' ? 'it asks for an OAuth sign-in' : 'it asks to be signed in to'
+    const type = server.config.auth?.type
+    server.refused = type === 'api-key' ? 'its API key was refused'
+      : type === 'oauth' ? (error instanceof UnauthorizedError ? error.message : 'it turned its sign-in away')
+        : 'it asks to be signed in to'
     server.log.write(`refused: ${server.refused}`)
     this.stopAll(server)
     this.#changed()
@@ -409,9 +439,10 @@ export class Runtime {
     let mine: Connection | undefined
     const starting = slot.starting = (async () => {
       const root = slot.thread ? (await this.#api.threads.get(slot.thread)).cwd : undefined
+      const resource = oauthResource(server.config)
       const connection = await Connection.open({
         name: server.name, config: server.config, cwd: root ?? server.cwd, secrets: await this.secretsOf(server), log: server.log,
-        ...(root ? { root } : {}),
+        ...(root ? { root } : {}), ...(resource ? { fetch: this.oauth.fetchFor(resource) } : {}),
         onToolsChanged: () => this.#relistSoon(server, slot),
         onClose: (exit) => { if (mine) this.#crashed(server, slot, mine, exit) },
       })
@@ -579,6 +610,7 @@ export class Runtime {
   async restart(server: Server, wait?: number) {
     this.#forget(server)
     delete server.refused
+    server.missing = await this.#missing(server)
     for (const slot of [...server.slots.values()]) await this.#close(server, slot)
     await this.check(server, wait)
   }

@@ -9,12 +9,15 @@ import { join } from 'node:path'
 import { defineExtension, hook, section, ToolTask, type Extension } from '@earendil-works/pi-durable'
 import { createToolSearchTool } from '@earendil-works/pi-durable/tool-search'
 import { defineAction, defineDaemonExtension, type AgentPartsThread, type DaemonExtension } from '@superego/daemon'
+import type { DaemonContext } from '@superego/daemon/sdk'
 import { RpcError, type Json } from '@superego/protocol'
-import { checkConfig, ConfigFile, secretNames } from './config.ts'
+import { checkConfig, ConfigFile, optionalSecretNames, secretNames } from './config.ts'
+import { Callbacks, DEFAULT_CALLBACK_PORT, redirectOf } from './loopback.ts'
+import { signIn } from './oauth.ts'
 import { interruptedText } from './results.ts'
-import { Runtime, type RuntimeOptions, type Server } from './servers.ts'
+import { oauthResource, Runtime, type RuntimeOptions, type Server } from './servers.ts'
 import {
-  about, ACTIONS, ADD_PARAMS, DEFAULTS, EDIT_PARAMS, INTERRUPTED, LOG_PARAMS, NAME_PARAMS, SECTION, SERVER_PARAMS, SERVERS_VALUE, SET_PARAMS, SET_SECRET_PARAMS, TOOL_PREFIX,
+  about, ACTIONS, ADD_PARAMS, CLIENT_SECRET, DEFAULTS, EDIT_PARAMS, INTERRUPTED, LOG_PARAMS, NAME_PARAMS, SECTION, SERVER_PARAMS, SERVERS_VALUE, SET_PARAMS, SET_SECRET_PARAMS, TOOL_PREFIX,
   type CheckResult, type LeftOutReason, type LogResult, type SectionData, type ServerConfig, type ServerInfo, type ThreadServers,
 } from './shared.ts'
 import { SecretStore, serverKey, type ServerSecrets } from './store.ts'
@@ -55,6 +58,10 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
       }
       const runtime = new Runtime(superego, store, changed, options)
       const checkWait = options.checkWait ?? 30_000
+      // Where sign-in pages send the browser back to: fixed per app, as authorization servers register it.
+      const callbackPort = superego.app.callbackPort ?? DEFAULT_CALLBACK_PORT
+      const callbacks = new Callbacks(callbackPort, (line) => console.error(`mcp-servers: ${line}`))
+      superego.signal.addEventListener('abort', () => callbacks.close(), { once: true })
 
       async function sectionData(): Promise<SectionData> {
         const all = [...runtime.servers.values()]
@@ -232,6 +239,8 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         if (!server) throw new RpcError('not_found', `No MCP server ${id} on this machine`, { hint: 'superego mcp-servers lists them.' })
         return server
       }
+      /** The servers that sign in to `resource` (tokens are kept by it, so they share a sign-in). */
+      const sharing = (resource: string) => [...runtime.servers.values()].filter((s) => oauthResource(s.config) === resource)
       const machineServer = (name: string) => {
         const server = runtime.machine(name)
         if (!server) throw new RpcError('not_found', `No MCP server ${name} on this machine`, { hint: 'superego mcp-servers lists them.' })
@@ -297,9 +306,11 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         description: 'Take a server off this machine, with its stored secrets.',
         params: NAME_PARAMS,
         async run({ name }) {
-          machineServer(name)
+          const resource = oauthResource(machineServer(name).config)
           await save((servers) => { delete servers[name] })
           await store.delete(serverKey(name))
+          // Its sign-in too, unless another server signs in to the same place.
+          if (resource && !sharing(resource).length) await runtime.oauth.forget(resource)
           return null
         },
       }))
@@ -333,7 +344,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         params: SET_SECRET_PARAMS,
         async run({ server: id, values }) {
           const server = byId(id)
-          const names = secretNames(server.config)
+          const names = [...secretNames(server.config), ...optionalSecretNames(server.config)]
           const unknown = Object.keys(values).filter((name) => !names.includes(name))
           if (unknown.length) {
             throw new RpcError('invalid', `${server.name} takes no secret ${unknown.join(', ')}`, { hint: names.length ? `It takes: ${names.join(', ')}.` : 'Its auth asks for none.' })
@@ -349,13 +360,42 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
       }))
       superego.action(defineAction({
         id: ACTIONS.logout, title: 'Sign out of an MCP server', expose: ['ui', 'cli'],
-        description: "Forget a server's stored secrets on this machine.",
+        description: "Forget a server's stored secrets on this machine, and its OAuth sign-in (every server that signs in to the same URL is signed out with it).",
         params: SERVER_PARAMS,
         async run({ server: id }) {
           const server = byId(id)
           await store.delete(serverKey(id))
-          await runtime.secretsChanged(server)
+          const resource = oauthResource(server.config)
+          if (resource) await runtime.oauth.forget(resource)
+          for (const each of new Set([server, ...resource ? sharing(resource) : []])) await runtime.secretsChanged(each)
           return { server: await runtime.info(server) as ServerInfo & Json }
+        },
+      }))
+      superego.action(defineAction({
+        id: ACTIONS.login, title: 'Sign in to an MCP server', expose: ['ui', 'cli'],
+        description: 'Sign in to a URL server with OAuth, in the browser. Answers { flow } at once; the flow (auth.event) says how it goes, and is done once the server is signed in and connected.',
+        params: SERVER_PARAMS,
+        run({ server: id }, context: DaemonContext) {
+          const server = byId(id)
+          const resource = oauthResource(server.config)
+          if (!resource || server.config.auth?.type !== 'oauth') {
+            throw new RpcError('invalid', `${server.name} doesn't sign in with OAuth`, { hint: server.config.command ? 'A command takes secret env vars: set-secret.' : 'Give it auth: { type: "oauth" } first (edit).' })
+          }
+          const { scopes, clientId } = server.config.auth
+          return superego.auth.flow(context, async (flow) => {
+            const clientSecret = clientId ? (await runtime.secretsOf(server))[CLIENT_SECRET] : undefined
+            await signIn({
+              store, name: server.name, url: server.config.url!, redirect: redirectOf(callbackPort), callbacks,
+              clientName: superego.app.name, ...(superego.app.url ? { clientUri: superego.app.url } : {}),
+              ...(scopes?.length ? { scopes } : {}), ...(clientId ? { clientId } : {}), ...(clientSecret ? { clientSecret } : {}),
+            }, flow)
+            server.log.write('signed in')
+            // Every server signing in to the same place starts again with it; this one is checked before it's done.
+            for (const each of new Set([server, ...sharing(resource)])) await runtime.secretsChanged(each)
+            flow.emit({ type: 'progress', message: `Connecting to ${server.name}…` })
+            await runtime.check(server, checkWait)
+            if (runtime.stateOf(server) === 'needs-sign-in') throw new Error(runtime.whyNot(server) ?? `${server.name} turned the sign-in away`)
+          })
         },
       }))
       superego.action(defineAction({
