@@ -8,7 +8,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
 import { Channels, defineApp, PROTOCOL_VERSION, type Hello, type Pane, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { terminalExtension } from '../src/daemon.ts'
-import { IO, RESIZE } from '../src/shared.ts'
+import { Framing, IO, RESIZE } from '../src/shared.ts'
 
 const app = defineApp({ name: 'test', id: 'termtest' })
 let dir: string
@@ -43,21 +43,12 @@ async function open() {
 async function attach(peer: RpcPeer, thread: string, pane: string, size = { cols: 80, rows: 24 }) {
   const channel = await Channels.of(peer).open(IO, { thread, pane, ...size })
   const decoder = new TextDecoder()
-  let header = ''
-  let replay = -1
+  const framing = new Framing()
   const seen = { replayed: '', live: '' }
   channel.onData((bytes) => {
-    let at = 0
-    while (replay < 0 && at < bytes.length) {
-      const c = bytes[at++]!
-      if (c === 0x0a) replay = Number(header)
-      else header += String.fromCharCode(c)
-    }
-    const rest = bytes.subarray(at)
-    const back = Math.min(replay, rest.length)
-    seen.replayed += decoder.decode(rest.subarray(0, back))
-    replay -= back
-    seen.live += decoder.decode(rest.subarray(back))
+    const { replayed, live } = framing.split(bytes)
+    seen.replayed += decoder.decode(replayed)
+    seen.live += decoder.decode(live)
   })
   return {
     seen, channel,

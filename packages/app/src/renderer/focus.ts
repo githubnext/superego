@@ -1,8 +1,8 @@
 // Focus, after Tremolo: always visible (the region holding it wears the ring, see app.css), and in one place the app
 // and the keyboard agree on. The window is a row of regions, left to right: the sidebar, the thread, each pane beside
 // it, the aside. ⌘⌥← and ⌘⌥→ move between them, ⌃I goes to the prompt (esc leaves it for the thread); going to a region focuses
-// what's used there (the selected thread in the sidebar, the thread's transcript, an editor's text, a page, else the
-// pane itself). Focus moving into a pane makes it the thread's focused pane; a pane brought forward from the keyboard
+// what's used there (the selected thread in the sidebar, the thread's transcript, an editor's text, what a pane marks
+// `data-focus` (a terminal), a page, else the pane itself). Focus moving into a pane makes it the thread's focused pane; a pane brought forward from the keyboard
 // (⌃Tab, the navigator) takes the focus with it.
 
 /** The regions, left to right, as the window shows them now. */
@@ -24,6 +24,7 @@ function target(region: HTMLElement): HTMLElement | null {
     ?? region.querySelector<HTMLElement>('.thread__scroll')
     ?? region.querySelector<HTMLElement>('.file-editor__rendered')
     ?? region.querySelector<HTMLElement>('.cm-content')
+    ?? region.querySelector<HTMLElement>('[data-focus]')
     ?? region.querySelector<HTMLElement>('.superego-list-item[tabindex]')
     ?? region.querySelector<HTMLElement>('.panes__body iframe')
     ?? (region.tabIndex >= 0 || region.hasAttribute('tabindex') ? region : null)

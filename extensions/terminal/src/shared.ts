@@ -22,3 +22,24 @@ export const about = {
   name: 'terminal', version: '1.0.0', api: '^1.5', title: 'Terminal',
   description: 'A shell beside a thread (⌃`), run by the machine so it outlives the window.',
 } satisfies ExtensionAbout
+
+/** A window's reading of a terminal's channel: its header, then what's replayed, then what's live. */
+export class Framing {
+  #header = ''
+  #left = -1
+  /** Whether what's replayed has all come. */
+  get live() { return this.#left === 0 }
+  /** `bytes` as they came, apart: what's replayed and what's live (either may be empty). */
+  split(bytes: Uint8Array): { replayed: Uint8Array; live: Uint8Array } {
+    let at = 0
+    while (this.#left < 0 && at < bytes.length) {
+      const c = bytes[at++]!
+      if (c === 0x0a) this.#left = Number(this.#header) || 0
+      else this.#header += String.fromCharCode(c)
+    }
+    const rest = bytes.subarray(at)
+    const back = Math.max(0, Math.min(this.#left, rest.length))
+    if (this.#left > 0) this.#left -= back
+    return { replayed: rest.subarray(0, back), live: rest.subarray(back) }
+  }
+}

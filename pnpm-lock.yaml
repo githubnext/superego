@@ -213,6 +213,9 @@ importers:
 
   app:
     dependencies:
+      '@lydell/node-pty':
+        specifier: 1.2.0-beta.18
+        version: 1.2.0-beta.18
       '@superego/app':
         specifier: workspace:*
         version: link:../packages/app
@@ -264,6 +267,9 @@ importers:
       '@superego/tasks':
         specifier: workspace:*
         version: link:../extensions/tasks
+      '@superego/terminal':
+        specifier: workspace:*
+        version: link:../extensions/terminal
       '@superego/threads':
         specifier: workspace:*
         version: link:../extensions/threads

@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-title" content="Superego" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; manifest-src 'self'; frame-src 'self' http: https: superego-artifact:" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; connect-src 'self' data:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; manifest-src 'self'; frame-src 'self' http: https: superego-artifact:" />
   </head>
   <body>
     <div id="root"></div>

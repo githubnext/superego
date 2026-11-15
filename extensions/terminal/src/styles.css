@@ -1,0 +1,34 @@
+/* The terminal: edge to edge in its pane, on the sheet, in the monospace face a little larger than code's. Its colours
+   are read from here (see theme.ts): the text, the sheet, and the accent for the cursor. */
+.terminal-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--superego-bg);
+}
+.terminal-pane__screen {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 4px 6px 10px;
+  overflow: hidden;
+  color: var(--superego-text);
+  background: var(--superego-bg);
+  text-decoration-color: var(--superego-accent);
+  font-family: var(--superego-mono);
+  font-size: calc(var(--superego-text-mono) + 1px);
+}
+.terminal-pane__screen:focus,
+.terminal-pane__screen:focus-visible { outline: none; }
+.terminal-pane__problem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--superego-border);
+  color: var(--superego-muted);
+  font-size: var(--superego-text-sm);
+}
+.terminal-pane__problem span { flex: 1; }
+.terminal-note { display: inline-flex; align-items: center; margin-left: 4px; }

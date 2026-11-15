@@ -16,6 +16,7 @@ import replyUi from '@superego/reply-ui/daemon'
 import skills from '@superego/skills/daemon'
 import suggestions from '@superego/suggestions/daemon'
 import tasks from '@superego/tasks/daemon'
+import terminal from '@superego/terminal/daemon'
 import threadReports from '@superego/threads/reports'
 import threadTools from '@superego/threads/daemon'
 import webPanes from '@superego/web-panes/daemon'
@@ -28,7 +29,7 @@ const webRoot = [join(import.meta.dirname, '../renderer'), join(import.meta.dirn
 // The daemon links to the machines this computer reaches (the same list the app and `superego machines` keep), to serve
 // them to browsers and agents (see the daemon's relay.ts).
 serveDaemon({
-  app, defaultCwd: homedir(), extensions: [worktrees, askUser, ego, files, git, images, paneUi, replyUi, skills, suggestions, tasks, threadTools, threadReports, webPanes], ...(webRoot ? { webRoot } : {}),
+  app, defaultCwd: homedir(), extensions: [worktrees, askUser, ego, files, git, images, paneUi, replyUi, skills, suggestions, tasks, terminal, threadTools, threadReports, webPanes], ...(webRoot ? { webRoot } : {}),
   reach: (dataDir, self) => machineHub({ app, dataDir, self }),
 }).catch((error) => {
   console.error(error)
