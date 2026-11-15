@@ -100,6 +100,15 @@ describe('the layout file', () => {
     expect(readFileSync(file.path, 'utf8')).toContain('// Views')
   })
 
+  it("keeps the window's change when the file is read as it's written", async () => {
+    // A look at the file (as the watcher has every so often) in the middle of writing it.
+    const set = settings.set('app.layout', { place: { 'threads.details': 'pane' } })
+    await new Promise((resolve) => setImmediate(resolve))
+    await Promise.all([set, file.read()])
+    expect(layout()).toBe('{"place":{"threads.details":"pane"}}')
+    expect(readFileSync(file.path, 'utf8')).toContain('"threads.details": "pane"')
+  })
+
   it('leaves a file that does not read as typed when the window changes the layout', async () => {
     writeFileSync(file.path, '{ "place": { "threads.details": "asi')
     await wait(() => file.problem?.startsWith('Not JSON') ?? false)

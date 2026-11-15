@@ -140,13 +140,25 @@ export class LayoutFile {
   #watcher: { close(): void } | undefined
   #timer: ReturnType<typeof setTimeout> | undefined
   #changed: () => void
+  /** What's being done with the file now: reads and writes go one at a time (see `#serially`). */
+  #queue: Promise<void> = Promise.resolve()
 
   constructor(dir: string, settings: SettingsRegistry, changed: () => void = () => {}) {
     this.path = join(dir, LAYOUT_FILE)
     this.#settings = settings
     this.#changed = changed
     this.#applied = text(settings.get(LAYOUT))
-    settings.onChange(() => { if (text(settings.get(LAYOUT)) !== this.#applied) void this.#write() })
+    settings.onChange(() => { if (text(settings.get(LAYOUT)) !== this.#applied) void this.#serially(() => this.#write()) })
+  }
+
+  /**
+   * Run `work` once what's before it is done. A read in the middle of a write would find the file as it was before it,
+   * take that for a newer save, and undo the window's change.
+   */
+  #serially(work: () => Promise<void>): Promise<void> {
+    const done = this.#queue.then(work)
+    this.#queue = done.catch(() => {})
+    return done
   }
 
   /** Read the file in (written first if there's none), and from then on as it's saved. */
@@ -164,7 +176,11 @@ export class LayoutFile {
    * The views a window declares (`undefined`: it closed): every window's are listed at the file's head, and what
    * layouts in it are checked against.
    */
-  async setViews(window: number, views: LayoutView[] | undefined): Promise<void> {
+  setViews(window: number, views: LayoutView[] | undefined): Promise<void> {
+    return this.#serially(() => this.#setViews(window, views))
+  }
+
+  async #setViews(window: number, views: LayoutView[] | undefined): Promise<void> {
     if (views) this.#windows.set(window, views)
     else this.#windows.delete(window)
     const all = new Map<string, LayoutView>()
@@ -180,7 +196,11 @@ export class LayoutFile {
   }
 
   /** The file as saved now: applied when it reads as a layout, noted when not. */
-  async read(): Promise<void> {
+  read(): Promise<void> {
+    return this.#serially(() => this.#read())
+  }
+
+  async #read(): Promise<void> {
     const current = await readFile(this.path, 'utf8').catch(() => undefined)
     if (current === undefined) return this.#write()
     if (current === this.#text) return
@@ -211,7 +231,7 @@ export class LayoutFile {
     if (this.problem) return
     const current = await readFile(this.path, 'utf8').catch(() => undefined)
     // Saved since it was last read (and not yet heard of): what's saved is the newer change.
-    if (current !== undefined && current !== this.#text) return this.read()
+    if (current !== undefined && current !== this.#text) return this.#read()
     const layout = this.#settings.get(LAYOUT)
     this.#applied = text(layout)
     await this.#save(layoutHead(this.#views) + '\n' + withComments(current === undefined ? '' : bodyOf(current), layout))
