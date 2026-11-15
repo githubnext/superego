@@ -684,12 +684,14 @@ if (phase === 'first') {
   await until(`Boolean(document.querySelector('.app__sidebar'))`, 'sidebar back after stepping')
   await run(`window.superego.call('local', 'thread.archive', { id: '${offshoot}' })`)
   await until(`![...document.querySelectorAll('.threads-session .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('offshoot'))`, 'offshoot put away')
-  // Superego's own agent: from the rail, one thread in Superego's data folder, the same one each time, in no list.
-  const elsewhereItem = `[...document.querySelectorAll('.superego-list-item')].find((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere'))`
+  // Superego's own agent: from the rail, one thread in Superego's data folder, the same one each time, in no list. Its
+  // tab is in front while it shows, alone: no sidebar. The Threads tab goes back to the listed thread it left.
+  const threadsTab = `document.querySelector('.app__rail [aria-label="Threads"]')`
   await run(`document.querySelector('.ego__button').click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'Ego' && document.querySelector('.ego__button').classList.contains('is-on') && !document.querySelector('.app__sidebar .superego-list-item.is-selected')`, 'Ego opened, not in the sidebar')
+  await until(`!document.querySelector('.app__sidebar') && !${threadsTab}.classList.contains('is-on') && document.querySelector('.app__rail').dataset.tab === 'thread'`, 'Ego alone, its tab in front')
   const ego = await run(`window.superego.call('local', 'ego.ask', {}).then((t) => t.id)`)
-  await run(`${elsewhereItem}.click()`)
+  await run(`${threadsTab}.click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'away from it')
   await run(`document.querySelector('.ego__button').click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'Ego'`, 'the same one again')
@@ -706,8 +708,9 @@ if (phase === 'first') {
   await shot('ego-outside')
   await run(`document.querySelector('.ego__clear').click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'Ego' && !document.querySelector('.msg--user')`, 'Ego cleared')
-  await run(`${elsewhereItem}.click()`)
+  await run(`${threadsTab}.click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'back to a listed thread')
+  await until(`Boolean(document.querySelector('.app__sidebar .superego-list-item.is-selected')) && ${threadsTab}.classList.contains('is-on')`, 'the sidebar back, Threads in front')
   // Focus: ⌘⌥← from the prompt goes to the sidebar, on the selected thread; ↓ moves along it; ⌘⌥→ comes back to the
   // thread itself; ⌃I goes to the prompt from anywhere, and esc leaves it for the thread. Wherever it is, it's drawn.
   // A hidden window's page never has focus, so :focus styles never apply; emulate it (nothing reaches the screen).
@@ -863,13 +866,16 @@ if (phase === 'first') {
   await until(`${keysOf('threads.rail')}?.textContent.includes('typing stays typing')`, 'a bare key is refused')
   await key('R', ['meta', 'shift'])
   await until(`/⇧R|Shift\\+R/.test(${keysOf('threads.rail')}?.textContent ?? '') && Boolean(document.querySelector('[data-action="threads.rail"] button.keymap__reset'))`, 'new shortcut recorded')
+  // (Settings covers the sidebar: what the action sets, not the dots, says it ran.)
+  const folded = `window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['threads.view'] === 'rail')`
   await key('\\')
   await new Promise((resolve) => setTimeout(resolve, 300))
-  if (await run(`Boolean(document.querySelector('.threads-rail'))`)) { await fail('the old shortcut still runs the action'); throw new Error('failed') }
+  if (await run(folded)) { await fail('the old shortcut still runs the action'); throw new Error('failed') }
   await key('R', ['meta', 'shift'])
-  await until(`Boolean(document.querySelector('.threads-rail'))`, 'the new shortcut runs the action')
+  await until(folded, 'the new shortcut runs the action')
+  await new Promise((resolve) => setTimeout(resolve, 300)) // the window hears of it after the daemon says so
   await key('R', ['meta', 'shift'])
-  await until(`!document.querySelector('.threads-rail')`, 'and back')
+  await until(`${folded}.then((on) => !on)`, 'and back')
   await run(`window.superego.call('app', 'app.settings.set', { key: 'app.keys', value: { 'threads.rail': 'mod+shift+r', 'threads.details': 'mod+shift+r' } })`)
   await until(`document.querySelector('[data-action="threads.rail"] .keymap__clash')?.textContent.includes('Toggle thread details')`, 'clash shown')
   await run(`document.querySelector('.keymap').scrollIntoView()`)
@@ -930,9 +936,9 @@ if (phase === 'first') {
   await run(`document.querySelector('[data-key="app.font.mono"] .superego-font-picker__button').click()`, true)
   await until(`document.activeElement?.placeholder === 'Search fonts'`, 'picker focused')
   await escape()
-  await until(`!document.querySelector('.superego-font-picker__popover') && Boolean(document.querySelector('.superego-dialog.settings'))`, 'picker closed, dialog open')
+  await until(`!document.querySelector('.superego-font-picker__popover') && Boolean(document.querySelector('.settings'))`, 'picker closed, dialog open')
   await escape()
-  await until(`!document.querySelector('.superego-dialog.settings')`, 'dialog closed by Escape')
+  await until(`!document.querySelector('.settings')`, 'dialog closed by Escape')
   // Web access: the daemon serves the same window to a browser, to devices paired from Settings → Web access.
   const port = 20000 + Math.floor(Math.random() * 20000)
   await run(`window.superego.call('local', 'settings.set', { key: 'web.port', value: ${port} })`)
@@ -963,7 +969,7 @@ if (phase === 'first') {
   if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/web-devices.png`, (await main.webContents.capturePage()).toPNG())
   main.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' })
   main.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' })
-  await inDesktop(`!document.querySelector('.superego-dialog.settings')`, 'Settings closed')
+  await inDesktop(`!document.querySelector('.settings')`, 'Settings closed')
   await inBrowser(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'threads in the browser')
   await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await inBrowser(`document.querySelector('.transcript')?.textContent.includes('echo: hello from smoke')`, 'a transcript in the browser')
@@ -1128,7 +1134,7 @@ if (phase === 'first') {
   // Its code ran here: a reload is offered, to stop anything it left going.
   await until(`document.querySelector('.machine-row__revoked')?.textContent.includes('Reload the window')`, 'revoked: a reload offered in Settings')
   await escape()
-  await until(`!document.querySelector('.superego-dialog.settings')`, 'settings closed')
+  await until(`!document.querySelector('.settings')`, 'settings closed')
   await until(`Boolean(document.querySelector('.profile-ui-notice')) && !document.querySelector('.profile-ui-marker')`, 'revoked: asked again')
   await until(`[...document.querySelectorAll('.revoked-ui-notice button')].some((b) => b.textContent === 'Reload')`, 'revoked: a reload offered in the window')
   await run(`[...document.querySelectorAll('.revoked-ui-notice button')].find((b) => b.textContent === 'Later').click()`)
@@ -1145,12 +1151,17 @@ if (phase === 'first') {
   await pickEgo(secondId)
   await until(`document.querySelector('.ego__machine')?.value === '${secondId}' && document.querySelector('.thread__title')?.textContent === 'Ego' && document.querySelector('.ego__button').classList.contains('is-on')`, "the second machine's Ego")
   if (await run(`window.superego.call('${secondId}', 'thread.list', {}).then((all) => all.some((t) => t.ext?.ego))`)) { await fail('Ego listed on the second machine'); throw new Error('failed') }
+  await run(`document.querySelector('.app__rail [aria-label="Threads"]').click()`)
+  await until(`[...document.querySelectorAll('.app__sidebar .superego-list-item')].some((li) => li.textContent.includes('over on second'))`, 'the sidebar, from Ego')
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('over on second')).click()`)
   await until(`!document.querySelector('.ego__machine') && !document.querySelector('.ego__button').classList.contains('is-on')`, 'away from Ego')
   await run(`document.querySelector('.ego__button').click()`)
   await until(`document.querySelector('.ego__machine')?.value === '${secondId}'`, 'the rail opens the Ego last chosen')
   await pickEgo('local')
   await until(`document.querySelector('.ego__machine')?.value === 'local'`, "back to this computer's Ego")
+  // Left on Threads: the window reopens as it was left, and reopening starts from the sidebar.
+  await run(`document.querySelector('.app__rail [aria-label="Threads"]').click()`)
+  await until(`Boolean(document.querySelector('.app__sidebar .threads'))`, 'back on Threads')
   console.log('smoke(first): ok')
 } else {
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread after reopen')
@@ -1184,7 +1195,8 @@ if (phase === 'first') {
   nativeTheme.themeSource = 'system'
   await run(`[...document.querySelectorAll('.auth-notice button')].find((b) => b.textContent === 'Sign in again').click()`)
   await until(`document.querySelector('.settings__nav-machine.is-selected')?.textContent.includes('Second') && document.querySelector('.settings')?.textContent.includes('Providers')`, "sign in again: that machine's Providers")
-  await run(`document.querySelector('.superego-dialog__actions button[aria-label="Close"]').click()`)
+  await run(`document.querySelector('.app__rail [aria-label="Threads"]').click()`)
+  await until(`!document.querySelector('.settings')`, 'Settings left for Threads')
   writeFileSync(secondAuth, JSON.stringify({}))
   // The one shown is seen as it answers; the other is done.
   await until(`!document.querySelector('.auth-notice') && !document.querySelector('.transcript__waiting') && document.querySelector('.transcript')?.textContent.includes('echo: keyed one')

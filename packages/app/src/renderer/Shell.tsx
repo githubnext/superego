@@ -41,7 +41,7 @@ export function Shell() {
   const { sessions, lastThread } = useSessions()
   const [log, setLog] = useState(false)
   const machines = useMachines()
-  const { selection, select, machine, thread } = useSelection()
+  const { selection, select, machine, thread, hidden: alone, listed } = useSelection()
   const settings = useSettingsDialog()
   const newThread = useNewThreadDialog()
   const { openSettings } = useShell()
@@ -57,6 +57,9 @@ export function Shell() {
   const spaces = viewsIn(registry, placed, 'space')
   const [spaceId, setSpace] = useLocalState<string | undefined>('space', undefined)
   const space = spaces.find((view) => view.id === spaceId) ?? spaces[0]
+  // Wide, the rail is a row of tabs with one in front, joined to what's beside it: Settings while it's open; else a
+  // hidden thread's (Ego's: the thread alone, no sidebar); else the open space, as the sidebar.
+  const tab: 'settings' | 'thread' | 'space' = narrow ? 'space' : settings.open ? 'settings' : alone ? 'thread' : 'space'
   const where = selection && thread && machine ? { machine: machine.id, thread } : undefined
   // The thread's places, as the views it sees resolve.
   const threadPlaced = useLayout(where).placed
@@ -84,11 +87,11 @@ export function Shell() {
   useAppEffects()
 
   const settingsButton = (
-    <IconButton label="Settings" className="app__settings" onClick={openSettings}>
+    <IconButton label="Settings" className={`app__settings ${tab === 'settings' ? 'is-on' : ''}`} onClick={openSettings}>
       <GearSixIcon size={18} aria-hidden />
     </IconButton>
   )
-  const sideOpen = spaces.length > 0 && (narrow ? drawer : sidebar.open)
+  const sideOpen = spaces.length > 0 && (narrow ? drawer : sidebar.open && tab === 'space')
   // Wide: across the top a title bar (the window's buttons, then where you are, the thread's columns and what the thread
   // says about itself); down the left a rail (what extensions put there, Settings) and the sidebar beside it; the rest holds the
   // thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.
@@ -99,30 +102,40 @@ export function Shell() {
         <header className="app__drag app__titlebar">
           <BackForward />
           <PlacedViews place="titlebar" frame={withContextMenu('titlebar')} />
-          {selection && thread && machine && <ThreadTitle machine={machine} thread={thread} />}
+          {tab === 'settings'
+            ? <span className="titlebar__crumb"><span className="titlebar__seg titlebar__title">Settings</span></span>
+            : selection && thread && machine && <ThreadTitle machine={machine} thread={thread} />}
           <span className="app__titlebar-end">
-            {!spaces.length && <><AuthNotice /><ServiceNotice /><LayoutNotice /><RevokedUiNotice /></>}
+            {/* The notices go at the sidebar's foot; without one shown (Settings, Ego's thread, closed), here. */}
+            {!sideOpen && <><AuthNotice /><ServiceNotice /><LayoutNotice /><RevokedUiNotice /></>}
             <span className="app__strip" ref={setStrip} />
-            {selection && thread && machine && <ThreadTools machine={machine} thread={thread} />}
+            {tab !== 'settings' && selection && thread && machine && <ThreadTools machine={machine} thread={thread} />}
           </span>
         </header>
       )}
       <div className="app__body">
         {!narrow && (
-          <nav className="app__rail" aria-label="App">
+          <nav className="app__rail" aria-label="App" data-tab={tab}>
             <div className="app__rail-group">
               <PlacedViews place="rail" frame={withContextMenu('rail')} />
               {spaces.map((view) => (
                 <ViewContextMenu key={view.id} view={view.id} place="space">
-                  <SpaceButton view={view} open={sidebar.open && view.id === space?.id}
-                    show={(open = true) => { setSpace(view.id); sidebar.toggle(open) }} />
+                  <SpaceButton view={view} open={tab === 'space' && sidebar.open && view.id === space?.id}
+                    show={(open = true) => {
+                      setSpace(view.id)
+                      sidebar.toggle(open)
+                      // From Ego's thread, back to the listed one it left; from Settings, back to the thread.
+                      if (open && alone) select(listed)
+                      else if (open) settings.close()
+                    }} />
                 </ViewContextMenu>
               ))}
             </div>
             <div className="app__rail-group">{settingsButton}</div>
           </nav>
         )}
-        {sideOpen && (
+        {tab === 'settings' && <main className="app__main"><SettingsView machines={machines} onClose={settings.close} pane /></main>}
+        {tab !== 'settings' && sideOpen && (
           // In the drawer, picking a thread (even the open one) closes it.
           <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) setDrawer(false) } : undefined}>
             {narrow && <div className="app__drag" />}
@@ -142,7 +155,7 @@ export function Shell() {
             )}</div>
           </aside>
         )}
-        <main className="app__main">
+        {tab !== 'settings' && <main className="app__main">
           {narrow && (
             // With no space there's no drawer: what stands in for one (the title bar's: the thread picker) and Settings.
             <div className="app__mobilebar">
@@ -163,13 +176,13 @@ export function Shell() {
           {selection && thread && machine
             ? <StripSlot.Provider value={narrow ? null : strip}><ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} /></StripSlot.Provider>
             : <div className="app__empty">{spaces.length ? 'Select or start a thread.' : `Start a thread with: ${registry.app.id}`}</div>}
-        </main>
-        {!narrow && where && viewsIn(registry, threadPlaced, 'aside', where).length > 0 && (
+        </main>}
+        {tab !== 'settings' && !narrow && where && viewsIn(registry, threadPlaced, 'aside', where).length > 0 && (
           <aside className="app__aside"><PlacedViews place="aside" machine={machine} thread={thread} frame={withMenuButton('aside', where)} /></aside>
         )}
       </div>
       {narrow && sheet && thread && machine && <ThreadSheet machine={machine} thread={thread} onClose={() => setSheet(false)} />}
-      {settings.open && <SettingsView machines={machines} onClose={settings.close} />}
+      {narrow && settings.open && <SettingsView machines={machines} onClose={settings.close} />}
       {palette && <Palette onClose={() => setPalette(false)} />}
       {navigator && <Navigator onClose={() => setNavigator(false)} />}
       <Slot name="overlay" props={{}} />

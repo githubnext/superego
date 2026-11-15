@@ -25,7 +25,8 @@ const APP = 'app'
 const MACHINES = '$machines'
 const ALL = '$all'
 
-export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; onClose(): void }) {
+/** Settings: wide, a pane beside the rail (Escape goes back); on a phone, a dialog. */
+export function SettingsView({ machines, onClose, pane = false }: { machines: MachineEntry[]; onClose(): void; pane?: boolean }) {
   const [kept, setTarget] = useLocalState('settings.target', APP)
   // The section kept from last time, unless its machine has gone since.
   const target = kept === APP || kept === MACHINES || kept === ALL || machines.some((m) => m.id === kept) ? kept : APP
@@ -34,9 +35,15 @@ export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; 
   const supported = target === APP || has(machine, 'settings')
   const snapshot = useSettings(target, target !== MACHINES && target !== ALL && connected && supported)
   const editable = machines.filter((m) => m.state === 'connected' && has(m, 'settings'))
+  useEffect(() => {
+    if (!pane) return
+    // Escape that something in it took (a picker closing, a field) stays there.
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented) onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [pane, onClose])
 
-  return (
-    <Dialog title="Settings" size="large" onClose={onClose} className="settings">
+  const body = (
       <div className="settings__body">
         <nav className="settings__nav">
           <button className={target === APP ? 'is-selected' : ''} onClick={() => setTarget(APP)}>General</button>
@@ -57,8 +64,10 @@ export function SettingsView({ machines, onClose }: { machines: MachineEntry[]; 
             : snapshot.sections.filter((section) => section.ui || section.settings.some((s) => !s.hidden)).map((section) => <Section key={section.id} target={target} section={section} values={snapshot.values} />)}
         </div>
       </div>
-    </Dialog>
   )
+  return pane
+    ? <section className="settings settings--pane" aria-label="Settings">{body}</section>
+    : <Dialog title="Settings" size="large" onClose={onClose} className="settings">{body}</Dialog>
 }
 
 function Section({ target, section, values }: { target: string; section: SectionInfo; values: SettingsSnapshot['values'] }) {

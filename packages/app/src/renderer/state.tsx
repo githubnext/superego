@@ -45,6 +45,8 @@ type ShellState = {
   archived: ThreadInfo | undefined
   /** The selected machine's threads that no list shows (extensions' own, like Ego's): shown when selected. */
   hidden: ThreadInfo[] | undefined
+  /** The listed thread last selected: where the sidebar's spaces go back to from a hidden one (Ego's). */
+  listed: Selection | undefined
   canBack: boolean
   canForward: boolean
   go(by: -1 | 1): void
@@ -68,12 +70,14 @@ export const useAllThreads = () => useShellState().threads
 export const useRejections = () => useShellState().rejections
 /** The selected thread, and a way to select another (or none). */
 export function useSelection() {
-  const { selection, select, machines, threads, archived, hidden } = useShellState()
+  const { selection, select, machines, threads, archived, hidden, listed } = useShellState()
   const machine = machines.find((m) => m.id === selection?.machine)
+  const own = selection && hidden?.find((t) => t.id === selection.thread)
   const thread = selection && (threads[selection.machine]?.find((s) => s.id === selection.thread)
     ?? (archived?.id === selection.thread ? archived : undefined)
-    ?? hidden?.find((t) => t.id === selection.thread))
-  return { selection, select, machine, thread }
+    ?? own)
+  /** `hidden`: the thread is one no list shows (an extension's own, like Ego's). `listed`: the listed one last selected. */
+  return { selection, select, machine, thread, hidden: Boolean(own), listed }
 }
 /** Every session, in the sidebar's order, and the thread last shown in each. */
 export function useSessions() {
@@ -142,6 +146,10 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (shownKey && lastThread[shownKey] !== shown!.id) setLastThread((last) => ({ ...last, [shownKey]: shown!.id }))
   }, [shownKey, shown?.id])
+  const [listed, setListed] = useLocalState<Selection | undefined>('selection.listed', undefined)
+  useEffect(() => {
+    if (shown && (listed?.machine !== selection!.machine || listed.thread !== shown.id)) setListed({ machine: selection!.machine, thread: shown.id })
+  }, [selection?.machine, shown?.id])
   // A selected thread that isn't in its machine's list may be archived: shown from the archived list, read only.
   // Asked again when the list changes (archiving or unarchiving moves threads between the two).
   const [archived, setArchived] = useState<ThreadInfo>()
@@ -172,7 +180,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const exists = (p: Place) => 'settings' in p || Boolean(hiddenAll[p.thread.machine]?.some((t) => t.id === p.thread.thread))
     || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread))
   const value = useMemo<ShellState>(() => ({
-    machines, threads, rejections, selection, settingsOpen, newThread, sessions, hold, lastThread, sidebarOpen, archived, hidden,
+    machines, threads, rejections, selection, settingsOpen, newThread, sessions, hold, lastThread, sidebarOpen, archived, hidden, listed,
     canBack: Boolean(step(history, -1, place, exists)),
     canForward: Boolean(step(history, 1, place, exists)),
     go: (by) => {
@@ -188,7 +196,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     openSettings: (open = true) => setSettingsOpen(open),
     openNewThread: (start = {}) => setNewThread(start === false ? undefined : start),
     toggleSidebar: (open) => setSidebarOpen((was) => open ?? !was),
-  }), [machines, threads, rejections, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived, hidden, hiddenAll, history])
+  }), [machines, threads, rejections, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived, hidden, hiddenAll, history, listed])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onHidden={onHidden} onRejections={onRejections} />)}
@@ -237,7 +245,7 @@ export function useNewThreadDialog() {
   return { start: newThread, close: () => openNewThread(false) }
 }
 
-/** For the shell: whether the Settings dialog is open, and closing it. */
+/** For the shell: whether Settings is open (a pane beside the rail; a dialog on a phone), and closing it. */
 export function useSettingsDialog() {
   const { settingsOpen, openSettings } = useShellState()
   return { open: settingsOpen, close: () => openSettings(false) }
