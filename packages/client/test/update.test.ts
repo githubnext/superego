@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { defineApp } from '@superego/protocol'
 import { runUpdate, updateCommand, updateScript, wrapperOf, type MachineConfig } from '../src/index.ts'
 
@@ -11,28 +11,36 @@ const machine = (patch: Partial<MachineConfig>): MachineConfig => ({ id: 'm', la
 const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf8' })
 
 describe('updating a machine', () => {
+  let origin: string
   let home: string
-  let checkout: string
-  beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'superego-update-'))
-    // A machine's checkout, cloned from an origin that has moved on since; its install script says what it got.
-    const origin = join(home, 'origin')
+  // An origin that has moved on since the machine cloned it (at the tag one); its install script says what it got. Made
+  // once: each git run takes a second or more on a busy machine.
+  beforeAll(() => {
+    origin = mkdtempSync(join(tmpdir(), 'superego-update-origin-'))
     mkdirSync(join(origin, 'scripts'), { recursive: true })
     writeFileSync(join(origin, 'scripts/install-machine.sh'), '#!/bin/sh\necho "installed $(git rev-parse --short HEAD) now=${SUPEREGO_RESTART_NOW:-}"\n')
     chmodSync(join(origin, 'scripts/install-machine.sh'), 0o755)
     git(origin, 'init', '-q', '-b', 'main')
     git(origin, 'add', '-A')
     git(origin, 'commit', '-qm', 'one')
-    checkout = join(home, 'dev/superego')
-    git(home, 'clone', '-q', origin, checkout)
+    git(origin, 'tag', 'one')
     writeFileSync(join(origin, 'NEW'), 'x')
     git(origin, 'add', '-A')
     git(origin, 'commit', '-qm', 'two')
-    // The wrapper install-machine.sh writes, naming the checkout.
+  }, 60_000)
+  afterAll(() => rmSync(origin, { recursive: true, force: true }))
+  beforeEach(() => { home = mkdtempSync(join(tmpdir(), 'superego-update-')) })
+  afterEach(() => rmSync(home, { recursive: true, force: true }))
+
+  /** The machine's checkout, cloned at one, and the wrapper install-machine.sh writes, naming it. */
+  const cloned = () => {
+    const checkout = join(home, 'dev/superego')
+    git(home, 'clone', '-q', origin, checkout)
+    git(checkout, 'reset', '-q', '--hard', 'one')
     mkdirSync(join(home, '.local/bin'), { recursive: true })
     writeFileSync(join(home, '.local/bin/superego'), `#!/bin/sh\n# Written by ${checkout}/scripts/install-machine.sh\nexec node "${checkout}/app/bin/superego.ts" "$@"\n`)
-  })
-  afterEach(() => rmSync(home, { recursive: true, force: true }))
+    return checkout
+  }
 
   const run = (script: string) => {
     try { return { ok: true, out: execFileSync('/bin/sh', ['-c', script], { env: { HOME: home, PATH: '/usr/bin:/bin' }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) } }
@@ -40,6 +48,7 @@ describe('updating a machine', () => {
   }
 
   it('finds the checkout from the wrapper, pulls, and runs its install script', () => {
+    const checkout = cloned()
     const { ok, out } = run(updateScript({ wrapper: wrapperOf('~/.local/bin/superego connect --start') }, true))
     expect(ok).toBe(true)
     expect(out).toContain(`Updating ${checkout}`)
@@ -48,6 +57,7 @@ describe('updating a machine', () => {
   })
 
   it('refuses a checkout with changes, a pull that fails, and a wrapper it did not write', () => {
+    const checkout = cloned()
     writeFileSync(join(checkout, 'scripts/install-machine.sh'), '#!/bin/sh\necho changed\n')
     expect(run(updateScript({ dir: checkout }))).toMatchObject({ ok: false, out: expect.stringContaining('has uncommitted changes') })
     git(checkout, 'checkout', '--', '.')
