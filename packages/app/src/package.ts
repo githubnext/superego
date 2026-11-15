@@ -1,7 +1,7 @@
 // Packaging the app: `<name>.app` and a zip in the app's dist/. Run after `electron-vite build`.
 //
-// The build bundles everything into out/, so the app ships only out/, resources/ and a package.json with no
-// dependencies: it's staged in dist/app and electron-builder packs that (never the workspace's node_modules), on the
+// The build bundles everything into out/ (native modules beside it, in out/node_modules, unpacked from the archive),
+// so the app ships only out/, resources/ and a package.json with no dependencies: it's staged in dist/app and electron-builder packs that (never the workspace's node_modules), on the
 // Electron already installed (nothing is downloaded). electron-builder runs through npx, outside the workspace, so its
 // own dependencies stay out of the lockfile. The daemon runs from inside the bundle, on the app's own Electron as Node.
 //
@@ -81,6 +81,8 @@ export async function packageApp(root: string, app: AppConfig, options: PackageO
     directories: { output, buildResources: join(stage, 'resources') },
     files: ['out/**', 'resources/**', 'package.json'],
     asar: true,
+    // Native modules (copied into out/node_modules by the build) are loaded from the disk, not the archive.
+    asarUnpack: ['out/node_modules/**'],
     npmRebuild: false,
     mac: {
       target: ['dir'],

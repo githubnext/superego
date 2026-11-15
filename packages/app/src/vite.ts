@@ -1,8 +1,9 @@
 // The build of an app on Superego, for its electron.vite.config.ts: `export default superegoConfig(import.meta.dirname)`.
 // Main and daemon come from the app's src/main.ts and src/daemon.ts, the preload from @superego/app, the renderer from
 // src/renderer. Everything is bundled (only Electron itself stays out), so a packaged app carries no node_modules: the
-// daemon, run by the app's own Electron as Node, finds all it needs in out/.
-import { cpSync, existsSync, rmSync } from 'node:fs'
+// daemon, run by the app's own Electron as Node, finds all it needs in out/. Native modules can't be bundled: those
+// the app depends on (NATIVE) stay out of it and are copied into out/node_modules, with the build for this platform.
+import { cpSync, existsSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -18,12 +19,13 @@ export function superegoConfig(root: string) {
     main: {
       build: {
         externalizeDeps: false,
-        rolldownOptions: { external: ['electron', /^node:/] },
+        rolldownOptions: { external: ['electron', /^node:/, ...NATIVE] },
         lib: { entry: { main: resolve(root, 'src/main.ts'), daemon: resolve(root, 'src/daemon.ts'), ...(existsSync(cli) ? { cli } : {}) } },
       },
       plugins: [
         // The commit it's built from, written in: a packaged app has no checkout to ask.
         { name: 'superego-commit', writeBundle: (options) => writeCommit(root, options.dir!) },
+        { name: 'superego-native', writeBundle: (options) => copyNative(root, resolve(options.dir!, '../node_modules')) },
         // The CLI's skill pages, where its build looks for them (out/main/cli.js → out/skill).
         { name: 'superego-cli-skill', writeBundle: (options) => { if (existsSync(cli)) cpSync(skill(root), resolve(options.dir!, '../skill'), { recursive: true }) } },
         // Types for profile authors (out/types), which the app keeps current in <dataDir>/types and `<id> profile types`
@@ -56,3 +58,37 @@ async function authorTypes(root: string, to: string) {
 
 /** The skill pages of the @superego/cli the app at `root` depends on. */
 const skill = (root: string) => resolve(dirname(createRequire(resolve(root, 'package.json')).resolve('@superego/cli')), '../skill')
+
+/** Native modules an app may depend on, loaded at run time from out/node_modules: the terminal's PTY. */
+const NATIVE = ['@lydell/node-pty']
+
+/**
+ * Each native module the app at `root` depends on, and those of its optional dependencies installed here (the build for
+ * this platform), copied into `into` as packages, so the bundle resolves them beside itself.
+ */
+function copyNative(root: string, into: string) {
+  rmSync(into, { recursive: true, force: true })
+  const from = createRequire(resolve(root, 'package.json'))
+  for (const name of NATIVE) {
+    const dir = packageDir(from, name)
+    if (!dir) continue
+    cpSync(dir, resolve(into, name), { recursive: true, dereference: true })
+    const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8')) as { optionalDependencies?: Record<string, string> }
+    const own = createRequire(resolve(dir, 'package.json'))
+    for (const dependency of Object.keys(pkg.optionalDependencies ?? {})) {
+      const found = packageDir(own, dependency)
+      if (found) cpSync(found, resolve(into, dependency), { recursive: true, dereference: true })
+    }
+  }
+}
+
+/** Where package `name` is installed, as `require` finds it; nothing when it isn't (another platform's build). */
+function packageDir(require: NodeJS.Require, name: string): string | undefined {
+  let entry: string
+  try { entry = realpathSync(require.resolve(name)) } catch { return undefined }
+  for (let dir = dirname(entry); dir !== dirname(dir); dir = dirname(dir)) {
+    const manifest = resolve(dir, 'package.json')
+    if (existsSync(manifest) && (JSON.parse(readFileSync(manifest, 'utf8')) as { name?: string }).name === name) return dir
+  }
+  return undefined
+}
