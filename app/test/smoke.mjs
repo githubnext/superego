@@ -747,6 +747,15 @@ if (phase === 'first') {
   await until(`document.activeElement?.matches('[data-column]:not([data-column="thread"])')`, 'a click on the title, into the pane')
   await run(`window.superego.call('local', 'pane.close', { id: '${shown}', pane: document.activeElement.dataset.column })`)
   await until(`!document.querySelector('.panes__tab')`, 'changes closed')
+  // ⌃`: a terminal beside the thread (terminal's), its shell on the machine, with the focus; typed into and read back.
+  await key('`', ['control'])
+  await until(`Boolean(document.querySelector('.terminal-pane__screen canvas')) && document.activeElement?.closest('.terminal-pane') !== null`, 'ctrl+`: a terminal with the focus')
+  await ringed('Terminal')
+  await run(`(() => { const screen = document.querySelector('.terminal-pane__screen')
+    for (const ch of 'echo "smoke-$((2*21))"\\n') screen.dispatchEvent(new KeyboardEvent('keydown', { key: ch === '\\n' ? 'Enter' : ch, code: ch === '\\n' ? 'Enter' : '', bubbles: true, cancelable: true })) })()`)
+  await until(`document.querySelector('.terminal-pane__screen').text().includes('smoke-42')`, 'the shell\'s answer in the terminal')
+  await run(`window.superego.call('local', 'pane.close', { id: '${shown}', pane: document.querySelector('[data-column]:not([data-column="thread"])').dataset.column })`)
+  await until(`!document.querySelector('.panes__tab')`, 'terminal closed')
   // Attachments: a file picked with Attach (under the box) waits in the box, then goes with the message and shows under it.
   await run(`(() => {
     const input = document.querySelector('.dock__footer input[type=file]')
