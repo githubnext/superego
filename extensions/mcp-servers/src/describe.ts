@@ -104,11 +104,14 @@ export function toolOf(name: string): { server: string; tool: string } {
   return at < 0 ? { server: rest, tool: '' } : { server: rest.slice(0, at), tool: rest.slice(at + 2) }
 }
 
-/** The first short, one-line string among a call's arguments: what it's about, as a title or a query says. */
+/** Arguments that say what a call is about, when it has one: its title, name or query, before the rest. */
+const ABOUT = ['title', 'name', 'query', 'q', 'search', 'subject', 'url', 'path', 'id']
+
+/** What a call is about, in a line: a short, one-line string among its arguments, a title or query first. */
 export function firstShortString(args: Record<string, unknown>): string | undefined {
-  for (const value of Object.values(args)) {
-    if (typeof value === 'string' && value.trim() && value.length <= 80 && !value.includes('\n')) return value.trim()
-  }
+  const short = (value: unknown): value is string => typeof value === 'string' && Boolean(value.trim()) && value.length <= 80 && !value.includes('\n')
+  for (const key of ABOUT) if (short(args[key])) return (args[key] as string).trim()
+  for (const value of Object.values(args)) if (short(value)) return value.trim()
   return undefined
 }
 

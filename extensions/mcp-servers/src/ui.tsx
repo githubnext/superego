@@ -14,7 +14,7 @@ import {
   type MachineEntry, type SlotProps, type ToolRowCall, type ViewProps,
 } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
-import { Button, IconButton, MagnifyingGlassIcon, PlugIcon, Popover, XIcon } from '@superego/ui'
+import { Button, CaretRightIcon, IconButton, MagnifyingGlassIcon, PlugIcon, Popover, XIcon } from '@superego/ui'
 import './styles.css'
 import { DOT, firstShortString, interrupted, needs, stateText, toolOf } from './describe.ts'
 import { ServersSection, SignInDialog } from './settings.tsx'
@@ -78,7 +78,7 @@ function CallBody({ call: { call, result, live, state } }: { call: ToolRowCall }
     <div className="mcp-call">
       {args && (
         <details className="mcp-call__args">
-          <summary>Arguments</summary>
+          <summary><CaretRightIcon className="mcp-call__caret" size={10} aria-hidden /> Arguments</summary>
           <Output text={args} />
         </details>
       )}

@@ -44,7 +44,7 @@
 .threads-details { padding: var(--superego-space-4) var(--superego-space-5) var(--superego-space-5); font-size: var(--superego-text-ui); }
 .threads-details h5 { margin: 0 0 10px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); }
 .threads-details dl { display: grid; grid-template-columns: 70px 1fr; gap: 6px 10px; margin: 0 0 var(--superego-space-5); }
-.threads-details dt { color: var(--superego-muted); }
+.threads-details dt { color: var(--superego-muted); overflow-wrap: anywhere; }
 .threads-details dd { margin: 0; overflow-wrap: anywhere; }
 .threads-details__file { font: var(--superego-text-sm)/1.7 var(--superego-mono); overflow-wrap: anywhere; }
 

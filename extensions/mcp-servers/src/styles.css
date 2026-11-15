@@ -15,6 +15,8 @@
 .mcp-server__line { margin: 6px 0; font: var(--superego-text-sm)/1.45 var(--superego-mono); white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; }
 .mcp-server__allow-actions { display: flex; gap: 6px; }
 .mcp-servers__add { padding: 12px 0; }
+/* Over the switches: what they are. */
+.mcp-servers__head { display: flex; justify-content: flex-end; padding: 6px 32px 0 0; font-size: var(--superego-text-xs); color: var(--superego-muted); }
 .mcp-servers__group { font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 2px; }
 /* A key's and secret env values' fields, under the row (the core's .auth-flow box). */
 .mcp-secrets { display: flex; flex-direction: column; gap: 6px; }
@@ -23,12 +25,15 @@
 .mcp-sign-in .auth-flow { margin-top: 0; }
 
 /* Add server and Edit. */
-.mcp-dialog__form { display: flex; flex-direction: column; gap: 10px; }
+.mcp-dialog__form { display: flex; flex-direction: column; gap: 10px; padding: var(--superego-space-4); }
+.mcp-dialog__label { font-size: var(--superego-text-sm); color: var(--superego-muted); margin-bottom: -4px; }
 .mcp-dialog__form label > span { display: block; font-size: var(--superego-text-sm); color: var(--superego-muted); margin-bottom: 3px; }
 .mcp-dialog__form .superego-field { width: 100%; box-sizing: border-box; }
 .mcp-dialog__form .superego-segmented { align-self: flex-start; }
 .mcp-dialog__pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.mcp-dialog__more > summary { font-size: var(--superego-text-sm); color: var(--superego-muted); cursor: default; margin-bottom: 8px; }
+.mcp-dialog__more > summary { display: flex; align-items: center; gap: 4px; list-style: none; font-size: var(--superego-text-sm); color: var(--superego-muted); cursor: default; margin-bottom: 8px; }
+.mcp-dialog__more > summary::-webkit-details-marker { display: none; }
+.mcp-dialog__more[open] > summary .mcp-call__caret { transform: rotate(90deg); }
 .mcp-dialog__timeout { display: block; margin-top: 10px; max-width: 50%; }
 .mcp-dialog__check { margin: 0; font-weight: 500; }
 .mcp-dialog__actions { display: flex; justify-content: flex-end; gap: 6px; }
@@ -43,7 +48,10 @@
 .mcp-call__interrupted { color: var(--superego-status-blocked); }
 /* Open: indented as the core's output is under a lone row. */
 .steps:not(.steps--run) > .step > .mcp-call { margin-left: 21px; }
-.mcp-call__args > summary { font-size: var(--superego-text-sm); color: var(--superego-muted); cursor: default; padding: 2px 0; }
+.mcp-call__args > summary { display: flex; align-items: center; gap: 4px; list-style: none; font-size: var(--superego-text-sm); color: var(--superego-muted); cursor: default; padding: 2px 0; }
+.mcp-call__args > summary::-webkit-details-marker { display: none; }
+.mcp-call__caret { transition: transform .12s; }
+.mcp-call__args[open] > summary .mcp-call__caret { transform: rotate(90deg); }
 .mcp-call__args > summary:hover { color: var(--superego-text); }
 .mcp-call__image { display: block; max-width: min(100%, 480px); max-height: 360px; margin: 4px 0 var(--superego-space-2); border-radius: 8px; box-shadow: var(--superego-control-edge); }
 .mcp-call__files { font-size: var(--superego-text-sm); color: var(--superego-muted); margin: 0 0 var(--superego-space-2); }

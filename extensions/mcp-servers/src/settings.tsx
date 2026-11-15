@@ -4,7 +4,7 @@
 // Everything goes through the extension's actions on that machine (`target`), so a remote one works the same.
 import { useEffect, useState, type ReactNode } from 'react'
 import { SignInFlow, useDispatch, useValue, type SettingsComponentProps } from '@superego/app/ui'
-import { Button, Dialog, DotsThreeIcon, IconButton, Menu, SegmentedControl, Select, Switch, TextField } from '@superego/ui'
+import { Button, CaretRightIcon, Dialog, DotsThreeIcon, IconButton, Menu, SegmentedControl, Select, Switch, TextField } from '@superego/ui'
 import { CATALOG } from './catalog.ts'
 import { checkText, commandLine, configOf, DOT, emptyForm, formOf, nameFrom, needs, splitCommandLine, stateText, type ServerForm } from './describe.ts'
 import { ACTIONS, type CheckResult, type LogResult, type SectionData, type ServerInfo, SERVERS_VALUE } from './shared.ts'
@@ -36,6 +36,7 @@ export function ServersSection({ target, section }: SettingsComponentProps) {
   )
   return (
     <div className="mcp-servers">
+      {data.servers.length > 0 && <div className="mcp-servers__head" aria-hidden>Without a profile</div>}
       {data.servers.map((server) => row(server, true))}
       <div className="mcp-servers__add"><Button onClick={() => setEditing('new')}>Add server…</Button></div>
       {error && <p className="setting__error">{error}</p>}
@@ -81,7 +82,8 @@ export function ServerRow({ server, own, run, onEdit, onLog, onHelp, children }:
             <code title={config.command ? commandLine(config) : config.url}>{server.runs}</code> · {stateText(server)}
             {from && <> · profile <b>{from.profile}</b>{from.scope === 'project' ? ` in ${from.project.replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, '~')}` : ''}</>}
           </div>
-          {server.error && state !== 'waiting' && <div className="setting__error">{server.error}</div>}
+          {/* Why it failed, or the last error of one that runs: what the state and the buttons don't say already. */}
+          {server.error && (state === 'failed' || state === 'running' || state === 'stopped' || state === 'starting') && <div className="setting__error">{server.error}</div>}
           {server.skipped?.length ? <div className="settings__note">Skipped: {server.skipped.map((s) => `${s.tool} (${s.why})`).join(', ')}</div> : null}
         </div>
         <div className="provider__actions">
@@ -196,11 +198,14 @@ function ServerDialog({ machine, editing, taken, onClose, onSignIn }: {
     const guess = nameFrom(next.kind === 'url' ? { url: next.url } : { ...(words[0] ? { command: words[0] } : {}), args: words.slice(1) })
     return { ...next, name: guess && taken.includes(guess) ? `${guess}-2` : guess ?? '' }
   })
+  // The well-known server it was filled from, for what to do after.
+  const [picked, setPicked] = useState<string>()
   const fill = (name: string | null) => {
     const entry = CATALOG.find((e) => e.name === name)
     if (!entry) return
     setForm({ ...formOf(entry.name, entry.server), name: taken.includes(entry.name) ? `${entry.name}-2` : entry.name })
     setNamed(true)
+    setPicked(entry.name)
   }
   const save = async () => {
     setError(undefined)
@@ -222,12 +227,12 @@ function ServerDialog({ machine, editing, taken, onClose, onSignIn }: {
     }
   }
   const check = checked && checkText(checked)
-  const entry = !editing ? CATALOG.find((e) => e.name === form.name) : undefined
+  const entry = CATALOG.find((e) => e.name === picked)
   return (
     <Dialog title={editing ? `Edit ${editing.name}` : 'Add an MCP server'} size="medium" onClose={onClose} className="mcp-dialog">
       <form className="mcp-dialog__form" onSubmit={(e) => { e.preventDefault(); if (!busy) void save() }}>
         {!editing && (
-          <Select aria-label="A well-known server" value={null} nullLabel="A well-known server…" onChange={fill}
+          <Select aria-label="A well-known server" value={picked ?? null} nullLabel="A well-known server…" onChange={fill}
             options={CATALOG.map((e) => ({ value: e.name, label: `${e.title}: ${e.description}` }))} />
         )}
         <SegmentedControl label="Runs" value={form.kind} onChange={(kind) => change({ kind })}
@@ -254,7 +259,7 @@ function ServerDialog({ machine, editing, taken, onClose, onSignIn }: {
           </div>
         )}
         <details className="mcp-dialog__more" open={more} onToggle={(e) => setMore(e.currentTarget.open)}>
-          <summary>More</summary>
+          <summary><CaretRightIcon className="mcp-call__caret" size={10} aria-hidden /> More</summary>
           <div className="mcp-dialog__pair">
             <label><span>Runs for</span>
               <Select value={form.lifetime} onChange={(lifetime) => setForm({ ...form, lifetime: (lifetime ?? 'machine') as ServerForm['lifetime'] })}
@@ -293,6 +298,7 @@ function EnvRows({ form, setForm, secretsSet }: { form: ServerForm; setForm(form
   const set = (index: number, patch: Partial<ServerForm['env'][number]>) => setForm({ ...form, env: form.env.map((row, i) => i === index ? { ...row, ...patch } : row) })
   return (
     <div className="mcp-env">
+      {form.env.length > 0 && <div className="mcp-dialog__label">Environment</div>}
       {form.env.map((row, index) => (
         <div key={index} className="mcp-env__row">
           <TextField aria-label="Variable" placeholder="NAME" value={row.name} spellCheck={false} onChange={(e) => set(index, { name: e.target.value })} />
