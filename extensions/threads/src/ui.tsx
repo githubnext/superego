@@ -1,36 +1,28 @@
 /// <reference path="./env.d.ts" />
 // threads: the sidebar. Sessions (a project on a machine) and the threads in each; the machine is said on the session,
 // where it isn't this computer. Its views:
-// - the list (`threads.list`), a space: sorted recently active, newest first, or needs you first; shown as a list, or
-//   folded into a rail of status glyphs (both kept as app settings). A row's title is followed by other extensions'
-//   marks (the `thread.badge` slot: a worktree's branch, say)
+// - the list (`threads.list`), a space: sorted recently active, newest first, or needs you first (an app setting); with
+//   the sidebar folded, a rail of status glyphs. A row's title is followed by other extensions' marks (the
+//   `thread.badge` slot: a worktree's branch, say)
 // - details (`threads.details`): what the thread runs with, spent and touched; beside it (in the aside) or not, ⌘I
 // - the model (`threads.model`), in the title bar: a button that shows or hides the details
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are its daemon half's.
-import { Fragment, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react'
+import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
-  call, defineAction, defineUiExtension, MachineDrift, showSession, Slot, SORT, unread, useAppSetting, useLocalState, useMachines, useNarrow, usePlacement, useSelection, useSessions, useThreadView, useShell, useShortcut,
-  type MachineEntry, type Session, type Sort, type SpaceRailProps, type Store, type WindowContext,
+  call, defineAction, defineUiExtension, MachineDrift, showSession, Slot, SORT, unread, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useSessions, useThreadView, useShell, useShortcut,
+  type MachineEntry, type Session, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
-import { bool, obj, opt, rollup, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
+import { rollup, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, ChatsIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
 import { activity, ago } from './groups.ts'
 import { registerLinks, registerRows } from './rows.tsx'
 import { about } from './shared.ts'
 
-export const VIEW = 'threads.view'
 /** The details view, and the action that puts it beside the thread or takes it away. */
 const DETAILS = 'threads.details'
-/** The action that folds the list into the rail and back. */
-const RAIL = 'threads.rail'
-export type View = 'list' | 'rail'
-
-/**
- * A narrow window folds the list into dots by itself, as if it were set to; the Threads button unfolds it there for a
- * while (until the window is wide again). Shared by the list and the rail.
- */
-let unfolded: Store<boolean>
+/** The shell's action that folds the sidebar, and shows it again: folded, the list is dots in the rail. */
+const FOLD = 'app.sidebar'
 /** How a session's machine is described while it isn't connected; anything else is offline. */
 const STATE_WORDS: Partial<Record<MachineEntry['state'], string>> = { connecting: 'connecting', 'needs-login': 'needs login', 'host-key': 'host key to check', disabled: 'off' }
 
@@ -41,31 +33,13 @@ const set = (c: Pick<WindowContext, 'dispatch'>, key: string, value: string | bo
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    unfolded = superego.store<boolean>('threads.unfolded', false)
-    superego.appSettings({
-      id: 'threads', title: 'Sidebar', order: 55,
-      settings: [
-        // Changed from the sidebar's own menu and ⌘\, not in Settings.
-        { key: VIEW, title: 'Show as', default: 'list', type: 'choice', options: [{ value: 'list', label: 'List' }, { value: 'rail', label: 'Rail' }], hidden: true },
-      ],
-    })
-    superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: Threads, rail: ThreadsRail, fold: RAIL })
+    superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: Threads, rail: ThreadsRail })
     superego.view(DETAILS, { title: 'Thread details', context: 'thread', fits: ['aside', 'pane'], component: DetailsPane })
     superego.view('threads.model', { title: 'Model', context: 'thread', fits: ['header'], default: 'header', component: ModelButton })
     registerRows(superego)
     registerLinks(superego)
     const action = (id: string, title: string, run: (c: WindowContext) => void, keys?: string) =>
       superego.action(defineAction({ id, title, ...(keys ? { keys } : {}), run: (_params, c) => run(c) }))
-    // The list folded into dots, or back (`on`; else the other way): ⌘\\, and the shell, as the sidebar's edge is dragged
-    // narrow or out from the rail. Unfolded in a narrow window, it stays so there for a while, as the Threads button does.
-    superego.action(defineAction({
-      id: RAIL, title: 'Toggle sidebar rail', keys: 'mod+\\', params: obj({ on: opt(bool()) }),
-      run({ on }, c) {
-        const rail = on ?? c.appSetting<View>(VIEW) !== 'rail'
-        if (!rail && matchMedia(NARROW).matches) unfolded.set(true)
-        return set(c, VIEW, rail ? 'rail' : 'list')
-      },
-    }))
     action(DETAILS, 'Toggle thread details', (c) => void c.dispatch('layout.place', { view: DETAILS, place: 'aside' }, { source: 'threads' }), 'mod+i')
     action('threads.sort.created', 'Sort threads: newest first', (c) => void set(c, SORT, 'created'))
     action('threads.sort.status', 'Sort threads: needs you first', (c) => void set(c, SORT, 'status'))
@@ -76,19 +50,7 @@ export default defineUiExtension({
   },
 })
 
-const NARROW = '(min-width: 600px) and (max-width: 760px)'
-function useFolded(view: View | undefined) {
-  const narrow = useSyncExternalStore((change) => { const list = matchMedia(NARROW); list.addEventListener('change', change); return () => list.removeEventListener('change', change) }, () => matchMedia(NARROW).matches)
-  const open = unfolded.use()
-  useEffect(() => { if (!narrow) unfolded.set(false) }, [narrow])
-  // A phone: the list is a drawer there, never folded.
-  const phone = useNarrow()
-  return { folded: !phone && ((view ?? 'list') === 'rail' || (narrow && !open)), narrow }
-}
-
 function Threads() {
-  const [view] = useAppSetting<View>(VIEW)
-  const { folded } = useFolded(view)
   const machines = useMachines().filter((m) => m.state !== 'disabled')
   const { sessions, lastThread, hold } = useSessions()
   const { selection, select } = useSelection()
@@ -105,8 +67,6 @@ function Threads() {
   const local = machines.find((m) => m.id === 'local')
   const ready = local?.state === 'connected'
 
-  // Folded, the threads are dots in the window's rail (ThreadsRail); the sidebar has nothing to show.
-  if (folded) return null
   return (
     <div className={`threads ${ready ? 'is-ready' : ''}`} data-focus-scope onPointerEnter={() => hold(true)} onPointerLeave={() => hold(false)}>
       <div className="threads__head">
@@ -203,12 +163,12 @@ function NewThreadButton({ label, machine, cwd }: { label: string; machine?: Mac
 
 const SORTS: { value: Sort; label: string }[] = [{ value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' }]
 
-/** The ··· menu: sort, show as, details. */
+/** The ··· menu: sort, details, folding to dots. */
 function Options() {
   const [sort, setSort] = useAppSetting<Sort>(SORT)
-  const [view, setView] = useAppSetting<View>(VIEW)
   const [details, setDetails] = usePlacement(DETAILS, 'aside')
-  const railKeys = useShortcut('threads.rail')
+  const dispatch = useDispatch()
+  const foldKeys = useShortcut(FOLD)
   const detailsKeys = useShortcut(DETAILS)
   return (
     <Menu.Root>
@@ -221,42 +181,26 @@ function Options() {
           </Menu.RadioGroup>
         </Menu.Group>
         <Menu.Separator />
-        <Menu.Group>
-          <Menu.GroupLabel>Show as</Menu.GroupLabel>
-          <Menu.RadioGroup value={view ?? 'list'} onValueChange={(value) => void setView(value as View)}>
-            <Menu.RadioItem value="list">List</Menu.RadioItem>
-            <Menu.RadioItem value="rail" hint={railKeys}>Rail</Menu.RadioItem>
-          </Menu.RadioGroup>
-        </Menu.Group>
-        <Menu.Separator />
         <Menu.CheckboxItem checked={details} onCheckedChange={(checked) => setDetails(checked)} hint={detailsKeys}>Thread details</Menu.CheckboxItem>
+        <Menu.Item onClick={() => void dispatch(FOLD, {}, { source: 'threads' }).catch((error) => console.error(error))} hint={foldKeys}>Fold to dots</Menu.Item>
       </Menu.Popup>
     </Menu.Root>
   )
 }
 
 /**
- * In the window's rail: Threads, lit while the sidebar shows them. A click folds the list into status dots here (and
- * back); with the sidebar closed (or showing another space), it opens it. Something unread you can't see from here
- * shows as a dot on the button, in the most pressing one's colour.
+ * In the window's rail: Threads, lit while they're the open space. A click folds the sidebar, the threads then status
+ * dots here, and shows the list again; with another space open (or none: Settings, Ego's thread), it shows the list.
+ * Something unread you can't see from here shows as a dot on the button, in the most pressing one's colour.
  */
-function ThreadsRail({ open, show }: SpaceRailProps) {
-  const [view, setView] = useAppSetting<View>(VIEW)
+function ThreadsRail({ open, folded: sidebarFolded, show }: SpaceRailProps) {
   const { sessions } = useSessions()
   const { selection, select } = useSelection()
-  const fold = useFolded(view)
-  const folded = open && fold.folded
-  const toggleKeys = useShortcut('threads.rail')
+  const folded = open && sidebarFolded
+  const toggleKeys = useShortcut(FOLD)
   const waiting = sessions.flatMap((s) => s.threads.filter((t) => unread(t) && !(s.machine.id === selection?.machine && t.id === selection.thread)).map((t) => t.status))
   const badge = !folded && waiting.length ? rollup(waiting).state : undefined
-  const click = () => {
-    if (fold.narrow) {
-      if (!open) show()
-      if (view === 'rail') void setView('list')
-      unfolded.set(open ? folded : true)
-    } else if (!open) { show(); if (view === 'rail') void setView('list') }
-    else void setView(folded ? 'list' : 'rail')
-  }
+  const click = () => show(!open || folded)
   const isOn = (session: Session, thread: ThreadInfo) => selection?.machine === session.machine.id && selection.thread === thread.id
   return (
     <TooltipProvider>

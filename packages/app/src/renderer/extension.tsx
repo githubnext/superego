@@ -84,8 +84,12 @@ export type ViewProps<C extends ViewContext = ViewContext> = C extends 'thread'
   ? { place: Place; machine: MachineEntry; thread: ThreadInfo }
   : { place: Place }
 
-/** What a space draws in the rail instead of the button that opens it: whether it's the open one, and a way to show it or not. */
-export type SpaceRailProps = { open: boolean; show(open?: boolean): void }
+/**
+ * What a space draws in the rail instead of the button that opens it: whether it's the open one; whether the sidebar is
+ * folded, the open one then shown in the rail alone (as its slim form, if it has one: a list folded into dots); and a
+ * way to show it in full (`show()`) or fold it (`show(false)`).
+ */
+export type SpaceRailProps = { open: boolean; folded: boolean; show(open?: boolean): void }
 
 /**
  * A view: UI an extension offers, which the layout puts in places (see layout.ts). `fits` says which places it can be
@@ -106,14 +110,8 @@ export type View<C extends ViewContext = ViewContext> = {
   /** Order among the views in a place (100 when unset; then as registered); the user's layout comes first. */
   order?: number
   component: ComponentType<ViewProps<C>>
-  /** As a `space`: what it draws in the rail instead of a button with its icon (a list folded into dots). */
+  /** As a `space`: what it draws in the rail instead of a button with its icon (folded, its slim form: a list as dots). */
   rail?: ComponentType<SpaceRailProps>
-  /**
-   * As a `space`: the action that folds it into a slim form in the rail and back, run with `{ on: true }` to fold and
-   * `{ on: false }` to unfold. The shell runs it as the sidebar's edge is dragged narrow, or out from the rail. Without
-   * one, dragging it narrow closes the sidebar.
-   */
-  fold?: string
   /** As a pane: its width to start with, as a share of the row. */
   width?: number
 }

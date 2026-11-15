@@ -12,6 +12,10 @@ declare module '@phosphor-icons/react' {
   }
   export type Icon = ForwardRefExoticComponent<IconProps>
   export const ArchiveIcon: Icon
+  export const ArrowClockwiseIcon: Icon
+  export const KeyIcon: Icon
+  export const ShieldWarningIcon: Icon
+  export const WarningIcon: Icon
   export const CardsIcon: Icon
   export const ColumnsPlusRightIcon: Icon
   export const ArrowCounterClockwiseIcon: Icon

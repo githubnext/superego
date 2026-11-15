@@ -3,13 +3,14 @@
 // remembered on this computer for those sources, and the thread's header says so instead, a click from asking again.
 // See profile-ui.ts.
 import { useState } from 'react'
-import { Button, FileTextIcon } from '@superego/ui'
+import { Button, FileTextIcon, ShieldWarningIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import type { PaneProps, UiApi } from './extension.tsx'
 import type { ThreadInfo } from '@superego/protocol'
 import { Markdown } from './Markdown.tsx'
 import { declineUi, dismissRevokedUi, reopenUi, usePendingUi, useProfileSource, useRevokedUi } from './profile-ui.ts'
 import { useRegistry } from './extension.tsx'
+import { RailNotice } from './rail-notice.tsx'
 
 /** A size in bytes, as people say it. */
 export const sizeOf = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -64,13 +65,13 @@ function ProfileUiNotice({ machine, thread }: { machine: MachineEntry; thread: T
 /**
  * A remote profile's UI revoked after it ran here: its views and actions are gone, but its code may have left
  * something going (a timer, a listener, a request), and only a fresh window is sure to stop it. Offers that reload, in
- * the window (and, `machine`, in that machine's row in Settings).
+ * the window (wide, in the rail: `rail`), and, `machine`, in that machine's row in Settings.
  */
-export function RevokedUiNotice({ machine }: { machine?: string }) {
+export function RevokedUiNotice({ machine, rail = false }: { machine?: string; rail?: boolean }) {
   const revoked = useRevokedUi().filter((r) => !machine || r.machine === machine)
   if (!revoked.length) return null
   const names = revoked.length === 1 ? `the ${revoked[0]!.profile.name} profile’s` : `the ${revoked.map((r) => r.profile.name).join(', ')} profiles’`
-  return (
+  const notice = (
     <div className={machine ? 'settings__note machine-row__revoked' : 'service-notice revoked-ui-notice'} role="status" aria-live="polite">
       <div className={machine ? undefined : 'service-notice__label'}>
         Revoked {names} UI. Reload the window to make sure none of its code keeps running.
@@ -81,6 +82,7 @@ export function RevokedUiNotice({ machine }: { machine?: string }) {
       </div>
     </div>
   )
+  return rail && !machine ? <RailNotice kind="revoked" label="Reload to stop revoked UI" tone="blocked" icon={ShieldWarningIcon}>{notice}</RailNotice> : notice
 }
 
 /** Put off for now: a quiet word among the header's chips, that asks again (the notice) when clicked. */

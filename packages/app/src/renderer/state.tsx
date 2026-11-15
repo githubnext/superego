@@ -1,7 +1,7 @@
 // What the shell knows and shares: the machines, every connected machine's threads (one subscription each, whatever
 // number of components show them), which thread is selected, and the Settings dialog; those two kept in the window
 // across reloads; and where the window has been, to go back and forward.
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { AUTH_REJECTED, DATA_VIEWS, type Json, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { has, machine as client, useHiddenThreads, useMachineList, useThreads as useThreadsWatch, useValue } from './client.ts'
@@ -13,6 +13,7 @@ import { setLocalState, useLocalState } from './local-state.ts'
 import { focusProvider } from './provider-focus.ts'
 import { useWindowEvents } from './window-events.ts'
 import { freeze, sessionKey, useSessionList, type Session } from './sessions.ts'
+import { isFolded, showSidebar, TIGHT, type SidebarMode } from './sidebar-mode.ts'
 
 export type Selection = { machine: string; thread: string }
 
@@ -39,8 +40,10 @@ type ShellState = {
   hold(held: boolean): void
   /** The thread last shown in a session, by its key. */
   lastThread: Record<string, string>
-  sidebarOpen: boolean
-  toggleSidebar(open?: boolean): void
+  /** Whether the sidebar is folded (see sidebar-mode.ts). */
+  sidebarFolded: boolean
+  /** Show the sidebar in full (`open`), or fold it; left out, the other way. */
+  showSidebar(open?: boolean): void
   /** The selected thread when it's archived (the machine's list leaves those out): fetched once it's selected. */
   archived: ThreadInfo | undefined
   /** The selected machine's threads that no list shows (extensions' own, like Ego's): shown when selected. */
@@ -84,10 +87,10 @@ export function useSessions() {
   const { sessions, lastThread, hold } = useShellState()
   return { sessions, lastThread, hold }
 }
-/** Whether the sidebar is open, and a way to open or close it. */
+/** Whether the sidebar is folded, and a way to show it in full or fold it (`show()` the other way). */
 export function useSidebar() {
-  const { sidebarOpen, toggleSidebar } = useShellState()
-  return { open: sidebarOpen, toggle: toggleSidebar }
+  const { sidebarFolded, showSidebar } = useShellState()
+  return { folded: sidebarFolded, show: showSidebar }
 }
 /** Back and forward through the threads (and Settings) this window has shown. */
 export function useHistory() {
@@ -118,6 +121,10 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useLocalState('settings.open', false)
   const [newThread, setNewThread] = useState<NewThreadStart>()
   const [sidebarOpen, setSidebarOpen] = useLocalState('sidebar.open', true)
+  const [sidebarUnfolded, setSidebarUnfolded] = useState(false)
+  const tight = useMedia(TIGHT)
+  useEffect(() => { if (!tight) setSidebarUnfolded(false) }, [tight])
+  const sidebarMode: SidebarMode = { open: sidebarOpen, unfolded: sidebarUnfolded }
   const onThreads = useCallback((machine: string, list: ThreadInfo[] | undefined) => {
     setThreads((all) => all[machine] === list ? all : { ...all, [machine]: list })
   }, [])
@@ -180,7 +187,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const exists = (p: Place) => 'settings' in p || Boolean(hiddenAll[p.thread.machine]?.some((t) => t.id === p.thread.thread))
     || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread))
   const value = useMemo<ShellState>(() => ({
-    machines, threads, rejections, selection, settingsOpen, newThread, sessions, hold, lastThread, sidebarOpen, archived, hidden, listed,
+    machines, threads, rejections, selection, settingsOpen, newThread, sessions, hold, lastThread, sidebarFolded: isFolded(sidebarMode, tight), archived, hidden, listed,
     canBack: Boolean(step(history, -1, place, exists)),
     canForward: Boolean(step(history, 1, place, exists)),
     go: (by) => {
@@ -195,8 +202,12 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     select: (next) => { setSettingsOpen(false); setNewThread(undefined); setSelection(next) },
     openSettings: (open = true) => setSettingsOpen(open),
     openNewThread: (start = {}) => setNewThread(start === false ? undefined : start),
-    toggleSidebar: (open) => setSidebarOpen((was) => open ?? !was),
-  }), [machines, threads, rejections, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, archived, hidden, hiddenAll, history, listed])
+    showSidebar: (open) => {
+      const next = showSidebar(sidebarMode, tight, open)
+      setSidebarOpen(next.open)
+      setSidebarUnfolded(next.unfolded)
+    },
+  }), [machines, threads, rejections, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, sidebarUnfolded, tight, archived, hidden, hiddenAll, history, listed])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onHidden={onHidden} onRejections={onRejections} />)}
@@ -249,4 +260,13 @@ export function useNewThreadDialog() {
 export function useSettingsDialog() {
   const { settingsOpen, openSettings } = useShellState()
   return { open: settingsOpen, close: () => openSettings(false) }
+}
+
+/** Whether the window matches a media query, as it's resized. */
+function useMedia(query: string) {
+  return useSyncExternalStore((change) => {
+    const list = matchMedia(query)
+    list.addEventListener('change', change)
+    return () => list.removeEventListener('change', change)
+  }, () => matchMedia(query).matches)
 }

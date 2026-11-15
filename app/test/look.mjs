@@ -1,4 +1,4 @@
-// Screenshots of the window's layout (run by test/look.sh): the sidebar open, folded to dots and closed; the thread
+// Screenshots of the window's layout (run by test/look.sh): the sidebar open and folded to dots; the thread
 // alone (and dragged narrower) and with Changes beside it (and a file past it); a long title, parent and branch; thread
 // details, their menu and the layout's file beside the thread; a phone, its drawer open, a data view in it, the thread's sheet; a data view
 // as a space; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
@@ -131,7 +131,7 @@ void (async () => {
   await run(`window.superego.call('local', 'pane.close', { id: '${id}', pane: '${editorId}' })`)
   await run(`document.activeElement?.blur()`)
   await sleep(300)
-  await setting('threads.view', 'rail')
+  await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true }))`)
   await sleep(300)
   await both('dots-changes')
   // Focus shown: the thread holds the keyboard.
@@ -142,10 +142,6 @@ void (async () => {
   await run(`window.superego.call('local', 'pane.close', { id: '${id}', pane: '${paneId}' })`)
   await sleep(300)
   await both('dots')
-  await setting('threads.view', 'list')
-  await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true }))`)
-  await sleep(300)
-  await both('closed')
   // A long title, a parent and a long branch, then archived: the title bar fits the window, wide and at its narrowest.
   await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true }))`)
   const long = 'Make the next and previous thread keys follow the order the sidebar shows them in, children under their parents'

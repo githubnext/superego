@@ -1,11 +1,12 @@
 // "Restart required": the background process runs older code than is installed. Outside the transcript and never a
-// modal: restart now, when idle, or later (which leaves a quiet reminder).
+// modal: restart now, when idle, or later (which leaves a quiet reminder). Wide, in the rail (`rail`).
 import { useEffect, useState } from 'react'
-import { Button } from '@superego/ui'
+import { ArrowClockwiseIcon, Button } from '@superego/ui'
 import { useRegistry } from './extension.tsx'
+import { RailNotice } from './rail-notice.tsx'
 import type { ServiceAction, ServiceState } from '../main/restart.ts'
 
-export function ServiceNotice() {
+export function ServiceNotice({ rail = false }: { rail?: boolean }) {
   const [state, setState] = useState<ServiceState>()
   useEffect(() => {
     let live = true
@@ -26,13 +27,13 @@ export function ServiceNotice() {
     ? 'The background process restarts once no agent is working.'
     : 'The background process runs older code than is installed. Restart it to use the new version; threads and their history are kept.')
 
-  if (state.deferred) {
+  if (state.deferred && !rail) {
     return <div className="service-notice is-deferred"><Button title={detail} onClick={() => act('review')}>Restart required…</Button></div>
   }
-  return (
+  const notice = (
     <div className="service-notice" role="status" aria-live="polite">
       <div className="service-notice__label" title={detail}>{label}</div>
-      {state.phase === 'error' && <div className="service-notice__detail">{state.error}</div>}
+      {state.phase === 'error' ? <div className="service-notice__detail">{state.error}</div> : rail && <div className="service-notice__note">{detail}</div>}
       {!restarting && (
         <div className="service-notice__actions">
           {!waiting && (state.busy
@@ -44,4 +45,9 @@ export function ServiceNotice() {
       )}
     </div>
   )
+  // Put off, a quiet mark; opened, it's reviewed: the reminder is up again until put off again.
+  return rail
+    ? <RailNotice kind="service" label={state.deferred ? 'Restart required' : label} tone={state.phase === 'error' ? 'error' : 'accent'} icon={ArrowClockwiseIcon}
+      quiet={state.deferred} {...(state.deferred ? { onOpen: () => act('review') } : {})}>{notice}</RailNotice>
+    : notice
 }

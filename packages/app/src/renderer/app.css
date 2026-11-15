@@ -27,10 +27,22 @@
 .app__rail[data-tab="settings"] .app__settings::before, .app__rail[data-tab="settings"] .app__settings::after { background: var(--rail-front); }
 .app__rail[data-tab="settings"] .app__rail-button.is-on { color: var(--superego-faint); }
 .app__rail :is(.app__rail-button, .app__settings) svg { width: 17px; height: 17px; }
+/* The notices, wide (rail-notice.tsx): above Settings, a quiet icon with a dot in its tone; quiet (put off), no dot.
+   Opened, all it says in a popover beside the rail. */
+.rail-notice { position: relative; display: grid; place-items: center; width: 30px; height: 30px; margin-right: 6px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--superego-muted); -webkit-app-region: no-drag; }
+.rail-notice:hover, .rail-notice.is-open { color: var(--superego-text); background: var(--superego-hover); }
+.rail-notice::after { content: ''; position: absolute; top: 3px; right: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 0 2px var(--superego-rail-bg); }
+.rail-notice--accent { --tone: var(--superego-accent); }
+.rail-notice--blocked { --tone: var(--superego-status-blocked); }
+.rail-notice--error { --tone: var(--superego-status-error); }
+.rail-notice.is-quiet { color: var(--superego-faint); }
+.rail-notice.is-quiet::after { display: none; }
+.rail-notice__popup { width: 260px; padding: 4px; }
+.rail-notice__popup .service-notice { margin: 0; background: none; box-shadow: none; }
 /* The sidebar: on the side's grey beside the rail, a hairline at its edge. Hidden while what's in it shows nothing.
    A region (its ring: see the end). */
 .app__sidebar { position: relative; width: var(--superego-sidebar); flex: none; min-height: 0; overflow: auto; padding: 7px 8px 10px; display: flex; flex-direction: column; }
-.app__sidebar:has(> .app__footer:first-child:empty) { display: none; }
+.app__sidebar:empty { display: none; }
 /* Its edge (sidebar-edge.tsx), on the hairline between it and the thread (with it hidden, the rail's): a strip to drag,
    quiet until it's pointed at or dragged, when the line darkens and a grip shows on it, as on the panes' handles.
    Dragged short enough to fold, the sidebar dims. */
@@ -47,13 +59,13 @@
 .app__tools .superego-icon-button:hover { color: var(--superego-text); }
 /* The thread and its panes, white (or the dark's deepest grey); a hairline between it and the list. */
 .app__main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; background: var(--superego-bg); overflow: hidden; }
-.app.has-sidebar:not(.is-narrow):has(.app__sidebar > :not(.app__footer):first-child) .app__main { border-left: 1px solid var(--superego-line); }
+.app.has-sidebar:not(.is-narrow):has(.app__sidebar:not(:empty)) .app__main { border-left: 1px solid var(--superego-line); }
 /* The title bar: past the window's buttons (or, with the list open, past the side), where you are; the thread's
    columns and what it says about itself at the right. Over the list, the side's grey runs up behind the window's
    buttons, with back and forward at its right edge. */
 .app__titlebar { position: relative; height: var(--superego-titlebar); display: flex; align-items: center; gap: var(--superego-space-3); min-width: 0; padding: 0 12px 0 84px; border-bottom: 1px solid var(--superego-line); container-type: inline-size; overflow: hidden; }
-.app.has-sidebar:has(.app__sidebar > :not(.app__footer):first-child) .app__titlebar { padding-left: calc(var(--superego-rail) + var(--superego-sidebar) + 1px + var(--superego-space-3)); }
-.app.has-sidebar:has(.app__sidebar > :not(.app__footer):first-child) .app__titlebar::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: calc(var(--superego-rail) + var(--superego-sidebar)); background: var(--superego-chrome); border-right: 1px solid var(--superego-line); pointer-events: none; }
+.app.has-sidebar:has(.app__sidebar:not(:empty)) .app__titlebar { padding-left: calc(var(--superego-rail) + var(--superego-sidebar) + 1px + var(--superego-space-3)); }
+.app.has-sidebar:has(.app__sidebar:not(:empty)) .app__titlebar::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: calc(var(--superego-rail) + var(--superego-sidebar)); background: var(--superego-chrome); border-right: 1px solid var(--superego-line); pointer-events: none; }
 /* Short of room, the bar gives way in turn. Its end takes up to 55% of it: in there, where the thread came from and
    its branch give way first (gone when tight), then the tabs and the model; buttons keep their size. The title takes
    the rest, the project kept short beside it. Nothing makes the window wider: the bar is as wide as the window,
@@ -78,7 +90,7 @@
 /* Back and forward: past the window's buttons, quiet. */
 .app__history { flex: none; display: flex; align-items: center; gap: 2px; margin-right: -4px; }
 /* With the sidebar open, the title starts over the sheet; back and forward stay over the list, at its right edge. */
-.app.has-sidebar:has(.app__sidebar > :not(.app__footer):first-child) .app__history { position: absolute; top: 0; bottom: 0; margin: 0; right: calc(100% - var(--superego-rail) - var(--superego-sidebar) + 10px); }
+.app.has-sidebar:has(.app__sidebar:not(:empty)) .app__history { position: absolute; top: 0; bottom: 0; margin: 0; right: calc(100% - var(--superego-rail) - var(--superego-sidebar) + 10px); }
 .app__history .superego-icon-button { width: 26px; height: 26px; min-height: 26px; border-radius: 6px; box-shadow: none; background: none; color: var(--superego-muted); }
 .app__history .superego-icon-button:hover:not(:disabled) { background: var(--superego-hover); color: var(--superego-text); }
 .app__titlebar-end { margin-left: auto; display: flex; align-items: center; gap: var(--superego-space-2); min-width: 0; flex: none; max-width: 55cqi; }
@@ -370,6 +382,8 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .service-notice { margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; background: var(--superego-raised); box-shadow: var(--superego-control-edge); font-size: calc(12px * var(--superego-text-scale)); }
 .service-notice__label { font-weight: 600; cursor: default; }
 .service-notice__detail { color: var(--superego-status-error); margin-top: 2px; }
+/* In the rail's popover, room for why. */
+.service-notice__note { color: var(--superego-muted); margin-top: 2px; }
 .service-notice__actions { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
 .service-notice__actions .superego-button { padding: 2px 8px; font-size: calc(12px * var(--superego-text-scale)); }
 .service-notice.is-deferred { padding: 0; background: none; box-shadow: none; }

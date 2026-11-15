@@ -62,7 +62,7 @@ export function Shell() {
   // hidden thread's (Ego's: the thread alone, no sidebar); else the open space, as the sidebar.
   const tab: 'settings' | 'thread' | 'space' = narrow ? 'space' : settings.open ? 'settings' : alone ? 'thread' : 'space'
   // Wide, the sidebar's edge resizes it, and folds it dragged narrow.
-  const sidebarEdge = useSidebarEdge(space)
+  const sidebarEdge = useSidebarEdge()
   const where = selection && thread && machine ? { machine: machine.id, thread } : undefined
   // The thread's places, as the views it sees resolve.
   const threadPlaced = useLayout(where).placed
@@ -84,7 +84,7 @@ export function Shell() {
       return found?.panes ? { ...found, panes: shownPanes(registry, { machine: s.machine, thread: found }) } : found
     },
     sessions, lastThread, appSetting: (key) => watched<SettingsSnapshot>('app', 'settings.watch', {})?.values[key] as never,
-    toggleSidebar: () => narrow ? setDrawer((open) => !open) : sidebar.toggle(),
+    toggleSidebar: () => narrow ? setDrawer((open) => !open) : sidebar.show(),
     back: history.back, forward: history.forward,
   })
   useAppEffects()
@@ -94,7 +94,9 @@ export function Shell() {
       <GearSixIcon size={18} aria-hidden />
     </IconButton>
   )
-  const sideOpen = spaces.length > 0 && (narrow ? drawer : sidebar.open && tab === 'space')
+  const sideOpen = spaces.length > 0 && (narrow ? drawer : !sidebar.folded && tab === 'space')
+  // The notices: wide, in the rail above Settings, each a mark that opens to all it says; on a phone, at the drawer's foot.
+  const notices = <><AuthNotice rail={!narrow} /><ServiceNotice rail={!narrow} /><LayoutNotice rail={!narrow} /><RevokedUiNotice rail={!narrow} /></>
   // Wide: across the top a title bar (the window's buttons, then where you are, the thread's columns and what the thread
   // says about itself); down the left a rail (what extensions put there, Settings) and the sidebar beside it; the rest holds the
   // thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.
@@ -110,8 +112,6 @@ export function Shell() {
             ? <span className="titlebar__crumb"><span className="titlebar__seg titlebar__title">Settings</span></span>
             : selection && thread && machine && <ThreadTitle machine={machine} thread={thread} />}
           <span className="app__titlebar-end">
-            {/* The notices go at the sidebar's foot; without one shown (Settings, Ego's thread, closed), here. */}
-            {!sideOpen && <><AuthNotice /><ServiceNotice /><LayoutNotice /><RevokedUiNotice /></>}
             <span className="app__strip" ref={setStrip} />
             {tab !== 'settings' && selection && thread && machine && <ThreadTools machine={machine} thread={thread} />}
           </span>
@@ -124,10 +124,10 @@ export function Shell() {
               <PlacedViews place="rail" frame={withContextMenu('rail')} />
               {spaces.map((view) => (
                 <ViewContextMenu key={view.id} view={view.id} place="space">
-                  <SpaceButton view={view} open={tab === 'space' && sidebar.open && view.id === space?.id}
+                  <SpaceButton view={view} open={tab === 'space' && view.id === space?.id} folded={sidebar.folded}
                     show={(open = true) => {
                       setSpace(view.id)
-                      sidebar.toggle(open)
+                      sidebar.show(open)
                       // From Ego's thread, back to the listed one it left; from Settings, back to the thread.
                       if (open && alone) select(listed)
                       else if (open) settings.close()
@@ -135,7 +135,7 @@ export function Shell() {
                 </ViewContextMenu>
               ))}
             </div>
-            <div className="app__rail-group">{settingsButton}</div>
+            <div className="app__rail-group">{notices}{settingsButton}</div>
           </nav>
         )}
         {tab === 'settings' && <main className="app__main"><SettingsView machines={machines} onClose={settings.close} pane /></main>}
@@ -144,19 +144,19 @@ export function Shell() {
           <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) setDrawer(false) } : undefined}>
             {narrow && <div className="app__drag" />}
             {space && <SpaceView key={space.id} view={space} {...(where ? { machine, thread } : {})} />}
-            <div className="app__footer"><AuthNotice /><ServiceNotice /><LayoutNotice /><RevokedUiNotice />{narrow && (
-              // A phone's drawer: the other spaces to switch to, what the layout puts in the drawer, and Settings at the end.
+            {narrow && <div className="app__footer">{notices}
+              {/* A phone's drawer: the other spaces to switch to, what the layout puts in the drawer, and Settings at the end. */}
               <div className="app__drawer-bar">
                 {spaces.length > 1 && <>
                   {spaces.map((view) => (
-                    <ViewContextMenu key={view.id} view={view.id} place="space"><SpaceButton view={view} open={view.id === space?.id} show={() => setSpace(view.id)} narrow /></ViewContextMenu>
+                    <ViewContextMenu key={view.id} view={view.id} place="space"><SpaceButton view={view} open={view.id === space?.id} folded={false} show={() => setSpace(view.id)} narrow /></ViewContextMenu>
                   ))}
                   <span className="app__drawer-sep" aria-hidden />
                 </>}
                 <PlacedViews place="drawer" frame={withContextMenu('drawer')} />
                 <span className="app__drawer-end">{settingsButton}</span>
               </div>
-            )}</div>
+            </div>}
           </aside>
         )}
         {!narrow && tab === 'space' && spaces.length > 0 && sidebarEdge.edge}
@@ -218,12 +218,16 @@ function BackForward() {
   )
 }
 
-/** A space's button in the rail: its own (`rail`), else its icon, lit while it's the open one. In a phone's drawer, always its icon. */
-function SpaceButton({ view, open, show, narrow = false }: { view: View; narrow?: boolean } & SpaceRailProps) {
-  if (view.rail && !narrow) return <Contained name={whose(view)} inline><view.rail open={open} show={show} /></Contained>
+/**
+ * A space's button in the rail: its own (`rail`), else its icon, lit while the sidebar shows it, and folding it from
+ * there. In a phone's drawer, always its icon.
+ */
+function SpaceButton({ view, open, folded, show, narrow = false }: { view: View; narrow?: boolean } & SpaceRailProps) {
+  if (view.rail && !narrow) return <Contained name={whose(view)} inline><view.rail open={open} folded={folded} show={show} /></Contained>
   const Icon = view.icon
+  const shown = open && !folded
   return (
-    <IconButton label={view.title} className={`app__rail-button ${open ? 'is-on' : ''}`} onClick={() => show(!open)}>
+    <IconButton label={view.title} className={`app__rail-button ${shown ? 'is-on' : ''}`} onClick={() => show(!shown)}>
       {Icon ? <Icon size={18} aria-hidden /> : view.title.slice(0, 1)}
     </IconButton>
   )

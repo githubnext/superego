@@ -5,11 +5,12 @@
 // layout itself: there, Edit layout… opens it in a dialog.
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { SettingsSnapshot } from '@superego/protocol'
-import { Button, Dialog, TextArea } from '@superego/ui'
+import { Button, Dialog, TextArea, WarningIcon } from '@superego/ui'
 import { useAppSetting, useSettings, watched } from './client.ts'
 import { isLayout, LAYOUT, PLACES, type Place, type Placement } from './layout.ts'
 import { defineWindowAction } from './actions.tsx'
 import { useRegistry, type EditorSlotProps, type UiApi } from './extension.tsx'
+import { RailNotice } from './rail-notice.tsx'
 
 type LayoutData = { file: string; problem?: string; missing?: string[] }
 
@@ -53,13 +54,25 @@ export function LayoutViews() {
 }
 
 /** In the window: the layout file wasn't applied, and a way to it. */
-export function LayoutNotice() {
+export function LayoutNotice({ rail = false }: { rail?: boolean }) {
   const data = useLayoutData()
   const dispatch = useRegistry().router.dispatch
   if (!data?.problem) return null
+  const edit = () => void dispatch('layout.edit', {}, { source: 'notice' }).catch((error) => console.error(error))
+  if (rail) {
+    return (
+      <RailNotice kind="layout" label="Layout not applied" tone="blocked" icon={WarningIcon}>
+        <div className="service-notice layout-notice" role="status">
+          <div className="service-notice__label">Layout not applied</div>
+          <div className="service-notice__detail">{data.problem}</div>
+          <div className="service-notice__actions"><Button variant="primary" onClick={edit}>Edit layout…</Button></div>
+        </div>
+      </RailNotice>
+    )
+  }
   return (
     <div className="service-notice is-deferred layout-notice" role="status">
-      <Button title={data.problem} onClick={() => void dispatch('layout.edit', {}, { source: 'notice' }).catch((error) => console.error(error))}>Layout not applied…</Button>
+      <Button title={data.problem} onClick={edit}>Layout not applied…</Button>
     </div>
   )
 }

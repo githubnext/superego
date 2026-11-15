@@ -303,7 +303,7 @@ place, and the window's console has why.
 
 | UI half (`superego.` in `setup`) | For |
 |---|---|
-| `view('x.y', { title, icon, context, fits, default, narrow, withoutSpaces, order, component, rail, fold, width })` | UI the layout puts in places (below): a space, a rail button, beside the thread, the pane menu, the title bar; `default` where it goes unless the user moves it |
+| `view('x.y', { title, icon, context, fits, default, narrow, withoutSpaces, order, component, rail, width })` | UI the layout puts in places (below): a space, a rail button, beside the thread, the pane menu, the title bar; `default` where it goes unless the user moves it |
 | `slot(name, Component, { order })` | a component in a slot whose place behaviour decides (below): `thread.crumb` for a chip where the title bar says where a thread works, `thread.badge` for a small mark after its title in the sidebar (a `thread-badge`: a 12px icon with a `title`), `composer.above`, `editor.side`, `editor.bar`, `overlay`. The old places (`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) are deprecated: declare a `view` |
 | `newThreadField({ component, from })` | a field in the New thread dialog: its value goes to `thread.create` as `options.<name>`, for the daemon half's `creating`; `from(thread)` its value for one started like `thread`; bundled only |
 | `signal` | aborted at teardown (its profile's UI reloaded or revoked): for its own timers, listeners and fetches (below) |
@@ -463,14 +463,14 @@ setting `app.layout` as `app.keys` keeps shortcuts.
 
 <!-- check: ui; import { ChatsIcon, LifebuoyIcon, type SpaceRailProps } from 'superego/ui'; declare const Threads: (props: ViewProps<'window'>) => null, DetailsPane: (props: ViewProps<'thread'>) => null, EgoButton: (props: ViewProps<'window'>) => null, ThreadsRail: (props: SpaceRailProps) => null -->
 ```ts
-superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: Threads, rail: ThreadsRail, fold: 'threads.rail' })
+superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: Threads, rail: ThreadsRail })
 superego.view('threads.details', { title: 'Thread details', context: 'thread', fits: ['aside', 'pane'], component: DetailsPane })
 superego.view('ego.button', { title: 'Ask Ego', icon: LifebuoyIcon, context: 'window', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10, component: EgoButton })
 ```
 
 | Place | What it is | A view there gets |
 |---|---|---|
-| `space` | a button in the rail (its `icon`, or its own `rail` component), and the sidebar while it's the open one; on a phone, the drawer. Its `fold` names an action that folds it into a slim form in the rail and back, given `{ on }`: the shell runs it as the sidebar's edge is dragged narrow, or out from the rail (without one, the sidebar closes) | `{ place }`; a `thread` view, the thread shown |
+| `space` | a button in the rail (its `icon`, or its own `rail` component), and the sidebar while it's the open one; on a phone, the drawer. The sidebar folds (⌘/, the open space's button, its edge dragged narrow; a tight window by itself): its `rail` component is told so (`folded`), and draws the space's slim form in the rail if it has one (Threads' status dots); a space without one just hides | `{ place }`; a `thread` view, the thread shown |
 | `rail` | a button in the rail that isn't a space (Ego's) | `{ place }` |
 | `drawer` | on a phone, at the drawer's foot beside Settings, where there's no rail | `{ place }` |
 | `titlebar` | at the title bar's start: what stands in for a space while there's none (the core's thread picker) | `{ place }` |

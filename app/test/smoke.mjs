@@ -43,12 +43,33 @@ const until = async (js, label, ms = 15_000) => {
   throw new Error('failed')
 }
 const STRAY = new URL('../out/main/zz-smoke-restart.js', import.meta.url).pathname
-async function restartOntoNewCode(change) {
+/** Over the rail, the notice of `kind` (rail-notice.tsx), opened: all it says, in its popover. */
+const openNotice = async (kind, label) => {
+  await until(`Boolean(document.querySelector('.app__rail .rail-notice--${kind}'))`, `${label} in the rail`)
+  if (!await run(`Boolean(document.querySelector('.rail-notice__popup'))`)) await run(`document.querySelector('.app__rail .rail-notice--${kind}').click()`)
+  await until(`Boolean(document.querySelector('.rail-notice__popup'))`, `${label} opened`)
+}
+/** `atRest`: before restarting, with the window at rest on Threads, fold the sidebar: the notice stays in the rail. */
+async function restartOntoNewCode(change, { atRest = false } = {}) {
   const before = await run(`window.superego.machines().then((list) => list.find((m) => m.id === 'local'))`)
   change()
-  await until(`document.querySelector('.service-notice')?.textContent.includes('Restart required')`, 'restart required shown')
-  await run(`[...document.querySelectorAll('.service-notice button')].find((b) => b.textContent === 'Restart now').click()`)
-  await until(`!document.querySelector('.service-notice')`, 'restart done', 40_000)
+  await until(`document.querySelector('.app__rail .rail-notice--service')?.getAttribute('aria-label') === 'Restart required'`, 'restart required shown in the rail')
+  if (atRest) {
+    // The sidebar folds with the notice up (it lived in the sidebar's foot, and held it open): the threads go to dots,
+    // the notice stays in the rail.
+    await key('/')
+    await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail .threads-rail__dot')) && Boolean(document.querySelector('.app__rail .rail-notice--service'))`, 'folded with the restart notice up')
+    await shot('rail-notice')
+  }
+  await openNotice('service', 'restart required')
+  await until(`document.querySelector('.rail-notice__popup .service-notice')?.textContent.includes('Restart required')`, 'restart required, in full')
+  if (atRest) { await new Promise((r) => setTimeout(r, 300)); await shot('rail-notice-open') }
+  await run(`[...document.querySelectorAll('.rail-notice__popup .service-notice button')].find((b) => b.textContent === 'Restart now').click()`)
+  await until(`!document.querySelector('.rail-notice--service') && !document.querySelector('.rail-notice__popup')`, 'restart done', 40_000)
+  if (atRest) {
+    await key('/')
+    await until(`Boolean(document.querySelector('.app__sidebar .threads-session'))`, 'the list again after the restart')
+  }
   const after = await run(`window.superego.call('local', 'hello', { client: 'smoke', version: 1 })`)
   if (after.machine.id !== before.machine.id || !(await run(`window.superego.call('local', 'thread.list', {})`)).length) { await fail('restart lost the machine or its threads'); throw new Error('failed') }
   return after
@@ -60,6 +81,11 @@ const shot = async (name) => {
   writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/${name}.png`, image.toPNG())
 }
 const run = (js, gesture = false) => BrowserWindow.getAllWindows()[0].webContents.executeJavaScript(js, gesture)
+const key = async (keyCode, modifiers = ['meta']) => {
+  const contents = BrowserWindow.getAllWindows()[0].webContents
+  contents.sendInputEvent({ type: 'keyDown', keyCode, modifiers })
+  contents.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
+}
 
 await until(`Boolean(document.querySelector('.threads.is-ready'))`, 'local machine connected')
 
@@ -252,22 +278,25 @@ if (phase === 'first') {
   await until(`Boolean(document.querySelector('.threads-rail__button .threads-rail__badge--done'))`, 'unread dot on Threads')
   await run(`[...document.querySelectorAll('.superego-list-item')].find((i) => i.textContent.includes('unread elsewhere')).click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'unread elsewhere'`, 'went to the unread thread')
-  // The sidebar's modes: the ··· menu (portalled, so a scrolling sidebar can't cut it off), ⌘\\ rail, ⌘I details.
-  const key = async (keyCode, modifiers = ['meta']) => {
-    const contents = BrowserWindow.getAllWindows()[0].webContents
-    contents.sendInputEvent({ type: 'keyDown', keyCode, modifiers })
-    contents.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
-  }
+  // The sidebar: the ··· menu (portalled, so a scrolling sidebar can't cut it off), ⌘/ folds it to dots, ⌘I details.
   await run(`document.querySelector('.threads-menu-trigger').click()`)
   await until(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].some((i) => i.textContent.includes('Needs you first'))`, 'sidebar menu open')
   await shot('menu')
   await run(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].find((i) => i.textContent.includes('Needs you first')).click()`)
   await until(`window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['app.sort'] === 'status')`, 'sorted by status')
-  await key('\\')
-  await until(`Boolean(document.querySelector('.threads-rail'))`, 'rail')
-  await key('\\')
-  await until(`Boolean(document.querySelector('.threads-session'))`, 'list again')
-  // Its edge: dragged, a width kept for every window; let go short, folded into the rail, then ⌘\ brings it back as
+  await key('/')
+  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail .threads-rail__dot'))`, 'folded: the sidebar gone, the threads as dots')
+  await key('/')
+  await until(`Boolean(document.querySelector('.threads-session')) && !document.querySelector('.threads-rail')`, 'list again')
+  // From the ··· menu too.
+  await run(`document.querySelector('.threads-menu-trigger').click()`)
+  await until(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].some((i) => i.textContent.includes('Fold to dots'))`, 'sidebar menu open again')
+  await run(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].find((i) => i.textContent.includes('Fold to dots')).click()`)
+  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail .threads-rail__dot'))`, 'folded from the menu')
+  // Threads in the rail shows the list again.
+  await run(`document.querySelector('.threads-rail__button').click()`)
+  await until(`Boolean(document.querySelector('.threads-session'))`, 'the list from the rail')
+  // Its edge: dragged, a width kept for every window; let go short, folded into the rail, then ⌘/ brings it back as
   // wide as it was; dragged out from the rail, the list again.
   const edge = (dx) => run(`(() => { const h = document.querySelector('.app__edge'); const r = h.getBoundingClientRect(); const x = r.left, y = r.top + r.height / 2
     h.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: x, clientY: y }))
@@ -277,8 +306,8 @@ if (phase === 'first') {
   await edge(300 - await run(`document.querySelector('.app__sidebar').offsetWidth`))
   await until(sidebarIs(300), 'sidebar dragged to 300')
   await edge(-200)
-  await until(`window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['threads.view'] === 'rail' && Boolean(document.querySelector('.threads-rail')))`, 'dragged short, folded into the rail')
-  await key('\\')
+  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail'))`, 'dragged short, folded into the rail')
+  await key('/')
   await until(sidebarIs(300), 'unfolded as wide as it was')
   await edge(-200)
   await until(`Boolean(document.querySelector('.threads-rail'))`, 'folded again')
@@ -297,13 +326,13 @@ if (phase === 'first') {
   await run(`document.querySelector('.threads-model').click()`)
   await until(`!document.querySelector('.threads-details')`, 'and off again')
   await key('/')
-  await until(`!document.querySelector('.app__sidebar')`, 'sidebar hidden')
+  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail'))`, 'sidebar folded')
   await key('i')
   await until(`Boolean(document.querySelector('.threads-details'))`, 'details on with the sidebar hidden')
   await key('i')
   await until(`!document.querySelector('.threads-details') && !document.querySelector('.threads-model').classList.contains('is-on')`, 'and off')
   await key('/')
-  await until(`Boolean(document.querySelector('.app__sidebar'))`, 'sidebar back')
+  await until(`Boolean(document.querySelector('.app__sidebar')) && !document.querySelector('.threads-rail')`, 'sidebar back')
   // Moving a view from its menu: the details from beside the thread into a pane and back, then the layout as text.
   const layoutNow = () => `window.superego.call('app', 'settings.watch', {}).then((r) => JSON.stringify(r.value.values['app.layout'] ?? {}))`
   const moveTo = async (button, place) => {
@@ -347,11 +376,20 @@ if (phase === 'first') {
   await until(`document.querySelector('.layout-note')?.textContent === 'Applied as you save'`, 'layout.json in the editor beside the thread')
   // A mistake is noted, and the last good layout stays; fixed, it applies.
   writeFileSync(layoutFile, '{ "place": { "threads.details": ')
-  await until(`document.querySelector('.layout-note.is-problem')?.textContent.includes('Not JSON') && Boolean(document.querySelector('.layout-notice')) && Boolean(document.querySelector('.app__aside .threads-details'))`, 'bad JSON noted, the details kept')
+  await until(`document.querySelector('.layout-note.is-problem')?.textContent.includes('Not JSON') && Boolean(document.querySelector('.app__rail .rail-notice--layout')) && Boolean(document.querySelector('.app__aside .threads-details'))`, 'bad JSON noted, the details kept')
+  // A notice up doesn't hold the sidebar open: folded, it's gone and the threads are dots; the notice is in the rail.
+  await key('/')
+  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail .threads-rail__dot')) && Boolean(document.querySelector('.app__rail .rail-notice--layout'))`, 'folded with the layout notice up')
+  await openNotice('layout', 'the layout notice')
+  await until(`document.querySelector('.rail-notice__popup .layout-notice')?.textContent.includes('Not JSON')`, 'the layout notice, in full')
+  await key('Escape', [])
+  await until(`!document.querySelector('.rail-notice__popup')`, 'the layout notice closed')
+  await key('/')
+  await until(`Boolean(document.querySelector('.app__sidebar .threads-session'))`, 'unfolded with the layout notice up')
   writeFileSync(layoutFile, '{ "place": { "threads.detail": "aside" } }')
-  await until(`document.querySelector('.layout-note:not(.is-problem)')?.textContent.includes('not here now, kept for when they\\'re back: threads.detail') && !document.querySelector('.layout-notice')`, 'a view not here applied, and noted')
+  await until(`document.querySelector('.layout-note:not(.is-problem)')?.textContent.includes('not here now, kept for when they\\'re back: threads.detail') && !document.querySelector('.rail-notice--layout')`, 'a view not here applied, and noted')
   writeFileSync(layoutFile, '{}')
-  await until(`${layoutNow()}.then((l) => l === '{}') && !document.querySelector('.app__aside') && !document.querySelector('.layout-notice')`, 'the layout reset from the file')
+  await until(`${layoutNow()}.then((l) => l === '{}') && !document.querySelector('.app__aside') && !document.querySelector('.rail-notice--layout')`, 'the layout reset from the file')
   await run(`window.superego.call('local', 'thread.list', {}).then((list) => Promise.all(list.flatMap((t) => (t.panes ?? []).filter((p) => p.params?.path === ${JSON.stringify(layoutFile)}).map((p) => window.superego.call('local', 'pane.close', { id: t.id, pane: p.id })))))`)
   await until(`!document.querySelector('.layout-note')`, 'layout.json closed')
   await run(`window.superego.call('app', 'app.settings.set', { key: 'app.sort', value: 'created' })`)
@@ -395,7 +433,7 @@ if (phase === 'first') {
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })()`)
   await key('Enter', [])
-  await until(`[...document.querySelectorAll('.action-log__table tr')].some((tr) => tr.textContent.includes('threads.rail') && tr.textContent.includes('keys'))`, 'action log')
+  await until(`[...document.querySelectorAll('.action-log__table tr')].some((tr) => tr.textContent.includes('app.sidebar') && tr.textContent.includes('keys'))`, 'action log')
   await until(`[...document.querySelectorAll('.action-log__table tr')].some((tr) => tr.textContent.includes('thread.select') && tr.textContent.includes('navigator'))`, 'navigator dispatch logged')
   await key('Escape', [])
   await until(`!document.querySelector('.action-log')`, 'log closed')
@@ -880,29 +918,28 @@ if (phase === 'first') {
   await until(`document.documentElement.style.getPropertyValue('--superego-accent-base').startsWith('color(display-p3')`, 'accent colour reset')
   // Keyboard: record a new shortcut for an action; the old one stops working, the new one runs it; a clash shows.
   const keysOf = (id) => `document.querySelector('[data-action="${id}"] .keymap__keys')`
-  await until(`${keysOf('threads.rail')}?.textContent === '${process.platform === 'darwin' ? '⌘\\\\' : 'Ctrl+\\\\'}'`, 'keyboard settings list the rail shortcut')
-  await run(`(() => { const b = ${keysOf('threads.rail')}; b.focus(); b.click() })()`)
-  await until(`${keysOf('threads.rail')}?.classList.contains('is-recording')`, 'recording')
+  await until(`${keysOf('app.sidebar')}?.textContent === '${process.platform === 'darwin' ? '⌘/' : 'Ctrl+/'}'`, 'keyboard settings list the sidebar shortcut')
+  await run(`(() => { const b = ${keysOf('app.sidebar')}; b.focus(); b.click() })()`)
+  await until(`${keysOf('app.sidebar')}?.classList.contains('is-recording')`, 'recording')
   await key('k', [])
-  await until(`${keysOf('threads.rail')}?.textContent.includes('typing stays typing')`, 'a bare key is refused')
+  await until(`${keysOf('app.sidebar')}?.textContent.includes('typing stays typing')`, 'a bare key is refused')
   await key('R', ['meta', 'shift'])
-  await until(`/⇧R|Shift\\+R/.test(${keysOf('threads.rail')}?.textContent ?? '') && Boolean(document.querySelector('[data-action="threads.rail"] button.keymap__reset'))`, 'new shortcut recorded')
-  // (Settings covers the sidebar: what the action sets, not the dots, says it ran.)
-  const folded = `window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['threads.view'] === 'rail')`
-  await key('\\')
+  await until(`/⇧R|Shift\\+R/.test(${keysOf('app.sidebar')}?.textContent ?? '') && Boolean(document.querySelector('[data-action="app.sidebar"] button.keymap__reset'))`, 'new shortcut recorded')
+  // (Settings covers the sidebar: what the window keeps, not the dots, says it ran.)
+  const folded = `localStorage.getItem('superego.sidebar.open') === 'false'`
+  await key('/')
   await new Promise((resolve) => setTimeout(resolve, 300))
   if (await run(folded)) { await fail('the old shortcut still runs the action'); throw new Error('failed') }
   await key('R', ['meta', 'shift'])
   await until(folded, 'the new shortcut runs the action')
-  await new Promise((resolve) => setTimeout(resolve, 300)) // the window hears of it after the daemon says so
   await key('R', ['meta', 'shift'])
-  await until(`${folded}.then((on) => !on)`, 'and back')
-  await run(`window.superego.call('app', 'app.settings.set', { key: 'app.keys', value: { 'threads.rail': 'mod+shift+r', 'threads.details': 'mod+shift+r' } })`)
-  await until(`document.querySelector('[data-action="threads.rail"] .keymap__clash')?.textContent.includes('Toggle thread details')`, 'clash shown')
+  await until(`!(${folded})`, 'and back')
+  await run(`window.superego.call('app', 'app.settings.set', { key: 'app.keys', value: { 'app.sidebar': 'mod+shift+r', 'threads.details': 'mod+shift+r' } })`)
+  await until(`document.querySelector('[data-action="app.sidebar"] .keymap__clash')?.textContent.includes('Toggle thread details')`, 'clash shown')
   await run(`document.querySelector('.keymap').scrollIntoView()`)
   await shot('keyboard')
   await run(`[...document.querySelectorAll('.keymap__head button')].find((b) => b.textContent === 'Reset all').click()`)
-  await until(`!document.querySelector('.keymap__clash') && ${keysOf('threads.rail')}?.textContent.includes('\\\\')`, 'reset to the actions’ own')
+  await until(`!document.querySelector('.keymap__clash') && ${keysOf('app.sidebar')}?.textContent.includes('/')`, 'reset to the actions’ own')
   // Machines: add one over ssh that can't connect; it shows its error, then goes away again.
   await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent === 'Machines').click()`)
   await run(`window.superego.call('app', 'machines.add', { label: 'Nowhere', target: 'superego-smoke.invalid' })`)
@@ -1173,9 +1210,10 @@ if (phase === 'first') {
   await escape()
   await until(`!document.querySelector('.settings')`, 'settings closed')
   await until(`Boolean(document.querySelector('.profile-ui-notice')) && !document.querySelector('.profile-ui-marker')`, 'revoked: asked again')
-  await until(`[...document.querySelectorAll('.revoked-ui-notice button')].some((b) => b.textContent === 'Reload')`, 'revoked: a reload offered in the window')
-  await run(`[...document.querySelectorAll('.revoked-ui-notice button')].find((b) => b.textContent === 'Later').click()`)
-  await until(`!document.querySelector('.revoked-ui-notice')`, 'revoked: the reload put off')
+  await openNotice('revoked', 'revoked UI')
+  await until(`[...document.querySelectorAll('.rail-notice__popup .revoked-ui-notice button')].some((b) => b.textContent === 'Reload')`, 'revoked: a reload offered in the window')
+  await run(`[...document.querySelectorAll('.rail-notice__popup .revoked-ui-notice button')].find((b) => b.textContent === 'Later').click()`)
+  await until(`!document.querySelector('.rail-notice--revoked') && !document.querySelector('.rail-notice__popup')`, 'revoked: the reload put off')
   // Ego on each machine: its title bar says whose, and switches to another's; the rail opens the one last chosen.
   const pickEgo = (machine) => run(`(() => {
     const select = document.querySelector('.ego__machine')
@@ -1214,7 +1252,7 @@ if (phase === 'first') {
   globalThis.superegoNotices = []
   await run(`window.dispatchEvent(new Event('blur'))`)
   for (const prompt of ['keyed one', 'keyed two']) await run(`window.superego.call('${secondId}', 'thread.create', { title: '${prompt}', prompt: '${prompt}' })`)
-  await until(`document.querySelector('.auth-notice')?.textContent.startsWith('faux rejected the API key on Second.2 threads are waiting.')`, 'one notice for the rejected key, naming the machine')
+  await until(`document.querySelectorAll('.app__rail .rail-notice--auth').length === 1 && document.querySelector('.rail-notice--auth').getAttribute('aria-label') === 'faux rejected the API key on Second'`, 'one notice for the rejected key, naming the machine')
   await until(`[...document.querySelectorAll('.superego-list-item')].filter((li) => /keyed (one|two)/.test(li.textContent) && li.querySelector('.superego-status--signin')).length === 2`, 'the threads waiting quietly')
   await new Promise((r) => setTimeout(r, 500))
   const keyNotices = globalThis.superegoNotices.filter((n) => n.machine === secondId)
@@ -1223,20 +1261,21 @@ if (phase === 'first') {
   // Shown, a waiting thread says why in place of its failure, and offers to sign in again.
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('keyed one')).click()`)
   await until(`document.querySelector('.transcript__waiting')?.textContent.startsWith('faux rejected the API key. It goes on once you sign in again.') && !document.querySelector('.transcript__error')`, 'the thread waiting, not failed')
-  await run(`document.querySelector('.auth-notice').scrollIntoView()`)
+  await openNotice('auth', 'the rejected key')
+  await until(`document.querySelector('.rail-notice__popup .auth-notice')?.textContent.startsWith('faux rejected the API key on Second.2 threads are waiting.')`, 'the rejected key, in full')
   for (const theme of ['light', 'dark']) {
     nativeTheme.themeSource = theme
     await new Promise((r) => setTimeout(r, 400))
     await shot(`auth-notice-${theme}`)
   }
   nativeTheme.themeSource = 'system'
-  await run(`[...document.querySelectorAll('.auth-notice button')].find((b) => b.textContent === 'Sign in again').click()`)
+  await run(`[...document.querySelectorAll('.rail-notice__popup .auth-notice button')].find((b) => b.textContent === 'Sign in again').click()`)
   await until(`document.querySelector('.settings__nav-machine.is-selected')?.textContent.includes('Second') && document.querySelector('.settings')?.textContent.includes('Providers')`, "sign in again: that machine's Providers")
   await run(`document.querySelector('.app__rail [aria-label="Threads"]').click()`)
   await until(`!document.querySelector('.settings')`, 'Settings left for Threads')
   writeFileSync(secondAuth, JSON.stringify({}))
   // The one shown is seen as it answers; the other is done.
-  await until(`!document.querySelector('.auth-notice') && !document.querySelector('.transcript__waiting') && document.querySelector('.transcript')?.textContent.includes('echo: keyed one')
+  await until(`!document.querySelector('.rail-notice--auth') && !document.querySelector('.transcript__waiting') && document.querySelector('.transcript')?.textContent.includes('echo: keyed one')
     && [...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('keyed two') && li.querySelector('.superego-status--done'))`, 'a new key: the threads went on and answered', 20_000)
   // `superego <dir> -p ...` from a terminal: a new thread there, shown in this (already running) app.
   const { execFileSync } = await import('node:child_process')
@@ -1244,7 +1283,7 @@ if (phase === 'first') {
   execFileSync('node', [cli, process.env.SUPEREGO_HOME, '-p', 'from the cli'], { env: { ...process.env, SUPEREGO_APP: new URL('..', import.meta.url).pathname } })
   await until(`document.querySelector('.thread__title')?.textContent === 'from the cli' && document.querySelector('.transcript')?.textContent.includes('echo: from the cli')`, 'thread opened from the command line', 30_000)
   // The extra file is gone again: the daemon is out of date once more, and restarts back.
-  await restartOntoNewCode(() => rmSync(STRAY, { force: true }))
+  await restartOntoNewCode(() => rmSync(STRAY, { force: true }), { atRest: true })
   // App settings persisted in the app's own file.
   await until(`document.documentElement.style.getPropertyValue('--superego-mono').includes('Menlo')`, 'font after reopen')
   console.log('smoke(reopen): ok')
