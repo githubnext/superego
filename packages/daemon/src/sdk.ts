@@ -10,12 +10,12 @@ export { spawnGroup } from './process-group.ts'
 
 export type { Extension as AgentExtension } from '@earendil-works/pi-durable'
 export type {
-  ActionDef, ActionInfo, DataIcon, DataPlace, DataView, ExtensionAbout, Exposure, Json, JsonSchema, Static, ThreadInfo,
+  ActionDef, ActionInfo, AuthEvent, AuthPrompt, DataIcon, DataPlace, DataView, ExtensionAbout, Exposure, Json, JsonSchema, Static, ThreadInfo,
   ViewAction, ViewContent, ViewItem,
 } from '@superego/protocol'
-export type { ProfileRef, ProfileSpec } from './profiles.ts'
+export type { ProfileMcpServer, ProfileRef, ProfileSpec } from './profiles.ts'
 export type {
-  AgentChoice, ArchiveNote, ArchiveNotes, DaemonApi, DaemonExtension, LiveValue, MessageBlock, OutgoingMessage,
+  AgentChoice, AgentPart, AgentPartsAnswer, AgentPartsThread, ArchiveNote, AuthFlow, AuthFlowEvent, ArchiveNotes, DaemonApi, DaemonExtension, LiveValue, MessageBlock, OutgoingMessage,
   RunRecord, ScopedValue, StatusContribution, SubmitTransform, ThreadCreating, ThreadDraft, ThreadHooks, ThreadState,
 } from './extension.ts'
 export type { DaemonContext } from './daemon.ts'

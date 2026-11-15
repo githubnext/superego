@@ -933,6 +933,22 @@ if (phase === 'first') {
   await shot('providers')
   const hasFaux = await run(`[...document.querySelectorAll('[data-key="agent.model"] option')].some((o) => o.value === 'faux/faux-1')`)
   if (!hasFaux) { await fail('model choices'); throw new Error('failed') }
+  // Signing in to a provider, drawn by SignInFlow: an API key stores it and says so, Close puts the flow away, and
+  // Sign out takes the key away again.
+  const anthropic = `[...document.querySelectorAll('.provider')].find((p) => p.textContent.includes('Anthropic'))`
+  const button = (row, label) => `[...${row}.querySelectorAll('button')].find((b) => b.textContent === '${label}')`
+  await run(`${button(anthropic, 'API key…')}.click()`)
+  await until(`Boolean(${anthropic}.querySelector('input[name="key"]'))`, "a provider's API key field")
+  await run(`(() => {
+    const input = ${anthropic}.querySelector('input[name="key"]')
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'sk-ant-smoke')
+    input.form.requestSubmit()
+  })()`)
+  await until(`document.querySelector('.auth-flow')?.textContent.includes('Signed in.') && Boolean(${button(anthropic, 'Sign out')})`, 'a provider signed in with an API key')
+  await run(`[...document.querySelectorAll('.auth-flow button')].find((b) => b.textContent === 'Close').click()`)
+  await until(`!document.querySelector('.auth-flow')`, 'the sign-in put away')
+  await run(`${button(anthropic, 'Sign out')}.click()`)
+  await until(`!${button(anthropic, 'Sign out')}`, 'the provider signed out again')
   // The menu bar: on by default; "Hide Dock icon" needs it; turning it off takes the item away.
   const desktop = () => run(`window.superego.call('app', 'app.desktop', {})`)
   if (!(await desktop()).menuBar) { await fail('menu bar item not up by default'); throw new Error('failed') }

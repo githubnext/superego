@@ -2,7 +2,7 @@
 // may name a custom component (`ui`) drawn below their settings; the Providers section is one.
 import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from 'react'
 import { useLocalState } from './local-state.ts'
-import { AUTH_REJECTED, type AuthEvent, type AuthPrompt, type Json, type Notifications, type ProviderAuthInfo, type ProviderRejection, type SectionInfo, type SettingInfo, type SettingsSnapshot } from '@superego/protocol'
+import { AUTH_REJECTED, type Json, type ProviderAuthInfo, type ProviderRejection, type SectionInfo, type SettingInfo, type SettingsSnapshot } from '@superego/protocol'
 import { Button, Dialog, FontPicker, Select, StatusGlyph, Switch, TextField } from '@superego/ui'
 import { remoteCommand } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
@@ -19,6 +19,7 @@ import { Contained } from './contained.tsx'
 import { useSettingsDialog } from './state.tsx'
 import { useAllowedUi, useDeclinedUi } from './profile-ui.ts'
 import { RevokedUiNotice, sizeOf } from './profile-ui-notice.tsx'
+import { SignInFlow } from './sign-in-flow.tsx'
 
 const APP = 'app'
 /** Settings → Machines (also opened by Update: see actions.tsx). */
@@ -235,32 +236,16 @@ export function Profiles({ section }: { target: string; section: SectionInfo }) 
 export function Providers({ target, section }: { target: string; section: SectionInfo }) {
   const dispatch = useRegistry().router.dispatch
   const providers = (section.data ?? []) as ProviderAuthInfo[]
-  const [flow, setFlow] = useState<{ provider: string; id?: string; events: AuthEvent[] }>()
+  // The sign-in going on, if one is: each new one drawn afresh (`n`).
+  const [signing, setSigning] = useState<{ provider: string; type: 'api_key' | 'oauth'; key?: string; n: number }>()
   // Opened to sign in to one again ("Sign in again"): there, with its key's field open when it takes a key.
   const [focused] = useState(() => takeProviderFocus(target))
   const [keyFor, setKeyFor] = useState<string | undefined>(() => providers.find((p) => p.id === focused && p.apiKey && !p.oauth)?.id)
   const focusedRow = useRef<HTMLDivElement>(null)
   useEffect(() => { focusedRow.current?.scrollIntoView({ block: 'center' }) }, [])
   const rejected = useValue<ProviderRejection[] | null>(target, true, AUTH_REJECTED)
-  const machine = client(target)
-
-  useEffect(() => machine.on('auth.event', ({ flow: id, event }: Notifications['auth.event']) => {
-    setFlow((current) => current?.id === id ? { ...current, events: [...current.events, event] } : current)
-    // Open the provider's sign-in page in the browser as soon as the flow has one.
-    if (event.type === 'auth_url') window.open(event.url, '_blank')
-  }), [target])
-
-  const start = async (provider: string, type: 'api_key' | 'oauth', key?: string) => {
-    setFlow({ provider, events: [] })
-    try {
-      const { flow: id } = await dispatch('auth.login', { provider, type, ...(key ? { key } : {}) }, { machine: target, source: 'settings' }) as { flow: string }
-      setFlow((current) => current && { ...current, id })
-    } catch (error) {
-      setFlow({ provider, events: [{ type: 'failed', message: (error as Error).message }] })
-    }
-  }
-  const last = flow?.events.at(-1)
-  const finished = last?.type === 'done' || last?.type === 'failed'
+  const start = (provider: string, type: 'api_key' | 'oauth', key?: string) =>
+    setSigning((current) => ({ provider, type, ...(key ? { key } : {}), n: (current?.n ?? 0) + 1 }))
 
   return (
     <div className="providers">
@@ -275,12 +260,12 @@ export function Providers({ target, section }: { target: string; section: Sectio
           </div>
           <div className="provider__actions">
             {keyFor === provider.id ? (
-              <form onSubmit={(e) => { e.preventDefault(); const key = new FormData(e.currentTarget).get('key') as string; setKeyFor(undefined); if (key) void start(provider.id, 'api_key', key) }}>
+              <form onSubmit={(e) => { e.preventDefault(); const key = new FormData(e.currentTarget).get('key') as string; setKeyFor(undefined); if (key) start(provider.id, 'api_key', key) }}>
                 <TextField name="key" type="password" autoFocus placeholder="API key" onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setKeyFor(undefined) } }} />
               </form>
             ) : (
               <>
-                {provider.oauth && <Button onClick={() => void start(provider.id, 'oauth')}>{provider.oauth}</Button>}
+                {provider.oauth && <Button onClick={() => start(provider.id, 'oauth')}>{provider.oauth}</Button>}
                 {provider.apiKey && <Button onClick={() => setKeyFor(provider.id)}>API key…</Button>}
                 {provider.stored && <Button onClick={() => void dispatch('auth.logout', { provider: provider.id }, { machine: target, source: 'settings' })}>Sign out</Button>}
                 {rejection && !rejection.retrying && <Button onClick={() => void dispatch('auth.retry', { provider: provider.id }, { machine: target, source: 'settings' })}>Retry now</Button>}
@@ -290,15 +275,13 @@ export function Providers({ target, section }: { target: string; section: Sectio
         </div>
         )
       })}
-      {flow && (
-        <div className="auth-flow">
-          <div className="auth-flow__head">
-            <b>Signing in to {providers.find((p) => p.id === flow.provider)?.name ?? flow.provider}</b>
-            {finished ? <Button onClick={() => setFlow(undefined)}>Close</Button>
-              : <Button onClick={() => { if (flow.id) void dispatch('auth.cancel', { flow: flow.id }, { machine: target, source: 'settings' }) }}>Cancel</Button>}
-          </div>
-          <FlowEvents flowId={flow.id} events={flow.events} target={target} />
-        </div>
+      {signing && (
+        <SignInFlow
+          key={signing.n} machine={target}
+          title={`Signing in to ${providers.find((p) => p.id === signing.provider)?.name ?? signing.provider}`}
+          start={() => dispatch('auth.login', { provider: signing.provider, type: signing.type, ...(signing.key ? { key: signing.key } : {}) }, { machine: target, source: 'settings' }) as Promise<{ flow: string }>}
+          onClose={() => setSigning(undefined)}
+        />
       )}
     </div>
   )
@@ -308,49 +291,6 @@ function describe(provider: ProviderAuthInfo) {
   if (!provider.auth) return 'Not signed in'
   const how = provider.auth.type === 'oauth' ? 'signed in' : 'API key'
   return `${how}${provider.auth.source ? ` · ${provider.auth.source}` : ''} · ${provider.models} models`
-}
-
-function FlowEvents({ flowId, events, target }: { flowId?: string; events: AuthEvent[]; target: string }) {
-  const dispatch = useRegistry().router.dispatch
-  const closed = new Set(events.flatMap((e) => e.type === 'prompt_closed' ? [e.id] : []))
-  const [answered, setAnswered] = useState<Set<string>>(new Set())
-  return (
-    <div className="auth-flow__events">
-      {events.map((event, index) => {
-        switch (event.type) {
-          case 'auth_url': return <p key={index}>A sign-in page opened in your browser. <a href={event.url} target="_blank" rel="noreferrer">Open it again</a>{event.instructions ? ` — ${event.instructions}` : ''}</p>
-          case 'device_code': return <p key={index}>Enter <code>{event.userCode}</code> at <a href={event.verificationUri} target="_blank" rel="noreferrer">{event.verificationUri}</a></p>
-          case 'info': return <p key={index}>{event.message}</p>
-          case 'progress': return <p key={index} className="settings__note">{event.message}</p>
-          case 'done': return <p key={index} className="auth-flow__done">Signed in.</p>
-          case 'failed': return <p key={index} className="setting__error">{event.message}</p>
-          case 'prompt':
-            if (closed.has(event.id) || answered.has(event.id) || !flowId) return null
-            return <PromptField key={index} prompt={event.prompt} onAnswer={(value) => {
-              setAnswered((set) => new Set(set).add(event.id))
-              void dispatch('auth.respond', { flow: flowId, prompt: event.id, value }, { machine: target, source: 'settings' })
-            }} />
-          default: return null
-        }
-      })}
-    </div>
-  )
-}
-
-function PromptField({ prompt, onAnswer }: { prompt: AuthPrompt; onAnswer(value: string): void }) {
-  const input = useRef<HTMLInputElement>(null)
-  if (prompt.type === 'select') {
-    return <div className="auth-flow__prompt"><p>{prompt.message}</p>{prompt.options.map((o) => <Button key={o.id} onClick={() => onAnswer(o.id)}>{o.label}</Button>)}</div>
-  }
-  return (
-    <form className="auth-flow__prompt" onSubmit={(e) => { e.preventDefault(); if (input.current?.value) onAnswer(input.current.value) }}>
-      <label>{prompt.message}</label>
-      <div className="auth-flow__row">
-        <TextField ref={input} autoFocus type={prompt.type === 'secret' ? 'password' : 'text'} placeholder={prompt.placeholder} />
-        <Button type="submit" variant="primary">Continue</Button>
-      </div>
-    </form>
-  )
 }
 
 /** The machines this app connects to: this computer, and any reached over ssh. */

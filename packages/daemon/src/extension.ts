@@ -3,7 +3,8 @@
 // tools, prompt sections and hooks (pi-durable extensions), register settings, define actions (intents) and methods
 // (reads), publish live values for the UI to watch, describe pane kinds to the agent, add to a thread's status, add to
 // what a message is sent with, take part in a thread's life (creating, turns, archiving), keep state with each thread
-// and say things about it to clients, say what a run did, and choose a thread's agent.
+// and say things about it to clients, say what a run did, choose a thread's agent or add to it, and run sign-in flows
+// of its own.
 //
 // Everything it registers is its own, named `<name>.<something>`, and undone when it's torn down: when the daemon
 // stops, or (a profile's) when the profile's files change. Torn down, its `signal` aborts, what it registers after is
@@ -11,11 +12,13 @@
 import type { Conversation, EntryRecord, Extension, Harness } from '@earendil-works/pi-durable'
 import type { ActionDef, ActionInfo, AppConfig, Attachment, ChannelAcceptor, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, MachineEntry, NewThread, Pane, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
+import type { AuthFlow } from './auth-flows.ts'
 import type { DaemonContext } from './daemon.ts'
 import type { ProfileRef, ProfileSpec } from './profiles.ts'
 import type { RunRecord } from './recap.ts'
 
-export type { RunRecord }
+export type { AuthFlow, RunRecord }
+export type { AuthFlowEvent } from './auth-flows.ts'
 
 /**
  * A daemon half: what the extension is (`ExtensionAbout`: its name, title, description, and whether it's required),
@@ -188,6 +191,35 @@ export type AgentChoice = {
   without?: string[]
 }
 
+/**
+ * An agent part an extension gave (`agent(part)`), to change or take away before teardown. Called, it's taken away, as
+ * `remove()` does: a setup that returns it (`setup: (s) => s.agent(part)`) returns its cleanup. 1.7.
+ */
+export type AgentPart = (() => void) & {
+  /**
+   * Put `next` in its place, under the same name: threads that have it get the new one from their next request to the
+   * model, a run that's going too (its tools, prompt sections and hooks as they are then), with nothing configured again.
+   * Throws for another name, or once it's removed.
+   */
+  replace(next: Extension): void
+  /** Take it away now, as teardown would. Again does nothing. */
+  remove(): void
+}
+
+/** A thread as an `agentParts` sees it, at submit. 1.7. */
+export type AgentPartsThread = {
+  id: string
+  /** An extension's own thread, in no list (`threads.create({ hidden })`): Ego's, say. */
+  hidden: boolean
+  /** The extension whose thread it is, for a hidden one. */
+  owner?: string
+  /** Its profile, as loaded now (`extends` merged): an edit to it shows from the next turn. */
+  profile?: { ref: ProfileRef; spec: ProfileSpec }
+}
+
+/** What an `agentParts` answers: parts its extension gave with `agent(part, { always: false })`, or nothing. */
+export type AgentPartsAnswer = Extension[] | undefined | void
+
 export type DaemonApi = {
   app: AppConfig
   /** This machine's data folder (`~/.superego`): where the app keeps its own files. */
@@ -203,9 +235,28 @@ export type DaemonApi = {
   signal: AbortSignal
   /**
    * Give the agents tools, system prompt sections, hooks or tasks. `always: false`: to no thread but those an
-   * `agentFor` of this extension chooses it for.
+   * `agentFor` or `agentParts` of this extension gives it to. Its handle replaces it (as its tools change, say) or takes
+   * it away (1.7).
    */
-  agent(extension: Extension, options?: { always?: boolean }): void
+  agent(extension: Extension, options?: { always?: boolean }): AgentPart
+  /**
+   * Add to a thread's agent, whatever chose it: asked at every submit (before the turn starts), and answering with parts
+   * this extension gave with `agent(part, { always: false })` (others are left out, with a warning). They come after the
+   * parts an `agentFor` chose, and before its profile's. Every extension's is asked at once; each may take up to 5s (a
+   * server it has to start, say), and one that takes longer, or throws, adds nothing to that turn. Not for threads that
+   * go without this extension; a profile's only for its own threads. 1.7.
+   */
+  agentParts(add: (thread: AgentPartsThread) => AgentPartsAnswer | Promise<AgentPartsAnswer>): void
+  /** Sign-in flows of this extension's own, carried as a provider's are. 1.7. */
+  auth: {
+    /**
+     * Run a sign-in flow for the client an action runs for (`to`: its context): the client hears it as `auth.event`
+     * (and draws it with `SignInFlow`, from 'superego/ui'), answers its prompts with `auth.respond`, and stops it with
+     * `auth.cancel`. It ends `done` when `run` resolves, `failed` with its error when it throws; cancelled, or this
+     * extension torn down, `run`'s `flow.signal` aborts. Answers at once, with what the action answers (`{ flow }`).
+     */
+    flow(to: Pick<DaemonContext, 'notify'>, run: (flow: AuthFlow) => Promise<void>): { flow: string }
+  }
   /**
    * This machine's settings, as an extension sees them: it reads any, and registers sections of its own. A section's
    * id is the extension's name (or `<name>.<more>`) and its keys are `<name>.<key>`.

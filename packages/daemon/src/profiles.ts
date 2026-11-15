@@ -9,6 +9,7 @@
 //     prompt: 'You answer customer email for Acme. Be brief.',
 //     extensions: ['./extensions/orders.ts'],    // agent extensions: tools, prompt sections, hooks
 //     without: ['ask-user'],                      // built-ins this profile does without
+//     mcp: ['linear'],                            // the machine's MCP servers its threads use, by name
 //   })
 //
 // A project's profile replaces the user's of the same name, unless it `extends: 'user:<name>'`. A project's profile is
@@ -58,6 +59,74 @@ export type ProfileSpec = {
   without?: string[]
   /** Start from another profile and add to it: 'user:<name>' (a project's profile on the user's). */
   extends?: string
+  /**
+   * The machine's MCP servers its threads use, by name (Settings → MCP servers): a name the machine has no server of is
+   * left out. Read by the `mcp-servers` extension; the core only carries it. With `extends`, both profiles' together.
+   */
+  mcp?: string[]
+  /**
+   * MCP servers of this profile's own, by name, for its threads (no need to list them in `mcp`): one of the machine's
+   * of the same name is this one in its threads. A command runs in the project's root unless `cwd` says. Its secrets
+   * aren't here: they're entered in Settings, and kept on the machine. With `extends`, by name, this profile's winning.
+   */
+  mcpServers?: Record<string, ProfileMcpServer>
+}
+
+/**
+ * An MCP server a profile defines (`mcpServers`): a command (stdio) or a URL (Streamable HTTP), and how it signs in.
+ * Field names as Claude Code's and Cursor's `mcpServers`.
+ */
+export type ProfileMcpServer = {
+  title?: string
+  command?: string
+  args?: string[]
+  cwd?: string
+  /** Plain values only: a secret goes in `auth: { type: 'env', names }`, its value entered in Settings. */
+  env?: Record<string, string>
+  url?: string
+  headers?: Record<string, string>
+  auth?:
+    | { type: 'oauth'; scopes?: string[]; clientId?: string }
+    /** Sent as `<header>: <scheme> <key>`; by default `Authorization: Bearer <key>`. */
+    | { type: 'api-key'; header?: string; scheme?: string }
+    /** Secret environment variables of a command, by name. */
+    | { type: 'env'; names: string[] }
+  /** One process (or session) for every thread that has it, or one per thread. Default `machine`. */
+  lifetime?: 'machine' | 'thread'
+  /** How its tools reach the model: as they are, found by search, or decided by how many (`auto`, the default). */
+  tools?: 'auto' | 'all' | 'search'
+  /** Seconds a call may take, reset by its progress. */
+  timeout?: number
+}
+
+/** An MCP server's name: lower-case and hyphens, as its tools are named by it (`mcp__<name>__<tool>`). */
+export const MCP_SERVER_NAME = /^[a-z][a-z0-9-]{0,23}$/
+
+/** Why a profile's `mcp` and `mcpServers` won't do, if they won't: the names, and a command or a URL each. */
+export function mcpProblem(spec: ProfileSpec): string | undefined {
+  const named = (name: unknown) => typeof name === 'string' && MCP_SERVER_NAME.test(name)
+  const nameRule = 'lower-case letters, digits and hyphens, starting with a letter, up to 24'
+  if (spec.mcp !== undefined) {
+    if (!Array.isArray(spec.mcp)) return 'mcp must be a list of server names'
+    const bad = spec.mcp.find((name) => !named(name))
+    if (bad !== undefined) return `mcp: ${JSON.stringify(bad)} isn't a server name (${nameRule})`
+  }
+  if (spec.mcpServers !== undefined) {
+    if (!spec.mcpServers || typeof spec.mcpServers !== 'object' || Array.isArray(spec.mcpServers)) return 'mcpServers must be an object of servers by name'
+    for (const [name, server] of Object.entries(spec.mcpServers)) {
+      if (!named(name)) return `mcpServers: ${JSON.stringify(name)} isn't a server name (${nameRule})`
+      if (!server || typeof server !== 'object' || Array.isArray(server)) return `mcpServers.${name} must be an object`
+      const command = typeof server.command === 'string' && server.command.trim() !== ''
+      const url = typeof server.url === 'string' && server.url.trim() !== ''
+      if (command === url) return `mcpServers.${name} needs one of command or url${command ? ', not both' : ''}`
+      if (server.args !== undefined && (!Array.isArray(server.args) || server.args.some((arg) => typeof arg !== 'string'))) return `mcpServers.${name}.args must be a list of strings`
+      for (const key of ['env', 'headers'] as const) {
+        const map = server[key]
+        if (map !== undefined && (!map || typeof map !== 'object' || Array.isArray(map) || Object.values(map).some((v) => typeof v !== 'string'))) return `mcpServers.${name}.${key} must be an object of strings`
+      }
+    }
+  }
+  return undefined
 }
 
 /** Identity for type inference: `export default defineProfile({ … })`. */
@@ -303,6 +372,8 @@ export async function loadProfile(given: ProfileRef, userRoot: string, trust: Tr
     })
   }
   const spec = await specOf(ref)
+  const problem = mcpProblem(spec)
+  if (problem) throw new RpcError('invalid', `Profile ${ref.name}: ${problem}`)
   let base: LoadedProfile | undefined
   if (spec.extends) {
     const [scope, name] = spec.extends.split(':')
@@ -341,6 +412,8 @@ export async function loadProfile(given: ProfileRef, userRoot: string, trust: Tr
     prompt: [base?.spec.prompt, spec.prompt].filter(Boolean).join('\n\n') || undefined,
     without: [...new Set([...(base?.spec.without ?? []), ...(spec.without ?? [])].map((name) => RENAMED[name] ?? name))],
     options: { ...base?.spec.options, ...spec.options },
+    ...(base?.spec.mcp || spec.mcp ? { mcp: [...new Set([...base?.spec.mcp ?? [], ...spec.mcp ?? []])] } : {}),
+    ...(base?.spec.mcpServers || spec.mcpServers ? { mcpServers: { ...base?.spec.mcpServers, ...spec.mcpServers } } : {}),
     // UI paths are relative to their own profile's folder: only this profile's are served from here.
     ui: spec.ui,
   }

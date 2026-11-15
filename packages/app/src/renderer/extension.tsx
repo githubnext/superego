@@ -337,7 +337,9 @@ export type UiApi = {
   /**
    * How calls to the tool `name` look (of the extension's daemon half, or any other): described (a `ToolRow`: icon,
    * verbs, subject, body), or drawn whole by a component of its own. `fold: false` keeps them out of the fold a run of
-   * work closes into: they show under it, open, as what the agent showed you (images, say).
+   * work closes into: they show under it, open, as what the agent showed you (images, say). A name ending in `*` is a
+   * prefix (`mcp__*`: every tool whose name starts so); a tool's own name wins over a prefix, and a longer prefix over a
+   * shorter. Prefixes: 1.7.
    */
   tool(name: string, view: ComponentType<ToolCallProps> | ToolRow, options?: { fold?: boolean }): void
   entry(kind: string, component: ComponentType<EntryProps>): void
@@ -633,7 +635,10 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       },
       get window() { return registry.window },
       appSetting: (key) => watched<SettingsSnapshot>('app', 'settings.watch', {})?.values[key] as never,
-      tool: (name, view, options) => unique(registry.tools, 'name', { name, ...(isComponent(view) ? { component: view } : { row: view }), fold: options?.fold !== false }, 'tool'),
+      tool: (name, view, options) => {
+        if (name.indexOf('*') !== -1 && name.indexOf('*') !== name.length - 1) return console.warn(`Extension ${extension.name}: tool ${name}: a * may only end a name (a prefix)`)
+        unique(registry.tools, 'name', { name, ...(isComponent(view) ? { component: view } : { row: view }), fold: options?.fold !== false }, 'tool')
+      },
       entry(kind, component) {
         own(kind, 'entry kinds')
         unique(registry.entries, 'kind', { kind, component }, 'entry kind')
@@ -921,17 +926,30 @@ export function usePlacement(view: string, place: Place, where?: Where): [boolea
   return [placed[place].includes(view), toggle]
 }
 
+/**
+ * Who says how calls to the tool `name` look for `where`: a registration of its own name, else the longest prefix
+ * (`mcp__*`) it starts with; a profile's before the app's at each.
+ */
+function toolEntry(registry: Registry, name: string, where: Where) {
+  const exact = lookUp(registry.tools, where, (t) => t.name === name)
+  if (exact) return exact
+  const prefixes = seenIn(registry.tools, where).filter((t) => t.name.endsWith('*') && name.startsWith(t.name.slice(0, -1)))
+  const longest = Math.max(...prefixes.map((t) => t.name.length))
+  const found = prefixes.filter((t) => t.name.length === longest)
+  return found.find((t) => t.owner.profile) ?? found[0]
+}
+
 /** How calls to the tool `name` are drawn for `where`, if an extension draws them whole. */
-export const toolView = (registry: Registry, name: string, where: Where) => lookUp(registry.tools, where, (t) => t.name === name)?.component
+export const toolView = (registry: Registry, name: string, where: Where) => toolEntry(registry, name, where)?.component
 
 /** The extension that says how calls to the tool `name` look for `where`, if one does. */
-export const toolOwner = (registry: Registry, name: string, where: Where) => lookUp(registry.tools, where, (t) => t.name === name)?.owner.extension
+export const toolOwner = (registry: Registry, name: string, where: Where) => toolEntry(registry, name, where)?.owner.extension
 
 /** How calls to the tool `name` are described for `where`: what an extension (or the core) said, else nothing (the defaults). */
-export const toolRow = (registry: Registry, name: string, where: Where): ToolRow => lookUp(registry.tools, where, (t) => t.name === name)?.row ?? {}
+export const toolRow = (registry: Registry, name: string, where: Where): ToolRow => toolEntry(registry, name, where)?.row ?? {}
 
 /** Whether calls to the tool `name` show outside the fold of their run, for `where` (an extension said `fold: false`). */
-export const unfoldedTool = (registry: Registry, name: string, where: Where) => lookUp(registry.tools, where, (t) => t.name === name)?.fold === false
+export const unfoldedTool = (registry: Registry, name: string, where: Where) => toolEntry(registry, name, where)?.fold === false
 
 /**
  * The handler that claims `href` (a link's, or inline code's text) for `where`: its profile's first, then the app's

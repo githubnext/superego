@@ -39,6 +39,28 @@ describe('tool rows', () => {
     expect(toolRow(registry, 'drawn', where)).toEqual({})
   })
 
+  it("matches a prefix (`mcp__*`) where a tool has no row of its own: its own name first, then the longest prefix", () => {
+    const Drawn = () => null
+    const servers = defineUiExtension({
+      name: 'servers',
+      setup(superego) {
+        superego.tool('mcp__*', { verbs: ['Called', 'Calling', 'Failed'] })
+        superego.tool('mcp__linear__*', Drawn, { fold: false })
+        superego.tool('mcp__linear__search', { verbs: ['Searched', 'Searching', 'Search failed'] })
+        // A * anywhere but the end is refused.
+        superego.tool('mcp__*__x', { verbs: ['No', 'No', 'No'] })
+      },
+    })
+    const registry = createRegistry(app, [servers], () => {})
+    expect(toolRow(registry, 'mcp__sentry__find', where).verbs).toEqual(['Called', 'Calling', 'Failed'])
+    expect(toolView(registry, 'mcp__linear__create_issue', where)).toBe(Drawn)
+    expect(unfoldedTool(registry, 'mcp__linear__create_issue', where)).toBe(true)
+    expect(toolRow(registry, 'mcp__linear__search', where).verbs).toEqual(['Searched', 'Searching', 'Search failed'])
+    expect(toolView(registry, 'mcp__linear__search', where)).toBeUndefined()
+    expect(toolRow(registry, 'mcp__sentry__x', where).verbs).toEqual(['Called', 'Calling', 'Failed'])
+    expect(toolRow(registry, 'bash', where)).toEqual({})
+  })
+
   it('says what a run did, the weightiest first, naming the file of a lone one', () => {
     expect(describeRun([tool('read', { path: 'a' }), tool('read', { path: 'b' }), tool('bash', { command: 'ls' })], rowOf)).toEqual(['Ran a command and read 2 files'])
     expect(describeRun([tool('read', { path: 'a' }), tool('edit', { path: 'src/a.ts' })], rowOf)).toEqual(['Edited ', 'src/a.ts', ' and read a file'])

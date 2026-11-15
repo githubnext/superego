@@ -19,9 +19,10 @@ import {
 import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
+import { createAuthFlows } from './auth-flows.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import {
-  defineDaemonExtension, type AgentChoice, type ArchiveNote, type ArchiveNotes, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type OutgoingMessage, type ScopedValue, type StatusContribution, type SubmitTransform,
+  defineDaemonExtension, type AgentChoice, type AgentPartsThread, type ArchiveNote, type ArchiveNotes, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type OutgoingMessage, type ScopedValue, type StatusContribution, type SubmitTransform,
   type ThreadCreating, type ThreadDraft, type ThreadHooks,
 } from './extension.ts'
 import { titleOf } from './names.ts'
@@ -203,6 +204,8 @@ export type DaemonOptions = {
    * down, so one that hangs doesn't hold up every profile after it. 15s by default.
    */
   setupTimeout?: number
+  /** How long an extension's `agentParts` may take at submit, in ms, before the turn goes on without its parts. 5s by default. */
+  agentPartsLimit?: number
   /**
    * The other machines this daemon reaches (see relay.ts), given its own identity so it never links to itself. The host
    * builds it from @superego/client (the app's daemon: `machineHub`); without it, this daemon reaches only itself.
@@ -279,6 +282,8 @@ function inFolder(folder: string, path: string) {
 /** The setting that lets outside agents (MCP) start threads here. Off unless turned on. */
 export const MCP_THREADS = 'mcp.startThreads'
 const ATTACHMENT_LIMIT = 20 * 1024 * 1024
+/** An agent part as set up: as installed, how to take it away, and how to put another (of its name) in its place. */
+type Installed = { installed: Extension; undo(): void; replace(next: Extension): Extension }
 const INLINE_LIMIT = 100 * 1024
 const ATTACHMENT = obj({ name: str({ minLength: 1 }), mimeType: str(), data: str() })
 /** Images the models take as images. */
@@ -344,18 +349,23 @@ export async function locate(root: string, name: string): Promise<{ path: string
 export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
   const settings = new SettingsRegistry(withMovedKeys(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')), MOVED))
-  const agent = await createAgentSettings(settings, options.dataDir, options.app)
+  const flows = createAuthFlows()
+  const agent = await createAgentSettings(settings, options.dataDir, options.app, flows)
   const registry = createRegistry()
   /**
    * The agent parts every thread has unless it goes without the extension that gave them (see `withoutOf`): the core's
    * own and the bundled extensions', each with its extension (one may give several).
    */
   const builtins: { part: Extension; owner: string }[] = []
-  const installBuiltin = (part: Extension, owner: string) => {
+  const installBuiltin = (part: Extension, owner: string): Installed => {
     const entry = { part, owner }
     registry.install(part)
     builtins.push(entry)
-    return () => { registry.uninstall(part); builtins.splice(builtins.indexOf(entry), 1) }
+    return {
+      installed: part,
+      undo: () => { registry.uninstall(entry.part); builtins.splice(builtins.indexOf(entry), 1) },
+      replace: (next) => { registry.install(next); entry.part = next; return next },
+    }
   }
   /** Every extension set up for the daemon's life, the core's own and the bundled ones, by name: what can be gone without. */
   const extensions = new Map<string, ExtensionAbout>()
@@ -368,8 +378,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const factSources: Owned<(thread: { id: string; state: Json | undefined }) => Json | undefined>[] = []
   const recaps: Owned<(run: RunRecord) => string | undefined>[] = []
   const choosers: Owned<(thread: { id?: string; state: Json | undefined; profile?: ProfileRef }) => AgentChoice | undefined>[] = []
-  /** Agent parts given to no thread but those an `agentFor` of their extension chooses them for: by extension, as given, to as installed. */
-  const chosenParts = new Map<string, Map<Extension, Extension>>()
+  /**
+   * An extension's `agentParts`: what it adds to each thread's agent at submit, from parts it gives with `always:
+   * false` (see `partsAdded`).
+   */
+  const adders: Owned<(thread: AgentPartsThread) => Extension[] | undefined | void | Promise<Extension[] | undefined | void>>[] = []
+  /**
+   * Agent parts given to no thread but those an `agentFor` or `agentParts` of their extension gives them to: by
+   * extension, by the name it gave them, to as installed now (replaced, it's the new one).
+   */
+  const chosenParts = new Map<string, Map<string, Extension>>()
   /** Whether what an extension registered is for a thread: one it doesn't go without, and of its profile if a profile's. */
   const appliesTo = (entry: Owned<unknown>, without: Set<string>, meta?: ThreadMeta) =>
     !without.has(entry.owner) && (!entry.profiles || Boolean(meta?.profile && entry.profiles.has(meta.profile.dir)))
@@ -466,6 +484,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   // The folder agents share: standing instructions in AGENTS.md (see agents-md.ts), and the skills extension's skills.
   const agentsDir = options.agentsDir ?? join(homedir(), '.agents')
   const setupTimeout = options.setupTimeout ?? 15_000
+  const partsLimit = options.agentPartsLimit ?? 5_000
   const inTime = setupTimeout < 1000 ? `${setupTimeout}ms` : `${Math.round(setupTimeout / 1000)}s`
   /**
    * The core's own agent parts, as extensions like any other: each optional, so a machine can turn it off and a profile
@@ -984,9 +1003,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * selection of the profiles that have it, `profiles`: their folders). Everything it registers is its own, and the
    * returned teardown undoes all of it: its agent parts, actions, values, status, settings, hooks and its name.
    * `agentExtension` installs an agent part, and gives it to every thread it's for when `always`: the installed part
-   * (a profile's are renamed), and how to undo it.
+   * (a profile's are renamed), how to undo it, and how to put another in its place.
    */
-  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension, always: boolean) => { installed: Extension; undo: () => void }, profiles?: Set<string>, from: { source: 'core' | 'bundled' | 'profile'; file?: string } = { source: 'bundled' }): Promise<() => void> {
+  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension, always: boolean) => Installed, profiles?: Set<string>, from: { source: 'core' | 'bundled' | 'profile'; file?: string } = { source: 'bundled' }): Promise<() => void> {
     const report = (state: 'failed' | 'refused' | 'timed out', error: string) => {
       failures.set(from.file ?? extension.name, { ...manifestOf(extension), ...(extension.title ? { title: extension.title } : {}), ...from, ...(profiles ? { profiles: [...profiles] } : {}), state, error, registered: {}, watches: [] })
     }
@@ -1017,13 +1036,40 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       signal: life.signal,
       agent(agentPart, { always = true } = {}) {
         life.live(`the agent part ${agentPart.name}`)
-        note('agent parts', always ? agentPart.name : `${agentPart.name} (only where its agentFor chooses it)`)
-        const { installed, undo: uninstall } = agentExtension(agentPart, always)
-        undo(uninstall, 'an agent part')
-        if (always) return
-        const own = chosenParts.get(extension.name) ?? new Map<Extension, Extension>()
-        chosenParts.set(extension.name, own.set(agentPart, installed))
-        undo(() => { own.delete(agentPart); if (!own.size) chosenParts.delete(extension.name) }, 'an agent part')
+        const name = agentPart.name
+        const given = chosenParts.get(extension.name) ?? new Map<string, Extension>()
+        if (!always && given.has(name)) throw new Error(`Extension ${extension.name} already gives an agent part named ${name}`)
+        note('agent parts', always ? name : `${name} (only where its agentFor or agentParts gives it)`)
+        const part = agentExtension(agentPart, always)
+        if (!always) chosenParts.set(extension.name, given.set(name, part.installed))
+        let removed = false
+        const remove = () => {
+          if (removed) return
+          removed = true
+          part.undo()
+          if (always) return
+          given.delete(name)
+          if (!given.size && chosenParts.get(extension.name) === given) chosenParts.delete(extension.name)
+        }
+        undo(remove, 'an agent part')
+        return Object.assign(() => remove(), {
+          replace(next: Extension) {
+            life.live(`the agent part ${name}`)
+            if (removed) throw new Error(`Extension ${extension.name}: the agent part ${name} was removed`)
+            if (next.name !== name) throw new Error(`Extension ${extension.name}: the agent part ${name} can only be replaced by one of the same name, not ${next.name}`)
+            const installed = part.replace(next)
+            if (!always) given.set(name, installed)
+          },
+          remove,
+        })
+      },
+      agentParts(add) { own(adders, add as (typeof adders)[number]['value'], 'an agentParts'); note('agentParts', 'an agentParts') },
+      auth: {
+        flow(to, run) {
+          life.live('a sign-in flow')
+          const flow = flows.start((event) => to.notify('auth.event', { flow, event }), run, life.signal)
+          return { flow }
+        },
       },
       settings: {
         register(section) {
@@ -1261,9 +1307,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   await migrateHidden()
   for (const extension of [...core, ...options.extensions ?? []]) {
     daemonLife.add(await setUp(extension, (part, always) => {
-      if (always) return { installed: part, undo: installBuiltin(part, extension.name) }
+      if (always) return installBuiltin(part, extension.name)
       registry.install(part)
-      return { installed: part, undo: () => registry.uninstall(part) }
+      return { installed: part, undo: () => registry.uninstall(part), replace: (next) => { registry.install(next); return next } }
     }, undefined, { source: core.includes(extension) ? 'core' : 'bundled' }))
     extensions.set(extension.name, aboutOf(extension))
   }
@@ -1342,11 +1388,19 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (!entry) {
       const made: Shared = { key: item.key, file: item.file, profiles: new Set(), parts: [], teardown: () => {} }
       made.teardown = await setUp(item.extension, (part, always) => {
-        const named = { ...part, name: `${item.prefix}/${part.name}` }
+        let named = { ...part, name: `${item.prefix}/${part.name}` }
         const uninstall = install(named)
-        if (!always) return { installed: named, undo: uninstall }
-        made.parts.push(named)
-        return { installed: named, undo: () => { made.parts.splice(made.parts.indexOf(named), 1); uninstall() } }
+        if (always) made.parts.push(named)
+        return {
+          installed: named,
+          undo: () => { if (always) made.parts.splice(made.parts.indexOf(named), 1); uninstall() },
+          replace(next) {
+            const renamed = { ...next, name: named.name }
+            registry.install(renamed)
+            if (always) made.parts[made.parts.indexOf(named)] = renamed
+            return named = renamed
+          },
+        }
       }, made.profiles, { source: 'profile', file: item.file })
       shared.set(item.key, entry = made)
     }
@@ -1498,8 +1552,49 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
 
   /**
+   * What extensions add to a thread's agent at submit (`agentParts`), each in the order they were set up: asked all at
+   * once, each given `agentPartsLimit` to answer. One that throws or takes longer adds nothing to this turn (logged).
+   * Only parts the extension gave with `always: false`, by the name it gave them.
+   */
+  /** What an `agentParts` did wrong, said once (not on every turn of every thread). */
+  const adderSaid = new WeakMap<object, Set<string>>()
+  const once = (adder: object, what: string, say: () => void): undefined => {
+    const said = adderSaid.get(adder) ?? new Set<string>()
+    adderSaid.set(adder, said)
+    if (!said.has(what)) { said.add(what); say() }
+    return undefined
+  }
+  async function partsAdded(id: string, meta: ThreadMeta, without: Set<string>, profile: LoadedProfile | undefined): Promise<Extension[]> {
+    const applying = adders.filter((adder) => appliesTo(adder, without, meta))
+    if (!applying.length) return []
+    const thread: AgentPartsThread = {
+      id, hidden: Boolean(meta.hidden), ...(meta.owner ? { owner: meta.owner } : {}),
+      ...(meta.profile && profile ? { profile: { ref: meta.profile, spec: clone(profile.spec) } } : {}),
+    }
+    const answers = await Promise.all(applying.map(async (adder) => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        const parts = await Promise.race([
+          Promise.resolve().then(() => adder.value(clone(thread))),
+          new Promise<'late'>((resolve) => { timer = setTimeout(() => resolve('late'), partsLimit) }),
+        ])
+        if (parts === 'late') { console.warn(`Extension ${adder.owner}: agentParts took over ${partsLimit / 1000}s; this turn goes without its parts`); return [] }
+        return (parts ?? []).map((part) => chosenParts.get(adder.owner)?.get(part.name) ?? once(adder, `gave ${part.name}`, () => console.warn(`agentParts of ${adder.owner} gave ${part.name}, which it doesn't give with agent(part, { always: false })`)))
+          .filter((part) => part !== undefined)
+      } catch (error) {
+        once(adder, 'failed', () => console.error(`Extension ${adder.owner}: agentParts failed:`, error))
+        return []
+      } finally {
+        clearTimeout(timer)
+      }
+    }))
+    return answers.flat()
+  }
+
+  /**
    * What a turn runs with: the thread's own choices, else what an extension chose for it (`agentFor`: Ego's), else its
-   * profile's, else this machine's settings. `id` is unset for a thread being made.
+   * profile's, else this machine's settings. `id` is unset for a thread being made: then only its model and thinking
+   * count (no `agentParts` are asked).
    */
   async function agentOf(id: string | undefined, meta: ThreadMeta) {
     const profile = meta.profile ? await profileOf(meta.profile) : undefined
@@ -1508,8 +1603,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       model: meta.model ?? choice?.model ?? profile?.spec.model, thinking: meta.thinking ?? choice?.thinking ?? profile?.spec.thinking,
     })
     // Only parts its own extension gave with `always: false`.
-    const chosen = (choice?.extensions ?? []).map((part) => chosenParts.get(choice!.by)?.get(part) ?? console.warn(`agentFor of ${choice!.by} chose ${part.name}, which it doesn't give with agent(part, { always: false })`)).filter((part) => part !== undefined)
-    const extensions = [...partsFor(without), ...chosen, ...(profile ? partsOf(profile) : [])]
+    const chosen = (choice?.extensions ?? []).map((part) => chosenParts.get(choice!.by)?.get(part.name) ?? console.warn(`agentFor of ${choice!.by} chose ${part.name}, which it doesn't give with agent(part, { always: false })`)).filter((part) => part !== undefined)
+    const added = id === undefined ? [] : await partsAdded(id, meta, without, profile)
+    // Each part once: one a chooser and an adder both give, where the chooser put it.
+    const extensions = [...new Set([...partsFor(without), ...chosen, ...added, ...(profile ? partsOf(profile) : [])])]
     // Always said, never left as it was: instructions a chooser gave go when it no longer answers.
     const instructions = choice?.instructions ?? (profile?.spec.prompt || null)
     return { model, thinkingLevel, extensions, instructions, without }
@@ -2065,12 +2162,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   router.register(defineAction({
     id: 'auth.respond', title: 'Answer a sign-in step', runs: 'machine',
     params: obj({ flow: str(), prompt: str(), value: str() }),
-    run({ flow, prompt, value }) { agent.respond(flow, prompt, value); return null },
+    run({ flow, prompt, value }) { flows.respond(flow, prompt, value); return null },
   }))
   router.register(defineAction({
     id: 'auth.cancel', title: 'Cancel a sign-in', runs: 'machine',
     params: obj({ flow: str() }),
-    run({ flow }) { agent.cancel(flow); return null },
+    run({ flow }) { flows.cancel(flow); return null },
   }))
   router.register(defineAction({
     id: 'auth.logout', title: 'Sign out of a provider', runs: 'machine', expose: ['ui', 'cli'],
@@ -2336,6 +2433,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       // Profiles' extensions first, then the bundled ones: each step tried whatever the others did.
       for (const dir of [...holds.keys()]) unload(dir)
       daemonLife.dispose()
+      flows.close()
       agent.close()
       for (const m of mounted.values()) await m.stop()
       await harness.close(context)

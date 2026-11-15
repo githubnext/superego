@@ -1,5 +1,6 @@
 // Everything about which model the agents use and how Superego is signed in to its providers, as settings: the Model and
-// Providers sections, the credential store, and sign-in flows. Nothing else in the daemon knows about auth.
+// Providers sections, the credential store, and signing in to providers (as flows of auth-flows.ts). Nothing else in the
+// daemon knows about providers' auth.
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { readFile, rename, writeFile } from 'node:fs/promises'
@@ -16,6 +17,7 @@ import { appEnv } from './paths.ts'
 import { replayProvider, withRecording } from './replay.ts'
 import { authFailure, Rejections, rejectionSummary, WAITING } from './provider-auth.ts'
 import { watchFiles } from './watch-files.ts'
+import type { AuthFlowEvent, AuthFlows } from './auth-flows.ts'
 
 /** The model each provider starts on when it is the first one signed in. */
 const PREFERRED: Record<string, string> = { anthropic: 'claude-opus-5-5', openai: 'gpt-6.1-sol' }
@@ -150,8 +152,6 @@ function echoProvider() {
   return { ...faux, provider }
 }
 
-type Flow = { abort: AbortController; prompts: Map<string, { resolve(value: string): void; reject(error: Error): void }> }
-
 export type AgentSettings = {
   models: Models
   /** What a thread runs with now; `model` is absent when no provider is signed in. */
@@ -162,9 +162,8 @@ export type AgentSettings = {
   resolve(override?: { model?: string; thinking?: string }): { model?: ModelRef; thinkingLevel?: ModelThinkingLevel }
   /** The models a thread can choose from here, with their thinking levels, and what a thread gets by default. */
   catalog(): ModelCatalog
+  /** Sign in to a provider, as a flow of `flows` (auth-flows.ts): its id. */
   login(provider: string, type: 'api_key' | 'oauth', key: string | undefined, emit: (event: AuthEvent) => void): string
-  respond(flow: string, prompt: string, value: string): void
-  cancel(flow: string): void
   logout(provider: string): Promise<void>
   /** The providers that rejected this machine's credentials, and the threads waiting on them. */
   rejections: Rejections
@@ -183,7 +182,7 @@ export type AgentSettings = {
   close(): void
 }
 
-export async function createAgentSettings(settings: SettingsRegistry, dataDir: string, app: AppConfig): Promise<AgentSettings> {
+export async function createAgentSettings(settings: SettingsRegistry, dataDir: string, app: AppConfig, flows: AuthFlows): Promise<AgentSettings> {
   const env = appEnv(app)
   const credentials = new FileCredentialStore(join(dataDir, 'auth.json'))
   const models = createModels({ credentials })
@@ -315,7 +314,6 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
     } catch { return undefined }
   })()
 
-  const flows = new Map<string, Flow>()
   // Some sign-ins identify the installation; it is created once per machine and kept next to the credentials.
   const deviceIdPath = join(dataDir, 'device-id')
   let deviceId = (await readFile(deviceIdPath, 'utf8').catch(() => '')).trim()
@@ -354,48 +352,21 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
     login(provider, type, key, emit) {
       if (!models.getProviders().some((p) => p.id === provider)) throw new RpcError('unknown_provider', `No provider ${provider}`)
       if (type === 'oauth' && !OAUTH.has(provider)) throw new RpcError('unsupported', `Sign-in is not offered for ${provider}; use an API key`)
-      const id = randomUUID()
-      const flow: Flow = { abort: new AbortController(), prompts: new Map() }
-      flows.set(id, flow)
-      const prompt = (prompt: PiAuthPrompt) => {
-        if (key !== undefined && type === 'api_key' && prompt.type === 'secret') return Promise.resolve(key)
-        return new Promise<string>((resolve, reject) => {
-          const promptId = randomUUID()
-          const { signal, ...rest } = prompt
-          flow.prompts.set(promptId, { resolve, reject })
-          const close = () => {
-            if (!flow.prompts.delete(promptId)) return
-            reject(new Error('Prompt closed'))
-            emit({ type: 'prompt_closed', id: promptId })
-          }
-          signal?.addEventListener('abort', close, { once: true })
-          flow.abort.signal.addEventListener('abort', close, { once: true })
-          emit({ type: 'prompt', id: promptId, prompt: rest as AuthPrompt })
-        })
-      }
-      models.login(provider, type, {
-        signal: flow.abort.signal,
-        prompt,
-        notify: (event) => emit(event.type === 'device_code' ? { type: 'device_code', userCode: event.userCode, verificationUri: event.verificationUri } : event as AuthEvent),
-      }, { agentName: app.id, getDeviceId }).then(async () => {
+      return flows.start(emit, async (flow) => {
+        const prompt = ({ signal, ...prompt }: PiAuthPrompt) => {
+          if (key !== undefined && type === 'api_key' && prompt.type === 'secret') return Promise.resolve(key)
+          return flow.prompt(prompt as AuthPrompt, signal ? { signal } : {})
+        }
+        await models.login(provider, type, {
+          signal: flow.signal,
+          prompt,
+          notify: (event) => flow.emit(event.type === 'device_code' ? { type: 'device_code', userCode: event.userCode, verificationUri: event.verificationUri } : event as AuthFlowEvent),
+        }, { agentName: app.id, getDeviceId })
         await refreshAuth()
-        emit({ type: 'done' })
         // Signed in again, even with the same key (fixed at the provider, say): what waited on it goes on.
         seen.set(provider, hashOf(await credentials.read(provider).catch(() => undefined)))
         credentialsChanged(provider)
-      }, (error: unknown) => {
-        emit({ type: 'failed', message: flow.abort.signal.aborted ? 'Cancelled' : error instanceof Error ? error.message : String(error) })
-      }).finally(() => flows.delete(id))
-      return id
-    },
-    respond(flow, prompt, value) {
-      const pending = flows.get(flow)?.prompts.get(prompt)
-      if (!pending) throw new RpcError('not_found', 'That sign-in step is no longer waiting')
-      flows.get(flow)!.prompts.delete(prompt)
-      pending.resolve(value)
-    },
-    cancel(flow) {
-      flows.get(flow)?.abort.abort()
+      })
     },
     async logout(provider) {
       await models.logout(provider)
@@ -421,7 +392,6 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
       return () => { credentialListeners.delete(listener) }
     },
     close() {
-      for (const flow of flows.values()) flow.abort.abort()
       clearTimeout(reread)
       watcher?.close()
     },

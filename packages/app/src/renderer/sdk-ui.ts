@@ -40,6 +40,7 @@ export { Picker, type PickerProps, type PickerRow } from './picker.tsx'
 export { PaneHeader, useTabNote } from './panes.tsx'
 export { Diff, parseDiff, type DiffFile } from './diff.tsx'
 export { FileEditor, type FileEditorProps } from './file-editor.tsx'
+export { SignInFlow, type SignInFlowProps } from './sign-in-flow.tsx'
 export {
   Button, ContextMenu, Dialog, IconButton, List, ListItem, Menu, Panel, Popover, Select, StatusGlyph, statusLabel, Switch, TextArea,
   TextField, Tooltip, type SelectOption,

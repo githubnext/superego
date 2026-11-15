@@ -102,11 +102,17 @@ export type AuthPrompt =
 /** What a sign-in flow tells the user, mirroring pi-ai's AuthEvent. */
 export type AuthEvent =
   | { type: 'info'; message: string; links?: { url: string; label?: string }[] }
-  | { type: 'auth_url'; url: string; instructions?: string }
+  /**
+   * A page to open in the browser. `callback`: the loopback address (`http://127.0.0.1:<port>/<path>`) the flow's
+   * machine listens on for the page's redirect. A desktop app whose machine is another computer may listen at the same
+   * address on its own while the flow is open, and answer the flow's `manual_code` prompt with the whole URL it was
+   * sent to, as a user pasting it would.
+   */
+  | { type: 'auth_url'; url: string; instructions?: string; callback?: string }
   | { type: 'device_code'; userCode: string; verificationUri: string }
   | { type: 'progress'; message: string }
   | { type: 'prompt'; id: string; prompt: AuthPrompt }
-  /** A prompt no longer needs an answer, e.g. the browser callback arrived before a pasted code. */
+  /** A prompt no longer needs an answer: answered (by anyone), or the browser callback arrived before a pasted code. */
   | { type: 'prompt_closed'; id: string }
   | { type: 'done' }
   | { type: 'failed'; message: string }

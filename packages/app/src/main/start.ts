@@ -18,6 +18,7 @@ import { installTypes } from '@superego/client/author-types'
 import { MenuBar } from './tray.ts'
 import { commandLine } from './command-line.ts'
 import { ServiceRestart, type ServiceAction } from './restart.ts'
+import { createSignInCatcher } from './sign-in-callback.ts'
 import { shortcutOf } from '../renderer/shortcuts.ts'
 
 /**
@@ -203,6 +204,7 @@ export function startApp(appConfig: AppConfig) {
    */
   const lastStatus = new Map<string, ThreadInfo['status']['state']>()
   const watchSubs = new Map<string, string>()
+  const signIns = createSignInCatcher((machine, params) => linkOf(machine)?.call('auth.respond', params) ?? Promise.resolve())
   function onMachineEvent(machine: string, method: string, params: unknown) {
     if (!linkOf(machine)) return
     if (method === '$connection') {
@@ -220,6 +222,11 @@ export function startApp(appConfig: AppConfig) {
     if (method === 'threads.changed') {
       const { sub, value } = params as Notifications['threads.changed']
       if (watchSubs.get(machine) === sub) track(machine, value, true)
+    }
+    // Another computer's sign-in: its browser redirect comes back here (sign-in-callback.ts).
+    if (method === 'auth.event' && machine !== 'local') {
+      const { flow, event } = params as Notifications['auth.event']
+      signIns.heard(machine, flow, event)
     }
     broadcast({ machine, method, params })
   }
@@ -769,7 +776,7 @@ export function startApp(appConfig: AppConfig) {
   })
   // Every quit quits: the menu bar's Quit, SIGTERM (Electron turns it into app.quit), logout. Only the ⌘Q menu item
   // is softer: with the menu bar on, it closes the windows and leaves the app there.
-  app.on('before-quit', () => { for (const link of allLinks()) link.stop() })
+  app.on('before-quit', () => { signIns.close(); for (const link of allLinks()) link.stop() })
   const quitKey = () => {
     if (menuBarOn() && !headless) for (const window of BrowserWindow.getAllWindows()) window.close()
     else app.quit()

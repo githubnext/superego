@@ -1,6 +1,6 @@
 # MCP servers for Superego's agents
 
-A design, 2026-11-15. Nothing here is built yet. It covers how agents in Superego threads use MCP servers: what the
+A design, 2026-11-15. Lane 1 (the core seams) is built; lanes 2–4 are not yet. It covers how agents in Superego threads use MCP servers: what the
 user sets up, where it lives, how it runs, and four lanes to build it in.
 
 ## Two MCPs, named apart
@@ -201,20 +201,32 @@ The extension API is short of four things, and Lane 1 adds them:
    - It gets `{ id, hidden, owner, profile?: { ref, spec } }`. The `spec` is the profile as loaded *now*, so profile
      edits take effect on the next turn.
    - It may be async, up to a limit the core enforces (5s). A first turn can then wait briefly for a server it has
-     never listed.
-   - It returns only parts the extension gave with `agent(part, { always: false })`.
+     never listed. Every extension's is asked at once; one that's late or throws adds nothing to that turn (logged
+     once).
+   - It returns only parts the extension gave with `agent(part, { always: false })`, matched by the name they were
+     given: returning the first object still gives the part installed under that name now.
+   - It isn't asked while a thread is being made (only its model counts then), only at submit.
 2. **`agent()` returns a handle** with `replace(next)` and `remove()`. A server's part is installed and replaced again
    as its tools change, under the same name. Conversations select parts by name, so the next request picks up the
-   change without configuring the thread again (pi-durable resolves the registry per phase).
-3. **`superego.auth.flow(run)`**: a sign-in flow of an extension's own, carried by the existing `auth.event`,
-   `auth.respond` and `auth.cancel`. The window shows MCP sign-ins with the same component it uses for providers. It
-   moves out of `SettingsView.tsx` and is exported from `superego/ui` as `SignInFlow`. The flow machinery moves out
-   of `agent-settings.ts` into `auth-flows.ts`, and providers use it too.
-4. **Tool rows by prefix** in the UI half: `superego.tool('mcp__*', row)`. Today a row is registered for one exact
-   tool name.
+   change without configuring the thread again (pi-durable resolves the registry per phase). The handle is also a
+   function that removes the part, so a one-line `setup: (s) => s.agent(part)` still returns a valid cleanup.
+3. **`superego.auth.flow(context, run)`**: a sign-in flow of an extension's own, carried by the existing `auth.event`,
+   `auth.respond` and `auth.cancel`. `context` is the action's (`DaemonContext`): the events go to the client that
+   ran it. It answers `{ flow }` at once, which the action returns, as `auth.login` does. `run(flow)` gets
+   `{ id, signal, emit(event), prompt(prompt, { signal }) }`. The flow ends `done` when `run` resolves and `failed`
+   when it throws (`Cancelled` after `auth.cancel`). It's also cancelled when the extension is torn down. An answered
+   prompt now says `prompt_closed` to every client. The window shows MCP sign-ins with the same component it uses for
+   providers, `SignInFlow` (`packages/app/src/renderer/sign-in-flow.tsx`). It's out of `SettingsView.tsx` and exported
+   from `superego/ui`: `<SignInFlow machine title start={() => dispatch('mcp-servers.login', …)} onClose />`. The flow
+   machinery is out of `agent-settings.ts` and in `auth-flows.ts`, and providers use it too.
+4. **Tool rows by prefix** in the UI half: `superego.tool('mcp__*', row)`. A `*` may only end the name. A tool's own
+   row wins over a prefix, and a longer prefix wins over a shorter one.
 
-`ProfileSpec` gains `mcp` and `mcpServers` (in `profiles.ts`, with the `extends` merge and checks: names, one of
-`command` or `url`). The core only carries them; the extension reads them.
+`ProfileSpec` gains `mcp` and `mcpServers` (in `profiles.ts`, with the `extends` merge and checks). The checks cover
+names, exactly one of `command` or `url`, `args` as strings, and `env` and `headers` as maps of strings. The rest,
+such as `auth`'s shape, is left to the extension. The core only carries them; the extension reads them. The server's
+type is `ProfileMcpServer`, exported from `'superego'`. The extension's `ServerConfig` is that type plus
+`unprofiled`, `enabled` and `allowed`.
 
 ### Which servers a turn has
 
@@ -358,10 +370,11 @@ committed.
     with the client registration.
   - *Registration*, in this order:
     1. a `clientId` in the config, with an optional secret in the store, for servers that want a registered app
-    2. Client ID Metadata Documents, when the server supports them and Superego has a metadata URL to give
-       (§Open questions)
-    3. dynamic client registration (RFC 7591), registered once per authorization server and redirect URI, and
+    2. dynamic client registration (RFC 7591), registered once per authorization server and redirect URI, and
        kept
+
+    Client ID Metadata Documents come later, once Superego has a URL to host its metadata on (§Decided questions,
+    §Future).
   - *The flow:* authorization code with PKCE (S256), `state`, and `resource` (RFC 8707) set to the server's canonical
     URL, so the token is good only there.
   - *Refresh* happens before a call when the token has less than a minute left, inside the store's serialised
@@ -382,7 +395,13 @@ committed.
   - **Daemon on another machine, desktop app:** the app's main process listens on that port on *this* computer
     while the flow is open. It catches the redirect and answers the flow's `manual_code` prompt with the whole
     redirect URL (`auth.respond`). The daemon checks `state` and exchanges the code, so signing in to a remote machine
-    feels like signing in locally.
+    feels like signing in locally. This is built (`packages/app/src/main/sign-in-callback.ts`). It watches every
+    `auth.event` from a machine other than `local`, so it doesn't depend on which window or component drew the flow.
+    It listens only for `http://127.0.0.1` or `localhost` callbacks at a port of 1024 or above, one flow per port.
+    It stops when the flow ends, after 10 minutes, or when it catches the redirect. A taken port is left alone.
+    For it to work, the flow must emit `auth_url` with `callback`, and then open a `manual_code` prompt, even when
+    its own daemon listens too. The daemon's own listener closes that prompt when it catches the redirect first,
+    through `prompt`'s `signal`.
   - **A browser or phone,** or a port that's taken: the user pastes the redirect URL, as with providers today.
   - **The command line** (`superego mcp-servers login <name>`, `-m` for another machine) prints the URL and listens
     the same way.
@@ -471,7 +490,7 @@ Ego helps set up a server ("connect Linear"), within its settings-only powers:
   Superego's agents use.
 
   An outside agent can still start a thread, where the machine allows it (`mcp.startThreads`), and that thread gets
-  its servers like any other. See Open questions.
+  its servers like any other (§Decided questions).
 - **Tool results are untrusted input**, the way web pages are. The row and the result say which server they came
   from. There's nothing more to do in v1.
 
@@ -483,26 +502,24 @@ Ego helps set up a server ("connect Linear"), within its settings-only powers:
 - **New core pieces are additive, so no new `FEATURES` entry is needed:**
   - **`auth_url.callback`** is an optional field, and older apps ignore it, so pasting still works.
   - **`auth.event` and `auth.respond` for extensions' flows** keep their shape. A flow is a flow.
-  - **The `agentParts` hook, `agent()`'s handle, `auth.flow` and the prefix rows** are extension API. They go in
-    `EXTENSION_API`'s next minor, and an extension asks for them with `api: '^1.6'`.
+  - **The `agentParts` hook, `agent()`'s handle, `auth.flow`, the prefix rows and `SignInFlow`** are extension API.
+    They went in as `EXTENSION_API` 1.7.0, and an extension asks for them with `api: '^1.7'`.
 - **Actions** (`mcp-servers.add`, `edit`, `remove`, `allow`, `login`, `logout`, `set-secret`, `restart`) are new, so
   `released-actions.json` only grows.
 - **A profile with `mcp` on an older daemon** loads without it, because the core ignores keys it doesn't know. Its
   threads run without servers, and `superego extensions --thread` is where to look.
 
-## Open questions
+## Decided questions
 
-1. **Outside agents' threads.** When an outside agent may start threads (`mcp.startThreads`), should those threads
-   get MCP servers? *Recommended: yes, like any thread of that profile*, with the Can start threads setting saying
-   so in its description. The alternative is no servers for threads created with exposure `mcp`. That's safer, but
-   a surprise when you start a thread from Claude Code on purpose.
-2. **Client ID Metadata Documents.** CIMD (in the 2025-11-25 spec) is the registration the spec now prefers. It
-   needs Superego's client metadata at an `https` URL we control, such as `https://<site>/oauth/mcp-client.json`. Is
-   there a site to host it on? *Recommended: start with DCR and a configurable `clientId`, and add CIMD once there's
-   a URL.*
-3. **Allow for commands Ego adds.** *Recommended: yes* (above). The other way, Ego adds and the server starts at
-   once, is quicker for "connect Sentry", but it lets a chat turn into running a command with no click from the
-   user.
+These were open in the first draft; the user settled them.
+
+1. **Outside agents' threads get MCP servers**, like any thread of that profile. A thread an outside agent starts
+   (`mcp.startThreads`) works out its servers as any other does. The Can start threads setting says so in its
+   description (Lanes 2 and 4).
+2. **No Client ID Metadata Documents for now.** There's no site to host Superego's client metadata on, so
+   registration is a configured `clientId`, else dynamic client registration. CIMD is future work (§Future).
+3. **A command Ego adds waits for the user's Allow.** It's saved with `allowed: false` and doesn't run until the user
+   allows it in Settings (§Ego).
 
 ## Lanes
 
@@ -535,6 +552,26 @@ Tests: daemon tests for parts adding up, a part replaced mid-run, a flow from an
 smoke step for a provider sign-in that still works.
 
 Depends on nothing.
+
+**Built.** As above, except:
+- `auth.flow` takes the action's context: `superego.auth.flow(context, run)`.
+- The catcher is `packages/app/src/main/sign-in-callback.ts`.
+- `SignInFlow` lives in `packages/app/src/renderer/sign-in-flow.tsx`.
+- `DaemonOptions.agentPartsLimit` shortens the 5s limit for tests.
+
+Its tests are `packages/daemon/test/agent-parts.test.ts`, `packages/app/test/sign-in-callback.test.ts`, the prefix
+case in `packages/app/test/tool-rows.test.ts`, and a smoke step (an API key through Settings → Providers, then Sign
+out).
+
+Lane 2 should know:
+- Give each server's part with `agent(part, { always: false })` at setup, from the cache, and keep the handle.
+  Return those parts from `agentParts` and call `replace` when the tools change. Don't install a part per thread;
+  `agentParts` picks among installed parts.
+- `profile.spec.mcpServers` is the *merged* map, so a server that came from the user's profile through `extends`
+  can't be told from the project's. `profile.ref` is the thread's profile, so a server's id is
+  `<ref.dir>#<name>`, and `cwd` defaults to the project root above `ref.dir`.
+- Hidden threads (`hidden: true`) get no servers: that's the extension's rule, applied to `hidden` and `owner`.
+- `ProfileMcpServer` is the shared base type to extend.
 
 ### Lane 2: The runtime
 

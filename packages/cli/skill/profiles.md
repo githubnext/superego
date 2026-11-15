@@ -37,6 +37,10 @@ export default defineProfile({
   worktree: true,                                    // its threads get a worktree each (in a git repository)
   options: { worktrees: true },                      // what its threads ask extensions for, by name (the same, longhand)
   extends: 'user:default',                           // start from your profile of that name, and add to it
+  mcp: ['linear'],                                   // the machine's MCP servers its threads use, by name
+  mcpServers: {                                      // MCP servers of its own: a command or a URL each
+    docs: { command: 'node', args: ['./tools/docs-mcp.js'], auth: { type: 'env', names: ['DOCS_TOKEN'] } },
+  },
 })
 ```
 
@@ -57,6 +61,13 @@ Every field is optional.
   `thread-reports` (a thread started by another tells it when it finishes, fails or waits on a question), `ask-user`, `files`, `git`, `images`, `links`, `pane-ui` (open_ui, update_ui), `reply-ui` (show_ui, ask_ui), `skills`, `suggestions`, `tasks`, `web-panes`. Its
   threads get none of their tools or prompt sections, and the window shows none of their UI there. Required ones (the
   sidebar) can't be left out.
+- **`mcp`** names MCP servers the machine has (Settings → MCP servers), for its threads; a name it has none of is
+  left out. **`mcpServers`** defines servers of the profile's own, by name, each a `command` (with `args`, `cwd`,
+  plain `env`) or a `url` (with `headers`), and how it signs in (`auth`: `oauth`, `api-key`, or secret `env` names,
+  their values entered in Settings, never in the file). Names are lower-case letters, digits and hyphens, up to 24.
+  With `extends`, `mcp` lists add up and `mcpServers` merge by name, this profile's winning. The `mcp-servers`
+  extension reads them; a machine without it (or a profile `without` it) runs no servers. Until that extension ships,
+  they're checked and carried, and no server runs.
 
 Profile files are TypeScript (the daemon strips the types as it loads them) or JavaScript. They may import each other
 and Node's built-ins (`node:fs/promises`, …). `'superego'` is the only package they get (and `'superego/ui'` and
