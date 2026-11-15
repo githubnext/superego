@@ -70,6 +70,37 @@ void (async () => {
   await both('rail-menu')
   await run(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
   await until(`!document.querySelector('.view-menu')`, 'rail menu closed')
+  // The sidebar's edge: dragged to its least and its most; past its least, dimmed as letting go would fold it; let go
+  // there, folded to dots; dragged out from the rail, the list again; a double click puts its width back.
+  const sidebarWidth = () => run(`document.querySelector('.app__sidebar')?.offsetWidth ?? 0`)
+  const edge = (dx, { up = true } = {}) => run(`(() => { const h = document.querySelector('.app__edge'); const r = h.getBoundingClientRect(); const x = r.left, y = r.top + r.height / 2
+    h.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: x, clientY: y }))
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: x + ${dx}, clientY: y }))
+    ${up ? `window.dispatchEvent(new PointerEvent('pointerup', { clientX: x + ${dx}, clientY: y }))` : ''} })()`)
+  await edge(180 - await sidebarWidth())
+  await until(`window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['app.sidebar.width'] === 180)`, 'sidebar at 180')
+  await sleep(300)
+  console.log('sidebar least:', await sidebarWidth())
+  await both('sidebar-180')
+  await edge(420 - await sidebarWidth())
+  await until(`window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['app.sidebar.width'] === 420)`, 'sidebar at 420')
+  await sleep(300)
+  console.log('sidebar most:', await sidebarWidth())
+  await both('sidebar-420')
+  await edge(120 - await sidebarWidth(), { up: false })
+  await sleep(300)
+  await both('sidebar-folding')
+  await run(`window.dispatchEvent(new PointerEvent('pointerup', { clientX: 0, clientY: 0 }))`)
+  await until(`!!document.querySelector('.threads-rail') && !document.querySelector('.app.is-folding')`, 'folded to dots')
+  await sleep(300)
+  await both('sidebar-folded')
+  await edge(300)
+  await until(`!!document.querySelector('.threads-session')`, 'dragged out from the rail')
+  await sleep(300)
+  console.log('sidebar dragged out:', await sidebarWidth())
+  await both('sidebar-out')
+  await run(`document.querySelector('.app__edge').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`)
+  await until(`window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['app.sidebar.width'] === 232)`, 'sidebar width reset')
   // The thread alone, dragged narrower from its handle at the row's end, then put back with a double click.
   const handle = `[...document.querySelectorAll('.panes__gap')].at(-1)`
   const dragBy = (dx) => run(`(() => { const h = ${handle}; const r = h.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2

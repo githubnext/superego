@@ -267,6 +267,25 @@ if (phase === 'first') {
   await until(`Boolean(document.querySelector('.threads-rail'))`, 'rail')
   await key('\\')
   await until(`Boolean(document.querySelector('.threads-session'))`, 'list again')
+  // Its edge: dragged, a width kept for every window; let go short, folded into the rail, then ⌘\ brings it back as
+  // wide as it was; dragged out from the rail, the list again.
+  const edge = (dx) => run(`(() => { const h = document.querySelector('.app__edge'); const r = h.getBoundingClientRect(); const x = r.left, y = r.top + r.height / 2
+    h.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: x, clientY: y }))
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: x + ${dx}, clientY: y }))
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: x + ${dx}, clientY: y })) })()`)
+  const sidebarIs = (width) => `window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['app.sidebar.width'] === ${width} && document.querySelector('.app__sidebar')?.offsetWidth === ${width})`
+  await edge(300 - await run(`document.querySelector('.app__sidebar').offsetWidth`))
+  await until(sidebarIs(300), 'sidebar dragged to 300')
+  await edge(-200)
+  await until(`window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['threads.view'] === 'rail' && Boolean(document.querySelector('.threads-rail')))`, 'dragged short, folded into the rail')
+  await key('\\')
+  await until(sidebarIs(300), 'unfolded as wide as it was')
+  await edge(-200)
+  await until(`Boolean(document.querySelector('.threads-rail'))`, 'folded again')
+  await edge(250)
+  await until(`Boolean(document.querySelector('.threads-session')) && ${sidebarIs(250)}`, 'dragged out from the rail')
+  await run(`document.querySelector('.app__edge').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`)
+  await until(sidebarIs(232), 'width put back')
   await key('i')
   await until(`document.querySelector('.threads-details')?.textContent.includes('Machine')`, 'details pane')
   await key('i')

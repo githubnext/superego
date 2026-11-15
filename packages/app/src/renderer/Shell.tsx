@@ -19,6 +19,7 @@ import { refreshFontsSoon } from './fonts.ts'
 import { AuthNotice } from './AuthNotice.tsx'
 import { ThreadTitle, ThreadTools, ThreadView } from './ThreadView.tsx'
 import { StripSlot } from './panes.tsx'
+import { useSidebarEdge } from './sidebar-edge.tsx'
 import { SettingsView } from './SettingsView.tsx'
 import { Palette } from './Palette.tsx'
 import { Navigator } from './Navigator.tsx'
@@ -60,6 +61,8 @@ export function Shell() {
   // Wide, the rail is a row of tabs with one in front, joined to what's beside it: Settings while it's open; else a
   // hidden thread's (Ego's: the thread alone, no sidebar); else the open space, as the sidebar.
   const tab: 'settings' | 'thread' | 'space' = narrow ? 'space' : settings.open ? 'settings' : alone ? 'thread' : 'space'
+  // Wide, the sidebar's edge resizes it, and folds it dragged narrow.
+  const sidebarEdge = useSidebarEdge(space)
   const where = selection && thread && machine ? { machine: machine.id, thread } : undefined
   // The thread's places, as the views it sees resolve.
   const threadPlaced = useLayout(where).placed
@@ -96,7 +99,8 @@ export function Shell() {
   // says about itself); down the left a rail (what extensions put there, Settings) and the sidebar beside it; the rest holds the
   // thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.
   return (
-    <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.superego.web ? 'is-web' : ''}`}>
+    <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.superego.web ? 'is-web' : ''} ${sidebarEdge.folding ? 'is-folding' : ''}`}
+      style={narrow ? undefined : sidebarEdge.style}>
       {narrow && spaces.length > 0 && drawer && <div className="app__scrim" onClick={() => setDrawer(false)} />}
       {!narrow && (
         <header className="app__drag app__titlebar">
@@ -155,6 +159,7 @@ export function Shell() {
             )}</div>
           </aside>
         )}
+        {!narrow && tab === 'space' && spaces.length > 0 && sidebarEdge.edge}
         {tab !== 'settings' && <main className="app__main">
           {narrow && (
             // With no space there's no drawer: what stands in for one (the title bar's: the thread picker) and Settings.

@@ -12,7 +12,7 @@ import {
   call, defineAction, defineUiExtension, MachineDrift, showSession, Slot, SORT, unread, useAppSetting, useLocalState, useMachines, useNarrow, usePlacement, useSelection, useSessions, useThreadView, useShell, useShortcut,
   type MachineEntry, type Session, type Sort, type SpaceRailProps, type Store, type WindowContext,
 } from '@superego/app/ui'
-import { rollup, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
+import { bool, obj, opt, rollup, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, ChatsIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
 import { activity, ago } from './groups.ts'
@@ -22,6 +22,8 @@ import { about } from './shared.ts'
 export const VIEW = 'threads.view'
 /** The details view, and the action that puts it beside the thread or takes it away. */
 const DETAILS = 'threads.details'
+/** The action that folds the list into the rail and back. */
+const RAIL = 'threads.rail'
 export type View = 'list' | 'rail'
 
 /**
@@ -47,14 +49,23 @@ export default defineUiExtension({
         { key: VIEW, title: 'Show as', default: 'list', type: 'choice', options: [{ value: 'list', label: 'List' }, { value: 'rail', label: 'Rail' }], hidden: true },
       ],
     })
-    superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: Threads, rail: ThreadsRail })
+    superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: Threads, rail: ThreadsRail, fold: RAIL })
     superego.view(DETAILS, { title: 'Thread details', context: 'thread', fits: ['aside', 'pane'], component: DetailsPane })
     superego.view('threads.model', { title: 'Model', context: 'thread', fits: ['header'], default: 'header', component: ModelButton })
     registerRows(superego)
     registerLinks(superego)
     const action = (id: string, title: string, run: (c: WindowContext) => void, keys?: string) =>
       superego.action(defineAction({ id, title, ...(keys ? { keys } : {}), run: (_params, c) => run(c) }))
-    action('threads.rail', 'Toggle sidebar rail', (c) => void set(c, VIEW, c.appSetting<View>(VIEW) === 'rail' ? 'list' : 'rail'), 'mod+\\')
+    // The list folded into dots, or back (`on`; else the other way): ⌘\\, and the shell, as the sidebar's edge is dragged
+    // narrow or out from the rail. Unfolded in a narrow window, it stays so there for a while, as the Threads button does.
+    superego.action(defineAction({
+      id: RAIL, title: 'Toggle sidebar rail', keys: 'mod+\\', params: obj({ on: opt(bool()) }),
+      run({ on }, c) {
+        const rail = on ?? c.appSetting<View>(VIEW) !== 'rail'
+        if (!rail && matchMedia(NARROW).matches) unfolded.set(true)
+        return set(c, VIEW, rail ? 'rail' : 'list')
+      },
+    }))
     action(DETAILS, 'Toggle thread details', (c) => void c.dispatch('layout.place', { view: DETAILS, place: 'aside' }, { source: 'threads' }), 'mod+i')
     action('threads.sort.created', 'Sort threads: newest first', (c) => void set(c, SORT, 'created'))
     action('threads.sort.status', 'Sort threads: needs you first', (c) => void set(c, SORT, 'status'))

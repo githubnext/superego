@@ -107,6 +107,12 @@ export type View<C extends ViewContext = ViewContext> = {
   component: ComponentType<ViewProps<C>>
   /** As a `space`: what it draws in the rail instead of a button with its icon (a list folded into dots). */
   rail?: ComponentType<SpaceRailProps>
+  /**
+   * As a `space`: the action that folds it into a slim form in the rail and back, run with `{ on: true }` to fold and
+   * `{ on: false }` to unfold. The shell runs it as the sidebar's edge is dragged narrow, or out from the rail. Without
+   * one, dragging it narrow closes the sidebar.
+   */
+  fold?: string
   /** As a pane: its width to start with, as a share of the row. */
   width?: number
 }

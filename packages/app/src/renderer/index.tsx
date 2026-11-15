@@ -16,6 +16,7 @@ import { WebAccess } from './web-access.tsx'
 import { ConnectedClients } from './connected.tsx'
 import { Shell, ThreadPicker } from './Shell.tsx'
 import { SORT } from './sessions.ts'
+import { DEFAULT_WIDTH, MAX_WIDTH, MIN_WIDTH, SIDEBAR_WIDTH } from './sidebar-width.ts'
 import { ShellStateProvider } from './state.tsx'
 import { coreActions, defineWindowAction } from './actions.tsx'
 import { webBridge } from './web-bridge.ts'
@@ -57,6 +58,11 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
           { value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' },
         ] },
       ],
+    })
+    // Changed by dragging the sidebar's edge, not in Settings.
+    core.appSettings({
+      id: 'sidebar', title: 'Sidebar', order: 61,
+      settings: [{ key: SIDEBAR_WIDTH, title: 'Sidebar width', default: DEFAULT_WIDTH, type: 'number', min: MIN_WIDTH, max: MAX_WIDTH, step: 1, hidden: true }],
     })
     registerBuiltInPanes(core)
     registerToolRows(core)

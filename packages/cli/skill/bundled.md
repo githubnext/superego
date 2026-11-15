@@ -77,7 +77,8 @@ Bundled extensions get more than a profile's:
 
 - **Views in the window's places**, not only a thread's: `superego.view(id, { title, icon, context, fits, default,
   narrow, withoutSpaces, order, component })` (see "Views and the layout" in `docs/writing-extensions.md`). A `space`
-  is a rail button (its `icon`, or its own `rail` component) and the sidebar while open; `rail` is a button there that
+  is a rail button (its `icon`, or its own `rail` component) and the sidebar while open (`fold`: the action, given
+  `{ on }`, that folds it into the rail as the sidebar's edge is dragged narrow); `rail` is a button there that
   isn't a space (Ego's, `order: 10`); `drawer` the foot of a phone's drawer, beside Settings; `titlebar` the title
   bar's start. `default` is where it starts (none: offered, the user places it), `narrow` where it goes on a phone,
   `withoutSpaces` where it goes while no view is in `space` (Unread's bell in the rail). The user's layout decides in
