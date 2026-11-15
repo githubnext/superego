@@ -12,13 +12,14 @@ import type { MachineConfig } from './shared.ts'
 export type { Transport } from './link.ts'
 
 /**
- * The daemon on this computer, at `socket`. `start` launches one when nothing answers; how depends on the client (the
- * app runs Electron as Node, the CLI runs Node), so it is the caller's.
+ * The daemon on this computer, at `socket`. `start` launches one when nothing answers (how depends on the client: the
+ * app runs Electron as Node, the CLI runs Node, so it is the caller's), and says whether it's still on its way: it's
+ * waited for until it listens or isn't coming.
  */
-export async function openLocal(socket: string, start?: () => void): Promise<Transport> {
+export async function openLocal(socket: string, start?: () => () => boolean): Promise<Transport> {
   if (start && !(await isListening(socket))) {
-    start()
-    for (let i = 0; i < 100 && !(await isListening(socket)); i++) await new Promise((resolve) => setTimeout(resolve, 100))
+    const coming = start()
+    while (!(await isListening(socket)) && coming()) await new Promise((resolve) => setTimeout(resolve, 100))
   }
   const { peer, socket: conn } = await connectSocket(socket)
   return { peer, closed: new Promise((resolve) => conn.once('close', () => resolve())), close: () => conn.destroy() }

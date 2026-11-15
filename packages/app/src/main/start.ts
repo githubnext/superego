@@ -1,10 +1,9 @@
-import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, openSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, protocol, session, shell, type MenuItemConstructorOptions } from 'electron'
-import { appEnv, daemonStarting, defaultDataDir, readBuild, socketPath } from '@superego/daemon/client'
+import { appEnv, daemonStarting, defaultDataDir, readBuild, socketPath, spawnDaemon } from '@superego/daemon/client'
 import {
   arr, bool, compareVersions, defineAction, int, lit, nullable, obj, opt, Router, RpcError, str, union, unknown, waitingForSignIn,
   type AppConfig, type Channel, type DeclaredSection, type Json, type Notifications, type ProfileRef, type ThreadInfo,
@@ -34,14 +33,11 @@ export function startApp(appConfig: AppConfig) {
   const dataDir = defaultDataDir(appConfig)
   const socket = socketPath(appConfig, dataDir)
 
-  /** Start the local daemon, detached: quitting the app leaves agents running. */
-  function startDaemon() {
-    if (daemonStarting(dataDir)) return
-    mkdirSync(dataDir, { recursive: true })
-    const log = openSync(join(dataDir, 'daemon.log'), 'a')
-    spawn(process.execPath, [join(import.meta.dirname, 'daemon.js')], {
-      detached: true, stdio: ['ignore', log, log], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-    }).unref()
+  /** Start the local daemon, detached (quitting the app leaves agents running), unless one is on its way. */
+  function startDaemon(): () => boolean {
+    const starting = () => daemonStarting(dataDir)
+    if (starting()) return starting
+    return spawnDaemon(dataDir, [process.execPath, join(import.meta.dirname, 'daemon.js')], { ...process.env, ELECTRON_RUN_AS_NODE: '1' })
   }
   const openLocal = () => openLocalSocket(socket, startDaemon)
 

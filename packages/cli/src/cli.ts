@@ -3,7 +3,7 @@
 // this computer or, with `-m <machine>`, on any machine the app knows. `<id> connect` is what `ssh <host> <id> connect`
 // runs on the far side. An app's bin calls `runCli(app, { appDir, bin })`.
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { createConnection } from 'node:net'
 import { hostname } from 'node:os'
@@ -22,7 +22,7 @@ import {
   type MachineConfig, type Transport,
 } from '@superego/client'
 // The daemon itself only for `daemon run`: loading it costs every other command most of its start.
-import { appEnv, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, startService, uninstallService } from '@superego/daemon/client'
+import { appEnv, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
 import {
   AUTH_REJECTED, compareVersions, driftPhrase, FEATURES, PROTOCOL_VERSION, RpcError, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ProfileRef, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
@@ -184,15 +184,18 @@ function installedDaemon(): { dir: string; command: string[]; env: NodeJS.Proces
   return { dir: fileURLToPath(new URL('../../daemon/src/', import.meta.url)), command, env: process.env }
 }
 
-/** Start this computer's daemon in the background, logging next to its data. */
-function startDaemon() {
-  if (daemonStarting(dataDir)) return
-  // A service, when one is installed, is what starts it: it then lives and restarts as the service says.
-  if (startService({ app })) return
-  mkdirSync(dataDir, { recursive: true, mode: 0o700 })
-  const log = openSync(`${dataDir}/daemon.log`, 'a')
-  const { command: [program, ...args], env } = installedDaemon()
-  spawn(program!, args, { detached: true, stdio: ['ignore', log, log], env }).unref()
+/** Start this computer's daemon in the background, unless one is on its way; whether it still is (see `openLocal`). */
+function startDaemon(): () => boolean {
+  const starting = () => daemonStarting(dataDir)
+  if (starting()) return starting
+  // A service, when one is installed, is what starts it: it then lives and restarts as the service says. Its daemon
+  // names itself only once it listens, so it's given ten seconds.
+  if (startService({ app })) {
+    const until = Date.now() + 10_000
+    return () => Date.now() < until
+  }
+  const { command, env } = installedDaemon()
+  return spawnDaemon(dataDir, command, env)
 }
 
 type Machine = { id: string; label: string; config?: MachineConfig }
@@ -498,7 +501,7 @@ async function daemonCommand(sub: string | undefined, now: boolean) {
     if (!running) return print({ stopped: false }, () => console.log('Not running.'))
     const { pid } = (await on(local, async (_call, hello) => hello)).machine
     process.kill(pid, 'SIGTERM')
-    await stopped()
+    await gone(pid)
     return print({ stopped: true, pid }, () => console.log(`Stopped daemon ${pid}. Running agents stop with it.`))
   }
   if (sub === 'restart') {
@@ -521,7 +524,7 @@ async function daemonCommand(sub: string | undefined, now: boolean) {
       }
       return hello
     })
-    await stopped()
+    await gone(before.machine.pid)
     const after = await on(local, async (_call, hello) => hello)
     return print({ restarted: true, from: before.machine.build, build: after.machine.build }, () =>
       console.log(`Restarted: build ${before.machine.build} → ${after.machine.build}, pid ${after.machine.pid}.`))
@@ -550,9 +553,10 @@ async function daemonCommand(sub: string | undefined, now: boolean) {
   throw new RpcError('usage', `Unknown: ${app.id} daemon ${sub}`)
 }
 
-/** Until nothing answers on the socket any more. */
-async function stopped() {
-  for (let i = 0; i < 100 && await isListening(socket); i++) await new Promise((done) => setTimeout(done, 100))
+/** Until the daemon `pid` has exited (one that won't is given a minute). */
+async function gone(pid: number) {
+  const alive = () => { try { process.kill(pid, 0); return true } catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM' } }
+  for (const end = Date.now() + 60_000; alive() && Date.now() < end;) await new Promise((done) => setTimeout(done, 100))
 }
 
 /** Splice stdio to this computer's daemon without parsing anything: the transport stays dumb, ssh does auth. */
