@@ -198,10 +198,10 @@ it('records a report with its branch\'s changes, keeps it past the archive, and 
     lane.archived = true
     await vi.waitFor(() => expect(board()?.changes).toEqual({}))
     expect(board().reports).toHaveLength(1)
-    expect(await methods['staff.details']({ id: '1' })).toEqual([{ id: '2', answer: null, merged: true }])
+    expect(await methods['staff.details']!({ id: '1' })).toEqual([{ id: '2', answer: null, merged: true }])
 
     // Dismissed: gone from the board and the state, and not reported again.
-    await methods['staff.dismiss']({ id: '1', child: '2' })
+    await methods['staff.dismiss']!({ id: '1', child: '2' })
     expect(board().reports).toEqual([])
     expect((d.kept.get('1') as any).reports).toEqual([])
     await new Promise((r) => setTimeout(r, 100))
@@ -231,7 +231,7 @@ it('reports a question and an error, takes a later report over an earlier one, a
   d.answers[asks.id] = 'Blue it is.'
   await tick(1_000)
   expect(reports().map((r: any) => [r.title, r.outcome, r.answer])).toEqual([['Asks', 'done', 'Blue it is.'], ['Fails', 'error', 'Out of credit']])
-  await methods['staff.dismiss']({ id: '1' })
+  await methods['staff.dismiss']!({ id: '1' })
   expect(reports()).toEqual([])
   await tick(1_000)
   expect(reports()).toEqual([])

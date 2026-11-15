@@ -124,7 +124,7 @@ function GraphPane({ machine, thread, pane }: PaneProps) {
     const px = (event.clientX - box.left - box.width / 2 - x) / scale, py = (event.clientY - box.top - box.height / 2 - y) / scale
     return graph?.nodes.find((n) => (n.x - px) ** 2 + (n.y - py) ** 2 < (radius(n, scale) + 4 / scale) ** 2)
   }
-  const drag = useRef<{ x: number; y: number; moved: boolean }>()
+  const drag = useRef<{ x: number; y: number; moved: boolean } | undefined>(undefined)
 
   if (error) return <div className="pane-empty">{error}</div>
   if (!graph) return <div className="pane-empty">Reading the vault…</div>
