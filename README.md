@@ -213,6 +213,7 @@ superego profile new            # .superego/profiles/default/profile.ts in this 
 superego profile new support    # another, for `superego -P support`
 superego profile new --user     # ~/.superego/profiles/default: yours, everywhere a project has none
 superego profile allow support  # after pulling someone else's changes to it
+superego profile types          # types for an editor, for profiles made before (or a fresh clone)
 ```
 
 ```ts

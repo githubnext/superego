@@ -96,6 +96,7 @@ machine's extensions as they come and go (`tools/list_changed`).
 superego profile                    # the profiles a thread here could start with
 superego profile new [name]         # .superego/profiles/<name>/profile.ts in this project, allowed
 superego profile new [name] --user  # ~/.superego/profiles/<name>: yours, everywhere
+superego profile types [name]       # types for an editor: tsconfig.json, node_modules → ~/.superego/types (--user: yours)
 superego profile allow [name]       # let this project's profile run (again, after it changed)
 superego profile allow-ui <name> -m <machine>   # let that machine's profile UI run in this computer's window, as it is now
 superego profile revoke-ui <name> -m <machine>

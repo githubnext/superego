@@ -14,6 +14,7 @@ that name, unless it `extends` it.
 ```sh
 superego profile new support           # scaffolds .superego/profiles/support/profile.ts here, and allows it
 superego profile new --user            # ~/.superego/profiles/default
+superego profile types                 # types for this project's profiles that were there already (--user: yours)
 superego -P support -p "Order 1234?"   # a thread with it
 ```
 
@@ -58,9 +59,25 @@ Every field is optional.
   sidebar) can't be left out.
 
 Profile files are TypeScript (the daemon strips the types as it loads them) or JavaScript. They may import each other
-and Node's built-ins (`node:fs/promises`, …). `'superego'` is the only package they get (and `'superego/ui'` in UI
-modules); there is no `npm install`. `superego extension new <name>` writes a tsconfig.json beside profile.ts that
-resolves them against this Superego, so `superego extension test` and an editor check the types.
+and Node's built-ins (`node:fs/promises`, …). `'superego'` is the only package they get (and `'superego/ui'` and
+`'react'` in UI modules); there is no `npm install`.
+
+## Types
+
+`superego profile new` (and `extension new`) gives the profile what an editor needs to check it; `superego profile
+types [name]` gives it to profiles that were there before (all of this project's, the one named, or yours with
+`--user`), and again after a fresh clone:
+
+- `tsconfig.json`: strict, JSX for React, Node's and the DOM's types. Nothing in it is about this computer, so a
+  project commits it. One you've changed is left as it is.
+- `node_modules`: a link to `~/.superego/types/node_modules`, declarations only, for `superego`, `superego/ui`,
+  `superego/unstable`, `superego/testing`, React, Node and vitest. They're built from Superego's own sources with each
+  build, and the app copies its own there whenever it starts, so an upgrade brings new ones; the link stays.
+- `.gitignore`: `node_modules`, since the link is this computer's.
+
+The daemon doesn't load from `node_modules`, and neither it nor the `.gitignore` counts toward a project profile's
+trust; the `tsconfig.json` does, so `profile types` allows again a profile that was allowed. `superego extension test`
+checks types with the same tsconfig before it runs the tests.
 
 ## What 'superego' exports
 

@@ -44,8 +44,9 @@ superego extension test notes         # check its types and run its tests
 for another, `--user` for yours in `~/.superego/profiles`), making the profile if there's none, and lists it there.
 It's a working one to change: a tool that adds an item to the thread's list, the thread's items as a scoped value, an
 action to clear them, and a view of them beside the thread; `shared.ts` with its `version` and the extension `api` it
-needs; a test on [`superego/testing`](#testing); a README; and the profile's `tsconfig.json`, which resolves
-`'superego'`, `'superego/ui'` and `'superego/testing'` against this Superego's own source, so `test` (and an editor)
+needs; a test on [`superego/testing`](#testing); a README; and the profile's types, as `superego profile types`
+gives them: a `tsconfig.json`, and `node_modules` linked to `~/.superego/types`, the declarations of `'superego'`,
+`'superego/ui'`, `'superego/testing'`, React and vitest built from this Superego's own source, so `test` (and an editor)
 checks the types. Send one of the profile's threads a message and it's there; after an edit, the next turn loads it
 again (`superego extension reload` loads it now). A project's profile runs as it was allowed: allow it again after
 editing (`superego profile allow`).

@@ -194,9 +194,10 @@ Every intent is an action: an id, a title, a params schema (pi-schema), where it
 - **Threads:** a thread takes the folder's `default` (or a named) profile when it starts, and keeps it. Each turn selects that profile's extensions and instructions in the one harness (pi-durable selects extensions per conversation); a thread without a profile gets the built-ins. Edits reload from the next turn.
 - **Trust:** a project's profile is that repo's code: it runs only once allowed (`superego profile allow`, or Allow and start in the app), and again after any of its files change.
 - **UI:** the daemon serves a profile's UI modules (types stripped, only once allowed); the window rewrites their imports to its own React and `superego/ui` and installs them for that profile's threads only.
-- **The command:** `superego profile` (list), `superego profile new [name] [--user]`, `superego profile allow [name]`, `-P <profile>` when starting.
+- **The command:** `superego profile` (list), `superego profile new [name] [--user]`, `superego profile types [name] [--user]`, `superego profile allow [name]`, `-P <profile>` when starting.
 - **Proof:** the `obsidian` profile (user scope): a vault as a graph pane and as notes edited in live preview with backlinks, with search and backlink tools and the vault's own AGENTS.md read every turn.
-- Not yet: types for profile authors (`superego` and `superego/ui` are untyped outside this repo); a profile's settings; a profile's UI in the sidebar.
+- **Types for authors:** `profile new`, `extension new` and `profile types` (for profiles made before, or a fresh clone) give a profile a `tsconfig.json` with nothing of this computer in it, a `.gitignore`, and `node_modules` linked to `~/.superego/types/node_modules`. That holds declarations only: `superego`, `superego/ui`, `superego/unstable` and `superego/testing` emitted by TypeScript from the SDK's sources (`packages/sdk/types.ts`), the workspace packages they reach, and the outside declarations those reach (pi-durable, React, Node, vitest; ~19MB), copied as installed. The app's build writes them to `out/types` and the app copies them to `~/.superego/types` when it starts, so an upgrade refreshes every profile's types; a checkout's CLI builds them into `packages/sdk/.types` when the sources they came from changed. The docs' code, the starter and the examples are checked against them.
+- Not yet: a profile's settings; a profile's UI in the sidebar.
 
 ## 3c. Web and phone
 
@@ -337,6 +338,7 @@ Still open:
 - **New thread dialog (2026-11-04).** It opens from ⌘N, the palette, the sidebar's + and minimal's New. It sets a prompt, a project folder (recent folders, Browse… on this computer), the machine, the model and thinking, and a name. A thread's own model and thinking win over the machine's default on every turn. The daemon refuses a missing folder or an unknown model.
 
 - **Profiles (2026-11-05–06).** Profiles with trust, JSX, daemon extensions and panes; the obsidian profile as proof.
+- **Types for profile authors (2026-11-15).** Declarations built from the SDK's sources into the app and `~/.superego/types`; a profile's `tsconfig.json` and `node_modules` link from `profile new` and `profile types` (§3b).
 - **Web and phone (2026-11-05).** Web access, the browser bridge, the phone layout, a PWA.
 - **Panes and the editor (2026-11-06–09).** Panes kept with a thread; built-ins (changes, editor, preview, artifact, thread); the editor's live preview, autosave and file watch; files in a thread clickable; the `files` extension.
 - **Sessions, threads, panes (2026-11-09).** The rename (a conversation is a thread), sessions, worktrees on request, Fut's navigation, the scrolling pane row, Tremolo's focus, attachments, the window's state kept across reloads, tests that stay off the screen.
@@ -352,7 +354,6 @@ Still open:
 - **MCP, more:** watches as resources (a thread's transcript, the thread list); more actions exposed as they prove safe.
 - **More bundled extensions:** git/diff, background jobs and subagents, suggestions.
 - **A terminal pane**, with a bridge per platform: libghostty on desktop and mobile, something simpler on the web.
-- **Types for profile authors** (`superego profile new` writing a tsconfig and declarations).
 - **The code, support and readonly profiles**, as further proofs of profiles.
 - **Publishing the packages**, so new apps don't need this checkout; then runtime-installed extensions.
 - **Remote install** over ssh, without a checkout there.
