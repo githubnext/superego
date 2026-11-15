@@ -65,7 +65,7 @@ once.
 | | |
 |---|---|
 | `superego.agent(extension)` | give this profile's agents an agent extension (`superego --skill tools`) |
-| `superego.action(defineAction({ id, title, params?, expose?, run }))` | an action (an intent) named `<name>.<action>`, logged. `expose: ['ui']` (default) is for the window; add `'cli'` for the command line (Ego lists these, to explain them). `run(params, context)` returns JSON or throws `RpcError(code, message, { hint })`. `keys: 'mod+shift+b'` binds it in the window while one of this machine's threads is shown (`thread: true` fills in the thread's `id`) |
+| `superego.action(defineAction({ id, title, params?, expose?, run }))` | an action (an intent) named `<name>.<action>`, logged. `expose: ['ui']` (default) is for the window; add `'cli'` for the command line (Ego lists these, to explain them). Add `'mcp'` for agents outside, as a tool of `superego mcp`: only for what's safe to hand any MCP client. `run(params, context)` returns JSON or throws `RpcError(code, message, { hint })`. `keys: 'mod+shift+b'` binds it in the window while one of this machine's threads is shown (`thread: true` fills in the thread's `id`) |
 | `superego.dispatch(id, params)`, `superego.actions(exposure?)` | run any action on this machine, as this extension (`settings.set`, another extension's); list them (`'cli'`: what `superego do` runs) |
 | `superego.method(name, run, { params? })` | a read named `<name>.<method>`: clients `call` it; params checked against the schema first. Not logged, not in the palette or the command line |
 | `superego.value(key, initial)` | a live value named `<name>.<key>`: `get()`, `set(next)`, `update(fn)`. In memory only; a UI reads it with `useValue(machine, key)` (null until it's published) |

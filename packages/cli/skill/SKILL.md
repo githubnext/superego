@@ -28,6 +28,7 @@ superego create . -p "fix tests"  # start one without the app; prints its id
 superego send <thread> "and the docs"
 superego threads --json           # every thread, with its status
 superego actions                  # what `superego do` can run
+superego mcp                      # those exposed to MCP, as an MCP server on stdio (cli topic)
 superego do thread.rename --id <thread> --title "Fix the tests"
 superego profile new [name]       # .superego/profiles/<name>/profile.ts, in this project
 superego daemon restart           # onto the installed code

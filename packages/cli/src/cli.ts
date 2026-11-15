@@ -105,6 +105,7 @@ Usage:
   ${app.id} do <action> [--<param> <value>...] [--params '<json>']
                                 Run an action; values are coerced to the action's schema
   ${app.id} actions log                Its newest dispatches, from anywhere
+  ${app.id} mcp                        Serve a machine's actions exposed to MCP as tools, over stdio, for agents elsewhere
 
   ${app.id} daemon [status|stop]       Run this computer's daemon in the foreground, or check on it
   ${app.id} daemon restart [--now]     Restart it onto the installed code; --now interrupts working agents
@@ -190,10 +191,10 @@ function resolveMachine(name: string | undefined): Machine {
 }
 
 /** Connect to a machine, say hello, and check it is who it should be. */
-async function connect(machine: Machine): Promise<{ transport: Transport; hello: Hello }> {
+async function connect(machine: Machine, as: { client: string; label: string } = { client: `${app.id}-cli`, label: hostname() }): Promise<{ transport: Transport; hello: Hello }> {
   const transport = machine.config ? await openMachine(machine.config, app, dataDir) : await openLocal(socket, startDaemon)
   try {
-    const hello = await transport.peer.call<Hello>('hello', { client: `${app.id}-cli`, version: PROTOCOL_VERSION, features: [...FEATURES], label: hostname() })
+    const hello = await transport.peer.call<Hello>('hello', { ...as, version: PROTOCOL_VERSION, features: [...FEATURES] })
     if (machine.config) checkIdentity(hello, { target: routeOf(machine.config, app), ...(machine.config.daemonId ? { expected: machine.config.daemonId } : {}) }, [])
     return { transport, hello }
   } catch (error) {
@@ -774,6 +775,14 @@ async function doCommand(argv: string[]) {
   print(result ?? { ok: true }, () => { if (result !== undefined && result !== null) console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2)) })
 }
 
+/** `mcp`: an MCP server on stdio for one machine (mcp.ts), loaded only for this command. */
+async function mcpCommand(name: string | undefined) {
+  const machine = resolveMachine(name)
+  const { serveMcp } = await import('./mcp.ts')
+  await serveMcp({ app, label: machine.config ? machine.label : 'this computer', connect: (label) => connect(machine, { client: `${app.id}-mcp`, label }) })
+  process.exit(0)
+}
+
 // ── The skill ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
 // A skill for agents, in tiers: `--skill` prints SKILL.md (what Superego is, a quick reference, and an index), which a
@@ -802,7 +811,7 @@ function layoutCommand() {
 
 // ── Dispatch ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const COMMANDS = new Set(['extension', 'extensions', 'open', 'threads', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles', 'web', 'layout'])
+const COMMANDS = new Set(['extension', 'extensions', 'open', 'threads', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles', 'web', 'layout', 'mcp'])
 
 async function main() {
   // `do` takes the action's own --params, which parseArgs would refuse.
@@ -852,6 +861,7 @@ async function main() {
     case 'actions': return actionsCommand(rest[0], values)
     case 'web': return webCommand(rest[0], rest.slice(1), values)
     case 'layout': return layoutCommand()
+    case 'mcp': return mcpCommand(values.machine)
   }
 }
 

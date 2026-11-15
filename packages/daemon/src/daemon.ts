@@ -1544,7 +1544,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   const thread = { thread: true as const }
   router.register(defineAction({
-    id: 'thread.create', title: 'Start a thread (no dialog)', runs: 'machine', expose: ['ui', 'cli'],
+    id: 'thread.create', title: 'Start a thread (no dialog)', runs: 'machine', expose: ['ui', 'cli', 'mcp'],
+    description: 'Start a thread: an agent working in `cwd` (default: the machine\'s), with `prompt` as its first message. Its id comes back; thread.submit sends it more.',
     params: obj({
       cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), attachments: opt(arr(ATTACHMENT)), profile: opt(str()),
       worktree: opt(bool()), parent: opt(str()), options: opt(obj({}, { open: true })),
@@ -1683,7 +1684,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
   }
   router.register(defineAction({
-    id: 'profile.list', title: 'List profiles', runs: 'machine', expose: ['ui', 'cli'],
+    id: 'profile.list', title: 'List profiles', runs: 'machine', expose: ['ui', 'cli', 'mcp'],
+    description: 'The profiles a thread in `cwd` could start with (thread.create\'s `profile`), and whether each may run.',
     params: obj({ cwd: opt(str()) }),
     async run({ cwd }) {
       const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
@@ -1719,12 +1721,14 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   }))
   router.register(defineAction({
-    id: 'thread.submit', title: 'Send a message', runs: 'machine', expose: ['ui', 'cli'], ...thread,
+    id: 'thread.submit', title: 'Send a message', runs: 'machine', expose: ['ui', 'cli', 'mcp'], ...thread,
+    description: 'Send a thread a message. While it works, `whenBusy` says how: `steer` (now) or `followUp` (after this turn).',
     params: obj({ id: str(), text: str(), attachments: opt(arr(ATTACHMENT)), requestId: opt(str()), whenBusy: opt(union([lit('steer'), lit('followUp')])) }),
     run: async ({ id, text, attachments, requestId, whenBusy }) => ({ submission: await submit(id, text, requestId ?? randomUUID(), whenBusy, attachments) }),
   }))
   router.register(defineAction({
-    id: 'thread.abort', title: 'Stop the agent', runs: 'machine', expose: ['ui', 'cli'], ...thread,
+    id: 'thread.abort', title: 'Stop the agent', runs: 'machine', expose: ['ui', 'cli', 'mcp'], ...thread,
+    description: 'Stop a thread\'s agent mid-turn. The thread stays, and takes messages again.',
     params: obj({ id: str() }),
     async run({ id }) { await (await get(id)).conversation.abort(context); return null },
   }))
@@ -1869,7 +1873,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   }))
   router.register(defineAction({
-    id: 'thread.rename', title: 'Rename the thread', runs: 'machine', expose: ['ui', 'cli'], ...thread,
+    id: 'thread.rename', title: 'Rename the thread', runs: 'machine', expose: ['ui', 'cli', 'mcp'], ...thread,
     params: obj({ id: str(), title: str({ minLength: 1 }) }),
     async run({ id, title }) { await updateMeta(id, (meta) => { meta.title = title }); return null },
   }))

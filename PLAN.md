@@ -172,7 +172,7 @@ As built (2026-11-04). An extension is a package with up to two halves, imported
 
 ## 3a. Actions
 
-Every intent is an action: an id, a title, a params schema (pi-schema), where it runs (`window`, `app` or `machine`), who may call it (`expose`: `ui`, `cli`, later `mcp`), a default shortcut, and whether it acts on the selected thread. One `Router` (in `@superego/protocol`) validates and coerces params, runs the action and logs it.
+Every intent is an action: an id, a title, a params schema (pi-schema), where it runs (`window`, `app` or `machine`), who may call it (`expose`: `ui`, `cli`, `mcp`), a default shortcut, and whether it acts on the selected thread. One `Router` (in `@superego/protocol`) validates and coerces params, runs the action and logs it.
 
 - **The window** has its own router. `dispatch(id, params)` runs window actions there, forwards app actions to the main process and machine actions to the right machine (`machine` option, else the selection's), filling in the thread from the selection. Keys, the palette, buttons and extensions all dispatch.
 - **The log:** every dispatch with its source (`keys`, `palette`, `cli`, `composer`, an extension) and timing. *Show action log* in the window; `action.log` per machine; `superego actions log`.
@@ -180,7 +180,9 @@ Every intent is an action: an id, a title, a params schema (pi-schema), where it
 - **Shortcuts are data.** The setting `app.keys` holds only the user's changes by action id (`null`: none). Settings → Keyboard lists every action that runs without more input, records new shortcuts, and marks clashes; the first registered wins a clash. Plain keys without ⌘/⌃/⌥ are refused so typing stays typing.
 - **Not a store.** Streams (threads, transcripts, settings, values) stay on watches; actions are intents only. Snapshots and the log make debugging output easy without one global state.
 
-**MCP (planned, not built):** a `superego mcp` server generated from the actions exposed to `mcp`: each becomes a tool with its schema, run through `action.run` with `exposure: 'mcp'`, so it lands in the same log. Watches could become resources. Open: which actions an outside agent may run by default, and per-machine routing (a `machine` param on every tool, or one server per machine).
+**MCP:** `superego mcp` (`packages/cli/src/mcp.ts`, on `@modelcontextprotocol/sdk`) is an MCP server on stdio, made from the actions a machine exposes to `mcp`: each is a tool (`thread.create` as `thread_create`: clients take `[A-Za-z0-9_-]`, and ids have no `_`) with the action's schema, run through `action.run` with `exposure: 'mcp'`, so the same log shows it from `mcp`, by a client of kind `superego-mcp` named for the MCP client. Reads stay methods, so two tools of the server's own read on them: `thread_list` and `thread_read` (state and last answer, waiting while it works). The list follows the machine (`features.changed` → `tools/list_changed`); the daemon is reached on the first request and again after a restart. Watches as resources: not built.
+- **Exposure is opt-in.** An outside agent runs only what says `'mcp'` in its `expose`; `cli` doesn't imply it, since the command line is the user and an MCP client is whatever the user plugged in. Exposed: `thread.create`, `thread.submit`, `thread.abort`, `thread.rename`, `profile.list`. Not: settings, auth, `profile.allow`/`reload` (trust is the user's), `thread.archive` (it removes a worktree), `file.write`, panes, `web.*`, `machines.*`, `daemon.restart`, and every extension's (`ask-user.answer` and `reply-ui.answer` answer as the user; `ego.*` changes setup).
+- **One server per machine.** `superego mcp` serves this computer, `superego mcp -m <machine>` another, over the CLI's own link. A `machine` param on every tool (through the hub's `relay.call`) would be cheap to route, but the tools are one machine's actions: another may take others, or the same with other schemas, and the hub would decide what an outside agent reaches. A client adds a server per machine it wants.
 
 ---
 
@@ -275,7 +277,7 @@ Styled over eight rounds of impartial review of the showcase screenshots (scores
 | M6 | Framework: AppConfig, @superego/app, examples, `superego new` | done |
 | M7 | Focus look, palette, sidebar modes, Base UI kit | done |
 | M8 | New thread dialog | done |
-| M9 | Actions: router, log, `superego do`, editable shortcuts | done; MCP planned |
+| M9 | Actions: router, log, `superego do`, editable shortcuts | done, with `superego mcp` |
 | M10 | macOS look; threads (markdown, runs, diffs); showcase; icons | done |
 | M11 | Packaging: a signed `superego.app` with the `.icon` and its variants | done (the command inside it to come) |
 | M12 | Profiles: trust, UI (JSX), daemon extensions, panes; web and phone | done |
@@ -340,13 +342,14 @@ Still open:
 - **Sessions, threads, panes (2026-11-09).** The rename (a conversation is a thread), sessions, worktrees on request, Fut's navigation, the scrolling pane row, Tremolo's focus, attachments, the window's state kept across reloads, tests that stay off the screen.
 - **Superego and Ego (2026-11-11).** The app, formerly mu, is Superego all the way down: the app, its id (`~/.superego`, `superego.sock`, the `superego` command, `SUPEREGO_*` variables, `superego/<slug>` branches, `.superego/profiles`), the packages (`@superego/*`, profiles import from `'superego'`), the window's bridge (`window.superego`), and the `--superego-*` tokens and `superego-*` classes. Its own agent is Ego: `AppConfig.agent` names it, for the ⌘K action, the rail and its prompt.
 - **The halo icon (2026-11-11).** The first icon, a serif letter, gives way to a tilted halo over a dot: `resources/superego.icon` (halo and head layers), copied to `app/resources/superego.icon`, with the Dock, `.icns`, PWA and menu bar images made from it. The menu bar's halo is drawn heavier (`resources/superego-menubar.svg`) to hold at 16px; `resources/ego.svg` is Ego's mark, the dot alone. Explorations in `design-explorations/superego-*.html`.
+- **MCP server from actions (2026-11-15).** `superego mcp` (§3a): opt-in exposure, one server per machine, and a test that drives it with an MCP client against a real daemon.
 - **One daemon reaches the others (2026-11-12).** The daemon as a hub (§2): its own links to `machines.json`, `machines.watch`, `relay.call` and `relay.event`; every machine in a browser; agents start, read and message threads on other machines. The app and CLI name their computer in `hello`.
 
 ## 9. Next
 
 - **Packaging, the rest** (M11): shipping the `superego` command inside the app, and a packaged app that doesn't share `~/.superego` with a development one.
 - **Web and mobile:** accounts and TLS, a service worker, native shells as wrappers.
-- **MCP server from actions** (§3a): designed, not built.
+- **MCP, more:** watches as resources (a thread's transcript, the thread list); more actions exposed as they prove safe.
 - **More bundled extensions:** git/diff, background jobs and subagents, suggestions.
 - **A terminal pane**, with a bridge per platform: libghostty on desktop and mobile, something simpler on the web.
 - **Types for profile authors** (`superego profile new` writing a tsconfig and declarations).

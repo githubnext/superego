@@ -176,6 +176,13 @@ older (or newer) than this computer's gets a dot beside its name in the sidebar 
 (⌘K *Update Superego on a machine*, or `superego machines update <host>`) runs its install-machine.sh over the same ssh
 and reconnects, asking first if agents are working there, since the daemon restarts.
 
+`superego mcp` is an MCP server on stdio, for agents outside Superego (Claude Code, Codex, an editor's): each action a
+machine exposes to MCP is a tool (`thread.create` as `thread_create`), run as `superego do` runs it and in the same
+action log, from `mcp`; `thread_list` and `thread_read` (a thread's state and last answer, waiting for it if asked) read.
+Only actions that opt in are there: starting threads, sending them messages, stopping and renaming them, listing
+profiles. One server serves one machine; `superego mcp -m <machine>` serves another. Add it as
+`claude mcp add superego -- superego mcp`, or as `{"command": "superego", "args": ["mcp"]}` in a client's config.
+
 ssh runs without a terminal (`BatchMode`) and rides one shared ControlMaster connection per target under the data dir. A host
 that wants a password, a code or a hardware key shows as "needs login": `superego machines login <machine>` (or Log in in
 Settings → Machines, which opens Terminal) logs in once and leaves a master that links ride for four hours. A changed or

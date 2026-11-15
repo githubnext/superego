@@ -73,6 +73,23 @@ superego do pane.open --params '{"id":"<thread>","kind":"editor","params":{"path
 
 Extensions add their own actions (`ask-user.answer`, `vault.graph`); they show in the list too.
 
+## MCP
+
+`superego mcp` serves a machine's actions to an agent outside Superego, as an MCP server on stdio:
+
+```sh
+claude mcp add superego -- superego mcp         # or {"command": "superego", "args": ["mcp"]} in a client's config
+superego mcp -m <machine>                       # one server per machine
+```
+
+Each action exposed to `mcp` is a tool named for its id with `_` for `.` (`thread.create` is `thread_create`), its
+schema the action's; it runs through `action.run` with `exposure: 'mcp'`, so `superego actions log` shows it from `mcp`.
+Exposed by default: `thread.create`, `thread.submit`, `thread.abort`, `thread.rename`, `profile.list`. Two tools of the
+server's own read: `thread_list` (`archived?`) and `thread_read` (`id wait?`: its state and last answer, after it stops
+working with `wait`). Nothing that changes settings, signs in, trusts a profile, archives, writes files or restarts
+the daemon is a tool; an extension's action becomes one by adding `'mcp'` to its `expose`. The tools follow the
+machine's extensions as they come and go (`tools/list_changed`).
+
 ## Profiles
 
 ```sh
