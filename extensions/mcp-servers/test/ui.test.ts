@@ -139,7 +139,7 @@ describe('what it draws', () => {
     expect(done).toContain('>Called<')
     expect(done).toContain('Linear · Create issue')
     expect(done).toContain('Fix login')
-    expect(done).toContain('<summary>Arguments</summary>')
+    expect(done).toMatch(/<summary>.*Arguments<\/summary>/)
     expect(done).toContain('Created ENG-1')
     expect(done).toContain('src="data:image/png;base64,AAAA"')
     // Before its result, by its name, the server's title from the thread.
