@@ -1,7 +1,7 @@
 #!/bin/sh
-# The window's layout in the states the design covers, screenshotted: `test/look.sh <dir> [focus|panes|composer|web]`;
+# The window's layout in the states the design covers, screenshotted: `test/look.sh <dir> [focus|panes|composer|mcp|web]`;
 # `focus`: each region holding the focus; `panes`: a thread's panes scrolled and stacked; `composer`: the composer and
-# what's around it; `web`: Settings → Web access,
+# what's around it; `mcp`: Settings → MCP servers, a thread's MCP calls, its chip and details; `web`: Settings → Web access,
 # pairing and devices and each Tailscale state (a stub `tailscale` on PATH: the machine's own is never touched).
 set -e
 cd "$(dirname "$0")/.."
@@ -17,6 +17,11 @@ export SUPEREGO_SHOWCASE_PROJECT="$SUPEREGO_HOME/ledger"
 node test/showcase/setup.mjs "$SUPEREGO_SHOWCASE_PROJECT" "$SUPEREGO_HOME/turns.jsonl"
 (cd "$SUPEREGO_SHOWCASE_PROJECT" && git init -q && git add -A && git -c user.name=x -c user.email=x@x commit -qm init)
 export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/turns.jsonl"
+# `mcp`: this machine's MCP servers in each state, one of them real, and a thread calling its tools.
+if [ "$2" = mcp ]; then
+  node test/showcase/mcp-setup.mjs "$SUPEREGO_HOME" "$SUPEREGO_HOME/mcp-turns.jsonl"
+  export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/mcp-turns.jsonl"
+fi
 # Skills of its own (shown in the Skills data view), not this machine's ~/.agents.
 export SUPEREGO_AGENTS="$SUPEREGO_HOME/agents"
 for skill in commit:'Write commit messages in the house style.' release:'Cut a release and write its notes.' review:'Review a change for bugs and missing tests.'; do
