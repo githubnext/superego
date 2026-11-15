@@ -462,6 +462,9 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 @media (max-width: 760px) {
   .superego-dialog { width: 100vw !important; max-width: 100vw; height: 100dvh !important; max-height: 100dvh; border-radius: 0; }
   .superego-dialog__frame { max-height: 100dvh; }
+  /* Filling the desktop app's window, a dialog's header is its title bar: past the traffic lights, and it drags. */
+  :root:has(.app:not(.is-web)) .superego-dialog__header { min-height: var(--superego-titlebar); padding-left: 84px; -webkit-app-region: drag; }
+  :root:has(.app:not(.is-web)) .superego-dialog__header :is(button, a, input, select, [role="button"]) { -webkit-app-region: no-drag; }
   .settings__body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .settings__nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--superego-border); padding: 8px; }
   .settings__nav button { white-space: nowrap; }
