@@ -83,6 +83,15 @@ export async function makeWorld(dir: string, install: Install, { model, reuse = 
       try { process.kill(-daemon.pid!, 'SIGKILL') } catch {}
       // Anything the agent left running (a dev server, a watcher) that names the run's folder.
       try { execFileSync('pkill', ['-f', dir]) } catch {}
+      // …and anything working in it (an agent's own headless app, run from a folder of the run's).
+      try {
+        const cwds = execFileSync('lsof', ['-d', 'cwd', '-Fpn'], { encoding: 'utf8' })
+        let pid = ''
+        for (const line of cwds.split('\n')) {
+          if (line.startsWith('p')) pid = line.slice(1)
+          else if (line.startsWith('n') && line.slice(1).replace(/^\/private/, '').startsWith(dir.replace(/^\/private/, ''))) try { process.kill(Number(pid), 'SIGKILL') } catch {}
+        }
+      } catch {}
     },
   }
 }

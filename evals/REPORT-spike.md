@@ -137,6 +137,9 @@ error, so it missed it. The harness now passes acceptance notes to the analysis.
   off, nobody could ask a question, though none tried to.
 - **Paths:** worlds lived under `/tmp`, which the daemon stores as `/private/tmp`. That tripped one agent's
   `profile.ui` call.
+- **A process outlived its run.** In `l3-kanban.opus.ego.3`, the agent launched the installed app headless with its
+  own script to check its pane. Its command line didn't name the run's folder, so the cleanup missed it. Cleanup now
+  also kills anything whose working folder is in the run.
 - **Thinking was off** for both models (the machine default), and the network was open. L1's "fails gracefully
   without network" wasn't tested: every weather call reached a real API.
 - **The request went to Ego through `ego.ask`** on the command-line path, not typed in the window. Ego didn't know
