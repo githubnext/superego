@@ -33,7 +33,7 @@ describe("an extension's declaration", () => {
     expect(contractProblem({ name: 'x', version: '1.0.0', api: '^1' })).toBeUndefined()
     expect(contractProblem({ name: 'x' })).toBeUndefined()
     expect(contractProblem({ name: 'x', api: '^2' })).toBe('Extension x needs extension API ^2, and this Superego has 1.5.0: update Superego')
-    expect(contractProblem({ name: 'x', api: '^1.5' })).toMatch(/update Superego$/)
+    expect(contractProblem({ name: 'x', api: '^1.6' })).toMatch(/update Superego$/)
     expect(contractProblem({ name: 'x', api: '^1' }, '2.0.0')).toBe('Extension x needs extension API ^1, and this Superego has 2.0.0: update the extension')
     expect(contractProblem({ name: 'x', version: '1.0' })).toMatch(/version "1.0" isn't major.minor.patch/)
     expect(contractProblem({ name: 'x', api: 'latest' })).toMatch(/isn't a version range/)
