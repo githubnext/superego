@@ -7,7 +7,7 @@ import { call, machine as client, useThreadView } from './client.ts'
 import { completionsIn, divideWork, entryOwner, entryView, fileKind, folderKind, paneMenu, PlacedViews, sentWithIn, Slot, shownPanes, toolOwner, toolRow, toolView, unfoldedTool, urlKind, useLayout, useRegistry, type ToolRowCall, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useRejections, useShell } from './state.tsx'
 import { useActions, useShortcut } from './keys.ts'
-import { withContextMenu } from './view-menu.tsx'
+import { ViewContextMenu, withContextMenu } from './view-menu.tsx'
 import { ctrlDigit } from './shortcuts.ts'
 import { Images, imagesIn, Markdown } from './Markdown.tsx'
 import { collector, LinkPlace, type LinkPlaceValue } from './links.tsx'
@@ -975,7 +975,10 @@ function Composer({ machine, thread, busy, inbox, onJump }: { machine: MachineEn
   )
 }
 
-/** Open a pane beside the thread: the kinds that show something without being told what (Changes, a profile's own). */
+/**
+ * Open a pane beside the thread: the kinds that show something without being told what (Changes, a profile's own).
+ * Each is a view the layout puts in the pane menu: a right-click on it moves it elsewhere or takes it out.
+ */
 export function PaneMenu({ machine, thread, add = false }: { machine: MachineEntry; thread: ThreadInfo; add?: boolean }) {
   const registry = useRegistry()
   const where = { machine: machine.id, thread }
@@ -988,7 +991,9 @@ export function PaneMenu({ machine, thread, add = false }: { machine: MachineEnt
         {add ? <PlusIcon size={14} aria-hidden /> : <ColumnsIcon size={18} aria-hidden />}
       </Menu.Trigger>
       <Menu.Popup align="end">
-        {kinds.map(({ kind, title }) => <Menu.Item key={kind} onClick={() => open(kind)}>{title}</Menu.Item>)}
+        {kinds.map(({ kind, title }) => (
+          <ViewContextMenu key={kind} view={kind} place="pane" machine={machine.id} thread={thread}><Menu.Item onClick={() => open(kind)}>{title}</Menu.Item></ViewContextMenu>
+        ))}
       </Menu.Popup>
     </Menu.Root>
   )

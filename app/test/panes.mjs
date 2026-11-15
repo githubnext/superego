@@ -152,6 +152,46 @@ void (async () => {
   if (!await fits()) fail('stacked with four: the row passes the window')
   await both('stack-opened')
 
+  // A pane's ···: what its buttons do (Maximize, Close), and Move to for a view that goes elsewhere too.
+  const items = (menu) => run(`[...document.querySelectorAll('${menu} :is(.superego-menu__item, .superego-menu__label)')].map((i) => i.textContent)`)
+  const menuOf = async (pane) => {
+    await run(`document.querySelector('[data-column="${pane}"] .panes__tab .view-menu__button').click()`)
+    await until(`!!document.querySelector('.pane-menu')`, 'a pane menu')
+    return items('.pane-menu')
+  }
+  const closeMenus = async () => {
+    for (let i = 0; i < 3 && await run(`!!document.querySelector('.superego-menu')`); i++) {
+      await run(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))`)
+      await sleep(200)
+    }
+    await until(`!document.querySelector('.superego-menu')`, 'menus closed')
+  }
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+  for (const pane of [diff, editor]) {
+    const shown = await menuOf(pane)
+    if (!same(shown, ['Maximize⌘⇧↩', 'Close⌘W'])) fail(`a pane's menu: Maximize and Close, not ${shown}`)
+    await closeMenus()
+  }
+  await open('threads.details', {}, `!!document.querySelector('.panes__column .threads-details')`)
+  const details = (await paneIds()).at(-1)
+  const shown = await menuOf(details)
+  if (!same(shown, ['Maximize⌘⇧↩', 'Move to', 'Close⌘W'])) fail(`a view's pane's menu: Maximize, Move to and Close, not ${shown}`)
+  await run(`[...document.querySelectorAll('.pane-menu .superego-menu__item')].find((i) => i.textContent === 'Move to').click()`)
+  await until(`!!document.querySelector('.view-menu__places [data-place]')`, 'Move to →')
+  await both('tab-menu')
+  await closeMenus()
+  // The menu that opens panes: a right-click on an entry is its view's menu, which takes it out of there.
+  await run(`document.querySelector('.strip .thread__panes').click()`)
+  await until(`document.querySelectorAll('.superego-menu .superego-menu__item').length > 0`, 'the menu that opens panes')
+  const offered = await items('.superego-menu')
+  await run(`(() => { const i = document.querySelector('.superego-menu .superego-menu__item'); const r = i.getBoundingClientRect(); i.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: r.left + 10, clientY: r.top + 5 })) })()`)
+  await until(`!!document.querySelector('.view-menu [data-remove]')`, 'an entry\'s own menu')
+  if (await run(`document.querySelector('.view-menu [data-remove]').textContent`) !== 'Remove from pane menu') fail('an entry\'s menu: Remove from pane menu')
+  await both('open-menu-entry')
+  await run(`document.querySelector('.view-menu [data-remove]').click()`)
+  await until(`![...document.querySelectorAll('.superego-menu .superego-menu__item')].some((i) => i.textContent === ${JSON.stringify(offered[0])})`, `${offered[0]} out of the menu that opens panes`)
+  await closeMenus()
+
   // Its shortcut toggles it back.
   await key({ key: '|', code: 'Backslash', metaKey: true, shiftKey: true })
   await until(`!document.querySelector('.panes--stack')`, 'scrolled again')

@@ -59,7 +59,7 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
 - **The layout** is yours: what sits in the rail, beside the thread, in the pane menu and in the thread's header (and a
   phone's drawer) is text, `~/.superego/layout.json`: *Edit layout…* in ⌘K opens it, it applies as you save, and its
   head lists the views and the places each fits (`superego layout` prints it). A right-click on a view (the ··· beside
-  the thread or on a pane) moves it too. Thread details (⌘I) are a view beside the thread like any.
+  the thread; an entry in the pane menu) moves it too, or takes it out; a pane's ··· moves its view. Thread details (⌘I) are a view beside the thread like any.
 - **Images** an agent shows (`show_images`: a screenshot it took, a chart it drew) appear in the thread where it showed
   them: one fits the column, a few sit in a grid, more go one at a time in a carousel (‹ ›, ←/→, a swipe). Click one
   to look closely: zoom by clicking, scrolling or pinching, drag to pan, ←/→ through the set, Esc to close. Each is

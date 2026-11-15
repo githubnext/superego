@@ -16,7 +16,7 @@
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
-import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, CornersInIcon, CornersOutIcon, FileTextIcon, SegmentedControl, XIcon, type SegmentedOption } from '@superego/ui'
+import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, CornersInIcon, CornersOutIcon, DotsThreeIcon, FileTextIcon, IconButton, Menu, SegmentedControl, XIcon, type SegmentedOption } from '@superego/ui'
 import { PANE_LAYOUT, type PaneLayout } from '../shared.ts'
 import { useAppSetting } from './client.ts'
 import { fileKind, paneKind, paneTitle, shownPanes, useNarrow, useRegistry, ViewScopeProvider, whose, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
@@ -24,7 +24,7 @@ import { Contained } from './contained.tsx'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
 import { PaneMenu, ThreadBody } from './ThreadView.tsx'
-import { ViewMenuButton } from './view-menu.tsx'
+import { PaneMoveTo } from './view-menu.tsx'
 import { FileEditor } from './file-editor.tsx'
 import { BRING_FORWARD, focusRegion } from './focus.ts'
 import { DEFAULT_SHARE, END, endShare, frontOf, GAP, roomFor, scrollWidths, stackWidths } from './pane-layout.ts'
@@ -44,7 +44,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
   const panes = shownPanes(registry, { machine: machine.id, thread })
-  // A pane of a view's kind can move to the other places the view fits, from its ···.
+  // A pane of a view's kind can move to the other places the view fits, from its tab's ···.
   const isView = (pane: Pane) => registry.views.some((v) => v.id === pane.kind && v.fits.includes('pane'))
   const narrow = useNarrow()
   const [layout] = useAppSetting<PaneLayout>(PANE_LAYOUT)
@@ -130,6 +130,8 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   // focus goes to what's used there, the editor's text or the page, as the keyboard takes it there. Shown as a click's
   // would be, unless the click came from the keyboard (⏎ on the title).
   const takeFocus = (event: React.MouseEvent<HTMLElement>) => {
+    // A click in what the column portals out (its menu) isn't on the column: the menu keeps the focus.
+    if (!event.currentTarget.contains(event.target as Node)) return
     const at = document.activeElement
     if (!event.currentTarget.contains(at) || at?.matches('.panes__label')) focusRegion(event.currentTarget, { visible: event.detail === 0 })
   }
@@ -280,7 +282,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
           <PaneColumn pane={pane} title={title(pane)} focused={pane.id === focused} width={widthOf(pane)}
             behind={stacked && pane.id !== front && pane.id !== maximized} maximized={maximized === undefined ? undefined : pane.id === maximized}
             onFocus={() => focus(pane.id)} onClick={takeFocus} onClose={() => close(pane)} {...(narrow ? {} : { onMaximize: () => maximize(pane) })}
-            menu={isView(pane) && <ViewMenuButton view={pane.kind} title={title(pane)} place="pane" machine={machine.id} thread={thread} pane={pane.id} />}>
+            moveTo={isView(pane) && <PaneMoveTo view={pane.kind} machine={machine.id} thread={thread} pane={pane.id} />}>
             <TabNote.Provider value={setNoteFor(pane.id)}><PaneBody machine={machine} thread={thread} pane={pane} /></TabNote.Provider>
           </PaneColumn>
           {/* Scrolled, its place in the row is kept while it's over the rest, so they stay where they were. */}
@@ -313,17 +315,19 @@ export function PaneHeader({ children }: { children: ReactNode }) {
   return at ? createPortal(children, at) : <div className="pane-bar">{children}</div>
 }
 
-function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, onClick, onClose, onMaximize, menu, children }: {
+function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, onClick, onClose, onMaximize, moveTo, children }: {
   pane: Pane; title: string; focused: boolean; width: number; behind: boolean
   /** Whether it's the one maximized, while one is (undefined: none is). */
   maximized: boolean | undefined
   onFocus(): void; onClick(event: React.MouseEvent<HTMLElement>): void; onClose(): void
   /** Maximize it, or restore it (wide only). */
   onMaximize?: () => void
-  menu?: ReactNode; children: ReactNode
+  /** Its view's Move to (see PaneMoveTo), for its menu. */
+  moveTo?: ReactNode; children: ReactNode
 }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   const keys = useShortcut('panes.maximize')
+  const closeKeys = useShortcut('panes.close')
   const label = maximized ? 'Restore' : 'Maximize'
   // At the back of a stack, or under a maximized pane, it's kept (its page, its place in a file), out of sight and out
   // of reach.
@@ -334,7 +338,18 @@ function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, o
       <div className={`panes__tab ${focused ? 'is-active' : ''}`}>
         <button className="panes__label" title={title} onDoubleClick={onMaximize}>{title}</button>
         <span className="panes__tools" ref={setSlot} />
-        {menu}
+        {/* The pane's menu: what its buttons do, and moving its view elsewhere. */}
+        <Menu.Root>
+          <Menu.Trigger render={<IconButton label={`${title}: more`} className="view-menu__button" />}>
+            <DotsThreeIcon size={16} weight="bold" aria-hidden />
+          </Menu.Trigger>
+          <Menu.Popup align="end" className="view-menu pane-menu">
+            {onMaximize && <Menu.Item data-maximize hint={keys} onClick={onMaximize}>{label}</Menu.Item>}
+            {moveTo}
+            <Menu.Separator />
+            <Menu.Item data-close hint={closeKeys} onClick={onClose}>Close</Menu.Item>
+          </Menu.Popup>
+        </Menu.Root>
         {onMaximize && (
           <button className="panes__maximize" aria-label={`${label} ${title}`} title={keys ? `${label} (${keys})` : label} onClick={onMaximize}>
             {maximized ? <CornersInIcon size={13} aria-hidden /> : <CornersOutIcon size={13} aria-hidden />}

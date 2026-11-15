@@ -1,6 +1,7 @@
 // A view's menu where it's shown: move it to another place it fits, take it out of this one, or edit the layout's text.
-// A right-click (or a long press) on a view in the rail, the title bar, the drawer or the thread's header; the ··· of a
-// view beside the thread or in a pane. All of it through `layout.place`, as the user's layout keeps it.
+// A right-click (or a long press) on a view in the rail, the title bar, the drawer, the thread's header or the menu
+// that opens panes; the ··· of a view beside the thread. A pane's tab has a menu of its own (panes.tsx), with Move to
+// from here. All of it through `layout.place`, as the user's layout keeps it.
 import type { ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import { ContextMenu, DotsThreeIcon, IconButton, Menu } from '@superego/ui'
@@ -27,17 +28,16 @@ export type ViewMenuProps = {
   pane?: string
 }
 
-/** The menu's items: Move to → the other places it fits, Remove from here (on a pane's tab, from the pane menu), Edit layout…. */
-export function ViewMenuItems({ view, place, machine, thread, pane }: ViewMenuProps) {
+/** Where a view shown in `place` can go instead, and taking it there; none when it isn't declared there. */
+function usePlacing({ view, place, machine, thread, pane }: ViewMenuProps) {
   const registry = useRegistry()
   const { placed, narrow, where } = usePlaced(machine && thread ? { machine, thread } : undefined)
   // As it's declared where it's shown: a thread's place, for that thread; the window's, for the window.
   const found = scopedViews(registry, placeScope(place, where)).find((v) => v.id === view)
-  if (!found) return null
+  if (!found) return undefined
   // The layout keeps a view by id: declared in more than one scope (a profile's on two machines), it moves in each.
   const shared = registry.views.filter((v) => v.id === view).length > 1
   const dispatch = registry.router.dispatch
-  const fail = (error: unknown) => console.error(error)
   const targets = found.fits.filter((p) => (narrow ? NARROW_PLACES : WIDE_PLACES).includes(p) && !placed[p].includes(view))
   const change = async (params: { place: Place; on?: boolean; from?: Place }) => {
     await dispatch('layout.place', { view, ...params, ...(narrow ? { narrow } : {}), ...placingIn(where) }, { source: 'layout' })
@@ -46,21 +46,51 @@ export function ViewMenuItems({ view, place, machine, thread, pane }: ViewMenuPr
     if (pane && params.on !== true) await dispatch('pane.close', { id: thread.id, pane }, { machine, source: 'layout' })
     if (params.place === 'pane' && params.on !== false && found.context === 'thread') await dispatch('pane.open', { id: thread.id, kind: view }, { machine, source: 'layout' })
   }
+  return { found, shared, targets, change }
+}
+
+const fail = (error: unknown) => console.error(error)
+
+/** Move to → each place in `targets`. */
+function MoveTo({ placing: { targets, change }, from }: { placing: NonNullable<ReturnType<typeof usePlacing>>; from: Place }) {
+  if (!targets.length) return null
+  return (
+    <Menu.SubmenuRoot>
+      <Menu.SubmenuTrigger>Move to</Menu.SubmenuTrigger>
+      <Menu.SubmenuPopup className="view-menu__places">
+        {targets.map((to) => <Menu.Item key={to} data-place={to} onClick={() => void change({ place: to, from }).catch(fail)}>{PLACE_TITLES[to]}</Menu.Item>)}
+      </Menu.SubmenuPopup>
+    </Menu.SubmenuRoot>
+  )
+}
+
+/**
+ * The menu's items: Move to → the other places it fits, Remove from here (the pane menu, from an entry in it), Edit
+ * layout…. Not on a pane's tab: its menu is the pane's (see PaneMoveTo).
+ */
+export function ViewMenuItems(props: ViewMenuProps) {
+  const placing = usePlacing(props)
+  const dispatch = useRegistry().router.dispatch
+  if (!placing) return null
   return (
     <>
-      {shared && <Menu.Group><Menu.GroupLabel data-shared>For every thread with {found.title}</Menu.GroupLabel></Menu.Group>}
-      {targets.length > 0 && (
-        <Menu.SubmenuRoot>
-          <Menu.SubmenuTrigger>Move to</Menu.SubmenuTrigger>
-          <Menu.SubmenuPopup className="view-menu__places">
-            {targets.map((to) => <Menu.Item key={to} data-place={to} onClick={() => void change({ place: to, from: place }).catch(fail)}>{PLACE_TITLES[to]}</Menu.Item>)}
-          </Menu.SubmenuPopup>
-        </Menu.SubmenuRoot>
-      )}
-      {/* On a pane's tab, beside the ✕ that only closes it: this takes it out of the menu too. */}
-      <Menu.Item data-remove onClick={() => void change({ place, on: false }).catch(fail)}>{pane ? 'Remove from pane menu' : 'Remove from here'}</Menu.Item>
+      {placing.shared && <Menu.Group><Menu.GroupLabel data-shared>For every thread with {placing.found.title}</Menu.GroupLabel></Menu.Group>}
+      <MoveTo placing={placing} from={props.place} />
+      <Menu.Item data-remove onClick={() => void placing.change({ place: props.place, on: false }).catch(fail)}>{props.place === 'pane' ? 'Remove from pane menu' : 'Remove from here'}</Menu.Item>
       <Menu.Separator />
       <Menu.Item onClick={() => void dispatch('layout.edit', {}, { source: 'layout' }).catch(fail)}>Edit layout…</Menu.Item>
+    </>
+  )
+}
+
+/** On a view's pane's tab, in the pane's menu: Move to → the other places the view fits, when there are any. */
+export function PaneMoveTo(props: Omit<ViewMenuProps, 'place'>) {
+  const placing = usePlacing({ ...props, place: 'pane' })
+  if (!placing?.targets.length) return null
+  return (
+    <>
+      {placing.shared && <Menu.Group><Menu.GroupLabel data-shared>For every thread with {placing.found.title}</Menu.GroupLabel></Menu.Group>}
+      <MoveTo placing={placing} from="pane" />
     </>
   )
 }
