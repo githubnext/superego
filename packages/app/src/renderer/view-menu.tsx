@@ -83,15 +83,18 @@ export function ViewMenuItems(props: ViewMenuProps) {
   )
 }
 
-/** On a view's pane's tab, in the pane's menu: Move to → the other places the view fits, when there are any. */
-export function PaneMoveTo(props: Omit<ViewMenuProps, 'place'>) {
+/**
+ * On a view's pane's tab: its menu (`menu`), with Move to → the other places the view fits in it. Only when there are
+ * any: otherwise the menu would only repeat the tab's own buttons.
+ */
+export function PaneMoveTo({ menu, ...props }: Omit<ViewMenuProps, 'place'> & { menu(moveTo: ReactNode): ReactNode }) {
   const placing = usePlacing({ ...props, place: 'pane' })
   if (!placing?.targets.length) return null
-  return (
+  return menu(
     <>
       {placing.shared && <Menu.Group><Menu.GroupLabel data-shared>For every thread with {placing.found.title}</Menu.GroupLabel></Menu.Group>}
       <MoveTo placing={placing} from="pane" />
-    </>
+    </>,
   )
 }
 

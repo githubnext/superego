@@ -152,7 +152,7 @@ void (async () => {
   if (!await fits()) fail('stacked with four: the row passes the window')
   await both('stack-opened')
 
-  // A pane's ···: what its buttons do (Maximize, Close), and Move to for a view that goes elsewhere too.
+  // A pane's ···, for a view that goes elsewhere too: Move to, with what its buttons do (Maximize, Close). None otherwise.
   const items = (menu) => run(`[...document.querySelectorAll('${menu} :is(.superego-menu__item, .superego-menu__label)')].map((i) => i.textContent)`)
   const menuOf = async (pane) => {
     await run(`document.querySelector('[data-column="${pane}"] .panes__tab .view-menu__button').click()`)
@@ -168,9 +168,7 @@ void (async () => {
   }
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
   for (const pane of [diff, editor]) {
-    const shown = await menuOf(pane)
-    if (!same(shown, ['Maximize⌘⇧↩', 'Close⌘W'])) fail(`a pane's menu: Maximize and Close, not ${shown}`)
-    await closeMenus()
+    if (await run(`!!document.querySelector('[data-column="${pane}"] .panes__tab .view-menu__button')`)) fail(`a pane with nowhere to move: no ···`)
   }
   await open('threads.details', {}, `!!document.querySelector('.panes__column .threads-details')`)
   const details = (await paneIds()).at(-1)

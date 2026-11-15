@@ -579,8 +579,6 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .panes.has-maximized > :not(.is-maximized) { visibility: hidden; }
 .panes > .panes__column.is-maximized { position: absolute; inset: 0; z-index: 1; }
 .panes__kept { flex: none; }
-/* A pane's menu with nothing above Close (a phone's, its view going nowhere else): no line over it. */
-.pane-menu > .superego-menu__separator:first-child { display: none; }
 .pane-empty { margin: auto; color: var(--superego-muted); padding: var(--superego-space-5); text-align: center; }
 .pane-scroll { flex: 1; overflow: auto; }
 .pane-bar { display: flex; align-items: center; gap: var(--superego-space-3); padding: 6px var(--superego-space-3); border-bottom: 1px solid color-mix(in srgb, var(--superego-border) 60%, transparent); font-size: var(--superego-text-sm); color: var(--superego-muted); flex: none; min-height: 38px; }

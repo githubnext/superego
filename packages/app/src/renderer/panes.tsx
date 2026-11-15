@@ -282,7 +282,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
           <PaneColumn pane={pane} title={title(pane)} focused={pane.id === focused} width={widthOf(pane)}
             behind={stacked && pane.id !== front && pane.id !== maximized} maximized={maximized === undefined ? undefined : pane.id === maximized}
             onFocus={() => focus(pane.id)} onClick={takeFocus} onClose={() => close(pane)} {...(narrow ? {} : { onMaximize: () => maximize(pane) })}
-            moveTo={isView(pane) && <PaneMoveTo view={pane.kind} machine={machine.id} thread={thread} pane={pane.id} />}>
+            view={isView(pane) ? { view: pane.kind, machine: machine.id, thread } : undefined}>
             <TabNote.Provider value={setNoteFor(pane.id)}><PaneBody machine={machine} thread={thread} pane={pane} /></TabNote.Provider>
           </PaneColumn>
           {/* Scrolled, its place in the row is kept while it's over the rest, so they stay where they were. */}
@@ -315,15 +315,15 @@ export function PaneHeader({ children }: { children: ReactNode }) {
   return at ? createPortal(children, at) : <div className="pane-bar">{children}</div>
 }
 
-function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, onClick, onClose, onMaximize, moveTo, children }: {
+function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, onClick, onClose, onMaximize, view, children }: {
   pane: Pane; title: string; focused: boolean; width: number; behind: boolean
   /** Whether it's the one maximized, while one is (undefined: none is). */
   maximized: boolean | undefined
   onFocus(): void; onClick(event: React.MouseEvent<HTMLElement>): void; onClose(): void
   /** Maximize it, or restore it (wide only). */
   onMaximize?: () => void
-  /** Its view's Move to (see PaneMoveTo), for its menu. */
-  moveTo?: ReactNode; children: ReactNode
+  /** The view it shows, if it's one: what its menu moves elsewhere (see PaneMoveTo). */
+  view?: { view: string; machine: string; thread: ThreadInfo }; children: ReactNode
 }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   const keys = useShortcut('panes.maximize')
@@ -338,18 +338,20 @@ function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, o
       <div className={`panes__tab ${focused ? 'is-active' : ''}`}>
         <button className="panes__label" title={title} onDoubleClick={onMaximize}>{title}</button>
         <span className="panes__tools" ref={setSlot} />
-        {/* The pane's menu: what its buttons do, and moving its view elsewhere. */}
-        <Menu.Root>
-          <Menu.Trigger render={<IconButton label={`${title}: more`} className="view-menu__button" />}>
-            <DotsThreeIcon size={16} weight="bold" aria-hidden />
-          </Menu.Trigger>
-          <Menu.Popup align="end" className="view-menu pane-menu">
-            {onMaximize && <Menu.Item data-maximize hint={keys} onClick={onMaximize}>{label}</Menu.Item>}
-            {moveTo}
-            <Menu.Separator />
-            <Menu.Item data-close hint={closeKeys} onClick={onClose}>Close</Menu.Item>
-          </Menu.Popup>
-        </Menu.Root>
+        {/* The pane's menu: moving its view elsewhere, with what its buttons do. Only for a view that has somewhere to go. */}
+        {view && <PaneMoveTo {...view} pane={pane.id} menu={(moveTo) => (
+          <Menu.Root>
+            <Menu.Trigger render={<IconButton label={`${title}: more`} className="view-menu__button" />}>
+              <DotsThreeIcon size={16} weight="bold" aria-hidden />
+            </Menu.Trigger>
+            <Menu.Popup align="end" className="view-menu pane-menu">
+              {onMaximize && <Menu.Item data-maximize hint={keys} onClick={onMaximize}>{label}</Menu.Item>}
+              {moveTo}
+              <Menu.Separator />
+              <Menu.Item data-close hint={closeKeys} onClick={onClose}>Close</Menu.Item>
+            </Menu.Popup>
+          </Menu.Root>
+        )} />}
         {onMaximize && (
           <button className="panes__maximize" aria-label={`${label} ${title}`} title={keys ? `${label} (${keys})` : label} onClick={onMaximize}>
             {maximized ? <CornersInIcon size={13} aria-hidden /> : <CornersOutIcon size={13} aria-hidden />}
