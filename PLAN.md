@@ -377,10 +377,12 @@ Still open:
 - **Web and mobile:** accounts and TLS, a service worker, native shells as wrappers.
 - **MCP, more:** watches as resources (a thread's transcript, the thread list); more actions exposed as they prove safe.
 - **More bundled extensions:** git/diff, background jobs and subagents, suggestions.
-- **The terminal, next** (built: ghostty-web in every window, node-pty in the daemon): native libghostty on desktop
-  (and mobile), drawn by the app instead of WASM in the page; the daemon keeping each terminal's screen with a headless
-  emulator (ghostty-vt in Node), so a window attaching is sent the screen as it is rather than raw output replayed (which
-  can garble when clients differ in width); terminals that survive a daemon restart (a PTY holder process, as herdr's);
+- **The terminal, next** (built: ghostty-web in every window, node-pty in the daemon): the daemon keeping each
+  terminal's screen with a headless emulator (libghostty-vt's official wasm in Node: tried, it reflows and formats the
+  screen as VT), so a window attaching is sent the screen as it is rather than raw output replayed (which can garble
+  when clients differ in width); native libghostty on desktop (and mobile), drawn by the app instead of WASM in the
+  page, which waits: Ghostty's drawing API is internal to its macOS app and runs its own PTY, and a native view over
+  the page covers every web overlay (`docs/terminal-native.md`, 2026-11-15: 3–5 weeks, macOS only); terminals that survive a daemon restart (a PTY holder process, as herdr's);
   channels relayed by the hub, so a browser reaches terminals on the machines it reaches; a terminal's tab title from
   the shell (OSC 0/2).
 - **The code, support and readonly profiles**, as further proofs of profiles.
