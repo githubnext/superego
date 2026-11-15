@@ -6,9 +6,9 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, p
 import { appEnv, daemonStarting, defaultDataDir, readBuild, socketPath } from '@superego/daemon/client'
 import {
   arr, bool, compareVersions, defineAction, int, lit, nullable, obj, opt, Router, RpcError, str, union, unknown, waitingForSignIn,
-  type AppConfig, type DeclaredSection, type Json, type Notifications, type ProfileRef, type ThreadInfo, type SettingType,
+  type AppConfig, type DeclaredSection, type Json, type Notifications, type ProfileRef, type ThreadInfo,
 } from '@superego/protocol'
-import { serveSettings } from '@superego/settings'
+import { declaredSpec, serveSettings } from '@superego/settings'
 import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, NOTIFY, signInNotice, threadNotice, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
 import { LayoutFile, type LayoutView } from './layout-file.ts'
@@ -118,9 +118,7 @@ export function startApp(appConfig: AppConfig) {
       /** A window's UI extensions declare their settings; the app keeps them in its own settings file. */
     'settings.register': async ({ section }: { section: DeclaredSection }) => {
       if (!section?.id || !Array.isArray(section.settings)) throw new RpcError('invalid', 'A section needs an id and settings')
-      appSettings.upsert({ ...section, settings: section.settings.map(({ key, title, description, default: initial, ...type }) => ({
-        key, title, default: initial, type: type as SettingType, ...(description ? { description } : {}),
-      })) })
+      appSettings.upsert(declaredSpec(section))
       return null
     },
       /** The profile UIs from other machines allowed to run in this computer's windows (see profile-ui.ts). */

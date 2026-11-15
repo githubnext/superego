@@ -53,7 +53,8 @@ export type DeclaredSection = {
   title: string
   description?: string
   order?: number
-  settings: (SettingType & { key: string; title: string; description?: string; default: Json })[]
+  /** `hidden`: kept, and changed where its owner offers it (a view's menu, a shortcut), but not shown in Settings. */
+  settings: (SettingType & { key: string; title: string; description?: string; default: Json; hidden?: boolean })[]
 }
 
 export type ProviderAuthInfo = {

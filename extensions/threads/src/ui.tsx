@@ -42,7 +42,8 @@ export default defineUiExtension({
     superego.appSettings({
       id: 'threads', title: 'Sidebar', order: 55,
       settings: [
-        { key: VIEW, title: 'Show as', default: 'list', type: 'choice', options: [{ value: 'list', label: 'List' }, { value: 'rail', label: 'Rail' }] },
+        // Changed from the sidebar's own menu and ⌘\, not in Settings.
+        { key: VIEW, title: 'Show as', default: 'list', type: 'choice', options: [{ value: 'list', label: 'List' }, { value: 'rail', label: 'Rail' }], hidden: true },
       ],
     })
     superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: Threads, rail: ThreadsRail })

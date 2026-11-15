@@ -1,7 +1,7 @@
 // The settings registry: sections of typed settings registered by whoever owns them, values kept in one store.
 // Types can be computed (a model list that depends on which providers are signed in), so the registry resolves them
 // whenever a snapshot is taken; `invalidate()` tells watchers that something they depend on changed.
-import { RpcError, type Json, type SectionInfo, type SettingInfo, type SettingsSnapshot, type SettingType } from '@superego/protocol'
+import { RpcError, type DeclaredSection, type Json, type SectionInfo, type SettingInfo, type SettingsSnapshot, type SettingType } from '@superego/protocol'
 
 export type SettingSpec = {
   key: string
@@ -34,6 +34,16 @@ export class MemorySettingsStore implements SettingsStore {
   constructor(values: Record<string, Json> = {}) { this.values = values }
   load() { return { ...this.values } }
   async save(values: Record<string, Json>) { this.values = { ...values } }
+}
+
+/** A section as a window declares it (see DeclaredSection), as the registry takes it. */
+export function declaredSpec(section: DeclaredSection): SectionSpec {
+  return {
+    ...section,
+    settings: section.settings.map(({ key, title, description, default: initial, hidden, ...type }) => ({
+      key, title, default: initial, type: type as SettingType, ...(description ? { description } : {}), ...(hidden ? { hidden: () => true } : {}),
+    })),
+  }
 }
 
 const resolveType = (spec: SettingSpec): SettingType => typeof spec.type === 'function' ? spec.type() : spec.type

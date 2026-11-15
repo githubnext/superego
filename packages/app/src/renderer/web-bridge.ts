@@ -2,8 +2,8 @@
 // page (its Web access setting), instead of Electron's preload. That daemon is "local", and every machine it reaches is
 // here too: calls for them go through it (`relay.call`) and their news comes back from it (`relay.event`). What the
 // desktop keeps in its main process (the app's own settings) is kept in this browser.
-import { FEATURES, offers, PROTOCOL_VERSION, RpcError, RpcPeer, versionOf, type Hello, type Notifications } from '@superego/protocol'
-import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
+import { FEATURES, offers, PROTOCOL_VERSION, RpcError, RpcPeer, versionOf, type DeclaredSection, type Hello, type Notifications } from '@superego/protocol'
+import { declaredSpec, serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { carriesFiles, uploadAttachments } from '@superego/client/uploads'
 import { APP_MOVED, LAYOUT_SETTING, withMovedActions, withMovedLayout, type MachineEntry, type SuperegoBridge, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { askPairing, LIMITED, type Pairing } from './pair-gate.ts'
@@ -189,8 +189,8 @@ export function webBridge(): SuperegoBridge {
   const app: Record<string, (params: never) => unknown> = {
     'settings.watch': served['settings.watch'] as never,
     'app.settings.set': async ({ key, value }: { key: string; value: never }) => { await settings.set(key, value); return null },
-    'settings.register': async ({ section }: { section: Parameters<SettingsRegistry['register']>[0] }) => {
-      try { settings.register(section) } catch { /* registered already, by another mount */ }
+    'settings.register': async ({ section }: { section: DeclaredSection }) => {
+      try { settings.register(declaredSpec(section)) } catch { /* registered already, by another mount */ }
       return null
     },
     'unwatch': async ({ sub }: { sub: string }) => { await subs.get(sub)?.(); subs.delete(sub); return null },
