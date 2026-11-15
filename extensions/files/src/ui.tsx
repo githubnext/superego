@@ -29,9 +29,9 @@ function useFiles(machine: string | undefined, thread: ThreadInfo | undefined) {
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    treeShown = superego.store<boolean>('files.tree', false, { persist: true })
-    quickOpen = superego.store<boolean>('files.open', false)
-    expanded = superego.store<Record<string, string[]>>('files.expanded', {}, { persist: true })
+    treeShown = superego.store<boolean>('tree', false, { persist: true })
+    quickOpen = superego.store<boolean>('open', false)
+    expanded = superego.store<Record<string, string[]>>('expanded', {}, { persist: true })
     superego.slot('editor.side', Tree)
     superego.slot('editor.bar', TreeButton)
     superego.slot('overlay', QuickOpen)

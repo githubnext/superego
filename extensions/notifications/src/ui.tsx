@@ -18,7 +18,7 @@ let declined: Store<boolean>
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    declined = superego.store<boolean>('notifications.declined', false, { persist: true })
+    declined = superego.store<boolean>('declined', false, { persist: true })
     superego.appSettings({
       id: 'notifications', title: 'Notifications', order: 60,
       settings: [{

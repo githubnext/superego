@@ -25,7 +25,7 @@ const egoMachine = (machines: MachineEntry[], chosen: string) => {
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    const chosen = superego.store<string>('ego.machine', 'local', { persist: true })
+    const chosen = superego.store<string>('machine', 'local', { persist: true })
     // A button, not a space: it shows a thread, and the sidebar keeps what it shows. First in the rail.
     superego.view('ego.button', {
       title: `Ask ${agentName(superego.app)}`, icon: LifebuoyIcon, context: 'window', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10,

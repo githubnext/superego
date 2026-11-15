@@ -324,7 +324,7 @@ place, and the window's console has why.
 | `composer.sentWith({ read(blocks), component })` | draw what its `submit` put in sent messages under them (a chip): `read` returns `{ items, blocks }`, and those blocks leave the text |
 | `work(divide)` | split a run of work into titled parts (tasks); bundled only |
 | `action(defineAction({ id, keys, when, run }))` | a window action with keys, in ⌘K while `when(context)` holds; a profile's only while one of its threads is shown |
-| `store('x.y', initial, { persist })` → `get`, `set`, `use()` | window state its actions and components share |
+| `store('open', initial, { persist })` → `get`, `set`, `use()` | window state its actions and components share, kept as `<name>.open` (`'<name>.open'` is the same one) |
 | `appSettings({ id, settings })` | per-user settings; `useAppSetting(key)`, `context.appSetting(key)`; bundled only |
 | `settings(ui, Component)` | draw under a settings section that names `ui` |
 | `dispatch(id, params, { machine })` | run any action outside React |

@@ -161,7 +161,7 @@ export function daemonMachine(daemon: TestDaemon, id = 'local', label = id): Tes
 export type MountOptions = {
   /** UI halves set up as the app's own (bundled), in order. */
   extensions?: UiExtension[]
-  /** UI halves set up as a profile's: drawn only in threads of that profile, on that machine. */
+  /** UI halves set up as a profile's: drawn only in threads of that profile, on that machine. One that fails to start throws. */
   profile?: { ref: ProfileRef; machine?: string; extensions: UiExtension[] }
   /** The machines it reaches: fakes, or test daemons (`daemonMachine`, or the daemon itself as `local`). */
   machines?: (TestMachine | TestDaemon)[]
@@ -201,7 +201,7 @@ export type TestWindow = {
   press(keys: string): Promise<string | undefined>
   /** Change what a machine says of itself (gone: `{ state: 'disconnected' }`), as the app's connection would. */
   setMachine(id: string, change: Partial<MachineEntry>): Promise<void>
-  /** Set up a profile's UI again (or none), as a change to its files would. */
+  /** Set up a profile's UI again (or none), as a change to its files would. One that fails to start throws. */
   installProfile(machine: string, ref: ProfileRef, extensions: UiExtension[]): Promise<void>
   /** Let what's under way settle: answers, effects, renders. */
   settle(): Promise<void>
@@ -260,8 +260,24 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   localStorage.clear()
   if (options.select) setLocalState('selection', { machine: options.select.machine ?? machines[0]?.id, thread: options.select.thread }, undefined)
 
-  const registry = windowRegistry(app, options.extensions ?? [])
-  if (options.profile) registry.installProfile(options.profile.machine ?? machines[0]!.id, options.profile.ref, options.profile.extensions)
+  // The window logs a profile's UI that fails to start and goes on without it; a test fails on it.
+  const install = (into: Registry, machine: string, ref: ProfileRef, extensions: UiExtension[]) => {
+    const [failed] = into.installProfile(machine, ref, extensions)
+    if (failed) throw failed.error
+  }
+  const registry = (() => {
+    let made: Registry | undefined
+    try {
+      made = windowRegistry(app, options.extensions ?? [])
+      if (options.profile) install(made, options.profile.machine ?? machines[0]!.id, options.profile.ref, options.profile.extensions)
+      return made
+    } catch (error) {
+      made?.teardown()
+      for (const off of offs) off()
+      letGoOfDom()
+      throw error
+    }
+  })()
 
   // The shell's state as the window has it, for the router's context and for `select`.
   let shell: { select(selection: { machine: string; thread: string } | undefined): void; selection?: { machine: string; thread: string }; threads: Record<string, ThreadInfo[] | undefined> } = { select() {}, threads: {} }
@@ -349,7 +365,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       await settle()
     },
     async installProfile(machine, ref, extensions) {
-      await act(async () => { registry.installProfile(machine, ref, extensions) })
+      await act(async () => { install(registry, machine, ref, extensions) })
       await settle()
     },
     settle,

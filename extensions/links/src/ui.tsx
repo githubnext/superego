@@ -13,7 +13,7 @@ let shown: Store<boolean>
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    shown = superego.store<boolean>('links.shown', false)
+    shown = superego.store<boolean>('shown', false)
     superego.slot('overlay', Links)
     // The links of the thread shown: only while one is.
     superego.action(defineAction({ id: 'links.list', title: 'Links in this thread…', keys: 'ctrl+o', when: (c) => Boolean(c.selection), run: () => shown.set((open) => !open) }))

@@ -135,6 +135,37 @@ describe('a window for a UI half', () => {
     expect(ui.placed('aside', { thread: 't1' })).toContain('queue.list')
   })
 
+  it("keeps an extension's stores under its name, given bare or already named", async () => {
+    const kanban = defineUiExtension({
+      name: 'kanban',
+      setup(superego) {
+        superego.store<string[]>('columns', ['todo'], { persist: true }).set(['todo', 'done'])
+        superego.store<boolean>('kanban.folded', false, { persist: true }).set(true)
+      },
+    })
+    const stored = () => Object.keys(localStorage).filter((key) => key.includes('kanban')).sort()
+    const bundled = await mountUi({ extensions: [kanban] })
+    expect(stored()).toEqual(['superego.kanban.columns', 'superego.kanban.folded'])
+    await bundled.unmount()
+    // A profile's the same, kept apart for that profile.
+    const ref = { scope: 'user' as const, name: 'default', dir: '/profiles/default' }
+    keep(await mountUi({ profile: { ref, extensions: [kanban] } }))
+    expect(stored()).toHaveLength(2)
+    for (const key of stored()) expect(key).toMatch(/^superego\.profile\..+\.kanban\.(columns|folded)$/)
+  })
+
+  it("fails on a profile's UI that fails to start, where the window would go on without it", async () => {
+    const ref = { scope: 'user' as const, name: 'default', dir: '/profiles/default' }
+    const broken = defineUiExtension({ name: 'broken', setup() { throw new Error('no columns') } })
+    const errors = console.error
+    console.error = () => {}
+    try {
+      await expect(mountUi({ profile: { ref, extensions: [broken] } })).rejects.toThrow('no columns')
+      const ui = keep(await mountUi({ profile: { ref, extensions: [] } }))
+      await expect(ui.installProfile('local', ref, [broken])).rejects.toThrow('no columns')
+    } finally { console.error = errors }
+  })
+
   it('says a machine is away, and copes with an older one that watches values whole', async () => {
     const thread = testThread({ id: 't1' })
     const older = fakeMachine({ features: ['threads', 'actions', 'data-views'], extensions: [{ name: 'queue', version: '0.9.0' }], threads: [thread], values: { 'queue.items': { t1: ['old'], t2: ['x'] } } })

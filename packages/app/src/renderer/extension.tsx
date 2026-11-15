@@ -385,7 +385,8 @@ export type UiApi = {
   appSettings(section: DeclaredSection): void
   /**
    * State of this extension, kept in the window: read and changed by its actions and components alike (`store.use()`
-   * in a component). Named `<extension>.<key>`; `persist` keeps it across reloads.
+   * in a component). Kept as `<extension>.<key>`: `store('open', …)` and `store('<extension>.open', …)` are the same
+   * one. `persist` keeps it across reloads.
    */
   store<T extends Json>(key: string, initial: T, options?: { persist?: boolean }): Store<T>
   /** The composer of a thread. */
@@ -466,8 +467,11 @@ export type Registry = {
    * extension the thread has (and a profile's, only its own threads); a listener that throws is logged and skipped.
    */
   emit<E extends WindowEvent>(event: E, payload: WindowEvents[E]): void
-  /** Set up a profile's UI extensions on `machine`, after tearing down what that profile set up before. */
-  installProfile(machine: string, profile: ProfileRef, extensions: UiExtension[]): void
+  /**
+   * Set up a profile's UI extensions on `machine`, after tearing down what that profile set up before. One that fails
+   * to start is logged and left out, the rest set up; the failures are returned.
+   */
+  installProfile(machine: string, profile: ProfileRef, extensions: UiExtension[]): { extension: string; error: unknown }[]
   /** Tear down every extension set up, the core's last: as the window closing would (a test's end). */
   teardown(): void
   /** Changes whenever extensions are added or removed at runtime; `subscribe` to hear it. */
@@ -520,11 +524,16 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     installProfile(machine, profile, list) {
       const scope = profileScope(machine, profile)
       for (const [key, teardown] of [...teardowns]) if (key.startsWith(`${scope}/`)) teardown()
+      const failed: { extension: string; error: unknown }[] = []
       for (const extension of list) {
-        try { setUp(extension, scope) } catch (error) { console.error(`Profile extension ${extension.name} failed to start`, error) }
+        try { setUp(extension, scope) } catch (error) {
+          console.error(`Profile extension ${extension.name} failed to start`, error)
+          failed.push({ extension: extension.name, error })
+        }
       }
       registry.version++
       for (const listener of listeners) listener()
+      return failed
     },
   }
 
@@ -694,10 +703,11 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         add(registry.appSettings, section)
       },
       store(key, initial, options) {
-        life.live(`the store ${key}`)
-        if (!key.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its state "${extension.name}.<key>", not "${key}"`)
+        // Its own: `<extension>.<key>`, whether given so or as the bare key.
+        const name = key.startsWith(`${extension.name}.`) ? key : `${extension.name}.${key}`
+        life.live(`the store ${name}`)
         // A profile's is kept apart for each profile on each machine: the same profile folder elsewhere is another.
-        return createStore(profile ? `profile.${encodeURIComponent(profile)}.${key}` : key, initial, options)
+        return createStore(profile ? `profile.${encodeURIComponent(profile)}.${name}` : name, initial, options)
       },
       composer: {
         complete: (provider) => { add(registry.completions, provider as CompletionProvider<any>) },
