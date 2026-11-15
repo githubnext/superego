@@ -158,7 +158,9 @@ and left out by a profile (`without`), and its tools, pane kinds and UI are then
 
 `superego` starts a thread in the current directory and opens it in the app. `superego <dir> -p "fix the tests"` starts one
 elsewhere with a first message; `-P <profile>` picks a profile; `-w` gives it a worktree of its own. `superego threads` lists
-them. Every command takes `-m <machine>` and `--json`; `superego help` lists them. `superego --skill` prints a skill for
+them. Every command takes `-m <machine>` and `--json`; `superego help` lists them. Settings → Command line puts it in
+`~/.local/bin`: the installed app writes a script that runs the CLI built into it, on its own Electron as Node; the dev
+app links the checkout's `app/bin/superego.ts`, as `pnpm link:cli` does. `superego --skill` prints a skill for
 agents on using and extending Superego (`superego --skill > ~/.agents/skills/superego/SKILL.md` installs it); it ends with
 an index of topics, each printed by `superego --skill <topic>`: `cli`, `profiles`, `tools`, `daemon`, `ui`, `bundled`,
 `debugging`. They live in `packages/cli/skill/`. A remote machine needs `superego` on its PATH for

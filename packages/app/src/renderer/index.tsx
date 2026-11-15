@@ -11,6 +11,7 @@ import { createRegistry, layoutOf, placeScope, RegistryProvider, scopedViews, ty
 import { LAYOUT, placeView, type Place } from './layout.ts'
 import { registerLayoutText } from './layout-text.tsx'
 import { Profiles, Providers } from './SettingsView.tsx'
+import { CommandLine } from './command-line.tsx'
 import { WebAccess } from './web-access.tsx'
 import { ConnectedClients } from './connected.tsx'
 import { Shell, ThreadPicker } from './Shell.tsx'
@@ -48,6 +49,7 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
     core.settings('web', WebAccess)
     core.settings('clients', ConnectedClients)
     core.settings('profiles', Profiles)
+    core.settings('command-line', CommandLine)
     core.appSettings({
       id: 'navigation', title: 'Navigation', order: 60,
       settings: [

@@ -14,6 +14,7 @@ import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
 import { LayoutFile, type LayoutView } from './layout-file.ts'
 import { Link, loginInTerminal, MachineLinks, MachineStore, openLocal as openLocalSocket, runUpdate, UiAllowStore } from '@superego/client'
 import { MenuBar } from './tray.ts'
+import { commandLine } from './command-line.ts'
 import { ServiceRestart, type ServiceAction } from './restart.ts'
 import { shortcutOf } from '../renderer/shortcuts.ts'
 
@@ -53,6 +54,16 @@ export function startApp(appConfig: AppConfig) {
     data: async () => ({ file: layoutFile.path, ...(layoutFile.problem ? { problem: layoutFile.problem } : {}), ...(layoutFile.missing ? { missing: layoutFile.missing } : {}) }),
   })
   void layoutFile.start().catch((error) => console.error('layout.json:', error))
+  // `<id>` on the PATH, from the app this build is in (out/main → the app, or its app.asar). Headless (tests), no login
+  // shell is asked where it finds it.
+  const cli = commandLine({
+    app: appConfig, appPath: join(import.meta.dirname, '..', '..'), packaged: app.isPackaged, executable: process.execPath,
+    ...(headless ? {} : { shell: process.env.SHELL || '/bin/zsh' }),
+  })
+  appSettings.register({
+    id: 'command-line', title: 'Command line', order: 80, ui: 'command-line', settings: [],
+    data: () => cli.info(),
+  })
 
   /** The app's own endpoint: its settings, per window so a closed window's subscriptions go with it. */
   const appSubs = new Map<number, Map<string, () => unknown>>()
@@ -438,6 +449,16 @@ export function startApp(appConfig: AppConfig) {
       void loginInTerminal(config, { dataDir }).done.then((up) => { if (up) restartLink(id) })
       return null
     },
+  }))
+  appRouter.register(defineAction({
+    id: 'app.cli.install', title: `Install the ${appConfig.id} command`, runs: 'app', expose: ['ui'],
+    params: obj({}),
+    run() { cli.install(); appSettings.invalidate(); return null },
+  }))
+  appRouter.register(defineAction({
+    id: 'app.cli.uninstall', title: `Remove the ${appConfig.id} command`, runs: 'app', expose: ['ui'],
+    params: obj({}),
+    run() { cli.uninstall(); appSettings.invalidate(); return null },
   }))
   appRouter.register(defineAction({
     id: 'service.act', title: 'Restart the background process', runs: 'app', expose: ['ui'],

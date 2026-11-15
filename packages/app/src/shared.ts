@@ -15,6 +15,18 @@ export type MachineEntry = Base & {
 
 export type MachineUpdate = { state: 'running' | 'done' | 'failed'; log: string; error?: string }
 
+/** The app's command on the PATH, as Settings → Command line shows it (see main/command-line.ts). */
+export type CommandLineInfo = {
+  /** Where it goes. */
+  path: string
+  /** Packaged, a script is installed; from a checkout, the bin is linked. Null: neither is there to offer. */
+  kind: 'script' | 'link' | null
+  /** Whether `path` is this app's (`installed`), something else's (`other`), or not there. */
+  state: 'installed' | 'other' | 'missing'
+  /** What a login shell runs for `<id>`, when it's installed but the shell finds something else, or nothing. */
+  shadowed?: string | null
+}
+
 
 /**
  * What a notification says of a thread that wants a look now (it finished, failed or needs you); nothing for any other

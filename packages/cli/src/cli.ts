@@ -35,6 +35,11 @@ export type CliOptions = {
    * extensions and its web build. Without it, `<id> daemon` is the bare core.
    */
   daemon?: string
+  /**
+   * The app's own executable, when this CLI is the build inside a packaged app (run on it as Node): it runs the daemon
+   * and opens the app. Without it, the checkout's development bundle (see dev-app.ts).
+   */
+  executable?: string
 }
 
 // One CLI run serves one app; `runCli` sets these before anything else runs.
@@ -145,6 +150,10 @@ function sayRejected(rejections: ProviderRejection[], machine: Machine) {
 // ── Reaching daemons ────────────────────────────────────────────────────────────────────────────────────────────────
 
 const appDir = () => appEnv(app)('APP') ?? options.appDir
+/** The packaged app's executable this CLI came in, unless `<ID>_APP` points elsewhere. */
+const packaged = () => appEnv(app)('APP') ? undefined : options.executable
+/** What runs the app at `appDir()`: the packaged app itself, or the checkout's development bundle. */
+const appExecutable = () => packaged() ?? devApp(appDir(), app)
 
 /**
  * The daemon code this computer would run: the app's build when there is one (so the app and `superego` agree on what is
@@ -154,7 +163,7 @@ function installedDaemon(): { dir: string; command: string[]; env: NodeJS.Proces
   const bundled = resolve(appDir(), 'out/main/daemon.js')
   if (existsSync(bundled)) {
     // The app's own (development) bundle, so the daemon is "Superego" in Activity Monitor, not "Electron".
-    return { dir: resolve(appDir(), 'out/main'), command: [devApp(appDir(), app), bundled], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }
+    return { dir: resolve(appDir(), 'out/main'), command: [appExecutable(), bundled], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }
   }
   const command = options.daemon ? [process.execPath, options.daemon] : [process.execPath, options.bin, 'daemon']
   return { dir: fileURLToPath(new URL('../../daemon/src/', import.meta.url)), command, env: process.env }
@@ -214,7 +223,10 @@ function openInApp(machine: string, thread: string) {
   if (!existsSync(resolve(dir, 'out/main/main.js'))) {
     throw new RpcError('no_app', `The app isn't built in ${dir}`, { hint: 'Build it: pnpm build in the app.' })
   }
-  spawn(devApp(dir, app), [dir, `--superego-open=${machine}/${thread}`], { detached: true, stdio: 'ignore' }).unref()
+  // A packaged app is its own app; a development bundle is Electron, told which app to run. Not as Node, as this may be.
+  const args = packaged() ? [] : [dir]
+  const { ELECTRON_RUN_AS_NODE: _, ...env } = process.env
+  spawn(appExecutable(), [...args, `--superego-open=${machine}/${thread}`], { detached: true, stdio: 'ignore', env }).unref()
 }
 
 // ── Commands ────────────────────────────────────────────────────────────────────────────────────────────────────────
