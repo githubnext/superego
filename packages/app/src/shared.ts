@@ -1,7 +1,7 @@
 // The contract between the main process and the renderer, exposed as `window.superego` by the preload.
 import type { ConnectionState, MachineConfig, MachineEntry as Base, MachineId } from '@superego/client/shared'
 import type { SettingsStore } from '@superego/settings'
-import { MIGRATIONS, waitingForSignIn, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
+import { MIGRATIONS, waitingForSignIn, type Channel, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
 
 export type { ConnectionState, MachineConfig, MachineId }
 
@@ -127,6 +127,43 @@ export type SuperegoBridge = {
   web?: boolean
   /** Where an artifact (an HTML file in a thread's folder) is served from, sandboxed, with its relative files beside it. */
   artifactUrl?(machine: MachineId, thread: string, path: string): string
+  /**
+   * Open a channel of `kind` on a machine's daemon: a byte stream both ways (a terminal's). Absent from a bridge
+   * that can't; in a browser, only to the daemon that served the page.
+   */
+  channel?(machine: MachineId, kind: string, params: unknown): Promise<BridgeChannel>
+}
+
+/**
+ * One of the protocol's channels (its channels.ts), as the window holds it. What the daemon sends comes to `onData` a
+ * chunk at a time, the next once the listener's promise settles, so a slow reader slows the sender; `write` sends,
+ * `close` gives up. `onClose` hears it end: closed from either side, or with the link (a reason then).
+ */
+export type BridgeChannel = {
+  write(bytes: Uint8Array): void
+  onData(listener: (bytes: Uint8Array) => void | Promise<void>): void
+  onClose(listener: (reason?: string) => void): void
+  close(): void
+}
+
+/** A protocol channel as a bridge hands it to the window. */
+export function bridgeChannel(channel: Channel): BridgeChannel {
+  const listeners = new Set<(reason?: string) => void>()
+  let closed: { reason?: string } | undefined
+  const end = (reason?: string) => {
+    if (closed) return
+    closed = reason ? { reason } : {}
+    // Its own half too, once the other side ended: nothing more will be written.
+    channel.end()
+    for (const listener of listeners) listener(reason)
+  }
+  channel.ended.then(() => end(), (error: Error) => end(error.message))
+  return {
+    write: (bytes) => { channel.write(bytes).catch(() => {}) },
+    onData: (listener) => channel.onData(listener),
+    onClose: (listener) => { if (closed) listener(closed.reason); else listeners.add(listener) },
+    close: () => channel.abort('Closed'),
+  }
 }
 
 /** An artifact's address on the desktop: superego-artifact://<machine>/<thread>/<path>, served by the main process. */
@@ -141,7 +178,14 @@ export const ARTIFACT_TYPES: Record<string, string> = {
   svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', txt: 'text/plain; charset=utf-8', md: 'text/plain; charset=utf-8',
 }
 
-export const CHANNEL = { call: 'superego:call', machines: 'superego:machines', event: 'superego:event' } as const
+export const CHANNEL = {
+  call: 'superego:call', machines: 'superego:machines', event: 'superego:event',
+  // A window's protocol channels, held for it by the main process: opened, their data, written, read, closed, and all
+  // of a window's dropped as its page (re)loads.
+  open: 'superego:ch-open', data: 'superego:ch-data', write: 'superego:ch-write', ack: 'superego:ch-ack', close: 'superego:ch-close', reset: 'superego:ch-reset',
+} as const
+/** What the main process tells a window of one of its channels: a chunk, or that it closed (and why, when it failed). */
+export type ChannelEvent = { id: string; data: Uint8Array } | { id: string; closed: true; reason?: string }
 
 /** Text sizes (Settings → Appearance), smallest first: each a step of 1px on the interface's 13px. */
 export const TEXT_SIZES = ['xs', 'sm', 'base', 'lg', 'xl'] as const

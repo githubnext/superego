@@ -2,10 +2,10 @@
 // page (its Web access setting), instead of Electron's preload. That daemon is "local", and every machine it reaches is
 // here too: calls for them go through it (`relay.call`) and their news comes back from it (`relay.event`). What the
 // desktop keeps in its main process (the app's own settings) is kept in this browser.
-import { FEATURES, offers, PROTOCOL_VERSION, RpcError, RpcPeer, versionOf, type DeclaredSection, type Hello, type Notifications } from '@superego/protocol'
+import { Channels, FEATURES, offers, PROTOCOL_VERSION, RpcError, RpcPeer, versionOf, type DeclaredSection, type Hello, type Notifications } from '@superego/protocol'
 import { declaredSpec, serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { carriesFiles, uploadAttachments } from '@superego/client/uploads'
-import { APP_MOVED, LAYOUT_SETTING, withMovedActions, withMovedLayout, type MachineEntry, type SuperegoBridge, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
+import { APP_MOVED, bridgeChannel, LAYOUT_SETTING, withMovedActions, withMovedLayout, type MachineEntry, type SuperegoBridge, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { askPairing, LIMITED, type Pairing } from './pair-gate.ts'
 
 const SETTINGS = 'superego.appSettings'
@@ -98,6 +98,8 @@ export function webBridge(): SuperegoBridge {
       })
       ws.onmessage = (message) => next.receive(String(message.data))
       next.onAny((method, params) => {
+        // Channels are this connection's own business, not news for the window.
+        if (method.startsWith('ch.')) return
         if (method === 'relay.event') {
           const relayed = params as Notifications['relay.event']
           return emit({ machine: relayed.machine, method: relayed.method, params: relayed.params })
@@ -245,6 +247,12 @@ export function webBridge(): SuperegoBridge {
       return send('relay.call', { machine, method, params })
     },
     machines: async () => entries,
+    // Only to this page's own daemon: a channel isn't relayed to the machines it reaches.
+    async channel(machine, kind, params) {
+      if (machine !== 'local') throw new RpcError('unsupported', 'In a browser, this works only on the machine that serves the page')
+      await starting
+      return bridgeChannel(await Channels.of(peer ?? await ready).open(kind, params))
+    },
     // Another machine's, through this daemon: `<thread>@<machine>` (see the daemon's web.ts).
     artifactUrl: (machine, thread, path) =>
       `/artifact/${encodeURIComponent(machine === 'local' ? thread : `${thread}@${machine}`)}/${path.split('/').map(encodeURIComponent).join('/')}`,

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, openSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
@@ -6,10 +7,10 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, p
 import { appEnv, daemonStarting, defaultDataDir, readBuild, socketPath } from '@superego/daemon/client'
 import {
   arr, bool, compareVersions, defineAction, int, lit, nullable, obj, opt, Router, RpcError, str, union, unknown, waitingForSignIn,
-  type AppConfig, type DeclaredSection, type Json, type Notifications, type ProfileRef, type ThreadInfo,
+  type AppConfig, type Channel, type DeclaredSection, type Json, type Notifications, type ProfileRef, type ThreadInfo,
 } from '@superego/protocol'
 import { declaredSpec, serveSettings } from '@superego/settings'
-import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, NOTIFY, signInNotice, threadNotice, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
+import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, NOTIFY, type ChannelEvent, signInNotice, threadNotice, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
 import { LayoutFile, type LayoutView } from './layout-file.ts'
 import { Link, loginInTerminal, MachineLinks, MachineStore, openLocal as openLocalSocket, runUpdate, UiAllowStore } from '@superego/client'
@@ -278,6 +279,48 @@ export function startApp(appConfig: AppConfig) {
       return { ok: false, error: { kind: error instanceof RpcError ? error.kind : 'error', message: error instanceof Error ? error.message : String(error) } }
     }
   })
+
+  // Windows' channels (a terminal's bytes, say), held on their machine's link: each chunk passed to its window and read
+  // there before the next, and every one of a window's aborted when its page loads again or it goes.
+  const held = new Map<string, { channel: Channel; contents: Electron.WebContents; reads: (() => void)[] }>()
+  const watchedContents = new WeakSet<Electron.WebContents>()
+  const dropChannels = (contents: Electron.WebContents) => { for (const entry of held.values()) if (entry.contents === contents) entry.channel.abort('The window closed') }
+  ipcMain.handle(CHANNEL.open, async (event, machine: string, kind: string, params: unknown): Promise<CallResult> => {
+    try {
+      const link = machine === APP ? undefined : linkOf(machine)
+      if (!link) throw new RpcError('unknown_machine', `No machine ${machine}`)
+      const channel = await link.channel(kind, params)
+      const id = randomUUID()
+      const contents = event.sender
+      const entry = { channel, contents, reads: [] as (() => void)[] }
+      held.set(id, entry)
+      const send = (message: ChannelEvent) => { if (!contents.isDestroyed()) contents.send(CHANNEL.data, message) }
+      channel.onData((data) => new Promise<void>((read) => {
+        if (contents.isDestroyed()) return read()
+        entry.reads.push(read)
+        send({ id, data })
+      }))
+      const closed = (reason?: string) => {
+        if (!held.delete(id)) return
+        channel.end()
+        for (const read of entry.reads.splice(0)) read()
+        send({ id, closed: true, ...(reason ? { reason } : {}) })
+      }
+      channel.ended.then(() => closed(), (error: Error) => closed(error.message))
+      if (!watchedContents.has(contents)) {
+        watchedContents.add(contents)
+        contents.once('destroyed', () => dropChannels(contents))
+      }
+      return { ok: true, result: id }
+    } catch (error) {
+      return { ok: false, error: { kind: error instanceof RpcError ? error.kind : 'error', message: error instanceof Error ? error.message : String(error) } }
+    }
+  })
+  const heldBy = (event: Electron.IpcMainEvent, id: string) => { const entry = held.get(id); return entry?.contents === event.sender ? entry : undefined }
+  ipcMain.on(CHANNEL.write, (event, id: string, bytes: Uint8Array) => { heldBy(event, id)?.channel.write(bytes).catch(() => {}) })
+  ipcMain.on(CHANNEL.ack, (event, id: string) => { heldBy(event, id)?.reads.shift()?.() })
+  ipcMain.on(CHANNEL.close, (event, id: string) => { heldBy(event, id)?.channel.abort('Closed') })
+  ipcMain.on(CHANNEL.reset, (event) => dropChannels(event.sender))
 
   /**
    * One app per data dir: its Electron state lives in the data dir, so the lock that keeps a second launch from opening

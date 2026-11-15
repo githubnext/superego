@@ -14,7 +14,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  aliasesOf, arr, type Attachment, AUTH_REJECTED, compareVersion, contractProblem, EXTENSION_API, type ExtensionManifest, manifestOf, parseVersion, UNVERSIONED, DATA_VIEWS, dataViewProblem, type DataViewInfo, type ExtensionReport, type ExtensionsReport, paramsParser, bool, defineAction, deriveStatus, FEATURES, Lifetime, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
+  aliasesOf, arr, type Attachment, AUTH_REJECTED, type ChannelAcceptor, Channels, compareVersion, contractProblem, EXTENSION_API, type ExtensionManifest, manifestOf, parseVersion, UNVERSIONED, DATA_VIEWS, dataViewProblem, type DataViewInfo, type ExtensionReport, type ExtensionsReport, paramsParser, bool, defineAction, deriveStatus, FEATURES, Lifetime, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
@@ -774,6 +774,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     return notes
   }
+  /** Tell the hooks panes beside a thread closed (closed, or gone as it was cleared): one that throws is logged. */
+  async function tellPaneClosed(id: string, panes: Pane[]) {
+    if (!panes.length) return
+    const m = await get(id)
+    for (const { value, owner } of hooksOf(id, m)) {
+      for (const pane of value.paneClosed ? panes : []) {
+        try { await value.paneClosed!(info(id, m), pane) } catch (error) { console.error(`Extension ${owner}: paneClosed of thread ${id} failed:`, error) }
+      }
+    }
+  }
   /** Turns as the hooks hear them: in order for each thread, one after another, never holding up the run. */
   const told = new Map<string, Promise<void>>()
   function tellLater(hook: 'turnStart' | 'turnEnd' | 'blocked', id: string) {
@@ -866,6 +876,14 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
   /** Extensions' read methods, `<name>.<method>`: plain requests, looked up when called (a profile's come and go). */
   const methods = new Map<string, (params: unknown) => Promise<Json>>()
+  /** Extensions' channels, by kind (`<name>.<kind>`): byte streams a client opens, accepted by their extension. */
+  const channelKinds = new Map<string, ChannelAcceptor>()
+  /** Take channels of `kind` on a connection: looked up as they're opened, so one gone since is refused. */
+  const acceptChannels = (peer: RpcPeer, kind: string) => Channels.of(peer).accept(kind, (channel, params) => {
+    const accept = channelKinds.get(kind)
+    if (!accept) throw new RpcError('unknown_channel', `No channel of kind ${kind} here`)
+    return accept(channel, params)
+  })
   /**
    * The names in use: an extension's name is the prefix of everything it registers, so it's claimed while the extension
    * is set up, and a second extension of that name (bundled or a profile's) is refused rather than mixed in.
@@ -973,6 +991,15 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         methods.set(id, async (params: unknown) => run(parse(params) as never))
         undo(() => { methods.delete(id) }, 'a method')
         note('methods', id)
+      },
+      channel(kind, accept) {
+        const id = named(extension.name, kind)
+        life.live(`the channel ${id}`)
+        if (channelKinds.has(id)) throw new Error(`Channel ${id} is already accepted`)
+        channelKinds.set(id, accept)
+        for (const peer of connections) acceptChannels(peer, id)
+        undo(() => { channelKinds.delete(id) }, 'a channel')
+        note('channels', id)
       },
       pane(kind, about) {
         life.live(`the pane kind ${kind}`)
@@ -1663,13 +1690,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     await m.conversation.reset(undefined, context)
     await m.conversation.waitForIdle(context)
     const last = (await m.conversation.entries({ order: 'descending' }, 1, undefined, context)).items[0]?.id
+    let closed: Pane[] = []
     await updateMeta(id, (meta) => {
       meta.cleared = Number(last ?? 0) + 1
       meta.seen = last === undefined ? {} : { entryId: Number(last) }
+      closed = JSON.parse(JSON.stringify(meta.panes ?? [])) as Pane[]
       delete meta.panes
       delete meta.pane
     })
     for (const stop of transcriptWatches.get(id) ?? []) void stop()
+    await tellPaneClosed(id, closed)
   }
   /**
    * Hidden threads from before extensions made them: Ego's, kept apart in the catalog (`ego`), or older, listed and
@@ -1860,9 +1890,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     params: obj({ id: str(), pane: str() }),
     async run({ id, pane }) {
       await get(id)
+      let closed: Pane | undefined
       await updateMeta(id, (meta) => {
         const index = (meta.panes ?? []).findIndex((p) => p.id === pane)
         if (index < 0) return
+        // A plain copy: what the transaction hands over is only valid inside it.
+        closed = JSON.parse(JSON.stringify(meta.panes![index])) as Pane
         meta.panes!.splice(index, 1)
         // The focus moves left: to the pane before it, or (it was the first) the thread.
         if (meta.pane === pane) meta.pane = meta.panes![index - 1]?.id
@@ -1870,6 +1903,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         if (!meta.panes!.length) delete meta.panes
       })
       changed()
+      if (closed) await tellPaneClosed(id, [closed])
       return null
     },
   }))
@@ -2168,6 +2202,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         return handler(connection.resolve(method, params))
       }
       connections.add(peer)
+      for (const kind of channelKinds.keys()) acceptChannels(peer, kind)
       for (const [method, handler] of Object.entries(handlers)) peer.handle(method, open(method, handler))
       // Actions under their ids, and extensions' methods: looked up as they're called, so a profile's registered since
       // this connection opened are there too.

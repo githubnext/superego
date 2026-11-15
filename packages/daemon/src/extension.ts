@@ -9,7 +9,7 @@
 // stops, or (a profile's) when the profile's files change. Torn down, its `signal` aborts, what it registers after is
 // refused, and its live values' `set` and `update` do nothing.
 import type { Conversation, EntryRecord, Extension, Harness } from '@earendil-works/pi-durable'
-import type { ActionDef, ActionInfo, AppConfig, Attachment, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, MachineEntry, NewThread, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
+import type { ActionDef, ActionInfo, AppConfig, Attachment, ChannelAcceptor, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, MachineEntry, NewThread, Pane, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
 import type { DaemonContext } from './daemon.ts'
 import type { ProfileRef, ProfileSpec } from './profiles.ts'
@@ -147,6 +147,8 @@ export type ThreadHooks<S extends Json = Json> = {
   unarchiveAbandoned?(thread: ThreadInfo): void | Promise<void>
   /** Brought back, taking messages again. */
   unarchived?(thread: ThreadInfo): void | Promise<void>
+  /** A pane beside it closed: closed by someone, or gone as the thread was cleared. What the pane held can go. 1.5. */
+  paneClosed?(thread: ThreadInfo, pane: Pane): void | Promise<void>
 }
 export type ThreadCreating<S extends Json = Json> = { cwd?: string; state?: S }
 /** What archiving a thread did, in a line, from an extension's `archiving` or `archived`. */
@@ -242,6 +244,14 @@ export type DaemonApi = {
    * a user's or another thread's (thread tools); tool results aren't. A transform that throws fails the send.
    */
   submit(transform: SubmitTransform): void
+  /**
+   * Byte streams of kind `<name>.<kind>` that clients open (the protocol's channels: base64 chunks within credit the
+   * receiver grants, behind every control message): a terminal's output and keystrokes, say. `accept` gets each one and
+   * the params it was opened with, and throws (an `RpcError`) to refuse it; read with `channel.onData` (set before it
+   * returns), write with `channel.write`. A channel ends with its connection. The window opens one with `channel` from
+   * `@superego/app/ui`. 1.5.
+   */
+  channel(kind: string, accept: ChannelAcceptor): void
   /**
    * Tell the agent about a kind of pane its UI half draws (`superego.pane(kind, …)` there), and the params it takes:
    * open_pane can open it from then on. A profile's extension's are for that profile's threads.

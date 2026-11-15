@@ -2,7 +2,7 @@
 // transport drops. While down, calls fail fast and a client keeps showing what it last knew (stale, not gone). It pings
 // a daemon that offers `heartbeat`, so a dead link is noticed in seconds on any transport, not when ssh gives up.
 // No Node imports: the app's main process uses it, and a daemon or a browser can.
-import { FEATURES, offers, PROTOCOL_VERSION, RpcError, versionOf, type Hello, type Notifications, type RpcPeer } from '@superego/protocol'
+import { Channels, FEATURES, offers, PROTOCOL_VERSION, RpcError, versionOf, type Channel, type Hello, type Notifications, type RpcPeer } from '@superego/protocol'
 import type { ConnectionState, MachineEntry, MachineId } from './shared.ts'
 import { carriesFiles, uploadAttachments } from './uploads.ts'
 
@@ -72,6 +72,12 @@ export class Link {
     const peer = this.#transport.peer
     if (this.has('uploads') && carriesFiles(method, params)) return uploadAttachments(peer, method, params).then((sent) => peer.call(method, sent))
     return peer.call(method, params)
+  }
+
+  /** Open a channel of `kind` on the daemon (a terminal's, say): it ends with this connection, and isn't opened again. */
+  channel(kind: string, params: unknown): Promise<Channel> {
+    if (!this.#transport || this.state !== 'connected') throw new RpcError('disconnected', `${this.label} is not connected`)
+    return Channels.of(this.#transport.peer).open(kind, params)
   }
 
   stop() {

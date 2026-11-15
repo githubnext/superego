@@ -5,7 +5,7 @@ import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { extensionVersion, offers } from '@superego/protocol'
 import type { Client, Feature, Json, MethodName, Notifications, Params, Result, ThreadInfo, SettingsSnapshot } from '@superego/protocol'
-import type { MachineEntry, MachineId, SuperegoBridge } from '../shared.ts'
+import type { BridgeChannel, MachineEntry, MachineId, SuperegoBridge } from '../shared.ts'
 import { useRegistry } from './extension.tsx'
 import { fonts } from './fonts.ts'
 
@@ -229,6 +229,16 @@ export function useValue<T>(first: MachineEntry | MachineId, second: boolean | s
 
 /** Call any method on a machine, including an extension's own (`<extension>.<method>`). */
 export const call = <R = unknown,>(machineId: MachineId, method: string, params: unknown = {}) => window.superego.call(machineId, method, params) as Promise<R>
+
+/**
+ * Open a channel of `kind` (an extension's `<name>.<kind>`) on a machine's daemon: a byte stream both ways, such as a
+ * terminal's (see BridgeChannel). Refused where the bridge has none, and in a browser for any machine but the one
+ * serving the page.
+ */
+export function channel(machineId: MachineId, kind: string, params: unknown = {}): Promise<BridgeChannel> {
+  if (!window.superego.channel) return Promise.reject(new Error('This window can\'t open channels'))
+  return window.superego.channel(machineId, kind, params)
+}
 
 /** A method's answer as a component has it: the last one, why the last call failed, and whether one is under way. */
 export type MethodState<R> = {
