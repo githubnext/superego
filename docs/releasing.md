@@ -68,9 +68,9 @@ through Gatekeeper's check, which a local build skips).
 
 ## When something fails
 
-- **pnpm won't run** (`ERR_PNPM_PNPM_ENGINE_IDENTITY_UNVERIFIABLE`): where registry.npmjs.org is blocked, pnpm can't
-  verify the version `packageManager` pins. `export npm_config_manage_package_manager_versions=false` runs the one
-  installed.
+- **pnpm won't run** (`ERR_PNPM_PNPM_ENGINE_IDENTITY_UNVERIFIABLE`): where registry.npmjs.org is blocked, pnpm
+  verifies the version `packageManager` pins against the registry in its own config, not `NPM_CONFIG_REGISTRY`. Set
+  the mirror there once, from outside the repo: `cd ~ && pnpm config set --global registry "$NPM_CONFIG_REGISTRY"`.
 - **"The specified electronDist does not exist"**: Electron's binary wasn't downloaded on install. Run
   `node install.js` in `node_modules/.pnpm/electron@*/node_modules/electron`.
 - **No Developer ID / no notarytool profile**: see [Once per Mac](#once-per-mac).
