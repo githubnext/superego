@@ -65,7 +65,7 @@ export function startApp(appConfig: AppConfig) {
   // Types for profile authors, from this build (out/types) to <dataDir>/types, where profiles link to them: an upgrade
   // brings its own without anyone asking. Not for tests.
   const types = join(import.meta.dirname, '..', 'types')
-  if (!headless && existsSync(join(types, 'stamp.json'))) setImmediate(() => { try { installTypes(types, dataDir) } catch (error) { console.error('author types:', error) } })
+  if (!headless && existsSync(join(types, 'stamp.json'))) setImmediate(() => { installTypes(types, dataDir).catch((error) => console.error('author types:', error)) })
   appSettings.register({
     id: 'command-line', title: 'Command line', order: 80, ui: 'command-line', settings: [],
     data: () => cli.info(),

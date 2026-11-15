@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameS
 import { createRequire } from 'node:module'
 import { basename, dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { withLock } from '@superego/client/lock'
 
 const sdk = dirname(fileURLToPath(import.meta.url))
 const repo = join(sdk, '..', '..')
@@ -208,25 +209,34 @@ export async function buildTypes(dir: string): Promise<Stamp> {
 
 /**
  * The types as this checkout's sources are now, built again when those changed (a few seconds): a folder in
- * `packages/sdk/.types` that `latest` names. Each build goes in a folder of its own and is never changed, so a copy
- * being made from an older one finishes; those are cleared a while later.
+ * `packages/sdk/.types` that `latest` names. One process builds them at a time; another finding them out of date too
+ * waits for its build and has that. Each build goes in a folder of its own and is never changed, so a copy being made
+ * from an older one finishes; those are cleared a while later.
  */
 export async function builtTypes(): Promise<string> {
   const cache = join(sdk, '.types')
   const latest = join(cache, 'latest')
-  let dir: string | undefined
-  try { dir = join(cache, readFileSync(latest, 'utf8').trim()) } catch {}
-  const stamp = dir ? stampOf(dir) : undefined
-  if (dir && stamp && stamp.source === sourceHash(stamp.sources.map((file) => join(repo, file)))) return dir
-  const name = `${Date.now().toString(36)}-${process.pid}`
-  await buildTypes(join(cache, name))
-  writeFileSync(`${latest}.${process.pid}`, name)
-  renameSync(`${latest}.${process.pid}`, latest)
-  for (const entry of readdirSync(cache)) {
-    const path = join(cache, entry)
-    if (entry !== name && entry !== 'latest' && Date.now() - statSync(path).mtimeMs > 10 * 60_000) rmSync(path, { recursive: true, force: true })
+  const current = () => {
+    let dir: string | undefined
+    try { dir = join(cache, readFileSync(latest, 'utf8').trim()) } catch { return undefined }
+    const stamp = stampOf(dir)
+    return stamp && stamp.source === sourceHash(stamp.sources.map((file) => join(repo, file))) ? dir : undefined
   }
-  return join(cache, name)
+  return current() ?? withLock(join(cache, 'lock'), async () => {
+    const built = current()
+    if (built) return built
+    const name = `${Date.now().toString(36)}-${process.pid}`
+    await buildTypes(join(cache, name))
+    writeFileSync(`${latest}.${process.pid}`, name)
+    renameSync(`${latest}.${process.pid}`, latest)
+    for (const entry of readdirSync(cache)) {
+      if (entry === name || !/^[0-9a-z]+-\d+$/.test(entry)) continue
+      const path = join(cache, entry)
+      const stat = statSync(path, { throwIfNoEntry: false })
+      if (stat && Date.now() - stat.mtimeMs > 10 * 60_000) rmSync(path, { recursive: true, force: true })
+    }
+    return join(cache, name)
+  })
 }
 
 // `node packages/sdk/types.ts <dir>`: build them there.

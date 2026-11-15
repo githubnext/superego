@@ -4,7 +4,8 @@
 // a profile's folder links its node_modules there and has a tsconfig.json with nothing of this computer in it, so a
 // project's profile can be committed as it is.
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
+import { withLock } from './lock.ts'
 
 /** The types folder's stamp: a hash of its declarations. */
 const stampOf = (dir: string): string | undefined => {
@@ -21,22 +22,27 @@ function copy(from: string, to: string) {
   }
 }
 
-/** `<dataDir>/types`, made the same as `from` (built types) unless it is already. Returns its path. */
-export function installTypes(from: string, dataDir: string): string {
+/**
+ * `<dataDir>/types`, made the same as `from` (built types) unless it is already. Returns its path. One process copies
+ * at a time (the app as it starts, a command line, another): the others wait, then find it done.
+ */
+export async function installTypes(from: string, dataDir: string): Promise<string> {
   const dir = join(dataDir, 'types')
   const want = stampOf(from)
   if (!want) throw new Error(`No types in ${from}`)
   if (stampOf(dir) === want) return dir
-  // Beside it, then swapped in: an editor reading it never sees half a copy.
-  const temp = `${dir}.${process.pid}.tmp`
-  rmSync(temp, { recursive: true, force: true })
-  mkdirSync(dirname(dir), { recursive: true })
-  copy(from, temp)
-  const old = `${dir}.${process.pid}.old`
-  if (existsSync(dir)) renameSync(dir, old)
-  renameSync(temp, dir)
-  rmSync(old, { recursive: true, force: true })
-  return dir
+  return withLock(`${dir}.lock`, () => {
+    if (stampOf(dir) === want) return dir
+    // Beside it, then swapped in: an editor reading it never sees half a copy.
+    const temp = `${dir}.${process.pid}.tmp`
+    rmSync(temp, { recursive: true, force: true })
+    copy(from, temp)
+    const old = `${dir}.${process.pid}.old`
+    if (existsSync(dir)) renameSync(dir, old)
+    renameSync(temp, dir)
+    rmSync(old, { recursive: true, force: true })
+    return dir
+  })
 }
 
 /** A profile's tsconfig.json: its files checked as the daemon and the window run them, against node_modules' types. */
