@@ -5,7 +5,7 @@ Either can be left out. Everything either half registers is its own, and goes wh
 
 ## The big picture
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/big-picture-dark.svg"><img src="writing-extensions/big-picture.svg" alt="The daemon half gives the agent tools; the UI half dispatches actions to it, calls its methods and watches its live values"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="guide/big-picture-dark.svg"><img src="guide/big-picture.svg" alt="The daemon half gives the agent tools; the UI half dispatches actions to it, calls its methods and watches its live values"></picture>
 
 | The UI half wants to… | The daemon half offers | The UI uses |
 |---|---|---|
@@ -16,9 +16,9 @@ Either can be left out. Everything either half registers is its own, and goes wh
 
 Where they come from:
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/loading-dark.svg"><img src="writing-extensions/loading.svg" alt="Bundled extensions are built into the app; profiles in ~/.superego/profiles or a project's .superego/profiles name their extensions and UI modules"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="guide/loading-dark.svg"><img src="guide/loading.svg" alt="Bundled extensions are built into the app; profiles in ~/.superego/profiles or a project's .superego/profiles name their extensions and UI modules"></picture>
 
-A profile's halves import `'superego'` and `'superego/ui'`. A bundled extension's halves import the packages directly (`@superego/daemon`, `@superego/app/ui`, …), see [bundled.md](../packages/cli/skill/bundled.md).
+A profile's halves import `'superego'` and `'superego/ui'`. A bundled extension's halves import the packages directly (`@superego/daemon`, `@superego/app/ui`, …), see [bundled.md](bundled.md).
 
 ### What to import
 
@@ -50,6 +50,10 @@ gives them: a `tsconfig.json`, and `node_modules` linked to `~/.superego/types`,
 checks the types. Send one of the profile's threads a message and it's there; after an edit, the next turn loads it
 again (`superego extension reload` loads it now). A project's profile runs as it was allowed: allow it again after
 editing (`superego profile allow`).
+
+A thread keeps the profile it started with, so a profile made after it started (the first `default`, made by `new`)
+doesn't reach it: not the thread that made it, nor the user's other open threads. Start a new thread to use it, or move
+an idle one onto it (`superego do thread.setProfile --id <thread> --profile <name>`).
 
 ## A first extension, end to end
 
@@ -111,7 +115,7 @@ shows the thread. After an edit, the daemon half reloads on the thread's next tu
 ## The build queue, two ways
 
 A project's build queue: a tool the agent queues work with, the thread's queue beside it, a Cancel button on each
-build, and a shortcut to show it. Both versions are in [`docs/examples`](examples), each a profile folder to copy,
+build, and a shortcut to show it. Both versions are in [`examples/`](examples), each a profile folder to copy,
 with its tests; a test builds both from there as an author would.
 
 The queue is per thread, so it's a **scoped value**: each thread's in its own scope, and a window showing a thread
@@ -251,7 +255,7 @@ it('queues builds and shows the thread its own', async () => {
   `render({ view, place, thread })` (`text()`, `find(selector)`, `click(text)`), `placed(place, { thread })`,
   `press(keys)`, `dispatch`, `select`, `setMachine(id, { state: 'disconnected' })`, `installProfile`, `until`, and
   `unmount()`, which tears every extension down (their `signal`s abort).
-- The cases worth a test each, in [the kit's own](../packages/sdk/test/kit.test.ts): teardown (`unmount`, an edit and
+- The cases worth a test each, in the kit's own tests (`packages/sdk/test/kit.test.ts` in Superego's source): teardown (`unmount`, an edit and
   `reload`), set up twice (`installProfile` again), a helper edited, one profile on two machines (two daemons in one
   window), a machine away or older (`setMachine`, `fakeMachine({ features: [], extensions: [{ name, version: '0.9.0' }] })`),
   and a phone with no spaces (`mountUi({ narrow: true })`).
@@ -325,11 +329,12 @@ place, and the window's console has why.
 | `settings(ui, Component)` | draw under a settings section that names `ui` |
 | `dispatch(id, params, { machine })` | run any action outside React |
 
-Names: everything is `<extension>.<something>`, except tool and pane kind names. In components: `useSelection`,
-`useMachines`, `useSessions`, `useValue(machine, key, { scope })`, `useMethod(machine.id, method, params, { enabled, refresh })` (a method's answer, with `error`, `loading` and `refetch`; called again as `params` or `refresh` change, answers to stale calls dropped), `useDispatch`, `call`, `has(machine, 'ext:x')` (whether a machine has an
+Names: everything is `<extension>.<something>`, except tool and pane kind names. In components: `useThreads`,
+`useAllThreads`, `useSessions`, `useSelection`, `useMachines` (what each gives, and a thread's `status`: "Reading threads" in
+[ui.md](ui.md)), `useValue(machine, key, { scope })`, `useMethod(machine.id, method, params, { enabled, refresh })` (a method's answer, with `error`, `loading` and `refetch`; called again as `params` or `refresh` change, answers to stale calls dropped), `useDispatch`, `call`, `has(machine, 'ext:x')` (whether a machine has an
 extension set up and switched on now, kept current; UI-only extensions never appear; `'ext:x@^1.2'` at a version in
 a range, see [Versions and compatibility](#versions-and-compatibility)), `version(machine, 'x')`; in panes `<PaneHeader>` and
-`useTabNote`; in rows `<ThreadRef machine id>`; `transcriptLinks(machine, thread)`, the links a transcript shows; for a list to pick from (quick open, say), `<Picker label placeholder items filter row onPick onClose digits>`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](../packages/cli/skill/daemon.md), [ui.md](../packages/cli/skill/ui.md).
+`useTabNote`; in rows `<ThreadRef machine id>`; `transcriptLinks(machine, thread)`, the links a transcript shows; for a list to pick from (quick open, say), `<Picker label placeholder items filter row onPick onClose digits>`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](daemon.md), [ui.md](ui.md).
 
 Machines update at different times, so a window can meet an older or newer daemon: a UI half that calls its daemon
 half checks `has(machine, 'ext:x@<range>')` first, and says so, or offers nothing, when it's missing. See
@@ -455,7 +460,7 @@ are optional, and a link to a file or a page has to work in a thread that goes w
 
 ## Views and the layout
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/places-dark.svg"><img src="writing-extensions/places.svg" alt="The window: the rail and the open space beside it, the thread with its header, transcript and composer.above, the aside, panes from the pane menu with the editor's bar and side; the title bar's stand-in, a phone's drawer and an overlay over everything"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="guide/places-dark.svg"><img src="guide/places.svg" alt="The window: the rail and the open space beside it, the thread with its header, transcript and composer.above, the aside, panes from the pane menu with the editor's bar and side; the title bar's stand-in, a phone's drawer and an overlay over everything"></picture>
 
 An extension declares **views**: what it offers, and the kinds of place each fits. The shell has **places**, and knows
 no extension. The **layout** decides what goes where: each view's `default`, then the user's changes, kept in the app
@@ -601,7 +606,7 @@ says it once for all.
 
 ## Lifecycle and ownership
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/lifecycle-dark.svg"><img src="writing-extensions/lifecycle.svg" alt="Set up, registrations owned by the extension, torn down when its profile changes or the daemon stops, then set up again"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="guide/lifecycle-dark.svg"><img src="guide/lifecycle.svg" alt="Set up, registrations owned by the extension, torn down when its profile changes or the daemon stops, then set up again"></picture>
 
 Each set-up of an extension, in either half, has one lifetime: everything it registers is owned by it, and teardown
 (its profile reloaded or gone, its UI revoked, the daemon stopping) ends all of it at once.
@@ -666,7 +671,7 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
 
 ## A thread's life
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/thread-life-dark.svg"><img src="writing-extensions/thread-life.svg" alt="creating makes a thread (a hook may move where it works and give it state, or refuse); created; turnStart and turnEnd around each run; archiving then archived on the way to archived, unarchiving then unarchived on the way back"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="guide/thread-life-dark.svg"><img src="guide/thread-life.svg" alt="creating makes a thread (a hook may move where it works and give it state, or refuse); created; turnStart and turnEnd around each run; archiving then archived on the way to archived, unarchiving then unarchived on the way back"></picture>
 
 <!-- check: daemon; declare function makeWorktree(top: string): Promise<{ path: string; branch: string }>; declare function removeWorktree(path: string): Promise<void>; declare function removeIfClean(path: string): Promise<boolean> -->
 ```ts
@@ -731,7 +736,7 @@ superego.thread<{ path: string; branch: string }>({   // the state its creating 
 
 Bundled extensions also declare whether they're required, once, in `about` (spread into both halves):
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="writing-extensions/required-dark.svg"><img src="writing-extensions/required.svg" alt="A required extension is always on; an optional one can be switched off per machine or left out by a profile, and that thread then has none of its agent parts or UI"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="guide/required-dark.svg"><img src="guide/required.svg" alt="A required extension is always on; an optional one can be switched off per machine or left out by a profile, and that thread then has none of its agent parts or UI"></picture>
 
 Only the sidebar (`threads`), `worktrees` (archiving removes a folder and unarchiving puts it back: never switched off
 between the two) and the core's `markdown` are required. Everything else is optional, `ego` too, and the core's own
@@ -744,24 +749,27 @@ to each machine, which lists it and lets profiles do without it.
 
 ## Real ones to read
 
+The build queue ships with this guide, in [`examples/`](examples) beside it. The bundled extensions are in Superego's
+source, at `extensions/<name>/src`, so only a checkout has them.
+
 | Extension | Shows |
 |---|---|
-| [`tasks`](../extensions/tasks/src) | the smallest: two tools and a prompt section; a `work` divider |
-| [`suggestions`](../extensions/suggestions/src) | a hook, a side call, a `scopedValue` per thread, a `composer.above` slot |
-| [`ask-user`](../extensions/ask-user/src) | a tool that waits on you: `status`, an action to answer, a `scopedValue` per thread (and the old list kept for older windows), a `tool` view |
-| [`images`](../extensions/images/src) | a tool with `{ fold: false }`, files kept with `threads.attachments` |
-| [`git`](../extensions/git/src) | Changes: a `method` (a read), a `pane` the agent is told of, built on the kit's `Diff`, an `action` with keys |
-| [`web-panes`](../extensions/web-panes/src) | two pane kinds and nothing else; `urls: true` makes web links open in one |
-| [`skills`](../extensions/skills/src) | a prompt section, a `submit` transform, a `method`; `composer.complete` and `composer.sentWith` |
-| [`files`](../extensions/files/src) | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
-| [`links`](../extensions/links/src) | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
-| [`unread`](../extensions/unread/src) | UI only: a view in the rail `withoutSpaces` and in a phone's `drawer`, an action with keys reading sessions, an app setting |
-| [`notifications`](../extensions/notifications/src) | UI only: `on('thread.status')`, `on('auth.rejected')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
-| [`threads`](../extensions/threads/src) | the required one: views (the list a `space` with a `rail` of its own, details in the `aside` with ⌘I, the model in the `header`), app settings, tool rows and a `link`; its daemon half is two other, optional extensions: `thread-tools`, on `superego.threads`, and `thread-reports`, report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by a submit transform's `by`) |
-| [`worktrees`](../extensions/worktrees/src) | `thread` hooks (`creating` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `thread.crumb` chip, a `thread.badge` mark and a `newThreadField` |
 | [`build-queue`](examples/build-queue), [`build-queue-ui`](examples/build-queue-ui) | a profile's extension both ways: a tool, a `scopedValue` per thread, a Cancel action, a data view or a UI half's view, a shortcut; tests on `superego/testing` |
-| [`mcp-servers`](../extensions/mcp-servers/src) | a settings section drawn by a component of its own (`settings(ui, …)`) from a live value, with dialogs and `SignInFlow`; tool rows by prefix (`mcp__*`) with a call's own `verb` and images; a `header` view, a `thread.details` slot and a `composer.above` notice, all from the thread's facts |
-| [`ego`](../extensions/ego/src) | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `value` older windows follow (the rail button reads the selection); a view in the `rail`, and in a phone's `drawer` |
+| `tasks` | the smallest: two tools and a prompt section; a `work` divider |
+| `suggestions` | a hook, a side call, a `scopedValue` per thread, a `composer.above` slot |
+| `ask-user` | a tool that waits on you: `status`, an action to answer, a `scopedValue` per thread (and the old list kept for older windows), a `tool` view |
+| `images` | a tool with `{ fold: false }`, files kept with `threads.attachments` |
+| `git` | Changes: a `method` (a read), a `pane` the agent is told of, built on the kit's `Diff`, an `action` with keys |
+| `web-panes` | two pane kinds and nothing else; `urls: true` makes web links open in one |
+| `skills` | a prompt section, a `submit` transform, a `method`; `composer.complete` and `composer.sentWith` |
+| `files` | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
+| `links` | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
+| `unread` | UI only: a view in the rail `withoutSpaces` and in a phone's `drawer`, an action with keys reading sessions, an app setting |
+| `notifications` | UI only: `on('thread.status')`, `on('auth.rejected')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
+| `threads` | the required one: views (the list a `space` with a `rail` of its own, details in the `aside` with ⌘I, the model in the `header`), app settings, tool rows and a `link`; its daemon half is two other, optional extensions: `thread-tools`, on `superego.threads`, and `thread-reports`, report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by a submit transform's `by`) |
+| `worktrees` | `thread` hooks (`creating` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `thread.crumb` chip, a `thread.badge` mark and a `newThreadField` |
+| `mcp-servers` | a settings section drawn by a component of its own (`settings(ui, …)`) from a live value, with dialogs and `SignInFlow`; tool rows by prefix (`mcp__*`) with a call's own `verb` and images; a `header` view, a `thread.details` slot and a `composer.above` notice, all from the thread's facts |
+| `ego` | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `value` older windows follow (the rail button reads the selection); a view in the `rail`, and in a phone's `drawer` |
 
-Diagram sources are the `.mmd` files in [writing-extensions/](writing-extensions/); re-render with the `diagram` skill
+Diagram sources are the `.mmd` files in [guide/](guide/); re-render with the `diagram` skill
 (`bun <skill>/scripts/render.ts x.mmd x.svg`, and `--dark` for `x-dark.svg`).

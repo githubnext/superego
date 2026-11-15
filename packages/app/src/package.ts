@@ -81,8 +81,9 @@ export async function packageApp(root: string, app: AppConfig, options: PackageO
     directories: { output, buildResources: join(stage, 'resources') },
     files: ['out/**', 'resources/**', 'package.json'],
     asar: true,
-    // Native modules (copied into out/node_modules by the build) are loaded from the disk, not the archive.
-    asarUnpack: ['out/node_modules/**'],
+    // Native modules (copied into out/node_modules by the build) are loaded from the disk, not the archive; the skill
+    // (out/skill) is read there by agents, whose shells can't read the archive.
+    asarUnpack: ['out/node_modules/**', 'out/skill/**'],
     npmRebuild: false,
     mac: {
       target: ['dir'],

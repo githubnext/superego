@@ -1,6 +1,6 @@
 # Working on Superego itself
 
-New to this? Start with [docs/writing-extensions.md](https://github.com/mikker/superego/blob/main/docs/writing-extensions.md): the big picture, a first extension end to end, and a cheat sheet.
+New to this? Start with [the guide](guide.md) (`superego --skill guide`): the big picture, a first extension end to end, and a cheat sheet.
 
 For changes to the Superego repository (github.com/mikker/superego): the core, or an extension bundled with the app.
 A profile is the way to extend Superego for a project or for yourself; bundle an extension only when every Superego
@@ -76,7 +76,7 @@ Then wire it in:
 Bundled extensions get more than a profile's:
 
 - **Views in the window's places**, not only a thread's: `superego.view(id, { title, icon, context, fits, default,
-  narrow, withoutSpaces, order, component })` (see "Views and the layout" in `docs/writing-extensions.md`). A `space`
+  narrow, withoutSpaces, order, component })` (see "Views and the layout" in `guide.md`). A `space`
   is a rail button (its `icon`, or its own `rail` component) and the sidebar while open (`fold`: the action, given
   `{ on }`, that folds it into the rail as the sidebar's edge is dragged narrow); `rail` is a button there that
   isn't a space (Ego's, `order: 10`); `drawer` the foot of a phone's drawer, beside Settings; `titlebar` the title
@@ -113,11 +113,11 @@ Bundled extensions get more than a profile's:
   (`has(machine, 'ext:orders@<2')`; `about` says the extension's `version` and the extension `api` it needs). Renaming
   a method or action keeps the old name as an alias until a milestone: an entry in `ALIASES`
   (`packages/protocol/src/compat.ts`), from which the daemon's `MOVED_*` are read. See "Versions and compatibility" in
-  `docs/writing-extensions.md`.
+  the guide (`guide.md`).
 
 ## Tests
 
-Use `superego/testing` (`@superego/sdk/testing`; "Testing" in `docs/writing-extensions.md`): `testDaemon({ extensions:
+Use `superego/testing` (`@superego/sdk/testing`; "Testing" in `guide.md`): `testDaemon({ extensions:
 [yours], model: [callTool(…), say(…)] })` runs the daemon half against a real daemon with a scripted model, and
 `mountUi({ extensions: [yours], machines: [fakeMachine({ … }) or daemonMachine(daemon)] })` the UI half in the window's
 own registry and shell. Older tests set up the same by hand (`extensions/tasks/test/daemon.test.ts`).

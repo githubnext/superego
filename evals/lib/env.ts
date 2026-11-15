@@ -4,10 +4,10 @@
 //
 //   <run>/home                 HOME for the daemon and everything it runs
 //   <run>/home/.superego       SUPEREGO_HOME: settings, threads, profiles
-//   <run>/home/.agents         SUPEREGO_AGENTS: skills/superego/SKILL.md, the skill as shipped (out/skill/SKILL.md)
+//   <run>/home/.agents         SUPEREGO_AGENTS: empty; the skills extension offers the app's own `superego` skill (out/skill)
 //   <run>/home/code/myproject  the user's project: a small git repository, where a plain thread starts
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Install } from './install.ts'
@@ -35,9 +35,8 @@ export async function makeWorld(dir: string, install: Install, { model, reuse = 
   const dataDir = join(home, '.superego')
   const agents = join(home, '.agents')
   const project = join(home, 'code', 'myproject')
-  for (const d of [dataDir, join(agents, 'skills', 'superego'), project, join(dir, 'tmp')]) mkdirSync(d, { recursive: true })
+  for (const d of [dataDir, join(agents, 'skills'), project, join(dir, 'tmp')]) mkdirSync(d, { recursive: true })
   if (!reuse) {
-    cpSync(join(install.out, 'skill', 'SKILL.md'), join(agents, 'skills', 'superego', 'SKILL.md'))
     writeFileSync(join(project, 'README.md'), '# myproject\n\nA small project of mine.\n')
     const git = (...args: string[]) => execFileSync('git', args, { cwd: project, stdio: 'ignore', env: { ...gitEnv, HOME: home } })
     git('init', '-q', '-b', 'main')

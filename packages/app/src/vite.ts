@@ -26,7 +26,7 @@ export function superegoConfig(root: string) {
         // The commit it's built from, written in: a packaged app has no checkout to ask.
         { name: 'superego-commit', writeBundle: (options) => writeCommit(root, options.dir!) },
         { name: 'superego-native', writeBundle: (options) => copyNative(root, resolve(options.dir!, '../node_modules')) },
-        // The CLI's skill pages, where its build looks for them (out/main/cli.js → out/skill).
+        // The `superego` skill (the CLI prints it, the daemon offers it to threads), where both look for it: out/skill.
         { name: 'superego-cli-skill', writeBundle: (options) => { if (existsSync(cli)) cpSync(skill(root), resolve(options.dir!, '../skill'), { recursive: true }) } },
         // Types for profile authors (out/types), which the app keeps current in <dataDir>/types and `<id> profile types`
         // links profiles to: built from the SDK's sources, again only when those changed.

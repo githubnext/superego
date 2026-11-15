@@ -226,7 +226,7 @@ once after each boot: `box run superego daemon restart`. (The app's ssh has no t
 
 ## Profiles
 
-Writing your first extension (a tool, a pane, where things show up): [docs/writing-extensions.md](docs/writing-extensions.md).
+Writing your first extension (a tool, a pane, where things show up): [packages/cli/skill/guide.md](packages/cli/skill/guide.md) (`superego --skill guide`).
 
 ```sh
 superego profile new            # .superego/profiles/default/profile.ts in this project (allowed, since you made it)

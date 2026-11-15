@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
 import { DATA_VIEWS, defineApp, PROTOCOL_VERSION, type DataViewInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
-import skills from '../src/daemon.ts'
+import skills, { skillsExtension } from '../src/daemon.ts'
 
 const app = defineApp({ name: 'test', id: 'skillstest' })
 let dir: string
@@ -27,9 +27,9 @@ const until = async (check: () => boolean | Promise<boolean>) => {
   throw new Error('timed out')
 }
 
-async function open() {
+async function open(extension = skills) {
   process.env.SKILLSTEST_MODEL = 'faux'
-  const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [skills] })
+  const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [extension] })
   const server = await listen(daemon, join(dir, 's.sock'))
   const { peer, socket } = await connectSocket(join(dir, 's.sock'))
   await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
@@ -102,5 +102,21 @@ it("keeps `without: ['skills', 'agents-md']` working: two extensions, each left 
   const agentsOnly = await send(peer, 'do $commit')
   expect(agentsOnly.content).toBe('do $commit')
   expect(agentsOnly.all).toContain('This project uses pnpm.')
+  await close()
+})
+
+it("offers the app's own skills from where they are, a skill of the same name in the agents' folder before them", async () => {
+  const own = async (folder: string, name: string, description: string) => {
+    await mkdir(join(dir, 'app', folder), { recursive: true })
+    await writeFile(join(dir, 'app', folder, 'SKILL.md'), `---\nname: ${name}\ndescription: ${description}\n---\n\nRead guide.md beside this.\n`)
+    return join(dir, 'app', folder)
+  }
+  const { peer, close } = await open(skillsExtension({ own: [await own('skill', 'superego', 'Use and extend Superego.'), await own('other', 'commit', 'The app\'s commits.')] }))
+  expect(await peer.call('skills.list', {})).toEqual([
+    { name: 'commit', description: 'Write commit messages.' }, { name: 'secret', description: 'Only by name.' }, { name: 'superego', description: 'Use and extend Superego.' },
+  ])
+  const { all, content } = await send(peer, 'build it with $superego')
+  expect(all).toContain(`<skill name=\\"superego\\" location=\\"${join(dir, 'app', 'skill', 'SKILL.md')}\\">Use and extend Superego.</skill>`)
+  expect((content as { text?: string }[])[1]!.text).toContain(`paths in it are relative to ${join(dir, 'app', 'skill')}.\n\nRead guide.md beside this.`)
   await close()
 })

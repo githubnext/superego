@@ -1,8 +1,8 @@
-// Skills from ~/.agents/skills, the folder agents share: each a folder with a SKILL.md (its name and description in
-// front matter, its instructions below). The agent sees the skills' names and descriptions and reads one when it fits;
+// Skills from ~/.agents/skills, the folder agents share, and the app's own: each a folder with a SKILL.md (its name and
+// description in front matter, its instructions below). The agent sees the skills' names and descriptions and reads one when it fits;
 // a message that names one with `$name` or `/skill:name` brings that skill's instructions along with it.
 import { readdir, readFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { quote } from './shared.ts'
 
 export type Skill = {
@@ -35,15 +35,18 @@ export function frontMatter(source: string): { data: Record<string, string>; bod
   return { data, body: source.slice(match[0].length) }
 }
 
-/** The skills in `dir` (`<dir>/<folder>/SKILL.md`), by name. A folder without a SKILL.md isn't one. */
-export async function listSkills(dir: string): Promise<Skill[]> {
+/**
+ * The skills in `dir` (`<dir>/<folder>/SKILL.md`), then those in `own` (each a skill's folder), by name; the first of a
+ * name wins. A folder without a SKILL.md isn't one.
+ */
+export async function listSkills(dir: string, own: string[] = []): Promise<Skill[]> {
   const folders = await readdir(dir).catch(() => [] as string[])
-  const skills = await Promise.all(folders.filter((name) => !name.startsWith('.')).map(async (folder): Promise<Skill | undefined> => {
-    const path = join(dir, folder, 'SKILL.md')
+  const skills = await Promise.all([...folders.filter((name) => !name.startsWith('.')).map((name) => join(dir, name)), ...own].map(async (folder): Promise<Skill | undefined> => {
+    const path = join(folder, 'SKILL.md')
     const source = await readFile(path, 'utf8').catch(() => undefined)
     if (source === undefined) return undefined
     const { data } = frontMatter(source)
-    const name = (data.name || folder).trim()
+    const name = (data.name || basename(folder)).trim()
     if (!/^[\w][\w.-]*$/.test(name)) return undefined
     return { name, description: data.description ?? '', path, manual: data['disable-model-invocation'] === 'true' }
   }))

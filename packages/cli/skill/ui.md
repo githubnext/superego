@@ -1,6 +1,6 @@
 # UI extensions
 
-New to this? Start with [docs/writing-extensions.md](https://github.com/mikker/superego/blob/main/docs/writing-extensions.md): the big picture, a first extension end to end, and a cheat sheet.
+New to this? Start with [the guide](guide.md) (`superego --skill guide`): the big picture, a first extension end to end, and a cheat sheet.
 
 A profile's UI runs in the window, for that profile's threads only (on the machine it came from): panes, things beside
 a thread, and how its tool calls look in the transcript. List modules in the profile's `ui`; each default-exports
@@ -100,10 +100,11 @@ Talking to the daemon:
 - `useValue<T>(machine.id, machine.state === 'connected', 'orders.recent')`: a daemon extension's live value, kept
   current. Undefined until it arrives, null while nothing publishes it yet (the profile hasn't loaded). However many
   components watch the same value, the window holds one subscription.
-- `useThreads(machine.id, connected)`, `useAllThreads()`, `useMachines()`, `useSelection()`: what the window knows.
+- `useThreads`, `useAllThreads`, `useSessions`, `useSelection`, `useMachines`: what the window knows ("Reading threads", below).
 
 Opening things:
 
+<!-- check: ui; declare const dispatch: import('superego/ui').Dispatch, thread: ThreadInfo -->
 ```ts
 dispatch('pane.open', { id: thread.id, kind: 'editor', params: { path: 'notes/a.md', line: 12 } }, { machine: machine.id })
 dispatch('pane.open', { id: thread.id, kind: 'preview', params: { url: 'http://localhost:3000' } }, { machine: machine.id })
@@ -127,11 +128,79 @@ Others: `useComposer()` (the message box), `useComposerClaim({ placeholder, subm
 something waits on the user), `useLocalState(key, initial)` (state kept in the window across reloads), `useShortcut(actionId)` (its key's
 label), `score` (fuzzy matching), `transcriptLinks(machine, thread)` (the links a thread's transcript shows, in order: `{ text, href, target, open(beside) }`), `h` (`React.createElement`, for modules without JSX).
 
+## Reading threads
+
+The window follows every connected machine's threads, live, with one subscription per machine however many components
+read them. A profile's UI sees them all, not just its own profile's.
+
+| Hook | Gives |
+|---|---|
+| `useThreads(machine.id)` | that machine's threads, `ThreadInfo[]`, newest first; `undefined` until the machine says (or while it's away and never answered) |
+| `useAllThreads()` | every machine's: `Record<machineId, ThreadInfo[] \| undefined>` |
+| `useSessions()` | `{ sessions, lastThread, hold }`: `sessions` in the sidebar's order, each a `Session`, `{ key, machine, root, name, threads, depth, activeAt, status }` (a project's threads, `depth` how far each is nested under the thread that started it, `status` the most pressing of theirs); `lastThread[key]` the thread last shown in it |
+| `useSelection()` | `{ selection, select, machine, thread }`: the thread shown (`selection` is `{ machine, thread }` ids, `thread` its `ThreadInfo`), and `select({ machine, thread })` to show another, or `select(undefined)` |
+| `useMachines()` | every machine, `MachineEntry`: `id`, `label`, `state` (`'connected'`, …) |
+
+Archived threads aren't in the lists, nor hidden ones (an extension's own agent, like Ego's).
+
+A `ThreadInfo` (type from `'superego/ui'`): `id`, `title`, `cwd` (where it works), `createdAt`, `activeAt` (when
+anything last happened in it: a dependency for `useMethod`'s `refresh`), `session` (`{ root, name }`: its project),
+`parent` (the thread that started it), `profile` (`{ name, scope: 'user' | 'project', dir }`; absent: none), `model`,
+`cost` (dollars), `panes` and `pane` (what's open beside it), `without` (optional extensions it goes without), `ext`
+(each extension's facts about it, by name: `ext.worktrees`), and `status`.
+
+`status` is `{ state, kind?, msg? }` (type `Status`). The states, most pressing first:
+
+| `state` | Means | `msg` |
+|---|---|---|
+| `blocked` | it needs the user: `kind` is `question` (an `ask_user`), `permission`, or `auth` (its provider refused the credentials; it goes on by itself once signed in again) | what it waits on |
+| `error` | its last run failed, and nobody has looked since | why |
+| `done` | it finished with an answer the user hasn't seen yet | what the run did, in a line (when there's a recap) |
+| `working` | a run is going | |
+| `idle` | nothing to see: never run, or its answer or failure seen (showing the thread marks it seen) | |
+
+So `done` and `error` turn `idle` once the user opens the thread: they mean "unseen", not "finished" or "failed for
+good". `StatusGlyph` draws a status as the sidebar does (`<StatusGlyph status={t.status} />`), and `statusLabel(status)`
+says it in words. To act on a change outside React, `superego.on('thread.status', …)` (the setup API, above).
+
+A board of one machine's threads, a column per state:
+
+```tsx
+// ui/board.tsx; in profile.ts: ui: ['./ui/board.tsx'], panes: { board: "every thread on this machine, by status; no params" }
+import { defineUiExtension, StatusGlyph, useSelection, useThreads, type PaneProps, type Status } from 'superego/ui'
+
+const LANES: { state: Status['state']; title: string }[] = [
+  { state: 'blocked', title: 'Needs you' }, { state: 'error', title: 'Failed' }, { state: 'working', title: 'Working' },
+  { state: 'done', title: 'Done' }, { state: 'idle', title: 'Idle' },
+]
+
+function Board({ machine }: PaneProps) {
+  const threads = useThreads(machine.id)
+  const { select } = useSelection()
+  if (!threads) return <div className="pane-empty">Loading…</div>
+  return <div className="board">{LANES.map(({ state, title }) => (
+    <section key={state}>
+      <h3>{title}</h3>
+      {threads.filter((t) => t.status.state === state).map((t) => (
+        <button key={t.id} type="button" onClick={() => select({ machine: machine.id, thread: t.id })}>
+          <StatusGlyph status={t.status} /> {t.title} <small>{t.session.name}</small>
+        </button>
+      ))}
+    </section>
+  ))}</div>
+}
+
+export default defineUiExtension({ name: 'board', setup: (superego) => superego.pane('board', { title: 'Board', component: Board, menu: true }) })
+```
+
+Every machine's instead: `Object.entries(useAllThreads())`, with `useMachines()` for each one's `label`.
+
 ## Styling
 
 Bring styles with a `<style>` element added in `setup` (a profile's UI can't import CSS), and use the theme's
 variables so it follows light and dark mode and the user's accent:
 
+<!-- check: skip -->
 ```ts
 const style = document.createElement('style')
 style.textContent = `.order-pane { padding: var(--superego-space-3); color: var(--superego-muted); border-radius: var(--superego-radius); }`

@@ -3,7 +3,7 @@
 // generation, whichever comes first), and a test fails once one is past it, so it's taken out rather than forgotten.
 // A migration stays as long as data from before it may still be opened, whatever the protocol does.
 //
-// The skew policy they serve is in docs/writing-extensions.md, "Versions and compatibility".
+// The skew policy they serve is in the guide (packages/cli/skill/guide.md), "Versions and compatibility".
 
 /**
  * A name kept on the wire after it moved, by the side that keeps it: a daemon answering an older client by the old

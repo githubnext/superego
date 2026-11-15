@@ -1,4 +1,4 @@
-// The guide's build queue (docs/examples), data-only and with a UI half, as an outside author would have it: copied
+// The guide's build queue (skill/examples), data-only and with a UI half, as an outside author would have it: copied
 // into a profile of their own, type-checked against the author types (what `superego profile types` links), and its
 // own tests run by `superego extension test`'s path.
 import { cp, mkdtemp, rm } from 'node:fs/promises'
@@ -10,7 +10,7 @@ import { setUpProfileTypes } from '@superego/client/author-types'
 import { testExtension } from '../src/extensions.ts'
 import { sharedAuthorTypes } from './author-types.ts'
 
-const examples = fileURLToPath(new URL('../../../docs/examples/', import.meta.url))
+const examples = fileURLToPath(new URL('../skill/examples/', import.meta.url))
 let dir: string
 let types: string
 beforeAll(async () => {

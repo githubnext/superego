@@ -228,9 +228,11 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     const overview = await superego(['--skill'])
     expect(overview).toMatch(/^---\nname: superego\ndescription: .+\n---\n/)
     const listed = [...overview.matchAll(/^\| `([a-z-]+)` \|/gm)].map((m) => m[1]).sort()
-    const pages = (await readdir(fileURLToPath(new URL('../skill/', import.meta.url)))).filter((f) => f !== 'SKILL.md').map((f) => f.replace(/\.md$/, '')).sort()
+    const pages = (await readdir(fileURLToPath(new URL('../skill/', import.meta.url)))).filter((f) => f.endsWith('.md') && f !== 'SKILL.md').map((f) => f.replace(/\.md$/, '')).sort()
     expect(listed).toEqual(pages)
     expect(await superego(['--skill', 'profiles'])).toMatch(/^# Profiles\n/)
+    // The guide is one of them (skill.test.ts checks the pages link only to what ships beside them).
+    expect(await superego(['--skill', 'guide'])).toMatch(/^# Writing extensions\n/)
     await expect(superego(['--skill', 'nope'])).rejects.toThrow(/Topics: bundled, cli/)
   })
 

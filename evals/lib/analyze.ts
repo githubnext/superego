@@ -12,7 +12,7 @@ export function helpUsed(entries: any[], installDir: string) {
       for (const m of text.matchAll(/superego\s+(?:help|([a-z-]+)(?:\s+[a-z-]+)?\s+(?:--help|-h))\b/g)) help.add(m[0].replace(/\s+/g, ' '))
       if (/\b(?:curl|wget)\b[^|;&]*https?:\/\/(?!wttr|api\.open-meteo|geocoding|api\.openweathermap|localhost|127\.)/.test(text)) web.add(text.slice(0, 160))
     }
-    for (const m of text.matchAll(/[\w./~-]*(?:SKILL\.md|\/skill\/[\w-]+\.md|docs\/[\w./-]+|out\/types\/[\w./-]+|\.superego\/types[\w./-]*)/g)) help.add(m[0].replace(installDir, '<install>'))
+    for (const m of text.matchAll(/[\w./~-]*(?:SKILL\.md|\/skill\/[\w./-]+|out\/types\/[\w./-]+|\.superego\/types[\w./-]*)/g)) help.add(m[0].replace(installDir, '<install>'))
     for (const m of text.matchAll(/[\w./~-]*out\/(?:main|renderer|preload)\/[\w./-]+/g)) source.add(m[0].replace(installDir, '<install>'))
     if (/Operation not permitted/.test(call.result ?? '')) blocked.add(text.slice(0, 160))
   }
@@ -28,8 +28,7 @@ export type Analysis = {
 }
 
 const HELP = `The shipped help an agent extending Superego has:
-- The superego skill: SKILL.md in its skills folder (listed in its system prompt), printed too by \`superego --skill\`; topics by \`superego --skill <topic>\`: cli, profiles, tools, daemon, ui, bundled, debugging.
-- docs/writing-extensions.md (linked from the skill as a local file in this setup) and docs/examples/ (build-queue, build-queue-ui).
+- The superego skill, offered by the app's skills extension (listed in its system prompt): SKILL.md in the app's out/skill, printed too by \`superego --skill\`; topics beside it or by \`superego --skill <topic>\`: guide (the long guide, with examples/ beside it: build-queue, build-queue-ui), cli, profiles, tools, daemon, ui, bundled, debugging.
 - The CLI: \`superego help\`, \`superego extension new|test|reload\`, \`superego profile new|types|allow\`, \`superego actions\`, \`superego do\`.
 - The SDK's types: a profile's node_modules linked to ~/.superego/types (declarations of 'superego', 'superego/ui', 'superego/testing').
 Anything else (reading the app's bundled JavaScript in out/main or out/renderer, guessing at paths, web searches, the GitHub repository) is a detour outside the help.`
@@ -43,7 +42,7 @@ ${notes.map((n) => `- ${n.slice(0, 600)}`).join('\n')}
 
 Read the transcript below (every thread of the run; tool results are cut) and report where the agent got lost, as JSON only, no prose around it:
 {
-  "docs_read": ["each piece of shipped help it read, in order: e.g. 'superego --skill', 'superego --skill ui', 'docs/writing-extensions.md', 'docs/examples/build-queue-ui', 'superego extension new --help', 'types: superego/ui index.d.ts'"],
+  "docs_read": ["each piece of shipped help it read, in order: e.g. 'superego --skill', 'superego --skill ui', 'superego --skill guide', 'skill/examples/build-queue-ui', 'superego extension new --help', 'types: superego/ui index.d.ts'"],
   "wrong_guesses": [{"what": "a wrong belief about Superego's API, CLI or behaviour it acted on (an import that doesn't exist, a wrong hook signature, a wrong path or command)", "evidence": "the call or error that shows it, briefly", "fix": "the concrete change to the skill, docs, SDK or CLI that would have prevented it"}],
   "detours": [{"what": "time spent outside the shipped help: reading the app's bundled code, searching the web, guessing, probing the sandbox", "evidence": "briefly"}],
   "stumbles": [{"summary": "one line, specific: what went wrong or was slow", "area": "skill|docs|sdk|cli|ego|daemon|eval-setup|other", "cost": "minor|major|fatal", "fix": "a concrete change to the docs, skill, SDK or CLI (name the file or command)"}],

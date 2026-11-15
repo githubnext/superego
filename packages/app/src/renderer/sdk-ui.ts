@@ -24,10 +24,11 @@ export type { Completion, CompletionProvider, CompletionWord, ComposerWhere, Sen
 export { call, has, useAppSetting, useMethod, useValue, version, type MethodState } from './client.ts'
 export { useDispatch } from './Shell.tsx'
 export { useAllThreads, useMachines, useSelection, useSessions, useThreads, type Selection } from './state.tsx'
+export type { Session } from './sessions.ts'
 export { keyLabel, useShortcut } from './keys.ts'
 export { useComposer, useComposerClaim, type Composer, type ComposerClaim } from './ThreadView.tsx'
 export { EXTENSION_API } from '@superego/protocol'
-export type { Json, ThreadInfo } from '@superego/protocol'
+export type { Json, Status, StatusState, ThreadInfo } from '@superego/protocol'
 export type { MachineEntry } from '../shared.ts'
 
 // Components to build from; `h` for a module that isn't JSX.

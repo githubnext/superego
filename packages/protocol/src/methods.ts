@@ -12,7 +12,7 @@ import type { MachineVersion } from './version.ts'
  * The protocol's generation. It changes only for a break no feature flag can bridge; a daemon and client of different
  * generations refuse each other. Within one, the core's methods and features only grow (`released.json` holds what was
  * released, and a test keeps it there), each new one announced in `FEATURES`. Not the extension API (`EXTENSION_API`)
- * nor the release (`MachineVersion`): see docs/writing-extensions.md, "Versions and compatibility".
+ * nor the release (`MachineVersion`): see the guide (packages/cli/skill/guide.md), "Versions and compatibility".
  */
 export const PROTOCOL_VERSION = 1
 

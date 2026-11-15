@@ -129,8 +129,13 @@ superego profile revoke-ui default -m box    # Settings → Machines lists them 
 
 ## When changes apply
 
+- **A thread keeps the profile it started with.** A profile made after a thread started (your first `default`, a
+  project's new one) never reaches that thread, the one that wrote it included, so the user's open threads don't gain
+  its tools: say so. Start a new thread to use it (`superego -p "…"`), or move an idle one onto it with `superego do
+  thread.setProfile --id <thread> --profile <name>` (refused while it's working).
 - The daemon loads a profile when a thread with it takes a turn, and again when its files changed: edit, then send the
-  thread another message. Daemon extensions are torn down (their cleanup runs) and set up again.
+  thread another message (a thread mid-run keeps what it started the run with). `superego extension reload` loads it
+  now, and says why if it doesn't load. Daemon extensions are torn down (their cleanup runs) and set up again.
 - The window loads a profile's UI when it shows one of its threads, and again once the thread moves on after a change.
 - `model`, `thinking` and `worktree` apply where a thread hasn't chosen its own.
 

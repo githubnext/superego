@@ -14,7 +14,8 @@ import images from '@superego/images/daemon'
 import mcpServers from '@superego/mcp-servers/daemon'
 import paneUi from '@superego/pane-ui/daemon'
 import replyUi from '@superego/reply-ui/daemon'
-import skills from '@superego/skills/daemon'
+import { skillsExtension } from '@superego/skills/daemon'
+import { SKILL_DIR } from '@superego/cli/skill'
 import suggestions from '@superego/suggestions/daemon'
 import tasks from '@superego/tasks/daemon'
 import terminal from '@superego/terminal/daemon'
@@ -26,6 +27,9 @@ import app from '../superego.config.ts'
 
 // The window's build, for Web access: next to this file once built (out/main → out/renderer); from source, the last build.
 const webRoot = [join(import.meta.dirname, '../renderer'), join(import.meta.dirname, '../out/renderer')].find((dir) => existsSync(join(dir, 'index.html')))
+
+// The skills extension offers the app's own `superego` skill (out/skill once built), beside those in ~/.agents/skills.
+const skills = skillsExtension({ own: [SKILL_DIR] })
 
 // The daemon links to the machines this computer reaches (the same list the app and `superego machines` keep), to serve
 // them to browsers and agents (see the daemon's relay.ts).

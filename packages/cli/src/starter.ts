@@ -165,8 +165,8 @@ An extension of this profile${kind === 'ui' ? ', with a daemon half and a UI hal
 ${kind === 'ui' ? `- \`ui.tsx\`: the items beside the thread (\`${name}.list\`, in the aside), and ⌘⇧Y to show or hide them.\n` : `- \`${name}.view\`: the items beside the thread, drawn by the window from data.\n`}- \`shared.ts\`: what it is (its \`version\` and the extension \`api\` it needs) and the names both halves use.
 - \`${name}.test.ts\`: run it with \`superego extension test ${name}\`, which checks the types too.
 
-Send one of this profile's threads a message: it loads with the turn${kind === 'ui' ? ', and the window loads the UI as it shows the\nthread' : ''}. After an edit, the next turn loads it again (or \`superego extension reload\`). See
-[Writing extensions](https://github.com/mikker/superego/blob/main/docs/writing-extensions.md).
+Send one of this profile's threads a message: it loads with the turn${kind === 'ui' ? ', and the window loads the UI as it shows the\nthread' : ''}. After an edit, the next turn loads it again (or \`superego extension reload\`). A thread started before
+the profile was made doesn't have it: start a new one. The guide: \`superego --skill guide\`.
 `
 
 const PROFILE = (name: string) => `import { defineProfile } from 'superego'

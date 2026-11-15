@@ -3,7 +3,7 @@
 // this computer or, with `-m <machine>`, on any machine the app knows. `<id> connect` is what `ssh <host> <id> connect`
 // runs on the far side. An app's bin calls `runCli(app, { appDir, bin })`.
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, openSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { createConnection } from 'node:net'
 import { hostname } from 'node:os'
@@ -15,6 +15,7 @@ import { devApp } from './dev-app.ts'
 import { authorTypes, newExtension, testExtension } from './extensions.ts'
 import { setUpProfileTypes, type ProfileTypes } from '@superego/client/author-types'
 import { formatReport } from './inspect.ts'
+import { skill } from './skill.ts'
 import { ACTIONS as MCP_ACTIONS, SECTION as MCP_SECTION, type CheckResult as McpCheck, type LogResult as McpLog, type SectionData as McpServers, type ServerInfo as McpServer, type ThreadServers } from '@superego/mcp-servers/shared'
 import {
   checkIdentity, collectProfileUi, controlPath, filesOf, hashProfileUi, loginArgs, machineHub, MachineStore, masterAlive, openLocal, openMachine, routeOf, runUpdate, UiAllowStore, updateScript,
@@ -892,21 +893,6 @@ async function mcpServersCommand(sub: string | undefined, rest: string[], values
     return print(checked.server, () => { table([line(checked.server)]); if (checked.server.error) console.log(checked.server.error) })
   }
   throw new RpcError('usage', `Unknown: ${app.id} mcp-servers ${sub}. See ${app.id} --help`)
-}
-
-// ── The skill ───────────────────────────────────────────────────────────────────────────────────────────────────────
-
-// A skill for agents, in tiers: `--skill` prints SKILL.md (what Superego is, a quick reference, and an index), which a
-// skills folder can keep as is; `--skill <topic>` prints one topic in depth. They live in ../skill.
-const SKILL_DIR = fileURLToPath(new URL('../skill/', import.meta.url))
-
-/** The topics `--skill <topic>` prints: every page beside SKILL.md. */
-export const skillTopics = () => readdirSync(SKILL_DIR).filter((f) => f.endsWith('.md') && f !== 'SKILL.md').map((f) => f.slice(0, -3)).sort()
-
-export function skill(topic?: string): string {
-  if (!topic) return readFileSync(join(SKILL_DIR, 'SKILL.md'), 'utf8')
-  if (!skillTopics().includes(topic)) throw new RpcError('usage', `No topic ${topic}. Topics: ${skillTopics().join(', ')}`)
-  return readFileSync(join(SKILL_DIR, `${topic}.md`), 'utf8')
 }
 
 /**
