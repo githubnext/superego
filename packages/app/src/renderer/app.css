@@ -265,6 +265,9 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .queued-row__action:hover { color: var(--superego-text); background: var(--superego-hover); }
 .queued-row__now + .queued-row__remove { margin-left: -6px; }
 .composer__error { color: var(--superego-status-error); display: flex; gap: var(--superego-space-2); align-items: center; font-size: var(--superego-text-ui); margin-bottom: var(--superego-space-2); }
+/* Its profile gone: another picked, in the error's line. */
+.profile-switch { display: flex; flex-wrap: wrap; gap: var(--superego-space-2); align-items: center; }
+.profile-switch .superego-select { width: auto; color: var(--superego-text); }
 
 .settings__body { display: grid; grid-template-columns: 180px 1fr; height: 100%; }
 .settings__nav { padding: 12px 8px; border-right: 1px solid var(--superego-border); background: var(--superego-sidebar-bg); display: flex; flex-direction: column; gap: 2px; }

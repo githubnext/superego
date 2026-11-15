@@ -398,6 +398,26 @@ if (phase === 'first') {
   await setValue('.new-thread [aria-label="Project folder"]', process.env.SUPEREGO_HOME)
   await key('Enter', ['meta'])
   await until(`!document.querySelector('.new-thread') && document.querySelector('.transcript')?.textContent.includes('echo: hello from the dialog')`, 'started with the prompt')
+  // A thread whose profile is gone from under it, with none of that name left: sending offers another in the error;
+  // picked (the default), what was typed goes, and the thread runs that from now on.
+  const goneDir = `${process.env.SUPEREGO_HOME}/profiles/gone`
+  makeDir(goneDir, { recursive: true })
+  writeFileSync(`${goneDir}/profile.ts`, "import { defineProfile } from 'superego'\nexport default defineProfile({})\n")
+  await run(`window.superego.call('local', 'thread.create', { title: 'orphaned', profile: 'gone' })`)
+  rmSync(goneDir, { recursive: true })
+  await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('orphaned'))`, 'orphaned thread listed')
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('orphaned')).click()`)
+  await until(`document.querySelector('.thread__profile')?.textContent === 'gone'`, 'orphaned thread open')
+  await run(`(() => {
+    const ta = document.querySelector('.composer textarea')
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(ta, 'still there?')
+    ta.dispatchEvent(new Event('input', { bubbles: true }))
+    ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  })()`)
+  await until(`Boolean(document.querySelector('.composer__error .profile-switch select'))`, 'its profile gone: another offered')
+  await shot('profile-gone')
+  await run(`[...document.querySelectorAll('.profile-switch button')].find((b) => b.textContent === 'Send').click()`)
+  await until(`document.querySelector('.thread__profile')?.textContent === 'default' && document.querySelector('.transcript')?.textContent.includes('echo: still there?') && document.querySelector('.transcript').textContent.includes('runs the default profile now') && !document.querySelector('.composer__error')`, 'switched to the default, and sent')
   // Panes: in a git repo, the changes, the editor and an artifact the agent could have written, beside the thread.
   const { execFileSync: git } = await import('node:child_process')
   const repo = `${process.env.SUPEREGO_HOME}/repo`

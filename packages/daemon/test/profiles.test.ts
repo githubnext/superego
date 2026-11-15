@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, renameSync, symlinkSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -657,6 +657,90 @@ it("lets go of a profile whose folder is gone: its extensions and its name", asy
   const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
   expect(hello.features).not.toContain('ext:vault')
   await close()
+})
+
+/** The lines Superego wrote in a thread's transcript itself (`superego.note`). */
+async function notes(peer: RpcPeer, id: string) {
+  const { value } = await peer.call<{ value: { entries: { kind: string; data?: { text?: string } }[] } }>('thread.watch', { id })
+  return value.entries.filter((e) => e.kind === 'superego.note').map((e) => e.data?.text ?? '')
+}
+const threadOf = async (peer: RpcPeer, id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)!
+
+describe('a thread whose profile moved or vanished', () => {
+  const chief = () => join(project, '.superego', 'profiles', 'chief')
+  const yours = () => join(home, 'profiles', 'chief')
+  beforeEach(() => {
+    write(chief(), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ prompt: 'Run my day.' })\n` })
+  })
+
+  it("runs the user's profile of that name once the project's moved there, and says so", async () => {
+    const { peer, close } = await open()
+    await peer.call('profile.allow', { cwd: project, name: 'chief' })
+    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'chief', prompt: 'hi' })
+    await done(peer, thread.id)
+    mkdirSync(join(home, 'profiles'), { recursive: true })
+    renameSync(chief(), yours())
+
+    await peer.call('thread.submit', { id: thread.id, text: 'again' })
+    await done(peer, thread.id)
+    expect((await threadOf(peer, thread.id)).profile).toEqual({ scope: 'user', name: 'chief', dir: yours() })
+    expect((await agentOf(peer, thread.id)).instructions).toBe('Run my day.')
+    expect(await notes(peer, thread.id)).toEqual([expect.stringContaining(`runs yours, at ${yours()}`)])
+    await close()
+  })
+
+  it('finds it where it moved as the daemon starts, too', async () => {
+    const first = await open()
+    await first.peer.call('profile.allow', { cwd: project, name: 'chief' })
+    const thread = await first.peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'chief' })
+    await first.close()
+    mkdirSync(join(home, 'profiles'), { recursive: true })
+    renameSync(chief(), yours())
+    const { peer, close } = await open()
+    await until(async () => (await threadOf(peer, thread.id)).profile?.dir === yours())
+    expect((await threadOf(peer, thread.id)).profile?.scope).toBe('user')
+    await close()
+  })
+
+  it("still has a project's profile found this way allowed first", async () => {
+    // The user's, moved into the project.
+    mkdirSync(join(home, 'profiles'), { recursive: true })
+    renameSync(chief(), yours())
+    const { peer, close } = await open()
+    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'chief' })
+    expect(thread.profile).toMatchObject({ scope: 'user' })
+    renameSync(yours(), chief())
+
+    await expect(peer.call('thread.submit', { id: thread.id, text: 'hi' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+    expect((await threadOf(peer, thread.id)).profile).toEqual({ scope: 'project', name: 'chief', dir: chief() })
+    await peer.call('profile.allow', { cwd: project, name: 'chief' })
+    await peer.call('thread.submit', { id: thread.id, text: 'hi' })
+    await done(peer, thread.id)
+    expect((await agentOf(peer, thread.id)).instructions).toBe('Run my day.')
+    await close()
+  })
+
+  it('says so when nothing of that name is left, and takes another profile (thread.setProfile)', async () => {
+    write(join(home, 'profiles', 'default'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ prompt: 'Be kind.' })\n` })
+    const { peer, close } = await open()
+    await peer.call('profile.allow', { cwd: project, name: 'chief' })
+    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'chief' })
+    await rm(chief(), { recursive: true })
+
+    await expect(peer.call('thread.submit', { id: thread.id, text: 'hi' })).rejects.toMatchObject({ kind: 'profile_missing' })
+    // A project's profile that isn't allowed isn't taken.
+    write(join(project, '.superego', 'profiles', 'support'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({})\n` })
+    await expect(peer.call('thread.setProfile', { id: thread.id, profile: 'support' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+    await expect(peer.call('thread.setProfile', { id: thread.id, profile: 'nope' })).rejects.toMatchObject({ kind: 'not_found' })
+
+    expect(await peer.call('thread.setProfile', { id: thread.id })).toMatchObject({ scope: 'user', name: 'default' })
+    expect((await threadOf(peer, thread.id)).profile).toMatchObject({ name: 'default' })
+    await peer.call('thread.submit', { id: thread.id, text: 'hi' })
+    await done(peer, thread.id)
+    expect((await agentOf(peer, thread.id)).instructions).toBe('Be kind.')
+    expect(await notes(peer, thread.id)).toEqual([expect.stringContaining('runs the default profile now')])
+    await close()
+  })
 })
 
 it("tears down every part of a profile's daemon extension on reload: actions, methods, status, pane kinds, agent parts", async () => {

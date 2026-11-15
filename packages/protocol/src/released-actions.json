@@ -357,6 +357,21 @@
     ],
     "additionalProperties": false
   },
+  "thread.setProfile": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "profile": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "additionalProperties": false
+  },
   "thread.steer": {
     "type": "object",
     "properties": {

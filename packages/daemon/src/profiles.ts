@@ -1,6 +1,6 @@
 // Profiles: what an agent is, as files. A profile is a folder with a `profile.ts`, in the user's `~/.superego/profiles/<name>`
 // or in a project's own `.superego/profiles/<name>`, so a repo can carry the harness it needs (a customer-service agent in the
-// support repo, say). A thread takes its profile when it starts and keeps it.
+// support repo, say). A thread takes its profile when it starts and keeps it: where it moved (relocated), if it moves.
 //
 //   import { defineProfile } from 'superego'
 //   export default defineProfile({
@@ -128,6 +128,21 @@ export function findProfile(cwd: string, userRoot: string, name?: string): Profi
   const found = listProfiles(cwd, userRoot).find((p) => p.name === wanted)
   if (!found && name) throw new RpcError('not_found', `No profile ${name} for ${cwd}`, { hint: `Make one: superego profile new ${name}` })
   return found
+}
+
+/** Whether a profile's folder is still there to load: its `profile.ts`. */
+export const profileThere = (ref: ProfileRef) => existsSync(join(ref.dir, 'profile.ts'))
+
+/**
+ * Where a thread's profile is now that its folder is gone (moved to the user's profiles, say): the profile of that name
+ * a thread in the first of `cwds` that has one would start with now (the project's before the user's). None: undefined.
+ */
+export function relocated(ref: ProfileRef, cwds: string[], userRoot: string): ProfileRef | undefined {
+  for (const cwd of new Set(cwds)) {
+    const found = listProfiles(cwd, userRoot).find((p) => p.name === ref.name && !same(p.dir, ref.dir))
+    if (found) return found
+  }
+  return undefined
 }
 
 /**

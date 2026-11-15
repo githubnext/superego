@@ -17,6 +17,7 @@ import { useLocalState } from './local-state.ts'
 import { readAttachment, splitMessage } from './attachments.ts'
 import { askFor, complete, completing, menuFor, readSent, type Completion, type Offered, type SentBlock } from './composer.ts'
 import { useProfileUi } from './profile-ui.ts'
+import { ProfileSwitch } from './profile-pick.tsx'
 import { ThreadPanes } from './panes.tsx'
 import { Contained } from './contained.tsx'
 import { startRename, stopRename, useRenaming } from './rename.ts'
@@ -837,6 +838,15 @@ function Composer({ machine, thread, busy, inbox, onJump }: { machine: MachineEn
     return () => window.removeEventListener('keydown', onKey)
   }, [numbered])
   const abort = () => dispatch('thread.abort', { id: thread.id }, { machine: machine.id, source: 'composer' })
+  // Its profile gone from under it: another picked for it (not from a daemon without thread.setProfile).
+  const switchable = useActions(machine.id).some((action) => action.id === 'thread.setProfile')
+  /** A project's profile the thread runs, changed (or found where its own moved): allowed as it is now, then sent. */
+  const allowAndSend = async (name: string) => {
+    try {
+      await dispatch('profile.allow', { cwd: thread.cwd, name }, { machine: machine.id, source: 'composer' })
+      await send()
+    } catch (e) { setError(e as { kind?: string; message: string }) }
+  }
   const sendable = Boolean(text.trim()) || (!claim && files.length > 0)
   const onKeyDown = (event: KeyboardEvent) => {
     if (claim?.keyDown?.(event, text)) { event.preventDefault(); return }
@@ -896,7 +906,10 @@ function Composer({ machine, thread, busy, inbox, onJump }: { machine: MachineEn
     )}
     {error && (
       <div className="composer__error">
-        {error.kind === 'no_model' ? <>No model is set up on {machine.label}. <Button onClick={onOpenSettings}>Open Settings</Button></> : error.message}
+        {error.kind === 'no_model' ? <>No model is set up on {machine.label}. <Button onClick={onOpenSettings}>Open Settings</Button></>
+          : error.kind === 'profile_missing' && switchable ? <ProfileSwitch machine={machine.id} thread={thread} onSwitched={() => void send()} />
+          : error.kind === 'untrusted_profile' && thread.profile ? <>{error.message} <Button onClick={() => void allowAndSend(thread.profile!.name)}>Allow and send</Button></>
+          : error.message}
       </div>
     )}
     {menu && (

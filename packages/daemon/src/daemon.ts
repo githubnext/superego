@@ -33,7 +33,7 @@ import { serveWeb, type ServedByTailscale, type WebServer } from './web.ts'
 import { WebDevices } from './web-devices.ts'
 import { startServe, stopServe, tailnetNames, type TailscaleState } from './tailscale.ts'
 import { agentsInstructions } from './agents-md.ts'
-import { defineProfile, findProfile, RENAMED, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, provideSdk, Trust, type LoadedProfile, type ProfileDaemonExtension, type ProfileRef } from './profiles.ts'
+import { defineProfile, findProfile, RENAMED, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, profileThere, provideSdk, relocated, Trust, type LoadedProfile, type ProfileDaemonExtension, type ProfileRef } from './profiles.ts'
 import { serveConnection, versionMismatch } from './connection.ts'
 import { Clients, type Via } from './clients.ts'
 import { keepsRunning } from './service.ts'
@@ -74,6 +74,9 @@ export const RESERVED = new Set([
   'ping', 'ch', 'clients', 'client', 'machines', 'relay',
   // `skill` is no longer the core's, but older windows still call skill.list (see MOVED_METHODS).
 ])
+
+/** A path as told to the user: under their home folder, from `~`. */
+const shortPath = (path: string) => path === homedir() || path.startsWith(`${homedir()}/`) ? `~${path.slice(homedir().length)}` : path
 
 /** A thread's own metadata, next to its transcript. */
 type ThreadMeta = {
@@ -723,8 +726,40 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * one of its threads runs). One that no longer loads is logged, and its hooks are gone with it.
    */
   async function withProfile(id: string) {
-    const { profile } = (await get(id)).meta
+    const profile = await rebound(id).catch(() => undefined)
     if (profile) await profileOf(profile).catch((error: Error) => console.error(`Profile ${profile.name}: ${error.message}`))
+  }
+  /**
+   * A thread's profile where it is now. One whose folder was moved or deleted out from under it is looked for by name
+   * where the thread could start one now (relocated: from its folder, then its project's): found, the thread runs that
+   * one from now on, and says so in its transcript. Not found, it keeps the one it had (see profileFor).
+   */
+  async function rebound(id: string): Promise<ProfileRef | undefined> {
+    const m = await get(id)
+    const was = m.meta.profile
+    if (!was || profileThere(was)) return was
+    const found = relocated(was, [m.meta.cwd, rootOf(m)], userProfiles)
+    if (!found) return was
+    await updateMeta(id, (meta) => { meta.profile = found })
+    letGoOf(was)
+    await note(id, `The ${was.name} profile is no longer at ${shortPath(was.dir)}: this thread runs ${found.scope === 'user' ? 'yours' : "the project's"}, at ${shortPath(found.dir)}, from now on.`)
+    return found
+  }
+  /** A profile whose folder is gone, once no thread is bound to it: what it set up let go of, its failure forgotten. */
+  function letGoOf(ref: ProfileRef) {
+    if (profileThere(ref) || [...mounted.values()].some((m) => m.meta.profile?.dir === ref.dir)) return
+    unload(ref.dir)
+    if (profileErrors.delete(ref.dir)) changed()
+  }
+  /** A thread's profile for a turn: rebound where it moved, else refused as gone, for the user to give it another. */
+  async function profileFor(id: string): Promise<ProfileRef | undefined> {
+    const ref = await rebound(id)
+    if (ref && !profileThere(ref)) {
+      throw new RpcError('profile_missing', `No profile ${ref.name} at ${ref.dir}, nor one of that name for this thread's folder`, {
+        hint: `Give it another: ${options.app.id} do thread.setProfile --id ${id} --profile <name> (or none, for the default)`,
+      })
+    }
+    return ref
   }
   /**
    * Ask the hooks that may refuse (`archiving`, `unarchiving`): the first to throw stops it, with its error. Those whose
@@ -1467,7 +1502,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const m = await get(id)
     // Put away: it can be read, not written to, until it's brought back.
     if (m.meta.archived) throw new RpcError('archived', 'This thread is archived', { hint: 'Unarchive it to send to it.' })
-    // Its profile loaded first, for what the thread goes without.
+    // Its profile found (where it moved) and loaded first, for what the thread goes without.
+    await profileFor(id)
     const { model, thinkingLevel, without, ...rest } = await agentOf(id, m.meta)
     // An extension's own thread runs as that extension makes it, or not at all: not while it's off here, or the thread
     // goes without it.
@@ -1955,6 +1991,25 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     async run({ id, title }) { await updateMeta(id, (meta) => { meta.title = title }); return null },
   }))
   router.register(defineAction({
+    id: 'thread.setProfile', title: "Change the thread's profile", runs: 'machine', expose: ['ui', 'cli'], ...thread,
+    description: "Run the thread with another profile from its next turn: `profile` by name, as profile.list gives them for its folder; none, the default (if there's none of those, plain Superego). Refused while it runs, and for a project's profile not allowed yet (profile.allow).",
+    params: obj({ id: str(), profile: opt(str()) }),
+    async run({ id, profile: name }) {
+      const m = await get(id)
+      if (m.meta.owner) throw new RpcError('invalid', `This thread is the ${m.meta.owner} extension's: it runs as that extension makes it`)
+      if (m.live?.run) throw new RpcError('busy', 'This thread is working', { hint: 'Change its profile once it finishes.' })
+      const ref = findProfile(m.meta.cwd, userProfiles, name?.trim() || undefined)
+      // Checked (and allowed) now, as a new thread's is: a thread isn't left with one it can't run.
+      if (ref) await profileOf(ref)
+      const was = m.meta.profile
+      if (was?.dir === ref?.dir) return ref ?? null
+      await updateMeta(id, (meta) => { if (ref) meta.profile = ref; else delete meta.profile })
+      if (was) letGoOf(was)
+      await note(id, ref ? `This thread runs the ${ref.name} profile now (${ref.scope === 'user' ? 'yours' : "the project's"}, at ${shortPath(ref.dir)}).` : 'This thread runs without a profile now.')
+      return ref ?? null
+    },
+  }))
+  router.register(defineAction({
     id: 'thread.seen', title: 'Mark as seen', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     params: obj({ id: str() }),
     async run({ id }) {
@@ -2020,8 +2075,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   await list({ hidden: true })
   // A run cut off by the last stop resumes where it was, maybe inside a profile's tool: its profile is loaded first, so
   // the tool is there to carry on with (a profile that no longer loads leaves the run to end as interrupted).
-  for (const m of mounted.values()) {
-    if (m.live?.run && m.meta.profile) await profileOf(m.meta.profile).catch((error: Error) => console.error(`Profile ${m.meta.profile!.name}: ${error.message}`))
+  // One whose profile moved meanwhile runs it from where it is now.
+  for (const [id, m] of mounted) {
+    if (!m.live?.run || !m.meta.profile) continue
+    const ref = await rebound(id).catch((error: Error) => { console.error(`Thread ${id}: ${error.message}`); return m.meta.profile! })
+    if (ref) await profileOf(ref).catch((error: Error) => console.error(`Profile ${ref.name}: ${error.message}`))
   }
   harness.resume()
   // Waiting on threads gone since (deleted, say) no longer; a provider whose credentials changed while the daemon was
@@ -2035,6 +2093,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   // The profiles of the threads in use, loaded in the background: their facts and what they go without show without
   // waiting for a turn. An archived thread's load when it's brought back.
   const loadingProfiles = (async () => {
+    // Those whose profile moved while the daemon was down are bound to where it is now first (see rebound).
+    for (const [id, m] of mounted) {
+      if (!m.meta.archived && m.meta.profile) await rebound(id).catch((error: Error) => console.error(`Thread ${id}: ${error.message}`))
+    }
     const refs = new Map([...mounted.values()].filter((m) => !m.meta.archived && m.meta.profile).map((m) => [m.meta.profile!.dir, m.meta.profile!]))
     for (const ref of refs.values()) await profileOf(ref).catch((error: Error) => console.error(`Profile ${ref.name}: ${error.message}`))
   })()

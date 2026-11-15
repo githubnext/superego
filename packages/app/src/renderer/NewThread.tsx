@@ -9,6 +9,7 @@ import { Contained } from './contained.tsx'
 import { Button, Dialog, Select, TextArea, TextField } from '@superego/ui'
 import { has, machine as client } from './client.ts'
 import { shortPath } from './ThreadView.tsx'
+import { ProfileSelect } from './profile-pick.tsx'
 import { useAllThreads, useMachines, useSelection, type NewThreadStart } from './state.tsx'
 
 const LAST = 'superego.newThread'
@@ -98,7 +99,6 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
     }, 250)
     return () => { live = false; clearTimeout(timer) }
   }, [machine?.id, cwd])
-  const defaultProfile = profiles.find((p) => p.name === 'default')
   const picked = profiles.find((p) => p.name === (profile ?? 'default'))
 
   /** This machine's sessions (projects threads worked in), most recent first. */
@@ -168,9 +168,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
             )}
             {profiles.length > 0 && (
               <label className="new-thread__field"><span>Profile</span>
-                <Select aria-label="Profile" value={profile}
-                  options={profiles.filter((p) => p.name !== 'default').map((p) => ({ value: p.name, label: `${p.name}${p.scope === 'user' ? ' (yours)' : ''}` }))}
-                  nullLabel={defaultProfile ? `default${defaultProfile.scope === 'user' ? ' (yours)' : ''}` : 'None'} onChange={setProfile} />
+                <ProfileSelect profiles={profiles} value={profile} onChange={setProfile} />
               </label>
             )}
             <label className="new-thread__field"><span>Model</span>

@@ -106,7 +106,7 @@ ping                                      ch.open {ch, kind, params, window} →
                                            an extension's `<name>.<kind>`: `terminal.io`, a terminal pane's bytes)
 
 actions, each also served under its id:
-thread.create {cwd, prompt, attachments, profile, worktree} / submit {text, attachments, whenBusy} / abort / rename / seen
+thread.create {cwd, prompt, attachments, profile, worktree} / submit {text, attachments, whenBusy} / abort / rename / seen / setProfile
 thread.withdraw {submission} / steer {submission} (a queued message taken back, or sent now: a follow-up becomes a steer)
 thread.archive / unarchive (its worktree removed if clean, and back)
 pane.open / update / focus / close        file.write              profile.list / allow
@@ -200,7 +200,7 @@ Every intent is an action: an id, a title, a params schema (pi-schema), where it
 - **Where:** `~/.superego/profiles/<name>/profile.ts` (yours) and `<repo>/.superego/profiles/<name>/profile.ts` (the project's; the nearest `.superego/profiles` at or above a thread's folder). A project's replaces yours of the same name, unless it `extends: 'user:<name>'`.
 - **What:** `defineProfile({ description, model, thinking, prompt, extensions, ui, panes, without, extends, worktree })`. `extensions` are agent extensions (pi-durable `defineExtension`: tools, prompt sections, hooks) or daemon extensions (`defineDaemonExtension`: actions, live values, agent extensions of their own; set up when the profile loads, torn down when it changes); `ui` are UI extensions (`defineUiExtension`); `panes` describes the pane kinds its UI adds, for the agent; `without` drops built-ins (`coding-tools`, `ask-user`); `worktree: true` gives its threads worktrees.
 - **'superego':** profiles and their extensions `import … from 'superego'` (the daemon's SDK, through a loader hook: nothing to install) and `'superego/ui'` (the window's hooks and components). UI modules are TS or TSX, compiled by sucrase as they're served.
-- **Threads:** a thread takes the folder's `default` (or a named) profile when it starts, and keeps it. Each turn selects that profile's extensions and instructions in the one harness (pi-durable selects extensions per conversation); a thread without a profile gets the built-ins. Edits reload from the next turn.
+- **Threads:** a thread takes the folder's `default` (or a named) profile when it starts, and keeps it. One whose profile folder moves or goes runs the profile of that name its folder would start with now (the project's, else yours), and says so in the thread; with none left, sending offers another (`thread.setProfile`; the default, or none). Each turn selects that profile's extensions and instructions in the one harness (pi-durable selects extensions per conversation); a thread without a profile gets the built-ins. Edits reload from the next turn.
 - **Trust:** a project's profile is that repo's code: it runs only once allowed (`superego profile allow`, or Allow and start in the app), and again after any of its files change.
 - **UI:** the daemon serves a profile's UI modules (types stripped, only once allowed); the window rewrites their imports to its own React and `superego/ui` and installs them for that profile's threads only.
 - **The command:** `superego profile` (list), `superego profile new [name] [--user]`, `superego profile types [name] [--user]`, `superego profile allow [name]`, `-P <profile>` when starting.

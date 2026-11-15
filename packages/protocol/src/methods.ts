@@ -210,6 +210,11 @@ export type Methods = {
   /** One module of a profile's UI, as JavaScript (types stripped); its own imports are left for the window to load. */
   'profile.module': { params: ProfileRef & { path: string }; result: { path: string; code: string } }
   'thread.rename': { params: { id: ThreadId; title: string }; result: null }
+  /**
+   * Run a thread with another profile from its next turn: by name, as `profile.list` gives them for its folder; none,
+   * the default there (none of those either: no profile). The one it runs now, or null.
+   */
+  'thread.setProfile': { params: { id: ThreadId; profile?: string }; result: ProfileRef | null }
   'thread.submit': { params: { id: ThreadId; text: string; attachments?: AttachmentRef[]; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
   'thread.abort': { params: { id: ThreadId }; result: null }
   /** Take back a message sent while the agent was busy, still waiting its turn (an item of the thread's `pi.inbox`). */
