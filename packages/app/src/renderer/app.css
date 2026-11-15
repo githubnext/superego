@@ -4,11 +4,24 @@
 .app__drag { height: 38px; -webkit-app-region: drag; flex: none; }
 .app__drag :is(button, a, input, select, textarea, summary, [role="button"], [contenteditable]) { -webkit-app-region: no-drag; }
 .app__body { flex: 1; display: flex; min-height: 0; background: var(--superego-chrome); }
-.app__rail { flex: none; width: var(--superego-rail); display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 9px 0 12px; background: var(--superego-rail-bg); box-shadow: inset -1px 0 0 var(--superego-line); -webkit-app-region: drag; }
+.app__rail { position: relative; flex: none; width: var(--superego-rail); display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; padding: 9px 0 16px; background: var(--superego-rail-bg); -webkit-app-region: drag; }
 .app__rail-group { display: flex; flex-direction: column; align-items: center; gap: 4px; -webkit-app-region: no-drag; }
 .app__rail-button { position: relative; width: 34px; height: 34px; min-height: 34px; border-radius: 8px; color: var(--superego-muted); box-shadow: none; background: none; }
 .app__rail-button:hover { color: var(--superego-text); background: var(--superego-hover); }
 .app__rail-button.is-on { color: var(--superego-text); background: var(--superego-selected); }
+/* In the rail, the buttons are folder tabs at its edge: the open one in front, joined to the sidebar; the rest behind
+   it, the rail's edge running across them. Each tab is two halves, slanted toward the left. */
+.app__rail::after { content: ''; position: absolute; top: 0; bottom: 0; right: 0; width: 1px; background: var(--superego-line); z-index: 2; pointer-events: none; }
+.app__rail .app__rail-group { align-items: flex-end; gap: 6px; }
+.app__rail :is(.app__rail-button, .app__settings) { z-index: 1; width: 42px; height: 50px; min-height: 50px; border-radius: 0; background: none; color: var(--superego-faint); }
+.app__rail :is(.app__rail-button, .app__settings)::before,
+.app__rail :is(.app__rail-button, .app__settings)::after { content: ''; position: absolute; left: 0; right: 0; z-index: -1; background: var(--superego-rail-tab); }
+.app__rail :is(.app__rail-button, .app__settings)::before { top: 0; bottom: 50%; border-top-left-radius: 10px; box-shadow: inset 1px 0 0 var(--superego-line), inset 0 1px 0 var(--superego-line); transform: skewY(-5deg); transform-origin: right bottom; }
+.app__rail :is(.app__rail-button, .app__settings)::after { top: 50%; bottom: 0; border-bottom-left-radius: 10px; box-shadow: inset 1px 0 0 var(--superego-line), inset 0 -1px 0 var(--superego-line); transform: skewY(5deg); transform-origin: right top; }
+.app__rail :is(.app__rail-button, .app__settings):hover { color: var(--superego-text); background: none; }
+.app__rail .app__rail-button.is-on { z-index: 3; color: var(--superego-text); background: none; }
+.app__rail .app__rail-button.is-on::before, .app__rail .app__rail-button.is-on::after { background: var(--superego-chrome); }
+.app__rail :is(.app__rail-button, .app__settings) svg { width: 17px; height: 17px; }
 /* The sidebar: on the side's grey beside the rail, a hairline at its edge. Hidden while what's in it shows nothing.
    A region (its ring: see the end). */
 .app__sidebar { position: relative; width: var(--superego-sidebar); flex: none; min-height: 0; overflow: auto; padding: 7px 8px 10px; display: flex; flex-direction: column; }
@@ -70,9 +83,8 @@
 .app__footer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-left: 4px; }
 .app__footer:empty { display: none; }
 .app__footer > .service-notice { flex: 1 0 100%; }
-.app__settings { width: 34px; height: 34px; min-height: 34px; border-radius: 8px; box-shadow: none; background: none; color: var(--superego-muted); }
-.app__settings:hover { background: var(--superego-hover); }
-.app__settings:hover { color: var(--superego-text); }
+.app__settings { position: relative; width: 34px; height: 34px; min-height: 34px; border-radius: 8px; box-shadow: none; background: none; color: var(--superego-muted); }
+.app__settings:hover { background: var(--superego-hover); color: var(--superego-text); }
 
 /* The thread: a crumb, a title and a reading column; the composer floats at the bottom. */
 .thread { display: flex; flex-direction: column; flex: 1; min-height: 0; position: relative; }

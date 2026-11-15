@@ -64,7 +64,7 @@ function EgoButton({ place, chosen }: ViewProps<'window'> & { chosen: string }) 
   return (
     <IconButton label={`Ask ${agentName(app)}${elsewhere ? ` on ${elsewhere}` : ''}`} className={`app__rail-button ego__button ${isEgo(thread) ? 'is-on' : ''}`}
       onClick={() => void dispatch(OPEN, {}, { source: place }).catch((error) => console.error(error))}>
-      <LifebuoyIcon size={18} aria-hidden />
+      <span className="ego__dot" aria-hidden />
     </IconButton>
   )
 }

@@ -22,19 +22,21 @@
 
 /* In the rail: Threads, with a dot when something unread is out of sight; folded, the threads as dots under it. */
 .threads-rail__button { position: relative; }
-.threads-rail__badge { position: absolute; right: 4px; top: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--superego-status-done); box-shadow: 0 0 0 2px var(--superego-rail-bg); }
-.threads-rail__button.is-on .threads-rail__badge { box-shadow: 0 0 0 2px color-mix(in srgb, var(--superego-rail-bg), var(--superego-text) 7%); }
+.threads-rail__badge { position: absolute; right: 9px; top: 14px; width: 7px; height: 7px; border-radius: 50%; background: var(--superego-status-done); box-shadow: 0 0 0 2px var(--superego-rail-tab); }
+.threads-rail__button.is-on .threads-rail__badge { box-shadow: 0 0 0 2px var(--superego-chrome); }
 .threads-rail__badge--blocked { background: var(--superego-status-blocked); }
 .threads-rail__badge--error { background: var(--superego-status-error); }
 .threads-rail__tipnote { opacity: .65; margin-left: 8px; }
-.threads-rail { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 2px 0; max-height: 50vh; overflow-y: auto; scrollbar-width: none; }
+.threads-rail { align-self: center; display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 2px 0; max-height: 50vh; overflow-y: auto; scrollbar-width: none; }
 .threads-rail__group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .threads-rail__dot { width: 26px; height: 20px; flex: none; border-radius: 6px; border: 0; background: none; display: grid; place-items: center; padding: 0; color: inherit; font-size: 13px; }
 .threads-rail__dot:hover { background: var(--superego-hover); }
 .threads-rail__dot.is-on { background: var(--superego-selected); }
 .threads-rail__dot.is-stale { opacity: .4; }
 .threads-rail__sep { width: 12px; height: 1px; background: var(--superego-line); margin: 3px 0; }
-.threads-rail__rule { width: 18px; height: 1px; background: var(--superego-line); margin: 4px 0; }
+/* Between the folded dots and the tabs under them; with nothing folded, the tabs need none. */
+.threads-rail__rule { display: none; align-self: center; width: 18px; height: 1px; background: var(--superego-line); margin: 4px 0; }
+.threads-rail + .threads-rail__rule:not(:last-child) { display: block; }
 
 .threads-details { padding: var(--superego-space-4) var(--superego-space-5) var(--superego-space-5); font-size: var(--superego-text-ui); }
 .threads-details h5 { margin: 0 0 10px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); }
