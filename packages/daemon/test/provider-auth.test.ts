@@ -76,9 +76,10 @@ it('gives a failed refresh the token endpoint\'s answer, so a run failing on it 
   const { join } = await import('node:path')
   const { SettingsRegistry } = await import('@superego/settings')
   const { createAgentSettings } = await import('../src/agent-settings.ts')
+  const { createAuthFlows } = await import('../src/auth-flows.ts')
   const dir = await mkdtemp(join(tmpdir(), 'superego-refresh-'))
   await writeFile(join(dir, 'auth.json'), JSON.stringify({ openai: { type: 'oauth', access: 'a', refresh: 'r', expires: 0, clientId: 'client' } }))
-  const agent = await createAgentSettings(new SettingsRegistry(), dir, { name: 'superego', id: 'refreshtest' } as never)
+  const agent = await createAgentSettings(new SettingsRegistry(), dir, { name: 'superego', id: 'refreshtest' } as never, createAuthFlows())
   const realFetch = globalThis.fetch
   globalThis.fetch = (async () => { throw new TypeError('fetch failed') }) as typeof fetch
   try {
