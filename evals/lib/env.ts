@@ -29,18 +29,21 @@ export type World = {
   stop(): Promise<void>
 }
 
-export async function makeWorld(dir: string, install: Install, { model }: { model: string }): Promise<World> {
+/** A run's world, new; or with `reuse`, the one a finished run left, its daemon started again (to check it again). */
+export async function makeWorld(dir: string, install: Install, { model, reuse = false }: { model: string; reuse?: boolean }): Promise<World> {
   const home = join(dir, 'home')
   const dataDir = join(home, '.superego')
   const agents = join(home, '.agents')
   const project = join(home, 'code', 'myproject')
   for (const d of [dataDir, join(agents, 'skills', 'superego'), project, join(dir, 'tmp')]) mkdirSync(d, { recursive: true })
-  cpSync(join(install.out, 'skill', 'SKILL.md'), join(agents, 'skills', 'superego', 'SKILL.md'))
-  writeFileSync(join(project, 'README.md'), '# myproject\n\nA small project of mine.\n')
-  const git = (...args: string[]) => execFileSync('git', args, { cwd: project, stdio: 'ignore', env: { ...gitEnv, HOME: home } })
-  git('init', '-q', '-b', 'main')
-  git('add', '.')
-  git('commit', '-qm', 'First commit')
+  if (!reuse) {
+    cpSync(join(install.out, 'skill', 'SKILL.md'), join(agents, 'skills', 'superego', 'SKILL.md'))
+    writeFileSync(join(project, 'README.md'), '# myproject\n\nA small project of mine.\n')
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: project, stdio: 'ignore', env: { ...gitEnv, HOME: home } })
+    git('init', '-q', '-b', 'main')
+    git('add', '.')
+    git('commit', '-qm', 'First commit')
+  }
 
   // Nothing of the real home: Superego's checkout, ~/.superego, ~/.agents, ssh keys and gh's token are all under it.
   const realHome = homedir()

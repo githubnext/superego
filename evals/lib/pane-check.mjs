@@ -33,7 +33,7 @@ void (async () => {
   }
   win().setContentSize(1500, 900)
   for (const [i, probe] of input.probes.entries()) {
-    const title = `Board probe ${i + 1}`
+    const title = `Board probe ${i + 1} (${Date.now() % 100000})`
     let thread
     try { thread = await call('thread.create', { cwd: input.project, title, ...(probe.profile ? { profile: probe.profile } : {}) }) } catch (error) {
       result.errors.push(`thread.create (${probe.profile ?? 'default'}): ${error.message}`); continue

@@ -5,6 +5,7 @@ How well agents extend Superego with only the help it ships: the `superego` skil
 ```sh
 pnpm eval                          # the spike plan: Opus by Ego and by a plain thread, then Sol by Ego; $60 budget
 pnpm eval --batch b2 --models opus --routes thread --tasks l1-weather --runs 1 --budget 5
+pnpm eval --batch spike --recheck <run,run>   # check finished runs again, after fixing a task's acceptance
 pnpm eval --batch spike --rollup-only   # redo the rolled-up "where it got lost" list and summary
 ```
 
@@ -21,3 +22,5 @@ skips the runs it has, and spends no more than what's left of its budget.
 
 Needs `ANTHROPIC_API_KEY` (and `OPENAI_API_KEY` for Sol) in the environment, macOS (`sandbox-exec`), and the app
 buildable here.
+
+The first batch and what it found: [REPORT-spike.md](REPORT-spike.md).

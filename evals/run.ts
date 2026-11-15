@@ -6,7 +6,9 @@
 // acceptance probes, analysis), and picks up where it left off when run again.
 //
 //   pnpm eval [--batch spike] [--budget 60] [--plan spike] [--tasks l1-weather,l3-kanban] [--models opus,sol]
-//             [--routes ego,thread] [--runs 3] [--parallel 3] [--minutes 20] [--run-cap 6] [--rollup-only]
+//             [--routes ego,thread] [--runs 3] [--parallel 3] [--minutes 20] [--run-cap 6]
+//   pnpm eval --batch spike --recheck <run,run>    check finished runs again (after fixing a task's acceptance)
+//   pnpm eval --batch spike --rollup-only          redo the rolled-up list and the summary (--summary-only: the summary)
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
@@ -23,7 +25,7 @@ const { values: args } = parseArgs({
     batch: { type: 'string', default: 'spike' }, budget: { type: 'string', default: '60' }, plan: { type: 'string', default: 'spike' },
     tasks: { type: 'string' }, models: { type: 'string' }, routes: { type: 'string' }, runs: { type: 'string', default: '3' },
     parallel: { type: 'string', default: '3' }, minutes: { type: 'string', default: '20' }, 'run-cap': { type: 'string', default: '6' },
-    'rollup-only': { type: 'boolean' }, root: { type: 'string', default: '/tmp/sge' }, rebuild: { type: 'boolean' },
+    'rollup-only': { type: 'boolean' }, 'summary-only': { type: 'boolean' }, recheck: { type: 'string' }, root: { type: 'string', default: '/tmp/sge' }, rebuild: { type: 'boolean' },
   },
 })
 
@@ -165,7 +167,7 @@ async function runOne(p: Planned, inst: ReturnType<typeof install>) {
 
   ledger.live.set(p.runId, metrics.cost + acceptance.cost)
   const clipped = text.length > 400_000 ? `${text.slice(0, 250_000)}\n…[cut]…\n${text.slice(-150_000)}` : text
-  const { analysis, cost: analysisCost, error: analysisError } = await analyzeRun({ request: p.task.request, route: p.route, transcript: clipped, pass: acceptance.pass, checks: acceptance.checks })
+  const { analysis, cost: analysisCost, error: analysisError } = await analyzeRun({ request: p.task.request, route: p.route, transcript: clipped, pass: acceptance.pass, checks: acceptance.checks, notes: acceptance.notes })
   if (analysis) writeFileSync(join(out, 'analysis.json'), JSON.stringify(analysis, null, 2))
 
   const record = {
@@ -185,8 +187,38 @@ async function runOne(p: Planned, inst: ReturnType<typeof install>) {
   log(`recorded: ${record.pass ? 'PASS' : 'FAIL'}, $${record.totalCost.toFixed(2)} (batch $${total().toFixed(2)} of $${budget})`)
 }
 
+/**
+ * Check finished runs again (after a fix to a task's acceptance): their worlds' daemons started again, the acceptance
+ * and the analysis redone, and their records replaced, with what that cost added.
+ */
+async function recheck(ids: string[]) {
+  const inst = install(args.root!)
+  const records = readRecords()
+  for (const record of records.filter((r: any) => ids.includes(r.runId))) {
+    const task = TASKS[record.task]!
+    const out = join(batchDir, 'runs', record.runId)
+    const world = await makeWorld(join(args.root!, 'runs', `${args.batch}-${record.runId}`), inst, { model: record.model, reuse: true })
+    let acceptance: Acceptance
+    try { acceptance = await task.accept({ world, install: inst, out }) } catch (error) {
+      acceptance = { pass: false, checks: {}, notes: [`acceptance threw: ${(error as Error).stack}`], cost: 0 }
+    } finally { await world.stop() }
+    const text = readFileSync(join(out, 'transcript.md'), 'utf8')
+    const clipped = text.length > 400_000 ? `${text.slice(0, 250_000)}\n…[cut]…\n${text.slice(-150_000)}` : text
+    const { analysis, cost: analysisCost, error: analysisError } = await analyzeRun({ request: task.request, route: record.route, transcript: clipped, pass: acceptance.pass, checks: acceptance.checks, notes: acceptance.notes })
+    if (analysis) writeFileSync(join(out, 'analysis.json'), JSON.stringify(analysis, null, 2))
+    Object.assign(record, {
+      pass: acceptance.pass, checks: acceptance.checks, acceptanceNotes: acceptance.notes, artifacts: acceptance.artifacts ?? {}, analysis, analysisError,
+      rechecked: true, acceptanceCost: record.acceptanceCost + acceptance.cost, analysisCost: record.analysisCost + analysisCost,
+      totalCost: record.totalCost + acceptance.cost + analysisCost,
+    })
+    console.log(`[${record.runId}] rechecked: ${acceptance.pass ? 'PASS' : 'FAIL'} ${JSON.stringify(acceptance.checks)}`)
+  }
+  writeFileSync(recordsFile, records.map((r: any) => JSON.stringify(r)).join('\n') + '\n')
+}
+
 async function main() {
-  if (!args['rollup-only']) {
+  if (args.recheck) return recheck(args.recheck.split(','))
+  if (!args['rollup-only'] && !args['summary-only']) {
     const inst = install(args.root!, { rebuild: Boolean(args.rebuild) })
     const done = new Set(readRecords().map((r: any) => r.runId))
     const queue = plan().filter((p) => !done.has(p.runId))
@@ -206,7 +238,8 @@ async function main() {
     await Promise.all(workers)
   }
   const records = readRecords()
-  const rollup = await rollUp(records.map((r: any) => ({ runId: r.runId, task: r.task, route: r.route, model: r.model, pass: r.pass, analysis: r.analysis as Analysis | undefined })))
+  const kept = join(batchDir, 'rollup.json')
+  const rollup = args['summary-only'] && existsSync(kept) ? JSON.parse(readFileSync(kept, 'utf8')) : await rollUp(records.map((r: any) => ({ runId: r.runId, task: r.task, route: r.route, model: r.model, pass: r.pass, analysis: r.analysis as Analysis | undefined })))
   writeFileSync(join(batchDir, 'rollup.json'), JSON.stringify(rollup, null, 2))
   writeFileSync(join(batchDir, 'summary.md'), summary(records, rollup))
   console.log(`eval: done. $${(records.reduce((s: number, r: any) => s + r.totalCost, 0) + rollup.cost).toFixed(2)} spent. ${join(batchDir, 'summary.md')}`)

@@ -10,12 +10,17 @@ import { profileDirs, sourcesOf, type Acceptance, type Task } from './shared.ts'
 const SEEDED = ['Fix the login bug', 'Write the release notes', 'Plan the Q3 roadmap']
 
 /** Pane kinds (or views, which are pane kinds too) a profile's code registers, by name. */
-function kindsIn(dir: string): string[] {
+export function kindsIn(dir: string): string[] {
   const kinds = new Set<string>()
-  for (const file of sourcesOf(dir)) {
-    const code = readFileSync(file, 'utf8')
-    for (const m of code.matchAll(/\.(?:pane|view)\(\s*['"`]([\w.:-]+)['"`]/g)) kinds.add(m[1]!)
+  const code = sourcesOf(dir).map((file) => readFileSync(file, 'utf8')).join('\n')
+  for (const m of code.matchAll(/\.(?:pane|view)\(\s*(?:['"`]([\w.:-]+)['"`]|([A-Za-z_$][\w$.]*))/g)) {
+    if (m[1]) kinds.add(m[1])
+    // A constant (`superego.pane(PANE, …)`, `about.name`): its value, wherever the profile defines it.
+    else for (const d of code.matchAll(new RegExp(`\\b${m[2]!.split('.').at(-1)}\\s*[:=]\\s*['"\`]([\\w.:-]+)['"\`]`, 'g'))) kinds.add(d[1]!)
   }
+  // The pane kinds a profile.ts describes to the agent (`panes: { kanban: '…' }`).
+  const panes = /panes\s*:\s*\{([^}]*)\}/.exec(code)?.[1]
+  if (panes) for (const m of panes.matchAll(/['"]?([\w.:-]+)['"]?\s*:/g)) kinds.add(m[1]!)
   return [...kinds]
 }
 
@@ -62,7 +67,8 @@ export const kanban: Task = {
     for (const r of reports) notes.push(`${r.profile}:${r.kind}: opened=${r.opened} failed=${r.failed} live=${r.live} seeded=${SEEDED.filter((t) => r.text.includes(t)).length}/3 text="${r.text.slice(0, 200).replace(/\s+/g, ' ')}"${r.error ? ` error=${r.error}` : ''}`)
     const best = reports[0] as any
     if (best) {
-      checks.pane_opens = best.opened && !best.failed && !best.error
+      // Opened, drawn by the profile's UI: not failed, and not the window's stand-in for a kind it doesn't know.
+      checks.pane_opens = best.opened && !best.failed && !best.error && !/No pane of kind/.test(best.text)
       checks.renders_threads = SEEDED.filter((t) => best.text.includes(t)).length >= 2
       checks.columns_by_status = ['idle', 'working', 'done', 'blocked', 'error', 'waiting', 'needs'].filter((s) => best.text.toLowerCase().includes(s)).length >= 2
       checks.live_updates = best.live
