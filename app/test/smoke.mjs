@@ -1091,6 +1091,24 @@ if (phase === 'first') {
   await until(`[...document.querySelectorAll('.revoked-ui-notice button')].some((b) => b.textContent === 'Reload')`, 'revoked: a reload offered in the window')
   await run(`[...document.querySelectorAll('.revoked-ui-notice button')].find((b) => b.textContent === 'Later').click()`)
   await until(`!document.querySelector('.revoked-ui-notice')`, 'revoked: the reload put off')
+  // Ego on each machine: its title bar says whose, and switches to another's; the rail opens the one last chosen.
+  const pickEgo = (machine) => run(`(() => {
+    const select = document.querySelector('.ego__machine')
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, ${JSON.stringify(machine)})
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+  })()`)
+  await run(`document.querySelector('.ego__button').click()`)
+  await until(`document.querySelector('.thread__title')?.textContent === 'Ego' && document.querySelector('.ego__machine')?.value === 'local' && document.querySelectorAll('.ego__machine option').length === 2`, 'Ego, with a machine switch')
+  await shot('ego-machines')
+  await pickEgo(secondId)
+  await until(`document.querySelector('.ego__machine')?.value === '${secondId}' && document.querySelector('.thread__title')?.textContent === 'Ego' && document.querySelector('.ego__button').classList.contains('is-on')`, "the second machine's Ego")
+  if (await run(`window.superego.call('${secondId}', 'thread.list', {}).then((all) => all.some((t) => t.ext?.ego))`)) { await fail('Ego listed on the second machine'); throw new Error('failed') }
+  await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('over on second')).click()`)
+  await until(`!document.querySelector('.ego__machine') && !document.querySelector('.ego__button').classList.contains('is-on')`, 'away from Ego')
+  await run(`document.querySelector('.ego__button').click()`)
+  await until(`document.querySelector('.ego__machine')?.value === '${secondId}'`, 'the rail opens the Ego last chosen')
+  await pickEgo('local')
+  await until(`document.querySelector('.ego__machine')?.value === 'local'`, "back to this computer's Ego")
   console.log('smoke(first): ok')
 } else {
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread after reopen')
