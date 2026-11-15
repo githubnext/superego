@@ -19,6 +19,8 @@ Many agents work on this repo at once, each in a git worktree of its own, all on
 - **After a rebase:** `pnpm install` if `pnpm-lock.yaml` changed; then `pnpm typecheck` and the related tests again.
   Run smoke again only if the rebase brought in changes under `app/` or `packages/app`, or to the protocol
   (`packages/protocol`).
+- **Checking main itself:** never in the main checkout. Every merge fast-forwards it and rewrites files under a
+  running check. Use a detached worktree of its own: `git worktree add --detach <dir> main`, then `pnpm install`.
 
 `pnpm test`, `pnpm typecheck`, smoke, showcase and `app/test/look.sh` share a few slots across the whole machine
 (`scripts/check.ts`; `SUPEREGO_CHECK_SLOTS`, default 2), so "waiting for a check slot…" and a short wait are normal.
