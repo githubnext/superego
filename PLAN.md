@@ -206,6 +206,7 @@ Every intent is an action: an id, a title, a params schema (pi-schema), where it
 - **The command:** `superego profile` (list), `superego profile new [name] [--user]`, `superego profile types [name] [--user]`, `superego profile allow [name]`, `-P <profile>` when starting.
 - **Proof:** the `obsidian` profile (user scope): a vault as a graph pane and as notes edited in live preview with backlinks, with search and backlink tools and the vault's own AGENTS.md read every turn.
 - **Types for authors:** `profile new`, `extension new` and `profile types` (for profiles made before, or a fresh clone) give a profile a `tsconfig.json` with nothing of this computer in it, a `.gitignore`, and `node_modules` linked to `~/.superego/types/node_modules`. That holds declarations only: `superego`, `superego/ui`, `superego/unstable` and `superego/testing` emitted by TypeScript from the SDK's sources (`packages/sdk/types.ts`), the workspace packages they reach, and the outside declarations those reach (pi-durable, React, Node, vitest; ~19MB), copied as installed. The app's build writes them to `out/types` and the app copies them to `~/.superego/types` when it starts, so an upgrade refreshes every profile's types; a checkout's CLI builds them into `packages/sdk/.types` when the sources they came from changed. One process builds or copies them at a time (`@superego/client`'s lock.ts): two commands at once, or the app starting as one runs, wait for each other rather than build twice or swap a copy out from under the other. The docs' code, the starter and the examples are checked against them.
+- **MCP servers:** `mcp: ['linear']` names the machine's MCP servers (Settings → MCP servers) its threads use; `mcpServers` defines servers of the profile's own, in a Settings entry's shape (a `command` run in the project's root, or a `url`; `auth`, `lifetime`, `tools`, `timeout`), their secrets entered in Settings, never in the file. A project's run only once its profile is allowed, since the profile isn't loaded before. `extends` adds `mcp` up and merges `mcpServers` by name; `without: ['mcp-servers']` drops them all. The core checks and carries both; the `mcp-servers` extension reads them each turn (`agentParts`). Design: docs/mcp.md.
 - Not yet: a profile's settings; a profile's UI in the sidebar.
 
 ## 3c. Web and phone
@@ -372,6 +373,18 @@ Still open:
   - **Status:** OSC 7501 read from the output (`terminal.status`, a scoped value per thread), a glyph on the tab.
   - Tests over the real socket; a smoke step; `app/test/look.sh <dir> terminal` screenshots it in light, dark and a
     browser, across a reload.
+- **MCP servers, UI and Ego (2026-11-15).** The `mcp-servers` extension's UI half (docs/mcp.md, lane 4):
+  - Settings → MCP servers: a row per server (state, what it runs, *Use in threads without a profile*, a menu with
+    Edit, Restart, Show log, Sign out, Remove), *Sign in* through `SignInFlow` or *Set key*, *Allow* with the whole
+    command line for a command Ego added, and *From profiles*; Add server, with a catalogue of well-known servers
+    (`catalog.ts`) and a check on save ("Connected · 23 tools").
+  - In threads: MCP calls as rows by prefix (`tool('mcp__*')`; *Interrupted: may have run* for one a restart cut off),
+    tool_search's row, `3 MCP` in the header, the list in thread details (the new `thread.details` slot), and a notice
+    over the composer when a server needs signing in. Tool results' images reach rows (`result.images`), and a row may
+    say a call's own verb (`ToolRow.verb`): both 1.7.
+  - Ego's `superego_mcp_servers`: list, catalogue, add, edit, remove, *Use in threads without a profile*. No secret in
+    its schema, and one slipped into a config is refused; a command it adds or edits waits for Allow; it refuses
+    outside agents whatever the machine lets them do. Its read tool won't open `auth.json` or `mcp-auth.json`.
 
 ## 9. Next
 

@@ -24,6 +24,7 @@ export {
   BellIcon,
   BroomIcon,
   PlugsConnectedIcon,
+  PlugIcon,
   CaretDownIcon,
   CaretLeftIcon,
   CaretRightIcon,

@@ -7,6 +7,7 @@ import files from '@superego/files/ui'
 import git from '@superego/git/ui'
 import images from '@superego/images/ui'
 import links from '@superego/links/ui'
+import mcpServers from '@superego/mcp-servers/ui'
 import notifications from '@superego/notifications/ui'
 import paneUi from '@superego/pane-ui/ui'
 import replyUi from '@superego/reply-ui/ui'
@@ -20,4 +21,4 @@ import webPanes from '@superego/web-panes/ui'
 import worktrees from '@superego/worktrees/ui'
 import app from '../../superego.config.ts'
 
-mountApp(app, { extensions: [threads, worktrees, askUser, ego, files, git, images, links, notifications, paneUi, replyUi, skills, suggestions, tasks, terminal, unread, webPanes] })
+mountApp(app, { extensions: [threads, worktrees, askUser, ego, files, git, images, links, mcpServers, notifications, paneUi, replyUi, skills, suggestions, tasks, terminal, unread, webPanes] })

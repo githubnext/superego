@@ -4,7 +4,8 @@
 // - the list (`threads.list`), a space: sorted recently active, newest first, or needs you first (an app setting); with
 //   the sidebar folded, a rail of status glyphs. A row's title is followed by other extensions' marks (the
 //   `thread.badge` slot: a worktree's branch, say)
-// - details (`threads.details`): what the thread runs with, spent and touched; beside it (in the aside) or not, ⌘I
+// - details (`threads.details`): what the thread runs with, spent and touched, then what other extensions say of it (the
+//   `thread.details` slot: its MCP servers, say); beside it (in the aside) or not, ⌘I
 // - the model (`threads.model`), in the title bar: a button that shows or hides the details
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are its daemon half's.
 import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react'
@@ -301,6 +302,7 @@ function DetailsPane({ machine, thread }: { machine: MachineEntry; thread: Threa
           {files.map((file) => <div key={file} className="threads-details__file">{file}</div>)}
         </>
       )}
+      <Slot name="thread.details" props={{ machine, thread }} />
     </div>
   )
 }

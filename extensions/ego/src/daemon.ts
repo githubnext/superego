@@ -7,7 +7,8 @@
 // Outside agents (`superego mcp`) ask it too (`ego.ask`, or `thread.submit` to its thread), but start threads through it
 // no more than they may themselves: each message one sends goes with a block saying so (`OUTSIDE`), and while
 // `mcp.startThreads` is off, thread_start refuses when the message it's answering, the newest, has it. A turn the user
-// asks for in the window, in the same conversation, still starts threads.
+// asks for in the window, in the same conversation, still starts threads. Nor do they set up MCP servers through it:
+// superego_mcp_servers refuses whenever the message it's answering came from one, whatever the setting.
 import { hostname } from 'node:os'
 import { MachineStore } from '@superego/client'
 import { defineDaemonExtension, MCP_THREADS, type DaemonExtension } from '@superego/daemon'
@@ -51,6 +52,12 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
           const at = threads.of(conversation)
           if (at && !await fromOutside(at)) return undefined
           return "An outside agent asked for this, and outside agents can't start threads on this machine. The user can allow it in Settings → Outside agents → Can start threads."
+        },
+        // MCP servers run commands and reach the user's accounts: never set up for an outside agent, whatever it may do.
+        async refuseServers(conversation) {
+          const at = threads.of(conversation)
+          if (at && !await fromOutside(at)) return undefined
+          return 'An outside agent asked for this. Outside agents never set up MCP servers: the user does, in Settings → MCP servers (or asks here in the window).'
         },
       })
       // An outside agent's message to Ego says so.

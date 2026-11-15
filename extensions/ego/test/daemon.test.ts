@@ -58,7 +58,7 @@ it("keeps superego's own agent as one hidden thread per machine, in its data fol
   // Tools that read, and thread_start; settings it changes itself (machines too, where the app gives it the list:
   // see meta.test.ts); nothing that writes files or runs commands.
   const tools = (value.entries.find((e) => e.kind === 'pi.system')!.model![0] as { toolsAdded: { name: string }[] }).toolsAdded.map((t) => t.name)
-  expect(tools.sort()).toEqual(['ls', 'open_pane', 'read', 'superego_actions', 'superego_profiles', 'superego_set_setting', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
+  expect(tools.sort()).toEqual(['ls', 'open_pane', 'read', 'superego_actions', 'superego_mcp_servers', 'superego_profiles', 'superego_set_setting', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
   for (const tool of ['write', 'edit', 'bash', 'superego_run', 'thread_send']) expect(tools).not.toContain(tool)
   // Other threads don't get its tools or prompt, and don't see it.
   const plain = await first.peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'hi' })

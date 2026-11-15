@@ -26,7 +26,7 @@ const n = (k: number, one: string, many: string) => k === 1 ? one : `${k} ${many
 export function DescribedCall({ row, call }: { row: ToolRow; call: ToolRowCall }) {
   const { state } = call
   const name = call.call.name
-  const verb = row.verbs ? row.verbs[state === 'error' ? 2 : state === 'working' ? 1 : 0] : state === 'error' ? `${name} failed` : name
+  const verb = row.verb?.(call) ?? (row.verbs ? row.verbs[state === 'error' ? 2 : state === 'working' ? 1 : 0] : state === 'error' ? `${name} failed` : name)
   const said = row.subject?.(call)
   const subject = said === undefined ? summaryOf(name, call.call.arguments) : said
   const stat = statOf(row, call)
@@ -82,13 +82,21 @@ export function mainKind(blocks: WorkBlock[], rowOf: (name: string) => ToolRow):
 /** "Read 2 files, ran 3 commands and edited a file", as text and paths in turn: ['Edited ', 'src/a.ts', ' and ran a command']. */
 export function describeRun(blocks: WorkBlock[], rowOf: (name: string) => ToolRow): string[] {
   const count = new Map<string, number>()
+  // Tools that share a row that phrases them (a prefix's: every `mcp__` tool) are one kind, named by the first of them.
+  const firsts = new Map<ToolRow, string>()
+  const kindOf = (name: string) => {
+    const row = rowOf(name)
+    if (!row.phrase) return name
+    if (!firsts.has(row)) firsts.set(row, name)
+    return firsts.get(row)!
+  }
   // Thinking between steps is part of the work; it's named only when that's all there is.
   const tools = blocks.filter((b) => b.type === 'toolCall')
-  for (const b of tools.length ? tools : blocks.filter((b) => b.type === 'thinking')) { const kind = b.type === 'thinking' ? 'thinking' : b.name ?? 'tool'; count.set(kind, (count.get(kind) ?? 0) + 1) }
+  for (const b of tools.length ? tools : blocks.filter((b) => b.type === 'thinking')) { const kind = b.type === 'thinking' ? 'thinking' : kindOf(b.name ?? 'tool'); count.set(kind, (count.get(kind) ?? 0) + 1) }
   // The weightiest kind leads, naming its file when it was one call about one.
-  const main = mainKind(blocks, rowOf)
+  const main = kindOf(mainKind(blocks, rowOf))
   const mainRow = rowOf(main)
-  const files = tools.filter((b) => b.name === main).map((b) => mainRow.file?.((b.arguments ?? {}) as Record<string, unknown>))
+  const files = tools.filter((b) => kindOf(b.name ?? 'tool') === main).map((b) => mainRow.file?.((b.arguments ?? {}) as Record<string, unknown>))
   const only = files.length === 1 && typeof files[0] === 'string' ? files[0] : undefined
   const ordered = [...count].sort((a, b) => (a[0] === main ? -1 : b[0] === main ? 1 : 0))
   const phrases = ordered.map(([kind, k]) => {

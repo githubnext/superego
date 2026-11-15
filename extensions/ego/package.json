@@ -9,11 +9,13 @@
   },
   "dependencies": {
     "@earendil-works/pi-durable": "1.5.0",
-    "@superego/client": "workspace:*",
-    "@superego/threads": "workspace:*",
-    "@superego/daemon": "workspace:*",
-    "@superego/protocol": "workspace:*",
+    "@earendil-works/pi-schema": "1.5.0",
     "@superego/app": "workspace:*",
+    "@superego/client": "workspace:*",
+    "@superego/daemon": "workspace:*",
+    "@superego/mcp-servers": "workspace:*",
+    "@superego/protocol": "workspace:*",
+    "@superego/threads": "workspace:*",
     "@superego/ui": "workspace:*"
   },
   "peerDependencies": {

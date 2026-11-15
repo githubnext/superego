@@ -41,7 +41,7 @@ describe('Ego, the meta agent', () => {
       const machines: MachineDirectory = { list: () => [{ id: 'm1', label: 'box', target: 'me@box', enabled: true }], add: async () => ({ id: 'm2', label: 'x' }), update: async () => {}, remove: async () => {} }
       const { tools = [] } = metaExtension({ dir, ...on(router), snapshot, machines: () => machines, threads: threads() })
       const names = (tools as unknown as Tool[]).map((t) => t.name)
-      expect(names.sort()).toEqual(['ls', 'read', 'superego_actions', 'superego_machines', 'superego_profiles', 'superego_set_setting', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
+      expect(names.sort()).toEqual(['ls', 'read', 'superego_actions', 'superego_machines', 'superego_mcp_servers', 'superego_profiles', 'superego_set_setting', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
       // Setup (settings, machines) is what it changes itself; files, profiles, skills and code go to threads, so it has
       // no tool that writes or runs anything.
       for (const mutating of ['write', 'edit', 'bash', 'superego_run', 'thread_send']) expect(names).not.toContain(mutating)

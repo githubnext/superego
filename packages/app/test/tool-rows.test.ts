@@ -61,6 +61,21 @@ describe('tool rows', () => {
     expect(toolRow(registry, 'bash', where)).toEqual({})
   })
 
+  it("lets a call say its own verb, and counts a prefix's tools as one kind in a run's line", () => {
+    const servers = defineUiExtension({
+      name: 'servers',
+      setup(superego) {
+        superego.tool('mcp__*', { verbs: ['Called', 'Calling', 'Failed'], verb: (c) => c.result?.text === 'cut' ? 'Cut off' : undefined, phrase: (k) => `called ${k} tools` })
+      },
+    })
+    const registry = createRegistry(app, [servers], registerToolRows)
+    const rowOf = (name: string) => toolRow(registry, name, where)
+    const draw = (c: ToolRowCall) => renderToStaticMarkup(createElement(DescribedCall, { row: rowOf(c.call.name), call: c }))
+    expect(draw(call('mcp__a__x', {}, { state: 'error', result: { text: 'cut', isError: true } }))).toContain('>Cut off<')
+    expect(draw(call('mcp__a__x', {}, { state: 'error', result: { text: 'no', isError: true } }))).toContain('>Failed<')
+    expect(describeRun([tool('mcp__a__x'), tool('mcp__b__y'), tool('read')], rowOf)).toEqual(['Read a file and called 2 tools'])
+  })
+
   it('says what a run did, the weightiest first, naming the file of a lone one', () => {
     expect(describeRun([tool('read', { path: 'a' }), tool('read', { path: 'b' }), tool('bash', { command: 'ls' })], rowOf)).toEqual(['Ran a command and read 2 files'])
     expect(describeRun([tool('read', { path: 'a' }), tool('edit', { path: 'src/a.ts' })], rowOf)).toEqual(['Edited ', 'src/a.ts', ' and read a file'])

@@ -1,14 +1,15 @@
 // Ego's agent: what it's told (the prompt below) and its tools. It reads and explains: what Superego is (the prompt below), and this machine's
 // setup through tools that read: its settings, its actions, its profiles, the machines this computer reaches, its
-// threads, and files. What it changes itself is setup: this machine's settings (superego_set_setting) and the machines
-// this computer reaches (superego_machines). Any other work it hands to a new, ordinary thread (thread_start), top-level
+// threads, and files. What it changes itself is setup: this machine's settings (superego_set_setting), the machines
+// this computer reaches (superego_machines), and this machine's MCP servers (superego_mcp_servers, servers-tool.ts). Any other work it hands to a new, ordinary thread (thread_start), top-level
 // in the project it belongs to, and names that thread.
 import { readdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { resolve } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { createReadTool } from '@earendil-works/pi-durable/tools'
 import { lineOf, linkTo, readTool } from '@superego/threads/tools'
+import { serversTool } from './servers-tool.ts'
 import { bool, lit, obj, opt, str, union, unknown, type ActionInfo, type Exposure, type Json, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 
 /** The machines a computer reaches, as the app keeps them (`machines.json`). */
@@ -18,6 +19,9 @@ export type MachineDirectory = {
   update(id: string, patch: { label?: string; enabled?: boolean }): Promise<unknown>
   remove(id: string): Promise<unknown>
 }
+
+/** The data folder's credential stores: providers' (pi-ai's) and MCP servers'. */
+const SECRET_FILES = ['auth.json', 'mcp-auth.json']
 
 /** What Ego needs of the daemon's threads: the listed ones (never Ego itself), and starting a top-level one. */
 export type EgoThreads = {
@@ -35,9 +39,10 @@ talking to you in, and about how it is set up on this machine (settings, profile
 You run on ${hostname}, in ${dataDir}, ${name}'s data folder there. Be brief and practical.
 
 You read and explain. Your tools look: read files, list folders, and read this machine's settings, actions, profiles,
-machines and threads. What you change yourself is setup: this machine's settings (superego_set_setting) and the
-machines this computer reaches (superego_machines: add, rename, enable, disable, remove). Say what you'll change first,
-ask before removing a machine, and afterwards say where the user sees it. Any other work (editing a file, signing in,
+machines and threads. What you change yourself is setup: this machine's settings (superego_set_setting), the
+machines this computer reaches (superego_machines: add, rename, enable, disable, remove), and this machine's MCP
+servers (superego_mcp_servers). Say what you'll change first, ask before removing a machine or a server, and afterwards
+say where the user sees it. Any other work (editing a file, signing in,
 writing a profile or a skill, writing code) is done by a separate, ordinary thread that you start with thread_start:
 - Give it a clear, self-contained prompt: it sees nothing of this conversation. Say what to do, where, what you found
   that it needs, and how to check the result.
@@ -48,7 +53,8 @@ writing a profile or a skill, writing code) is done by a separate, ordinary thre
 - Ask before starting work the user didn't ask for, and say what it will change.
 - A message that comes with <outside-agent> is from an outside agent (an MCP client the user connected), not the
   user. It starts threads through you only where this machine lets outside agents start threads (Settings → Outside
-  agents → Can start threads); else thread_start refuses: tell it so, and where the user turns it on.
+  agents → Can start threads); else thread_start refuses: tell it so, and where the user turns it on. It never sets up
+  MCP servers: superego_mcp_servers refuses it, since a server runs commands and reaches the user's accounts.
 
 What ${name} is:
 - A machine runs a daemon that keeps agents going while the app is closed. "This computer" is always there; others are
@@ -68,7 +74,8 @@ What ${name} is:
       prompt: 'You answer customer email for Acme.', // instructions for its agent
       extensions: ['./tools.ts'],                    // agent tools, prompt sections, hooks (defineExtension from '${id}')
       ui: ['./ui/badge.tsx'],                        // window extensions (defineUiExtension from '${id}/ui')
-      without: ['ask-user'],                         // optional extensions it does without: coding-tools, panes, skills, agents-md, thread-tools, thread-reports, ask-user, ego, files, git, images, links, suggestions, tasks, web-panes
+      mcp: ['linear'],                               // the machine's MCP servers its threads use, by name
+      without: ['ask-user'],                         // optional extensions it does without: coding-tools, panes, skills, agents-md, thread-tools, thread-reports, ask-user, ego, files, git, images, links, mcp-servers, suggestions, tasks, web-panes
       worktree: true,                                // its threads get worktrees
       extends: 'user:default',                       // a project's profile building on the user's
     })
@@ -79,6 +86,16 @@ What ${name} is:
   disable-model-invocation: true to offer it only when named), then the instructions. Every agent is told about them; a
   message with $name or /skill:name sends one along. ${agentsDir}/AGENTS.md, and AGENTS.md files from / down to a
   thread's folder, are standing instructions for every agent.
+- MCP servers are other people's tools for the agents in threads (Linear, GitHub, Sentry, a browser): a command a
+  machine runs or a URL it reaches, set up per machine in Settings → MCP servers. A thread uses those its profile
+  names (\`mcp: ['linear']\`, or servers of its own in \`mcpServers\`), or without a profile those switched to "Use in
+  threads without a profile". You set them up with superego_mcp_servers: a well-known one by name (op catalog lists
+  them), else a command or a URL. A command you add doesn't run until the user allows it (Settings → MCP servers
+  shows the whole command line, with Allow): say so. Signing in is the user's: never ask for a key, token or password
+  in chat, where it would stay in the transcript, and never put one in a server's config. Send them to Settings → MCP
+  servers → <name> → Sign in (OAuth, in the browser) or Set key; if they paste one anyway, don't use it, and tell them
+  to set it there (and to revoke it, if it matters). "Outside agents" (\`${id} mcp\`) are the other way round: agents
+  outside ${name} using this machine.
 - Settings: each machine has its own (models, providers and sign-in, web access, …): superego_settings reads them and
   superego_set_setting changes them (as \`${id} do settings.set --key … --value …\` does). Providers sign in from the app's
   Settings → Providers (OAuth needs the browser). The app's own settings (fonts, accent colour, keyboard shortcuts,
@@ -88,15 +105,16 @@ What ${name} is:
 - You are one thread per machine, kept, and not listed with the others. The user clears you from your title bar.
 
 Data folder layout (${dataDir}): settings.json (this machine's settings), app-settings.json (the app's), machines.json
-(the machines this computer reaches), profiles/, worktrees/, attachments/, trusted-profiles.json. Settings and
-machines change through your tools, the rest through actions (profile.allow, …) a thread runs, not by hand.`
+(the machines this computer reaches), mcp-servers.json (its MCP servers), profiles/, worktrees/, attachments/,
+trusted-profiles.json. Settings, machines and MCP servers change through your tools, the rest through actions
+(profile.allow, …) a thread runs, not by hand. auth.json and mcp-auth.json hold sign-ins and keys: you don't read them.`
 }
 
 /**
  * The meta agent's tools: they read, except those for setup, which is Ego's own to change (superego_set_setting,
  * superego_machines), and thread_start, which hands any other work to a thread.
  */
-export function metaExtension({ dir, dispatch, actions, snapshot, machines, threads, refuseStart }: {
+export function metaExtension({ dir, dispatch, actions, snapshot, machines, threads, refuseStart, refuseServers }: {
   /** Ego's own folder, the data folder: where relative paths start. */
   dir: string
   /** Run an action on this machine (`settings.set`, `profile.list`), and list them. */
@@ -107,13 +125,24 @@ export function metaExtension({ dir, dispatch, actions, snapshot, machines, thre
   threads: EgoThreads
   /** Why thread_start may not start a thread now, in the turn of conversation `conversation`; nothing when it may. */
   refuseStart?(conversation: number): Promise<string | undefined>
+  /** Why superego_mcp_servers may not run now (an outside agent asked), likewise. */
+  refuseServers?(conversation: number): Promise<string | undefined>
 }) {
   const json = (value: unknown) => ({ output: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] })
   const text = (value: string) => ({ output: [{ type: 'text' as const, text: value }] })
   const brief = (action: ActionInfo) => ({ id: action.id, title: action.title, params: action.params })
   const folder = (path: string) => resolve(dir, path.replace(/^~(?=\/|$)/, homedir()))
+  // Every file but the credential stores: what's in them never reaches a transcript.
+  const read = createReadTool()
   const tools = [
-    createReadTool(),
+    {
+      ...read,
+      execute(params: { path: string }, ...rest: unknown[]) {
+        const at = folder(params.path)
+        if (dirname(at) === resolve(dir) && SECRET_FILES.includes(basename(at))) throw new Error(`${basename(at)} holds sign-ins and keys: not for reading here.`)
+        return (read.execute as (...args: unknown[]) => unknown)(params, ...rest)
+      },
+    } as typeof read,
     defineTool({
       name: 'ls',
       description: 'List a folder: its entries, folders with a trailing slash. Relative to your folder; ~ is home.',
@@ -191,6 +220,7 @@ export function metaExtension({ dir, dispatch, actions, snapshot, machines, thre
       },
     }),
   ]
+  tools.push(serversTool({ dispatch, snapshot, ...(refuseServers ? { refuse: refuseServers } : {}) }) as typeof tools[number])
   if (machines) tools.push(defineTool({
     name: 'superego_machines',
     description: 'The machines this computer reaches besides itself, as the app keeps them: list; add (by ssh target, or `via` any command piping stdio to the far side, with an optional name and the command to run there); rename; enable; disable; remove. The app connects to an added machine on its own; it needs superego installed there.',

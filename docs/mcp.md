@@ -1,6 +1,6 @@
 # MCP servers for Superego's agents
 
-A design, 2026-11-15. Lanes 1 (the core seams) and 2 (the runtime) are built; lanes 3 and 4 are not yet. It covers how agents in Superego threads use MCP servers: what the
+A design, 2026-11-15. Lanes 1 (the core seams), 2 (the runtime) and 4 (UI, Ego and docs) are built; lane 3 (OAuth) is not yet. It covers how agents in Superego threads use MCP servers: what the
 user sets up, where it lives, how it runs, and four lanes to build it in.
 
 ## Two MCPs, named apart
@@ -700,6 +700,22 @@ Files:
 
 Depends on Lane 1 (prefix rows, `SignInFlow`) and on Lane 2's `shared.ts`. It runs alongside Lane 3, with OAuth
 rows working once Lane 3 lands.
+
+**Built.** As above, except:
+- `extensions/mcp-servers/src/settings.tsx` holds the section and its dialogs, `describe.ts` the words and the Add
+  dialog's form (plain functions, tested as such); `ui.tsx` the rest.
+- Three more core seams, all 1.7 (it hadn't shipped): the `thread.details` slot (the threads extension's details draw
+  it), a tool result's images in rows (`ToolCallProps.result.images`), and a call's own verb (`ToolRow.verb`), for
+  *Interrupted: may have run*. Tools of one prefix's row count as one kind in a run's line ("Called 3 MCP tools").
+  `Output` and `unwrap` are in `superego/unstable`.
+- An interrupted call is known by its text (the `afterTool` rewrite, or pi-durable's own), since a row doesn't see
+  diagnostics.
+- Ego's tool is `servers-tool.ts`. Besides having no secret field, it refuses a config that slips one in: an env var
+  named like one (it asks for `secretEnv` names instead), a value shaped like a key, a flag that takes one, or a URL
+  carrying credentials. An edit to a command waits for Allow again. Ego's `read` won't open `auth.json` or
+  `mcp-auth.json`.
+- The header chip is a view (`mcp-servers.chip`, in `header`), so the user's layout can move it.
+- `app/test/look.sh <dir> mcp` shoots the section and a transcript with MCP rows.
 
 ## Future
 

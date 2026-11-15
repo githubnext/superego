@@ -39,6 +39,8 @@ export type BehaviourSlot =
   | 'thread.badge'
   /** Above the composer: things waiting on the user, suggestions. */
   | 'composer.above'
+  /** In a thread's details (⌘I), after what the core says of it: what an extension knows of the thread. Draw a `<h5>` and a `<dl>`, or nothing. 1.7. */
+  | 'thread.details'
   /** Beside a file being edited: a file tree, an outline. `open` shows another file there (`beside`: in a pane of its own). */
   | 'editor.side'
   /** In a file editor's bar: small buttons. */
@@ -67,6 +69,7 @@ export type SlotProps = {
   'thread.crumb': { machine: MachineEntry; thread: ThreadInfo }
   'thread.badge': { machine: MachineEntry; thread: ThreadInfo }
   'composer.above': { machine: MachineEntry; thread: ThreadInfo }
+  'thread.details': { machine: MachineEntry; thread: ThreadInfo }
   'thread.aside': { machine: MachineEntry; thread: ThreadInfo }
   'editor.side': EditorSlotProps
   'editor.bar': EditorSlotProps
@@ -153,12 +156,15 @@ export type NewThreadField = {
   from?(thread: ThreadInfo): Json | undefined
 }
 
-/** A tool call in the transcript. `result` is there once it finished; `live` while it runs. */
+/**
+ * A tool call in the transcript. `result` is there once it finished (its text, and the images the model was shown, as
+ * base64: 1.7); `live` while it runs.
+ */
 export type ToolCallProps = {
   machine: MachineEntry
   thread: ThreadInfo
   call: { id: string; name: string; arguments: Record<string, unknown> }
-  result?: { text: string; isError: boolean; details?: unknown }
+  result?: { text: string; isError: boolean; details?: unknown; images?: { data: string; mimeType: string }[] }
   live?: { status: 'pending' | 'running' | 'done'; output?: string; details?: unknown }
 }
 
@@ -178,6 +184,8 @@ export type ToolRow = {
   icon?: ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>
   /** Done, working, failed: "Read", "Reading", "Read failed". Unset: the tool's name, and "<name> failed". */
   verbs?: [done: string, working: string, failed: string]
+  /** This call's verb instead of `verbs`' (one cut off by a restart, say); `undefined`, `verbs`'. 1.7. */
+  verb?: (call: ToolRowCall) => ReactNode
   /** What it acted on, after the verb. Text shows in the mono face (a path, a command); a node as itself (a thread). Default: its `command`, `path` or `pattern`, else its arguments. */
   subject?: (call: ToolRowCall) => ReactNode
   /** Lines it added and removed: shown in the row, and summed in its run's line and its turn's. */
@@ -477,7 +485,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}),
       ...(version ? { version } : {}), ...(api ? { api } : {}), ...(capabilities?.length ? { capabilities } : {}),
     })),
-    slots: { 'thread.crumb': [], 'thread.badge': [], 'composer.above': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
+    slots: { 'thread.crumb': [], 'thread.badge': [], 'composer.above': [], 'thread.details': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
     views: [], dataViews: {}, tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),

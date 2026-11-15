@@ -100,6 +100,12 @@ Bundled extensions get more than a profile's:
 - **App settings** (per user, in Settings → General): `superego.appSettings({ id, title, settings: [{ key: 'orders.x', … }] })`,
   read with `useAppSetting('orders.x')`, or `context.appSetting('orders.x')` in an action.
 - **Machine settings** from the daemon half: `superego.settings.register({ id: 'orders', title, settings: [{ key: 'orders.x', title, default, type }] })`.
+- **A settings section drawn your own way**, for what isn't a list of settings (a machine's MCP servers, its
+  providers): the daemon half registers `{ id, title, ui: 'orders', settings: [], data }`, the UI half draws it with
+  `superego.settings('orders', Component)` (given `{ target, section }`: run actions with `{ machine: target }`, so a
+  remote machine works the same). Keep what it shows current as a live value and draw from that. A sign-in of the
+  extension's own runs in its daemon (`superego.auth.flow(context, run)`, answered `{ flow }`) and shows in the window
+  with `<SignInFlow machine title start onClose />`. `extensions/mcp-servers` does all of it.
 - A feature flag: the daemon announces `ext:<name>` for each extension set up and switched on there, and tells clients
   again whenever that changes, so `has(machine, 'ext:orders')` says whether a machine has it now (a profile's once the
   profile loads). Watching a value needs no check: it's null until the extension publishes it. Check it before calling the

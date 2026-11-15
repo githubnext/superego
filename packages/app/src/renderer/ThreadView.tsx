@@ -71,6 +71,14 @@ export const useComposer = () => useContext(ComposerContext)
 const blocks = (message: Message | undefined): Block[] =>
   !message ? [] : typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content
 const textOf = (message: Message | undefined) => blocks(message).map((b) => b.text ?? '').join('')
+/** A tool result's images, as the model was shown them: `{ images }`, or nothing when it has none. */
+const imagesOf = (message: Message) => {
+  const images = blocks(message).flatMap((b) => {
+    const { data, mimeType } = b as { data?: unknown; mimeType?: unknown }
+    return b.type === 'image' && typeof data === 'string' && typeof mimeType === 'string' ? [{ data, mimeType }] : []
+  })
+  return images.length ? { images } : {}
+}
 
 /** A thread: its transcript and composer, and the panes open beside it. */
 export function ThreadView({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
@@ -724,7 +732,7 @@ function callOf(here: { machine: MachineEntry; thread: ThreadInfo }, block: Bloc
   return {
     ...here,
     call: { id: block.id ?? '', name: block.name ?? '', arguments: (block.arguments ?? {}) as Record<string, unknown> },
-    ...(result ? { result: { text: textOf(result), isError: Boolean(result.isError), details: result.details } } : {}),
+    ...(result ? { result: { text: textOf(result), isError: Boolean(result.isError), details: result.details, ...imagesOf(result) } } : {}),
     ...(slot ? { live: { status: slot.status, ...(slot.output !== undefined ? { output: slot.output } : {}), details: slot.details } } : {}),
     state: result ? (result.isError ? 'error' : 'done') : slot?.status === 'running' ? 'working' : 'idle',
   }

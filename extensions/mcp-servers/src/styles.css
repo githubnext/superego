@@ -1,0 +1,68 @@
+/* Settings → MCP servers: rows like Providers' (the core's .provider), a status dot before the name. */
+.mcp-server { padding: 10px 0; border-bottom: 1px solid var(--superego-border); }
+.mcp-server__main { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.mcp-server__name { display: flex; align-items: center; gap: 6px; }
+.mcp-server__title { color: var(--superego-muted); }
+.mcp-server__runs code { font: var(--superego-text-sm) var(--superego-mono); overflow-wrap: anywhere; }
+.mcp-server .provider__actions { align-items: center; }
+.mcp-server__unprofiled { display: inline-flex; align-items: center; }
+.mcp-server__more { width: 26px; height: 26px; min-height: 26px; box-shadow: none; background: none; color: var(--superego-muted); }
+.mcp-server__more:hover, .mcp-server__more[data-popup-open] { background: var(--superego-hover); color: var(--superego-text); }
+/* Switched off: a hollow dot. */
+.superego-status--off::before { background: none; border: 1.5px solid currentColor; }
+/* Waiting for Allow: the whole command line, as it will run. */
+.mcp-server__allow { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--superego-status-blocked) 8%, var(--superego-bg)); }
+.mcp-server__line { margin: 6px 0; font: var(--superego-text-sm)/1.45 var(--superego-mono); white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; }
+.mcp-server__allow-actions { display: flex; gap: 6px; }
+.mcp-servers__add { padding: 12px 0; }
+.mcp-servers__group { font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 2px; }
+/* A key's and secret env values' fields, under the row (the core's .auth-flow box). */
+.mcp-secrets { display: flex; flex-direction: column; gap: 6px; }
+.mcp-secrets__field { display: grid; grid-template-columns: minmax(90px, auto) 1fr; align-items: center; gap: 8px; }
+.mcp-secrets__actions { display: flex; gap: 6px; }
+.mcp-sign-in .auth-flow { margin-top: 0; }
+
+/* Add server and Edit. */
+.mcp-dialog__form { display: flex; flex-direction: column; gap: 10px; }
+.mcp-dialog__form label > span { display: block; font-size: var(--superego-text-sm); color: var(--superego-muted); margin-bottom: 3px; }
+.mcp-dialog__form .superego-field { width: 100%; box-sizing: border-box; }
+.mcp-dialog__form .superego-segmented { align-self: flex-start; }
+.mcp-dialog__pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mcp-dialog__more > summary { font-size: var(--superego-text-sm); color: var(--superego-muted); cursor: default; margin-bottom: 8px; }
+.mcp-dialog__timeout { display: block; margin-top: 10px; max-width: 50%; }
+.mcp-dialog__check { margin: 0; font-weight: 500; }
+.mcp-dialog__actions { display: flex; justify-content: flex-end; gap: 6px; }
+.mcp-env { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.mcp-env__row { display: grid; grid-template-columns: 1fr 1.4fr auto auto; gap: 6px; align-items: center; width: 100%; }
+.mcp-env__secret { display: flex; gap: 4px; align-items: center; font-size: var(--superego-text-sm); color: var(--superego-muted); white-space: nowrap; }
+.mcp-log__text { margin: 0; max-height: 60vh; overflow: auto; font: var(--superego-text-sm)/1.45 var(--superego-mono); white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; }
+
+/* A call's row: the server and tool, then what it's about, quieter. */
+.mcp-call__subject { font-family: inherit; }
+.mcp-call__about { color: var(--superego-muted); }
+.mcp-call__interrupted { color: var(--superego-status-blocked); }
+/* Open: indented as the core's output is under a lone row. */
+.steps:not(.steps--run) > .step > .mcp-call { margin-left: 21px; }
+.mcp-call__args > summary { font-size: var(--superego-text-sm); color: var(--superego-muted); cursor: default; padding: 2px 0; }
+.mcp-call__args > summary:hover { color: var(--superego-text); }
+.mcp-call__image { display: block; max-width: min(100%, 480px); max-height: 360px; margin: 4px 0 var(--superego-space-2); border-radius: 8px; box-shadow: var(--superego-control-edge); }
+.mcp-call__files { font-size: var(--superego-text-sm); color: var(--superego-muted); margin: 0 0 var(--superego-space-2); }
+.mcp-call__files code { margin-left: 6px; font: var(--superego-text-sm) var(--superego-mono); overflow-wrap: anywhere; }
+.mcp-call__loaded { margin: 2px 0 var(--superego-space-2) 21px; padding: 0; list-style: none; font-size: var(--superego-text-sm); }
+.mcp-call__loaded code { font: var(--superego-text-sm) var(--superego-mono); }
+
+/* The header's chip, and the list it opens to (the same in thread details). */
+.mcp-chip { display: inline-flex; align-items: center; gap: 4px; font: inherit; border: 0; cursor: default; }
+.mcp-chip.is-troubled { color: var(--superego-status-blocked); }
+.mcp-chip__popup { min-width: 240px; max-width: 360px; padding: 4px 2px; }
+.mcp-chip__title { font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); margin: 0 0 6px; }
+.mcp-list { margin: 0 0 var(--superego-space-5); padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.mcp-chip__popup .mcp-list { margin: 0; }
+.mcp-list__item { display: grid; grid-template-columns: auto 1fr; column-gap: 6px; align-items: center; }
+.mcp-list__state, .mcp-list__error { grid-column: 2; font-size: var(--superego-text-sm); color: var(--superego-muted); }
+.mcp-list__error { color: var(--superego-status-error); overflow-wrap: anywhere; }
+.mcp-list__item.is-left .mcp-list__name { color: var(--superego-muted); }
+
+/* Over the composer: a server that needs signing in (the core's .service-notice). */
+.mcp-notice__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.mcp-notice__dismiss { width: 18px; height: 18px; min-height: 18px; box-shadow: none; background: none; color: var(--superego-muted); }

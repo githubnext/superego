@@ -11,7 +11,8 @@ import type { ExtensionAbout } from './app.ts'
  * `setup`'s cleanup, and the `unarchiveAbandoned` hook. 1.2: `scopedValue` and `useValue`'s `scope`, `useMethod`,
  * window actions from a profile's UI, and the stable surface apart from `superego/unstable`. 1.3: `spawnGroup`. 1.5:
  * channels (`superego.channel` in a daemon half, `channel` in the window) and the `paneClosed` hook. 1.6: `recap`.
- * 1.7: `agentParts`, `agent()`'s handle (`replace`, `remove`), `auth.flow`, and tool rows by prefix (`tool('x__*')`).
+ * 1.7: `agentParts`, `agent()`'s handle (`replace`, `remove`), `auth.flow`, tool rows by prefix (`tool('x__*')`) and a
+ * call's own verb (`ToolRow.verb`), the `thread.details` slot, and a tool result's images (`ToolCallProps.result.images`).
  * Minor: something added (an extension that uses it asks for `^1.<minor>`); major: something an extension could rely
  * on changed or went. An extension whose `api` range this doesn't satisfy is refused when it's set up.
  */

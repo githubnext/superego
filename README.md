@@ -137,6 +137,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `extensions/skills` | skills from `~/.agents/skills`: what each is for in the prompt, `$name` completed in the composer and sent with the message, a chip under it, and a data view listing them (daemon + UI) |
 | `extensions/suggestions` | after each answer, a side call to the thread's model for what you might send next; offered over the composer, numbered; ←/→ pick, ⏎ sends, ⇥ takes it to change, ⌃1–9 send that one (daemon + UI) |
 | `extensions/tasks` | `task_start`/`task_finish` tools and a prompt asking the agent to report its work as tasks; the transcript folds work under each task's title, status and outcome (daemon + UI) |
+| `extensions/mcp-servers` | MCP servers for the agents in threads: other people's tools (Linear, GitHub, a browser) as `mcp__<server>__<tool>`, a command a machine runs or a URL it reaches, signed in to once per machine; Settings → MCP servers (Add server with a list of well-known ones, Sign in, Set key, Allow, Show log), the calls as rows, `3 MCP` in a thread's header and its servers in thread details, a notice when one needs signing in (daemon + UI) |
 
 An extension has a daemon half (`defineDaemonExtension`: agent tools and hooks, settings, actions, read methods, live
 values, pane kinds described to the agent, thread status) and a UI half (`defineUiExtension`: slots, pane kinds, tool
@@ -188,6 +189,18 @@ Only actions that opt in are there: starting threads, sending them messages, sto
 profiles. One server serves one machine; `superego mcp -m <machine>` serves another. Add it as
 `claude mcp add superego -- superego mcp`, or as `{"command": "superego", "args": ["mcp"]}` in a client's config.
 
+That's Superego as an MCP server, for agents outside it ("outside agents"). The other way round, the agents in its
+threads use **MCP servers**: Settings → MCP servers lists a machine's, each a command it runs (stdio) or a URL it
+reaches (Streamable HTTP), with how it signs in: OAuth in the browser, an API key, or secret environment variables.
+Secrets stay on that machine, in `mcp-auth.json` (mode 0600), never in `mcp-servers.json`. Add server offers well-known
+ones to start from, and checks a server as it's saved ("Connected · 23 tools"). A thread uses the servers its profile
+names (`mcp: ['linear']`, below), or, without a profile, those switched to *Use in threads without a profile*. Its
+calls show as rows (*Called Linear · create_issue*), its header says how many servers it has (`3 MCP`, opening to each
+with its state and why any were left out), and a server needing sign-in puts a notice over its composer. Ego sets
+servers up too ("connect Linear"), but never takes a key in chat, and a command it adds waits for **Allow** in
+Settings, which shows the whole command line. Outside agents can't set servers up, through Ego or otherwise; a thread
+one starts (where *Can start threads* is on) uses its profile's servers like any other. Design: [docs/mcp.md](docs/mcp.md).
+
 ssh runs without a terminal (`BatchMode`) and rides one shared ControlMaster connection per target under the data dir. A host
 that wants a password, a code or a hardware key shows as "needs login": `superego machines login <machine>` (or Log in in
 Settings → Machines, which opens Terminal) logs in once and leaves a master that links ride for four hours. A changed or
@@ -229,11 +242,20 @@ export default defineProfile({
   extensions: ['./orders.ts'],     // agent extensions, or daemon extensions (actions, live values), from 'superego'
   ui: ['./ui/order.tsx'],          // defineUiExtension({ name, setup(superego) { superego.pane('order', …) } }) from 'superego/ui'
   panes: { order: 'an order, with its lines and status. Params: { id }' },  // told to the agent, for open_pane
+  mcp: ['linear', 'sentry'],       // the machine's MCP servers its threads use (Settings → MCP servers), by name
+  mcpServers: {                    // servers of its own: a command (run in the project's root) or a URL
+    docs: { command: 'node', args: ['./tools/docs-mcp.js'], auth: { type: 'env', names: ['DOCS_TOKEN'] } },
+  },
   without: ['ask-user'],           // optional extensions its threads go without
   worktree: false,                 // its threads work in place (the default); true: each in a worktree of its own
   options: { worktrees: false },   // what its threads ask extensions for, by name (`worktree` is the shorthand for this one)
 })
 ```
+
+A profile's `mcpServers` take the shape of a Settings entry (`command`, `args`, `cwd`, `env`, or `url`, `headers`;
+`auth`, `lifetime`, `tools`, `timeout`); their secrets are entered in Settings → MCP servers → From profiles, never in
+the file. A project's run only once its profile is allowed, like the rest of it. With `extends`, `mcp` lists add up and
+`mcpServers` merge by name, the project's winning; `without: ['mcp-servers']` drops them all.
 
 A profile's UI is TSX or TS, compiled when the daemon serves it; it imports `react` and `superego/ui` (the window's own
 hooks and components, the file editor among them). An example is the `obsidian` profile in `~/.superego/profiles`: a vault's
