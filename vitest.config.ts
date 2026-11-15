@@ -27,6 +27,7 @@ export default defineConfig({
   }],
   test: {
     include: ['packages/*/test/**/*.test.ts', 'extensions/*/test/**/*.test.ts', 'packages/app/test/**/*.test.ts'], testTimeout: 20_000,
-    env: { XDG_RUNTIME_DIR: runtime },
+    // The author types tests share (packages/cli/test/author-types.ts): a data dir to install them in, once a run.
+    env: { XDG_RUNTIME_DIR: runtime, SUPEREGO_TEST_AUTHOR_TYPES: join(runtime, 'author') },
   },
 })

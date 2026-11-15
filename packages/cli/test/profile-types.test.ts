@@ -35,7 +35,9 @@ beforeAll(async () => {
   home = realpathSync(await mkdtemp(join(tmpdir(), 'superego-profile-types-')))
   await builtTypes()
 }, 240_000)
-afterAll(async () => { await rm(home, { recursive: true, force: true }) })
+// With the author types `profile new` copied in (the one test file that has its own: author-types.ts): some 2,000 files,
+// that take seconds to remove on a busy machine.
+afterAll(async () => { await rm(home, { recursive: true, force: true }) }, 120_000)
 
 it("gives a new profile types: 'superego', 'superego/ui', React and JSX check, and mistakes don't", async () => {
   const made = JSON.parse(await superego(['profile', 'new', 'desk', '--user', '--json'])) as { dir: string; written: string[] }

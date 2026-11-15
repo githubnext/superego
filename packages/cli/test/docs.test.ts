@@ -12,7 +12,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { setUpProfileTypes } from '@superego/client/author-types'
-import { authorTypes, sdkPaths } from '../src/extensions.ts'
+import { sdkPaths } from '../src/extensions.ts'
+import { sharedAuthorTypes } from './author-types.ts'
 
 const GUIDE = fileURLToPath(new URL('../../../docs/writing-extensions.md', import.meta.url))
 
@@ -59,7 +60,7 @@ let dir: string
 let types: string
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), 'superego-docs-'))
-  types = await authorTypes(join(dir, '.data'))
+  types = await sharedAuthorTypes()
 }, 240_000)
 afterAll(async () => { await rm(dir, { recursive: true, force: true }) })
 

@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
-import { authorTypes } from '../src/extensions.ts'
+import { linkAuthorTypes } from './author-types.ts'
 
 const CLI = fileURLToPath(new URL('../../../app/bin/superego.ts', import.meta.url))
 let home: string
@@ -31,21 +31,21 @@ const until = async (check: () => Promise<boolean>) => {
 
 beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), 'superego-cli-'))
-  // The author types `profile new` links a profile to, built and installed in this home before any command waits on
-  // them: installing is a copy of some 2,000 files, seconds on a busy machine (profile-types.test.ts covers it).
-  await authorTypes(home)
+  // The author types `profile new` links a profile to, there before any command waits on them.
+  await linkAuthorTypes(home)
 }, 240_000)
 afterAll(async () => {
-  // Each daemon, gone before its files are: one still shutting down writes as the folder is removed.
-  for (const dir of [home, join(home, 'second'), join(home, 'third')]) {
+  // Each daemon, gone before its files are: one still shutting down writes as the folder is removed. All at once, so
+  // their shutdowns overlap.
+  await Promise.all([home, join(home, 'second'), join(home, 'third')].map(async (dir) => {
     const pid = Number(await readFile(join(dir, 'daemon.pid'), 'utf8').catch(() => '0'))
-    if (!pid) continue
-    try { process.kill(pid) } catch { continue }
+    if (!pid) return
+    try { process.kill(pid) } catch { return }
     for (let i = 0; i < 100; i++) {
       try { process.kill(pid, 0) } catch { break }
       await new Promise((r) => setTimeout(r, 50))
     }
-  }
+  }))
   await rm(home, { recursive: true, force: true })
 })
 

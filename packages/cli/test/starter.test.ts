@@ -4,7 +4,8 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { authorTypes, newExtension, testExtension } from '../src/extensions.ts'
+import { newExtension, testExtension } from '../src/extensions.ts'
+import { sharedAuthorTypes } from './author-types.ts'
 import { addToProfile } from '../src/starter.ts'
 
 describe('adding to a profile', () => {
@@ -25,7 +26,7 @@ describe('a new extension', () => {
   let types: string
   beforeAll(async () => {
     dir = await mkdtemp(join(tmpdir(), 'superego-starter-'))
-    types = await authorTypes(join(dir, 'data'))
+    types = await sharedAuthorTypes()
   }, 240_000)
   afterAll(async () => { await rm(dir, { recursive: true, force: true }) })
 
