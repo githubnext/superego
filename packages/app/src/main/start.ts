@@ -282,7 +282,8 @@ export function startApp(appConfig: AppConfig) {
 
   // Windows' channels (a terminal's bytes, say), held on their machine's link: each chunk passed to its window and read
   // there before the next, and every one of a window's aborted when its page loads again or it goes.
-  const held = new Map<string, { channel: Channel; contents: Electron.WebContents; reads: (() => void)[] }>()
+  type HeldChannel = { channel: Channel; contents: Electron.WebContents; reads: (() => void)[]; start(): void }
+  const held = new Map<string, HeldChannel>()
   const watchedContents = new WeakSet<Electron.WebContents>()
   const dropChannels = (contents: Electron.WebContents) => { for (const entry of held.values()) if (entry.contents === contents) entry.channel.abort('The window closed') }
   ipcMain.handle(CHANNEL.open, async (event, machine: string, kind: string, params: unknown): Promise<CallResult> => {
@@ -292,10 +293,11 @@ export function startApp(appConfig: AppConfig) {
       const channel = await link.channel(kind, params)
       const id = randomUUID()
       const contents = event.sender
-      const entry = { channel, contents, reads: [] as (() => void)[] }
+      const entry: HeldChannel = { channel, contents, reads: [], start: () => {} }
       held.set(id, entry)
       const send = (message: ChannelEvent) => { if (!contents.isDestroyed()) contents.send(CHANNEL.data, message) }
-      channel.onData((data) => new Promise<void>((read) => {
+      // Read once the window is ready for it (`start`): it knows the channel's id only once this has answered.
+      entry.start = () => channel.onData((data) => new Promise<void>((read) => {
         if (contents.isDestroyed()) return read()
         entry.reads.push(read)
         send({ id, data })
@@ -318,6 +320,7 @@ export function startApp(appConfig: AppConfig) {
   })
   const heldBy = (event: Electron.IpcMainEvent, id: string) => { const entry = held.get(id); return entry?.contents === event.sender ? entry : undefined }
   ipcMain.on(CHANNEL.write, (event, id: string, bytes: Uint8Array) => { heldBy(event, id)?.channel.write(bytes).catch(() => {}) })
+  ipcMain.on(CHANNEL.start, (event, id: string) => { heldBy(event, id)?.start() })
   ipcMain.on(CHANNEL.ack, (event, id: string) => { heldBy(event, id)?.reads.shift()?.() })
   ipcMain.on(CHANNEL.close, (event, id: string) => { heldBy(event, id)?.channel.abort('Closed') })
   ipcMain.on(CHANNEL.reset, (event) => dropChannels(event.sender))

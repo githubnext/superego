@@ -92,6 +92,11 @@ function TerminalPane({ machine, thread, pane }: PaneProps) {
       const term = new ghostty.Terminal({ ...lookOf(element, dark), cursorBlink: true, scrollback: 10_000 })
       cleanups.push(() => term.dispose())
       term.open(element)
+      // Its text, for tests and a look from the devtools: `document.querySelector('.terminal-pane__screen').text()`.
+      Object.defineProperty(element, 'text', { configurable: true, value: () => {
+        const buffer = term.buffer.active
+        return Array.from({ length: buffer.length }, (_, y) => buffer.getLine(y)?.translateToString(true) ?? '').join('\n').trimEnd()
+      } })
       term.attachCustomKeyEventHandler(windowTakes)
       // What the terminal doesn't pass on is its own: kept from the window's shortcuts.
       const own = (event: KeyboardEvent) => { if (!windowTakes(event)) event.stopPropagation() }
@@ -108,15 +113,22 @@ function TerminalPane({ machine, thread, pane }: PaneProps) {
       const framing = new Framing()
       let replaying = true
       const encoder = new TextEncoder()
-      const write = (bytes: Uint8Array) => new Promise<void>((done) => term.write(bytes, done))
-      channel.onData(async (bytes) => {
+      // Written as it comes: the emulator takes it at once (its callback waits for a frame, and a hidden window or tab
+      // draws none, which would hold up the shell).
+      // What's replayed is written at the size it was printed at, so a line the shell redrew lands where it did; then
+      // the terminal fits its pane again (the shell redraws for that).
+      let sized = false
+      channel.onData((bytes) => {
+        if (disposed) return
         const { replayed, live } = framing.split(bytes)
-        if (replayed.length) await write(replayed)
-        if (framing.live) replaying = false
-        if (live.length) await write(live)
+        if (!sized && framing.size) { sized = true; term.resize(framing.size.cols, framing.size.rows) }
+        if (replayed.length) term.write(replayed)
+        if (replaying && framing.live) { replaying = false; fit.fit() }
+        if (live.length) term.write(live)
       })
       const typed = term.onData((text) => { if (!replaying) channel!.write(encoder.encode(text)) })
-      const resized = term.onResize(({ cols, rows }) => { void call(machine.id, RESIZE, { thread: thread.id, pane: pane.id, cols, rows }).catch(() => {}) })
+      // Sized for the replay isn't the pane's size: only the pane's is the shell's.
+      const resized = term.onResize(({ cols, rows }) => { if (!replaying) void call(machine.id, RESIZE, { thread: thread.id, pane: pane.id, cols, rows }).catch(() => {}) })
       cleanups.push(() => { typed.dispose(); resized.dispose() })
       fit.observeResize()
       cleanups.push(() => fit.dispose())

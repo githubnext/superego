@@ -6,8 +6,9 @@ import type { ExtensionAbout, Status } from '@superego/protocol'
 export const TERMINAL = 'terminal'
 /**
  * The channel a pane's terminal speaks on, opened with `{ thread, pane, cols, rows }`: the daemon sends a header line
- * (the decimal length of the output it replays, then `\n`), that much of what the terminal printed before, then what it
- * prints from then on; the window sends keystrokes. Opening it starts the shell if it isn't running.
+ * (`<length> <cols> <rows>\n`: how much output it replays, and the size the terminal had), that much of what the
+ * terminal printed before, then what it prints from then on, at the size asked for; the window sends keystrokes.
+ * Opening it starts the shell if it isn't running.
  */
 export const IO = 'terminal.io'
 /** A terminal's size changed in a window: `{ thread, pane, cols, rows }`. The last window to say so wins. */
@@ -27,6 +28,8 @@ export const about = {
 export class Framing {
   #header = ''
   #left = -1
+  /** The size the terminal had as it was attached to, once the header is read: what's replayed was printed at it. */
+  size: { cols: number; rows: number } | undefined
   /** Whether what's replayed has all come. */
   get live() { return this.#left === 0 }
   /** `bytes` as they came, apart: what's replayed and what's live (either may be empty). */
@@ -34,8 +37,11 @@ export class Framing {
     let at = 0
     while (this.#left < 0 && at < bytes.length) {
       const c = bytes[at++]!
-      if (c === 0x0a) this.#left = Number(this.#header) || 0
-      else this.#header += String.fromCharCode(c)
+      if (c === 0x0a) {
+        const [length, cols, rows] = this.#header.split(' ').map(Number)
+        this.#left = length || 0
+        if (cols && rows) this.size = { cols, rows }
+      } else this.#header += String.fromCharCode(c)
     }
     const rest = bytes.subarray(at)
     const back = Math.max(0, Math.min(this.#left, rest.length))

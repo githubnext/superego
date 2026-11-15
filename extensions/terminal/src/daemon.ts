@@ -82,8 +82,10 @@ export function terminalExtension({ spawn = spawnPty, shell = userShell }: { spa
       superego.channel(IO, async (channel, params: { thread?: unknown; pane?: unknown; cols?: unknown; rows?: unknown }) => {
         if (typeof params.thread !== 'string' || typeof params.pane !== 'string') throw new RpcError('invalid', 'A terminal is opened by its thread and pane')
         const terminal = await terminalOf(params.thread, params.pane)
-        if (typeof params.cols === 'number' && typeof params.rows === 'number') terminal.resize(params.cols, params.rows)
+        // Started at the size asked for; attached to at the size it had (what's replayed was printed at it), then that.
+        if (!terminal.running && typeof params.cols === 'number' && typeof params.rows === 'number') terminal.resize(params.cols, params.rows)
         const detach = terminal.attach(channel)
+        if (typeof params.cols === 'number' && typeof params.rows === 'number') terminal.resize(params.cols, params.rows)
         channel.onData((bytes) => terminal.input(bytes))
         channel.ended.then(() => { detach(); channel.end() }, detach)
       })

@@ -94,14 +94,14 @@ export class Terminal {
   }
 
   /**
-   * Attach a window: it's sent a header (the length of what's replayed, then `\n`), what the terminal printed before,
+   * Attach a window: it's sent a header (the length of what's replayed and the size it has, then `\n`), what the terminal printed before,
    * and from then on what it prints. Starts the shell if it isn't running. Returns the detach.
    */
   attach(reader: Reader): () => void {
     this.start()
     const kept = Buffer.concat(this.#chunks)
     this.#readers.set(reader, 0)
-    this.#send(reader, Buffer.concat([Buffer.from(`${kept.length}\n`), kept]))
+    this.#send(reader, Buffer.concat([Buffer.from(`${kept.length} ${this.#size.cols} ${this.#size.rows}\n`), kept]))
     return () => { this.#readers.delete(reader); this.#flow() }
   }
 

@@ -60,6 +60,7 @@ function held(id: string): BridgeChannel {
       void reading.then(() => { for (const listener of closers) listener(reason) })
     },
   })
+  ipcRenderer.send(CHANNEL.start, id)
   return {
     write: (bytes) => { if (!closed) ipcRenderer.send(CHANNEL.write, id, bytes) },
     onData: (listener) => { reader = listener; for (const bytes of waiting.splice(0)) read(bytes) },

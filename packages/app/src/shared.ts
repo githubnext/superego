@@ -180,9 +180,9 @@ export const ARTIFACT_TYPES: Record<string, string> = {
 
 export const CHANNEL = {
   call: 'superego:call', machines: 'superego:machines', event: 'superego:event',
-  // A window's protocol channels, held for it by the main process: opened, their data, written, read, closed, and all
-  // of a window's dropped as its page (re)loads.
-  open: 'superego:ch-open', data: 'superego:ch-data', write: 'superego:ch-write', ack: 'superego:ch-ack', close: 'superego:ch-close', reset: 'superego:ch-reset',
+  // A window's protocol channels, held for it by the main process: opened, ready for data (once the window knows its
+  // id), their data, written, read, closed, and all of a window's dropped as its page (re)loads.
+  open: 'superego:ch-open', start: 'superego:ch-start', data: 'superego:ch-data', write: 'superego:ch-write', ack: 'superego:ch-ack', close: 'superego:ch-close', reset: 'superego:ch-reset',
 } as const
 /** What the main process tells a window of one of its channels: a chunk, or that it closed (and why, when it failed). */
 export type ChannelEvent = { id: string; data: Uint8Array } | { id: string; closed: true; reason?: string }
