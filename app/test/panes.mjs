@@ -1,6 +1,6 @@
 // Screenshots of a thread with three panes in each layout (run by `test/look.sh <dir> panes`): scrolled, then stacked
 // from the strip's switch, a pane brought to the front by ⌃Tab and one opened from outside the window, then scrolled again
-// by its shortcut. Checks on the way that a stack never passes the window's edge, and that the last pane's handle is
+// by its shortcut; a pane maximized in each, and restored (Esc, a double click, another pane opening). Checks on the way that a stack never passes the window's edge, and that the last pane's handle is
 // clear of it and drags the pane wider. Light and dark, into
 // $SUPEREGO_SHOWCASE_OUT.
 import { app, BrowserWindow, nativeTheme } from 'electron'
@@ -87,6 +87,25 @@ void (async () => {
   await run(`window.superego.call('local', 'pane.focus', { id: '${id}', pane: '${editor}' })`)
   await sleep(600)
 
+  // Maximized from its tab's button: over the whole of the thread's area, the rest kept under it as they were (the
+  // row's scroll too). An Esc the editor has no use for restores it.
+  const maximized = () => run(`document.querySelector('.panes.has-maximized > .is-maximized')?.dataset.column ?? null`)
+  const rowScroll = await run(`document.querySelector('.panes').scrollLeft`)
+  await run(`document.querySelector('[data-column="${editor}"] .panes__maximize').click()`)
+  await until(`document.querySelector('.panes > .is-maximized')?.dataset.column === '${editor}'`, 'maximized from its button')
+  await sleep(300)
+  const covers = await run(`(() => { const s = document.querySelector('.sheet').getBoundingClientRect(), c = document.querySelector('[data-column="${editor}"]').getBoundingClientRect(); return [s.width - c.width, s.height - c.height].every((d) => Math.abs(d) < 1) })()`)
+  if (!covers) fail('maximized: the pane should cover the thread and the rest')
+  if (JSON.stringify(await shownPanes()) !== JSON.stringify([editor])) fail(`maximized: only it shown, not ${await shownPanes()}`)
+  if (!await run(`document.querySelector('[data-column="thread"]').inert`)) fail('maximized: the thread under it is out of reach')
+  if (await run(`document.querySelector('[data-column="${editor}"] .panes__maximize').getAttribute('aria-label')`) !== 'Restore README.md') fail('maximized: its button restores')
+  await both('scroll-maximized')
+  await run(`document.querySelector('[data-column="${editor}"] .cm-content').focus()`)
+  await run(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }))`)
+  await until(`!document.querySelector('.panes.has-maximized')`, 'Esc restored it')
+  if (await run(`document.querySelector('.panes').scrollLeft`) !== rowScroll) fail('restored: the row scrolled as it was')
+  if (JSON.stringify(await shownPanes()) !== JSON.stringify([diff, editor, folder])) fail(`restored: every pane shown, not ${await shownPanes()}`)
+
   // Stacked, from the strip's switch: the focused pane in front, and nothing past the window's edge.
   await run(`document.querySelector('.strip__layout [aria-label="Stack panes"]').click()`)
   await until(`!!document.querySelector('.panes--stack')`, 'stacked')
@@ -114,12 +133,22 @@ void (async () => {
   await tab(diff)
   await inFront(diff, 'strip again')
   await both('stack-changes')
+  // Maximized by its shortcut, from the pane with the focus; its title's double click restores it; maximized again,
+  // a pane opening restores it.
+  await key({ key: 'Enter', code: 'Enter', metaKey: true, shiftKey: true })
+  await until(`document.querySelector('.panes > .is-maximized')?.dataset.column === '${diff}'`, 'maximized by its shortcut')
+  await both('stack-maximized')
+  await run(`document.querySelector('[data-column="${diff}"] .panes__label').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`)
+  await until(`!document.querySelector('.panes.has-maximized')`, 'a double click restored it')
+  await key({ key: 'Enter', code: 'Enter', metaKey: true, shiftKey: true })
+  await until(`document.querySelector('.panes > .is-maximized')?.dataset.column === '${diff}'`, 'maximized again')
   // Opened from outside the window (the agent's open_pane, another client's): in front, the focus left where it was.
   await run(`window.superego.call('local', 'pane.open', { id: '${id}', kind: 'editor', params: { path: 'src/dates.mjs' } })`)
   await until(`document.querySelectorAll('.panes > [data-column]').length === 5`, 'a fourth pane')
   await sleep(400)
   const fourth = (await paneIds()).at(-1)
   if (JSON.stringify(await shownPanes()) !== JSON.stringify([fourth])) fail(`opened: the new pane in front, not ${await shownPanes()}`)
+  if (await maximized()) fail('opened: the layout restored')
   if (!await fits()) fail('stacked with four: the row passes the window')
   await both('stack-opened')
 

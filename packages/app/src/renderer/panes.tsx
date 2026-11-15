@@ -9,13 +9,14 @@
 // - Stack: the thread, and beside it one column its panes share, one in front at a time; the row never passes the
 //   window's edge. The strip's tabs bring one to the front; so does its getting the focus (a click, ⌃Tab, ⌘⌥←/→, the
 //   navigator, pane.focus from anywhere) and its opening. The thread's handle drags the line between the two.
-// ⌃Tab moves the focus along. On a phone each column is the screen's width, and a swipe moves between them.
+// Either way, a pane can be maximized for a while: over the thread and the rest, which stay as they were under it (see
+// maximized.ts). ⌃Tab moves the focus along. On a phone each column is the screen's width, and a swipe moves between them.
 // Built in: editor and thread. Extensions and profiles add kinds with superego.pane(kind, …) (Changes is git's; a web
 // page and an artifact, web-panes'). A pane of a kind only an extension the thread goes without draws isn't shown.
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
-import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, FileTextIcon, SegmentedControl, XIcon, type SegmentedOption } from '@superego/ui'
+import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, CornersInIcon, CornersOutIcon, FileTextIcon, SegmentedControl, XIcon, type SegmentedOption } from '@superego/ui'
 import { PANE_LAYOUT, type PaneLayout } from '../shared.ts'
 import { useAppSetting } from './client.ts'
 import { fileKind, paneKind, paneTitle, shownPanes, useNarrow, useRegistry, ViewScopeProvider, whose, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
@@ -27,6 +28,8 @@ import { ViewMenuButton } from './view-menu.tsx'
 import { FileEditor } from './file-editor.tsx'
 import { BRING_FORWARD, focusRegion } from './focus.ts'
 import { DEFAULT_SHARE, END, endShare, frontOf, GAP, roomFor, scrollWidths, stackWidths } from './pane-layout.ts'
+import { maximizedPane, maximizedStore, restoresOn } from './maximized.ts'
+import { useShortcut } from './keys.ts'
 
 /** The strip's switch between the layouts. */
 const LAYOUTS: SegmentedOption<PaneLayout>[] = [
@@ -78,12 +81,38 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     known.current = ids
     if (opened) bringForward(opened)
   }, [ids.join()])
-  // One at the back the focus is going to (see focus.ts) comes to the front first, so it can take it.
+  // A pane maximized over the rest (see maximized.ts), while it lasts; forgotten once it doesn't, or the thread goes.
+  // Wide only: on a phone each column is the screen's already.
+  const stored = maximizedStore.use()
+  const maximized = narrow ? undefined : maximizedPane(stored, threadKey, ids)
+  const maximizedRef = useRef(maximized)
+  maximizedRef.current = maximized
+  useEffect(() => { if (stored && !maximized) maximizedStore.set(undefined) }, [stored, maximized])
+  useEffect(() => () => maximizedStore.set(undefined), [])
+  // Esc restores it, unless something in the pane took it (an editor's search, a terminal) or it's pressed in a dialog.
+  useEffect(() => {
+    if (!maximized) return
+    const onKey = (event: KeyboardEvent) => {
+      const at = event.target instanceof Element ? event.target : null
+      if (!restoresOn(event, at === document.body || Boolean(at?.closest('.app__main')))) return
+      event.preventDefault()
+      maximizedStore.set(undefined)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [maximized])
+  const maximize = (pane: Pane) => void dispatch('panes.maximize', { pane: pane.id }, { source: 'panes' })
+  // One at the back the focus is going to (see focus.ts) comes to the front first, so it can take it; one under a
+  // maximized pane, the layout restored.
   useEffect(() => {
     const el = row.current
     const bring = (event: Event) => {
       const id = (event.target as HTMLElement).dataset.column
-      if (id && id !== 'thread') flushSync(() => bringForward(id))
+      if (!id) return
+      flushSync(() => {
+        if (maximizedRef.current && id !== maximizedRef.current) maximizedStore.set(undefined)
+        if (id !== 'thread') bringForward(id)
+      })
     }
     el?.addEventListener(BRING_FORWARD, bring)
     return () => el?.removeEventListener(BRING_FORWARD, bring)
@@ -124,11 +153,11 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     : scrollWidths(room, keys.map((key, i) => shareOf(key, i)))
   const widthOf = (pane: Pane) => widths[panes.indexOf(pane) + 1]!
   // How much of each column is in view, and on which side the rest are: for the strip. Stacked, the thread and the
-  // pane in front are; the rest are behind.
+  // pane in front are; the rest are behind. Maximized, only that pane is: the rest are under it.
   const starts = widths.map((_, i) => widths.slice(0, i).reduce((sum, w) => sum + w + GAP, 0))
-  const shown = widths.map((w, i) => stacked ? Number(i === 0 || keys[i] === front)
+  const shown = widths.map((w, i) => maximized ? Number(keys[i] === maximized) : stacked ? Number(i === 0 || keys[i] === front)
     : w ? Math.max(0, Math.min(starts[i]! + w, scrolled + rowWidth) - Math.max(starts[i]!, scrolled)) / w : 0)
-  const side = (i: number) => shown[i]! >= 0.5 ? undefined : stacked ? 'behind' : starts[i]! < scrolled ? 'left' : 'right'
+  const side = (i: number) => shown[i]! >= 0.5 ? undefined : stacked || maximized ? 'behind' : starts[i]! < scrolled ? 'left' : 'right'
 
   // The gap after a column resizes it (`index`): its share of the row, kept for next time. The last one's, dragged to
   // about what the others leave, takes that again; past it, it's wider and the row scrolls. A double click puts any
@@ -239,20 +268,23 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     <div className={`sheet ${panes.length ? 'has-panes' : ''}`}>
       {stripSlot ? strip && createPortal(strip, stripSlot) : strip}
       {/* Stacked, a grid: the thread, its handle, the panes on top of each other, the room at the end. */}
-      <div className={`panes ${narrow ? 'panes--narrow' : ''} ${stacked ? 'panes--stack' : ''}`} ref={row} onScroll={onScroll}
+      <div className={`panes ${narrow ? 'panes--narrow' : ''} ${stacked ? 'panes--stack' : ''} ${maximized ? 'has-maximized' : ''}`} ref={row} onScroll={onScroll}
         style={stacked ? { gridTemplateColumns: `${threadWidth}px ${GAP}px ${stackWidth}px ${GAP}px` } : undefined}>
         {/* Focus moving into a column (a click, a key) makes it the focused one: the app and the keyboard agree. */}
-        <div data-column="thread" tabIndex={-1} className="panes__column panes__column--thread"
+        <div data-column="thread" tabIndex={-1} className={`panes__column panes__column--thread ${maximized ? 'is-covered' : ''}`} inert={Boolean(maximized)}
           style={{ width: widths[0] }} onPointerDownCapture={() => focus(undefined)} onFocusCapture={() => focus(undefined)}>{main}</div>
         {/* The gap after each column is its handle: drag it to make that one wider or narrower. */}
         {gap(0)}
         {panes.map((pane, index) => (
           <Fragment key={pane.id}>
-          <PaneColumn pane={pane} title={title(pane)} focused={pane.id === focused} width={widthOf(pane)} behind={stacked && pane.id !== front}
-            onFocus={() => focus(pane.id)} onClick={takeFocus} onClose={() => close(pane)}
+          <PaneColumn pane={pane} title={title(pane)} focused={pane.id === focused} width={widthOf(pane)}
+            behind={stacked && pane.id !== front && pane.id !== maximized} maximized={maximized === undefined ? undefined : pane.id === maximized}
+            onFocus={() => focus(pane.id)} onClick={takeFocus} onClose={() => close(pane)} {...(narrow ? {} : { onMaximize: () => maximize(pane) })}
             menu={isView(pane) && <ViewMenuButton view={pane.kind} title={title(pane)} place="pane" machine={machine.id} thread={thread} pane={pane.id} />}>
             <TabNote.Provider value={setNoteFor(pane.id)}><PaneBody machine={machine} thread={thread} pane={pane} /></TabNote.Provider>
           </PaneColumn>
+          {/* Scrolled, its place in the row is kept while it's over the rest, so they stay where they were. */}
+          {!stacked && pane.id === maximized && <div className="panes__kept" style={{ width: widthOf(pane) }} aria-hidden />}
           {!stacked && gap(index + 1)}
           </Fragment>
         ))}
@@ -281,18 +313,33 @@ export function PaneHeader({ children }: { children: ReactNode }) {
   return at ? createPortal(children, at) : <div className="pane-bar">{children}</div>
 }
 
-function PaneColumn({ pane, title, focused, width, behind, onFocus, onClick, onClose, menu, children }: {
-  pane: Pane; title: string; focused: boolean; width: number; behind: boolean; onFocus(): void; onClick(event: React.MouseEvent<HTMLElement>): void; onClose(): void; menu?: ReactNode; children: ReactNode
+function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, onClick, onClose, onMaximize, menu, children }: {
+  pane: Pane; title: string; focused: boolean; width: number; behind: boolean
+  /** Whether it's the one maximized, while one is (undefined: none is). */
+  maximized: boolean | undefined
+  onFocus(): void; onClick(event: React.MouseEvent<HTMLElement>): void; onClose(): void
+  /** Maximize it, or restore it (wide only). */
+  onMaximize?: () => void
+  menu?: ReactNode; children: ReactNode
 }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
-  // At the back of a stack it's kept (its page, its place in a file), out of sight and out of reach.
+  const keys = useShortcut('panes.maximize')
+  const label = maximized ? 'Restore' : 'Maximize'
+  // At the back of a stack, or under a maximized pane, it's kept (its page, its place in a file), out of sight and out
+  // of reach.
+  const covered = maximized === false
   return (
-    <div data-column={pane.id} tabIndex={-1} className={`panes__column ${behind ? 'is-behind' : ''}`} inert={behind}
-      style={{ width }} onPointerDownCapture={onFocus} onFocusCapture={onFocus} onClick={onClick}>
+    <div data-column={pane.id} tabIndex={-1} className={`panes__column ${behind ? 'is-behind' : ''} ${maximized ? 'is-maximized' : covered ? 'is-covered' : ''}`}
+      inert={behind || covered} style={maximized ? undefined : { width }} onPointerDownCapture={onFocus} onFocusCapture={onFocus} onClick={onClick}>
       <div className={`panes__tab ${focused ? 'is-active' : ''}`}>
-        <button className="panes__label" title={title}>{title}</button>
+        <button className="panes__label" title={title} onDoubleClick={onMaximize}>{title}</button>
         <span className="panes__tools" ref={setSlot} />
         {menu}
+        {onMaximize && (
+          <button className="panes__maximize" aria-label={`${label} ${title}`} title={keys ? `${label} (${keys})` : label} onClick={onMaximize}>
+            {maximized ? <CornersInIcon size={13} aria-hidden /> : <CornersOutIcon size={13} aria-hidden />}
+          </button>
+        )}
         <button className="panes__close" aria-label={`Close ${title}`} onClick={onClose}><XIcon size={12} aria-hidden /></button>
       </div>
       <div className="panes__body"><HeaderSlot.Provider value={slot}>{children}</HeaderSlot.Provider></div>

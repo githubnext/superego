@@ -66,4 +66,6 @@ declare module '@phosphor-icons/react' {
   export const TerminalIcon: Icon
   export const WrenchIcon: Icon
   export const XIcon: Icon
+  export const CornersInIcon: Icon
+  export const CornersOutIcon: Icon
 }

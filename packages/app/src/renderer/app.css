@@ -544,8 +544,8 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 
 .panes__label { flex: none; max-width: 50%; text-align: left; font: inherit; font-weight: 500; color: var(--superego-text); background: none; border: 0; padding: 0; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .panes__tools { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
-.panes__close { display: grid; place-items: center; width: 22px; height: 22px; flex: none; color: var(--superego-faint); background: none; border: 0; border-radius: 5px; padding: 0; cursor: default; }
-.panes__close:hover { color: var(--superego-text); background: var(--superego-hover); }
+.panes__close, .panes__maximize { display: grid; place-items: center; width: 22px; height: 22px; flex: none; color: var(--superego-faint); background: none; border: 0; border-radius: 5px; padding: 0; cursor: default; }
+.panes__close:hover, .panes__maximize:hover { color: var(--superego-text); background: var(--superego-hover); }
 .panes__body { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .panes--narrow { scroll-snap-type: x mandatory; scrollbar-width: none; }
 .panes--narrow .panes__column { scroll-snap-align: start; scroll-snap-stop: always; }
@@ -559,6 +559,12 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .panes__tail { flex: none; }
 .panes__column:has(+ .panes__gap + .panes__tail) { scroll-margin-right: 28px; }
 .panes__column.is-behind { visibility: hidden; }
+/* Maximized: one pane over the whole of the thread's area; the rest stay as they were (their places, their sizes, the
+   row's scroll) under it, out of sight. */
+.sheet { position: relative; }
+.panes.has-maximized > :not(.is-maximized) { visibility: hidden; }
+.panes > .panes__column.is-maximized { position: absolute; inset: 0; z-index: 1; }
+.panes__kept { flex: none; }
 .pane-empty { margin: auto; color: var(--superego-muted); padding: var(--superego-space-5); text-align: center; }
 .pane-scroll { flex: 1; overflow: auto; }
 .pane-bar { display: flex; align-items: center; gap: var(--superego-space-3); padding: 6px var(--superego-space-3); border-bottom: 1px solid color-mix(in srgb, var(--superego-border) 60%, transparent); font-size: var(--superego-text-sm); color: var(--superego-muted); flex: none; min-height: 38px; }

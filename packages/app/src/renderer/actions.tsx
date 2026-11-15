@@ -12,6 +12,7 @@ import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
 import { scrollHalfPage } from './scroll.ts'
 import { startRename } from './rename.ts'
 import { setLocalState } from './local-state.ts'
+import { maximizedPane, maximizedStore, NARROW, toggleMaximized } from './maximized.ts'
 
 /** What a window action gets besides its parameters. */
 export type WindowContext = {
@@ -209,6 +210,20 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
       focusColumn(panes[index - 1]?.id)
     },
   }),
+  // A pane over the whole of the thread's area for a while (see maximized.ts), and back: `pane`, else the focused one.
+  defineWindowAction({
+    id: 'panes.maximize', title: 'Maximize or restore pane', keys: 'mod+shift+enter',
+    params: obj({ pane: opt(str()) }),
+    when: (c) => {
+      const at = maximizable(c)
+      return Boolean(at && (maximizedPane(maximizedStore.get(), at.key, at.panes) || at.panes.includes(focusedColumn(at.thread) ?? '')))
+    },
+    run: ({ pane }, c) => {
+      const at = maximizable(c)
+      if (!at) return
+      maximizedStore.set(toggleMaximized(maximizedStore.get(), at.key, at.panes, pane, focusedColumn(at.thread)))
+    },
+  }),
   defineWindowAction({
     id: 'thread.startRename', title: 'Rename thread…', 
     run: (_p, c) => { if (c.selection) startRename(c.selection.machine, c.selection.thread) },
@@ -267,6 +282,13 @@ function focusedColumn(thread: ThreadInfo | undefined): string | undefined {
   const column = (document.activeElement?.closest('.app__main [data-column]') as HTMLElement | null)?.dataset.column
   if (column) return column === 'thread' ? undefined : column
   return thread?.pane
+}
+
+/** The selected thread and its panes' ids, for maximizing one: none in a window as narrow as a phone's. */
+function maximizable(c: WindowContext) {
+  const thread = c.selection && c.threadOf(c.selection)
+  if (!c.selection || !thread?.panes?.length || matchMedia(NARROW).matches) return undefined
+  return { key: `${c.selection.machine}/${c.selection.thread}`, thread, panes: thread.panes.map((p) => p.id) }
 }
 
 /** The thread, then its panes, then around: the next one brought forward. */

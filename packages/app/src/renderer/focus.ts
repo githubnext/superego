@@ -4,7 +4,7 @@
 // what's used there (the selected thread in the sidebar, the thread's transcript, an editor's text, what a pane marks
 // `data-focus` (a terminal), a page, else the pane itself). Focus moving into a pane makes it the thread's focused pane; a pane brought forward from the keyboard
 // (⌃Tab, the navigator) takes the focus with it. A pane at the back of a stack (see panes.tsx) is a region too: going
-// there brings it to the front.
+// there brings it to the front. Those under a maximized pane aren't, until it's restored (going to one restores it).
 
 /** Sent to a pane's column at the back of a stack, as the focus goes there: brought to the front, it can take it. */
 export const BRING_FORWARD = 'superego:bring-forward'
@@ -12,7 +12,7 @@ export const BRING_FORWARD = 'superego:bring-forward'
 /** The regions, left to right, as the window shows them now. */
 function regions(): HTMLElement[] {
   const sidebar = document.querySelector<HTMLElement>('.app__sidebar')
-  const columns = [...document.querySelectorAll<HTMLElement>('.app__main .panes > [data-column]')]
+  const columns = [...document.querySelectorAll<HTMLElement>('.app__main .panes > [data-column]:not(.is-covered)')]
   const thread = columns.length ? [] : [document.querySelector<HTMLElement>('.app__main .thread')].filter((e): e is HTMLElement => Boolean(e))
   const aside = [...document.querySelectorAll<HTMLElement>('.app__aside')].filter((e) => getComputedStyle(e).display !== 'none')
   return [...(sidebar ? [sidebar] : []), ...thread, ...columns, ...aside]

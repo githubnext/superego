@@ -18,6 +18,7 @@ import { useSelection, type Selection } from './state.tsx'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowContext, type WindowRouter } from './actions.tsx'
 import { useSettings, watched } from './client.ts'
 import { createStore, type Store } from './local-state.ts'
+import { NARROW } from './maximized.ts'
 import { isLayout, LAYOUT, PLACES, resolveLayout, THREAD_PLACES, type Layout, type Place, type Placed, type Placement } from './layout.ts'
 import type { CompletionProvider, CompletionWord, SentWith } from './composer.ts'
 import { dataIcon, DataViewBody } from './data-views.tsx'
@@ -808,7 +809,7 @@ export function Slot<S extends BehaviourSlot>({ name, props }: { name: S; props:
 
 /** Whether the window is phone-narrow: no rail, the space a drawer, the narrow layout. */
 export function useNarrow() {
-  const query = '(max-width: 599px)'
+  const query = NARROW
   const [narrow, setNarrow] = useState(() => matchMedia(query).matches)
   useEffect(() => {
     const list = matchMedia(query)

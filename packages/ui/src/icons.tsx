@@ -27,6 +27,8 @@ export {
   ChatsCircleIcon,
   CheckIcon,
   CommandIcon,
+  CornersInIcon,
+  CornersOutIcon,
   CopyIcon,
   DotsThreeIcon,
   ExclamationMarkIcon,
