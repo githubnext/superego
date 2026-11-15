@@ -1,9 +1,9 @@
 // The declarations a profile's author type-checks against outside this repo: `buildTypes(dir)` writes a node_modules
 // of types only, made from the real sources at build time so they can't drift from them.
 //
-//   <dir>/node_modules/superego/          'superego', 'superego/ui', 'superego/unstable', 'superego/testing': this
-//                                         package's entries, their declarations emitted by TypeScript
-//   <dir>/node_modules/@superego/*/       the workspace packages those declarations reach, emitted the same way
+//   <dir>/node_modules/superego/          'superego', 'superego/ui', 'superego/unstable', 'superego/testing': one file
+//                                         each (index.d.ts, ui.d.ts, …), emitted by TypeScript and flattened with
+//                                         what they reach of the workspace's packages (flatten.ts), to be read
 //   <dir>/node_modules/<package>/         every outside package they reach (pi-durable, React's types, Node's, …):
 //                                         its declaration files and package.json, copied as installed
 //   <dir>/stamp.json                      a hash of all of it, to tell an old copy from this one, and of the sources
@@ -64,6 +64,20 @@ function installedPackage(file: string): string {
 const inNodeModules = (file: string) => file.split(sep).includes('node_modules')
 const declaration = (path: string) => path.replace(/\.tsx?$/, '.d.ts')
 
+/** `text` with the indent its lines share taken off. */
+function dedent(text: string): string {
+  const lines = text.replace(/^\n+|\s+$/g, '').split('\n')
+  const indent = Math.min(...lines.filter((line) => line.trim()).map((line) => /^ */.exec(line)![0].length))
+  return lines.map((line) => line.slice(indent)).join('\n') + '\n'
+}
+
+/** An entry's opening doc comment, what its flattened file opens with: what the entry is for, to an author. */
+function headerOf(ts: typeof import('typescript'), file: import('typescript').SourceFile): string {
+  const range = ts.getLeadingCommentRanges(file.text, 0)?.find((comment) => file.text.startsWith('/**', comment.pos))
+  if (!range) throw new Error(`${file.fileName} opens with no doc comment, to say what it's for`)
+  return file.text.slice(range.pos + 3, range.end - 2).split('\n').map((line) => line.replace(/^\s*\* ?/, '')).join('\n').trim()
+}
+
 /** A workspace package's exports with its sources swapped for their declarations. */
 function typesExports(exports: unknown): unknown {
   if (typeof exports === 'string') return /\.tsx?$/.test(exports) ? { types: declaration(exports) } : exports
@@ -93,7 +107,8 @@ export async function buildTypes(dir: string): Promise<Stamp> {
   })
   const program = ts.createProgram({ rootNames: ENTRIES.map((entry) => join(sdk, 'src', entry)), options, host })
   // What it's made from, to tell later when it's out of date: what the program read of ours, as it read it.
-  const sources = program.getSourceFiles().map((file) => file.fileName).filter((file) => !inNodeModules(file)).map((file) => relative(repo, file))
+  const sources = [...program.getSourceFiles().map((file) => file.fileName).filter((file) => !inNodeModules(file)), fileURLToPath(import.meta.url), join(sdk, 'flatten.ts')]
+    .map((file) => relative(repo, file))
   const made = { source: sourceHash(sources.map((file) => join(repo, file))), sources }
   const emitted = new Map<string, string>()
   const result = program.emit(undefined, (file, text) => emitted.set(join(repo, relative(options.outDir!, file)), text), undefined, true)
@@ -102,57 +117,78 @@ export async function buildTypes(dir: string): Promise<Stamp> {
 
   mkdirSync(dirname(dir), { recursive: true })
   const temp = join(realpathSync(dirname(dir)), `${basename(dir)}.${process.pid}.tmp`)
-  rmSync(temp, { recursive: true, force: true })
+  const stage = `${temp}.src`
+  for (const at of [temp, stage]) rmSync(at, { recursive: true, force: true })
   const write = (path: string, text: string) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text) }
   const modules = join(temp, 'node_modules')
+  const staged = join(stage, 'node_modules')
 
-  // Ours: each workspace package as installed, with declarations where its sources were, and the declarations written
-  // by hand that the program read (an ambient module standing in for a package's own types, say). The SDK is 'superego'.
+  // Ours, as TypeScript emitted them, staged to be flattened from: each workspace package as installed, with
+  // declarations where its sources were. The modules declared by hand (a package's own types stood in for, say) are
+  // inlined like ours; one declared without a body (`*.css`) is nothing to a type.
   const ours = new Map<string, { name: string; json: Record<string, unknown> }>()
-  const ambient: string[] = []
-  const standIns = new Set<string>()
+  const standIns = new Map<string, string>()
+  const empty: RegExp[] = []
   const place = (source: string) => {
     const pkg = packageOf(source)
     const name = pkg.dir === sdk ? 'superego' : pkg.json.name as string
     ours.set(pkg.dir, { name, json: pkg.json })
-    return join(modules, name, relative(pkg.dir, source))
+    return join(staged, name, relative(pkg.dir, source))
   }
   for (const file of program.getSourceFiles()) {
     if (!file.isDeclarationFile || inNodeModules(file.fileName) || program.isSourceFileDefaultLibrary(file)) continue
-    const at = place(file.fileName)
-    write(at, file.text)
-    ambient.push(at)
-    for (const [, name] of file.text.matchAll(/^declare module ['"]([^'"*]+)['"]/gm)) standIns.add(name!)
+    for (const statement of file.statements) {
+      if (!ts.isModuleDeclaration(statement) || !ts.isStringLiteral(statement.name)) continue
+      const name = statement.name.text
+      if (!statement.body) empty.push(new RegExp(`^${name.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\/]/g, '\\$&')).join('.*')}$`))
+      else standIns.set(name, dedent(file.text.slice(statement.body.getStart(file) + 1, statement.body.getEnd() - 1)))
+    }
   }
-  for (const [source, text] of emitted) {
-    const at = place(source)
-    // Each entry brings the hand-written ones along: they declare what it relies on.
-    const brings = at.startsWith(join(modules, 'superego', 'src') + sep) ? ambient.map((file) => `/// <reference path="${relative(dirname(at), file)}" />\n`).join('') : ''
-    write(at, brings + text)
-  }
+  for (const [source, text] of emitted) write(place(source), text)
   for (const { name, json } of ours.values()) {
-    write(join(modules, name, 'package.json'), JSON.stringify({ name, version: json.version, type: 'module', exports: typesExports(json.exports) }, null, 2) + '\n')
+    write(join(staged, name, 'package.json'), JSON.stringify({ name, version: json.version, type: 'module', exports: typesExports(json.exports) }, null, 2) + '\n')
   }
 
+  // 'superego': each entry one file, with the rest of ours inlined (flatten.ts). An outside package one imports is
+  // resolved below from the package of ours that imported it.
+  const { flatten } = await import('./flatten.ts')
+  const checker = program.getTypeChecker()
+  const importedBy = new Map<string, string>()
+  const stagedOrigin = new Map([...ours].map(([from, { name }]) => [join(staged, name), from]))
+  const exports: Record<string, { types: string }> = {}
+  for (const entry of ENTRIES) {
+    const file = program.getSourceFile(join(sdk, 'src', entry))!
+    const header = headerOf(ts, file)
+    const order = checker.getExportsOfModule(checker.getSymbolAtLocation(file)!).map((symbol) => symbol.name)
+    const flat = await flatten({
+      input: join(staged, 'superego', 'src', declaration(entry)), order, header, standIns, empty, ours: (id) => id.startsWith('@superego/'),
+      outside: (id, importer) => {
+        const at = [...stagedOrigin].find(([staging]) => importer.startsWith(staging + sep))
+        if (at && !importedBy.has(id)) importedBy.set(id, at[1])
+      },
+    })
+    const name = declaration(entry)
+    write(join(modules, 'superego', name), flat)
+    exports[entry === 'index.ts' ? '.' : `./${entry.replace(/\.ts$/, '')}`] = { types: `./${name}` }
+  }
+  write(join(modules, 'superego', 'package.json'), JSON.stringify({ name: 'superego', type: 'module', exports }, null, 2) + '\n')
+  rmSync(stage, { recursive: true, force: true })
+
   // Theirs: the installed packages' declarations that ours reach (at the versions ours use), found by a program over
-  // ours that resolves each name as the package it was emitted from would; and the packages an author's files import
-  // themselves, whole, so a deep import of one ('react/jsx-runtime') resolves too.
-  const origin = new Map([...ours].map(([from, { name }]) => [join(modules, name), from]))
+  // ours; and the packages an author's files import themselves, whole, so a deep import of one ('react/jsx-runtime')
+  // resolves too.
   const check = ts.createCompilerHost({})
   check.resolveModuleNameLiterals = (literals, containingFile, redirected, compilerOptions, file) => literals.map((literal) => {
-    // A package declared by hand stands in for its own types: those aren't needed.
-    if (standIns.has(literal.text)) return { resolvedModule: undefined }
     const resolve = (from: string) => ts.resolveModuleName(literal.text, from, compilerOptions, check, undefined, redirected, ts.getModeForUsageLocation(file, literal, compilerOptions))
     const here = resolve(containingFile)
-    if (here.resolvedModule) return here
-    const at = [...origin].find(([dir]) => containingFile.startsWith(dir + sep))
-    return resolve(at ? join(at[1], relative(at[0], containingFile)) : join(sdk, 'package.json'))
+    if (here.resolvedModule || !containingFile.startsWith(temp + sep)) return here
+    return resolve(join(importedBy.get(literal.text) ?? sdk, 'package.json'))
   })
   // An author's tests import vitest (`superego extension test` runs them): its declarations come too.
   const probe = join(temp, 'probe.d.ts')
   write(probe, "import 'vitest'\n")
   const reached = ts.createProgram({
-    rootNames: [...ENTRIES.map((entry) => join(modules, 'superego', 'src', declaration(entry))), probe],
+    rootNames: [...ENTRIES.map((entry) => join(modules, 'superego', declaration(entry))), probe],
     options: { module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, jsx: ts.JsxEmit.ReactJSX, noEmit: true, types: [], allowImportingTsExtensions: true },
     host: check,
   })

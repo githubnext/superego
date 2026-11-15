@@ -1,5 +1,6 @@
 import { waitingForSignIn, type Status } from '@superego/protocol'
 
+/** A thread's status in a few words: `working`, `needs you (question)`, `done: <recap>`. */
 export const statusLabel = (status: Status) =>
   waitingForSignIn(status) ? `waiting for sign-in${status.msg ? `: ${status.msg}` : ''}`
     : status.state === 'blocked' ? `needs you${status.kind ? ` (${status.kind})` : ''}` : status.msg ? `${status.state}: ${status.msg}` : status.state

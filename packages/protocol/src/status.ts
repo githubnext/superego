@@ -1,10 +1,12 @@
 // Agent status uses the OSC 7501 Program Status vocabulary, so Superego threads, Claude Code, Codex and pi all read alike.
 
+/** What a thread is doing: nothing, running, finished a run, waiting on the user, or failed. */
 export type StatusState = 'idle' | 'working' | 'done' | 'blocked' | 'error'
+/** What a blocked thread waits on: a permission, an answer, or sign-in. */
 export type BlockedKind = 'permission' | 'question' | 'auth'
 /**
- * `msg`, in a line or a few: blocked, what it waits on (a question, Markdown); error, why it failed; done, what the run
- * did (a recap, plain text, short: see recap.ts). Absent when there's nothing to say, and from daemons before recaps for done.
+ * A thread's status: its state, what it's blocked on, and `msg`, in a line or a few: blocked, what it waits on (a question, Markdown); error, why it failed; done, what the run
+ * did (a recap, plain text, short). Absent when there's nothing to say, and from daemons before recaps for done.
  */
 export type Status = { state: StatusState; kind?: BlockedKind; msg?: string }
 

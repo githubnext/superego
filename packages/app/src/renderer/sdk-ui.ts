@@ -1,31 +1,32 @@
 /// <reference path="./env.d.ts" />
 // What `import … from 'superego/ui'` gives an author: the stable surface of the UI half. A profile's UI modules get
-// these at run time (profile-ui.ts), and an author's types resolve against this file (`@superego/sdk/ui`). What's here
+// these at run time (profile-ui.ts), and an author's types are this file's, flattened (packages/sdk/types.ts). What's here
 // follows the extension API's semver (`EXTENSION_API`). The window's own workings (its registry, the shell's state,
 // the host's helpers) are `superego/unstable` (sdk-unstable.ts): there for the bundled extensions, and changed
 // whenever the window changes. Bundled extensions import `@superego/app/ui`, which has both.
 
+// In the order an author meets them (the order of the flattened 'superego/ui' they read).
+
 // Defining a UI half, and what its setup is given.
-export {
-  defineUiExtension, usePlacement, useApp, useNarrow,
-  type BehaviourSlot, type EditorSlotProps, type EntryProps, type LinkAttributes, type LinkHandler, type LinkProps, type LinkWhere,
-  type NewThreadField, type NewThreadFieldProps, type PaneKind, type PaneProps, type SettingsComponentProps, type SlotName, type SlotProps,
-  type SpaceRailProps, type ToolCallProps, type ToolRow, type ToolRowCall, type ToolState, type UiApi, type UiExtension, type View,
-  type ViewContext, type ViewProps, type WindowEvent, type WindowEvents, type WindowState, type WorkBlock, type WorkPart, type WorkRun,
-  type WorkStatus,
-} from './extension.tsx'
+export { defineUiExtension, type UiExtension, type UiApi } from './extension.tsx'
 export { defineWindowAction as defineAction, type WindowAction, type WindowContext } from './actions.tsx'
 export type { Dispatch } from './actions.tsx'
+export type {
+  View, ViewContext, ViewProps, PaneKind, PaneProps, SlotName, SlotProps, BehaviourSlot, EditorSlotProps, SpaceRailProps, ToolCallProps, ToolRow,
+  ToolRowCall, ToolState, EntryProps, LinkHandler, LinkProps, LinkWhere, LinkAttributes, NewThreadField, NewThreadFieldProps, SettingsComponentProps,
+  WindowEvent, WindowEvents, WindowState, WorkRun, WorkPart, WorkBlock, WorkStatus,
+} from './extension.tsx'
 export type { Place, Placement } from './layout.ts'
 export type { Store } from './local-state.ts'
 export type { Completion, CompletionProvider, CompletionWord, ComposerWhere, SentBlock, SentWith } from './composer.ts'
 
-// Reaching machines: calls, live values, features and versions.
-export { call, has, useAppSetting, useMethod, useValue, version, type MethodState } from './client.ts'
-export { useDispatch } from './Shell.tsx'
-export { useAllThreads, useMachines, useSelection, useSessions, useThreads, type Selection } from './state.tsx'
+// Reaching machines and the window: calls, live values, threads, the selection, features and versions.
+export { useValue, useMethod, call, has, version, useAppSetting, type MethodState } from './client.ts'
+export { useMachines, useThreads, useAllThreads, useSelection, useSessions, type Selection } from './state.tsx'
 export type { Session } from './sessions.ts'
-export { keyLabel, useShortcut } from './keys.ts'
+export { useDispatch } from './Shell.tsx'
+export { usePlacement, useApp, useNarrow } from './extension.tsx'
+export { useShortcut, keyLabel } from './keys.ts'
 export { useComposer, useComposerClaim, type Composer, type ComposerClaim } from './ThreadView.tsx'
 export { EXTENSION_API } from '@superego/protocol'
 export type { Json, Status, StatusState, ThreadInfo } from '@superego/protocol'

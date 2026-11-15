@@ -2,6 +2,7 @@
 // and the heading each URI-encoded), so a link handler claims it as it would any other scheme. Messages, rendered
 // files and the editor's live preview all make them here, the same way.
 
+/** The scheme `[[wikilinks]]` come as: `wikilink:Note#Heading`. */
 export const WIKILINK = 'wikilink:'
 
 /** A wikilink taken apart: the note it names, as written, and the heading or block (`^id`) in it, if any. */

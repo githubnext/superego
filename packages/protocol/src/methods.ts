@@ -31,10 +31,13 @@ export type ThreadId = string
 /** A file's version, as the daemon sees it: when it last changed, and its size in bytes. */
 export type FileVersion = { mtimeMs: number; size: number }
 
+/** A thread, as its machine tells clients about it (`thread.list`, `useThreads`). */
 export type ThreadInfo = {
   id: ThreadId
   title: string
+  /** The folder it works in. */
   cwd: string
+  /** When it was made, ms since the epoch. */
   createdAt: number
   /** When anything last happened in it: a message, or work going on. Absent from older daemons. */
   activeAt: number
@@ -48,6 +51,7 @@ export type ThreadInfo = {
   cost?: number
   /** The panes open beside it, and the one in front (none: the thread itself). */
   panes?: Pane[]
+  /** The id of the pane in front. */
   pane?: string
   /** The profile it runs with: one of the project's, or one of the user's. Absent: plain Superego. */
   profile?: ProfileRef
@@ -68,6 +72,7 @@ export type ThreadInfo = {
   owner?: string
   /** What extensions say about it (their facts), by extension name: `ext.worktrees`, say. Absent: nothing. */
   ext?: Record<string, Json>
+  /** What it's doing: `idle`, `working`, `done`, `blocked` (on the user) or `error`, with a line saying more. */
   status: Status
 }
 
@@ -187,7 +192,7 @@ export type Methods = {
   hello: { params: { client: string; version: number; features?: string[]; label?: string }; result: Hello }
   /** Nothing, answered at once: a client pinging every few seconds notices a dead link in seconds (`heartbeat`). */
   ping: { params: {}; result: null }
-  /** Open a channel (see channels.ts). The daemon accepts `upload` {name, mimeType, size}; its id names the upload. */
+  /** Open a channel (a byte stream). The daemon accepts `upload` {name, mimeType, size}; its id names the upload. */
   'ch.open': { params: { ch: string; kind: string; params?: unknown; window: number }; result: { window: number } }
   /** The threads, newest first; `archived` lists the ones put away instead, `hidden` those in no list (extensions' own). */
   'thread.list': { params: { archived?: boolean; hidden?: boolean }; result: ThreadInfo[] }
@@ -338,7 +343,7 @@ export type Notifications = {
   'file.changed': { sub: string; content: string | null }
   /** What the daemon offers now, as `hello` said it: sent to every client whenever it changes (an extension set up, torn down, switched off). */
   'features.changed': { features: string[]; extensions?: ExtensionManifest[] }
-  /** Channels (see channels.ts). */
+  /** Channels: byte streams a client and the daemon open. */
   'ch.data': { ch: string; data: string }
   'ch.ack': { ch: string; bytes: number }
   'ch.end': { ch: string }

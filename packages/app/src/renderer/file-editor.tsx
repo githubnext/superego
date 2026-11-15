@@ -25,6 +25,7 @@ import { folderOf, resolve } from './markdown-html.ts'
 import { linkAt, livePreview } from './live-markdown.ts'
 import { arrivals } from './arrivals.ts'
 
+/** The file a `FileEditor` shows, and what goes around it. */
 export type FileEditorProps = {
   machine: MachineEntry
   thread: ThreadInfo
@@ -102,6 +103,7 @@ function goToLine(view: EditorView, line: number, scroller: HTMLElement | null) 
   requestAnimationFrame(() => { center(); requestAnimationFrame(center) })
 }
 
+/** A file of the thread's folder, to read and edit, as the core's editor pane shows it. */
 export function FileEditor({ machine, thread, path, line, actions, children, onOpenFile }: FileEditorProps) {
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path)
   const [mode, setMode] = useState<Mode>(storedMode)

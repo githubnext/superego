@@ -12,6 +12,7 @@ export type Sort = 'recent' | 'created' | 'status'
 /** App setting: the order of sessions, and of the threads in each. */
 export const SORT = 'app.sort'
 
+/** A project on a machine, as the sidebar groups threads: its folder, and its threads in order. */
 export type Session = {
   /** Unique across machines: the machine and the project's folder. */
   key: string

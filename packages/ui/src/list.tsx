@@ -1,9 +1,11 @@
 import type { HTMLAttributes, KeyboardEvent, ReactNode } from 'react'
 
+/** A list of rows to pick from (`ListItem`s), moved through with ↑↓. */
 export function List({ className = '', ...props }: HTMLAttributes<HTMLUListElement>) {
   return <ul role="listbox" className={`superego-list ${className}`} {...props} />
 }
 
+/** A row of a `List`: `leading` and `trailing` beside its text, `selected` marked. With `onClick`, Enter or Space does it too. */
 export function ListItem({ selected, leading, trailing, children, className = '', onClick, onKeyDown, ...props }:
   HTMLAttributes<HTMLLIElement> & { selected?: boolean; leading?: ReactNode; trailing?: ReactNode }) {
   // A row that does something is a stop for the keyboard: Enter or Space does it, ↑↓ go to the rows around it (in the

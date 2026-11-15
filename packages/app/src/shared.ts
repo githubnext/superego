@@ -5,7 +5,7 @@ import { firstLine, lastParagraph, MIGRATIONS, shorten, waitingForSignIn, type C
 
 export type { ConnectionState, MachineConfig, MachineId }
 
-/** A machine as the window shows it: what its link says (see @superego/client), and what this computer adds. */
+/** A machine as the window shows it: what its link to it says, and what this computer adds. */
 export type MachineEntry = Base & {
   /** A remote machine's Superego next to this computer's; absent when this computer can't tell. */
   drift?: VersionDrift
@@ -177,7 +177,7 @@ export type SuperegoBridge = {
 }
 
 /**
- * One of the protocol's channels (its channels.ts), as the window holds it. What the daemon sends comes to `onData` a
+ * One of the protocol's channels (a byte stream), as the window holds it. What the daemon sends comes to `onData` a
  * chunk at a time, the next once the listener's promise settles, so a slow reader slows the sender; `write` sends,
  * `close` gives up. `onClose` hears it end: closed from either side, or with the link (a reason then).
  */

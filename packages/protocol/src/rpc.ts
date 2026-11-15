@@ -13,9 +13,15 @@ type Response = { jsonrpc: '2.0'; id: number; result?: unknown; error?: RpcError
 type Notification = { jsonrpc: '2.0'; method: string; params?: unknown }
 type Message = Request | Response | Notification
 
+/**
+ * An error to throw from an action, method or hook for a clean message: the caller gets `message` (and `hint`), not a
+ * stack. `kind` says what went wrong (`not_found`, `invalid_params`, …).
+ */
 export class RpcError extends Error {
   readonly kind: string
+  /** Its JSON-RPC error code: -32000 unless given. */
   readonly code: number
+  /** What to do about it, in a line. */
   readonly hint?: string
   constructor(kind: string, message: string, options: { code?: number; hint?: string } = {}) {
     super(message)

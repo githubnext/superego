@@ -1,11 +1,13 @@
 import { forwardRef, type InputHTMLAttributes, type SelectHTMLAttributes } from 'react'
 
+/** A one-line text input. */
 export const TextField = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function TextField({ className = '', ...props }, ref) {
     return <input ref={ref} className={`superego-field ${className}`} {...props} />
   },
 )
 
+/** One of a `Select`'s options; options with a `group` are grouped under it. */
 export type SelectOption = { value: string; label: string; group?: string }
 
 const PLACEHOLDER = '\u0000placeholder'
@@ -28,6 +30,7 @@ export function Select({ options, value, onChange, nullLabel, placeholder, class
   )
 }
 
+/** An on/off switch, named by `label`. */
 export function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange(checked: boolean): void; label: string; disabled?: boolean }) {
   return (
     <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled}

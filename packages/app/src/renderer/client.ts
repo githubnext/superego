@@ -44,7 +44,7 @@ export function useMachineList(): MachineEntry[] {
   return machines
 }
 
-/** The families of the fonts installed here, through the Local Font Access API (kept: see fonts.ts). */
+/** The families of the fonts installed here, through the Local Font Access API (kept once asked). */
 export const loadFonts = (): Promise<string[]> => fonts.load()
 
 /**

@@ -28,6 +28,10 @@ function useArchived(machine: string, id: string, inUse: ThreadInfo[] | undefine
   return thread
 }
 
+/**
+ * A link to a thread on `machine`, by id: its title (or `children`) and status, opening it when followed (`open`:
+ * instead, `beside` with ⌘).
+ */
 export function ThreadRef({ machine, id, children, className = '', open: follow }: { machine: string; id: string; children?: ReactNode; className?: string; open?: (beside: boolean) => void }) {
   const dispatch = useRegistry().router.dispatch
   const { selection } = useSelection()

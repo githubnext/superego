@@ -2,6 +2,7 @@
 // generic UI renders. Machine settings live in that machine's daemon; app settings in the app. Both speak the same
 // `settings.*` methods.
 
+/** A value as JSON has it: what live values, methods and actions carry. */
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json }
 
 export type SettingOption = { value: string; label: string; description?: string; group?: string }

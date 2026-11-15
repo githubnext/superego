@@ -8,6 +8,7 @@ import { keyLabel } from './keys.ts'
 /** An item as a line of the list: a glyph before it, its title, more after it, and its key. */
 export type PickerRow = { key: string; title: ReactNode; glyph?: ReactNode; detail?: ReactNode; keys?: string; className?: string }
 
+/** A `Picker`'s items, how each looks, and what picking one does. */
 export type PickerProps<T> = {
   /** Names the dialog, for those who can't see it. */
   label: string
@@ -46,6 +47,7 @@ export function pickerKey(event: PickerKey, { active, count, digits = false }: {
   return undefined
 }
 
+/** A dialog to pick an item from a list, filtered as you type: the palette's, for an extension's own (a quick open). */
 export function Picker<T>({ label, placeholder, className = '', items, filter, row, onPick, onClose, digits, empty = 'Nothing matches', footer }: PickerProps<T>) {
   const [query, setQuery] = useState('')
   const [lit, setActive] = useState(0)

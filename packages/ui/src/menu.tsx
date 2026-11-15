@@ -65,6 +65,7 @@ function SubmenuPopup({ children, className = '' }: { children: ReactNode; class
 const GroupLabel = (props: ComponentProps<typeof Base.GroupLabel>) => <Base.GroupLabel className="superego-menu__label" {...props} />
 const Separator = () => <Base.Separator className="superego-menu__separator" />
 
+/** A dropdown menu, Base UI's styled: `<Menu.Root><Menu.Trigger>…</Menu.Trigger><Menu.Popup><Menu.Item>…`. */
 export const Menu = {
   Root: Base.Root, Trigger: Base.Trigger, Popup, Item, Group: Base.Group, GroupLabel, RadioGroup: Base.RadioGroup, RadioItem, CheckboxItem, Separator,
   SubmenuRoot: Base.SubmenuRoot, SubmenuTrigger, SubmenuPopup,

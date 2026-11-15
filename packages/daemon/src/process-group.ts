@@ -9,6 +9,7 @@
 // tree at once (`taskkill /T /F`), and `exited` waits for the command itself.
 import { spawn, spawnSync, type ChildProcess, type SpawnOptions } from 'node:child_process'
 
+/** `spawn`'s options (bar `detached`, which the group is), and how to stop it. */
 export type SpawnGroupOptions = Omit<SpawnOptions, 'detached' | 'signal'> & {
   /** Stops the whole group when it aborts: an action's cancel, `superego.signal` at teardown, or both (`AbortSignal.any`). */
   signal?: AbortSignal
@@ -19,7 +20,9 @@ export type SpawnGroupOptions = Omit<SpawnOptions, 'detached' | 'signal'> & {
 /** How the command ended, once nothing of it is left. `stopped`: it was stopped (`stop()` or its signal), not done. */
 export type GroupExit = { code: number | null; signal: NodeJS.Signals | null; stopped: boolean; error?: Error }
 
+/** A command `spawnGroup` started: its process, and when all of it has gone. */
 export type SpawnedGroup = {
+  /** The command's own process: its stdio, its pid. */
   child: ChildProcess
   /** Resolves once the command has exited and nothing it started in its group is left; never rejects. */
   exited: Promise<GroupExit>

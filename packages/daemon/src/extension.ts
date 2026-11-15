@@ -47,7 +47,13 @@ export function defineAction<S extends JsonSchema | undefined, R>(
 }
 
 /** A value an extension publishes; clients watch it with `value.watch` and get every change. Kept in memory only. */
-export type LiveValue<T extends Json> = { get(): T; set(next: T): void; update(edit: (current: T) => T): void }
+export type LiveValue<T extends Json> = {
+  get(): T
+  /** Its value now is `next`: every watcher hears it. */
+  set(next: T): void
+  /** Set it from what it is now. */
+  update(edit: (current: T) => T): void
+}
 
 /**
  * A value an extension publishes in scopes (each thread's, by its id): a client watches one scope (`useValue(machine,
@@ -64,6 +70,7 @@ export type ScopedValue<T extends Json> = {
   scopes(): string[]
 }
 
+/** What `status` says of a thread that needs the user: what it waits on, and a line (or a few, Markdown) saying it. */
 export type StatusContribution = { kind: BlockedKind; msg?: string }
 
 /** A block of what a message gives the model: text, or an image (base64). */
@@ -162,6 +169,7 @@ export type ThreadHooks<S extends Json = Json> = {
   /** A pane beside it closed: closed by someone, or gone as the thread was cleared. What the pane held can go. 1.5. */
   paneClosed?(thread: ThreadInfo, pane: Pane): void | Promise<void>
 }
+/** What a `creating` hook gives a new thread: the folder it works in instead, and this extension's state with it. */
 export type ThreadCreating<S extends Json = Json> = { cwd?: string; state?: S }
 /** What archiving a thread did, in a line, from an extension's `archiving` or `archived`. */
 export type ArchiveNote = { note?: string }
@@ -220,7 +228,9 @@ export type AgentPartsThread = {
 /** What an `agentParts` answers: parts its extension gave with `agent(part, { always: false })`, or nothing. */
 export type AgentPartsAnswer = Extension[] | undefined | void
 
+/** What a daemon half's `setup` gets (`superego`): this machine, and ways to add to it, for as long as the extension is set up. */
 export type DaemonApi = {
+  /** The app this daemon belongs to: its name and id. */
   app: AppConfig
   /** This machine's data folder (`~/.superego`): where the app keeps its own files. */
   dataDir: string
@@ -309,7 +319,7 @@ export type DaemonApi = {
    * receiver grants, behind every control message): a terminal's output and keystrokes, say. `accept` gets each one and
    * the params it was opened with, and throws (an `RpcError`) to refuse it; read with `channel.onData` (set before it
    * returns), write with `channel.write`. A channel ends with its connection. The window opens one with `channel` from
-   * `@superego/app/ui`. 1.5.
+   * 'superego/unstable'. 1.5.
    */
   channel(kind: string, accept: ChannelAcceptor): void
   /**
@@ -387,6 +397,7 @@ export type DaemonApi = {
      * archiving itself), its notes then said in the thread as Superego's own note (`superego.note`).
      */
     archive(id: string, options?: { whenIdle?: boolean }): Promise<{ notes: ArchiveNotes }>
+    /** Bring it back from the archive (its `unarchiving` hooks may refuse). */
     unarchive(id: string): Promise<void>
     /**
      * Start it over: its run stopped and a new context, its transcript starting after this (clients watching it watch
@@ -395,11 +406,13 @@ export type DaemonApi = {
     clear(id: string): Promise<void>
   }
   /**
-   * The other machines this daemon reaches (its `machines.json`, see relay.ts), and a call to one of them: its methods
+   * The other machines this daemon reaches (its `machines.json`), and a call to one of them: its methods
    * and actions as a client calls them (`thread.list`, `thread.create`, …). None when the daemon reaches no others. 1.4.
    */
   machines: {
+    /** The machines it reaches, by id. */
     list(): MachineEntry[]
+    /** Call a method or dispatch an action on `machine`, by its id. */
     call(machine: string, method: string, params?: unknown): Promise<unknown>
   }
 }

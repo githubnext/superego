@@ -15,6 +15,7 @@ import { useWindowEvents } from './window-events.ts'
 import { freeze, sessionKey, useSessionList, type Session } from './sessions.ts'
 import { isFolded, showSidebar, TIGHT, type SidebarMode } from './sidebar-mode.ts'
 
+/** The thread the window shows: its machine's id and its own. */
 export type Selection = { machine: string; thread: string }
 
 /**

@@ -25,10 +25,13 @@ import type { DaemonExtension } from './extension.ts'
 import { MIGRATIONS, RpcError, type Json } from '@superego/protocol'
 import { CODE, digestOf, graphOf, versionedImport, versionedUrl, versionOf, within } from './module-graph.ts'
 
+/** A profile, as its profile.ts default-exports it (`defineProfile`): its agent's model, prompt and extensions, its UI. */
 export type ProfileSpec = {
+  /** What it's for, in a line: shown where it's picked. */
   description?: string
   /** `provider/model` for its threads, unless a thread picks its own. */
   model?: string
+  /** Thinking level for its threads (`low`, `high`, …), unless a thread picks its own. */
   thinking?: string
   /** Instructions for the agent, after the extensions' prompt sections. */
   prompt?: string
@@ -132,6 +135,7 @@ export function mcpProblem(spec: ProfileSpec): string | undefined {
 /** Identity for type inference: `export default defineProfile({ … })`. */
 export const defineProfile = (spec: ProfileSpec) => spec
 
+/** A profile: the user's (`~/.superego/profiles/<name>`) or a project's (`.superego/profiles/<name>`), and its folder. */
 export type ProfileRef = { scope: 'user' | 'project'; name: string; dir: string }
 
 /**

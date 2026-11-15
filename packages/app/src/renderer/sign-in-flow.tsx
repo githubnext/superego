@@ -7,6 +7,7 @@ import { Button, TextField } from '@superego/ui'
 import { machine as client } from './client.ts'
 import { useRegistry } from './extension.tsx'
 
+/** The sign-in flow a `SignInFlow` runs: where, what to, and how it starts. */
 export type SignInFlowProps = {
   /** The machine the flow runs on. */
   machine: string

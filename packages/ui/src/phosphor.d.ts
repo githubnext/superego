@@ -2,7 +2,9 @@
 // module package), so these stand in for the icons icons.tsx re-exports. Same shapes as its lib/types.d.ts.
 declare module '@phosphor-icons/react' {
   import type { ComponentPropsWithoutRef, ForwardRefExoticComponent, RefAttributes } from 'react'
+  /** How heavy an icon's strokes are. */
   export type IconWeight = 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone'
+  /** What every icon takes: `size` (px, or a CSS length), `weight`, `color`, and an svg's own props. */
   export interface IconProps extends ComponentPropsWithoutRef<'svg'>, RefAttributes<SVGSVGElement> {
     alt?: string
     color?: string
@@ -10,6 +12,7 @@ declare module '@phosphor-icons/react' {
     weight?: IconWeight
     mirrored?: boolean
   }
+  /** An icon: a component drawing one of Phosphor's glyphs (`<XIcon size={12} />`). */
   export type Icon = ForwardRefExoticComponent<IconProps>
   export const ArchiveIcon: Icon
   export const ArrowClockwiseIcon: Icon

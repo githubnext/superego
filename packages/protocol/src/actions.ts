@@ -14,11 +14,14 @@ export type Exposure = 'ui' | 'cli' | 'mcp'
 export type ActionInfo = {
   /** Stable, dotted: `thread.create`, `threads.rail`. Extensions' start with their name. */
   id: string
+  /** What it's called in the palette and menus. */
   title: string
+  /** What it does, in a line: for the palette and `superego do`. */
   description?: string
   /** JSON Schema of the parameters (an object). Absent: none. */
   params?: JsonSchema
   runs: Runs
+  /** Who may dispatch it: `['ui']` unless said. */
   expose: Exposure[]
   /** Its default shortcut, like `mod+shift+n`. */
   keys?: string
@@ -26,6 +29,7 @@ export type ActionInfo = {
   thread?: boolean
 }
 
+/** An action with what it does: `run`, given its params and what it runs for. Made with `defineAction`. */
 export type ActionDef<P = any, R = unknown, C = unknown> = ActionInfo & { run(params: P, context: C): R | Promise<R> }
 
 /** Define an action; with a pi-schema `params`, `run` gets them typed. */

@@ -1,10 +1,5 @@
 // A real daemon for a test, in a folder of its own: your extensions set up as the app's, or your profile copied in as
 // this machine's user profile, and a scripted model that answers each turn as you wrote it. Close it after.
-//
-//   const daemon = await testDaemon({ profile: here, model: [callTool('enqueue', { what: 'lint' }), say('Queued.')] })
-//   const thread = await daemon.thread('Queue a lint')
-//   expect(await daemon.transcript(thread.id)).toContain('Queued.')
-//   await daemon.close()
 import { cp, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -12,6 +7,7 @@ import { connectSocket, listen, openDaemon, type DaemonExtension } from '@supere
 import { defineApp, envName, PROTOCOL_VERSION, type ExtensionManifest, type Hello, type Json, type Notifications, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import type { Turn } from './model.ts'
 
+/** What `testDaemon` sets up: your extensions or your profile, and the model's script. */
 export type TestDaemonOptions = {
   /** Extensions set up as the app's own (bundled), for the daemon's life. */
   extensions?: DaemonExtension[]
@@ -38,15 +34,19 @@ export type Watched<T> = {
   stop(): Promise<void>
 }
 
+/** A daemon running for a test, and a client of it: start threads, send them messages, watch values, run actions. */
 export type TestDaemon = {
-  /** Its data folder, and the profile's folder there (the copy). */
+  /** Its data folder. */
   dataDir: string
+  /** The profile's folder there (the copy), if it was given one. */
   profileDir: string | undefined
   /** What it said at `hello`, kept current: its features and its extensions' manifests. */
   readonly features: string[]
+  /** The extensions set up there, each at its version. */
   readonly extensions: ExtensionManifest[]
   /** The connection, to call anything a client can. */
   peer: RpcPeer
+  /** Call a method, as a client would (`thread.list`, an extension's `<name>.<method>`). */
   call<T = unknown>(method: string, params?: unknown): Promise<T>
   /** Run an action by id, as the window would (`action.run`). */
   dispatch<T = unknown>(id: string, params?: Record<string, unknown>): Promise<T>
@@ -74,6 +74,15 @@ export type TestDaemon = {
 
 let opened = 0
 
+/**
+ * A real daemon for a test, in a folder of its own: your extensions set up as the app's, or your profile copied in as
+ * this machine's user profile, and a scripted model that answers each turn as you wrote it. Close it after.
+ *
+ *   const daemon = await testDaemon({ profile: here, model: [callTool('enqueue', { what: 'lint' }), say('Queued.')] })
+ *   const thread = await daemon.thread('Queue a lint')
+ *   expect(await daemon.transcript(thread.id)).toContain('Queued.')
+ *   await daemon.close()
+ */
 export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestDaemon> {
   const given = Boolean(options.dataDir)
   const dataDir = options.dataDir ?? await mkdtemp(join(tmpdir(), 'superego-test-'))

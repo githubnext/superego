@@ -61,6 +61,7 @@ export type SlotName = BehaviourSlot | ViewSlot
 /** What a slot beside a file editor gets: the file, and a way to show another. */
 export type EditorSlotProps = { machine: MachineEntry; thread: ThreadInfo; path: string; open(path: string, options?: { beside?: boolean }): void }
 
+/** What each slot's component is drawn with, by slot. */
 export type SlotProps = {
   'sidebar': Record<string, never>
   'rail': Record<string, never>
@@ -95,7 +96,7 @@ export type ViewProps<C extends ViewContext = ViewContext> = C extends 'thread'
 export type SpaceRailProps = { open: boolean; folded: boolean; show(open?: boolean): void }
 
 /**
- * A view: UI an extension offers, which the layout puts in places (see layout.ts). `fits` says which places it can be
+ * A view: UI an extension offers, which the layout puts in places. `fits` says which places it can be
  * drawn in; `default` where it goes unless the user's layout says otherwise (none: offered, not placed).
  */
 export type View<C extends ViewContext = ViewContext> = {
@@ -150,6 +151,7 @@ export type PaneKind = {
  */
 export type NewThreadFieldProps = { machine: MachineEntry; cwd: string; value: Json | undefined; onChange(value: Json | undefined): void }
 
+/** A field of the New thread dialog (`newThreadField`): what draws it, and its value for a thread started beside another. */
 export type NewThreadField = {
   component: ComponentType<NewThreadFieldProps>
   /** Its value for a thread started beside `thread` (like it, ⌘N): undefined, none. */
@@ -215,10 +217,10 @@ export type LinkWhere = {
   openUrl?(url: string): void
 }
 
-/** A link a handler draws: where it goes, what it says (inline code, for `code`), and a way to follow it. */
 /** A link's attributes besides where it goes, what it says and its title. */
 export type LinkAttributes = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'children' | 'title'>
 
+/** A link a handler draws: where it goes, what it says (inline code, for `code`), and a way to follow it. */
 export type LinkProps = {
   href: string
   children: ReactNode
@@ -260,6 +262,7 @@ export type LinkHandler = {
 /** An entry of a kind an extension writes (`kind` is its own, like `git.commit`). */
 export type EntryProps = { machine: MachineEntry; thread: ThreadInfo; entry: { id: number; kind: string; data?: unknown } }
 
+/** What a settings section's own component gets (`settings`): whose settings (`'app'`, or a machine's id), and the section. */
 export type SettingsComponentProps = { target: string; section: SectionInfo }
 
 /** A block of what the agent wrote: thinking, text, or a tool call (`id`, `name`, `arguments`). */
@@ -299,6 +302,7 @@ export type WindowEvents = {
    */
   'auth.rejected': { machine: string; rejection: ProviderRejection }
 }
+/** A thing that happens in the window, to hear with `on`: see `WindowEvents`. */
 export type WindowEvent = keyof WindowEvents
 
 /** The window as it is now, for listeners: whether it has the focus and shows, and the thread it shows. */
@@ -310,7 +314,9 @@ export type WindowState = {
   thread: ThreadInfo | undefined
 }
 
+/** What a UI half's `setup` gets (`superego`): ways to add to the window, for as long as the extension is set up. */
 export type UiApi = {
+  /** The app this window belongs to: its name and id. */
   app: AppConfig
   /**
    * Aborted when this extension is torn down (a profile's UI reloaded or revoked, the window closing), before what it
@@ -337,6 +343,7 @@ export type UiApi = {
    * are now.
    */
   on<E extends WindowEvent>(event: E, listener: (event: WindowEvents[E]) => void): () => void
+  /** The window as it is now. */
   window: Readonly<WindowState>
   /** One of the app's settings as it is now (`useAppSetting` in components). */
   appSetting<T extends Json>(key: string): T | undefined
@@ -348,6 +355,7 @@ export type UiApi = {
    * shorter. Prefixes: 1.7.
    */
   tool(name: string, view: ComponentType<ToolCallProps> | ToolRow, options?: { fold?: boolean }): void
+  /** Draw transcript entries of `kind`, ones this extension's daemon half writes. */
   entry(kind: string, component: ComponentType<EntryProps>): void
   /**
    * Claim links of a kind (`thread:`, files, web pages): how they look in Markdown and what following one does. A

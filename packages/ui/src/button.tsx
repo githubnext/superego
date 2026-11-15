@@ -2,6 +2,7 @@ import type { ButtonHTMLAttributes } from 'react'
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'default' | 'primary' | 'ghost' }
 
+/** A push button: `default`, `primary` (the one to press), or `ghost` (no box until hovered). */
 export function Button({ variant = 'default', className = '', ...props }: Props) {
   return <button type="button" className={`superego-button superego-button--${variant} ${className}`} {...props} />
 }

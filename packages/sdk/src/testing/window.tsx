@@ -2,11 +2,6 @@
 // machines (whose methods, values and threads you give) or to test daemons (`testDaemon`), in a DOM of its own
 // (happy-dom's, laid over Node's globals while it's mounted). Draw a view or a place, click in it, press keys, change a machine (gone,
 // an older Superego) and see what it does.
-//
-//   const ui = await mountUi({ extensions: [builds], machines: [fakeMachine({ values: { 'builds.queue': [] } })], threads: [thread] })
-//   const aside = await ui.render({ place: 'aside', thread: thread.id })
-//   expect(aside.text()).toContain('No builds queued')
-//   await ui.unmount()
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import {
@@ -25,15 +20,21 @@ import { useDom } from './dom.ts'
 /** A machine the window talks to: how it answers, and what it says. */
 export type TestMachine = {
   id: string
+  /** The machine as the window lists it: its label, state, features and extensions. */
   entry: MachineEntry
+  /** Answer one of the window's calls. */
   call(method: string, params: unknown): Promise<unknown>
+  /** Tell `tell` of every notification it sends, until the function returned is called. */
   listen(tell: (method: string, params: unknown) => void): () => void
   /** A fake's: change a live value (whole, or one scope's part) and tell its watchers. */
   setValue?(key: string, value: Json, scope?: string): void
 }
 
+/** What a `fakeMachine` is and answers. */
 export type FakeMachineOptions = {
+  /** Its id: `local` unless given. */
   id?: string
+  /** Its name in the window: its id unless given. */
   label?: string
   /** Its protocol features: the current ones unless given (`[]`: a daemon from before them all). */
   features?: string[]
@@ -47,6 +48,7 @@ export type FakeMachineOptions = {
   methods?: Record<string, (params: any) => unknown>
   /** Its actions as data, for keys and the palette (`action.list`). */
   actions?: ActionInfo[]
+  /** Whether the window reaches it: `connected` unless given. */
   state?: MachineEntry['state']
 }
 
@@ -158,6 +160,7 @@ export function daemonMachine(daemon: TestDaemon, id = 'local', label = id): Tes
   return machine
 }
 
+/** What `mountUi` sets up: your UI halves, the machines the window reaches, and what it shows. */
 export type MountOptions = {
   /** UI halves set up as the app's own (bundled), in order. */
   extensions?: UiExtension[]
@@ -171,21 +174,29 @@ export type MountOptions = {
   narrow?: boolean
   /** The thread shown, to start with. */
   select?: { machine?: string; thread: string }
+  /** The app the window is: a test one unless given. */
   app?: AppConfig
 }
 
+/** What `render` drew, to look in and click. */
 export type Rendered = {
+  /** The element it's drawn in. */
   container: HTMLElement
+  /** All its text, as it reads now. */
   text(): string
   /** The first element `selector` matches, if any. */
   find(selector: string): HTMLElement | null
   /** Click the first button or link whose text is `text` (or that `selector` matches), and let what it set off settle. */
   click(text: string): Promise<void>
+  /** Take it away (the window stays). */
   unmount(): Promise<void>
 }
 
+/** A window `mountUi` set up: draw places and views in it, click, press keys, change machines, and wait for it. */
 export type TestWindow = {
+  /** What the extensions set up in it: the window's own workings, which change with it. */
   registry: Registry
+  /** The machines it reaches. */
   machines: TestMachine[]
   /** Every call the window made (not its watches), by machine. */
   calls: { machine: string; method: string; params: any }[]
@@ -213,7 +224,16 @@ export type TestWindow = {
 
 const isDaemon = (m: TestMachine | TestDaemon): m is TestDaemon => 'peer' in m
 
-/** A window for a test, with your UI halves set up in it. Unmount it after: that takes its DOM away again. */
+/**
+ * A window for a test: your UI halves set up in the real registry, drawn by the real shell state over a bridge to fake
+ * machines (`fakeMachine`) or test daemons (`daemonMachine`), in a DOM of its own. Draw a view or a place, click in it,
+ * press keys, change a machine and see what it does. Unmount it after: that takes its DOM away again.
+ *
+ *   const ui = await mountUi({ extensions: [builds], machines: [fakeMachine({ values: { 'builds.queue': [] } })] })
+ *   const aside = await ui.render({ place: 'aside', thread: thread.id })
+ *   expect(aside.text()).toContain('No builds queued')
+ *   await ui.unmount()
+ */
 export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   const letGoOfDom = useDom()
   const app = options.app ?? defineApp({ name: 'Superego test', id: 'superego-test' })

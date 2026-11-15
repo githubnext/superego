@@ -15,6 +15,7 @@ export type Completion = { label: string; detail?: string; insert: string }
 /** Where the composer is: the thread it sends to, on its machine. */
 export type ComposerWhere = { machine: MachineEntry; thread: ThreadInfo }
 
+/** Completions for the composer, as the user types: a word at the caret (a `/skill`, say), and what it could be. */
 export type CompletionProvider<W extends CompletionWord = CompletionWord> = {
   /** What its items are, for the menu's label: "Skills". */
   title: string
@@ -70,6 +71,7 @@ export function complete(text: string, caret: number, start: number, insert: str
 /** A block of a sent message, as the agent was given it: text, or an image. */
 export type SentBlock = { type: string; text?: string; data?: string; mimeType?: string }
 
+/** What a composer claim put in a message, read back from it once sent and drawn under it. */
 export type SentWith<T = any> = {
   /** What it put in a sent message: the items to draw, and the blocks (by index) they were, which the message's text leaves out. */
   read(blocks: readonly SentBlock[]): { items: T[]; blocks: number[] } | undefined
