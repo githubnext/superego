@@ -66,6 +66,26 @@ Before releasing, run the checks as before any merge: `pnpm test` and `pnpm smok
 After it: download the zip from the release, open it, and check it starts (a first launch from a download goes
 through Gatekeeper's check, which a local build skips).
 
+## What an author's checks need from the package
+
+`superego extension test` type-checks and tests a profile's extensions with only what the app carries: TypeScript's
+compiler and a small test runner (vitest's `expect` and `vi`, its own `describe` and `it`), bundled as
+`out/main/author-test.js` and its chunks (about 16 MB, 3.5 MB zipped), and the author types in `out/types`, with
+TypeScript's `lib.*.d.ts` (about 4 MB). electron-builder drops every `*.d.ts` from an app's files, so `out/types` goes
+in as a file set of its own ([packages/app/src/package.ts](../packages/app/src/package.ts)).
+
+`pnpm smoke` checks it on the build: [app/test/author-test.sh](../app/test/author-test.sh) copies `out/` out of the repo
+and runs `extension new` and `extension test` on Electron as Node, for a data-only extension and one with a UI half.
+What it can't see is the packing itself. After changing how the app is packaged, check a package by hand, out of
+the repo's reach:
+
+```sh
+pnpm --filter superego package
+A=$(mktemp -d /tmp/sg.XXXX) && ditto app/dist/mac-arm64/Superego.app $A/Superego.app && mkdir $A/home $A/work && cd $A/work && git init -q
+sg() { env -i HOME=$A/home PATH=/usr/bin:/bin SUPEREGO_HOME=$A/home ELECTRON_RUN_AS_NODE=1 $A/Superego.app/Contents/MacOS/Superego $A/Superego.app/Contents/Resources/app.asar/out/main/cli.js "$@"; }
+sg extension new foo && sg extension test foo && sg extension new bar --ui && sg extension test bar; sg daemon stop
+```
+
 ## When something fails
 
 - **pnpm won't run** (`ERR_PNPM_PNPM_ENGINE_IDENTITY_UNVERIFIABLE`): where registry.npmjs.org is blocked, pnpm

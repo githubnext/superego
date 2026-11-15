@@ -215,7 +215,11 @@ superego.action(defineAction({
 
 `'superego/testing'` runs an extension as it runs in Superego: the daemon half in a real daemon with a scripted model,
 the UI half in the window's own registry and shell, in a DOM of its own, over a fake machine or that daemon.
-`superego extension test` runs a profile's `*.test.ts` with it, after checking the types.
+`superego extension test` runs a profile's `*.test.ts` and `*.test.tsx` with it, after checking the types. It needs
+nothing installed: the app carries TypeScript's compiler and a test runner of its own for vitest's `describe`, `it`,
+`test`, their hooks, `expect` and `vi` (`vi.fn`, `vi.spyOn`, fake timers, `vi.waitFor`); snapshots, `vi.mock` and
+`expect.poll` aren't there. A `.ts` file loads as the daemon loads it, its types stripped by Node (import a type as one:
+`import { type Name }`), a `.tsx` as the window loads it.
 
 ```ts
 // builds.test.ts, beside the extension in its profile

@@ -15,12 +15,14 @@ import { newPackages } from './dev-packages.ts'
 export function superegoConfig(root: string) {
   // The app's command line, when it has one: in a packaged app, out/main/cli.js is what `<id>` runs (see command-line.ts).
   const cli = resolve(root, 'src/cli.ts')
+  // With it, what `<id> extension test` runs (out/main/author-test.js): the SDK's type checker and test runner.
+  const entries: Record<string, string> = existsSync(cli) ? { cli, 'author-test': authorTest(root) } : {}
   return defineConfig({
     main: {
       build: {
         externalizeDeps: false,
         rolldownOptions: { external: ['electron', /^node:/, ...NATIVE] },
-        lib: { entry: { main: resolve(root, 'src/main.ts'), daemon: resolve(root, 'src/daemon.ts'), ...(existsSync(cli) ? { cli } : {}) } },
+        lib: { entry: { main: resolve(root, 'src/main.ts'), daemon: resolve(root, 'src/daemon.ts'), ...entries } },
       },
       plugins: [
         // The commit it's built from, written in: a packaged app has no checkout to ask.
@@ -45,6 +47,9 @@ export function superegoConfig(root: string) {
     },
   })
 }
+
+/** The SDK's runner for `<id> extension test`, of the @superego/cli the app at `root` depends on. */
+const authorTest = (root: string) => createRequire(createRequire(resolve(root, 'package.json')).resolve('@superego/cli')).resolve('@superego/sdk/runner')
 
 /** Build the author types (@superego/sdk/types.ts, through the app's @superego/cli) into `to`, unless they're there. */
 async function authorTypes(root: string, to: string) {

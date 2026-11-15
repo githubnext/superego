@@ -10,15 +10,18 @@
     "./unstable": "./src/unstable.ts",
     "./testing": "./src/testing.ts",
     "./package.json": "./package.json",
-    "./vitest.author": "./vitest.author.ts",
-    "./types": "./types.ts"
+    "./types": "./types.ts",
+    "./runner": "./src/runner/main.ts"
   },
   "dependencies": {
     "@superego/app": "workspace:*",
     "@superego/client": "workspace:*",
     "@superego/daemon": "workspace:*",
     "@superego/protocol": "workspace:*",
-    "happy-dom": "^21.0.4"
+    "happy-dom": "^21.0.4",
+    "sucrase": "^3.35.1",
+    "typescript": "^6",
+    "vitest": "^5"
   },
   "peerDependencies": {
     "react": "^19"

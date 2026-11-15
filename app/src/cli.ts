@@ -7,5 +7,5 @@ import app from '../superego.config.ts'
 const appDir = join(import.meta.dirname, '..', '..')
 runCli(app, {
   appDir, bin: join(import.meta.dirname, 'cli.js'), daemon: join(import.meta.dirname, 'daemon.js'), executable: process.execPath,
-  types: join(import.meta.dirname, '..', 'types'),
+  types: join(import.meta.dirname, '..', 'types'), authorTest: join(import.meta.dirname, 'author-test.js'),
 })

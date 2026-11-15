@@ -45,6 +45,8 @@ export type CliOptions = {
   executable?: string
   /** The types for profile authors this build carries (a packaged app's out/types); without, built from the checkout. */
   types?: string
+  /** What `<id> extension test` checks and tests with (a packaged app's out/main/author-test.js); without, the checkout's. */
+  authorTest?: string
 }
 
 // One CLI run serves one app; `runCli` sets these before anything else runs.
@@ -694,7 +696,7 @@ async function extensionCommand(sub: string | undefined, rest: string[], values:
     const dir = await profileHere(values)
     const target = rest[0] ? join(dir, rest[0]) : undefined
     if (target && !existsSync(target)) throw new RpcError('not_found', `No ${rest[0]} in ${dir}`)
-    process.exitCode = await testExtension(dir, target, await authorTypes(dataDir, options.types))
+    process.exitCode = await testExtension(dir, target, await authorTypes(dataDir, options.types), options.authorTest)
     return
   }
   if (sub === 'reload') {

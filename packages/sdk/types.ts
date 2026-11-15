@@ -6,6 +6,7 @@
 //                                         what they reach of the workspace's packages (flatten.ts), to be read
 //   <dir>/node_modules/<package>/         every outside package they reach (pi-durable, React's types, Node's, …):
 //                                         its declaration files and package.json, copied as installed
+//   <dir>/lib/                            TypeScript's own lib.*.d.ts, for `superego extension test` to check with
 //   <dir>/stamp.json                      a hash of all of it, to tell an old copy from this one, and of the sources
 //                                         it was made from, to tell when it's out of date
 //
@@ -222,6 +223,10 @@ export async function buildTypes(dir: string): Promise<Stamp> {
       }
     }
     walk(from)
+  }
+  // The standard library's declarations, for the compiler `superego extension test` checks with (runner/check.ts).
+  for (const entry of readdirSync(join(typescript, 'lib'))) {
+    if (/^lib\..*\.d\.ts$/.test(entry)) write(join(temp, 'lib', entry), readFileSync(join(typescript, 'lib', entry), 'utf8'))
   }
 
   const hash = createHash('sha256')

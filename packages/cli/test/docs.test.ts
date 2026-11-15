@@ -12,7 +12,6 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { setUpProfileTypes } from '@superego/client/author-types'
-import { sdkPaths } from '../src/extensions.ts'
 import { sharedAuthorTypes } from './author-types.ts'
 
 const SKILL = fileURLToPath(new URL('../skill/', import.meta.url))
@@ -86,9 +85,8 @@ it("type-checks every TypeScript block in the guide and the UI topic against the
     offsets.set(name, { page: block.page, line: block.line, prelude: head.length })
     await writeFile(join(dir, name), `${head.join('\n')}\n${block.code}\n`)
   }
-  const { repoDir } = sdkPaths()
   setUpProfileTypes(dir, types)
-  const tsc = join(dirname(createRequire(join(repoDir, 'package.json')).resolve('typescript/package.json')), 'bin', 'tsc')
+  const tsc = join(dirname(createRequire(import.meta.url).resolve('typescript/package.json')), 'bin', 'tsc')
   const output = await new Promise<string>((resolve) => {
     let out = ''
     const child = spawn(process.execPath, [tsc, '-p', join(dir, 'tsconfig.json'), '--pretty', 'false'], { cwd: dir })

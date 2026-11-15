@@ -79,7 +79,9 @@ export async function packageApp(root: string, app: AppConfig, options: PackageO
     electronVersion,
     electronDist: join(electron, 'dist'),
     directories: { output, buildResources: join(stage, 'resources') },
-    files: ['out/**', 'resources/**', 'package.json'],
+    // The author types (out/types) on their own: electron-builder leaves every *.d.ts out of the app's files, which is
+    // all they are, but not out of a set of files from elsewhere.
+    files: ['out/**', '!out/types{,/**}', 'resources/**', 'package.json', { from: 'out', to: 'out', filter: ['types/**'] }],
     asar: true,
     // Native modules (copied into out/node_modules by the build) are loaded from the disk, not the archive; the skill
     // (out/skill) is read there by agents, whose shells can't read the archive.

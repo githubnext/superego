@@ -6,6 +6,8 @@ cd "$(dirname "$0")/.."
 # seconds), and builds the app first if its sources changed.
 [ "$SUPEREGO_CHECK_COMMAND" = test/smoke.sh ] || exec node ../scripts/check.ts --timeout SUPEREGO_SMOKE_TIMEOUT=480 test/smoke.sh "$@"
 node scripts/build.ts
+# `superego extension new` and `test` with only what the build carries, out of the repo's reach.
+sh test/author-test.sh
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_MODEL=faux SUPEREGO_HEADLESS=1
 # A recorded agent that asks the user something, then uses the answer: offered as the model "replay/replay".

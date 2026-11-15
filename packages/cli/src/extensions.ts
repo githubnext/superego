@@ -1,18 +1,12 @@
 // `superego extension …`: make an extension in a profile (`new`), check and test it (`test`), load its profile again
 // (`reload`), and see what each extension on a machine is and does (`superego extensions`, inspect.ts).
 import { spawn } from 'node:child_process'
-import { existsSync, realpathSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { installTypes, linkProfileTypes, setUpProfileTypes } from '@superego/client/author-types'
 import { writeStarter, type StarterKind } from './starter.ts'
-
-/** Where this Superego's author SDK is, and the checkout it's in (for its TypeScript and vitest). */
-export function sdkPaths() {
-  const sdkDir = dirname(createRequire(import.meta.url).resolve('@superego/sdk/package.json'))
-  return { sdkDir, repoDir: resolve(sdkDir, '..', '..') }
-}
 
 /**
  * This computer's types for profile authors, `<dataDir>/types`, made current from this Superego's: `built` (a packaged
@@ -30,17 +24,12 @@ export async function authorTypes(dataDir: string, built?: string): Promise<stri
   return installTypes(from, dataDir)
 }
 
-/** A tool of the checkout's: its bin, run with this Node. */
-function tool(pkg: string, bin: string) {
-  const { repoDir } = sdkPaths()
-  return join(dirname(createRequire(join(repoDir, 'package.json')).resolve(`${pkg}/package.json`)), bin)
-}
-
-function run(args: string[], cwd: string, env: Record<string, string> = {}): Promise<number> {
-  return new Promise((done) => {
-    const child = spawn(process.execPath, args, { cwd, stdio: 'inherit', env: { ...process.env, ...env } })
-    child.on('exit', (code) => done(code ?? 1))
-  })
+/**
+ * What runs `superego extension test`'s checks and tests (@superego/sdk's runner/main.ts): `built`, a packaged app's
+ * (out/main/author-test.js), else this checkout's source. Run on this process's runtime: the app's Electron as Node, or Node.
+ */
+function runner(built?: string): string {
+  return built ?? createRequire(import.meta.url).resolve('@superego/sdk/runner')
 }
 
 /** Make `name` in the profile at `profileDir`, and give the profile types (`typesDir`: `authorTypes`'s). */
@@ -52,19 +41,14 @@ export function newExtension(profileDir: string, name: string, kind: StarterKind
 
 /**
  * Check the profile's types (its tsconfig: what `new` wrote) and run its tests, or those of one extension in it
- * (`target`, a folder in it), as `superego/testing` runs them. Resolves to the exit code.
+ * (`target`, a folder or file in it), as `superego/testing` runs them: in a process of its own, with the compiler and
+ * runner this Superego carries (`built`: a packaged app's). Resolves to the exit code.
  */
-export async function testExtension(given: string, target: string | undefined, typesDir: string): Promise<number> {
-  const { sdkDir } = sdkPaths()
-  // As vitest names it (through a symlink, /tmp: its real path), so a target in it is found.
-  const profileDir = realpathSync(given)
-  if (target) target = realpathSync(target)
-  if (existsSync(join(profileDir, 'tsconfig.json'))) {
-    // Its types, linked again if they aren't (a fresh clone of a project's).
-    linkProfileTypes(profileDir, typesDir)
-    console.log(`Checking types in ${profileDir}…`)
-    const code = await run([tool('typescript', 'bin/tsc'), '-p', join(profileDir, 'tsconfig.json')], profileDir)
-    if (code) return code
-  }
-  return run([tool('vitest', 'vitest.mjs'), 'run', '--config', join(sdkDir, 'vitest.author.ts'), ...(target ? [target] : [])], profileDir, { SUPEREGO_AUTHOR_DIR: profileDir })
+export async function testExtension(profileDir: string, target: string | undefined, typesDir: string, built?: string): Promise<number> {
+  // Its types, linked again if they aren't (a fresh clone of a project's).
+  if (existsSync(join(profileDir, 'tsconfig.json'))) linkProfileTypes(profileDir, typesDir)
+  return new Promise((done) => {
+    const child = spawn(process.execPath, [runner(built), '--types', typesDir, profileDir, ...(target ? [target] : [])], { cwd: profileDir, stdio: 'inherit' })
+    child.on('exit', (code) => done(code ?? 1))
+  })
 }
