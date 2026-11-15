@@ -1,5 +1,5 @@
-// The sidebar's edge, wide: dragged, it makes the sidebar wider or narrower (between MIN_WIDTH and MAX_WIDTH, kept as an
-// app setting); let go short of FOLD_AT, the open space folds into its slim form in the rail (its view's `fold` action),
+// The sidebar's edge, wide: dragged, it makes the sidebar wider or narrower (between MIN_WIDTH and MAX_WIDTH, and no
+// more than MAX_SHARE of the window, kept as an app setting); let go short of FOLD_AT, the open space folds into its slim form in the rail (its view's `fold` action),
 // or the sidebar closes for a space without one. A double click puts the width back. With the sidebar hidden (closed,
 // or folded) the edge is the rail's, and dragging out from it unfolds the sidebar at the width it's dragged to.
 import { useEffect, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
@@ -17,12 +17,13 @@ type Drag = { width: number; folds: boolean; done?: boolean }
 export function useSidebarEdge(space: View | undefined) {
   const [kept, keep] = useAppSetting<number>(SIDEBAR_WIDTH)
   const stored = sidebarWidth(kept)
+  const windowWidth = useWindowWidth()
   const sidebar = useSidebar()
   const dispatch = useRegistry().router.dispatch
   // While dragged, and after until the setting comes back with the new width: then it's the setting's again.
   const [drag, setDrag] = useState<Drag>()
   useEffect(() => setDrag((d) => d?.done ? undefined : d), [stored])
-  const width = drag?.width ?? stored
+  const width = sidebarWidth(drag?.width ?? stored, windowWidth)
 
   // Folded into the rail and back by the space's own action; one without closes, and opens, the sidebar.
   const run = (action: string, on: boolean) => void dispatch(action, { on }, { source: 'sidebar' }).catch((error) => console.error(error))
@@ -48,7 +49,7 @@ export function useSidebarEdge(space: View | undefined) {
     let unfolded = out
     let last: Drag | undefined
     const move = (e: PointerEvent) => {
-      const next = dragSidebar(start + e.clientX - startX)
+      const next = dragSidebar(start + e.clientX - startX, window.innerWidth)
       if (!unfolded) {
         if (next.folds) return
         unfolded = true
@@ -85,4 +86,15 @@ export function useSidebarEdge(space: View | undefined) {
         role="separator" aria-orientation="vertical" aria-label="Sidebar width" title="Drag to resize, double-click to reset" />
     ),
   }
+}
+
+/** The window's width, as it's resized. */
+function useWindowWidth() {
+  const [width, setWidth] = useState(window.innerWidth)
+  useEffect(() => {
+    const resize = () => setWidth(window.innerWidth)
+    window.addEventListener('resize', resize)
+    return () => window.removeEventListener('resize', resize)
+  }, [])
+  return width
 }

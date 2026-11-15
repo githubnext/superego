@@ -1,6 +1,6 @@
 // The sidebar's width as kept, and as its edge is dragged: held within its bounds, and folding when let go short.
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_WIDTH, dragSidebar, FOLD_AT, MAX_WIDTH, MIN_WIDTH, release, sidebarWidth } from '../src/renderer/sidebar-width.ts'
+import { DEFAULT_WIDTH, dragSidebar, FOLD_AT, MAX_WIDTH, MIN_WIDTH, release, sidebarWidth, widest } from '../src/renderer/sidebar-width.ts'
 
 describe('the width kept', () => {
   it('is the default until one is kept', () => {
@@ -15,6 +15,18 @@ describe('the width kept', () => {
     expect(sidebarWidth(MAX_WIDTH + 200)).toBe(MAX_WIDTH)
     expect(sidebarWidth(20)).toBe(MIN_WIDTH)
     expect(sidebarWidth(250.6)).toBe(251)
+  })
+
+  it('shows no wider than 40% of the window, nor narrower than its least, and comes back as the window widens', () => {
+    expect(widest(1100)).toBe(MAX_WIDTH)
+    expect(widest(800)).toBe(320)
+    expect(widest(601)).toBe(240)
+    expect(widest(400)).toBe(MIN_WIDTH)
+    expect(sidebarWidth(400, 800)).toBe(320)
+    expect(sidebarWidth(300, 800)).toBe(300)
+    expect(sidebarWidth(undefined, 500)).toBe(200)
+    expect(sidebarWidth(400, 300)).toBe(MIN_WIDTH)
+    expect(sidebarWidth(400, 1200)).toBe(400)
   })
 })
 
@@ -32,6 +44,12 @@ describe('dragging its edge', () => {
     expect(dragSidebar(0)).toEqual({ width: MIN_WIDTH, folds: true })
     expect(dragSidebar(-50)).toEqual({ width: MIN_WIDTH, folds: true })
   })
+
+  it('stops at 40% of the window, and still folds', () => {
+    expect(dragSidebar(300, 700)).toEqual({ width: 280, folds: false })
+    expect(dragSidebar(250, 700)).toEqual({ width: 250, folds: false })
+    expect(dragSidebar(FOLD_AT - 1, 700)).toEqual({ width: MIN_WIDTH, folds: true })
+  })
 })
 
 describe('letting go', () => {
@@ -40,6 +58,11 @@ describe('letting go', () => {
     expect(release(dragSidebar(150), 300)).toBe(MIN_WIDTH)
     expect(release(dragSidebar(360), 300)).toBe(360)
     expect(release(dragSidebar(300), 300)).toBeUndefined()
+  })
+
+  it('keeps the capped width when let go at the window\'s cap', () => {
+    expect(release(dragSidebar(500, 700), 400)).toBe(280)
+    expect(release(dragSidebar(FOLD_AT - 1, 700), 400)).toBe('fold')
   })
 
   it('does nothing after a drag from the rail that never brought the sidebar out', () => {

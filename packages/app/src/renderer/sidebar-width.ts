@@ -8,25 +8,34 @@ export const DEFAULT_WIDTH = 232
 /** No narrower than this while it shows: dragged further, it holds here and shows it will fold. */
 export const MIN_WIDTH = 180
 export const MAX_WIDTH = 420
+/** Nor wider than this share of the window, while that's at least MIN_WIDTH: what's kept comes back as it widens. */
+export const MAX_SHARE = 0.4
 /** Let go with its edge short of this and it folds; dragged out from the rail past it, it unfolds. */
 export const FOLD_AT = 140
 
-const clamp = (width: number) => Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(width)))
+/** The most it shows in a window `windowWidth` wide (none given: MAX_WIDTH). */
+export const widest = (windowWidth = Infinity) => Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(windowWidth * MAX_SHARE)))
 
-/** The width as kept: anything but a number (nothing kept yet) is the default; a number out of bounds is brought in. */
-export const sidebarWidth = (kept: unknown) => typeof kept === 'number' && Number.isFinite(kept) ? clamp(kept) : DEFAULT_WIDTH
+const clamp = (width: number, windowWidth?: number) => Math.min(widest(windowWidth), Math.max(MIN_WIDTH, Math.round(width)))
 
 /**
- * Its edge dragged to `width` from the sidebar's start: how wide it shows (never past its bounds), and whether letting
- * go there folds it. Dragged out from the rail, `folds` is it staying folded.
+ * The width as kept: anything but a number (nothing kept yet) is the default; a number out of bounds is brought in. With
+ * the window's width, as it shows there.
  */
-export function dragSidebar(width: number): { width: number; folds: boolean } {
-  return { width: clamp(width), folds: width < FOLD_AT }
+export const sidebarWidth = (kept: unknown, windowWidth?: number) =>
+  clamp(typeof kept === 'number' && Number.isFinite(kept) ? kept : DEFAULT_WIDTH, windowWidth)
+
+/**
+ * Its edge dragged to `width` from the sidebar's start, in a window `windowWidth` wide: how wide it shows (never past its
+ * bounds), and whether letting go there folds it. Dragged out from the rail, `folds` is it staying folded.
+ */
+export function dragSidebar(width: number, windowWidth?: number): { width: number; folds: boolean } {
+  return { width: clamp(width, windowWidth), folds: width < FOLD_AT }
 }
 
 /**
- * Let go after dragging to `last` (none: it never came out of the rail): fold, keep a width other than the one `kept`,
- * or neither.
+ * Let go after dragging to `last` (none: it never came out of the rail): fold, keep a width other than the one `kept`
+ * (as kept, not as shown: let go at the window's cap, that's kept), or neither.
  */
 export function release(last: { width: number; folds: boolean } | undefined, kept: number): 'fold' | number | undefined {
   if (!last) return undefined
