@@ -5,7 +5,7 @@
 //   scrolling layout is. Each column has its own width, a share of the row: the thread's half to start, a pane's its
 //   kind's; the room after a column (the last one's too, at the row's end) is its handle, and the last column takes
 //   what's left over until it's dragged. Past the edge the row scrolls, and the focused column scrolls just far enough
-//   to show whole.
+//   to show whole. The row runs a little past the last handle, so it's never at the window's edge.
 // - Stack: the thread, and beside it one column its panes share, one in front at a time; the row never passes the
 //   window's edge. The strip's tabs bring one to the front; so does its getting the focus (a click, ⌃Tab, ⌘⌥←/→, the
 //   navigator, pane.focus from anywhere) and its opening. The thread's handle drags the line between the two.
@@ -26,7 +26,7 @@ import { PaneMenu, ThreadBody } from './ThreadView.tsx'
 import { ViewMenuButton } from './view-menu.tsx'
 import { FileEditor } from './file-editor.tsx'
 import { BRING_FORWARD, focusRegion } from './focus.ts'
-import { DEFAULT_SHARE, frontOf, GAP, roomFor, scrollWidths, stackWidths } from './pane-layout.ts'
+import { DEFAULT_SHARE, END, endShare, frontOf, GAP, roomFor, scrollWidths, stackWidths } from './pane-layout.ts'
 
 /** The strip's switch between the layouts. */
 const LAYOUTS: SegmentedOption<PaneLayout>[] = [
@@ -130,8 +130,9 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     : w ? Math.max(0, Math.min(starts[i]! + w, scrolled + rowWidth) - Math.max(starts[i]!, scrolled)) / w : 0)
   const side = (i: number) => shown[i]! >= 0.5 ? undefined : stacked ? 'behind' : starts[i]! < scrolled ? 'left' : 'right'
 
-  // The gap after a column resizes it (`index`): its share of the row, kept for next time. The last one's, dragged out
-  // to the row's end, takes what's left again; a double click puts any back as it was.
+  // The gap after a column resizes it (`index`): its share of the row, kept for next time. The last one's, dragged to
+  // about what the others leave, takes that again; past it, it's wider and the row scrolls. A double click puts any
+  // back as it was.
   const keyOf = (index: number) => index === last ? `${keys[index]}:end` : keys[index]!
   const drag = (index: number) => (event: React.PointerEvent) => {
     if (event.button !== 0) return
@@ -141,9 +142,8 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     const used = widths.slice(0, last).reduce((sum, w) => sum + w, 0)
     const move = (e: PointerEvent) => {
       const width = start + e.clientX - startX
-      const fills = index === last && width >= room - used
-      const next = Math.min(index === last ? 1 : 0.85, Math.max(0.15, width / Math.max(1, room)))
-      setShares(({ [key]: _, ...rest }) => fills ? rest : { ...rest, [key]: next })
+      const next = index === last ? endShare(width, room, used) : Math.min(0.85, Math.max(0.15, width / Math.max(1, room)))
+      setShares(({ [key]: _, ...rest }) => next === undefined ? rest : { ...rest, [key]: next })
     }
     const root = document.documentElement
     const up = () => {
@@ -257,6 +257,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
           </Fragment>
         ))}
         {stacked && <div className="panes__end" aria-hidden />}
+        {!stacked && !narrow && panes.length > 0 && <div className="panes__tail" style={{ width: END }} aria-hidden />}
       </div>
     </div>
   )

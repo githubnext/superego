@@ -1,6 +1,6 @@
 // The pane row's arithmetic: column widths scrolled and stacked, and which pane a stack shows.
 import { describe, expect, it } from 'vitest'
-import { frontOf, GAP, MIN_COLUMN, roomFor, scrollWidths, stackWidths } from '../src/renderer/pane-layout.ts'
+import { endShare, frontOf, GAP, MIN_COLUMN, roomFor, scrollWidths, SNAP, stackWidths } from '../src/renderer/pane-layout.ts'
 
 describe('scrolled', () => {
   it('gives each column its share and the last what the others leave', () => {
@@ -18,6 +18,17 @@ describe('scrolled', () => {
     const widths = scrollWidths(1000, [0.5, 0.5, 0.2, undefined])
     expect(widths).toEqual([500, 500, MIN_COLUMN, MIN_COLUMN])
     expect(widths.reduce((sum, w) => sum + w, 0)).toBeGreaterThan(1000)
+  })
+
+  it('lets the last column be dragged wider than what the others leave, and takes that again near it', () => {
+    // The others leave 600: dragged out to 900, it's its own width and the row scrolls; back near 600, it fills.
+    expect(endShare(900, 1200, 600)).toBe(0.75)
+    expect(endShare(600 + SNAP, 1200, 600)).toBeUndefined()
+    expect(endShare(500, 1200, 600)).toBeCloseTo(500 / 1200)
+    // The row scrolls already (the others leave less than the least): it still grows, from the least.
+    expect(endShare(MIN_COLUMN + 100, 1200, 1100)).toBeCloseTo((MIN_COLUMN + 100) / 1200)
+    expect(endShare(MIN_COLUMN, 1200, 1100)).toBeUndefined()
+    expect(endShare(5000, 1200, 0)).toBe(1)
   })
 
   it('never makes a column wider than the room', () => {

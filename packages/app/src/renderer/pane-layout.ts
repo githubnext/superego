@@ -6,6 +6,10 @@ export const DEFAULT_SHARE = 0.5
 export const GAP = 8
 /** No column narrower than this, however many: the row scrolls instead (stacked, it's shared out). */
 export const MIN_COLUMN = 380
+/** Scrolled, room past the last column's handle: so the handle is never at the window's edge, and can be dragged out. */
+export const END = 20
+/** The last column's handle dragged within this of where it takes what the others leave: it does again. */
+export const SNAP = 12
 
 /** The room `columns` columns share in a row `rowWidth` wide: the row less the gap after each. */
 export const roomFor = (rowWidth: number, columns: number) => Math.max(0, rowWidth - GAP * columns)
@@ -20,6 +24,15 @@ export function scrollWidths(room: number, shares: (number | undefined)[]): numb
   const last = shares.length - 1
   if (last >= 0 && shares[last] === undefined) widths[last] = fit(room - widths.slice(0, last).reduce((sum, w) => sum + w, 0))
   return widths
+}
+
+/**
+ * The last column's share once its handle is dragged to `width`, the others `used` wide: none (it takes what they
+ * leave) near that, else its own, wider (the row scrolls) or narrower.
+ */
+export function endShare(width: number, room: number, used: number): number | undefined {
+  const left = Math.min(room, Math.max(MIN_COLUMN, room - used))
+  return Math.abs(width - left) <= SNAP ? undefined : Math.min(1, Math.max(0.15, width / Math.max(1, room)))
 }
 
 /**

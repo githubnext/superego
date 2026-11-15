@@ -515,6 +515,9 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .panes--stack > .panes__column--thread { grid-area: 1 / 1; }
 .panes--stack > .panes__gap { grid-area: 1 / 2; }
 .panes__end { grid-area: 1 / 4; box-shadow: inset 1px 0 0 var(--superego-line); }
+/* Scrolled, the room past the last handle (END in pane-layout.ts); the last column, brought into view, shows it too. */
+.panes__tail { flex: none; }
+.panes__column:has(+ .panes__gap + .panes__tail) { scroll-margin-right: 28px; }
 .panes__column.is-behind { visibility: hidden; }
 .pane-empty { margin: auto; color: var(--superego-muted); padding: var(--superego-space-5); text-align: center; }
 .pane-scroll { flex: 1; overflow: auto; }

@@ -1,6 +1,7 @@
 // Screenshots of a thread with three panes in each layout (run by `test/look.sh <dir> panes`): scrolled, then stacked
 // from the strip's switch, a pane brought to the front by ⌃Tab and one opened from outside the window, then scrolled again
-// by its shortcut. Checks on the way that a stack never passes the window's edge. Light and dark, into
+// by its shortcut. Checks on the way that a stack never passes the window's edge, and that the last pane's handle is
+// clear of it and drags the pane wider. Light and dark, into
 // $SUPEREGO_SHOWCASE_OUT.
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import { writeFileSync } from 'node:fs'
@@ -67,6 +68,24 @@ void (async () => {
   const scrolled = await run(`(() => { const p = document.querySelector('.panes'); return p.scrollWidth > p.clientWidth })()`)
   if (!scrolled) fail('scrolled: the row should run past the window')
   await both('scroll')
+  // The last pane focused, its handle in view clear of the window's edge; dragged out, it grows and the row scrolls on.
+  await run(`window.superego.call('local', 'pane.focus', { id: '${id}', pane: '${folder}' })`)
+  await sleep(600)
+  const handle = `[...document.querySelectorAll('.panes > .panes__gap')].at(-1)`
+  const clear = await run(`(() => { const p = document.querySelector('.panes').getBoundingClientRect(), h = ${handle}.getBoundingClientRect(); return Math.round(p.right - h.right) })()`)
+  if (clear < 16) fail(`the last handle should be clear of the window's edge, not ${clear}px from it`)
+  await both('scroll-end')
+  const lastWidth = () => run(`document.querySelector('[data-column="${folder}"]').offsetWidth`)
+  const before = await lastWidth()
+  await run(`(() => { const h = ${handle}; const r = h.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2
+    h.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: x, clientY: y }))
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: x + 150, clientY: y }))
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: x + 150, clientY: y })) })()`)
+  await until(`document.querySelector('[data-column="${folder}"]').offsetWidth >= ${before} + 140`, 'the last pane dragged wider')
+  await run(`${handle}.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`)
+  await until(`document.querySelector('[data-column="${folder}"]').offsetWidth === ${before}`, 'the last pane put back')
+  await run(`window.superego.call('local', 'pane.focus', { id: '${id}', pane: '${editor}' })`)
+  await sleep(600)
 
   // Stacked, from the strip's switch: the focused pane in front, and nothing past the window's edge.
   await run(`document.querySelector('.strip__layout [aria-label="Stack panes"]').click()`)
