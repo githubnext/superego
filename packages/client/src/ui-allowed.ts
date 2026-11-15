@@ -19,6 +19,9 @@ export class UiAllowStore {
   #declined: AllowedUi[]
   #listeners = new Set<() => void>()
   #watcher: { close(): void } | undefined
+  /** The saves under way, one at a time, each writing the lists as they were when it was asked for. */
+  #saving: Promise<void> = Promise.resolve()
+  #unsaved = 0
 
   constructor(dataDir: string) {
     this.#dir = dataDir
@@ -35,6 +38,9 @@ export class UiAllowStore {
     if (this.#watcher) return
     mkdirSync(this.#dir, { recursive: true, mode: 0o700 })
     this.#watcher = watchFiles(this.#dir, [ALLOWED, DECLINED], (file) => {
+      // Read while a save is under way, a file is as it was before it: that would undo the change being saved. The
+      // save's own rename is heard once it's done.
+      if (this.#unsaved) return
       const next = this.#read(file)
       const list = file === ALLOWED ? this.#allowed : this.#declined
       if (JSON.stringify(next) === JSON.stringify(list)) return
@@ -78,13 +84,18 @@ export class UiAllowStore {
     if (!writes.length) return
     this.#allowed = allowed
     this.#declined = declined
-    await mkdir(this.#dir, { recursive: true, mode: 0o700 })
-    for (const [file, , list] of writes) {
-      const path = join(this.#dir, file)
-      const temp = `${path}.${process.pid}.tmp`
-      await writeFile(temp, JSON.stringify(list, null, 2) + '\n', { mode: 0o600 })
-      await rename(temp, path)
-    }
+    this.#unsaved++
+    const saved = this.#saving.then(async () => {
+      await mkdir(this.#dir, { recursive: true, mode: 0o700 })
+      for (const [file, , list] of writes) {
+        const path = join(this.#dir, file)
+        const temp = `${path}.${process.pid}.tmp`
+        await writeFile(temp, JSON.stringify(list, null, 2) + '\n', { mode: 0o600 })
+        await rename(temp, path)
+      }
+    }).finally(() => { this.#unsaved-- })
+    this.#saving = saved.catch(() => {})
+    await saved
     for (const listener of this.#listeners) listener()
   }
 }

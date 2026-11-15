@@ -15,6 +15,9 @@ export class MachineStore {
   #listeners = new Set<() => void>()
 
   #watcher: { close(): void } | undefined
+  /** The saves under way, one at a time, each writing the list as it was when it was asked for. */
+  #saving: Promise<void> = Promise.resolve()
+  #unsaved = 0
 
   constructor(dataDir: string) {
     this.#path = join(dataDir, 'machines.json')
@@ -31,6 +34,9 @@ export class MachineStore {
     const name = this.#path.split('/').at(-1)!
     mkdirSync(this.#path.slice(0, -name.length - 1), { recursive: true, mode: 0o700 })
     this.#watcher = watchFiles(this.#path.slice(0, -name.length - 1), [name], () => {
+      // Read while a save is under way, the file is as it was before it: that would undo the change being saved. The
+      // save's own rename is heard once it's done.
+      if (this.#unsaved) return
       const next = this.#read()
       if (JSON.stringify(next) === JSON.stringify(this.#machines)) return
       this.#machines = next
@@ -93,10 +99,16 @@ export class MachineStore {
   }
 
   async #save() {
-    await mkdir(this.#path.slice(0, this.#path.lastIndexOf('/')), { recursive: true, mode: 0o700 })
-    const temp = `${this.#path}.${process.pid}.tmp`
-    await writeFile(temp, JSON.stringify(this.#machines, null, 2) + '\n', { mode: 0o600 })
-    await rename(temp, this.#path)
+    const text = JSON.stringify(this.#machines, null, 2) + '\n'
+    this.#unsaved++
+    const saved = this.#saving.then(async () => {
+      await mkdir(this.#path.slice(0, this.#path.lastIndexOf('/')), { recursive: true, mode: 0o700 })
+      const temp = `${this.#path}.${process.pid}.tmp`
+      await writeFile(temp, text, { mode: 0o600 })
+      await rename(temp, this.#path)
+    }).finally(() => { this.#unsaved-- })
+    this.#saving = saved.catch(() => {})
+    await saved
     for (const listener of this.#listeners) listener()
   }
 }
