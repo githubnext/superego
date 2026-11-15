@@ -19,7 +19,6 @@ import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import * as nodeModule from 'node:module'
-import { transform } from 'sucrase'
 import type { Extension } from '@earendil-works/pi-durable'
 import type { DaemonExtension } from './extension.ts'
 import { MIGRATIONS, RpcError, type Json } from '@superego/protocol'
@@ -458,6 +457,8 @@ export async function profileModule(dir: string, path: string): Promise<{ path: 
   const source = await readFile(found, 'utf8')
   const typed = /\.[cm]?tsx?$/.test(found)
   const jsx = /x$/.test(found)
+  // Loaded only now: some 60 modules, a second of every daemon's start on a busy machine.
+  const { transform } = await import('sucrase')
   try {
     const { code } = transform(source, {
       transforms: [...(typed ? ['typescript' as const] : []), ...(jsx ? ['jsx' as const] : [])],
