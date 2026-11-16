@@ -13,7 +13,7 @@
 // maximized.ts). ⌃Tab moves the focus along. On a phone each column is the screen's width, and a swipe moves between them.
 // Built in: editor and thread. Extensions and profiles add kinds with superego.pane(kind, …) (Changes is git's; a web
 // page and an artifact, web-panes'). A pane of a kind only an extension the thread goes without draws isn't shown.
-import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
 import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, CornersInIcon, CornersOutIcon, DotsThreeIcon, FileTextIcon, IconButton, Menu, SegmentedControl, XIcon, type SegmentedOption } from '@superego/ui'
@@ -44,25 +44,24 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
   const panes = shownPanes(registry, { machine: machine.id, thread })
+  const where = { machine: machine.id, thread }
+  const title = (pane: Pane) => paneTitle(registry, pane, where)
   // A pane of a view's kind can move to the other places the view fits, from its tab's ···.
   const isView = (pane: Pane) => registry.views.some((v) => v.id === pane.kind && v.fits.includes('pane'))
   const narrow = useNarrow()
   const [layout] = useAppSetting<PaneLayout>(PANE_LAYOUT)
   // On a phone each column is the screen's width either way.
   const stacked = layout === 'stack' && !narrow && panes.length > 0
-  // Each pane's width, as a share of the row, by pane; kept in this window.
-  const [shares, setShares] = useLocalState<Record<string, number>>('pane.widths', {})
   const row = useRef<HTMLDivElement>(null)
-  const [rowWidth, setRowWidth] = useState(0)
   const [scrolled, setScrolled] = useState(0)
-  useLayoutEffect(() => {
-    const el = row.current
-    if (!el) return
-    const observer = new ResizeObserver(() => setRowWidth(el.clientWidth))
-    observer.observe(el)
-    setRowWidth(el.clientWidth)
-    return () => observer.disconnect()
-  }, [panes.length > 0])
+
+  // The columns, left to right: the thread, then its panes, each by the key its width is kept under.
+  const keys = ['thread', ...panes.map((pane) => pane.id)]
+  const { rowWidth, widths, threadWidth, stackWidth, drag, reset } = useColumnWidths(row, {
+    keys, stacked, narrow,
+    kindShares: panes.map((pane) => paneKind(registry, pane.kind, where)?.width),
+  })
+  const widthOf = (pane: Pane) => widths[panes.indexOf(pane) + 1]!
 
   // The focused column: a pane, or (none, or one that closed) the thread.
   const focused = panes.find((p) => p.id === thread.pane)?.id
@@ -136,58 +135,14 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     if (!event.currentTarget.contains(at) || at?.matches('.panes__label')) focusRegion(event.currentTarget, { visible: event.detail === 0 })
   }
   const close = (pane: Pane) => void dispatch('pane.close', { thread: thread.id, pane: pane.id }, { machine: machine.id, source: 'panes' })
-  const where = { machine: machine.id, thread }
-  const title = (pane: Pane) => paneTitle(registry, pane, where)
 
-  // The columns, left to right: the thread, then its panes, each by the key its width is kept under. The last one's
-  // width is kept apart (`<key>:end`): dragged from its own handle at the end, it's its width while it is last.
-  // Stacked, the thread's is the only one: its panes' column takes the rest.
-  const keys = ['thread', ...panes.map((pane) => pane.id)]
-  const last = stacked ? 1 : keys.length - 1
-  const shareOf = (key: string, index: number) => index === last
-    ? shares[`${key}:end`]
-    : shares[key] ?? (index === 0 ? DEFAULT_SHARE : paneKind(registry, panes[index - 1]!.kind, where)?.width ?? DEFAULT_SHARE)
-  // The room the columns share: the row less the gap after each (stacked, the thread's and the stack's).
-  const room = narrow ? rowWidth : roomFor(rowWidth, stacked ? 2 : keys.length)
-  const [threadWidth, stackWidth] = stackWidths(room, shares.thread)
-  const widths = narrow ? keys.map(() => rowWidth)
-    : stacked ? [threadWidth, ...panes.map(() => stackWidth)]
-    : scrollWidths(room, keys.map((key, i) => shareOf(key, i)))
-  const widthOf = (pane: Pane) => widths[panes.indexOf(pane) + 1]!
   // How much of each column is in view, and on which side the rest are: for the strip. Stacked, the thread and the
   // pane in front are; the rest are behind. Maximized, only that pane is: the rest are under it.
   const starts = widths.map((_, i) => widths.slice(0, i).reduce((sum, w) => sum + w + GAP, 0))
   const shown = widths.map((w, i) => maximized ? Number(keys[i] === maximized) : stacked ? Number(i === 0 || keys[i] === front)
     : w ? Math.max(0, Math.min(starts[i]! + w, scrolled + rowWidth) - Math.max(starts[i]!, scrolled)) / w : 0)
-  const side = (i: number) => shown[i]! >= 0.5 ? undefined : stacked || maximized ? 'behind' : starts[i]! < scrolled ? 'left' : 'right'
+  const side = (i: number) => shown[i]! >= 0.5 ? undefined : stacked || maximized ? 'behind' as const : starts[i]! < scrolled ? 'left' as const : 'right' as const
 
-  // The gap after a column resizes it (`index`): its share of the row, kept for next time. The last one's, dragged to
-  // about what the others leave, takes that again; past it, it's wider and the row scrolls. A double click puts any
-  // back as it was.
-  const keyOf = (index: number) => index === last ? `${keys[index]}:end` : keys[index]!
-  const drag = (index: number) => (event: React.PointerEvent) => {
-    if (event.button !== 0) return
-    const startX = event.clientX
-    const start = widths[index]!
-    const key = keyOf(index)
-    const used = widths.slice(0, last).reduce((sum, w) => sum + w, 0)
-    const move = (e: PointerEvent) => {
-      const width = start + e.clientX - startX
-      const next = index === last ? endShare(width, room, used) : Math.min(0.85, Math.max(0.15, width / Math.max(1, room)))
-      setShares(({ [key]: _, ...rest }) => next === undefined ? rest : { ...rest, [key]: next })
-    }
-    const root = document.documentElement
-    const up = () => {
-      root.classList.remove('is-resizing-columns')
-      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up)
-    }
-    root.classList.add('is-resizing-columns')
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-    event.preventDefault()
-    event.stopPropagation()
-  }
-  const reset = (index: number) => setShares(({ [keyOf(index)]: _, ...rest }) => rest)
   const gap = (index: number) => !narrow && (
     <div className="panes__gap" onPointerDown={drag(index)} onDoubleClick={() => reset(index)} role="separator" aria-orientation="vertical"
       aria-label={`${index === 0 ? 'Thread' : title(panes[index - 1]!)} width`} title="Drag to resize, double-click to reset" />
@@ -220,54 +175,18 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     return set
   }
   // The thread's own tab, then each pane's, drawn as its kind says (its glyph, and whether its title is a file's name).
-  const tabs: { id: string | undefined; label: string; kind: Pick<PaneKind, 'icon' | 'file'> | undefined; pane: Pane | undefined }[] = [
-    { id: undefined, label: 'Thread', kind: { icon: ChatTextIcon }, pane: undefined },
-    ...panes.map((pane) => ({ id: pane.id, label: title(pane), kind: paneKind(registry, pane.kind, where), pane })),
+  const tabs: StripTab[] = [
+    { id: undefined, label: 'Thread', kind: { icon: ChatTextIcon }, pane: undefined, width: widths[0]!, shown: shown[0]!, away: side(0) },
+    ...panes.map((pane, i) => ({
+      id: pane.id, label: title(pane), kind: paneKind(registry, pane.kind, where), pane, note: notes[pane.id], width: widths[i + 1]!, shown: shown[i + 1]!, away: side(i + 1),
+    })),
   ]
-  const total = widths.reduce((sum, w) => sum + w, 0) || 1
-  const stripSlot = useContext(StripSlot)
   // The tab raised: the focused column's; stacked, the one in front once a pane opening covers the focused one.
   const current = stacked && focused && focused !== front ? front : focused
 
-  const strip = panes.length > 0 && (
-    <div className={`strip ${narrow ? 'strip--narrow' : ''}`} role="tablist" aria-label="The thread and its panes">
-      <div className="strip__tabs">
-        {tabs.map((tab, i) => {
-          const Icon = tab.kind?.icon
-          const away = side(i)
-          // The whole of what the tab may cut short: a file's path, a page's address, or its title.
-          const { path, url } = (tab.pane?.params ?? {}) as { path?: string; url?: string }
-          const full = path ?? url ?? tab.label
-          return (
-            <button key={tab.id ?? 'thread'} type="button" role="tab" aria-selected={tab.id === current}
-              className={`strip__tab ${tab.id === current ? 'is-focused' : away ? 'is-away' : 'is-shown'}`}
-              title={full}
-              onClick={() => show(tab.pane)}>
-              {Icon && <Icon size={14} aria-hidden />}
-              <span className={`strip__label ${tab.kind?.file ? 'strip__label--file' : ''}`}>{tab.label}</span>
-              {tab.id && notes[tab.id]}
-              {away === 'right' && <ArrowRightIcon className="strip__away" size={11} aria-hidden />}
-            </button>
-          )
-        })}
-      </div>
-      {!narrow && (
-        <>
-          {/* The row in small: each column a bar as wide as it is, the ones in view darker. */}
-          {!stacked && (
-            <span className="strip__map" aria-hidden>
-              {widths.map((w, i) => <i key={i} className={shown[i]! >= 0.5 ? 'is-in' : ''} style={{ width: Math.max(4, Math.round((w / total) * 52)) }} />)}
-            </span>
-          )}
-          <SegmentedControl label="Pane layout" className="strip__layout" options={LAYOUTS} value={stacked ? 'stack' : 'scroll'}
-            onChange={(next) => void dispatch('pane.layout', { layout: next }, { source: 'strip' })} />
-        </>
-      )}
-    </div>
-  )
   return (
     <div className={`sheet ${panes.length ? 'has-panes' : ''}`}>
-      {stripSlot ? strip && createPortal(strip, stripSlot) : strip}
+      {panes.length > 0 && <PaneStrip tabs={tabs} current={current} stacked={stacked} narrow={narrow} onShow={show} />}
       {/* Stacked, a grid: the thread, its handle, the panes on top of each other, the room at the end. */}
       <div className={`panes ${narrow ? 'panes--narrow' : ''} ${stacked ? 'panes--stack' : ''} ${maximized ? 'has-maximized' : ''}`} ref={row} onScroll={onScroll}
         style={stacked ? { gridTemplateColumns: `${threadWidth}px ${GAP}px ${stackWidth}px ${GAP}px` } : undefined}>
@@ -294,6 +213,122 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
       </div>
     </div>
   )
+}
+
+/**
+ * Each column's width in px, from the shares of the row kept in this window (by `keys`: the thread's, then each
+ * pane's), and the dragging of the handle after each. Until it's dragged, a column takes its share: the thread's half,
+ * a pane's its kind's (`kindShares`). The last one's share is kept apart (`<key>:end`): dragged from its own handle at
+ * the end, it's its width while it is last; never dragged, it takes what's left over. Stacked, the thread's is the only
+ * one: its panes' column takes the rest. On a phone each is the row's width.
+ */
+function useColumnWidths(row: RefObject<HTMLDivElement | null>, { keys, kindShares, stacked, narrow }: { keys: string[]; kindShares: (number | undefined)[]; stacked: boolean; narrow: boolean }) {
+  const [shares, setShares] = useLocalState<Record<string, number>>('pane.widths', {})
+  const [rowWidth, setRowWidth] = useState(0)
+  const hasPanes = keys.length > 1
+  useLayoutEffect(() => {
+    const el = row.current
+    if (!el) return
+    const observer = new ResizeObserver(() => setRowWidth(el.clientWidth))
+    observer.observe(el)
+    setRowWidth(el.clientWidth)
+    return () => observer.disconnect()
+  }, [hasPanes])
+
+  const last = stacked ? 1 : keys.length - 1
+  const keyOf = (index: number) => index === last ? `${keys[index]}:end` : keys[index]!
+  const shareOf = (index: number) => index === last ? shares[keyOf(index)] : shares[keys[index]!] ?? (index === 0 ? DEFAULT_SHARE : kindShares[index - 1] ?? DEFAULT_SHARE)
+  // The room the columns share: the row less the gap after each (stacked, the thread's and the stack's).
+  const room = narrow ? rowWidth : roomFor(rowWidth, stacked ? 2 : keys.length)
+  const [threadWidth, stackWidth] = stackWidths(room, shares.thread)
+  const widths = narrow ? keys.map(() => rowWidth)
+    : stacked ? [threadWidth, ...keys.slice(1).map(() => stackWidth)]
+    : scrollWidths(room, keys.map((_, i) => shareOf(i)))
+
+  // The gap after a column resizes it (`index`): its share of the row, kept for next time. The last one's, dragged to
+  // about what the others leave, takes that again; past it, it's wider and the row scrolls. A double click puts any
+  // back as it was.
+  const drag = (index: number) => (event: React.PointerEvent) => {
+    if (event.button !== 0) return
+    const startX = event.clientX
+    const start = widths[index]!
+    const key = keyOf(index)
+    const used = widths.slice(0, last).reduce((sum, w) => sum + w, 0)
+    const move = (e: PointerEvent) => {
+      const width = start + e.clientX - startX
+      const next = index === last ? endShare(width, room, used) : Math.min(0.85, Math.max(0.15, width / Math.max(1, room)))
+      setShares(({ [key]: _, ...rest }) => next === undefined ? rest : { ...rest, [key]: next })
+    }
+    const root = document.documentElement
+    const up = () => {
+      root.classList.remove('is-resizing-columns')
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up)
+    }
+    root.classList.add('is-resizing-columns')
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    event.preventDefault()
+    event.stopPropagation()
+  }
+  const reset = (index: number) => setShares(({ [keyOf(index)]: _, ...rest }) => rest)
+  return { rowWidth, widths, threadWidth, stackWidth, drag, reset }
+}
+
+/** A column's tab in the strip: the thread's (no `id`) or a pane's, and how much of its column is in view. */
+type StripTab = {
+  id: string | undefined; label: string; kind: Pick<PaneKind, 'icon' | 'file'> | undefined; pane: Pane | undefined
+  /** What the pane says on its tab (see useTabNote). */
+  note?: ReactNode
+  /** Its column's width, and how much of it is in view (0–1). */
+  width: number; shown: number
+  /** Where its column is, when it's mostly out of view. */
+  away: 'left' | 'right' | 'behind' | undefined
+}
+
+/**
+ * The strip: a tab for the thread and each pane (`current` raised), bringing its column into view; wide, the row in
+ * small (scrolled) and the switch between the layouts. In the title bar, where the window has a place for it.
+ */
+function PaneStrip({ tabs, current, stacked, narrow, onShow }: { tabs: StripTab[]; current: string | undefined; stacked: boolean; narrow: boolean; onShow(pane: Pane | undefined): void }) {
+  const dispatch = useRegistry().router.dispatch
+  const slot = useContext(StripSlot)
+  const total = tabs.reduce((sum, tab) => sum + tab.width, 0) || 1
+  const strip = (
+    <div className={`strip ${narrow ? 'strip--narrow' : ''}`} role="tablist" aria-label="The thread and its panes">
+      <div className="strip__tabs">
+        {tabs.map((tab) => {
+          const Icon = tab.kind?.icon
+          // The whole of what the tab may cut short: a file's path, a page's address, or its title.
+          const { path, url } = (tab.pane?.params ?? {}) as { path?: string; url?: string }
+          const full = path ?? url ?? tab.label
+          return (
+            <button key={tab.id ?? 'thread'} type="button" role="tab" aria-selected={tab.id === current}
+              className={`strip__tab ${tab.id === current ? 'is-focused' : tab.away ? 'is-away' : 'is-shown'}`}
+              title={full}
+              onClick={() => onShow(tab.pane)}>
+              {Icon && <Icon size={14} aria-hidden />}
+              <span className={`strip__label ${tab.kind?.file ? 'strip__label--file' : ''}`}>{tab.label}</span>
+              {tab.id && tab.note}
+              {tab.away === 'right' && <ArrowRightIcon className="strip__away" size={11} aria-hidden />}
+            </button>
+          )
+        })}
+      </div>
+      {!narrow && (
+        <>
+          {/* The row in small: each column a bar as wide as it is, the ones in view darker. */}
+          {!stacked && (
+            <span className="strip__map" aria-hidden>
+              {tabs.map((tab, i) => <i key={i} className={tab.shown >= 0.5 ? 'is-in' : ''} style={{ width: Math.max(4, Math.round((tab.width / total) * 52)) }} />)}
+            </span>
+          )}
+          <SegmentedControl label="Pane layout" className="strip__layout" options={LAYOUTS} value={stacked ? 'stack' : 'scroll'}
+            onChange={(next) => void dispatch('pane.layout', { layout: next }, { source: 'strip' })} />
+        </>
+      )}
+    </div>
+  )
+  return slot ? createPortal(strip, slot) : strip
 }
 
 /** What a pane says on its tab in the strip (Changes: +3 −1), by pane. */
