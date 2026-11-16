@@ -138,15 +138,6 @@ export class SettingsRegistry {
     this.invalidate()
   }
 
-  /** Forget a chosen value so the default applies again. */
-  async reset(key: string): Promise<void> {
-    if (!(key in this.#values)) return
-    const { [key]: _removed, ...rest } = this.#values
-    this.#values = rest
-    await this.#store.save(this.#values)
-    this.invalidate()
-  }
-
   async snapshot(): Promise<SettingsSnapshot> {
     const sections: SectionInfo[] = []
     for (const section of this.#sections.values()) {

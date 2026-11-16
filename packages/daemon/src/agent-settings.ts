@@ -3,7 +3,7 @@
 // daemon knows about providers' auth.
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AuthPrompt as PiAuthPrompt, Credential, CredentialStore, ModelThinkingLevel } from '@earendil-works/pi-ai'
 import { createAssistantMessageEventStream, fauxAssistantMessage, fauxProvider, type FauxResponseStep } from '@earendil-works/pi-ai'
@@ -17,6 +17,7 @@ import { appEnv } from './paths.ts'
 import { replayProvider, withRecording } from './replay.ts'
 import { authFailure, Rejections, rejectionSummary, WAITING } from './provider-auth.ts'
 import { watchFiles } from './watch-files.ts'
+import { writeAtomic } from './write-atomic.ts'
 import type { AuthFlowEvent, AuthFlows } from './auth-flows.ts'
 
 /** The model each provider starts on when it is the first one signed in. */
@@ -65,11 +66,7 @@ class FileCredentialStore implements CredentialStore {
       throw error
     }
   }
-  async #save(all: Record<string, Credential>) {
-    const temp = `${this.path}.${process.pid}.tmp`
-    await writeFile(temp, JSON.stringify(all, null, 2), { mode: 0o600 })
-    await rename(temp, this.path)
-  }
+  #save(all: Record<string, Credential>) { return writeAtomic(this.path, JSON.stringify(all, null, 2)) }
 }
 
 /**
@@ -328,7 +325,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
   const getDeviceId = () => {
     if (!deviceId) {
       deviceId = randomUUID()
-      void writeFile(deviceIdPath, deviceId, { mode: 0o600 })
+      writeAtomic(deviceIdPath, deviceId).catch((error: Error) => console.error(`Keeping the device id: ${error.message}`))
     }
     return deviceId
   }

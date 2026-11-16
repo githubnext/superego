@@ -146,9 +146,9 @@ describe('restarting', () => {
     expect(restartVia({ app, platform: 'linux', home: h, run: failed.run }, {})).toBe('self')
   })
 
-  it('leaves the restart\'s environment for the successor a service starts, once', () => {
+  it('leaves the restart\'s environment for the successor a service starts, once', async () => {
     const dir = home()
-    saveRestartEnv(dir, { ANTHROPIC_API_KEY: 'k', SSH_AUTH_SOCK: '/run/agent' })
+    await saveRestartEnv(dir, { ANTHROPIC_API_KEY: 'k', SSH_AUTH_SOCK: '/run/agent' })
     expect(statSync(join(dir, 'restart-env.json')).mode & 0o777).toBe(0o600)
     expect(takeRestartEnv(dir)).toEqual({ ANTHROPIC_API_KEY: 'k', SSH_AUTH_SOCK: '/run/agent' })
     expect(existsSync(join(dir, 'restart-env.json'))).toBe(false)

@@ -32,10 +32,8 @@ describe('SettingsRegistry', () => {
     await settings.set('pick', 'c')
     await expect(settings.set('missing', 1)).rejects.toMatchObject({ kind: 'unknown_setting' })
 
-    await settings.reset('flag')
-    expect(settings.get('flag')).toBe(false)
     const snapshot = await settings.snapshot()
-    expect(snapshot.values).toEqual({ flag: false, pick: 'c', n: 1 })
+    expect(snapshot.values).toEqual({ flag: true, pick: 'c', n: 1 })
     expect(snapshot.sections[0]!.settings[1]).toMatchObject({ type: 'choice', options: [{ value: 'a' }, { value: 'b' }, { value: 'c' }] })
   })
 

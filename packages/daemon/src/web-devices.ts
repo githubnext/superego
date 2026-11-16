@@ -3,8 +3,8 @@
 // device's name, when it was paired and last seen, and from where. A device unused for 90 days stops working.
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { writeQueue } from './write-atomic.ts'
 
 export const DEVICE_COOKIE = 'superego-device'
 /** How long a pairing ticket (its link and its code) lasts. */
@@ -41,7 +41,7 @@ export function deviceName(agent = ''): string {
 }
 
 export class WebDevices {
-  readonly #path: string
+  readonly #write: (text: string) => Promise<void>
   readonly #now: () => number
   #state: State
   readonly #tickets = new Map<string, { code: string; expires: number }>()
@@ -52,11 +52,12 @@ export class WebDevices {
   #saving: Promise<void> = Promise.resolve()
 
   constructor(dataDir: string, { now = Date.now }: { now?: () => number } = {}) {
-    this.#path = join(dataDir, 'web.json')
+    const path = join(dataDir, 'web.json')
+    this.#write = writeQueue(path)
     this.#now = now
     this.#state = (() => {
       try {
-        const read = JSON.parse(readFileSync(this.#path, 'utf8')) as Partial<State>
+        const read = JSON.parse(readFileSync(path, 'utf8')) as Partial<State>
         return { devices: read.devices ?? [], tailscale: read.tailscale ?? [] }
       } catch { return { devices: [], tailscale: [] } }
     })()
@@ -203,8 +204,8 @@ export class WebDevices {
 
   #save(): Promise<void> {
     this.#saved = this.#now()
-    const content = JSON.stringify(this.#state, null, 2) + '\n'
-    this.#saving = this.#saving.then(() => writeFile(this.#path, content, { mode: 0o600 })).catch(() => {})
+    this.#saving = this.#write(JSON.stringify(this.#state, null, 2) + '\n')
+      .catch((error: Error) => console.error(`Keeping paired devices: ${error.message}`))
     for (const listener of this.#changed) listener()
     return this.#saving
   }

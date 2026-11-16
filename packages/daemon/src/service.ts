@@ -3,10 +3,11 @@
 // process that the first connection started: it ends with a reboot. Every command that touches the system goes through
 // `run`, so tests write into a temp home and record the commands instead of installing anything.
 import { execFile, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, userInfo } from 'node:os'
 import { dirname, join } from 'node:path'
 import { envName, type AppConfig, type KeepsRunning } from '@superego/protocol'
+import { writeAtomic } from './write-atomic.ts'
 
 export type RunResult = { code: number; stdout: string; stderr: string }
 export type Run = (command: string, args: string[]) => RunResult
@@ -218,11 +219,7 @@ const restartEnvPath = (dataDir: string) => join(dataDir, 'restart-env.json')
  * What a restart adds to the environment, for a successor the service starts: the service gives it only the unit's
  * own, so the daemon leaves the rest here (0600) and the successor takes it when it starts (see `takeRestartEnv`).
  */
-export function saveRestartEnv(dataDir: string, env: Record<string, string>) {
-  const path = restartEnvPath(dataDir)
-  writeFileSync(`${path}.tmp`, JSON.stringify(env), { mode: 0o600 })
-  renameSync(`${path}.tmp`, path)
-}
+export const saveRestartEnv = (dataDir: string, env: Record<string, string>) => writeAtomic(restartEnvPath(dataDir), JSON.stringify(env))
 
 /** What a restart left for this daemon, read once and removed. */
 export function takeRestartEnv(dataDir: string): Record<string, string> {

@@ -46,7 +46,7 @@ export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket =
     await writeFile(pidFile, String(process.pid))
     await close()
     const extra = { ...carried, ...env }
-    saveRestartEnv(dataDir, extra)
+    await saveRestartEnv(dataDir, extra)
     const via = restartVia({ app })
     if (via === 'manager') { await rm(pidFile, { force: true }); process.exit(RESTART_EXIT) }
     if (via === 'service') { await rm(pidFile, { force: true }); process.exit(0) }

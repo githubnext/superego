@@ -2,8 +2,8 @@
 // to call it, and which providers are rejected and which threads wait on them (`Rejections`). Kept in the data dir, so
 // a restart neither forgets them nor starts asking a provider that will only say no again.
 import { readFileSync } from 'node:fs'
-import { rename, writeFile } from 'node:fs/promises'
 import type { ProviderRejection } from '@superego/protocol'
+import { writeQueue } from './write-atomic.ts'
 
 /** What a turn refused without asking the provider says: it reads as an auth failure like the one that started it. */
 export const WAITING = 'Waiting for sign-in:'
@@ -63,11 +63,11 @@ type Rejection = Omit<ProviderRejection, 'threads'> & {
 
 /** Rejected providers and the threads waiting on them, kept in `path`. */
 export class Rejections {
-  readonly #path: string
+  readonly #write: (text: string) => Promise<void>
   readonly #listeners = new Set<() => void>()
   #all = new Map<string, Rejection>()
   constructor(path: string) {
-    this.#path = path
+    this.#write = writeQueue(path)
     try {
       for (const rejection of JSON.parse(readFileSync(path, 'utf8')) as Rejection[]) this.#all.set(rejection.provider, rejection)
     } catch { /* none kept, or unreadable: none rejected */ }
@@ -129,10 +129,7 @@ export class Rejections {
   /** Written in turn, each as things are when it's written. */
   #saving: Promise<void> = Promise.resolve()
   #changed() {
-    const temp = `${this.#path}.${process.pid}.tmp`
-    this.#saving = this.#saving
-      .then(() => writeFile(temp, JSON.stringify(this.all(), null, 2), { mode: 0o600 }))
-      .then(() => rename(temp, this.#path))
+    this.#saving = this.#write(JSON.stringify(this.all(), null, 2))
       .catch((error: Error) => console.error(`Keeping rejected providers: ${error.message}`))
     for (const listener of this.#listeners) listener()
   }
