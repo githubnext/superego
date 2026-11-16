@@ -22,7 +22,7 @@ export type { MachineUpdate } from '../shared/bridge.ts'
 export { describeImage, ImageFrame, imageFileName, imageSourceOf, useImageSource, useNear, type ImageItem, type LoadedImage } from './images.tsx'
 export { Lightbox } from './lightbox.tsx'
 export { driftNote, MachineDrift } from './machine-drift.tsx'
-export { Output, unwrap } from './tool-rows.tsx'
+export { Output } from './tool-rows.tsx'
 export { FontPicker, isMonospace, TooltipProvider } from '@superego/ui'
 // What's unread: one rule for the bell, notifications and the counts (see @superego/protocol's status.ts).
 export { unread } from '@superego/protocol'

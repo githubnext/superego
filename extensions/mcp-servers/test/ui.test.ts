@@ -186,11 +186,11 @@ describe('what it draws', () => {
     expect(running).toContain('>Calling<')
     expect(running).toContain('Linear · list_issues')
     expect(running).not.toContain('Arguments')
-    const failed = row(call('mcp__github__get_me', {}, { state: 'error', result: { text: '<harness>[error] github needs you to sign in again</harness>', isError: true } }))
+    const failed = row(call('mcp__github__get_me', {}, { state: 'error', result: { text: 'github needs you to sign in again', isError: true } }))
     expect(failed).toContain('>Failed<')
     expect(failed).toContain('github · get_me')
     expect(failed).toContain('github needs you to sign in again')
-    const cut = row(call('mcp__linear__create_issue', {}, { state: 'error', result: { text: '<harness>[error] Superego restarted while linear.create_issue was running. Check.</harness>', isError: true } }))
+    const cut = row(call('mcp__linear__create_issue', {}, { state: 'error', result: { text: 'Superego restarted while linear.create_issue was running. Check.', isError: true } }))
     expect(cut).toContain('Interrupted: may have run')
     expect(cut).not.toContain('>Failed<')
     // A run of them, in a line.

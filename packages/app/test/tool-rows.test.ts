@@ -90,7 +90,7 @@ describe('tool rows', () => {
     expect(read).toContain('>Read<')
     expect(read).toContain('title="src/a.ts"')
     expect(read).toContain('hello')
-    const failed = renderToStaticMarkup(createElement(DescribedCall, { row: rowOf('find_order'), call: call('find_order', { id: 7 }, { state: 'error', result: { text: '<harness>[error] gone</harness>', isError: true } }) }))
+    const failed = renderToStaticMarkup(createElement(DescribedCall, { row: rowOf('find_order'), call: call('find_order', { id: 7 }, { state: 'error', result: { text: 'gone', isError: true } }) }))
     expect(failed).toContain('find_order failed')
     expect(failed).toContain('{&quot;id&quot;:7}')
     expect(failed).toContain('>gone<')

@@ -153,8 +153,9 @@ export type NewThreadField = {
 }
 
 /**
- * A tool call in the transcript. `result` is there once it finished (its text, and the images the model was shown, as
- * base64); `live` while it runs.
+ * A tool call in the transcript. `result` is there once it finished: its text (the output's, then what went wrong, as
+ * the user reads it: without the harness's `<harness>[error] …</harness>` the model is shown it in) and the images the
+ * model was shown, as base64. `live` while it runs.
  */
 export type ToolCallProps = {
   machine: MachineEntry

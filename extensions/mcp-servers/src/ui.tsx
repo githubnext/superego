@@ -10,7 +10,7 @@
 // machine without the extension shows none of it.
 import { useState } from 'react'
 import {
-  defineUiExtension, Output, unwrap, useLocalState, useValue,
+  defineUiExtension, Output, useLocalState, useValue,
   type MachineEntry, type SlotProps, type ToolRowCall, type ViewProps,
 } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
@@ -26,7 +26,7 @@ export default defineUiExtension({
     superego.settings(SECTION, ServersSection)
     superego.tool(`${TOOL_PREFIX}*`, {
       icon: PlugIcon, verbs: ['Called', 'Calling', 'Failed'], weight: 2,
-      verb: (c) => c.state === 'error' && c.result && interrupted(unwrap(c.result.text)) ? <span className="mcp-call__interrupted">Interrupted: may have run</span> : undefined,
+      verb: (c) => c.state === 'error' && c.result && interrupted(c.result.text) ? <span className="mcp-call__interrupted">Interrupted: may have run</span> : undefined,
       subject: (c) => <CallSubject call={c} />,
       body: (c) => <CallBody call={c} />,
       phrase: (k) => k === 1 ? 'called an MCP tool' : `called ${k} MCP tools`,
@@ -72,7 +72,7 @@ function CallSubject({ call }: { call: ToolRowCall }) {
 /** Open: its arguments (folded), then its result, with its images, and the files it saved. */
 function CallBody({ call: { call, result, live, state } }: { call: ToolRowCall }) {
   const args = Object.keys(call.arguments).length ? JSON.stringify(call.arguments, null, 2) : undefined
-  const text = result ? unwrap(result.text) : live?.output
+  const text = result ? result.text : live?.output
   const files = (result?.details as CallDetails | undefined)?.files
   return (
     <div className="mcp-call">

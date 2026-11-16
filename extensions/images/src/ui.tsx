@@ -16,16 +16,13 @@ export default defineUiExtension({
   },
 })
 
-/** A tool's error as the harness wraps it, as just the message. */
-const unwrap = (text: string) => text.replace(/^\s*<harness>\s*(?:\[error\]\s*)?([\s\S]*?)\s*<\/harness>\s*$/, '$1')
-
 function ShownImages({ machine, thread, call, result }: ToolCallProps) {
   const [open, setOpen] = useState<number>()
   if (result?.isError) {
     return (
       <div className="images images--failed">
         <div className="images__failed"><ImageBrokenIcon size={14} aria-hidden /><span>Couldn’t show {Array.isArray(call.arguments.images) && call.arguments.images.length === 1 ? 'the image' : 'images'}</span></div>
-        <div className="images__error">{unwrap(result.text)}</div>
+        <div className="images__error">{result.text}</div>
       </div>
     )
   }

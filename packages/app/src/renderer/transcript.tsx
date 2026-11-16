@@ -21,10 +21,42 @@ const Here = createContext<{ machine: MachineEntry; thread: ThreadInfo }>(undefi
 
 const blocks = (message: Message | undefined): Block[] =>
   !message ? [] : typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content
-const textOf = (message: Message | undefined) => blocks(message).map((b) => b.text ?? '').join('')
+/** A tool call's result, as tool rows and extensions' views of the call see it (`ToolCallProps.result`). */
+type ToolResult = NonNullable<ToolRowCall['result']>
+type Results = Map<string, ToolResult>
+
+/**
+ * The tool results in `entries`, by call. Each reads as the user should see it: the output's text, then what went
+ * wrong (an error's message comes as a diagnostic). The model is shown those diagnostics wrapped
+ * (`<harness>[error] …</harness>`, the content's last text); the entry keeps them apart as its data, so here they're
+ * their messages alone.
+ */
+export function toolResults(entries: readonly EntryRecord[]): Map<string, ToolResult> {
+  const results = new Map<string, ToolResult>()
+  for (const entry of entries) {
+    const message = entry.model?.[0] as Message | undefined
+    if (message?.role !== 'toolResult' || !message.toolCallId) continue
+    const diagnostics = diagnosticsOf(entry.data)
+    const content = blocks(message)
+    const wrapped = diagnostics.length ? content.findLastIndex((b) => b.type === 'text') : -1
+    const text = [
+      ...content.flatMap((b, index) => b.type === 'text' && index !== wrapped ? [b.text ?? ''] : []),
+      ...diagnostics,
+    ].join('\n')
+    results.set(message.toolCallId, { text, isError: Boolean(message.isError), details: message.details, ...imagesOf(content) })
+  }
+  return results
+}
+
+/** The messages of a tool result entry's diagnostics (`{ diagnostics: [{ severity, message }] }`). */
+const diagnosticsOf = (data: unknown): string[] => {
+  const list = (data as { diagnostics?: unknown } | undefined)?.diagnostics
+  return Array.isArray(list) ? list.flatMap((d) => typeof (d as { message?: unknown })?.message === 'string' ? [(d as { message: string }).message] : []) : []
+}
+
 /** A tool result's images, as the model was shown them: `{ images }`, or nothing when it has none. */
-const imagesOf = (message: Message) => {
-  const images = blocks(message).flatMap((b) => {
+const imagesOf = (content: Block[]) => {
+  const images = content.flatMap((b) => {
     const { data, mimeType } = b as { data?: unknown; mimeType?: unknown }
     return b.type === 'image' && typeof data === 'string' && typeof mimeType === 'string' ? [{ data, mimeType }] : []
   })
@@ -36,19 +68,12 @@ export function Transcript({ machine, thread, view, live }: { machine: MachineEn
   const here = useMemo(() => ({ machine, thread }), [machine, thread])
   const registry = useRegistry()
   // Tool results render inside the call that asked for them.
-  const results = useMemo(() => {
-    const map = new Map<string, Message>()
-    for (const entry of view.entries) {
-      const message = entry.model?.[0] as Message | undefined
-      if (message?.role === 'toolResult' && message.toolCallId) map.set(message.toolCallId, message)
-    }
-    return map
-  }, [view.entries])
+  const results = useMemo(() => toolResults(view.entries), [view.entries])
   const running = new Map((live?.tools ?? []).map((slot) => [slot.callId, slot]))
   const partial = live?.generation?.message as Message | undefined
   const working = Boolean(live?.run) && here.thread.status.state === 'working'
   const items = useMemo(() => flatten(view.entries, partial, working), [view.entries, partial, working])
-  const result = (id: string) => { const message = results.get(id); return message && { text: textOf(message), isError: Boolean(message.isError) } }
+  const result = (id: string) => results.get(id)
 
   return (
     <Here.Provider value={here}>
@@ -209,7 +234,7 @@ function Working({ steps, since }: { steps: number; since: number | undefined })
 }
 
 /** "6 steps · +11 −2 · 1 failed" under a finished turn. */
-function TurnEnd({ blocks, results }: { blocks: Block[]; results: Map<string, Message> }) {
+function TurnEnd({ blocks, results }: { blocks: Block[]; results: Results }) {
   const rows = useRows()
   const calls = blocks.filter((b) => b.type === 'toolCall')
   const failed = calls.filter((b) => results.get(b.id!)?.isError).length
@@ -229,7 +254,7 @@ function useRows() {
   const registry = useRegistry()
   const where = { machine: here.machine.id, thread: here.thread }
   const rowOf = (name: string) => toolRow(registry, name, where)
-  const stats = (calls: Block[], results: Map<string, Message>) => calls.reduce((sum, b) => {
+  const stats = (calls: Block[], results: Results) => calls.reduce((sum, b) => {
     const stat = statOf(rowOf(b.name ?? ''), callOf(here, b, results.get(b.id!)))
     return stat ? { added: sum.added + stat.added, removed: sum.removed + stat.removed } : sum
   }, { added: 0, removed: 0 })
@@ -252,7 +277,7 @@ function Entry({ entry }: { entry: EntryRecord }) {
 }
 
 /** A run's blocks as rows: thinking, what the agent said along the way, tool calls. */
-const steps = (blocks: Block[], results: Map<string, Message>, running: Slots) => blocks.map((block, index) => block.type === 'thinking'
+const steps = (blocks: Block[], results: Results, running: Slots) => blocks.map((block, index) => block.type === 'thinking'
   ? <Thinking key={index} text={block.thinking ?? ''} />
   : block.type === 'text'
     ? <div key={index} className="step__note"><Markdown text={block.text ?? ''} /></div>
@@ -265,7 +290,7 @@ const steps = (blocks: Block[], results: Map<string, Message>, running: Slots) =
  * Rows share one anatomy: a chevron hung in the gutter, then an icon at the text's edge, then the label. What a row
  * opens to sits under its icon; inside a run, rows sit under the run's label.
  */
-function Work({ blocks: all, results, running, active }: { blocks: Block[]; results: Map<string, Message>; running: Slots; active: boolean }) {
+function Work({ blocks: all, results, running, active }: { blocks: Block[]; results: Results; running: Slots; active: boolean }) {
   const [open, setOpen] = useState<boolean>()
   const { rowOf, stats: sum } = useRows()
   const { blocks, shown } = useUnfolded(all, results, running)
@@ -301,7 +326,7 @@ function Work({ blocks: all, results, running, active }: { blocks: Block[]; resu
  * A run's blocks without the calls an extension shows unfolded (`tool(name, component, { fold: false })`: images the
  * agent showed, say), and those calls drawn on their own, to go under the fold.
  */
-function useUnfolded(all: Block[], results: Map<string, Message>, running: Slots) {
+function useUnfolded(all: Block[], results: Results, running: Slots) {
   const registry = useRegistry()
   const here = useContext(Here)
   const where = { machine: here.machine.id, thread: here.thread }
@@ -314,7 +339,7 @@ function useUnfolded(all: Block[], results: Map<string, Message>, running: Slots
  * A titled part of a run (a task the agent reported): how it went, its title, and its outcome under it, all shown
  * folded; its steps under that, opened by hand.
  */
-function Task({ part, results, running }: { part: WorkPart; results: Map<string, Message>; running: Slots }) {
+function Task({ part, results, running }: { part: WorkPart; results: Results; running: Slots }) {
   const [open, setOpen] = useState(false)
   const status = part.status ?? 'success'
   const { stats: sum } = useRows()
@@ -363,7 +388,7 @@ function Thinking({ text }: { text: string }) {
 }
 
 /** A call as its tool's row describes it, or as an extension draws it whole. */
-function ToolCall({ block, result, slot }: { block: Block; result: Message | undefined; slot: ReturnType<Slots['get']> }) {
+function ToolCall({ block, result, slot }: { block: Block; result: ToolResult | undefined; slot: ReturnType<Slots['get']> }) {
   const here = useContext(Here)
   const registry = useRegistry()
   const where = { machine: here.machine.id, thread: here.thread }
@@ -376,11 +401,11 @@ function ToolCall({ block, result, slot }: { block: Block; result: Message | und
 }
 
 /** A call, its result and how it runs, as tool rows (and an extension's view of the call) see them. */
-function callOf(here: { machine: MachineEntry; thread: ThreadInfo }, block: Block, result: Message | undefined, slot?: ReturnType<Slots['get']>): ToolRowCall {
+function callOf(here: { machine: MachineEntry; thread: ThreadInfo }, block: Block, result: ToolResult | undefined, slot?: ReturnType<Slots['get']>): ToolRowCall {
   return {
     ...here,
     call: { id: block.id ?? '', name: block.name ?? '', arguments: (block.arguments ?? {}) as Record<string, unknown> },
-    ...(result ? { result: { text: textOf(result), isError: Boolean(result.isError), details: result.details, ...imagesOf(result) } } : {}),
+    ...(result ? { result } : {}),
     ...(slot ? { live: { status: slot.status, ...(slot.output !== undefined ? { output: slot.output } : {}), details: slot.details } } : {}),
     state: result ? (result.isError ? 'error' : 'done') : slot?.status === 'running' ? 'working' : 'idle',
   }

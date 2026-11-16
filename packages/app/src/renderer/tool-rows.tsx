@@ -51,7 +51,7 @@ export function DescribedCall({ row, call }: { row: ToolRow; call: ToolRowCall }
 function DefaultBody({ call: { state, result, live } }: { call: ToolRowCall }) {
   const diff = state !== 'error' ? diffOf(result?.details) : undefined
   if (diff) return <StepDiff diff={diff} />
-  const output = result ? unwrap(result.text) : live?.output
+  const output = result ? result.text : live?.output
   return output ? <Output text={output} className={state === 'error' ? 'is-error' : ''} /> : null
 }
 
@@ -125,9 +125,6 @@ const CAP = 12
 export const Stat = ({ added, removed }: { added: number; removed: number }) => (
   <>{added > 0 && <span className="stat--add">+{added}</span>}{added > 0 && removed > 0 && ' '}{removed > 0 && <span className="stat--del">−{removed}</span>}</>
 )
-
-/** A tool's error as the harness wraps it (`<harness>[error] …</harness>`), as just the message. */
-export const unwrap = (text: string) => text.replace(/^\s*<harness>\s*(?:\[error\]\s*)?([\s\S]*?)\s*<\/harness>\s*$/, '$1')
 
 /** What a call is about, in a line: the command, the path, else its arguments. */
 function summaryOf(name: string, args: Record<string, unknown>): string {
