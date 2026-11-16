@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { defineAction, obj, opt, Router, str, unknown, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
-import { metaExtension, type EgoThreads, type MachineDirectory } from '../src/tools.ts'
+import { metaExtension, metaPrompt, type EgoThreads, type MachineDirectory } from '../src/tools.ts'
 
 type Tool = { name: string; execute(params: unknown, api: unknown, context?: unknown): Promise<{ output: { text: string }[] }> }
 const text = async (tools: readonly unknown[], name: string, params: unknown) => {
@@ -102,5 +102,22 @@ describe('Ego, the meta agent', () => {
     await text(tools, 'thread_start', { prompt: 'Add a profile', cwd: 'profiles' })
     expect(started).toHaveLength(1)
     expect(asked).toEqual([1, 1])
+  })
+})
+
+describe('metaPrompt', () => {
+  const prompt = metaPrompt({ name: 'Superego', id: 'superego', dataDir: '/data', agentsDir: '/agents', hostname: 'here' })
+
+  it('briefs builders with the extension commands, without Node', () => {
+    expect(prompt).toContain('`superego extension\n  new <name> --user [--ui]`')
+    expect(prompt).toContain('`superego extension test --user`')
+    expect(prompt).toContain('the superego skill, which every thread has')
+    expect(prompt).toContain('No Node, npx or tsc')
+    expect(prompt).not.toContain('--skill')
+  })
+
+  it('takes the obvious default rather than asking', () => {
+    expect(prompt).toContain('take the obvious default and start the thread, saying what\n  you assumed')
+    expect(prompt).not.toContain("Ask the user when you can't tell")
   })
 })
