@@ -364,7 +364,7 @@ function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, o
   )
 }
 
-function PaneBody({ machine, thread, pane }: PaneProps) {
+export function PaneBody({ machine, thread, pane }: PaneProps) {
   const registry = useRegistry()
   const kind = paneKind(registry, pane.kind, { machine: machine.id, thread })
   if (!kind) return <div className="pane-empty">No pane of kind “{pane.kind}” here{thread.profile ? '' : ' (a profile may add it)'}.</div>

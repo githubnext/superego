@@ -25,6 +25,30 @@ git init -q
 sg() { env -i HOME="$HOME_DIR" PATH=/usr/bin:/bin TMPDIR="$STAGE" SUPEREGO_HOME="$HOME_DIR" ELECTRON_RUN_AS_NODE=1 "$ELECTRON" "$STAGE/app/out/main/cli.js" "$@"; }
 sg extension new notes --user >/dev/null
 sg extension new board --ui --user >/dev/null
+# The UI half's view drawn as a pane, and a slot, by the test window.
+BOARD=$(dirname "$(find "$HOME_DIR" -path '*/board/ui.tsx')")
+cat > "$BOARD/pane.test.tsx" <<'TEST'
+import { afterEach, expect, it } from 'vitest'
+import { defineUiExtension, type SlotProps } from 'superego/ui'
+import { fakeMachine, mountUi, testThread, type TestWindow } from 'superego/testing'
+import ui from './ui.tsx'
+import { ITEMS } from './shared.ts'
+
+const ref = { scope: 'user' as const, name: 'default', dir: '/profiles/default' }
+const badge = defineUiExtension({ name: 'badge', setup(superego) {
+  superego.slot('thread.badge', ({ thread }: SlotProps['thread.badge']) => <span className="thread-badge">{thread.title}</span>)
+} })
+let shown: TestWindow | undefined
+afterEach(async () => { await shown?.unmount() })
+
+it('draws the items as a pane, and a badge for a thread', async () => {
+  const thread = testThread({ id: 't1', profile: ref })
+  const machine = fakeMachine({ extensions: ['board'], threads: [thread], values: { [ITEMS]: { t1: [{ id: '1', text: 'first' }] } } })
+  shown = await mountUi({ extensions: [badge], machines: [machine], profile: { ref, extensions: [ui] } })
+  expect((await shown.render({ pane: { kind: 'board.list' }, thread: 't1' })).text()).toContain('first')
+  expect((await shown.render({ slot: 'thread.badge', thread: testThread({ title: 'Mine' }) })).text()).toBe('Mine')
+})
+TEST
 for name in notes board; do
   if ! out=$(sg extension test "$name" --user 2>&1); then
     echo "superego extension test $name failed outside the repo:"
@@ -32,5 +56,6 @@ for name in notes board; do
     exit 1
   fi
   echo "$out" | grep -q ' passed' || { echo "superego extension test $name ran no tests:"; echo "$out"; exit 1; }
+  [ "$name" = notes ] || echo "$out" | grep -q 'pane.test.tsx' || { echo "superego extension test board ran no pane test:"; echo "$out"; exit 1; }
 done
 echo "author-test: extension new and test pass outside the repo (data-only and with a UI half)"

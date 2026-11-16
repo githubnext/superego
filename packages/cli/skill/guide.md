@@ -259,6 +259,17 @@ it('queues builds and shows the thread its own', async () => {
   `render({ view, place, thread })` (`text()`, `find(selector)`, `click(text)`), `placed(place, { thread })`,
   `press(keys)`, `dispatch`, `select`, `setMachine(id, { state: 'disconnected' })`, `installProfile`, `until`, and
   `unmount()`, which tears every extension down (their `signal`s abort).
+- **A pane kind or a slot**: `render({ pane: { kind, params } })` and `render({ slot, props })` draw them as the
+  window does, for `thread`: an id the machine has, or a `ThreadInfo` as it is (`testThread({ cwd, profile, without })`);
+  without one, the selected thread, the machine's first, or a made-up one of `mountUi`'s profile. A kind or slot that
+  thread wouldn't see (a profile's in another profile's thread, one it goes `without`) throws, saying what it has.
+
+  <!-- check: ui; import { expect } from 'vitest'; import { testThread, type TestWindow } from 'superego/testing'; declare const window: TestWindow; declare const thread: ThreadInfo -->
+  ```ts
+  const card = await window.render({ pane: { kind: 'board.card', params: { card: 'c1' } }, thread: thread.id })
+  const badge = await window.render({ slot: 'thread.badge', thread: testThread({ cwd: '/work/db' }) })
+  expect(badge.find('.thread-badge')?.title).toBe('database')
+  ```
 - The cases worth a test each, in the kit's own tests (`packages/sdk/test/kit.test.ts` in Superego's source): teardown (`unmount`, an edit and
   `reload`), set up twice (`installProfile` again), a helper edited, one profile on two machines (two daemons in one
   window), a machine away or older (`setMachine`, `fakeMachine({ features: [], extensions: [{ name, version: '0.9.0' }] })`),

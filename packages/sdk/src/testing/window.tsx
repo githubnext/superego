@@ -9,8 +9,9 @@ import {
 } from '@superego/protocol'
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '@superego/app/shared'
 import {
-  bound, LAYOUT, layoutOf, normalize, placedFor, PlacedViews, RegistryProvider, scopedViews, setLocalState, ShellStateProvider, ViewScopeProvider,
-  useAllThreads, useMachines, useSelection, windowRegistry, type Layout, type Place, type Registry, type UiExtension, type ViewProps,
+  bound, LAYOUT, layoutOf, normalize, PaneBody, paneKind, placedFor, PlacedViews, RegistryProvider, scopedViews, seenIn, setLocalState, ShellStateProvider, Slot,
+  ViewScopeProvider, useAllThreads, useMachines, useSelection, windowRegistry, type BehaviourSlot, type Layout, type Place, type Registry, type SlotProps,
+  type UiExtension, type ViewProps,
 } from '@superego/app/internals'
 import type { TestDaemon } from './daemon.ts'
 import { useDom } from './dom.ts'
@@ -178,6 +179,20 @@ export type MountOptions = {
   app?: AppConfig
 }
 
+/**
+ * What `render` draws, and for which thread: `thread` an id of one the machine has (followed as it changes), or a
+ * `ThreadInfo` as it is (`testThread({ profile })`, say). A pane or a thread's slot without one: the selected thread,
+ * else the machine's first, else a test thread (of `mountUi`'s profile, if it has one).
+ */
+export type RenderWhat<S extends BehaviourSlot = BehaviourSlot> = { machine?: string; thread?: string | ThreadInfo } & (
+  /** A view by its id in a place, or everything the layout puts in a place. */
+  | { view?: string; place: Place }
+  /** A pane of a kind, as the thread's panes draw it, with its params. */
+  | { pane: { kind: string; params?: Json; title?: string; id?: string } }
+  /** Everything in a slot, as the window draws it, with the props it gives (a thread's slots: its machine and thread; the editor's: `path`, `open`). */
+  | { slot: S; props?: Partial<SlotProps[S]> }
+)
+
 /** What `render` drew, to look in and click. */
 export type Rendered = {
   /** The element it's drawn in. */
@@ -200,8 +215,12 @@ export type TestWindow = {
   machines: TestMachine[]
   /** Every call the window made (not its watches), by machine. */
   calls: { machine: string; method: string; params: any }[]
-  /** Draw a view by its id in a place, or everything the layout puts in a place; for a thread's place, the thread. */
-  render(what: { view?: string; place: Place; machine?: string; thread?: string }): Promise<Rendered>
+  /**
+   * Draw a view by its id in a place, or everything the layout puts in a place (a thread's place: give the thread); a
+   * pane of a kind (`{ pane: { kind, params } }`); or what fills a slot (`{ slot: 'thread.badge', thread }`). A view,
+   * pane kind or slot that the window wouldn't draw there throws, saying what it would.
+   */
+  render<S extends BehaviourSlot>(what: RenderWhat<S>): Promise<Rendered>
   /** The views the layout puts in `place` (a thread's: give the thread), as ids. */
   placed(place: Place, where?: { machine?: string; thread: string }): string[]
   /** Show a thread (or none), as clicking it in the sidebar would. */
@@ -332,15 +351,48 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
 
   const ui: TestWindow = {
     registry, machines, calls,
-    async render({ view, place, machine, thread }) {
-      const at = machineOf(machine)
-      if (thread && !threadOf(at, thread)) throw new Error(`No thread ${thread} on ${at}: give it to the machine (threads)`)
-      if (view) {
-        const info = thread ? threadOf(at, thread) : undefined
-        const ids = scopedViews(registry, info ? { machine: at, thread: info } : undefined).map((v) => v.id)
-        if (!ids.includes(view)) throw new Error(`No view ${view} ${info ? `in thread ${thread}` : 'in the window'}: ${ids.join(', ') || 'none'}`)
+    async render(what) {
+      const at = machineOf(what.machine)
+      const given = what.thread
+      if (typeof given === 'string' && !threadOf(at, given)) throw new Error(`No thread ${given} on ${at}: give it to the machine (threads), or give a ThreadInfo`)
+      let node: ReactNode
+      if ('pane' in what || ('slot' in what && what.slot !== 'overlay')) {
+        // A pane or a thread's slot is always some thread's.
+        const thread = given ?? defaultThread(at)
+        const info = typeof thread === 'string' ? threadOf(at, thread)! : thread
+        const where = { machine: at, thread: info }
+        if ('pane' in what) {
+          if (!paneKind(registry, what.pane.kind, where)) {
+            const kinds = [...new Set(seenIn(registry.panes, where).map((p) => p.kind))]
+            const theirs = registry.panes.some((p) => p.kind === what.pane.kind && p.owner.profile)
+            throw new Error(`No pane kind ${what.pane.kind} in thread ${info.id}${theirs ? " (a profile's pane kinds are its threads': give a thread of that profile)" : ''}: ${kinds.join(', ') || 'none'}`)
+          }
+          const { kind, params, title, id = 'pane-1' } = what.pane
+          const pane = { id, kind, ...(params !== undefined ? { params } : {}), ...(title !== undefined ? { title } : {}) }
+          node = <InThread machine={at} thread={thread} draw={(machine, info) => <PaneBody machine={machine} thread={info} pane={pane} />} />
+        } else {
+          const slot = slotNamed(what.slot)
+          if (!seenIn(registry.slots[slot], where).length) {
+            const theirs = registry.slots[slot].length
+            throw new Error(`Nothing fills ${slot} in thread ${info.id}${theirs ? ` (${theirs} elsewhere: a profile's fill its threads' slots, and a thread goes without an optional extension it names in without)` : ''}`)
+          }
+          const props = what.props as Record<string, unknown> | undefined
+          node = <InThread machine={at} thread={thread} draw={(machine, info) =>
+            <Slot name={slot} props={{ path: '', open() {}, ...props, machine, thread: info } as never} />} />
+        }
+      } else if ('slot' in what) {
+        if (!registry.slots.overlay.length) throw new Error('Nothing fills overlay: only the app\'s extensions can')
+        node = <Slot name="overlay" props={{}} />
+      } else {
+        const { view, place } = what
+        if (view) {
+          const info = given === undefined ? undefined : typeof given === 'string' ? threadOf(at, given) : given
+          const ids = scopedViews(registry, info ? { machine: at, thread: info } : undefined).map((v) => v.id)
+          if (!ids.includes(view)) throw new Error(`No view ${view} ${info ? `in thread ${info.id}` : 'in the window'}: ${ids.join(', ') || 'none'}`)
+        }
+        node = <Draw view={view} place={place} machine={at} thread={given} registry={registry} />
       }
-      const { container, root } = await draw(<Draw view={view} place={place} machine={at} thread={thread} registry={registry} />)
+      const { container, root } = await draw(node)
       return {
         container,
         text: () => container.textContent ?? '',
@@ -407,15 +459,27 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     },
   }
   const threadOf = (machine: string, id: string) => shell.threads[machine]?.find((t) => t.id === id)
+  // The thread a pane or slot is drawn for when none is given: the selected one, the machine's first, else one made up.
+  const defaultThread = (machine: string): string | ThreadInfo => {
+    if (shell.selection?.machine === machine && threadOf(machine, shell.selection.thread)) return shell.selection.thread
+    const first = shell.threads[machine]?.[0]
+    if (first) return first.id
+    const ref = options.profile && (options.profile.machine ?? machines[0]!.id) === machine ? options.profile.ref : undefined
+    return testThread({ id: 'test', ...(ref ? { profile: ref } : {}) })
+  }
+  const slotNamed = <S extends BehaviourSlot>(slot: S): S => {
+    if (slot in registry.slots) return slot
+    throw new Error(`No slot ${slot}: ${Object.keys(registry.slots).join(', ')} (one that's a place now is a view: render({ view, place }))`)
+  }
   return ui
 }
 
 /** A view (or a place's views) as the window draws it, for the thread given, looked up live. */
-function Draw({ view, place, machine, thread, registry }: { view?: string; place: Place; machine: string; thread?: string; registry: Registry }) {
+function Draw({ view, place, machine, thread, registry }: { view?: string; place: Place; machine: string; thread?: string | ThreadInfo; registry: Registry }) {
   const machines = useMachines()
   const all = useAllThreads()
   const entry = machines.find((m) => m.id === machine)
-  const info = thread ? all[machine]?.find((t) => t.id === thread) : undefined
+  const info = typeof thread === 'string' ? all[machine]?.find((t) => t.id === thread) : thread
   if (thread && (!entry || !info)) return null
   if (!view) return <PlacedViews place={place} {...(entry && info ? { machine: entry, thread: info } : {})} />
   const where = entry && info ? { machine: entry.id, thread: info } : undefined
@@ -423,4 +487,13 @@ function Draw({ view, place, machine, thread, registry }: { view?: string; place
   if (!found) return null
   const Component = found.component as (props: ViewProps) => ReactNode
   return <ViewScopeProvider value={where}><Component place={place} {...(entry && info ? { machine: entry, thread: info } : {})} /></ViewScopeProvider>
+}
+
+/** What `draw` gives, for the machine and thread as the window has them now (a thread given whole: as given). */
+function InThread({ machine, thread, draw }: { machine: string; thread: string | ThreadInfo; draw: (machine: MachineEntry, thread: ThreadInfo) => ReactNode }) {
+  const entry = useMachines().find((m) => m.id === machine)
+  const all = useAllThreads()
+  const info = typeof thread === 'string' ? all[machine]?.find((t) => t.id === thread) : thread
+  if (!entry || !info) return null
+  return <>{draw(entry, info)}</>
 }
