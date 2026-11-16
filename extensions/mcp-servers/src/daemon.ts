@@ -123,8 +123,9 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
       let fileProblem: string | undefined
       let reloads: Promise<void> = Promise.resolve()
       let first = true
-      /** One at a time: an action's and the file watcher's never add the same server twice. */
+      /** One at a time: an action's and the file watcher's never add the same server twice. None once it's torn down. */
       const reload = () => reloads = reloads.then(async () => {
+        if (superego.signal.aborted) return
         try {
           const { servers } = await file.read()
           // Before the runtime takes the new config, so it never connects with secrets set for another.
@@ -239,6 +240,12 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
       })
       superego.agent(ego, { always: false })
 
+      /** Memos being kept: waited for at teardown. */
+      const remembering = new Set<Promise<void>>()
+      const remember = (work: Promise<unknown>) => {
+        const done: Promise<void> = work.then(() => {}, () => {}).finally(() => remembering.delete(done))
+        remembering.add(done)
+      }
       superego.agentParts(async (thread) => {
         if (thread.owner === EGO) return [ego]
         // Another extension's own thread has none: it isn't the user's agent.
@@ -247,11 +254,11 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         await runtime.firstListings(chosen, thread.id)
         const memo: Memo = { servers: chosen.map((s) => s.id), ...(left.length ? { left } : {}) }
         runtime.use(thread.id, { servers: memo.servers })
-        void memos.get(thread.id).then((before) => {
+        remember(memos.get(thread.id).then((before) => {
           if (JSON.stringify(before ?? null) !== JSON.stringify(memo.servers.length || left.length ? memo : null)) {
             return memos.set(thread.id, memo.servers.length || left.length ? memo : undefined)
           }
-        }).catch((error: unknown) => console.error('mcp-servers: keeping what a thread has failed:', error))
+        }).catch((error: unknown) => { if (!superego.signal.aborted) console.error('mcp-servers: keeping what a thread has failed:', error) }))
         if (!chosen.length) return []
         const parts: Extension[] = [shared, ...chosen.map((s) => ({ name: s.partName }))]
         if (chosen.some((s) => runtime.isDeferred(s))) parts.push(search)
@@ -495,6 +502,16 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
           return { path: server.log.path, text: await server.log.tail(Math.min(lines ?? 100, 5000)) }
         },
       }))
+
+      // Torn down (its signal aborted: nothing new starts): done once its sessions have stopped and what it was
+      // writing (its files, the logs, threads' memos) has landed.
+      return async () => {
+        clearTimeout(reloading)
+        await runtime.close()
+        await reloads
+        while (remembering.size) await Promise.all(remembering)
+        await Promise.all([file.settled(), store.settled()])
+      }
     },
   })
 }

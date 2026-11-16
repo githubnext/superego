@@ -59,6 +59,8 @@ class FileCredentialStore implements CredentialStore {
     this.#queue = run.catch(() => {})
     return run
   }
+  /** Resolves once what's queued now has run: the saves going landed. */
+  settled() { return this.#serial(async () => {}).catch(() => {}) }
   /** Every credential as stored; none when there's no file. */
   all() { return this.#serial(() => this.#load()) }
   async #load(): Promise<Record<string, Credential>> {
@@ -163,7 +165,8 @@ export type AgentSettings = {
   onCredentials(listener: (provider: string) => void): () => void
   /** The rejected providers whose credentials changed since (while the daemon was down, say): to retry. */
   changedSinceRejected(): string[]
-  close(): void
+  /** Stop watching auth.json; resolves once the credentials and device id being saved are. */
+  close(): Promise<void>
 }
 
 export async function createAgentSettings(settings: SettingsRegistry, dataDir: string, app: AppConfig, flows: AuthFlows): Promise<AgentSettings> {
@@ -310,10 +313,11 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
   // Some sign-ins identify the installation; it is created once per machine and kept next to the credentials.
   const deviceIdPath = join(dataDir, 'device-id')
   let deviceId = (await readFile(deviceIdPath, 'utf8').catch(() => '')).trim()
+  let keepingDeviceId: Promise<void> = Promise.resolve()
   const getDeviceId = () => {
     if (!deviceId) {
       deviceId = randomUUID()
-      writeAtomic(deviceIdPath, deviceId).catch((error: Error) => console.error(`Keeping the device id: ${error.message}`))
+      keepingDeviceId = writeAtomic(deviceIdPath, deviceId).catch((error: Error) => console.error(`Keeping the device id: ${error.message}`))
     }
     return deviceId
   }
@@ -384,9 +388,10 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
       credentialListeners.add(listener)
       return () => { credentialListeners.delete(listener) }
     },
-    close() {
+    async close() {
       clearTimeout(reread)
       watcher?.close()
+      await Promise.all([credentials.settled(), keepingDeviceId])
     },
   }
 }

@@ -53,6 +53,12 @@ export class SecretStore {
 
   delete(key: string) { return this.modify(key, () => undefined) }
 
+  /** Resolves once the changes going now have finished, their writes landed. */
+  async settled() {
+    while (this.#locks.size) await Promise.all(this.#locks.values())
+    await this.#writes
+  }
+
   /** The secret values known, longest first, for `redact`. */
   secrets(): string[] { return [...this.#values].sort((a, b) => b.length - a.length) }
 

@@ -15,11 +15,32 @@ import { about, type Worktree } from './shared.ts'
 const REMOVING = '.removing-'
 
 /**
- * Deleting a folder, as plain Node does. The daemon runs in Electron, whose `fs` takes an `.asar` file for a folder: it
+ * The file system as plain Node has it. The daemon runs in Electron, whose `fs` takes an `.asar` file for a folder: it
  * reads into it rather than deleting it, so a worktree with Electron in its node_modules (`default_app.asar`) was never
  * deleted (ENOTEMPTY). Electron's `original-fs` is `fs` without that; in plain Node there's none, and `fs` is plain.
  */
-const { rm } = ((process.getBuiltinModule('original-fs') ?? process.getBuiltinModule('node:fs')) as typeof import('node:fs')).promises
+const plainFs = ((process.getBuiltinModule('original-fs') ?? process.getBuiltinModule('node:fs')) as typeof import('node:fs')).promises
+
+/**
+ * Delete a folder and everything in it, stopping when `signal` aborts (the daemon closing): what's left is deleted next
+ * time (see sweepRemoved). Symbolic links are deleted, never followed.
+ */
+async function removeTree(path: string, signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted()
+  const entries = await plainFs.readdir(path, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  })
+  if (!entries) return
+  await Promise.all(entries.map(async (entry) => {
+    const inner = join(path, entry.name)
+    if (entry.isDirectory()) return removeTree(inner, signal)
+    signal.throwIfAborted()
+    await plainFs.unlink(inner).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error })
+  }))
+  signal.throwIfAborted()
+  await plainFs.rmdir(path).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error })
+}
 
 /** git in `cwd`: its output, trimmed; its own message when it fails. */
 function git(cwd: string, args: string[]): Promise<string> {
@@ -59,16 +80,19 @@ async function stopProcessesIn(path: string) {
   for (const pid of doomed.filter(alive)) signal(pid, 'SIGKILL')
 }
 
+/** What deletes the worktrees moved aside in a folder, in the background (see sweepRemoved). */
+type Sweeper = (folder: string) => void
+
 /**
  * A clean worktree, gone at once: moved aside and let go of by git, then deleted in the background. Deleting it in
  * place (`git worktree remove`) takes as long as its files do, many seconds with a node_modules in it.
  */
-async function removeWorktree(path: string, root: string) {
+async function removeWorktree(path: string, root: string, sweep: Sweeper) {
   await stopProcessesIn(path)
   const aside = join(dirname(path), `.${basename(path)}${REMOVING}${randomUUID().slice(0, 8)}`)
   if (!await rename(path, aside).then(() => true, () => false)) return false
   await git(root, ['worktree', 'prune']).catch(() => {})
-  void sweepRemoved(dirname(path))
+  sweep(dirname(path))
   return true
 }
 
@@ -77,23 +101,24 @@ const deleting = new Set<string>()
 
 /**
  * The worktrees moved aside in a repository's folder (see removeWorktree), deleted: the one just moved, and any an
- * earlier try didn't finish (the daemon ended mid-way, or it failed), so each removal tries those again too. A failure
- * is logged, and left for the next.
+ * earlier try didn't finish (the daemon closed mid-way, or it failed), so each removal tries those again too. A failure
+ * is logged, and left for the next; the daemon closing stops it.
  */
-async function sweepRemoved(folder: string) {
+async function sweepRemoved(folder: string, signal: AbortSignal) {
   for (const name of await readdir(folder).catch(() => [])) {
     const path = join(folder, name)
+    if (signal.aborted) return
     if (!name.startsWith('.') || !name.includes(REMOVING) || deleting.has(path)) continue
     deleting.add(path)
-    await rm(path, { recursive: true, force: true, maxRetries: 3 })
-      .catch((error: unknown) => console.error(`worktrees: deleting ${path} failed:`, error))
+    await removeTree(path, signal)
+      .catch((error: unknown) => { if (!signal.aborted) console.error(`worktrees: deleting ${path} failed:`, error) })
       .finally(() => deleting.delete(path))
   }
 }
 
 /** Every repository's leftovers (see sweepRemoved), as the daemon starts. */
-async function sweepAll(root: string) {
-  for (const repo of await readdir(root).catch(() => [])) await sweepRemoved(join(root, repo))
+async function sweepAll(root: string, signal: AbortSignal) {
+  for (const repo of await readdir(root).catch(() => [])) await sweepRemoved(join(root, repo), signal)
 }
 
 /** A branch's tip, or undefined when there's no such branch. */
@@ -119,6 +144,14 @@ export default defineDaemonExtension({
   setup(superego) {
     const folder = join(superego.dataDir, 'worktrees')
     const state = superego.state<Worktree>()
+    const { signal } = superego
+    /** What it does in the background (deleting, sweeping up), waited for at teardown: it stops between steps. */
+    const going = new Set<Promise<void>>()
+    const background = (work: Promise<unknown>) => {
+      const done: Promise<void> = work.then(() => {}, () => {}).finally(() => going.delete(done))
+      going.add(done)
+    }
+    const sweep: Sweeper = (at) => background(sweepRemoved(at, signal))
     superego.facts<Worktree>(({ state }) => state)
     superego.thread({
       // Asked for by the thread, or its profile (both in `options`).
@@ -138,7 +171,7 @@ export default defineDaemonExtension({
       async abandoned(draft, made) {
         const tree = made as Worktree | undefined
         if (!tree || !draft.checkout) return
-        await git(draft.checkout.top, ['worktree', 'remove', '--force', tree.path]).catch(() => rm(tree.path, { recursive: true, force: true }))
+        await git(draft.checkout.top, ['worktree', 'remove', '--force', tree.path]).catch(() => plainFs.rm(tree.path, { recursive: true, force: true }))
         await git(draft.checkout.top, ['worktree', 'prune']).catch(() => {})
         await git(draft.checkout.top, ['branch', '-D', tree.branch]).catch(() => {})
       },
@@ -149,7 +182,7 @@ export default defineDaemonExtension({
         const exists = await stat(tree.path).then(() => true, () => false)
         const clean = exists && (await git(tree.path, ['status', '--porcelain']).catch(() => 'unknown')) === ''
         // Said, in a line, in what archiving answers (thread_archive tells the agent).
-        if (exists && !(clean && await removeWorktree(tree.path, tree.root))) {
+        if (exists && !(clean && await removeWorktree(tree.path, tree.root, sweep))) {
           return { note: clean ? `Kept the worktree ${tree.path}: it couldn't be removed.` : `Kept the worktree ${tree.path}: it has uncommitted changes.` }
         }
         // Deleted by hand, it's still git's until pruned, and so is its branch.
@@ -197,14 +230,16 @@ export default defineDaemonExtension({
      * As the daemon starts: what archiving left half done (the daemon ended mid-way), finished. Leftover folders
      * deleted, and the merged branches of archived threads whose worktree is removed deleted.
      */
-    async function sweep() {
-      await sweepAll(folder)
+    async function sweepUp() {
+      await sweepAll(folder, signal)
       for (const thread of await superego.threads.list({ archived: true })) {
+        if (signal.aborted) return
         const tree = await state.get(thread.id)
         if (!tree?.removed || !await git(tree.root, ['rev-parse', '--git-dir']).then(() => true, () => false)) continue
         if (await tipOf(tree.root, tree.branch)) await settleBranch(thread.id, tree)
       }
     }
-    void sweep().catch((error: unknown) => console.error('worktrees: sweeping up after archived threads failed:', error))
+    background(sweepUp().catch((error: unknown) => { if (!signal.aborted) console.error('worktrees: sweeping up after archived threads failed:', error) }))
+    return async () => { while (going.size) await Promise.all(going) }
   },
 })

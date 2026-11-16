@@ -139,6 +139,11 @@ export class Runtime {
   #changed: () => void
   #cacheDir: string
   #logDir: string
+  #sweep: ReturnType<typeof setInterval>
+  /** Every server's log, those removed since too: closed last, once nothing more is said in them. */
+  #logs = new Set<ServerLog>()
+  /** Work going on in the background (sessions stopping, listings, a check's end): waited for by `close`. */
+  #going = new Set<Promise<void>>()
 
   constructor(api: DaemonApi, store: SecretStore, changed: () => void, options: RuntimeOptions = {}) {
     this.#api = api
@@ -150,19 +155,32 @@ export class Runtime {
     this.#retries = options.retries ?? [1_000, 3_000]
     this.#cacheDir = join(api.dataDir, 'mcp', 'cache')
     this.#logDir = join(api.dataDir, 'logs', 'mcp')
-    const sweep = setInterval(() => this.sweep(), Math.min(60_000, Math.max(250, this.#idle / 4)))
-    sweep.unref?.()
-    api.signal.addEventListener('abort', () => {
-      clearInterval(sweep)
-      // Every session stops, and one still starting is called off (its process stopped with it) or closed once it's up.
-      for (const server of this.servers.values()) {
-        for (const slot of server.slots.values()) {
-          slot.stop?.abort()
-          void slot.connection?.close('the MCP servers extension was reloaded')
-          void slot.starting?.then((connection) => connection.close(), () => {})
-        }
+    this.#sweep = setInterval(() => this.sweep(), Math.min(60_000, Math.max(250, this.#idle / 4)))
+    this.#sweep.unref?.()
+  }
+
+  /**
+   * The extension torn down (its signal aborted, so nothing starts from here on): every session stops, and one still
+   * starting is called off (its process stopped with it) or closed once it's up. Resolves once all of it has, and what
+   * it wrote (the tools' cache, the logs) has landed.
+   */
+  async close() {
+    clearInterval(this.#sweep)
+    for (const server of this.servers.values()) {
+      for (const slot of server.slots.values()) {
+        slot.stop?.abort()
+        if (slot.connection) this.#background(slot.connection.close('the MCP servers extension was reloaded'))
+        if (slot.starting) this.#background(slot.starting.then((connection) => connection.close()))
       }
-    }, { once: true })
+    }
+    while (this.#going.size) await Promise.all(this.#going)
+    await Promise.all([...this.#logs].map((log) => log.close()))
+  }
+
+  /** Go on with `work` without waiting for it here; `close` waits for it. */
+  #background(work: Promise<unknown>) {
+    const done: Promise<void> = work.then(() => {}, () => {}).finally(() => this.#going.delete(done))
+    this.#going.add(done)
   }
 
   // ── Servers ───────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -225,6 +243,7 @@ export class Runtime {
       listedNow: false, profileLoaded, offered: [], skipped: [], deferred: false, slots: new Map(), missing: [], crashes: [],
       log: new ServerLog(join(this.#logDir, `${file}.log`), () => this.#store.secrets()),
     }
+    this.#logs.add(server.log)
     const invalid = configProblem(name, config)
     if (invalid) server.invalid = invalid
     this.#offer(server)
@@ -453,7 +472,7 @@ export class Runtime {
   /** A call on a connection ended: one retired meanwhile is closed once it has none left. */
   #done(connection: Connection) {
     connection.inflight--
-    if (connection.retired && !connection.inflight) void connection.close()
+    if (connection.retired && !connection.inflight) this.#background(connection.close())
   }
 
   /** A 401: the key or token was refused, so the server needs sign-in. */
@@ -483,6 +502,7 @@ export class Runtime {
   async connect(server: Server, slot: Slot): Promise<Connection> {
     if (slot.connection && !slot.connection.closed) return slot.connection
     if (slot.starting) return slot.starting
+    if (this.#api.signal.aborted) throw new RpcError('unavailable', `${server.name} isn't started: MCP servers are stopping`)
     const gate = this.#gate(server)
     if (gate) throw new RpcError('unavailable', gate.why)
     if (!server.slots.has(slot.key)) server.slots.set(slot.key, slot)
@@ -502,6 +522,7 @@ export class Runtime {
       // A URL that doesn't answer (a network blip, its sign-in's server down) is tried again a little later.
       let connection: Connection
       for (let attempt = 0; ; attempt++) {
+        signal.throwIfAborted()
         try {
           connection = await Connection.open(launch, signal)
           break
@@ -543,6 +564,8 @@ export class Runtime {
     const listing = await connection.list()
     server.listing = { ...listing, listedAt: Date.now() }
     server.listedNow = true
+    // Stopping: nothing more written.
+    if (this.#api.signal.aborted) return
     const cache: Cache = {
       id: server.id, name: server.name, ...listing, listedAt: server.listing.listedAt,
       ...(server.from.type === 'profile' ? { from: server.from, config: server.config } : {}),
@@ -564,7 +587,7 @@ export class Runtime {
       if (connection && !connection.closed) return this.#list(server, connection)
     }).catch((error) => server.log.write(`listing tools failed: ${errorText(error)}`))
     server.listed = listed
-    void listed.finally(() => { if (server.listed === listed) delete server.listed })
+    this.#background(listed.finally(() => { if (server.listed === listed) delete server.listed }))
   }
 
   /**
@@ -607,7 +630,7 @@ export class Runtime {
     this.#changed()
     if (!connection) return
     connection.retired = true
-    if (!connection.inflight) void connection.close()
+    if (!connection.inflight) this.#background(connection.close())
   }
 
   /** Stop a slot's session now, calls and all (`why` is what a call it cuts off is told); one starting is called off. */
@@ -626,7 +649,7 @@ export class Runtime {
 
   /** Stop every session of a server now. `why`: what a call it cuts off is told. */
   stopAll(server: Server, why = `${server.name} was stopped`) {
-    for (const slot of [...server.slots.values()]) void this.#close(server, slot, why)
+    for (const slot of [...server.slots.values()]) this.#background(this.#close(server, slot, why))
   }
 
   /** Stop a thread's own sessions (it was archived). */
@@ -653,7 +676,7 @@ export class Runtime {
         if (!slot.connection || slot.connection.inflight || slot.starting || now - slot.lastUsed < this.#idle) continue
         if (!slot.thread && busy.has(server.id)) continue
         server.log.write('idle: stopping')
-        void this.#close(server, slot)
+        this.#background(this.#close(server, slot))
       }
     }
     this.#prune(now)
@@ -668,7 +691,7 @@ export class Runtime {
     for (const server of [...this.servers.values()]) {
       if (server.from.type === 'profile' && !existsSync(server.from.dir)) {
         server.log.write(`its profile's folder is gone: forgotten`)
-        void this.remove(server)
+        this.#background(this.remove(server))
       }
     }
     for (const [thread, use] of [...this.threads]) if (!use.working && now - use.at >= this.#idle) this.threads.delete(thread)
@@ -679,7 +702,7 @@ export class Runtime {
     if (this.#gate(server)) return
     const slot = this.#slot(server, thread)
     slot.lastUsed = Date.now()
-    void this.connect(server, slot).catch(() => {})
+    this.#background(this.connect(server, slot))
   }
 
   /**
@@ -696,7 +719,7 @@ export class Runtime {
     await Promise.race([done.catch(() => {}), new Promise((resolve) => { timer = setTimeout(resolve, wait) })])
     clearTimeout(timer)
     const busy = this.#busy().has(server.id)
-    void done.then(() => { if (own || !busy) this.#retire(server, slot) }, () => {})
+    this.#background(done.then(() => { if (own || !busy) this.#retire(server, slot) }))
   }
 
   /** Restart: every session stopped, a failure forgotten, and started again to check it. */

@@ -24,7 +24,7 @@ beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'superego-mcp-runtime-'))
   calls = join(dir, 'calls')
 })
-afterEach(async () => { await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }) })
+afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 const until = async (check: () => boolean | Promise<boolean>, what = 'it', ms = 15_000) => {
   for (const end = Date.now() + ms; Date.now() < end;) { if (await check()) return; await new Promise((r) => setTimeout(r, 25)) }
@@ -36,7 +36,7 @@ const alive = (pid: number) => { try { process.kill(pid, 0); return true } catch
 
 // ── Against the runtime ───────────────────────────────────────────────────────────────────────────────────────────
 
-/** A runtime over a stand-in for the daemon's API: `abort()` tears it down, as an extension reload does. */
+/** A runtime over a stand-in for the daemon's API: `abort()` tears it down, as an extension reload does, and waits for it. */
 function runtime(options: ConstructorParameters<typeof Runtime>[3] = {}) {
   const life = new AbortController()
   const api = {
@@ -45,7 +45,8 @@ function runtime(options: ConstructorParameters<typeof Runtime>[3] = {}) {
     threads: { of: () => undefined, attachments: () => join(dir, 'files'), get: async () => ({ cwd: dir }) },
   } as unknown as DaemonApi
   const store = new SecretStore(join(dir, 'mcp-auth.json'))
-  return { runtime: new Runtime(api, store, () => {}, { idle: 60_000, ...options }), abort: () => life.abort() }
+  const r = new Runtime(api, store, () => {}, { idle: 60_000, ...options })
+  return { runtime: r, abort: async () => { life.abort(); await r.close() } }
 }
 const machine = (r: Runtime, name: string, config: ServerConfig) => r.add(name, { type: 'machine' }, config, dir, name)
 /** Call one of its tools, as a thread's model would. */
@@ -76,7 +77,7 @@ it("hides every value the store keeps in what a crash says: the model's result, 
   expect(r.whyNot(fx)).toContain('invalid token ***')
   // A call now fails at once, with the reason hidden too.
   expect((await call(r, fx, 'echo', { text: 'x' })).text).toMatch(/fx has failed .*invalid token \*\*\*/)
-  abort()
+  await abort()
 }, 60_000)
 
 it('tells the model a call cut off by Restart may or may not have taken effect', async () => {
@@ -91,7 +92,7 @@ it('tells the model a call cut off by Restart may or may not have taken effect',
   expect(result.text).toBe('fx.hang was cut off before it answered: fx was restarted\nIt may or may not have taken effect on the server. Check (for example, list or read what it would have changed) before calling it again.')
   // Restarted, it runs again.
   expect(await call(r, fx, 'echo', { text: 'back' })).toEqual({ error: false, text: 'back' })
-  abort()
+  await abort()
 }, 60_000)
 
 it('stops a server that is still starting when the extension is torn down', async () => {
@@ -105,7 +106,7 @@ it('stops a server that is still starting when the extension is torn down', asyn
   const pid = Number(readFileSync(pidFile, 'utf8'))
   expect(alive(pid)).toBe(true)
   expect(r.stateOf(slow)).toBe('starting')
-  abort()
+  await abort()
   await until(() => !alive(pid), 'its process to stop', 10_000)
   // Called off, not failed.
   expect(slow.crashes).toEqual([])
@@ -121,7 +122,7 @@ it("tries a URL that can't be reached again, and never fails it for that", async
   expect(web.crashes).toEqual([])
   expect((await r.info(web)).error).toBeTruthy()
   expect(await web.log.tail(100)).toContain('not reached; trying again in 0.01s')
-  abort()
+  await abort()
 }, 30_000)
 
 // ── Against a daemon: a profile's server across restarts ─────────────────────────────────────────────────────────

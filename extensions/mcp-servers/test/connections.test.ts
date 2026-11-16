@@ -10,7 +10,7 @@ import { serveHttp } from './fixture.ts'
 const FIXTURE = join(import.meta.dirname, 'fixture.ts')
 let dir: string
 beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-mcp-conn-')) })
-afterEach(async () => { await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }) })
+afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 const until = async (check: () => boolean | Promise<boolean>) => {
   for (let i = 0; i < 200; i++) { if (await check()) return; await new Promise((r) => setTimeout(r, 25)) }
@@ -41,6 +41,7 @@ it('runs a command in a clean environment, lists and calls its tools, logs its s
   await expect(connection.call('crash', {}, { timeout: 5000 })).rejects.toThrow(/fx exited with code 3\. Its last words on stderr:\n[\s\S]*boom: the fixture fell over/)
   await until(() => closes.length === 1)
   expect(closes[0]).toMatchObject({ code: 3, stopped: false, stderr: expect.arrayContaining(['boom: the fixture fell over']) })
+  await log.close()
 })
 
 it('reaches a URL with its API key, and closing it is no crash', async () => {
@@ -48,15 +49,17 @@ it('reaches a URL with its API key, and closing it is no crash', async () => {
   const http = await serveHttp((auth) => seen.push(auth))
   const closes: unknown[] = []
   const config = { url: http.url, auth: { type: 'api-key' as const } }
-  const connection = await Connection.open({ name: 'web', config, cwd: dir, secrets: { key: 'good-key' }, log: new ServerLog(join(dir, 'web.log'), () => []), onClose: (exit) => closes.push(exit) })
+  const log = new ServerLog(join(dir, 'web.log'), () => [])
+  const connection = await Connection.open({ name: 'web', config, cwd: dir, secrets: { key: 'good-key' }, log, onClose: (exit) => closes.push(exit) })
   expect((await connection.list()).tools).toHaveLength(6)
   expect(await connection.call('echo', { text: 'over http' }, { timeout: 5000 })).toMatchObject({ content: [{ text: 'over http' }] })
   expect(seen.every((auth) => auth === 'Bearer good-key')).toBe(true)
   await connection.close()
   expect(closes).toEqual([])
   // A refused key fails to start.
-  await expect(Connection.open({ name: 'web', config, cwd: dir, secrets: { key: 'bad' }, log: new ServerLog(join(dir, 'web.log'), () => []) })).rejects.toThrow()
+  await expect(Connection.open({ name: 'web', config, cwd: dir, secrets: { key: 'bad' }, log })).rejects.toThrow()
   await http.close()
+  await log.close()
 })
 
 it('sends a key in the header its auth names, and secret env only by name', () => {

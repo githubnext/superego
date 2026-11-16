@@ -93,6 +93,8 @@ export class SettingsRegistry {
   #settings = new Map<string, SettingSpec>()
   #listeners = new Set<() => void>()
   #queued = false
+  #closed = false
+  #saving = new Set<Promise<void>>()
 
   constructor(store: SettingsStore = new MemorySettingsStore()) {
     this.#store = store
@@ -139,9 +141,18 @@ export class SettingsRegistry {
     const disabled = spec.disabled?.()
     if (disabled) throw new RpcError('setting_disabled', `${spec.title}: ${disabled}`)
     check(spec, value)
+    if (this.#closed) throw new RpcError('closing', `Settings are closed: ${key} wasn't changed`)
     this.#values = { ...this.#values, [key]: value }
-    await this.#store.save(this.#values)
+    const saving = this.#store.save(this.#values)
+    this.#saving.add(saving)
+    try { await saving } finally { this.#saving.delete(saving) }
     this.invalidate()
+  }
+
+  /** No more changes (a `set` from now on is refused); resolves once those being saved are. */
+  async close(): Promise<void> {
+    this.#closed = true
+    await Promise.allSettled(this.#saving)
   }
 
   async snapshot(): Promise<SettingsSnapshot> {

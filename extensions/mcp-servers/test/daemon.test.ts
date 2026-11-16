@@ -26,7 +26,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await daemon?.close()
   daemon = undefined
-  await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+  await rm(dir, { recursive: true, force: true })
 })
 
 /** A daemon with mcp-servers (and `more`), in `dir`, answering as `model` says: a model's turns, one per request. */

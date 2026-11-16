@@ -203,7 +203,7 @@ describe('close', () => {
     socket.destroy(); server.close()
   })
 
-  it('starts nothing for a setting changed after it closed', async () => {
+  it('takes no setting changed after it closed, and starts nothing for it', async () => {
     process.env.SUPEREGO_MODEL = 'faux'
     const root = join(dir, 'root')
     await mkdir(root, { recursive: true })
@@ -214,7 +214,7 @@ describe('close', () => {
       settingsStore: new MemorySettingsStore({ 'web.port': port }),
     })
     await daemon.close()
-    await daemon.settings.set('web.access', 'local')
+    await expect(daemon.settings.set('web.access', 'local')).rejects.toThrow(/Settings are closed/)
     // Heard on the next turn, and served at once if it were: the port is free for the taking.
     await new Promise((resolve) => setImmediate(resolve))
     const probe = createServer()

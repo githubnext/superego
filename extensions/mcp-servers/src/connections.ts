@@ -32,7 +32,10 @@ export class ServerLog {
     this.#limit = limit
   }
 
+  #closed = false
+
   write(line: string) {
+    if (this.#closed) return
     const text = `${new Date().toISOString()} ${redact(line.replace(/\s+$/, ''), this.#secrets())}\n`
     this.#queue = this.#queue.then(async () => {
       await mkdir(dirname(this.path), { recursive: true })
@@ -40,6 +43,12 @@ export class ServerLog {
       if (size + text.length > this.#limit) await rename(this.path, `${this.path}.1`).catch(() => {})
       await appendFile(this.path, text)
     }).catch(() => {})
+  }
+
+  /** Written to no more (a line from now on is dropped); resolves once the lines before are written. */
+  async close() {
+    this.#closed = true
+    await this.#queue
   }
 
   /** Its last `lines` lines (the old file's too, when this one is short), secrets hidden. */
@@ -183,7 +192,8 @@ export class Connection {
   readonly client: Client
   readonly launch: Launch
   #transport: Transport
-  #closing = false
+  /** Stopping, by `close()`: every caller waits for the same stop. */
+  #closing: Promise<void> | undefined
   closed = false
   /** Why it was stopped, when the runtime said (`close(why)`): what a call it cut off tells the model. */
   stoppedBecause?: string
@@ -199,7 +209,7 @@ export class Connection {
   }
 
   /** Stopped or stopping (not by itself): a call still going on it is cut off. */
-  get ended() { return this.closed || this.#closing }
+  get ended() { return this.closed || this.#closing !== undefined }
 
   /**
    * Start it and say hello (`initialize`); throws when it can't. `signal` stops it, while it starts and after: a command's
@@ -307,18 +317,22 @@ export class Connection {
     }
   }
 
-  /** Stop it: the command's whole group, or the HTTP session (ended with a DELETE where the server keeps sessions). */
-  async close(why?: string) {
-    if (this.#closing) return
-    this.#closing = true
+  /**
+   * Stop it: the command's whole group, or the HTTP session (ended with a DELETE where the server keeps sessions).
+   * Resolves once it has stopped (a command's group exited); again, with the same stop.
+   */
+  close(why?: string): Promise<void> {
+    if (this.#closing) return this.#closing
     if (why) this.stoppedBecause = why
     this.#unhook?.()
     this.launch.log.write('stopping')
-    const http = this.#transport instanceof StreamableHTTPClientTransport ? this.#transport : undefined
-    if (http?.sessionId) await http.terminateSession().catch(() => {})
-    await this.client.close().catch(() => {})
-    await this.#transport.close().catch(() => {})
-    this.closed = true
+    return this.#closing = (async () => {
+      const http = this.#transport instanceof StreamableHTTPClientTransport ? this.#transport : undefined
+      if (http?.sessionId) await http.terminateSession().catch(() => {})
+      await this.client.close().catch(() => {})
+      await this.#transport.close().catch(() => {})
+      this.closed = true
+    })()
   }
 
   #closed(exit: Exit | undefined) {
@@ -326,7 +340,7 @@ export class Connection {
     this.closed = true
     this.#unhook?.()
     // Stopped by us (`close()`, or its signal stopped the group): not a crash.
-    if (this.#closing || exit?.stopped) return
+    if (this.#closing !== undefined || exit?.stopped) return
     const how = exit ? (exit.error ?? (exit.signal ? `killed by ${exit.signal}` : `exited with code ${exit.code}`)) : 'the session ended'
     this.launch.log.write(`closed: ${how}`)
     this.launch.onClose?.(exit)

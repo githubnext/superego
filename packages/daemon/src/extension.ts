@@ -37,9 +37,11 @@ export type { AuthFlowEvent } from './auth-flows.ts'
 export type DaemonExtension = ExtensionAbout & {
   /**
    * Called once when it's set up (the daemon starting, before interrupted work resumes; a profile loading). May return a
-   * cleanup, run first at teardown. Given up on (and torn down) when it takes longer than 15s.
+   * cleanup, run first at teardown. Given up on (and torn down) when it takes longer than 15s. A cleanup that returns a
+   * promise is waited for (15s at most) before the daemon closes: return one for work of its own still finishing (a
+   * write, a process stopping), so nothing touches the data folder once the daemon is closed.
    */
-  setup?(superego: DaemonApi): void | (() => void) | Promise<void | (() => void)>
+  setup?(superego: DaemonApi): void | (() => unknown) | Promise<void | (() => unknown)>
 }
 
 /** Identity for type inference: `export default defineDaemonExtension({ name, setup(superego) { … } })`. */

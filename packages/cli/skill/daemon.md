@@ -55,7 +55,10 @@ down, and the profile fails to load, saying so.
 Teardown aborts `superego.signal` first: tie timers, watchers and fetches of your own to it (`watch(path, { signal })`,
 `fetch(url, { signal })`), or return a cleanup. Run commands with `spawnGroup(command, args, { cwd, signal })` (from
 'superego'), not `spawn`: it runs them as a process group, `stop()` (or the signal) ends all of it, SIGTERM then SIGKILL
-after `grace`, and `exited` resolves once none of it is left. Stopping a shell alone leaves what it started running. A cleanup that throws is logged, and the rest still goes. After teardown,
+after `grace`, and `exited` resolves once none of it is left. Stopping a shell alone leaves what it started running. A cleanup that throws is logged, and the rest still goes.
+A cleanup may return a promise: the daemon waits for it (15s at most) before it closes. Return one for work of your own
+still finishing (a write landing, a process exiting), and start nothing new once the signal has aborted, so nothing
+touches the data folder after the daemon has closed. After teardown,
 registering throws, and a live value's `set` and `update` do nothing, so work that outlives it can't publish over the
 next version. An edit to any local file an extension imports (a helper) reloads it with its new code; packages load
 once.

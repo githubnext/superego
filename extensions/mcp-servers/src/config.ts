@@ -28,6 +28,9 @@ export class ConfigFile {
     return file
   }
 
+  /** Resolves once the changes going now have finished, their writes landed. */
+  async settled() { await this.#queue }
+
   /** Change it: `edit` gets the servers as they are now and returns them as they should be. */
   modify<T>(edit: (file: ServersFile) => T | Promise<T>): Promise<T> {
     const run = this.#queue.then(async () => {

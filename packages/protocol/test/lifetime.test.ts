@@ -3,19 +3,36 @@
 import { expect, it, vi } from 'vitest'
 import { Lifetime } from '../src/lifetime.ts'
 
-it('runs every disposer, last first, whatever one throws; reports the failures; and a second dispose does nothing', () => {
+it('runs every disposer, last first, whatever one throws; logs the failures; and a second dispose does nothing', async () => {
   const error = vi.spyOn(console, 'error').mockImplementation(() => {})
   const life = new Lifetime('Extension x')
   const ran: string[] = []
   life.add(() => ran.push('first'))
   life.add(() => { throw new Error('broken') })
   life.add(() => ran.push('last'))
-  const failures = life.dispose()
+  await life.dispose()
   expect(ran).toEqual(['last', 'first'])
-  expect(failures).toHaveLength(1)
+  expect(error).toHaveBeenCalledTimes(1)
   expect(error).toHaveBeenCalledWith('Extension x: a cleanup failed', expect.any(Error))
-  expect(life.dispose()).toEqual([])
+  await life.dispose()
   expect(ran).toEqual(['last', 'first'])
+  expect(error).toHaveBeenCalledTimes(1)
+  error.mockRestore()
+})
+
+it('resolves once every cleanup has finished, those that return a promise included', async () => {
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const life = new Lifetime('Extension x')
+  const ran: string[] = []
+  life.add(() => new Promise<void>((resolve) => setTimeout(() => { ran.push('slow'); resolve() }, 20)))
+  life.add(() => Promise.reject(new Error('broken')))
+  life.add(() => ran.push('sync'))
+  const ending = life.dispose()
+  expect(ran).toEqual(['sync'])
+  expect(life.dispose()).toBe(ending)
+  await ending
+  expect(ran).toEqual(['sync', 'slow'])
+  expect(error).toHaveBeenCalledWith('Extension x: a cleanup failed', expect.objectContaining({ message: 'broken' }))
   error.mockRestore()
 })
 

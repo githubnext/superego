@@ -239,11 +239,17 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       await webAccess.close()
       // Profiles' extensions first, then the bundled ones: each step tried whatever the others did.
       profiles.unloadAll()
-      daemonLife.dispose()
+      const disposed = daemonLife.dispose()
       flows.close()
-      agent.close()
       for (const m of mounted.values()) await m.stop()
+      // Runs stopped before extensions' work is waited for: a tool call cut off as its extension ends was interrupted.
       await harness.close(context)
+      // Their work still finishing (a write, a process stopping): those torn down before (a profile reloaded) too.
+      await disposed
+      await extensions.ended()
+      // Then what's saved last: nothing writes in the data folder once this resolves.
+      await agent.close()
+      await settings.close()
       await agent.rejections.saved()
     },
   }

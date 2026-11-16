@@ -26,7 +26,7 @@ const closing: (() => unknown)[] = []
 beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-oauth-')) })
 afterEach(async () => {
   for (const close of closing.splice(0).reverse()) await close()
-  await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+  await rm(dir, { recursive: true, force: true })
 })
 
 const until = async (check: () => boolean | Promise<boolean>, what = 'it') => {

@@ -5,13 +5,14 @@
 //   life.add(() => watcher.close())             // undone at teardown, last added first
 //   fetch(url, { signal: life.signal })          // aborted at teardown
 //   const set = life.guard('set notes.x', set)   // a no-op once torn down, with a warning
-//   life.dispose()                               // every step tried; the failures logged and returned; again does nothing
+//   await life.dispose()                         // every step tried, the failures logged; resolves once all have finished
 
 /** One owned lifetime: its disposers, a signal aborted when it ends, and a guard for work that outlives it. */
 export class Lifetime {
   readonly #controller = new AbortController()
   readonly #signal = contained(this.#controller.signal, () => this.name)
   #steps: (() => unknown)[] = []
+  #ended: Promise<void> | undefined
   readonly #warned = new Set<string>()
   /** Who it is, in what it says: `Extension notes`. */
   readonly name: string
@@ -46,26 +47,24 @@ export class Lifetime {
   }
 
   /**
-   * End it: abort the signal, then run every disposer, last added first. Each is tried whatever the others did; the
-   * failures are logged and returned. Ending it again does nothing.
+   * End it: abort the signal, then run every disposer, last added first. Each is tried whatever the others did, and the
+   * failures are logged. Resolves once every one has finished, those that return a promise included: what it owned is
+   * done with then (a write it made has landed). Ending it again gives the same promise.
    */
-  dispose(): unknown[] {
-    const errors: unknown[] = []
-    if (!this.disposed) {
-      try { this.#controller.abort() } catch (error) { errors.push(error) }
-    }
+  dispose(): Promise<void> {
+    if (this.#ended) return this.#ended
+    const failed = (error: unknown) => console.error(`${this.name}: a cleanup failed`, error)
+    try { this.#controller.abort() } catch (error) { failed(error) }
+    const running: Promise<unknown>[] = []
     for (const step of this.#steps.splice(0).reverse()) {
       try {
         const done = step()
-        if (done && typeof (done as PromiseLike<unknown>).then === 'function') {
-          void Promise.resolve(done).catch((error: unknown) => console.error(`${this.name}: a cleanup failed`, error))
-        }
+        if (done && typeof (done as PromiseLike<unknown>).then === 'function') running.push(Promise.resolve(done).catch(failed))
       } catch (error) {
-        errors.push(error)
+        failed(error)
       }
     }
-    for (const error of errors) console.error(`${this.name}: a cleanup failed`, error)
-    return errors
+    return this.#ended = Promise.all(running).then(() => {})
   }
 }
 

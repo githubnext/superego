@@ -382,7 +382,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
    * `agentExtension` installs an agent part, and gives it to every thread it's for when `always`: the installed part
    * (a profile's are renamed), how to undo it, and how to put another in its place.
    */
-  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension, always: boolean) => Installed, profiles?: Set<string>, from: Source = { source: 'bundled' }): Promise<() => void> {
+  async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension, always: boolean) => Installed, profiles?: Set<string>, from: Source = { source: 'bundled' }): Promise<() => Promise<void>> {
     const report = (state: 'failed' | 'refused' | 'timed out', error: string) => {
       failures.set(from.file ?? extension.name, { ...manifestOf(extension), ...(extension.title ? { title: extension.title } : {}), ...from, ...(profiles ? { profiles: [...profiles] } : {}), state, error, registered: {}, watches: [] })
     }
@@ -599,7 +599,8 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         remove: (id) => later.relay().list.remove(id),
       },
     }
-    const teardown = () => { life.dispose() }
+    /** Torn down: resolves once everything it undoes has finished (see `ended`). */
+    const teardown = () => ending(extension.name, life.dispose())
     // Given up on when it takes too long: torn down (its signal aborted, what it registered undone, what it registers
     // after refused), so the profiles waiting behind it load. A cleanup it returns after that runs at once.
     const setup = Promise.resolve().then(() => extension.setup?.(api))
@@ -608,7 +609,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     try {
       const cleanup = await Promise.race([setup, timedOut])
       if (cleanup === 'timeout') {
-        void setup.then((late) => { if (typeof late === 'function') late() }).catch((error: unknown) => console.error(`Extension ${extension.name}: its setup, given up on, failed after:`, error))
+        void ending(extension.name, setup.then((late) => { if (typeof late === 'function') return late() }).catch((error: unknown) => console.error(`Extension ${extension.name}: its setup, given up on, failed after:`, error)))
         throw Object.assign(new Error(`its setup didn't finish in ${host.inTime}, so it's torn down. Keep setup quick, and don't await work that loads a profile (starting or reading a thread) in it`), { timedOut: true })
       }
       if (cleanup) undo(cleanup, 'a cleanup')
@@ -625,6 +626,24 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     record.ready = true
     announce()
     return teardown
+  }
+
+  /** Extensions' teardowns still finishing (a write landing, a process exiting), each given `setupTimeout` at most. */
+  const endings = new Set<Promise<void>>()
+  function ending(name: string, done: Promise<unknown>): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const late = new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        console.error(`Extension ${name}: its teardown didn't finish in ${host.inTime}; going on without it`)
+        resolve()
+      }, host.setupTimeout)
+    })
+    const ended: Promise<void> = Promise.race([done.then(() => {}, () => {}), late]).finally(() => {
+      clearTimeout(timer)
+      endings.delete(ended)
+    })
+    endings.add(ended)
+    return ended
   }
 
   /**
@@ -747,6 +766,8 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     publishViews, agentOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
     /** The daemon closing: switches turned meanwhile change nothing. */
     close: () => unlisten(),
+    /** Every teardown so far finished (or given up on): those of extensions torn down earlier too, a profile's reloaded. */
+    async ended() { while (endings.size) await Promise.all(endings) },
     /** The hooks that are for a thread, in order. */
     hooksFor: (without: Set<string>, meta: ThreadMeta) => threadHooks.filter((h) => appliesTo(h, without, meta)),
     /** Whether any extension has a `hook` at all. */

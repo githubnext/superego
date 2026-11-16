@@ -21,7 +21,7 @@ import type { Threads } from './threads.ts'
  * ProfileDaemonExtension), and torn down when the last of them lets it go. `profiles`: their folders, whose threads
  * its pane kinds are for; `parts`: the agent parts it gave, which each of them selects.
  */
-type Shared = { key: string; file: string; profiles: Set<string>; parts: Extension[]; teardown: () => void }
+type Shared = { key: string; file: string; profiles: Set<string>; parts: Extension[]; teardown: () => Promise<void> }
 
 export function createProfileHost(host: Host, extensions: ExtensionHost, later: { threads(): Threads }) {
   const { registry, mounted, changed, userProfiles, allowances, profileKeys, settings, router, folderOf } = host
@@ -48,7 +48,7 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
   async function share(item: ProfileDaemonExtension, dir: string) {
     let entry = shared.get(item.key)
     if (!entry) {
-      const made: Shared = { key: item.key, file: item.file, profiles: new Set(), parts: [], teardown: () => {} }
+      const made: Shared = { key: item.key, file: item.file, profiles: new Set(), parts: [], teardown: async () => {} }
       made.teardown = await extensions.setUp(item.extension, (part, always) => {
         let named = { ...part, name: `${item.prefix}/${part.name}` }
         const uninstall = install(named)
@@ -76,7 +76,7 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
         extensions.publishViews()
         if (used.profiles.size) return
         shared.delete(used.key)
-        used.teardown()
+        return used.teardown()
       },
     }
   }
