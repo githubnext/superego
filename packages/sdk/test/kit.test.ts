@@ -67,6 +67,23 @@ describe('a daemon with a scripted model', () => {
     await expect(testDaemon({ extensions: [one, two] })).rejects.toThrow(/already set up/)
   })
 
+  it('answers with the echo model, from the folder agents share, to a second client too', async () => {
+    const seen = defineDaemonExtension({ name: 'seen', setup(superego) { superego.method('seen.agents', () => superego.agentsDir) } })
+    const daemon = await testDaemon({ extensions: [seen], model: 'echo' })
+    expect(await daemon.call('seen.agents')).toBe(daemon.agentsDir)
+    expect(daemon.app.id).toMatch(/^superego-test-/)
+    const thread = await daemon.thread('say this back')
+    expect(await daemon.transcript(thread.id)).toContain('say this back')
+    // Another window's connection sees the same machine.
+    const other = await daemon.connect()
+    expect((await other.peer.call<{ id: string }[]>('thread.list', {})).map((t) => t.id)).toEqual([thread.id])
+    other.close()
+    // Restarted, it still echoes.
+    const again = keep(await daemon.restart())
+    await again.send(thread.id, 'and this')
+    expect(await again.transcript(thread.id)).toContain('and this')
+  })
+
   it('keeps threads and state across a restart, with a new script', async () => {
     const first = await testDaemon({ profile: PROFILE, model: [say('Hello.')] })
     const thread = await first.thread('hi')

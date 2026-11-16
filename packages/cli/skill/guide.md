@@ -245,11 +245,15 @@ it('queues builds and shows the thread its own', async () => {
 ```
 
 - **`testDaemon({ profile, extensions, model })`**: `profile` is a folder (copied) or files by path; `extensions` are
-  set up as the app's own. `model` is the model's turns in order: `say(text)`, `callTool(name, args)`,
-  `callTools(…)`. It has `thread(prompt)`, `send`, `idle`, `transcript`, `call`, `dispatch`, `watch(key, { scope })`,
-  `extensions` (the manifests of those set up and on there, kept current: where yours shows) and `features` (protocol
-  features only); `edit(path, content)` then `reload()` to load a change (a helper edited alone loads too);
-  `restart({ model })` on the same folder; `close()`.
+  set up as the app's own (a factory's with the options a test needs: `ordersExtension({ clock })`). `model` is the
+  model's turns in order: `say(text)`, `callTool(name, args)`, `callTools(…)`; or `'echo'`, a model that answers every
+  request with the last user message (side calls to the thread's model too). `dataDir` runs it on a folder you made
+  (and keeps it). It has `thread(prompt)`, `send`, `idle`, `transcript`, `call`, `dispatch`, `watch(key, { scope })`,
+  `until(check)`, `extensions` (the manifests of those set up and on there, kept current: where yours shows) and
+  `features` (protocol features only); `app` (its own id), `dataDir` and `agentsDir` (skills go in `skills/`); `peer`,
+  the connection (`Channels.of(daemon.peer)` opens a channel), and `connect()` for another client's, as a second
+  window; `edit(path, content)` then `reload()` to load a change (a helper edited alone loads too); `restart({ model })`
+  on the same folder; `close()`.
 - **`isRunning(pid)`**: whether a process is still there, to check that what an extension started stopped with it.
   The queue examples' tests cancel a build whose command starts a `sleep` of its own, and check it's gone once the
   build says cancelled.

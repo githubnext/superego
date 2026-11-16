@@ -133,7 +133,10 @@ Bundled extensions get more than a profile's:
 Use `superego/testing` (`@superego/sdk/testing`; "Testing" in `guide.md`): `testDaemon({ extensions:
 [yours], model: [callTool(…), say(…)] })` runs the daemon half against a real daemon with a scripted model, and
 `mountUi({ extensions: [yours], machines: [fakeMachine({ … }) or daemonMachine(daemon)] })` the UI half in the window's
-own registry and shell; `extensions/agent-ui/test/daemon.test.ts` is one. Older tests set up the same by hand (`extensions/tasks/test/daemon.test.ts`).
+own registry and shell. No test opens a daemon by hand: `extensions/tasks/test/daemon.test.ts` is a short one to copy,
+`extensions/agent-ui/test/daemon.test.ts` a longer one, `extensions/terminal/test/daemon.test.ts` one that opens
+channels. What a test needs that `testDaemon` lacks goes in it (`packages/sdk/src/testing`), not in the test. A fixed
+sleep is only for "nothing happened" where nothing says so, with a comment.
 
 Pure logic (parsing, dividing work, a composer provider's `word`, a `sentWith` reader) gets plain unit tests; see
 `extensions/skills/test/names.test.ts`. `pnpm test` runs everything under `packages/*/test` and

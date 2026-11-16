@@ -4,7 +4,7 @@ import { cp, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { connectSocket, listen, openDaemon, type DaemonExtension } from '@superego/daemon'
-import { defineApp, envName, PROTOCOL_VERSION, type ExtensionManifest, type Hello, type Json, type Notifications, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { defineApp, envName, PROTOCOL_VERSION, type AppConfig, type ExtensionManifest, type Hello, type Json, type Notifications, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import type { Turn } from './model.ts'
 
 /** What `testDaemon` sets up: your extensions or your profile, and the model's script. */
@@ -18,8 +18,11 @@ export type TestDaemonOptions = {
   profile?: string | Record<string, string>
   /** Its name: `default` unless given. */
   profileName?: string
-  /** The model's turns, one per request, in order; after the last, it says it ran out. */
-  model?: Turn[]
+  /**
+   * The model's turns, one per request, in order; after the last, it says it ran out. `'echo'`: a model that answers
+   * every request with the last user message, for as many turns as it's asked (a side call to the thread's model too).
+   */
+  model?: Turn[] | 'echo'
   /** The daemon's data folder: a new one in tmp unless given (`restart` keeps it). */
   dataDir?: string
   /** How long a setup may take (15s in the app): shorter, to test one that hangs. */
@@ -40,16 +43,22 @@ export type Watched<T> = {
 
 /** A daemon running for a test, and a client of it: start threads, send them messages, watch values, run actions. */
 export type TestDaemon = {
+  /** The app it runs as: its own id, so its environment, and the names it gives (branches, `.<id>` folders), are its own. */
+  app: AppConfig
   /** Its data folder. */
   dataDir: string
+  /** The folder agents share (`<dataDir>/agents`): skills in `skills/`. */
+  agentsDir: string
   /** The profile's folder there (the copy), if it was given one. */
   profileDir: string | undefined
   /** What it said at `hello`, kept current: its protocol features. */
   readonly features: string[]
   /** The extensions set up there, each at its version. */
   readonly extensions: ExtensionManifest[]
-  /** The connection, to call anything a client can. */
+  /** The connection, to call anything a client can (open a channel: `Channels.of(daemon.peer)`). */
   peer: RpcPeer
+  /** Another client's connection (said hello), as a second window's: closed with the daemon, or by `close()` before. */
+  connect(): Promise<{ peer: RpcPeer; close(): void }>
   /** Call a method, as a client would (`thread.list`, an extension's `<name>.<method>`). */
   call<T = unknown>(method: string, params?: unknown): Promise<T>
   /** Run an action by id, as the window would (`action.run`). */
@@ -70,8 +79,8 @@ export type TestDaemon = {
   reload(): Promise<void>
   /** Wait until `check` holds, trying every 25ms. */
   until(check: () => boolean | Promise<boolean>, what?: string, timeout?: number): Promise<void>
-  /** Stop it and start it again on the same folder (threads, state and the profile kept), with a new script. */
-  restart(options?: { model?: Turn[] }): Promise<TestDaemon>
+  /** Stop it and start it again on the same folder (threads, state and the profile kept), with a new script (the echo model stays). */
+  restart(options?: { model?: Turn[] | 'echo' }): Promise<TestDaemon>
   /** Stop it, and remove its folder (unless it was given one). */
   close(): Promise<void>
 }
@@ -113,9 +122,11 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
     name: 'Superego test', id: (options as { appId?: string }).appId ?? `superego-test-${process.pid}-${++opened}`,
     ...(options.callbackPort ? { callbackPort: options.callbackPort } : {}),
   })
+  const model = options.model ?? []
   const turns = join(dataDir, `turns-${++opened}.jsonl`)
-  await writeFile(turns, (options.model ?? []).map((turn) => JSON.stringify(turn)).join('\n') + '\n')
-  process.env[envName(app, 'MODEL')] = `replay:${turns}`
+  if (model !== 'echo') await writeFile(turns, model.map((turn) => JSON.stringify(turn)).join('\n') + '\n')
+  // The echo model is pi-durable's faux provider.
+  process.env[envName(app, 'MODEL')] = model === 'echo' ? 'faux' : `replay:${turns}`
   process.env[envName(app, 'REPLAY_SPEED')] = '0'
   const work = join(dataDir, 'work')
   await mkdir(work, { recursive: true })
@@ -128,6 +139,8 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
   const server = await listen(daemon, socket)
   const { peer, socket: connection } = await connectSocket(socket)
   let hello = await peer.call<Hello>('hello', { client: 'superego/testing', version: PROTOCOL_VERSION })
+  /** The other clients' connections, closed with it. */
+  const others = new Set<{ destroy(): void }>()
   peer.on('features.changed', ({ features, extensions }: Notifications['features.changed']) => { hello = { ...hello, features, extensions } })
 
   const until = async (check: () => boolean | Promise<boolean>, what = 'the condition', timeout = 15_000) => {
@@ -152,7 +165,13 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
   }
 
   const test: TestDaemon = {
-    dataDir, profileDir, peer,
+    app, dataDir, agentsDir: join(dataDir, 'agents'), profileDir, peer,
+    async connect() {
+      const { peer: other, socket: connection } = await connectSocket(socket)
+      others.add(connection)
+      await other.call<Hello>('hello', { client: 'superego/testing', version: PROTOCOL_VERSION })
+      return { peer: other, close: () => { others.delete(connection); connection.destroy() } }
+    },
     get features() { return hello.features },
     get extensions() { return hello.extensions },
     call: (method, params = {}) => peer.call(method, params),
@@ -211,7 +230,7 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
     until,
     async restart({ model } = {}) {
       await stop()
-      return testDaemon({ ...options, dataDir, model: model ?? [], appId: app.id } as TestDaemonOptions).then((next) => {
+      return testDaemon({ ...options, dataDir, model: model ?? (options.model === 'echo' ? 'echo' : []), appId: app.id } as TestDaemonOptions).then((next) => {
         // The folder is this test's still: the new one removes it when it closes, unless it was given.
         if (!given) (next as { close(): Promise<void> }).close = closeAndRemove(next.close)
         return next
@@ -226,6 +245,7 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
   async function stop() {
     if (stopped) return
     stopped = true
+    for (const other of others) other.destroy()
     connection.destroy()
     server.close()
     await daemon.close()
