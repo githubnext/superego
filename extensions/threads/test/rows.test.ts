@@ -27,6 +27,9 @@ it('says what a run of thread tools did, and reads each row', () => {
   const failed = renderToStaticMarkup(createElement(DescribedCall, { row: rowOf('thread_start'), call: call('thread_start', { title: 'Dates' }, { state: 'error', result: { text: 'no', isError: true } }) }))
   expect(failed).toContain('Couldn’t start a thread')
   expect(failed).toContain('>Dates<')
+  // A thread read or messaged is named as itself, by the tools' `thread` param.
+  const named = rowOf('thread_read').subject?.(call('thread_read', { thread: '42' })) as { props?: { id?: string } } | undefined
+  expect(named?.props?.id).toBe('42')
   // Its own, not another's: a thread that goes without the tools (Ego) still shows them.
   expect(toolRow(registry, 'thread_read', { machine: 'local', thread: { ...thread, without: ['thread-tools'] } }).verbs?.[0]).toBe('Read')
 })

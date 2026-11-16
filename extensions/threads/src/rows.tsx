@@ -12,7 +12,7 @@ export function registerRows(superego: UiApi) {
   // is named in the row, so what the call said back would only repeat it.
   const other = ({ call, result }: ToolRowCall) => call.name === 'thread_start'
     ? (result?.details as { id?: string } | undefined)?.id
-    : typeof call.arguments.id === 'string' ? call.arguments.id : undefined
+    : typeof call.arguments.thread === 'string' ? call.arguments.thread : undefined
   const thread = (c: ToolRowCall) => { const id = other(c); return id ? <ThreadRef machine={c.machine.id} id={id} className="row__thread" /> : undefined }
   const quiet = (c: ToolRowCall) => other(c) && c.state === 'done' ? null : undefined
   superego.tool('thread_start', {
