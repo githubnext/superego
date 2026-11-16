@@ -96,7 +96,7 @@ project    a git repository (its worktrees too) or a folder, on a machine
 | `⌃I` | Focus the prompt (`Esc` there leaves it for the thread, to read and scroll; typing goes back to the prompt) |
 | `⌃D` `⌃U` | Scroll what has the focus (the thread, from its prompt) half a page down / up |
 | `⌃O` | The links in the thread, to follow from the keyboard |
-| `⌘/` | Hide or show the sidebar |
+| `⌘/` | Show or hide the sidebar |
 | `⌘⇧E` | Archive the thread shown |
 | `⌘⇧T` | The file tree beside the editor |
 | `⌘⇧D` | Show changes |

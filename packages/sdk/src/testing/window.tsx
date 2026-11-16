@@ -249,8 +249,8 @@ const isDaemon = (m: TestMachine | TestDaemon): m is TestDaemon => 'peer' in m
  * press keys, change a machine and see what it does. Unmount it after: that takes its DOM away again.
  *
  *   const ui = await mountUi({ extensions: [builds], machines: [fakeMachine({ values: { 'builds.queue': [] } })] })
- *   const aside = await ui.render({ place: 'aside', thread: thread.id })
- *   expect(aside.text()).toContain('No builds queued')
+ *   const beside = await ui.render({ place: 'beside', thread: thread.id })
+ *   expect(beside.text()).toContain('No builds queued')
  *   await ui.unmount()
  */
 export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {

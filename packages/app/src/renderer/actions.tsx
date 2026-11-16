@@ -140,7 +140,7 @@ declare const __SUPEREGO_DEV_SERVER__: string | undefined
 export const coreActions = (app: AppConfig): WindowAction[] => [
   defineWindowAction({ id: 'app.palette', title: 'Commands', keys: 'mod+k', run: (_p, c) => c.togglePalette() }),
   defineWindowAction({ id: 'app.navigator', title: 'Go to a project, thread or pane', keys: 'mod+l', run: (_p, c) => c.toggleNavigator() }),
-  defineWindowAction({ id: 'app.sidebar', title: 'Toggle sidebar', keys: 'mod+/', run: (_p, c) => c.toggleSidebar() }),
+  defineWindowAction({ id: 'app.sidebar', title: 'Show or hide sidebar', keys: 'mod+/', run: (_p, c) => c.toggleSidebar() }),
   // Through every thread, in the sidebar's order, across projects; and between projects, at the thread last shown in each.
   defineWindowAction({ id: 'thread.next', title: 'Next thread', keys: 'mod+shift+]', run: (_p, c) => stepThread(c, 1) }),
   defineWindowAction({ id: 'thread.previous', title: 'Previous thread', keys: 'mod+shift+[', run: (_p, c) => stepThread(c, -1) }),

@@ -23,7 +23,7 @@ const HELP = [
   '  "place": { "<view>": "<place>" | ["<place>", …] | null },   null hides it',
   '  "order": { "<place>": ["<view>", …] },                       first to last; the rest after',
   '  "narrow": { "place": …, "order": … },                         on a phone, on top of the above',
-  'For example: { "place": { "threads.details": "aside", "ego.button": null }, "order": { "pane": ["git.changes"] } }',
+  'For example: { "place": { "threads.details": "beside", "ego.button": null }, "order": { "pane": ["git.changes"] } }',
   `Places: ${PLACES.join(', ')}.`,
 ]
 

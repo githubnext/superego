@@ -1,4 +1,4 @@
-// Screenshots of the window's layout (run by test/look.sh): the sidebar open and folded to dots; the thread
+// Screenshots of the window's layout (run by test/look.sh): the sidebar shown and hidden (the threads as dots); the thread
 // alone (and dragged narrower) and with Changes beside it (and a file past it); a long title, parent and branch; thread
 // details, their menu and the layout's file beside the thread; a phone, its drawer open, a data view in it, the thread's sheet; a data view
 // as a space; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
@@ -70,8 +70,8 @@ void (async () => {
   await both('rail-menu')
   await run(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
   await until(`!document.querySelector('.view-menu')`, 'rail menu closed')
-  // The sidebar's edge: dragged to its least and its most; past its least, dimmed as letting go would fold it; let go
-  // there, folded to dots; dragged out from the rail, the list again; a double click puts its width back.
+  // The sidebar's edge: dragged to its least and its most; past its least, dimmed as letting go would hide it; let go
+  // there, hidden (the threads as dots); dragged out from the rail, the list again; a double click puts its width back.
   const sidebarWidth = () => run(`document.querySelector('.app__sidebar')?.offsetWidth ?? 0`)
   const edge = (dx, { up = true } = {}) => run(`(() => { const h = document.querySelector('.app__edge'); const r = h.getBoundingClientRect(); const x = r.left, y = r.top + r.height / 2
     h.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: x, clientY: y }))
@@ -89,11 +89,11 @@ void (async () => {
   await both('sidebar-420')
   await edge(120 - await sidebarWidth(), { up: false })
   await sleep(300)
-  await both('sidebar-folding')
+  await both('sidebar-hiding')
   await run(`window.dispatchEvent(new PointerEvent('pointerup', { clientX: 0, clientY: 0 }))`)
-  await until(`!!document.querySelector('.threads-rail') && !document.querySelector('.app.is-folding')`, 'folded to dots')
+  await until(`!!document.querySelector('.threads-rail') && !document.querySelector('.app.is-hiding')`, 'hidden, the threads as dots')
   await sleep(300)
-  await both('sidebar-folded')
+  await both('sidebar-hidden')
   await edge(300)
   await until(`!!document.querySelector('.threads-project')`, 'dragged out from the rail')
   await sleep(300)

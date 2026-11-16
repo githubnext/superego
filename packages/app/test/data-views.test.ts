@@ -11,9 +11,9 @@ import { resolveLayout } from '../src/renderer/layout.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
 const thread = (more: Partial<ThreadInfo> = {}): ThreadInfo => ({ id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' }, ...more })
-const recent: DataViewInfo = { id: 'orders.recent', extension: 'orders', title: 'Recent orders', icon: 'list', context: 'window', fits: ['space', 'aside'], default: 'space', value: 'orders.recent' }
-const notes: DataViewInfo = { id: 'orders.notes', extension: 'orders', title: 'Notes', context: 'thread', fits: ['aside', 'pane'], default: 'pane', method: 'orders.notes' }
-const board: DataViewInfo = { id: 'staff.board', extension: 'staff', title: 'Board', context: 'thread', fits: ['aside', 'pane'], default: 'aside', value: 'staff.board', profiles: ['/p/staff'] }
+const recent: DataViewInfo = { id: 'orders.recent', extension: 'orders', title: 'Recent orders', icon: 'list', context: 'window', fits: ['space', 'beside'], default: 'space', value: 'orders.recent' }
+const notes: DataViewInfo = { id: 'orders.notes', extension: 'orders', title: 'Notes', context: 'thread', fits: ['beside', 'pane'], default: 'pane', method: 'orders.notes' }
+const board: DataViewInfo = { id: 'staff.board', extension: 'staff', title: 'Board', context: 'thread', fits: ['beside', 'pane'], default: 'beside', value: 'staff.board', profiles: ['/p/staff'] }
 
 describe('data views in the registry', () => {
   it('makes each a view the layout places, and a thread view that fits a pane a pane kind', () => {
@@ -51,9 +51,9 @@ describe('data views in the registry', () => {
     registry.setDataViews('local', [board])
     const placed = resolveLayout(registry.views, undefined)
     const mine = thread({ profile: { name: 'staff', dir: '/p/staff', scope: 'user' } })
-    expect(viewsIn(registry, placed, 'aside', { machine: 'local', thread: mine }).map((v) => v.id)).toEqual(['staff.board'])
-    expect(viewsIn(registry, placed, 'aside', { machine: 'local', thread: thread() })).toEqual([])
-    expect(viewsIn(registry, placed, 'aside', { machine: 'box', thread: mine })).toEqual([])
+    expect(viewsIn(registry, placed, 'beside', { machine: 'local', thread: mine }).map((v) => v.id)).toEqual(['staff.board'])
+    expect(viewsIn(registry, placed, 'beside', { machine: 'local', thread: thread() })).toEqual([])
+    expect(viewsIn(registry, placed, 'beside', { machine: 'box', thread: mine })).toEqual([])
   })
 
   it("leaves a view an extension's UI declares to that UI", () => {
@@ -146,8 +146,8 @@ describe('what a machine sends, checked where it lands', () => {
   })
 
   it("keeps a profile's out of spaces, and an id to one declaration per profile", () => {
-    const profiled = { ...good, context: 'thread', fits: ['space', 'aside'], profiles: ['/p'] }
-    expect(checkDataViews([profiled], on('orders')).views.map((v) => v.fits)).toEqual([['aside']])
+    const profiled = { ...good, context: 'thread', fits: ['space', 'beside'], profiles: ['/p'] }
+    expect(checkDataViews([profiled], on('orders')).views.map((v) => v.fits)).toEqual([['beside']])
     expect(checkDataViews([{ ...profiled, fits: ['space'] }], on('orders')).views).toEqual([])
     expect(checkDataViews([good, good, profiled], on('orders')).views).toHaveLength(2)
   })
@@ -212,7 +212,7 @@ describe("a data view's buttons", () => {
 
 describe('a data view that throws as it draws', () => {
   it('says so in its place, with Try again', () => {
-    const boundary = new DataViewBoundary({ id: 'orders.recent', place: 'aside', children: null })
+    const boundary = new DataViewBoundary({ id: 'orders.recent', place: 'beside', children: null })
     boundary.state = DataViewBoundary.getDerivedStateFromError(new Error('boom'))
     const html = renderToStaticMarkup(boundary.render() as never)
     expect(html).toContain('orders.recent couldn’t be drawn')

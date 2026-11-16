@@ -31,7 +31,7 @@ import { Lifetime } from '@superego/protocol'
  */
 export type BehaviourSlot =
   /** Among the chips that say where a thread works, after the title's: a branch, say. Draw a `titlebar__chip`. */
-  | 'thread.crumb'
+  | 'header.chips'
   /**
    * After a thread's title in the sidebar's list: a small mark of something about it (its own branch, say). Draw a
    * `thread-badge`, an icon (about 12px) with a `title` for its tooltip; or nothing, as for most threads.
@@ -40,7 +40,7 @@ export type BehaviourSlot =
   /** Above the composer: things waiting on the user, suggestions. */
   | 'composer.above'
   /** In a thread's details (⌘I), after what the core says of it: what an extension knows of the thread. Draw a `<h5>` and a `<dl>`, or nothing. 1.7. */
-  | 'thread.details'
+  | 'details.section'
   /** Beside a file being edited: a file tree, an outline. `open` shows another file there (`beside`: in a pane of its own). */
   | 'editor.side'
   /** In a file editor's bar: small buttons. */
@@ -53,10 +53,10 @@ export type EditorSlotProps = { machine: MachineEntry; thread: ThreadInfo; path:
 
 /** What each slot's component is drawn with, by slot. */
 export type SlotProps = {
-  'thread.crumb': { machine: MachineEntry; thread: ThreadInfo }
+  'header.chips': { machine: MachineEntry; thread: ThreadInfo }
   'thread.badge': { machine: MachineEntry; thread: ThreadInfo }
   'composer.above': { machine: MachineEntry; thread: ThreadInfo }
-  'thread.details': { machine: MachineEntry; thread: ThreadInfo }
+  'details.section': { machine: MachineEntry; thread: ThreadInfo }
   'editor.side': EditorSlotProps
   'editor.bar': EditorSlotProps
   'overlay': Record<string, never>
@@ -75,10 +75,10 @@ export type ViewProps<C extends ViewContext = ViewContext> = C extends 'thread'
 
 /**
  * What a space draws in the rail instead of the button that opens it: whether it's the open one; whether the sidebar is
- * folded, the open one then shown in the rail alone (as its slim form, if it has one: a list folded into dots); and a
- * way to show it in full (`show()`) or fold it (`show(false)`).
+ * hidden, the open one then shown in the rail alone (with what it draws there while hidden, if anything: a list as
+ * dots); and a way to show the sidebar (`show()`) or hide it (`show(false)`).
  */
-export type SpaceRailProps = { open: boolean; folded: boolean; show(open?: boolean): void }
+export type SpaceRailProps = { open: boolean; sidebarHidden: boolean; show(open?: boolean): void }
 
 /**
  * A view: UI an extension offers, which the layout puts in places. `fits` says which places it can be
@@ -87,7 +87,7 @@ export type SpaceRailProps = { open: boolean; folded: boolean; show(open?: boole
 export type View<C extends ViewContext = ViewContext> = {
   title: string
   icon?: ComponentType<{ size?: number; 'aria-hidden'?: boolean }>
-  /** `thread`: drawn only where there's a thread (aside, pane, header; in a space, the one shown). */
+  /** `thread`: drawn only where there's a thread (beside, pane, header; in a space, the one shown). */
   context: C
   /** The places it can be drawn in. A `thread` view that fits `pane` is a pane kind too, of its id. */
   fits: Place[]
@@ -99,8 +99,8 @@ export type View<C extends ViewContext = ViewContext> = {
   /** Order among the views in a place (100 when unset; then as registered); the user's layout comes first. */
   order?: number
   component: ComponentType<ViewProps<C>>
-  /** As a `space`: what it draws in the rail instead of a button with its icon (folded, its slim form: a list as dots). */
-  rail?: ComponentType<SpaceRailProps>
+  /** As a `space`: what it draws in the rail instead of a button with its icon (the sidebar hidden, a list as dots, say). */
+  railButton?: ComponentType<SpaceRailProps>
   /** As a pane: its width to start with, as a share of the row. */
   width?: number
 }
@@ -314,7 +314,7 @@ export type UiApi = {
    * it. A profile's views fit only the places that show a thread, and only its own threads.
    */
   view<C extends ViewContext>(id: string, view: View<C>): void
-  /** A component in a slot whose place behaviour decides (`thread.crumb`, `composer.above`, the editor's, `overlay`), in `order`. */
+  /** A component in a slot whose place behaviour decides (`header.chips`, `composer.above`, the editor's, `overlay`), in `order`. */
   slot<S extends BehaviourSlot>(slot: S, component: ComponentType<SlotProps[S]>, options?: { order?: number }): void
   /**
    * Hear what happens in the window (see `WindowEvents`): a thread's status changing, the thread shown changing, the
@@ -476,7 +476,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}),
       ...(version ? { version } : {}), ...(api ? { api } : {}), ...(capabilities?.length ? { capabilities } : {}),
     })),
-    slots: { 'thread.crumb': [], 'thread.badge': [], 'composer.above': [], 'thread.details': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
+    slots: { 'header.chips': [], 'thread.badge': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
     views: [], dataViews: {}, tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
@@ -798,7 +798,7 @@ export function Slot<S extends BehaviourSlot>({ name, props }: { name: S; props:
   const { machine, thread } = props as { machine?: MachineEntry; thread?: ThreadInfo }
   const entries = seenIn(registry.slots[name] as Owned<{ component: ComponentType<SlotProps[S]> }>[], machine && thread ? { machine: machine.id, thread } : undefined)
   return <>{entries.map(({ component: Component, owner }, index) =>
-    <Contained key={`${owner.profile ?? ''}/${owner.extension}-${index}`} name={owner.extension} inline={name === 'thread.crumb' || name === 'thread.badge' || name === 'editor.bar'}><Component {...props} /></Contained>)}</>
+    <Contained key={`${owner.profile ?? ''}/${owner.extension}-${index}`} name={owner.extension} inline={name === 'header.chips' || name === 'thread.badge' || name === 'editor.bar'}><Component {...props} /></Contained>)}</>
 }
 
 // ── Views in places ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -879,14 +879,14 @@ export function PlacedViews({ place, machine, thread, frame }: {
 }
 
 /**
- * The scope a view's placement is read and changed in: the scope its place is drawn in. A thread's places (`aside`,
+ * The scope a view's placement is read and changed in: the scope its place is drawn in. A thread's places (`beside`,
  * `pane`, `header`) are that thread's (`where`); the window's places are the window's, whatever thread asks.
  */
 export const placeScope = (place: Place, where: Where | undefined): Where | undefined => THREAD_PLACES.includes(place) ? where : undefined
 
 /**
  * Where every view is now, each place as it's drawn: a thread's places for `where`, else for the thread the asking
- * view is drawn for, else the selected thread's (the window's aside is its); the window's places for the window.
+ * view is drawn for, else the selected thread's (the window's column beside is its); the window's places for the window.
  * `where` is that thread, to change them in (`layout.place`'s `machine` and `thread`).
  */
 export function usePlaced(where?: Where): { placed: Placed; narrow: boolean; where: Where | undefined } {

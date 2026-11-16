@@ -17,7 +17,7 @@ export const sizeOf = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1
 
 export function registerProfileUi(core: UiApi) {
   core.slot('composer.above', ProfileUiNotice, { order: 50 })
-  core.slot('thread.crumb', ProfileUiMarker)
+  core.slot('header.chips', ProfileUiMarker)
   core.pane('profile-source', {
     title: (pane) => (pane.params as { path?: string } | undefined)?.path?.split('/').at(-1) ?? 'Profile UI', icon: FileTextIcon, file: true, component: SourcePane,
   })

@@ -9,8 +9,8 @@ import type { Status } from './status.ts'
 export const DATA_VIEWS = 'view.list'
 
 /** The places a data view can be drawn in: a space (on a phone, the drawer), beside the thread, a pane. */
-export type DataPlace = 'space' | 'aside' | 'pane'
-export const DATA_PLACES: DataPlace[] = ['space', 'aside', 'pane']
+export type DataPlace = 'space' | 'beside' | 'pane'
+export const DATA_PLACES: DataPlace[] = ['space', 'beside', 'pane']
 
 /** The glyphs a data view, or a button in one, can take, by name. */
 export const DATA_ICONS = ['list', 'table', 'folder', 'file', 'bell', 'check', 'gear', 'globe', 'sparkle', 'terminal', 'wrench', 'chats', 'archive', 'columns'] as const
@@ -30,7 +30,7 @@ export type DataView = {
   title: string
   icon?: DataIcon
   context: 'window' | 'thread'
-  /** The places it can be drawn in. A `window` view fits only `space` and `aside`. */
+  /** The places it can be drawn in. A `window` view fits only `space` and `beside`. */
   fits: DataPlace[]
   /** Where it goes unless the user's layout says otherwise; none: offered, not placed. */
   default?: DataPlace | DataPlace[] | false
@@ -88,7 +88,7 @@ export function dataViewProblem(view: DataView): string | undefined {
   if (view.context !== 'window' && view.context !== 'thread') return 'needs a context, window or thread'
   if (!Array.isArray(view.fits) || !view.fits.length) return 'fits no place'
   const bad = view.fits.find((p) => !DATA_PLACES.includes(p) || (view.context === 'window' && p === 'pane'))
-  if (bad) return `can't be drawn in ${bad}${view.context === 'window' ? ' (a window view fits space and aside)' : ''}`
+  if (bad) return `can't be drawn in ${bad}${view.context === 'window' ? ' (a window view fits space and beside)' : ''}`
   if (Boolean(view.value) === Boolean(view.method)) return 'needs one source: a value or a method'
   if (view.icon && !DATA_ICONS.includes(view.icon)) return `has no icon ${view.icon}`
   return undefined

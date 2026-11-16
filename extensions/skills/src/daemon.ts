@@ -37,7 +37,7 @@ export function skillsExtension({ own = [] }: SkillsOptions = {}): DaemonExtensi
         items: (await skills()).map(({ name, description, manual }) => ({ id: name, title: `$${name}`, subtitle: description, ...(manual ? { detail: 'by name' } : {}) })),
         empty: `No skills in ${dir} yet.`,
       }))
-      superego.view(VIEW, { title: 'Skills', icon: 'sparkle', context: 'window', fits: ['space', 'aside'], method: VIEW })
+      superego.view(VIEW, { title: 'Skills', icon: 'sparkle', context: 'window', fits: ['space', 'beside'], method: VIEW })
     },
   })
 }

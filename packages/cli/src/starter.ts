@@ -66,7 +66,7 @@ ${kind === 'data-only' ? `    // What the view shows: the thread's items, each w
       run({ thread }) { items.delete(thread); show(thread); return null },
     }))
 ${kind === 'data-only' ? `
-    superego.view('${name}.view', { title: '${title(name)}', icon: 'list', context: 'thread', fits: ['aside', 'pane'], default: 'aside', value: '${name}.view' })
+    superego.view('${name}.view', { title: '${title(name)}', icon: 'list', context: 'thread', fits: ['beside', 'pane'], default: 'beside', value: '${name}.view' })
 ` : ''}    // A thread's items go with it.
     superego.thread({ archived(thread) { items.delete(thread.id); show(thread.id) } })
   },
@@ -102,11 +102,11 @@ function Items({ machine, thread }: ViewProps<'thread'>) {
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    superego.view(VIEW, { title: '${title(name)}', context: 'thread', fits: ['aside', 'pane'], default: 'aside', component: Items })
+    superego.view(VIEW, { title: '${title(name)}', context: 'thread', fits: ['beside', 'pane'], default: 'beside', component: Items })
     // Shown or hidden beside the thread, in this profile's threads.
     superego.action(defineAction({
       id: '${name}.toggle', title: 'Show or hide ${title(name).toLowerCase()}', keys: 'mod+shift+y',
-      run: (_params, context) => context.dispatch('layout.place', { view: VIEW, place: 'aside' }),
+      run: (_params, context) => context.dispatch('layout.place', { view: VIEW, place: 'beside' }),
     }))
   },
 })
@@ -140,10 +140,10 @@ it('draws the thread\\'s items beside it, and removes one', async () => {
   const thread = await daemon.thread('Add one')
   const window = await mountUi({ machines: [daemonMachine(daemon)], profile: { ref: thread.profile!, extensions: [ui] } })
   try {
-    const aside = await window.render({ place: 'aside', thread: thread.id })
-    expect(aside.text()).toContain('first')
-    await aside.click('Remove')
-    await window.until(() => !aside.text().includes('first'), 'the item to go')
+    const beside = await window.render({ place: 'beside', thread: thread.id })
+    expect(beside.text()).toContain('first')
+    await beside.click('Remove')
+    await window.until(() => !beside.text().includes('first'), 'the item to go')
   } finally {
     await window.unmount()
   }
@@ -162,7 +162,7 @@ const readme = (name: string, kind: StarterKind) => `# ${title(name)}
 An extension of this profile${kind === 'ui' ? ', with a daemon half and a UI half' : ': a daemon half whose view the window draws from data'}.
 
 - \`daemon.ts\`: the tool \`${tool(name)}\`, each thread's items (\`${name}.items\`, a scoped value), and the actions \`${name}.remove\` and \`${name}.clear\`.
-${kind === 'ui' ? `- \`ui.tsx\`: the items beside the thread (\`${name}.list\`, in the aside), and ⌘⇧Y to show or hide them.\n` : `- \`${name}.view\`: the items beside the thread, drawn by the window from data.\n`}- \`shared.ts\`: what it is (its \`version\` and the extension \`api\` it needs) and the names both halves use.
+${kind === 'ui' ? `- \`ui.tsx\`: the items beside the thread (\`${name}.list\`), and ⌘⇧Y to show or hide them.\n` : `- \`${name}.view\`: the items beside the thread, drawn by the window from data.\n`}- \`shared.ts\`: what it is (its \`version\` and the extension \`api\` it needs) and the names both halves use.
 - \`${name}.test.ts\`: run it with \`superego extension test ${name}\`, which checks the types too.
 
 Send one of this profile's threads a message: it loads with the turn${kind === 'ui' ? ', and the window loads the UI as it shows the\nthread' : ''}. After an edit, the next turn loads it again (or \`superego extension reload\`). A thread started before

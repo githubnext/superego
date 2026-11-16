@@ -207,7 +207,7 @@ it("serves a profile's UI modules, types stripped, only from inside it and only 
   const profile = join(project, '.superego', 'profiles', 'default')
   write(profile, {
     'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ ui: ['./ui/badge.ts'] })\n`,
-    'ui/badge.ts': `import { defineUiExtension, h } from 'superego/ui'\nimport { label } from './label.ts'\nconst n: number = 1\nexport default defineUiExtension({ name: 'badge', setup(superego) { superego.slot('thread.crumb', () => h('span', null, label)) } })\n`,
+    'ui/badge.ts': `import { defineUiExtension, h } from 'superego/ui'\nimport { label } from './label.ts'\nconst n: number = 1\nexport default defineUiExtension({ name: 'badge', setup(superego) { superego.slot('header.chips', () => h('span', null, label)) } })\n`,
     'ui/label.ts': `export const label: string = 'Acme'\n`,
   })
   const { peer, close } = await open()
@@ -227,7 +227,7 @@ it("serves a profile's UI modules, types stripped, only from inside it and only 
 it("compiles a profile's UI written in TSX to calls into the window's React", async () => {
   write(join(home, 'profiles', 'default'), {
     'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ ui: ['./ui/badge.tsx'] })\n`,
-    'ui/badge.tsx': `import { defineUiExtension } from 'superego/ui'\nconst label: string = 'Acme'\nexport default defineUiExtension({ name: 'badge', setup(superego) { superego.slot('thread.crumb', () => <span className="badge">{label}</span>) } })\n`,
+    'ui/badge.tsx': `import { defineUiExtension } from 'superego/ui'\nconst label: string = 'Acme'\nexport default defineUiExtension({ name: 'badge', setup(superego) { superego.slot('header.chips', () => <span className="badge">{label}</span>) } })\n`,
   })
   const { peer, close } = await open()
   const ref = { scope: 'user', name: 'default', dir: join(home, 'profiles', 'default') }
@@ -807,7 +807,7 @@ export default defineDaemonExtension({
   name: 'board',
   setup(superego) {
     superego.value('board.cards', {})
-    superego.view('board.cards', { title: '${title}', context: 'thread', fits: ['space', 'aside', 'pane'], default: 'aside', value: 'board.cards' })
+    superego.view('board.cards', { title: '${title}', context: 'thread', fits: ['space', 'beside', 'pane'], default: 'beside', value: 'board.cards' })
   },
 })
 `
@@ -820,7 +820,7 @@ export default defineDaemonExtension({
   const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
   await done(peer, thread.id)
   await until(async () => views.length === 1)
-  expect(views[0]).toMatchObject({ id: 'board.cards', title: 'Board', fits: ['aside', 'pane'], profiles: [profile] })
+  expect(views[0]).toMatchObject({ id: 'board.cards', title: 'Board', fits: ['beside', 'pane'], profiles: [profile] })
   write(profile, { 'board.ts': extension('Cards') })
   await peer.call('thread.submit', { id: thread.id, text: 'again' })
   await done(peer, thread.id)

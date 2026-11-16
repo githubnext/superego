@@ -1116,7 +1116,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         if (dataViews.some((v) => v.info.id === name)) throw new Error(`View ${name} is already declared`)
         // A profile's show only in its threads: the places that show one.
         const fits = profiles ? view.fits.filter((p) => p !== 'space') : view.fits
-        if (!fits.length) throw new Error(`View ${name} fits no place a profile's view is drawn in (aside, pane)`)
+        if (!fits.length) throw new Error(`View ${name} fits no place a profile's view is drawn in (beside, pane)`)
         const entry = { info: { ...view, fits, id: name, extension: extension.name }, ...(profiles ? { profiles } : {}) }
         dataViews.push(entry)
         publishViews()

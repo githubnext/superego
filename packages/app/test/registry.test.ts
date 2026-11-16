@@ -86,7 +86,7 @@ describe('optional and required extensions', () => {
       superego.tool('ask_user', Card)
     },
   })
-  const required = defineUiExtension({ name: 'threads', required: true, setup(superego) { superego.view('threads.details', { title: 'Details', context: 'thread', fits: ['aside'], default: 'aside', component: Sidebar }) } })
+  const required = defineUiExtension({ name: 'threads', required: true, setup(superego) { superego.view('threads.details', { title: 'Details', context: 'thread', fits: ['beside'], default: 'beside', component: Sidebar }) } })
 
   it("draws nothing of an optional extension for a thread that goes without it, and all of a required one's", () => {
     const registry = createRegistry(app, [optional, required], () => {})

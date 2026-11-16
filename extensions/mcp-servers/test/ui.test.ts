@@ -212,7 +212,7 @@ describe('what it draws', () => {
     expect(chip).toContain('2 MCP')
     expect(chip).toContain('is-troubled')
     expect(html(createElement(Chip, { place: 'header', machine, thread: thread() }))).toBe('')
-    const details = seenIn(registry.slots['thread.details'], where).map(({ component }) => html(createElement(component, { machine, thread: where.thread }))).join('')
+    const details = seenIn(registry.slots['details.section'], where).map(({ component }) => html(createElement(component, { machine, thread: where.thread }))).join('')
     expect(details).toContain('<h5>MCP servers</h5>')
     expect(details).toContain('Linear')
     expect(details).toContain('Running · 23 tools')
@@ -220,7 +220,7 @@ describe('what it draws', () => {
     expect(details).toContain('Set its key')
     expect(details).toContain('Left out: no such server here')
     // None for a thread that goes without the extension.
-    expect(seenIn(registry.slots['thread.details'], { machine: 'local', thread: { ...where.thread, without: ['mcp-servers'] } })).toEqual([])
+    expect(seenIn(registry.slots['details.section'], { machine: 'local', thread: { ...where.thread, without: ['mcp-servers'] } })).toEqual([])
   })
 
   it('asks the user to sign in, or to set a key', () => {

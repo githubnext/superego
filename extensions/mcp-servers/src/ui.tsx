@@ -39,7 +39,7 @@ export default defineUiExtension({
       phrase: (k) => k === 1 ? 'looked for tools' : `looked for tools ${k}×`,
     })
     superego.view('mcp-servers.chip', { title: 'MCP servers', icon: PlugIcon, context: 'thread', fits: ['header'], default: 'header', component: Chip })
-    superego.slot('thread.details', Details)
+    superego.slot('details.section', Details)
     superego.slot('composer.above', SignInNotice, { order: 50 })
   },
 })
@@ -151,7 +151,7 @@ export function Chip({ thread }: ViewProps<'thread'>) {
 }
 
 /** In thread details: the same list. */
-export function Details({ thread }: SlotProps['thread.details']) {
+export function Details({ thread }: SlotProps['details.section']) {
   const servers = serversOf(thread)
   if (!servers) return null
   return <><h5>MCP servers</h5><ServerList servers={servers} /></>

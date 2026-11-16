@@ -3,7 +3,7 @@
 // (⌘P): any file in the selected thread's folder by a few letters of its name, opened beside the thread in the pane
 // kind that takes it. Clicking a file in the tree shows it in that editor; ⌘-click opens it beside. A folder a thread
 // names opens in a pane of its own (`folder`), as a tree to open files from. The thread's whole folder is a view too
-// (`files.folder`), offered for a space, the aside or the pane menu: not placed until the user puts it somewhere.
+// (`files.folder`), offered for a space, beside the thread or the pane menu: not placed until the user puts it somewhere.
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import {
   defineAction, defineUiExtension, fileKind, Picker, score, useAllThreads, useDispatch, useMachines, useMethod, useRegistry, useSelection,
@@ -39,7 +39,7 @@ export default defineUiExtension({
       title: (pane) => folderTitle((pane.params as { path?: string } | undefined)?.path), icon: FolderSimpleIcon, component: FolderPane, folders: true,
     })
     superego.view('files.folder', {
-      title: 'Files', icon: FolderSimpleIcon, context: 'thread', fits: ['space', 'aside', 'pane'],
+      title: 'Files', icon: FolderSimpleIcon, context: 'thread', fits: ['space', 'beside', 'pane'],
       component: ({ machine, thread }: ViewProps<'thread'>) => <FolderPane machine={machine} thread={thread} pane={{ id: 'files.folder', kind: FOLDER, params: { path: '' } }} />,
     })
     superego.action(defineAction({ id: 'files.tree', title: 'Toggle file tree', keys: 'mod+shift+t', run: () => treeShown.set((shown) => !shown) }))

@@ -10,17 +10,17 @@ import type { Json } from '@superego/protocol'
  * - `rail`: a button in the rail that isn't a space (Ego's)
  * - `drawer`: at the foot of a phone's drawer, beside Settings, where there's no rail
  * - `titlebar`: at the title bar's start, after back and forward (the core's thread picker, with no space)
- * - `aside`: a column beside the thread
+ * - `beside`: a column beside the thread
  * - `pane`: in the thread's pane menu, opened as a pane beside it
  * - `header`: right of the thread's title: a button, a badge
  */
-export type Place = 'space' | 'rail' | 'drawer' | 'titlebar' | 'aside' | 'pane' | 'header'
-export const PLACES: Place[] = ['space', 'rail', 'drawer', 'titlebar', 'aside', 'pane', 'header']
-/** The places a wide window draws, and a phone's (its aside in the thread's sheet; its title bar only while there's no space). */
-export const WIDE_PLACES: Place[] = ['space', 'rail', 'titlebar', 'aside', 'pane', 'header']
-export const NARROW_PLACES: Place[] = ['space', 'drawer', 'aside', 'pane', 'header']
+export type Place = 'space' | 'rail' | 'drawer' | 'titlebar' | 'beside' | 'pane' | 'header'
+export const PLACES: Place[] = ['space', 'rail', 'drawer', 'titlebar', 'beside', 'pane', 'header']
+/** The places a wide window draws, and a phone's (the column beside the thread in its sheet; its title bar only while there's no space). */
+export const WIDE_PLACES: Place[] = ['space', 'rail', 'titlebar', 'beside', 'pane', 'header']
+export const NARROW_PLACES: Place[] = ['space', 'drawer', 'beside', 'pane', 'header']
 /** The places that show a thread: a view drawn there gets it. */
-export const THREAD_PLACES: Place[] = ['aside', 'pane', 'header']
+export const THREAD_PLACES: Place[] = ['beside', 'pane', 'header']
 
 /** Where a view goes: a place, several, or none (`false`, `null`: offered, not placed). */
 export type Placement = Place | Place[] | false | null

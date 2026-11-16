@@ -71,7 +71,7 @@ function DataViewInner({ id, place, machine, thread }: { id: string; place: Plac
   // A space is a panel under its title, as the sidebar's are; beside the thread, a heading; a pane's tab says it already.
   const framed = (title: string, children: ReactNode) => place === 'space'
     ? <Panel title={title} className="data-view data-view--space">{children}</Panel>
-    : <div className={`data-view data-view--${place}`}>{place === 'aside' && <h5 className="data-view__heading">{title}</h5>}{children}</div>
+    : <div className={`data-view data-view--${place}`}>{place === 'beside' && <h5 className="data-view__heading">{title}</h5>}{children}</div>
   if (machine && thread) {
     const info = declaredOn(registry, machine.id, id, thread)
     return info ? framed(info.title, <Source info={info} machine={machine} thread={thread} />) : null

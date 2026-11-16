@@ -82,7 +82,7 @@ const imagesOf = (message: Message) => {
 
 /** A thread: its transcript and composer, and the panes open beside it. */
 export function ThreadView({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
-  // The thread's profile may bring UI of its own (header, aside, composer, tool renderers, panes).
+  // The thread's profile may bring UI of its own (header, beside, composer, tool renderers, panes).
   useProfileUi(machine.id, thread)
   return <ThreadPanes machine={machine} thread={thread} main={<ThreadBody machine={machine} thread={thread} />} />
 }
@@ -154,9 +154,9 @@ export function ThreadTools({ machine, thread, panes = true }: { machine: Machin
   const dispatch = registry.router.dispatch
   return (
     <span className="thread__tools">
-      <span className="thread__crumb">
+      <span className="thread__chips">
         {thread.parent && <span className="titlebar__chip thread__parent">from <ThreadRef machine={machine.id} id={thread.parent} /></span>}
-        <Slot name="thread.crumb" props={{ machine, thread }} />
+        <Slot name="header.chips" props={{ machine, thread }} />
         {thread.profile && <span className="titlebar__chip thread__profile" title={thread.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{thread.profile.name}</span>}
       </span>
       <PlacedViews place="header" machine={machine} thread={thread} frame={withContextMenu('header', { machine: machine.id, thread })} />

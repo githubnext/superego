@@ -53,7 +53,7 @@ it('offers the skills to the agent, sends one a message names, and lists them fo
   ])
   // To browse, as a data view the window draws: offered for a space or beside the thread, not placed.
   const views = await peer.call<{ value: DataViewInfo[] }>('value.watch', { key: DATA_VIEWS })
-  expect(views.value).toEqual([{ id: 'skills.view', extension: 'skills', title: 'Skills', icon: 'sparkle', context: 'window', fits: ['space', 'aside'], method: 'skills.view' }])
+  expect(views.value).toEqual([{ id: 'skills.view', extension: 'skills', title: 'Skills', icon: 'sparkle', context: 'window', fits: ['space', 'beside'], method: 'skills.view' }])
   expect(await peer.call('skills.view', {})).toMatchObject({ items: [
     { id: 'commit', title: '$commit', subtitle: 'Write commit messages.' }, { id: 'secret', title: '$secret', subtitle: 'Only by name.', detail: 'by name' },
   ] })

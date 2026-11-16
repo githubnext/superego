@@ -1,5 +1,5 @@
 // The shell every app gets: its places (the rail's spaces and buttons, the open space in the sidebar, the title bar's
-// start, the aside beside the thread; on a phone, the drawer), with the views the layout puts there; the selected
+// start, the column beside the thread; on a phone, the drawer), with the views the layout puts there; the selected
 // thread, the notices (restart required, a provider rejecting the credentials), Settings, and the app-wide reactions
 // (fonts, ⌘, , threads shown from the command line or a notification). It knows no extension: what's where is the
 // layout's (see layout.ts).
@@ -52,7 +52,7 @@ export function Shell() {
   // A phone (or a narrow window): the sidebar becomes a drawer over the thread, opened from a bar at the top.
   const { placed, narrow } = useLayout()
   const [drawer, setDrawer] = useState(false)
-  // On a phone, what the title bar and the aside hold for the thread: a sheet from the foot, opened from its title.
+  // On a phone, what the title bar and the column beside hold for the thread: a sheet from the foot, opened from its title.
   const [sheet, setSheet] = useState(false)
   // The spaces, and the one the sidebar shows: as the window was left, else the first.
   const spaces = viewsIn(registry, placed, 'space')
@@ -61,7 +61,7 @@ export function Shell() {
   // Wide, the rail is a row of tabs with one in front, joined to what's beside it: Settings while it's open; else a
   // hidden thread's (Ego's: the thread alone, no sidebar); else the open space, as the sidebar.
   const tab: 'settings' | 'thread' | 'space' = narrow ? 'space' : settings.open ? 'settings' : alone ? 'thread' : 'space'
-  // Wide, the sidebar's edge resizes it, and folds it dragged narrow.
+  // Wide, the sidebar's edge resizes it, and hides it dragged narrow.
   const sidebarEdge = useSidebarEdge()
   const where = selection && thread && machine ? { machine: machine.id, thread } : undefined
   // The thread's places, as the views it sees resolve.
@@ -94,14 +94,14 @@ export function Shell() {
       <GearSixIcon size={18} aria-hidden />
     </IconButton>
   )
-  const sideOpen = spaces.length > 0 && (narrow ? drawer : !sidebar.folded && tab === 'space')
+  const sideOpen = spaces.length > 0 && (narrow ? drawer : !sidebar.hidden && tab === 'space')
   // The notices: wide, in the rail above Settings, each a mark that opens to all it says; on a phone, at the drawer's foot.
   const notices = <><AuthNotice rail={!narrow} /><ServiceNotice rail={!narrow} /><LayoutNotice rail={!narrow} /><RevokedUiNotice rail={!narrow} /></>
   // Wide: across the top a title bar (the window's buttons, then where you are, the thread's columns and what the thread
   // says about itself); down the left a rail (what extensions put there, Settings) and the sidebar beside it; the rest holds the
   // thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.
   return (
-    <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.superego.web ? 'is-web' : ''} ${sidebarEdge.folding ? 'is-folding' : ''}`}
+    <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.superego.web ? 'is-web' : ''} ${sidebarEdge.hiding ? 'is-hiding' : ''}`}
       style={narrow ? undefined : sidebarEdge.style}>
       {narrow && spaces.length > 0 && drawer && <div className="app__scrim" onClick={() => setDrawer(false)} />}
       {!narrow && (
@@ -124,7 +124,7 @@ export function Shell() {
               <PlacedViews place="rail" frame={withContextMenu('rail')} />
               {spaces.map((view) => (
                 <ViewContextMenu key={view.id} view={view.id} place="space">
-                  <SpaceButton view={view} open={tab === 'space' && view.id === space?.id} folded={sidebar.folded}
+                  <SpaceButton view={view} open={tab === 'space' && view.id === space?.id} sidebarHidden={sidebar.hidden}
                     show={(open = true) => {
                       setSpace(view.id)
                       sidebar.show(open)
@@ -149,7 +149,7 @@ export function Shell() {
               <div className="app__drawer-bar">
                 {spaces.length > 1 && <>
                   {spaces.map((view) => (
-                    <ViewContextMenu key={view.id} view={view.id} place="space"><SpaceButton view={view} open={view.id === space?.id} folded={false} show={() => setSpace(view.id)} narrow /></ViewContextMenu>
+                    <ViewContextMenu key={view.id} view={view.id} place="space"><SpaceButton view={view} open={view.id === space?.id} sidebarHidden={false} show={() => setSpace(view.id)} narrow /></ViewContextMenu>
                   ))}
                   <span className="app__drawer-sep" aria-hidden />
                 </>}
@@ -182,8 +182,8 @@ export function Shell() {
             ? <StripSlot.Provider value={narrow ? null : strip}><ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} /></StripSlot.Provider>
             : <div className="app__empty">{spaces.length ? 'Select or start a thread.' : `Start a thread with: ${registry.app.id}`}</div>}
         </main>}
-        {tab !== 'settings' && !narrow && where && viewsIn(registry, threadPlaced, 'aside', where).length > 0 && (
-          <aside className="app__aside"><PlacedViews place="aside" machine={machine} thread={thread} frame={withMenuButton('aside', where)} /></aside>
+        {tab !== 'settings' && !narrow && where && viewsIn(registry, threadPlaced, 'beside', where).length > 0 && (
+          <aside className="app__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></aside>
         )}
       </div>
       {narrow && sheet && thread && machine && <ThreadSheet machine={machine} thread={thread} onClose={() => setSheet(false)} />}
@@ -219,13 +219,13 @@ function BackForward() {
 }
 
 /**
- * A space's button in the rail: its own (`rail`), else its icon, lit while the sidebar shows it, and folding it from
+ * A space's button in the rail: its own (`railButton`), else its icon, lit while the sidebar shows it, and hiding it from
  * there. In a phone's drawer, always its icon.
  */
-function SpaceButton({ view, open, folded, show, narrow = false }: { view: View; narrow?: boolean } & SpaceRailProps) {
-  if (view.rail && !narrow) return <Contained name={whose(view)} inline><view.rail open={open} folded={folded} show={show} /></Contained>
+function SpaceButton({ view, open, sidebarHidden, show, narrow = false }: { view: View; narrow?: boolean } & SpaceRailProps) {
+  if (view.railButton && !narrow) return <Contained name={whose(view)} inline><view.railButton open={open} sidebarHidden={sidebarHidden} show={show} /></Contained>
   const Icon = view.icon
-  const shown = open && !folded
+  const shown = open && !sidebarHidden
   return (
     <IconButton label={view.title} className={`app__rail-button ${shown ? 'is-on' : ''}`} onClick={() => show(!shown)}>
       {Icon ? <Icon size={18} aria-hidden /> : view.title.slice(0, 1)}
@@ -235,14 +235,14 @@ function SpaceButton({ view, open, folded, show, narrow = false }: { view: View;
 
 /**
  * On a phone, the thread's sheet: what the title bar says of it wide (where it runs, the header's views, archiving),
- * the panes to open beside it, and the views the layout puts in the aside. Over the thread, from the foot.
+ * the panes to open beside it, and the views the layout puts beside the thread. Over the thread, from the foot.
  */
 function ThreadSheet({ machine, thread, onClose }: { machine: MachineEntry; thread: ThreadInfo; onClose(): void }) {
   const registry = useRegistry()
   const where = { machine: machine.id, thread }
   const { placed } = useLayout(where)
   const kinds = paneMenu(registry, placed, where)
-  const asides = viewsIn(registry, placed, 'aside', where)
+  const besides = viewsIn(registry, placed, 'beside', where)
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); onClose() } }
     window.addEventListener('keydown', onKey)
@@ -267,7 +267,7 @@ function ThreadSheet({ machine, thread, onClose }: { machine: MachineEntry; thre
             {kinds.map(({ kind, title }) => <Button key={kind} variant="ghost" className="thread-sheet__pane" onClick={() => open(kind)}>{title}</Button>)}
           </div>
         )}
-        {asides.length > 0 && <div className="thread-sheet__aside"><PlacedViews place="aside" machine={machine} thread={thread} frame={withMenuButton('aside', where)} /></div>}
+        {besides.length > 0 && <div className="thread-sheet__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></div>}
       </div>
     </>
   )

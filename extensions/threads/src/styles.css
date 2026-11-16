@@ -23,7 +23,7 @@
 .threads__why--error { color: var(--superego-status-error-text); }
 .threads__why--quiet { color: var(--superego-muted); font-weight: 400; }
 
-/* In the rail: Threads, with a dot when something unread is out of sight; folded, the threads as dots under it. */
+/* In the rail: Threads, with a dot when something unread is out of sight; the sidebar hidden, the threads as dots under it. */
 .threads-rail__button { position: relative; }
 .threads-rail__badge { position: absolute; right: 9px; top: 14px; width: 7px; height: 7px; border-radius: 50%; background: var(--superego-status-done); box-shadow: 0 0 0 2px var(--superego-rail-tab); }
 .threads-rail__button.is-on .threads-rail__badge { box-shadow: 0 0 0 2px var(--superego-chrome); }
@@ -37,7 +37,7 @@
 .threads-rail__dot.is-on { background: var(--superego-selected); }
 .threads-rail__dot.is-stale { opacity: .4; }
 .threads-rail__sep { width: 12px; height: 1px; background: var(--superego-line); margin: 3px 0; }
-/* Between the folded dots and the tabs under them; with nothing folded, the tabs need none. */
+/* Between the dots and the tabs under them; with no dots, the tabs need none. */
 .threads-rail__rule { display: none; align-self: center; width: 18px; height: 1px; background: var(--superego-line); margin: 4px 0; }
 .threads-rail + .threads-rail__rule:not(:last-child) { display: block; }
 
@@ -48,7 +48,7 @@
 .threads-details dd { margin: 0; overflow-wrap: anywhere; }
 .threads-details__file { font: var(--superego-text-sm)/1.7 var(--superego-mono); overflow-wrap: anywhere; }
 
-/* Archived: one list across projects and machines, folded at the end of the sidebar. */
+/* Archived: one list across projects and machines, closed at the end of the sidebar. */
 .threads-archived { margin-top: 14px; }
 .threads-archived__head { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: none; padding: 0 8px; min-height: 24px; font: inherit; font-size: var(--superego-text-sm); font-weight: 400; color: var(--superego-faint); text-align: left; cursor: default; }
 .threads-archived__head:hover { color: var(--superego-text); }

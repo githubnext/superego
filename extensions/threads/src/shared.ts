@@ -7,7 +7,7 @@ import type { ExtensionAbout } from '@superego/protocol'
  * switch nor a profile's `without` could mean anything for it.
  */
 export const about = {
-  name: 'threads', version: '1.0.0', api: '^2', title: 'Sidebar', description: 'Projects and their threads, sorted, as a list or a rail, with thread details.', required: true,
+  name: 'threads', version: '1.0.0', api: '^2', title: 'Threads', description: 'Projects and their threads in the sidebar, sorted, as a list or dots in the rail, with thread details.', required: true,
 } satisfies ExtensionAbout
 
 /** The daemon half: the agent's thread tools, optional. */

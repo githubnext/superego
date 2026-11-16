@@ -102,7 +102,7 @@ export function freeze(frozen: Project[], live: Project[]): Project[] {
 
 /**
  * The thread `by` from `from`: down (or up) the rows the sidebar shows, across projects, and around at the ends; from
- * nothing (or a thread not listed: archived, Ego's), the first or the last. There's nothing to fold in the sidebar, so
+ * nothing (or a thread not listed: archived, Ego's), the first or the last. No project's threads are closed in the sidebar, so
  * every listed thread is a row; archived ones aren't listed.
  */
 export function threadBeside(projects: Project[], from: { machine: string; thread: string } | undefined, by: number) {

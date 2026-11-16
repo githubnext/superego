@@ -37,11 +37,11 @@ it('draws the queue beside the thread, cancels from its button, and opens it as 
   const thread = await daemon.thread('Build it')
   const window = await mountUi({ machines: [daemonMachine(daemon)], select: { thread: thread.id } })
   try {
-    expect(window.placed('aside', { thread: thread.id })).toContain(VIEW)
-    const aside = await window.render({ place: 'aside', thread: thread.id })
-    await window.until(() => aside.text().includes('sleep 30') && aside.text().includes('running'))
-    await aside.click('Cancel')
-    await window.until(() => aside.text().includes('cancelled'))
+    expect(window.placed('beside', { thread: thread.id })).toContain(VIEW)
+    const beside = await window.render({ place: 'beside', thread: thread.id })
+    await window.until(() => beside.text().includes('sleep 30') && beside.text().includes('running'))
+    await beside.click('Cancel')
+    await window.until(() => beside.text().includes('cancelled'))
     expect(await window.press('mod+shift+b')).toBe('builds.open')
     await daemon.until(async () => (await daemon!.call<{ id: string; panes?: { kind: string }[] }[]>('thread.list')).find((t) => t.id === thread.id)?.panes?.some((p) => p.kind === VIEW) ?? false, 'the queue to open as a pane')
   } finally {

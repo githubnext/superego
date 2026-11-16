@@ -12,7 +12,7 @@ import type { ExtensionAbout } from './app.ts'
  * window actions from a profile's UI, and the stable surface apart from `superego/unstable`. 1.3: `spawnGroup`. 1.5:
  * channels (`superego.channel` in a daemon half, `channel` in the window) and the `paneClosed` hook. 1.6: `recap`.
  * 1.7: `agentParts`, `agent()`'s handle (`replace`, `remove`), `auth.flow`, tool rows by prefix (`tool('x__*')`) and a
- * call's own verb (`ToolRow.verb`), the `thread.details` slot, and a tool result's images (`ToolCallProps.result.images`).
+ * call's own verb (`ToolRow.verb`), the `details.section` slot, and a tool result's images (`ToolCallProps.result.images`).
  * 1.8: `toolCalls`, to hear each tool call a thread's agent makes. 2.0: sessions are projects (`Project`, `useProjects`,
  * `ThreadInfo.project`, `project.next`), and the compatibility names of protocol generation 1 are gone.
  * Minor: something added (an extension that uses it asks for `^2.<minor>`); major: something an extension could rely

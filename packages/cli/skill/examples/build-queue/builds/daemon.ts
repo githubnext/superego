@@ -94,7 +94,7 @@ export default defineDaemonExtension({
     }))
 
     superego.view(VIEW, {
-      title: 'Builds', icon: 'terminal', context: 'thread', fits: ['aside', 'pane'], default: 'aside', value: VIEW,
+      title: 'Builds', icon: 'terminal', context: 'thread', fits: ['beside', 'pane'], default: 'beside', value: VIEW,
       about: "the thread's build queue; no params",
     })
     // A thread put away takes its queue with it.

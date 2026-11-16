@@ -49,16 +49,16 @@ const openNotice = async (kind, label) => {
   if (!await run(`Boolean(document.querySelector('.rail-notice__popup'))`)) await run(`document.querySelector('.app__rail .rail-notice--${kind}').click()`)
   await until(`Boolean(document.querySelector('.rail-notice__popup'))`, `${label} opened`)
 }
-/** `atRest`: before restarting, with the window at rest on Threads, fold the sidebar: the notice stays in the rail. */
+/** `atRest`: before restarting, with the window at rest on Threads, hide the sidebar: the notice stays in the rail. */
 async function restartOntoNewCode(change, { atRest = false } = {}) {
   const before = await run(`window.superego.machines().then((list) => list.find((m) => m.id === 'local'))`)
   change()
   await until(`document.querySelector('.app__rail .rail-notice--service')?.getAttribute('aria-label') === 'Restart required'`, 'restart required shown in the rail')
   if (atRest) {
-    // The sidebar folds with the notice up (it lived in the sidebar's foot, and held it open): the threads go to dots,
+    // The sidebar hides with the notice up (it lived in the sidebar's foot, and held it open): the threads go to dots,
     // the notice stays in the rail.
     await key('/')
-    await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail .threads-rail__dot')) && Boolean(document.querySelector('.app__rail .rail-notice--service'))`, 'folded with the restart notice up')
+    await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail .threads-rail__dot')) && Boolean(document.querySelector('.app__rail .rail-notice--service'))`, 'hidden with the restart notice up')
     await shot('rail-notice')
   }
   await openNotice('service', 'restart required')
@@ -281,25 +281,25 @@ if (phase === 'first') {
   await until(`Boolean(document.querySelector('.threads-rail__button .threads-rail__badge--done'))`, 'unread dot on Threads')
   await run(`[...document.querySelectorAll('.superego-list-item')].find((i) => i.textContent.includes('unread elsewhere')).click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'unread elsewhere'`, 'went to the unread thread')
-  // The sidebar: the ··· menu (portalled, so a scrolling sidebar can't cut it off), ⌘/ folds it to dots, ⌘I details.
+  // The sidebar: the ··· menu (portalled, so a scrolling sidebar can't cut it off), ⌘/ hides it (the threads as dots), ⌘I details.
   await run(`document.querySelector('.threads-menu-trigger').click()`)
   await until(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].some((i) => i.textContent.includes('Needs you first'))`, 'sidebar menu open')
   await shot('menu')
   await run(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].find((i) => i.textContent.includes('Needs you first')).click()`)
   await until(`window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['app.sort'] === 'status')`, 'sorted by status')
   await key('/')
-  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail .threads-rail__dot'))`, 'folded: the sidebar gone, the threads as dots')
+  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail .threads-rail__dot'))`, 'hidden: the sidebar gone, the threads as dots')
   await key('/')
   await until(`Boolean(document.querySelector('.threads-project')) && !document.querySelector('.threads-rail')`, 'list again')
   // From the ··· menu too.
   await run(`document.querySelector('.threads-menu-trigger').click()`)
-  await until(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].some((i) => i.textContent.includes('Fold to dots'))`, 'sidebar menu open again')
-  await run(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].find((i) => i.textContent.includes('Fold to dots')).click()`)
-  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail .threads-rail__dot'))`, 'folded from the menu')
+  await until(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].some((i) => i.textContent.includes('Hide sidebar'))`, 'sidebar menu open again')
+  await run(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].find((i) => i.textContent.includes('Hide sidebar')).click()`)
+  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail .threads-rail__dot'))`, 'hidden from the menu')
   // Threads in the rail shows the list again.
   await run(`document.querySelector('.threads-rail__button').click()`)
   await until(`Boolean(document.querySelector('.threads-project'))`, 'the list from the rail')
-  // Its edge: dragged, a width kept for every window; let go short, folded into the rail, then ⌘/ brings it back as
+  // Its edge: dragged, a width kept for every window; let go short, hidden, then ⌘/ brings it back as
   // wide as it was; dragged out from the rail, the list again.
   const edge = (dx) => run(`(() => { const h = document.querySelector('.app__edge'); const r = h.getBoundingClientRect(); const x = r.left, y = r.top + r.height / 2
     h.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: x, clientY: y }))
@@ -309,11 +309,11 @@ if (phase === 'first') {
   await edge(300 - await run(`document.querySelector('.app__sidebar').offsetWidth`))
   await until(sidebarIs(300), 'sidebar dragged to 300')
   await edge(-200)
-  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail'))`, 'dragged short, folded into the rail')
+  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail'))`, 'dragged short, hidden')
   await key('/')
-  await until(sidebarIs(300), 'unfolded as wide as it was')
+  await until(sidebarIs(300), 'shown as wide as it was')
   await edge(-200)
-  await until(`Boolean(document.querySelector('.threads-rail'))`, 'folded again')
+  await until(`Boolean(document.querySelector('.threads-rail'))`, 'hidden again')
   await edge(250)
   await until(`Boolean(document.querySelector('.threads-project')) && ${sidebarIs(250)}`, 'dragged out from the rail')
   await run(`document.querySelector('.app__edge').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`)
@@ -321,7 +321,7 @@ if (phase === 'first') {
   await key('i')
   await until(`document.querySelector('.threads-details')?.textContent.includes('Machine')`, 'details pane')
   await key('i')
-  await until(`!document.querySelector('.threads-details') && !document.querySelector('.app__aside')?.getBoundingClientRect().width`, 'details closed, its column gone')
+  await until(`!document.querySelector('.threads-details') && !document.querySelector('.app__beside')?.getBoundingClientRect().width`, 'details closed, its column gone')
   // The model in the title bar shows and hides them too; with the sidebar hidden, ⌘I turns them on and off as well.
   await until(`Boolean(document.querySelector('.app__titlebar .threads-model')?.textContent)`, 'the model in the title bar')
   await run(`document.querySelector('.threads-model').click()`)
@@ -329,7 +329,7 @@ if (phase === 'first') {
   await run(`document.querySelector('.threads-model').click()`)
   await until(`!document.querySelector('.threads-details')`, 'and off again')
   await key('/')
-  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail'))`, 'sidebar folded')
+  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail'))`, 'sidebar hidden')
   await key('i')
   await until(`Boolean(document.querySelector('.threads-details'))`, 'details on with the sidebar hidden')
   await key('i')
@@ -346,53 +346,53 @@ if (phase === 'first') {
     await run(`document.querySelector('.view-menu__places [data-place="${place}"]').click()`)
   }
   await key('i')
-  await until(`Boolean(document.querySelector('.app__aside .threads-details'))`, 'details beside the thread')
-  // A view that draws nothing takes no room beside the thread, nor its ···; with only such views, there's no aside.
+  await until(`Boolean(document.querySelector('.app__beside .threads-details'))`, 'details beside the thread')
+  // A view that draws nothing takes no room beside the thread, nor its ···; with only such views, there's no beside.
   await until(`(() => {
-    const aside = document.querySelector('.app__aside')
+    const beside = document.querySelector('.app__beside')
     const empty = document.createElement('div')
     empty.className = 'placed-view'
     empty.innerHTML = '<button class="view-menu__button"></button>'
-    aside.append(empty)
-    const hidden = getComputedStyle(empty).display === 'none' && getComputedStyle(aside).display !== 'none'
-    const alone = Object.assign(document.createElement('aside'), { className: 'app__aside' })
+    beside.append(empty)
+    const hidden = getComputedStyle(empty).display === 'none' && getComputedStyle(beside).display !== 'none'
+    const alone = Object.assign(document.createElement('aside'), { className: 'app__beside' })
     alone.append(empty)
     document.body.append(alone)
     const gone = getComputedStyle(alone).display === 'none'
     alone.remove()
     return hidden && gone
-  })()`, 'an empty view hidden, and an aside of only those')
+  })()`, 'an empty view hidden, and a column beside of only those')
   await moveTo('.placed-view[data-view="threads.details"] .view-menu__button', 'pane')
-  await until(`Boolean(document.querySelector('.panes__column .threads-details')) && !document.querySelector('.app__aside')`, 'details moved into a pane')
+  await until(`Boolean(document.querySelector('.panes__column .threads-details')) && !document.querySelector('.app__beside')`, 'details moved into a pane')
   await until(`${layoutNow()}.then((l) => l === JSON.stringify({ place: { 'threads.details': 'pane' } }))`, 'the layout keeping it in the pane menu')
-  await moveTo('.panes__tab .view-menu__button', 'aside')
-  await until(`Boolean(document.querySelector('.app__aside .threads-details')) && !document.querySelector('.panes__column .threads-details')`, 'details moved back beside the thread')
+  await moveTo('.panes__tab .view-menu__button', 'beside')
+  await until(`Boolean(document.querySelector('.app__beside .threads-details')) && !document.querySelector('.panes__column .threads-details')`, 'details moved back beside the thread')
   // The layout as text: layout.json has the move, and the views at its head; Edit layout… opens it beside the thread.
   const layoutFile = `${process.env.SUPEREGO_HOME}/layout.json`
   const readLayout = () => { try { return readFileSync(layoutFile, 'utf8') } catch { return '' } }
   for (let i = 0; i < 50 && !readLayout().includes('//   threads.details'); i++) await new Promise((resolve) => setTimeout(resolve, 100))
   const written = readLayout()
-  if (!written.includes('"threads.details": "aside"') || !written.includes('//   threads.details')) { await fail(`layout.json as written: ${written}`); throw new Error('failed') }
+  if (!written.includes('"threads.details": "beside"') || !written.includes('//   threads.details')) { await fail(`layout.json as written: ${written}`); throw new Error('failed') }
   await run(`document.querySelector('.placed-view[data-view="threads.details"] .view-menu__button').click()`)
   await until(`[...document.querySelectorAll('.view-menu .superego-menu__item')].some((i) => i.textContent === 'Edit layout…')`, 'the view menu again')
   await run(`[...document.querySelectorAll('.view-menu .superego-menu__item')].find((i) => i.textContent === 'Edit layout…').click()`)
   await until(`document.querySelector('.layout-note')?.textContent === 'Applied as you save'`, 'layout.json in the editor beside the thread')
   // A mistake is noted, and the last good layout stays; fixed, it applies.
   writeFileSync(layoutFile, '{ "place": { "threads.details": ')
-  await until(`document.querySelector('.layout-note.is-problem')?.textContent.includes('Not JSON') && Boolean(document.querySelector('.app__rail .rail-notice--layout')) && Boolean(document.querySelector('.app__aside .threads-details'))`, 'bad JSON noted, the details kept')
-  // A notice up doesn't hold the sidebar open: folded, it's gone and the threads are dots; the notice is in the rail.
+  await until(`document.querySelector('.layout-note.is-problem')?.textContent.includes('Not JSON') && Boolean(document.querySelector('.app__rail .rail-notice--layout')) && Boolean(document.querySelector('.app__beside .threads-details'))`, 'bad JSON noted, the details kept')
+  // A notice up doesn't hold the sidebar open: hidden, it's gone and the threads are dots; the notice is in the rail.
   await key('/')
-  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail .threads-rail__dot')) && Boolean(document.querySelector('.app__rail .rail-notice--layout'))`, 'folded with the layout notice up')
+  await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail .threads-rail__dot')) && Boolean(document.querySelector('.app__rail .rail-notice--layout'))`, 'hidden with the layout notice up')
   await openNotice('layout', 'the layout notice')
   await until(`document.querySelector('.rail-notice__popup .layout-notice')?.textContent.includes('Not JSON')`, 'the layout notice, in full')
   await key('Escape', [])
   await until(`!document.querySelector('.rail-notice__popup')`, 'the layout notice closed')
   await key('/')
-  await until(`Boolean(document.querySelector('.app__sidebar .threads-project'))`, 'unfolded with the layout notice up')
-  writeFileSync(layoutFile, '{ "place": { "threads.detail": "aside" } }')
+  await until(`Boolean(document.querySelector('.app__sidebar .threads-project'))`, 'shown with the layout notice up')
+  writeFileSync(layoutFile, '{ "place": { "threads.detail": "beside" } }')
   await until(`document.querySelector('.layout-note:not(.is-problem)')?.textContent.includes('not here now, kept for when they\\'re back: threads.detail') && !document.querySelector('.rail-notice--layout')`, 'a view not here applied, and noted')
   writeFileSync(layoutFile, '{}')
-  await until(`${layoutNow()}.then((l) => l === '{}') && !document.querySelector('.app__aside') && !document.querySelector('.rail-notice--layout')`, 'the layout reset from the file')
+  await until(`${layoutNow()}.then((l) => l === '{}') && !document.querySelector('.app__beside') && !document.querySelector('.rail-notice--layout')`, 'the layout reset from the file')
   await run(`window.superego.call('local', 'thread.list', {}).then((list) => Promise.all(list.flatMap((t) => (t.panes ?? []).filter((p) => p.params?.path === ${JSON.stringify(layoutFile)}).map((p) => window.superego.call('local', 'pane.close', { id: t.id, pane: p.id })))))`)
   await until(`!document.querySelector('.layout-note')`, 'layout.json closed')
   await run(`window.superego.call('app', 'app.settings.set', { key: 'app.sort', value: 'created' })`)
@@ -414,9 +414,9 @@ if (phase === 'first') {
     await key('Enter', [])
   }
   await pick('show thread details beside', 'Show Thread details beside the thread')
-  await until(`Boolean(document.querySelector('.app__aside .threads-details'))`, 'details shown beside the thread from ⌘K')
+  await until(`Boolean(document.querySelector('.app__beside .threads-details'))`, 'details shown beside the thread from ⌘K')
   await pick('reset layout', 'Reset layout')
-  await until(`!document.querySelector('.app__aside') && ${layoutNow()}.then((l) => l === '{}')`, 'the layout reset from ⌘K')
+  await until(`!document.querySelector('.app__beside') && ${layoutNow()}.then((l) => l === '{}')`, 'the layout reset from ⌘K')
   await key('l')
   await until(`Boolean(document.querySelector('.navigator .palette__input'))`, 'navigator')
   await run(`(() => {
@@ -725,10 +725,10 @@ if (phase === 'first') {
   for (let i = 0; i < 100 && !(await newWindow.webContents.executeJavaScript(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`).catch(() => false)); i++) await new Promise((r) => setTimeout(r, 100))
   if (!(await newWindow.webContents.executeJavaScript(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`).catch(() => false))) { await fail('the new window does not show the thread'); throw new Error('failed') }
   newWindow.destroy()
-  // Archived: folded at the sidebar's end; opened, one list across projects.
+  // Archived: closed at the sidebar's end; opened, one list across projects.
   await run(`window.superego.call('local', 'thread.archive', { id: '${other}' })`)
   await until(`![...document.querySelectorAll('.threads-project .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere'))`, 'archived out of its project')
-  await until(`document.querySelector('.threads-archived__head')?.getAttribute('aria-expanded') === 'false'`, 'archived folded')
+  await until(`document.querySelector('.threads-archived__head')?.getAttribute('aria-expanded') === 'false'`, 'archived closed')
   await run(`document.querySelector('.threads-archived__head').click()`)
   await until(`[...document.querySelectorAll('.threads-archived .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere'))`, 'archived listed')
   // Picked there, it shows read only: the prompt is off, and Unarchive is where Send would be; that brings it back.
@@ -938,14 +938,14 @@ if (phase === 'first') {
   await key('R', ['meta', 'shift'])
   await until(`/⇧R|Shift\\+R/.test(${keysOf('app.sidebar')}?.textContent ?? '') && Boolean(document.querySelector('[data-action="app.sidebar"] button.keymap__reset'))`, 'new shortcut recorded')
   // (Settings covers the sidebar: what the window keeps, not the dots, says it ran.)
-  const folded = `localStorage.getItem('superego.sidebar.open') === 'false'`
+  const hidden = `localStorage.getItem('superego.sidebar.open') === 'false'`
   await key('/')
   await new Promise((resolve) => setTimeout(resolve, 300))
-  if (await run(folded)) { await fail('the old shortcut still runs the action'); throw new Error('failed') }
+  if (await run(hidden)) { await fail('the old shortcut still runs the action'); throw new Error('failed') }
   await key('R', ['meta', 'shift'])
-  await until(folded, 'the new shortcut runs the action')
+  await until(hidden, 'the new shortcut runs the action')
   await key('R', ['meta', 'shift'])
-  await until(`!(${folded})`, 'and back')
+  await until(`!(${hidden})`, 'and back')
   await run(`window.superego.call('app', 'app.settings.set', { key: 'app.keys', value: { 'app.sidebar': 'mod+shift+r', 'threads.details': 'mod+shift+r' } })`)
   await until(`document.querySelector('[data-action="app.sidebar"] .keymap__clash')?.textContent.includes('Toggle thread details')`, 'clash shown')
   await run(`document.querySelector('.keymap').scrollIntoView()`)
@@ -1093,7 +1093,7 @@ if (phase === 'first') {
   await browser.webContents.executeJavaScript(`document.querySelector('button.app__mobiletitle').click()`)
   await inBrowser(`Boolean(document.querySelector('.thread-sheet .ego__clear')) && !document.querySelector('.thread-sheet .thread__archive')`, "Ego's Clear in the thread's sheet")
   if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-ego-sheet.png`, (await browser.webContents.capturePage()).toPNG())
-  // The model button there shows the details (the aside's) in the sheet.
+  // The model button there shows the details (beside the thread, wide) in the sheet.
   await browser.webContents.executeJavaScript(`document.querySelector('.thread-sheet .threads-model').click()`)
   await inBrowser(`Boolean(document.querySelector('.thread-sheet .threads-details'))`, 'thread details in the sheet')
   await browser.webContents.executeJavaScript(`document.querySelector('.thread-sheet .threads-model').click()`)

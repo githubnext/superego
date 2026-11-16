@@ -14,7 +14,7 @@ import { setLocalState, useLocalState } from './local-state.ts'
 import { focusProvider } from './provider-focus.ts'
 import { useWindowEvents } from './window-events.ts'
 import { freeze, projectKey, useProjectList, type Project } from './projects.ts'
-import { isFolded, showSidebar, TIGHT, type SidebarMode } from './sidebar-mode.ts'
+import { sidebarIsHidden, showSidebar, TIGHT, type SidebarMode } from './sidebar-mode.ts'
 
 /** The thread the window shows: its machine's id and its own. */
 export type Selection = { machine: string; thread: string }
@@ -42,9 +42,9 @@ type ShellState = {
   hold(held: boolean): void
   /** The thread last shown in a project, by its key. */
   lastThread: Record<string, string>
-  /** Whether the sidebar is folded (see sidebar-mode.ts). */
-  sidebarFolded: boolean
-  /** Show the sidebar in full (`open`), or fold it; left out, the other way. */
+  /** Whether the sidebar is hidden (see sidebar-mode.ts). */
+  sidebarHidden: boolean
+  /** Show the sidebar (`open`), or hide it; left out, the other way. */
   showSidebar(open?: boolean): void
   /** The selected thread when it's archived (the machine's list leaves those out): fetched once it's selected. */
   archived: ThreadInfo | undefined
@@ -89,10 +89,10 @@ export function useProjects() {
   const { projects, lastThread, hold } = useShellState()
   return { projects, lastThread, hold }
 }
-/** Whether the sidebar is folded, and a way to show it in full or fold it (`show()` the other way). */
+/** Whether the sidebar is hidden, and a way to show or hide it (`show()` the other way). */
 export function useSidebar() {
-  const { sidebarFolded, showSidebar } = useShellState()
-  return { folded: sidebarFolded, show: showSidebar }
+  const { sidebarHidden, showSidebar } = useShellState()
+  return { hidden: sidebarHidden, show: showSidebar }
 }
 /** Back and forward through the threads (and Settings) this window has shown. */
 export function useHistory() {
@@ -123,10 +123,10 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useLocalState('settings.open', false)
   const [newThread, setNewThread] = useState<NewThreadStart>()
   const [sidebarOpen, setSidebarOpen] = useLocalState('sidebar.open', true)
-  const [sidebarUnfolded, setSidebarUnfolded] = useState(false)
+  const [sidebarShownTight, setSidebarShownTight] = useState(false)
   const tight = useMedia(TIGHT)
-  useEffect(() => { if (!tight) setSidebarUnfolded(false) }, [tight])
-  const sidebarMode: SidebarMode = { open: sidebarOpen, unfolded: sidebarUnfolded }
+  useEffect(() => { if (!tight) setSidebarShownTight(false) }, [tight])
+  const sidebarMode: SidebarMode = { open: sidebarOpen, shownTight: sidebarShownTight }
   const onThreads = useCallback((machine: string, list: ThreadInfo[] | undefined) => {
     setThreads((all) => all[machine] === list ? all : { ...all, [machine]: list })
   }, [])
@@ -189,7 +189,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const exists = (p: Place) => 'settings' in p || Boolean(hiddenAll[p.thread.machine]?.some((t) => t.id === p.thread.thread))
     || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread))
   const value = useMemo<ShellState>(() => ({
-    machines, threads, rejections, selection, settingsOpen, newThread, projects, hold, lastThread, sidebarFolded: isFolded(sidebarMode, tight), archived, hidden, listed,
+    machines, threads, rejections, selection, settingsOpen, newThread, projects, hold, lastThread, sidebarHidden: sidebarIsHidden(sidebarMode, tight), archived, hidden, listed,
     canBack: Boolean(step(history, -1, place, exists)),
     canForward: Boolean(step(history, 1, place, exists)),
     go: (by) => {
@@ -207,9 +207,9 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     showSidebar: (open) => {
       const next = showSidebar(sidebarMode, tight, open)
       setSidebarOpen(next.open)
-      setSidebarUnfolded(next.unfolded)
+      setSidebarShownTight(next.shownTight)
     },
-  }), [machines, threads, rejections, selection, settingsOpen, newThread, projects, lastThread, sidebarOpen, sidebarUnfolded, tight, archived, hidden, hiddenAll, history, listed])
+  }), [machines, threads, rejections, selection, settingsOpen, newThread, projects, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, listed])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onHidden={onHidden} onRejections={onRejections} />)}

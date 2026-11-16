@@ -176,8 +176,8 @@ it('announces data views, fed by a value, whose buttons run its actions: a round
         id: 'orders.ship', title: 'Ship an order', runs: 'machine', params: obj({ id: str() }),
         run: ({ id }) => { list.update((c) => ({ ...c, items: c.items!.map((i) => i.id === id ? { ...i, status: 'done', subtitle: 'Ada · shipped', actions: [] } : i) })) },
       }))
-      superego.view('orders.recent', { title: 'Recent orders', icon: 'list', context: 'window', fits: ['space', 'aside'], default: 'space', value: 'orders.recent' })
-      superego.view('orders.notes', { title: 'Notes', context: 'thread', fits: ['aside', 'pane'], method: 'orders.notes', about: "the thread's order notes; no params" })
+      superego.view('orders.recent', { title: 'Recent orders', icon: 'list', context: 'window', fits: ['space', 'beside'], default: 'space', value: 'orders.recent' })
+      superego.view('orders.notes', { title: 'Notes', context: 'thread', fits: ['beside', 'pane'], method: 'orders.notes', about: "the thread's order notes; no params" })
       superego.method('orders.notes', ({ id }) => ({ markdown: `Notes for ${String(id)}` }))
       // Checked: a source of another's, two sources, a place a window view can't go.
       expect(() => superego.view('orders.bad', { title: 'Bad', context: 'window', fits: ['space'], value: 'other.x' })).toThrow(/orders's/)
@@ -189,7 +189,7 @@ it('announces data views, fed by a value, whose buttons run its actions: a round
   expect(hello.features).toContain('data-views')
   const views = await peer.call<{ value: DataViewInfo[] }>('value.watch', { key: DATA_VIEWS })
   expect(views.value.map((v) => [v.id, v.extension])).toEqual([['orders.recent', 'orders'], ['orders.notes', 'orders']])
-  expect(views.value[0]).toMatchObject({ title: 'Recent orders', icon: 'list', fits: ['space', 'aside'], default: 'space', value: 'orders.recent' })
+  expect(views.value[0]).toMatchObject({ title: 'Recent orders', icon: 'list', fits: ['space', 'beside'], default: 'space', value: 'orders.recent' })
   // The window reads the content as any value, and a button runs the action it names on this machine.
   const watched = await peer.call<{ sub: string; value: ViewContent }>('value.watch', { key: 'orders.recent' })
   let content = watched.value

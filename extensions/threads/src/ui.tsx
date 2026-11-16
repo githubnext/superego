@@ -1,11 +1,11 @@
 /// <reference path="./env.d.ts" />
-// threads: the sidebar. Projects (a repository or folder on a machine) and the threads in each; the machine is said on the project,
+// threads: the Threads space in the sidebar. Projects (a repository or folder on a machine) and the threads in each; the machine is said on the project,
 // where it isn't this computer. Its views:
 // - the list (`threads.list`), a space: sorted recently active, newest first, or needs you first (an app setting); with
-//   the sidebar folded, a rail of status glyphs. A row's title is followed by other extensions' marks (the
+//   the sidebar hidden, a rail of status glyphs. A row's title is followed by other extensions' marks (the
 //   `thread.badge` slot: a worktree's branch, say)
 // - details (`threads.details`): what the thread runs with, spent and touched, then what other extensions say of it (the
-//   `thread.details` slot: its MCP servers, say); beside it (in the aside) or not, ⌘I
+//   `details.section` slot: its MCP servers, say); beside it or not, ⌘I
 // - the model (`threads.model`), in the title bar: a button that shows or hides the details
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are its daemon half's.
 import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react'
@@ -22,8 +22,8 @@ import { about } from './shared.ts'
 
 /** The details view, and the action that puts it beside the thread or takes it away. */
 const DETAILS = 'threads.details'
-/** The shell's action that folds the sidebar, and shows it again: folded, the list is dots in the rail. */
-const FOLD = 'app.sidebar'
+/** The shell's action that hides the sidebar, and shows it again: hidden, the list is dots in the rail. */
+const SIDEBAR = 'app.sidebar'
 /** How a project's machine is described while it isn't connected; anything else is offline. */
 const STATE_WORDS: Partial<Record<MachineEntry['state'], string>> = { connecting: 'connecting', 'needs-login': 'needs login', 'host-key': 'host key to check', disabled: 'off' }
 
@@ -34,14 +34,14 @@ const set = (c: Pick<WindowContext, 'dispatch'>, key: string, value: string | bo
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: Threads, rail: ThreadsRail })
-    superego.view(DETAILS, { title: 'Thread details', context: 'thread', fits: ['aside', 'pane'], component: DetailsPane })
+    superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: Threads, railButton: ThreadsRail })
+    superego.view(DETAILS, { title: 'Thread details', context: 'thread', fits: ['beside', 'pane'], component: DetailsPane })
     superego.view('threads.model', { title: 'Model', context: 'thread', fits: ['header'], default: 'header', component: ModelButton })
     registerRows(superego)
     registerLinks(superego)
     const action = (id: string, title: string, run: (c: WindowContext) => void, keys?: string) =>
       superego.action(defineAction({ id, title, ...(keys ? { keys } : {}), run: (_params, c) => run(c) }))
-    action(DETAILS, 'Toggle thread details', (c) => void c.dispatch('layout.place', { view: DETAILS, place: 'aside' }, { source: 'threads' }), 'mod+i')
+    action(DETAILS, 'Toggle thread details', (c) => void c.dispatch('layout.place', { view: DETAILS, place: 'beside' }, { source: 'threads' }), 'mod+i')
     action('threads.sort.created', 'Sort threads: newest first', (c) => void set(c, SORT, 'created'))
     action('threads.sort.status', 'Sort threads: needs you first', (c) => void set(c, SORT, 'status'))
     action('threads.sort.recent', 'Sort threads: recently active', (c) => void set(c, SORT, 'recent'))
@@ -109,7 +109,7 @@ function Threads() {
 }
 
 /**
- * Threads put away, from every machine and project in one list, newest activity first; folded until opened. Picking one
+ * Threads put away, from every machine and project in one list, newest activity first; closed until opened. Picking one
  * shows it, read only; its Unarchive button brings it back.
  */
 function Archived({ machines, live }: { machines: MachineEntry[]; live: Project[] }) {
@@ -164,16 +164,16 @@ function NewThreadButton({ label, machine, cwd }: { label: string; machine?: Mac
 
 const SORTS: { value: Sort; label: string }[] = [{ value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' }]
 
-/** The ··· menu: sort, details, folding to dots. */
+/** The ··· menu: sort, details, hiding the sidebar. */
 function Options() {
   const [sort, setSort] = useAppSetting<Sort>(SORT)
-  const [details, setDetails] = usePlacement(DETAILS, 'aside')
+  const [details, setDetails] = usePlacement(DETAILS, 'beside')
   const dispatch = useDispatch()
-  const foldKeys = useShortcut(FOLD)
+  const sidebarKeys = useShortcut(SIDEBAR)
   const detailsKeys = useShortcut(DETAILS)
   return (
     <Menu.Root>
-      <Menu.Trigger render={<IconButton label="Sidebar options" className="threads-menu-trigger" />}><DotsThreeIcon size={16} weight="bold" aria-hidden /></Menu.Trigger>
+      <Menu.Trigger render={<IconButton label="Threads options" className="threads-menu-trigger" />}><DotsThreeIcon size={16} weight="bold" aria-hidden /></Menu.Trigger>
       <Menu.Popup className="threads-menu">
         <Menu.Group>
           <Menu.GroupLabel>Sort</Menu.GroupLabel>
@@ -183,35 +183,35 @@ function Options() {
         </Menu.Group>
         <Menu.Separator />
         <Menu.CheckboxItem checked={details} onCheckedChange={(checked) => setDetails(checked)} hint={detailsKeys}>Thread details</Menu.CheckboxItem>
-        <Menu.Item onClick={() => void dispatch(FOLD, {}, { source: 'threads' }).catch((error) => console.error(error))} hint={foldKeys}>Fold to dots</Menu.Item>
+        <Menu.Item onClick={() => void dispatch(SIDEBAR, {}, { source: 'threads' }).catch((error) => console.error(error))} hint={sidebarKeys}>Hide sidebar</Menu.Item>
       </Menu.Popup>
     </Menu.Root>
   )
 }
 
 /**
- * In the window's rail: Threads, lit while they're the open space. A click folds the sidebar, the threads then status
+ * In the window's rail: Threads, lit while they're the open space. A click hides the sidebar, the threads then status
  * dots here, and shows the list again; with another space open (or none: Settings, Ego's thread), it shows the list.
  * Something unread you can't see from here shows as a dot on the button, in the most pressing one's colour.
  */
-function ThreadsRail({ open, folded: sidebarFolded, show }: SpaceRailProps) {
+function ThreadsRail({ open, sidebarHidden, show }: SpaceRailProps) {
   const { projects } = useProjects()
   const { selection, select } = useSelection()
-  const folded = open && sidebarFolded
-  const toggleKeys = useShortcut(FOLD)
+  const hidden = open && sidebarHidden
+  const toggleKeys = useShortcut(SIDEBAR)
   const waiting = projects.flatMap((s) => s.threads.filter((t) => unread(t) && !(s.machine.id === selection?.machine && t.id === selection.thread)).map((t) => t.status))
-  const badge = !folded && waiting.length ? rollup(waiting).state : undefined
-  const click = () => show(!open || folded)
+  const badge = !hidden && waiting.length ? rollup(waiting).state : undefined
+  const click = () => show(!open || hidden)
   const isOn = (project: Project, thread: ThreadInfo) => selection?.machine === project.machine.id && selection.thread === thread.id
   return (
     <TooltipProvider>
-      <Tooltip content={`Threads: ${!open ? 'show' : folded ? 'show the list' : 'fold to dots'}${toggleKeys ? ` (${toggleKeys})` : ''}`} side="right">
+      <Tooltip content={`${!open ? 'Show Threads' : hidden ? 'Show sidebar' : 'Hide sidebar'}${toggleKeys ? ` (${toggleKeys})` : ''}`} side="right">
         <IconButton label="Threads" className={`app__rail-button threads-rail__button ${open ? 'is-on' : ''}`} onClick={click}>
           <ChatsIcon size={18} aria-hidden />
           {badge && <span className={`threads-rail__badge threads-rail__badge--${badge}`} />}
         </IconButton>
       </Tooltip>
-      {folded && (
+      {hidden && (
         <nav className="threads-rail" aria-label="Threads">
           {projects.map((project, index) => (
             <div key={project.key} className="threads-rail__group">
@@ -238,7 +238,7 @@ function ThreadsRail({ open, folded: sidebarFolded, show }: SpaceRailProps) {
  * spent and touched), lit while they're shown.
  */
 function ModelButton({ thread }: { thread: ThreadInfo }) {
-  const [on, setOn] = usePlacement(DETAILS, 'aside')
+  const [on, setOn] = usePlacement(DETAILS, 'beside')
   const keys = useShortcut(DETAILS)
   const model = thread.model?.split('/').at(-1) ?? 'No model'
   return (
@@ -302,7 +302,7 @@ function DetailsPane({ machine, thread }: { machine: MachineEntry; thread: Threa
           {files.map((file) => <div key={file} className="threads-details__file">{file}</div>)}
         </>
       )}
-      <Slot name="thread.details" props={{ machine, thread }} />
+      <Slot name="details.section" props={{ machine, thread }} />
     </div>
   )
 }

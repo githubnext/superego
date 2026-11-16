@@ -28,11 +28,11 @@ function Queue({ machine, thread }: ViewProps<'thread'>) {
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    superego.view(VIEW, { title: 'Builds', context: 'thread', fits: ['aside', 'pane'], default: 'aside', component: Queue })
+    superego.view(VIEW, { title: 'Builds', context: 'thread', fits: ['beside', 'pane'], default: 'beside', component: Queue })
     // In this profile's threads: the queue beside the thread, or not.
     superego.action(defineAction({
       id: 'builds.toggle', title: 'Show or hide the build queue', keys: 'mod+shift+b',
-      run: (_params, context) => context.dispatch('layout.place', { view: VIEW, place: 'aside' }),
+      run: (_params, context) => context.dispatch('layout.place', { view: VIEW, place: 'beside' }),
     }))
   },
 })

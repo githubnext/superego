@@ -17,7 +17,7 @@ export default defineDaemonExtension({ name: 'queue', version: '1.0.0', api: '^2
   superego.scopedValue('queue.items', [])
   superego.method('queue.read', () => null)
   superego.action(defineAction({ id: 'queue.show', title: 'Show', runs: 'machine', keys: 'mod+shift+q', run: () => null }))
-  superego.view('queue.list', { title: 'Queue', context: 'thread', fits: ['aside'], value: 'queue.items' })
+  superego.view('queue.list', { title: 'Queue', context: 'thread', fits: ['beside'], value: 'queue.items' })
 } })
 `
 
@@ -31,7 +31,7 @@ it('reports what each extension is, has registered and has watched; and what a t
   expect(queue).toMatchObject({ version: '1.0.0', api: '^2', source: 'profile', state: 'set up', profiles: ['user:default'] })
   expect(queue.file).toMatch(/queue\.ts$/)
   expect(queue.registered).toMatchObject({
-    values: ['queue.items (scoped)'], methods: ['queue.read'], actions: ['queue.show (mod+shift+q)'], views: ['queue.list (aside; from queue.items)'],
+    values: ['queue.items (scoped)'], methods: ['queue.read'], actions: ['queue.show (mod+shift+q)'], views: ['queue.list (beside; from queue.items)'],
   })
   expect(queue.watches).toEqual([{ value: 'queue.items', whole: 0, scopes: 1 }])
   expect(report.extensions.find((e) => e.name === 'bundled-extra')).toMatchObject({ source: 'bundled', version: '2.0.0', registered: { 'thread hooks': ['archived'] } })

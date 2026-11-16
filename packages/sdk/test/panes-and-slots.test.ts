@@ -20,7 +20,7 @@ const board = defineUiExtension({
         h('button', { type: 'button', onClick: () => opened.push((pane.params as { card: string }).card) }, 'Open')),
     })
     superego.view('board.columns', {
-      title: 'Columns', context: 'thread', fits: ['aside', 'pane'], default: 'aside',
+      title: 'Columns', context: 'thread', fits: ['beside', 'pane'], default: 'beside',
       component: ({ thread }: ViewProps<'thread'>) => h('p', null, `Columns of ${thread.id}`),
     })
     superego.slot('thread.badge', ({ thread }: SlotProps['thread.badge']) =>
@@ -67,7 +67,7 @@ describe('rendering a slot', () => {
 
   it("throws for a slot nothing fills for the thread, or one that's a place now", async () => {
     const ui = keep(await mountUi({ extensions: [board] }))
-    await expect(ui.render({ slot: 'thread.details' })).rejects.toThrow(/Nothing fills thread.details/)
+    await expect(ui.render({ slot: 'details.section' })).rejects.toThrow(/Nothing fills details.section/)
     await expect(ui.render({ slot: 'thread.badge', thread: testThread({ without: ['board'] }) })).rejects.toThrow(/1 elsewhere/)
     await expect(ui.render({ slot: 'sidebar' as never })).rejects.toThrow(/No slot sidebar/)
   })

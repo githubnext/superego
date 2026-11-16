@@ -12,14 +12,14 @@ const treeOf = (thread: ThreadInfo) => thread.ext?.worktrees as Worktree | undef
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    superego.slot('thread.crumb', Branch)
+    superego.slot('header.chips', Branch)
     superego.slot('thread.badge', BranchMark)
     superego.newThreadField({ component: InWorktree, from: (thread) => treeOf(thread) ? true : undefined })
   },
 })
 
 /** The branch it works on, its worktree's path on hover. */
-function Branch({ thread }: SlotProps['thread.crumb']) {
+function Branch({ thread }: SlotProps['header.chips']) {
   const tree = treeOf(thread)
   if (!tree) return null
   return <span className="titlebar__chip thread__branch" title={`${tree.branch}\n${tree.path}`}>{tree.branch}</span>
