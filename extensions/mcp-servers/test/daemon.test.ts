@@ -190,7 +190,8 @@ it("never sends a stored key anywhere it wasn't set for: a new origin, header or
   await act(peer, 'set-secret', { server: 'site', values: { key: 'good-key' } })
   writeFileSync(join(dir, 'mcp-servers.json'), JSON.stringify({ servers: {} }))
   await until(async () => (await section(peer)).servers.length === 0, 'the server to go')
-  expect(await stored()).toEqual({})
+  // Its secrets go just after (reading the store doesn't wait for that).
+  await until(async () => Object.keys(await stored()).length === 0, 'its secrets to go')
   await close()
   await home.close()
   await elsewhere.close()
