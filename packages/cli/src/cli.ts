@@ -26,7 +26,7 @@ import {
 // The daemon itself only for `daemon run`: loading it costs every other command most of its start.
 import { appEnv, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
 import {
-  AUTH_REJECTED, compareVersions, driftPhrase, PROTOCOL_VERSION, RpcError, unreadThreads, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Notifications, type Params, type ProviderAuthInfo, type Result,
+  AUTH_REJECTED, compareVersions, driftPhrase, PROTOCOL_VERSION, RpcError, unreadThreads, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ProfileRef, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
