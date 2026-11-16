@@ -13,10 +13,11 @@ import type { ExtensionAbout } from './app.ts'
  * channels (`superego.channel` in a daemon half, `channel` in the window) and the `paneClosed` hook. 1.6: `recap`.
  * 1.7: `agentParts`, `agent()`'s handle (`replace`, `remove`), `auth.flow`, tool rows by prefix (`tool('x__*')`) and a
  * call's own verb (`ToolRow.verb`), the `thread.details` slot, and a tool result's images (`ToolCallProps.result.images`).
+ * 1.8: `ToolTask` from 'superego', for `hook(ToolTask, { beforeTool, afterTool })`.
  * Minor: something added (an extension that uses it asks for `^1.<minor>`); major: something an extension could rely
  * on changed or went. An extension whose `api` range this doesn't satisfy is refused when it's set up.
  */
-export const EXTENSION_API = '1.7.0'
+export const EXTENSION_API = '1.8.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api' | 'capabilities'>

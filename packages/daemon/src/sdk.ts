@@ -13,7 +13,7 @@ export type {
 export type { DaemonContext } from './daemon.ts'
 export { defineProfile } from './profiles.ts'
 export type { ProfileSpec, ProfileRef, ProfileMcpServer } from './profiles.ts'
-export { defineExtension, defineTool, hook, section, wrapSection, wrapTool } from '@earendil-works/pi-durable'
+export { defineExtension, defineTool, hook, section, ToolTask, wrapSection, wrapTool } from '@earendil-works/pi-durable'
 export type { Extension as AgentExtension } from '@earendil-works/pi-durable'
 export { arr, bool, int, lit, nullable, num, obj, opt, RpcError, str, union, unknown } from '@superego/protocol'
 export { spawnGroup } from './process-group.ts'

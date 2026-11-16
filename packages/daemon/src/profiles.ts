@@ -303,7 +303,7 @@ const load = (url: string) => nativeImport(url).catch((error: unknown) => {
 
 /** What 'superego' exports: kept in step with sdk-shim.ts (a test checks). */
 export const SDK_EXPORTS = [
-  'defineProfile', 'defineExtension', 'defineTool', 'section', 'hook', 'wrapTool', 'wrapSection', 'defineDaemonExtension', 'defineAction', 'RpcError', 'spawnGroup',
+  'defineProfile', 'defineExtension', 'defineTool', 'section', 'hook', 'ToolTask', 'wrapTool', 'wrapSection', 'defineDaemonExtension', 'defineAction', 'RpcError', 'spawnGroup',
   'arr', 'bool', 'int', 'lit', 'nullable', 'num', 'obj', 'opt', 'str', 'union', 'unknown',
 ] as const
 
