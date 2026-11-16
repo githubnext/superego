@@ -37,6 +37,8 @@ superego extension reload               # load the profile's changes now, and sa
 superego extensions                     # every extension here: where it's from, how it stands, what it registered
 ```
 
+Each says which profile it uses. `superego <command> --help` gives any command's options.
+
 `new` writes `<profile>/orders/`: a tool, each thread's items as a scoped value, actions, a view beside the thread,
 `shared.ts` (its name, `version` and `api`), a test on `superego/testing`, a README, and the profile's types. Then:
 
@@ -52,7 +54,7 @@ superego extensions                     # every extension here: where it's from,
 ```sh
 superego                          # start a thread here and open it in the app
 superego create . -p "fix tests"  # start one without the app; prints its id
-superego send <thread> "and the docs"
+superego send <thread> "and the docs" && superego read <thread> --wait   # its answer, once it stops working
 superego threads --json           # every thread, with its status
 superego actions                  # what `superego do` can run
 superego mcp                      # those exposed to MCP, as an MCP server on stdio (cli topic)

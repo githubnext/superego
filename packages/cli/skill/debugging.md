@@ -38,6 +38,7 @@ With `SUPEREGO_MODEL=faux` in the daemon's environment, turns echo instead of ca
 ```sh
 superego daemon status         # running, and on the installed build?
 superego threads --json        # each thread's status, profile and folder
+superego read <thread> --wait  # a thread's state and last answer, once it stops working
 superego actions --all         # every action registered, extensions' included
 superego actions log           # recent actions, from anywhere, with errors
 superego settings              # this machine's settings, incl. which extensions are on

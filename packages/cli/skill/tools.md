@@ -94,5 +94,5 @@ prefer tools and sections. To hear every tool call a thread makes, a daemon exte
 
 ## Testing a tool
 
-Start a thread with the profile and ask for it: `superego -P <profile> -p "Use find_order for 1234"`. Tool calls and
-errors show in the transcript. Edits load on the thread's next turn (a project's profile needs allowing again).
+Start a thread with the profile, ask for it, and read its answer: `id=$(superego create . -P <profile> -p "Use
+find_order for 1234") && superego read "$id" --wait`. Tool calls and errors show in the transcript. Edits load on the thread's next turn (a project's profile needs allowing again).
