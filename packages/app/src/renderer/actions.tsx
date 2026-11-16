@@ -14,6 +14,7 @@ import { startRename } from './rename.ts'
 import { setLocalState, windowState } from './local-state.ts'
 import { showOnboarding } from './Onboarding.tsx'
 import { maximizedPane, maximizedStore, NARROW, toggleMaximized } from './maximized.ts'
+import { RAIL_TABS, tabAction, type RailTab } from './rail-tabs.ts'
 
 /** What a window action gets besides its parameters. */
 export type WindowContext = {
@@ -32,6 +33,8 @@ export type WindowContext = {
   lastThread: Record<string, string>
   toggleSidebar(): void
   toggleNavigator(): void
+  /** The rail's tabs that ⌘1–⌘9 go to, as the rail is now (none on a phone, which has no rail). */
+  railTabs(): RailTab[]
   /** Back and forward through the threads (and Settings) this window has shown. */
   back(): void
   forward(): void
@@ -142,6 +145,12 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
   defineWindowAction({ id: 'app.palette', title: 'Commands', keys: 'mod+k', run: (_p, c) => c.togglePalette() }),
   defineWindowAction({ id: 'app.navigator', title: 'Go to a project, thread or pane', keys: 'mod+l', run: (_p, c) => c.toggleNavigator() }),
   defineWindowAction({ id: 'app.sidebar', title: 'Show or hide sidebar', keys: 'mod+/', run: (_p, c) => c.toggleSidebar() }),
+  // ⌘1–⌘9: the rail's tabs in its order (see rail-tabs.ts).
+  ...Array.from({ length: RAIL_TABS }, (_, i) => defineWindowAction({
+    id: tabAction(i + 1), title: `Go to rail tab ${i + 1}`, keys: `mod+${i + 1}`,
+    when: (c) => c.railTabs().length > i,
+    run: (_p, c) => c.railTabs()[i]?.open(),
+  })),
   // Through every thread, in the sidebar's order, across projects; and between projects, at the thread last shown in each.
   defineWindowAction({ id: 'thread.next', title: 'Next thread', keys: 'mod+shift+]', run: (_p, c) => stepThread(c, 1) }),
   defineWindowAction({ id: 'thread.previous', title: 'Previous thread', keys: 'mod+shift+[', run: (_p, c) => stepThread(c, -1) }),

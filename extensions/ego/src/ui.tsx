@@ -4,7 +4,7 @@
 // its thread's title bar, Clear instead of archiving and, where more than one machine has an Ego, which one's this is,
 // to switch to another's. Its thread is a hidden one: the window shows it while it's selected, as any. A message an
 // outside agent sent it shows a chip saying so. On the first-launch page, a word on what to ask it for, and where it is.
-import { defineAction, defineUiExtension, has, useApp, useDispatch, useMachines, useNarrow, useSelection, type ViewProps } from '@superego/app/ui'
+import { defineAction, defineUiExtension, has, useApp, useDispatch, useMachines, useNarrow, useRailShortcut, useSelection, type ViewProps } from '@superego/app/ui'
 import { agentName, obj, opt, str, type ThreadInfo } from '@superego/protocol'
 import { BroomIcon, Button, IconButton, LifebuoyIcon, PlugsConnectedIcon, Select } from '@superego/ui'
 import type { MachineEntry } from '@superego/app/ui'
@@ -26,9 +26,9 @@ export default defineUiExtension({
   ...about,
   setup(superego) {
     const chosen = superego.store<string>('machine', 'local', { persist: true })
-    // A button, not a space: it shows a thread, and the sidebar keeps what it shows. First in the rail.
+    // A button, not a space: it shows a thread, and the sidebar keeps what it shows. First in the rail, its tab ⌘1.
     superego.view('ego.button', {
-      title: `Ask ${agentName(superego.app)}`, icon: LifebuoyIcon, context: 'window', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10,
+      title: `Ask ${agentName(superego.app)}`, icon: LifebuoyIcon, context: 'window', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10, action: OPEN,
       component: (props) => <EgoButton {...props} chosen={chosen.use()} />,
     })
     superego.view('ego.machine', { title: 'Machine', context: 'thread', fits: ['header'], default: 'header', component: MachineSwitch })
@@ -59,11 +59,13 @@ function EgoButton({ place, chosen }: ViewProps<'window'> & { chosen: string }) 
   const dispatch = useDispatch()
   const machines = useMachines()
   const { thread } = useSelection()
+  const keys = useRailShortcut()
   const at = egoMachine(machines, chosen)
   if (!at) return null
   const elsewhere = at !== 'local' && withEgo(machines).length > 1 ? machines.find((m) => m.id === at)?.label : undefined
+  const label = `Ask ${agentName(app)}${elsewhere ? ` on ${elsewhere}` : ''}`
   return (
-    <IconButton label={`Ask ${agentName(app)}${elsewhere ? ` on ${elsewhere}` : ''}`} className={`app__rail-button ego__button ${isEgo(thread) ? 'is-on' : ''}`}
+    <IconButton label={label} title={keys ? `${label} (${keys})` : label} className={`app__rail-button ego__button ${isEgo(thread) ? 'is-on' : ''}`}
       onClick={() => void dispatch(OPEN, {}, { source: place }).catch((error) => console.error(error))}>
       <span className="ego__dot" aria-hidden />
     </IconButton>

@@ -27,7 +27,8 @@ import { ActionLog, runsBare } from './actions.tsx'
 import { performed } from './perform.ts'
 import { NewThreadDialog } from './NewThread.tsx'
 import { Onboarding, useOnboarding } from './Onboarding.tsx'
-import { bound, KEYMAP, shortcutOf, useActions, useShortcut, type Keymap } from './keys.ts'
+import { bound, KEYMAP, RailTabNumber, shortcutOf, useActions, useRailShortcut, useShortcut, type Keymap } from './keys.ts'
+import { railTabs } from './rail-tabs.ts'
 import { useAllThreads, useHistory, useMachines, useNewThreadDialog, useSelection, useProjects, useSettingsDialog, useShell, useSidebar, type Selection } from './state.tsx'
 
 /** Dispatch an action from this window: `dispatch('app.sidebar')`, `dispatch('thread.select', { machine, thread })`. */
@@ -65,6 +66,20 @@ export function Shell() {
   // Wide, the sidebar's edge resizes it, and hides it dragged narrow.
   const sidebarEdge = useSidebarEdge()
   const where = selection && thread && machine ? { machine: machine.id, thread } : undefined
+  // A space shown in the sidebar (\`open\`), or the sidebar hidden from its button: from Ego's thread, back to the
+  // listed one it left; from Settings, back to the thread.
+  const showSpace = (view: (typeof spaces)[number], open = true) => {
+    setSpace(view.id)
+    sidebar.show(open)
+    if (open && alone) select(listed)
+    else if (open) settings.close()
+  }
+  // The rail's tabs, which ⌘1–⌘9 go to (see rail-tabs.ts): as the rail is when asked.
+  const tabsNow = () => narrow ? [] : railTabs(viewsIn(registry, placed, 'rail'), spaces, {
+    offered: registry.router.offered,
+    run: (action) => void registry.router.dispatch(action, {}, { source: 'keys' }).catch((error) => console.error(error)),
+    show: (view) => showSpace(view),
+  })
   // The thread's places, as the views it sees resolve.
   const threadPlaced = useLayout(where).placed
   // Where the thread's columns show their tabs: in the title bar, wide.
@@ -87,7 +102,10 @@ export function Shell() {
     projects, lastThread, appSetting: (key) => watched<SettingsSnapshot>('app', 'settings.watch', {})?.values[key] as never,
     toggleSidebar: () => narrow ? setDrawer((open) => !open) : sidebar.show(),
     back: history.back, forward: history.forward,
+    railTabs: tabsNow,
   })
+  // Each tab's number, for its tooltip.
+  const tabNumber = new Map(tabsNow().map((tab, i) => [tab.id, i + 1]))
   useAppEffects()
   const onboarding = useOnboarding()
 
@@ -123,17 +141,12 @@ export function Shell() {
         {!narrow && (
           <nav className="app__rail" aria-label="App" data-tab={tab}>
             <div className="app__rail-group">
-              <PlacedViews place="rail" frame={withContextMenu('rail')} />
+              <PlacedViews place="rail" frame={(view, drawn) => <RailTabNumber.Provider value={tabNumber.get(view.id)}>{withContextMenu('rail')(view, drawn)}</RailTabNumber.Provider>} />
               {spaces.map((view) => (
                 <ViewContextMenu key={view.id} view={view.id} place="space">
-                  <SpaceButton view={view} open={tab === 'space' && view.id === space?.id} sidebarHidden={sidebar.hidden}
-                    show={(open = true) => {
-                      setSpace(view.id)
-                      sidebar.show(open)
-                      // From Ego's thread, back to the listed one it left; from Settings, back to the thread.
-                      if (open && alone) select(listed)
-                      else if (open) settings.close()
-                    }} />
+                  <RailTabNumber.Provider value={tabNumber.get(view.id)}>
+                    <SpaceButton view={view} open={tab === 'space' && view.id === space?.id} sidebarHidden={sidebar.hidden} show={(open = true) => showSpace(view, open)} />
+                  </RailTabNumber.Provider>
                 </ViewContextMenu>
               ))}
             </div>
@@ -222,14 +235,15 @@ function BackForward() {
 
 /**
  * A space's button in the rail: its own (`railButton`), else its icon, lit while the sidebar shows it, and hiding it from
- * there. In a phone's drawer, always its icon.
+ * there; its tooltip says its number (⌘2). In a phone's drawer, always its icon.
  */
 function SpaceButton({ view, open, sidebarHidden, show, narrow = false }: { view: View; narrow?: boolean } & SpaceRailProps) {
+  const keys = useRailShortcut()
   if (view.railButton && !narrow) return <Contained name={whose(view)} inline><view.railButton open={open} sidebarHidden={sidebarHidden} show={show} /></Contained>
   const Icon = view.icon
   const shown = open && !sidebarHidden
   return (
-    <IconButton label={view.title} className={`app__rail-button ${shown ? 'is-on' : ''}`} onClick={() => show(!shown)}>
+    <IconButton label={view.title} title={keys ? `${view.title} (${keys})` : view.title} className={`app__rail-button ${shown ? 'is-on' : ''}`} onClick={() => show(!shown)}>
       {Icon ? <Icon size={18} aria-hidden /> : view.title.slice(0, 1)}
     </IconButton>
   )

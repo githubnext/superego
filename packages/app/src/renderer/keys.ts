@@ -1,9 +1,10 @@
 // The hooks over shortcuts.ts: the user's keymap and what runs on which keys now.
-import { useSyncExternalStore } from 'react'
+import { createContext, useContext, useSyncExternalStore } from 'react'
 import type { ActionInfo } from '@superego/protocol'
 import { useAppSetting } from './client.ts'
 import { useRegistry } from './extension.tsx'
 import { bound, KEYMAP, keyLabel, type Keymap } from './shortcuts.ts'
+import { tabAction } from './rail-tabs.ts'
 
 export * from './shortcuts.ts'
 
@@ -23,4 +24,13 @@ export function useShortcut(id: string): string | undefined {
   const [keymap] = useKeymap()
   const keys = action && bound(action, keymap)
   return keys ? keyLabel(keys) : undefined
+}
+
+/** The rail's tab drawn inside, by its number (from 1): the shell says, around each tab's button. */
+export const RailTabNumber = createContext<number | undefined>(undefined)
+
+/** In the rail: the label of the shortcut that goes to this tab (⌘1…), for its tooltip; undefined without one. */
+export function useRailShortcut(): string | undefined {
+  const n = useContext(RailTabNumber)
+  return useShortcut(n ? tabAction(n) : '')
 }

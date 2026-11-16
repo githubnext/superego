@@ -104,6 +104,11 @@ export type View<C extends ViewContext = ViewContext> = {
   component: ComponentType<ViewProps<C>>
   /** As a `space`: what it draws in the rail instead of a button with its icon (the sidebar hidden, a list as dots, say). */
   railButton?: ComponentType<SpaceRailProps>
+  /**
+   * In the rail: the action pressing its button runs (Ego's: open its thread). It makes the button one of the rail's
+   * tabs, which ⌘1–⌘9 go to in order, before the spaces; its tooltip says its number (`useRailShortcut`).
+   */
+  action?: string
   /** As a pane: its width to start with, as a share of the row. */
   width?: number
 }

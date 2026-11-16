@@ -11,7 +11,9 @@
   --superego-chrome: light-dark(#f2f2f4, #262628);      /* the window's side: the sidebar, and the strip over it */
   --superego-rail-bg: light-dark(#ebebed, #212123);     /* the rail, a shade under the sidebar beside it */
   --superego-rail-tab: light-dark(#e6e6e9, #1c1c1e);    /* the rail's tabs behind the open one */
-  --superego-line: light-dark(rgb(0 0 0 / .09), rgb(255 255 255 / .07));   /* hairlines between columns and parts */
+  /* Hairlines between columns and parts: the window's every structural line, 1px. Opaque, so a line is one colour
+     whatever it runs over (the rail, the side, the sheet). */
+  --superego-line: light-dark(#dedee1, #38383b);
   --superego-fill: light-dark(rgb(0 0 0 / .05), rgb(255 255 255 / .06));   /* quiet fills: file heads, small buttons */
   --superego-card-edge: 0 0 0 .5px var(--superego-border), 0 1px 3px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .3));
   --superego-surface: light-dark(#f3f3f6, #262629);     /* wells: code, tool output */

@@ -1,4 +1,4 @@
-.files-tree { flex: none; width: clamp(130px, 32%, 220px); overflow: auto; border-right: 1px solid var(--superego-border); background: var(--superego-sidebar-bg); padding: 6px 0 24px; font-size: var(--superego-text-ui); }
+.files-tree { flex: none; width: clamp(130px, 32%, 220px); overflow: auto; border-right: 1px solid var(--superego-line); background: var(--superego-sidebar-bg); padding: 6px 0 24px; font-size: var(--superego-text-ui); }
 .files-tree__row { display: flex; align-items: center; width: 100%; border: 0; background: none; font: inherit; color: var(--superego-text); text-align: left; padding: 3px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
 .files-tree__row:hover { background: var(--superego-hover); }
 .files-tree__row.is-current { background: var(--superego-selected); }

@@ -26,7 +26,7 @@ export { useMachines, useThreads, useAllThreads, useSelection, useProjects, type
 export type { Project } from './projects.ts'
 export { useDispatch } from './Shell.tsx'
 export { usePlacement, useApp, useNarrow } from './extension.tsx'
-export { useShortcut, keyLabel } from './keys.ts'
+export { useShortcut, useRailShortcut, keyLabel } from './keys.ts'
 export { useComposer, useComposerClaim, type Composer, type ComposerClaim } from './ThreadView.tsx'
 export { EXTENSION_API } from '@superego/protocol'
 export type { Json, Status, StatusState, ThreadInfo } from '@superego/protocol'

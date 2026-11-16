@@ -328,7 +328,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     registry.router.setContext({
       app, machines: list, selection, select, openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, showLog() {},
       threadOf: (s) => all[s.machine]?.find((t) => t.id === s.thread), projects: [], lastThread: {},
-      appSetting: (key) => appValues[key] as never, toggleSidebar() {}, back() {}, forward() {},
+      appSetting: (key) => appValues[key] as never, toggleSidebar() {}, back() {}, forward() {}, railTabs: () => [],
     })
     return <>{children}</>
   }

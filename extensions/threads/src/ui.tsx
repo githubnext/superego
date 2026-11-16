@@ -10,7 +10,7 @@
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are thread-tools'.
 import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
-  call, defineAction, defineUiExtension, MachineDrift, showProject, Slot, SORT, unread, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut,
+  call, defineAction, defineUiExtension, MachineDrift, showProject, Slot, SORT, unread, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
   type MachineEntry, type Project, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, STATUS_WORDS, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
@@ -209,13 +209,14 @@ function ThreadsRail({ open, sidebarHidden, show }: SpaceRailProps) {
   const { selection, select } = useSelection()
   const hidden = open && sidebarHidden
   const toggleKeys = useShortcut(SIDEBAR)
+  const tabKeys = useRailShortcut()
   const waiting = projects.flatMap((s) => s.threads.filter((t) => unread(t) && !(s.machine.id === selection?.machine && t.id === selection.thread)).map((t) => t.status))
   const badge = !hidden && waiting.length ? rollup(waiting).state : undefined
   const click = () => show(!open || hidden)
   const isOn = (project: Project, thread: ThreadInfo) => selection?.machine === project.machine.id && selection.thread === thread.id
   return (
     <TooltipProvider>
-      <Tooltip content={`${!open ? 'Show Threads' : hidden ? 'Show sidebar' : 'Hide sidebar'}${toggleKeys ? ` (${toggleKeys})` : ''}`} side="right">
+      <Tooltip content={!open ? `Show Threads${tabKeys ? ` (${tabKeys})` : ''}` : `${hidden ? 'Show sidebar' : 'Hide sidebar'}${toggleKeys ? ` (${toggleKeys})` : ''}`} side="right">
         <IconButton label="Threads" className={`app__rail-button threads-rail__button ${open ? 'is-on' : ''}`} onClick={click}>
           <ChatsIcon size={18} aria-hidden />
           {badge && <span className={`threads-rail__badge threads-rail__badge--${badge}`} />}

@@ -113,7 +113,7 @@
 .profile-card dt { color: var(--superego-faint); }
 .profile-card dd { margin: 0; overflow-wrap: anywhere; }
 .profile-card__path { font-family: var(--superego-mono); font-size: var(--superego-text-xs); line-height: inherit; }
-.app__beside { width: 280px; flex: none; min-height: 0; overflow: auto; background: var(--superego-bg); box-shadow: inset .5px 0 0 var(--superego-line); }
+.app__beside { width: 280px; flex: none; min-height: 0; overflow: auto; background: var(--superego-bg); box-shadow: inset 1px 0 0 var(--superego-line); }
 /* Hidden while every view in it draws nothing: then each holds only its ···. */
 .app__beside:empty, .app__beside:not(:has(> .placed-view > :not(.view-menu__button))) { display: none; }
 .app__empty { margin: auto; color: var(--superego-muted); padding: var(--superego-space-5); }
@@ -336,7 +336,7 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .profile-switch .superego-select { width: auto; color: var(--superego-text); }
 
 .settings__body { display: grid; grid-template-columns: 180px 1fr; height: 100%; }
-.settings__nav { padding: 12px 8px; border-right: 1px solid var(--superego-border); background: var(--superego-sidebar-bg); display: flex; flex-direction: column; gap: 2px; }
+.settings__nav { padding: 12px 8px; border-right: 1px solid var(--superego-line); background: var(--superego-sidebar-bg); display: flex; flex-direction: column; gap: 2px; }
 .settings__nav button { font: inherit; color: inherit; text-align: left; background: none; border: 0; padding: 5px 8px; border-radius: var(--superego-radius); }
 .settings__nav button:hover:not(.is-selected) { background: var(--superego-hover); }
 .settings__nav button.is-selected { background: var(--superego-accent); color: var(--superego-accent-text); }
@@ -346,7 +346,7 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 /* Wide, a pane beside the rail: its list where the sidebar is, on the side's grey. */
 .settings--pane { flex: 1; min-height: 0; }
 .settings--pane .settings__body { grid-template-columns: var(--superego-sidebar) 1fr; }
-.settings--pane .settings__nav { background: var(--superego-chrome); border-right-color: var(--superego-line); }
+.settings--pane .settings__nav { background: var(--superego-chrome); }
 .settings--pane .settings__content { padding: 8px 40px 48px; }
 .settings--pane .settings__content > * { max-width: 760px; }
 .settings__note { color: var(--superego-muted); font-size: calc(12px * var(--superego-text-scale)); margin: 2px 0; }
@@ -491,7 +491,7 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .web-device__actions { display: flex; gap: 6px; flex: none; }
 
 /* Phones and narrow windows: one column, the sidebar a drawer, nothing hovering where a thumb goes. */
-.app__mobilebar { display: flex; align-items: center; gap: var(--superego-space-2); padding: calc(env(safe-area-inset-top) + 8px) var(--superego-space-3) 8px; border-bottom: 1px solid var(--superego-border); background: var(--superego-sidebar-bg); flex: none; }
+.app__mobilebar { display: flex; align-items: center; gap: var(--superego-space-2); padding: calc(env(safe-area-inset-top) + 8px) var(--superego-space-3) 8px; border-bottom: 1px solid var(--superego-line); background: var(--superego-sidebar-bg); flex: none; }
 .app__mobiletitle { flex: 1; min-width: 0; text-align: center; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The thread's title opens its sheet: the status, the title, a caret that says there's more. */
 button.app__mobiletitle { display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 6px; border: 0; border-radius: 8px; background: none; color: var(--superego-text); font: inherit; font-weight: 600; cursor: default; }
@@ -544,7 +544,7 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
   :root:has(.app:not(.is-web)) .superego-dialog__header { min-height: var(--superego-titlebar); padding-left: 84px; -webkit-app-region: drag; }
   :root:has(.app:not(.is-web)) .superego-dialog__header :is(button, a, input, select, [role="button"]) { -webkit-app-region: no-drag; }
   .settings__body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .settings__nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--superego-border); padding: 8px; }
+  .settings__nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--superego-line); padding: 8px; }
   .settings__nav button { white-space: nowrap; }
   .settings__content { padding: 8px 16px 40px; }
   .setting, .provider, .profile-row, .machine-row, .web-device, .web-pair { flex-wrap: wrap; }
@@ -569,7 +569,10 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 /* Wide, the columns stand apart on the side's grey, a hairline at each edge; the room after each (see GAP in panes.tsx)
    is its handle, with a grip that's quiet until it's pointed at or dragged. Past the last column, the row's ground. */
 .panes:not(.panes--narrow) { background: var(--superego-chrome); }
-.panes__gap { flex: none; width: 8px; cursor: col-resize; position: relative; display: grid; place-items: center; box-shadow: inset 1px 0 0 var(--superego-line), inset -1px 0 0 var(--superego-line); }
+.panes__gap { flex: none; width: 8px; cursor: col-resize; position: relative; display: grid; place-items: center; box-shadow: inset 1px 0 0 var(--superego-line); }
+/* A column's edge on each side: the one before it always, the next one's only where there's a next (none at the
+   window's edge, nor against the column beside, which draws its own). */
+.panes__gap:has(+ .panes__column) { box-shadow: inset 1px 0 0 var(--superego-line), inset -1px 0 0 var(--superego-line); }
 .panes__gap::after { content: ''; width: 3px; height: 28px; border-radius: 2px; background: var(--superego-faint); opacity: .45; transition: opacity .12s, height .12s, background-color .12s; }
 .panes__gap:hover::after, .panes__gap:active::after { opacity: 1; height: 40px; background: var(--superego-muted); }
 /* While a column is dragged: the cursor stays, and nothing under it is selected. */
@@ -605,7 +608,7 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .panes__kept { flex: none; }
 .pane-empty { margin: auto; color: var(--superego-muted); padding: var(--superego-space-5); text-align: center; }
 .pane-scroll { flex: 1; overflow: auto; }
-.pane-bar { display: flex; align-items: center; gap: var(--superego-space-3); padding: 6px var(--superego-space-3); border-bottom: 1px solid color-mix(in srgb, var(--superego-border) 60%, transparent); font-size: var(--superego-text-sm); color: var(--superego-muted); flex: none; min-height: 38px; }
+.pane-bar { display: flex; align-items: center; gap: var(--superego-space-3); padding: 6px var(--superego-space-3); border-bottom: 1px solid var(--superego-line); font-size: var(--superego-text-sm); color: var(--superego-muted); flex: none; min-height: 38px; }
 .pane-bar > :first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pane-bar code { font: var(--superego-text-sm) var(--superego-mono); color: var(--superego-text); }
 .pane-bar a { color: var(--superego-accent); text-decoration: none; }
@@ -641,7 +644,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .file-editor__host .cm-editor { font-size: calc(13px * var(--superego-text-scale)); }
 .file-editor__host .cm-editor.cm-focused { outline: none; }
 .file-editor__host .cm-scroller { font-family: var(--superego-mono); overflow: visible; }
-.file-editor__host .cm-gutters { background: var(--superego-sidebar-bg); border-right: 1px solid var(--superego-border); color: var(--superego-faint); }
+.file-editor__host .cm-gutters { background: var(--superego-sidebar-bg); border-right: 1px solid var(--superego-line); color: var(--superego-faint); }
 .file-editor:not(.file-editor--live, .file-editor--rendered) .file-editor__scroll { background: var(--superego-bg); }
 .file-editor__after { padding: 0 var(--superego-space-5) 48px; max-width: 720px; margin: 0 auto; }
 :is(.file-editor--live, .file-editor--rendered) .file-editor__after { box-sizing: content-box; }
