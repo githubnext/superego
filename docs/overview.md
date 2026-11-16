@@ -127,9 +127,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `extensions/thread-reports` | a thread started by another tells it when what it was asked finishes, fails or waits on a question, until the user takes it over by writing to it; meanwhile the child is `quiet`, unread and notified only when it needs you (daemon; optional) |
 | `extensions/worktrees` | a git worktree of its own for a thread that asks (`-w`, the New thread checkbox, `options: { worktrees: true }` in a profile): made on a branch, removed when archived clean (what still runs from it stopped first), put back when unarchived; the branch in the title bar (daemon + UI; required) |
 | `extensions/ego` | Ego, Superego's own agent: one hidden thread per machine, its prompt and tools that read and set up; the rail's lifebuoy (a phone's drawer's too), *Ask Ego* in ⌘K, *Clear* (daemon + UI) |
-| `extensions/ask-user` | an `ask_user` tool; the question card and blocked status (daemon + UI) |
-| `extensions/answer-ui` | `show_ui` (blocks in the transcript, pressed later as a message) and `ask_ui` (blocks above the composer, waiting for an answer); both drawn out of the run's fold (daemon + UI) |
-| `extensions/pane-ui` | `open_ui`/`update_ui`: the agent's blocks in a `ui` pane beside the thread, kept with the thread across restarts (daemon + UI) |
+| `extensions/agent-ui` | the agent's ways to ask and show: `ask_user` (a question, with options) and `ask_ui` (blocks) wait above the composer, one at a time, oldest first, the thread blocked meanwhile; `show_ui` (blocks in the transcript, out of the run's fold, pressed later as a message); `open_ui`/`update_ui` (blocks in a `ui` pane beside the thread, kept with the thread across restarts). The blocks guide is one prompt section (daemon + UI) |
 | `extensions/git` | Changes (`⌘⇧D`): the thread's folder's changes by git, file by file, +N −N on its tab; the agent opens it too (daemon + UI) |
 | `extensions/web-panes` | Preview, a web page beside the thread (a link it names, opened beside), and Artifact, an HTML file the agent wrote, sandboxed (daemon + UI) |
 | `extensions/files` | the file tree beside the editor and quick open (`⌘P`) (daemon + UI) |
@@ -252,7 +250,7 @@ export default defineProfile({
     'linear', 'sentry',            // the machine's (Settings → MCP servers), by name
     { docs: { command: 'node', args: ['./tools/docs-mcp.js'], auth: { type: 'env', names: ['DOCS_TOKEN'] } } },  // its own
   ],
-  without: ['ask-user'],           // optional extensions its threads go without
+  without: ['agent-ui'],           // optional extensions its threads go without
   options: { worktrees: true },    // what its threads ask extensions for, by name: each a worktree of its own
 })
 ```

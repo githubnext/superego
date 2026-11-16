@@ -531,7 +531,7 @@ export default defineProfile({
   // thinking: 'medium',
   // prompt: 'You work on this project. …',
   // extensions: ['./extensions/example.ts'],   // agent parts: tools, prompt sections, hooks
-  // without: ['ask-user'],                       // built-ins this profile does without
+  // without: ['agent-ui'],                       // built-ins this profile does without
   // extends: 'user:default',                     // start from your own profile of that name
 })
 `

@@ -79,7 +79,7 @@ Useful ones:
 superego do pane.open --params '{"thread":"<thread>","kind":"editor","params":{"path":"README.md"}}'
 ```
 
-Extensions add their own actions (`ask-user.answer`, `vault.graph`); they show in the list too.
+Extensions add their own actions (`agent-ui.answer`, `vault.graph`); they show in the list too.
 
 ## Outside agents
 

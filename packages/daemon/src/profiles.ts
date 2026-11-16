@@ -8,7 +8,7 @@
 //     model: 'anthropic/claude-sonnet-4-5',
 //     prompt: 'You answer customer email for Acme. Be brief.',
 //     extensions: ['./extensions/orders.ts'],    // agent parts: tools, prompt sections, hooks
-//     without: ['ask-user'],                      // built-ins this profile does without
+//     without: ['agent-ui'],                      // built-ins this profile does without
 //     mcpServers: ['linear'],                     // an extension's own key: the MCP servers its threads use
 //   })
 //
@@ -60,7 +60,7 @@ export type ProfileSpec = {
    * read by their `starting` hooks (`{ worktrees: true }`: a git worktree of its own).
    */
   options?: Record<string, Json>
-  /** Built-in extensions this profile does without: 'coding-tools', 'ask-user', … */
+  /** Built-in extensions this profile does without: 'coding-tools', 'agent-ui', … */
   without?: string[]
   /** Start from another profile and add to it: 'user:<name>' (a project's profile on the user's). */
   extends?: string

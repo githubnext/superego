@@ -726,7 +726,7 @@ superego.thread<{ path: string; branch: string }>({   // the state its starting 
 - `turnStart` and `turnEnd` are per run, not per message: a message steered or queued into a run that's going is part
   of it. A run resumed after a restart had started already, so it ends with a `turnEnd` alone; one that ended while
   the daemon was down gets neither.
-- `blocked` is told when a thread comes to need the user mid-run (an extension's `status`: `ask-user`'s question), once
+- `blocked` is told when a thread comes to need the user mid-run (an extension's `status`: `agent-ui`'s question), once
   each time: when the extension whose status it is calls `invalidate()`.
 - A thread archiving itself mid-turn is `threads.archive(id, { whenIdle: true })`: archived once its run ends, even
   across a restart. What its hooks said they did (or why it couldn't be) is then said in the thread, as Superego's
@@ -768,7 +768,7 @@ source, at `extensions/<name>/src`, so only a checkout has them.
 | [`build-queue`](examples/build-queue), [`build-queue-ui`](examples/build-queue-ui) | a profile's extension both ways: a tool, a `scopedValue` per thread, a Cancel action, a data view or a UI half's view, a shortcut; tests on `superego/testing` |
 | `tasks` | the smallest: two tools and a prompt section; a `work` divider |
 | `suggestions` | a hook, a side call, a `scopedValue` per thread, a `composer.above` slot |
-| `ask-user` | a tool that waits on you: `status`, an action to answer, a `scopedValue` per thread, a `tool` view |
+| `agent-ui` | tools that wait on you (one queue, a `scopedValue` per thread, `status` while it asks, an action to answer, one `composer.above` card claiming the composer), tools that draw blocks (`tool` views, some `{ fold: false }`), a pane kind drawn from its `state` with each thread, published per thread (`state({ publish })`), and a prompt section the tools' descriptions point to |
 | `images` | a tool with `{ fold: false }`, files kept with `threads.attachments` |
 | `git` | Changes: a `method` (a read), a `pane` the agent is told of, built on the kit's `Diff`, an `action` with keys |
 | `web-panes` | two pane kinds and nothing else; `urls: true` makes web links open in one |
@@ -782,8 +782,6 @@ source, at `extensions/<name>/src`, so only a checkout has them.
 | `worktrees` | `thread` hooks (`starting` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `header.chips` chip, a `thread.badge` mark and a `newThreadField` |
 | `mcp-servers` | a key of its own in profiles (`profileKey('mcpServers', …)`); a settings section drawn by a component of its own (`settings(ui, …)`) from a live value (the section's `value`), with dialogs and `SignInFlow`; tool rows by prefix (`mcp__*`) with a call's own `verb` and images; a `header` view, a `details.section` slot and a `composer.above` notice, all from the thread's facts |
 | `ego` | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `beforeSend` transform marking an outside agent's message and `threads.answering` to tell a call that answers one; the machines list through `machines.add`/`update`/`remove`; a view in the `rail`, and in a phone's `drawer`; an `onboarding` slot |
-| `answer-ui` | tools that draw blocks in the transcript and wait on an answer: a `scopedValue` per thread, `status` while it asks, a `composer.above` slot, `tool` views with `{ fold: false }` |
-| `pane-ui` | a pane kind drawn from what the agent sends: its `state` with each thread, published per thread (`state({ publish })`), so it's kept across restarts; `tool` views |
 | `terminal` | bytes on a `channel` (the window's half with `channel` from `superego/unstable`), a `pane` in the pane menu, an action with keys, a `method` for its size, OSC 7501 status as a `scopedValue` and the thread's `status`, `thread` hooks to end its shells |
 
 Diagram sources are the `.mmd` files in [guide/](guide/); re-render with the `diagram` skill

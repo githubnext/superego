@@ -86,7 +86,7 @@ Machine
 Projects aren't stored: each thread keeps the project it belongs to, and clients group by it. What a client shows and
 where its focus is (the selection, a draft, an editor's scroll) are the client's own.
 
-A thread's status is derived: a run → `working`; an extension says blocked (ask-user's question) → `blocked`; a failed
+A thread's status is derived: a run → `working`; an extension says blocked (agent-ui's question) → `blocked`; a failed
 run → `error`; an answer the user hasn't seen → `done`; otherwise `idle`. "Seen" is stored per thread, so every
 client agrees.
 

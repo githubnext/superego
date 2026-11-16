@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { blockErrors, checkBlocks, describeReply, initialValues, needsSubmit, picksAnswer, type Block } from '../src/blocks.ts'
+import { BLOCK_TYPES, BLOCKS_GUIDE, blockErrors, checkBlocks, describeReply, initialValues, needsSubmit, picksAnswer, type Block } from '../src/blocks.ts'
 
 it('takes every kind of block, nested', () => {
   const blocks: Block[] = [
@@ -11,7 +11,8 @@ it('takes every kind of block, nested', () => {
     ] },
     { type: 'choice', id: 'size', options: [{ label: 'Small', preview: { type: 'markdown', text: 'tiny' } }, { label: 'Large', value: 'l' }] },
     { type: 'slider', id: 'n', min: 0, max: 10 },
-    { type: 'open', label: 'See it', kind: 'editor', path: 'a.md', line: 3 },
+    { type: 'open', label: 'See it', kind: 'editor', params: { path: 'a.md', line: 3 } },
+    { type: 'open', label: 'The changes', kind: 'diff' },
     { type: 'html', html: '<b>hi</b>', id: 'chart' },
     { type: 'buttons', buttons: [{ id: 'go', label: 'Go', style: 'primary' }] },
   ]
@@ -24,8 +25,12 @@ it('says where blocks are wrong, in words a model can act on', () => {
   expect(blockErrors([{ type: 'markdown', txt: 'x' }])).toEqual(['blocks[0].text: missing', 'blocks[0].txt: unknown field'])
   expect(blockErrors([{ type: 'card', blocks: [{ type: 'nope' }] }])[0]).toMatch(/^blocks\[0\]\.blocks\[0\]\.type: expected one of/)
   expect(blockErrors([{ type: 'choice', id: 'a', options: [{ label: 'x' }] }, { type: 'text', id: 'a' }])).toEqual(['blocks[1].id: "a" is used twice; ids must be unique'])
-  expect(blockErrors([{ type: 'open', label: 'x', kind: 'preview' }])).toEqual(['blocks[0].url: missing (a preview pane opens a web page)'])
+  expect(blockErrors([{ type: 'open', label: 'x', kind: 'editor', path: 'a.md' }])).toEqual(['blocks[0].path: unknown field'])
   expect(() => checkBlocks([{ type: 'divider', x: 1 }])).toThrow(/blocks\[0\]\.x: unknown field[\s\S]*call again/)
+})
+
+it('describes every block in its guide', () => {
+  for (const type of BLOCK_TYPES) expect(BLOCKS_GUIDE).toMatch(new RegExp(`(^|[\\s|-])${type} \\{`))
 })
 
 it('answers at once from a lone choice, and otherwise needs submitting', () => {

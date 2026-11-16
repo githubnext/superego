@@ -101,9 +101,10 @@ async function answerQuestions(world: World, threads: Thread[]): Promise<number>
   let answered = 0
   for (const thread of threads.filter((t) => t.status.state === 'blocked')) {
     for (const call of toolCalls(await entriesOf(world.rpc, thread.id)).filter((c) => c.result === undefined)) {
-      const answer = call.name === 'ask_user' ? { id: 'ask-user.answer', params: { id: call.id, answer: NUDGE } }
-        : call.name === 'ask_ui' ? { id: 'answer-ui.answer', params: { id: call.id, values: defaultsOf(call.args?.blocks ?? []), button: 'submit' } }
+      const params = call.name === 'ask_user' ? { id: call.id, text: NUDGE }
+        : call.name === 'ask_ui' ? { id: call.id, values: defaultsOf(call.args?.blocks ?? []), button: 'submit' }
         : undefined
+      const answer = params && { id: 'agent-ui.answer', params }
       if (answer) await world.rpc.call('action.run', { ...answer, exposure: 'cli' }).then(() => answered++, () => {})
     }
   }

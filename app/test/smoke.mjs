@@ -214,13 +214,13 @@ if (phase === 'first') {
   await until(`(() => { const items = [...document.querySelectorAll('.links .palette__list li')].map((li) => li.textContent); return items.some((t) => t.includes('127.0.0.1')) && items.some((t) => t.includes('this thread')) })()`, 'links listed')
   press('Escape', [])
   await until(`!document.querySelector('.links')`, 'links closed')
-  // ask-user: a replayed agent asks; the question shows above the composer and the thread as needing you; an answer
+  // agent-ui: a replayed agent asks; the question shows above the composer and the thread as needing you; an answer
   // from the card reaches it, and it carries on.
   await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: 'replay/replay' })`)
   const asking = await run(`window.superego.call('local', 'thread.start', {}).then((s) => window.superego.call('local', 'thread.send', { thread: s.id, text: 'pick a colour' }).then(() => s.id))`)
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('pick a colour'))`, 'new thread listed')
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('pick a colour'))?.click()`)
-  await until(`document.querySelector('.ask-user')?.textContent.includes('Which colour?')`, 'question card above the composer')
+  await until(`document.querySelector('.agent-ui-waiting')?.textContent.includes('Which colour?')`, 'question card above the composer')
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('pick a colour') && li.querySelector('.superego-status--blocked'))`, 'thread marked as needing you')
   // Sent while it's busy, a follow-up shows at once as waiting over the composer, and goes in when the agent is done;
   // one taken back with its × never does.
@@ -235,8 +235,8 @@ if (phase === 'first') {
   await until(`Boolean([...document.querySelectorAll('.queued-row')].find((row) => row.textContent.includes('make it bold'))?.querySelector('.queued-row__now'))`, 'follow-up offered to send now')
   await run(`[...document.querySelectorAll('.queued-row')].find((row) => row.textContent.includes('make it bold')).querySelector('.queued-row__now').click()`)
   await until(`(() => { const row = [...document.querySelectorAll('.queued-row')].find((r) => r.textContent.includes('make it bold')); return row?.textContent.includes('Steers after this step') && !row.querySelector('.queued-row__now') })()`, 'sent now: steers')
-  await run(`[...document.querySelectorAll('.ask-user button')].find((b) => b.querySelector('.ask-user__option-label')?.textContent === 'blue').click()`)
-  await until(`!document.querySelector('.ask-user') && document.querySelector('.ask-user-asked')?.textContent.includes('blue') && document.querySelector('.transcript').textContent.includes('Blue it is.')`, 'answered, agent carried on')
+  await run(`[...document.querySelectorAll('.agent-ui-waiting button')].find((b) => b.querySelector('.agent-ui-question__option-label')?.textContent === 'blue').click()`)
+  await until(`!document.querySelector('.agent-ui-waiting') && document.querySelector('.agent-ui-asked')?.textContent.includes('blue') && document.querySelector('.transcript').textContent.includes('Blue it is.')`, 'answered, agent carried on')
   await until(`(() => { const text = document.querySelector('.transcript').textContent; return text.includes('make it bold') && text.indexOf('make it bold') < text.indexOf('Blue it is.') })()`, 'the one sent now went in after the step, before the answer')
   await until(`!document.querySelector('.queued-row') && document.querySelector('.transcript').textContent.includes('then paint it') && document.querySelector('.transcript').textContent.includes('Noted for later.') && !document.querySelector('.transcript').textContent.includes('never mind this')`, 'queued follow-up went in, the one taken back not')
   // images: a replayed agent shows images (show_images), drawn in the thread: one alone, a grid, a carousel; a file

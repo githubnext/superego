@@ -9,8 +9,6 @@ export type Cell = string | number | boolean | null
 export type ChoiceOption = { value?: string; label: string; description?: string; preview?: Block }
 export type SelectOption = { value?: string; label: string }
 export type ActionButton = { id: string; label: string; style?: 'primary' | 'danger' }
-/** Where an `open` block takes the user: a file (`path`, `line`), the changes, a web page (`url`), an HTML file (`path`). */
-export type PaneKind = 'editor' | 'diff' | 'preview' | 'artifact'
 
 export type Block =
   | { type: 'markdown'; text: string }
@@ -31,7 +29,8 @@ export type Block =
   | { type: 'number'; id: string; label?: string; min?: number; max?: number; step?: number; default?: number }
   | { type: 'slider'; id: string; label?: string; min: number; max: number; step?: number; default?: number }
   | { type: 'buttons'; buttons: ActionButton[] }
-  | { type: 'open'; label: string; kind: PaneKind; path?: string; url?: string; line?: number }
+  /** A link to a pane of any kind the thread offers (as `pane_open`), with that kind's params. */
+  | { type: 'open'; label: string; kind: string; title?: string; params?: { [key: string]: Value } }
   | { type: 'html'; id?: string; html: string; height?: number }
 
 export type BlockType = Block['type']
@@ -83,7 +82,7 @@ const BLOCK = union([
   obj({ type: lit('number'), id, label: opt(str()), min: opt(num()), max: opt(num()), step: opt(num({ exclusiveMinimum: 0 })), default: opt(num()) }),
   obj({ type: lit('slider'), id, label: opt(str()), min: num(), max: num(), step: opt(num({ exclusiveMinimum: 0 })), default: opt(num()) }),
   obj({ type: lit('buttons'), buttons: arr(obj({ id, label, style: opt(oneOf(['primary', 'danger'])) }), { minItems: 1 }) }),
-  obj({ type: lit('open'), label, kind: oneOf(['editor', 'diff', 'preview', 'artifact']), path: opt(str({ minLength: 1 })), url: opt(str({ pattern: '^https?://' })), line: opt(int({ minimum: 1 })) }),
+  obj({ type: lit('open'), label, kind: str({ minLength: 1 }), title: opt(str()), params: opt(obj({}, { open: true }) as Schema<{ [key: string]: Value }>) }),
   obj({ type: lit('html'), id: opt(id), html: str({ minLength: 1 }), height: opt(int({ minimum: 20, maximum: 2000 })) }),
 ])
 
@@ -102,7 +101,7 @@ export const blocksParameter = (description = 'The UI, top to bottom.') =>
 export function blockErrors(blocks: unknown): string[] {
   const errors = validator.check(blocks) ? [] : validator.errors(blocks).map((e) => `blocks${e.path.replaceAll('/', '.').replace(/\.(\d+)/g, '[$1]')}: ${e.message}`)
   if (errors.length) return errors.slice(0, 12)
-  // What a schema can't say: ids are unique, and an open block names what it opens.
+  // What a schema can't say: ids are unique.
   const seen = new Set<string>()
   walk(blocks as Block[], (block, path) => {
     const key = 'id' in block ? block.id : undefined
@@ -113,10 +112,6 @@ export function blockErrors(blocks: unknown): string[] {
     if (block.type === 'buttons') for (const [i, b] of block.buttons.entries()) {
       if (seen.has(b.id)) errors.push(`${path}.buttons[${i}].id: "${b.id}" is used twice; ids must be unique`)
       seen.add(b.id)
-    }
-    if (block.type === 'open') {
-      if ((block.kind === 'editor' || block.kind === 'artifact') && !block.path) errors.push(`${path}.path: missing (a ${block.kind} pane opens a file)`)
-      if (block.kind === 'preview' && !block.url) errors.push(`${path}.url: missing (a preview pane opens a web page)`)
     }
     if (block.type === 'slider' && block.min >= block.max) errors.push(`${path}.max: must be more than min`)
   })
@@ -219,5 +214,5 @@ export const BLOCKS_GUIDE = `Blocks (JSON objects, by "type"; "?" marks optional
 - stack {blocks} | row {blocks} (side by side) | card {title?, blocks} | divider {}
 - inputs, each with a unique id (its key in the answer) and label?: choice {options: [{label, value?, description?, preview?: block}], multiple?, style?: buttons|list, default?} | select {options: [{label, value?}], default?} | switch {label, default?} | text {placeholder?, default?} | textarea {placeholder?, default?} | number {min?, max?, step?, default?} | slider {min, max, step?, default?}
 - buttons {buttons: [{id, label, style?: primary|danger}]}: each sends {button: id} with every input's value. Without buttons, inputs get a submit button, and a lone single choice answers when picked.
-- open {label, kind: editor|diff|preview|artifact, path?, url?, line?}: a link that opens a pane.
+- open {label, kind, params?, title?}: a link that opens a pane beside the thread: a kind your instructions list under panes, with the params it takes there ({ path } for an editor).
 - html {html, height?, id?}: your own HTML/CSS/JS in a sandboxed frame (no network access to the app, no same-origin). Theme variables (--superego-text, --superego-muted, --superego-accent, --superego-border, --superego-surface, --superego-font, --superego-mono, --superego-radius) follow light/dark. Scripts get superego.reply(value) (answers, as values[id]) and superego.send(text) (a message), both only on a click or key press, and superego.resize(). For what blocks can't draw: charts, diagrams, custom widgets.`

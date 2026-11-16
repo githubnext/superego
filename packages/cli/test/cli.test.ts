@@ -104,7 +104,7 @@ describe('superego', () => {
 
   it('lists actions and runs any of them with do', async () => {
     const actions = await superegoJson(['actions'])
-    expect(actions.map((a: any) => a.id)).toEqual(expect.arrayContaining(['thread.start', 'thread.rename', 'ask-user.answer']))
+    expect(actions.map((a: any) => a.id)).toEqual(expect.arrayContaining(['thread.start', 'thread.rename', 'agent-ui.answer']))
     expect(await superego(['actions'])).toMatch(/thread\.rename\s+thread title\s+Rename the thread/)
     const created = await superegoJson(['do', 'thread.start', '--title', 'via do'])
     await superego(['do', 'thread.rename', '--thread', created.id, '--title', 'renamed via do'])

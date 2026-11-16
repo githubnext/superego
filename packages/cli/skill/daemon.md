@@ -124,7 +124,7 @@ const where = defineTool({
 **Data for a pane:** the pane's UI calls a method with the thread's id; the method reads from disk or the network and
 returns JSON. Keep actions for what changes something. See `superego --skill ui`.
 
-**Waiting on the user** (as `ask-user` does): a tool stores a resolver in a `Map`, publishes the pending question as a
+**Waiting on the user** (as `agent-ui` does): a tool stores a resolver in a `Map`, publishes the pending question as a
 live value, contributes `status` so the thread shows blocked, and an action (`<name>.answer`) resolves it. Mark the
 tool `replay: 'safe'` so a restart asks again.
 

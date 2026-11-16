@@ -46,7 +46,7 @@ extensions/orders/
 Bundled code imports packages directly, not `'superego'`: `defineExtension`, `defineTool`, `section` from
 `@earendil-works/pi-durable`; schemas from `@earendil-works/pi-schema`; `defineAction` (machine actions), `RpcError`
 from `@superego/protocol`; `defineAction` for window actions from `@superego/app/ui`; components from `@superego/ui`.
-Copy `extensions/ask-user/package.json` for dependencies.
+Copy `extensions/agent-ui/package.json` for dependencies.
 
 **Required or optional.** An extension says what it is once, in `src/shared.ts`, and spreads that into both halves:
 
@@ -123,7 +123,7 @@ Bundled extensions get more than a profile's:
 Use `superego/testing` (`@superego/sdk/testing`; "Testing" in `guide.md`): `testDaemon({ extensions:
 [yours], model: [callTool(…), say(…)] })` runs the daemon half against a real daemon with a scripted model, and
 `mountUi({ extensions: [yours], machines: [fakeMachine({ … }) or daemonMachine(daemon)] })` the UI half in the window's
-own registry and shell. Older tests set up the same by hand (`extensions/tasks/test/daemon.test.ts`).
+own registry and shell; `extensions/agent-ui/test/daemon.test.ts` is one. Older tests set up the same by hand (`extensions/tasks/test/daemon.test.ts`).
 
 Pure logic (parsing, dividing work, a composer provider's `word`, a `sentWith` reader) gets plain unit tests; see
 `extensions/skills/test/names.test.ts`. `pnpm test` runs everything under `packages/*/test` and

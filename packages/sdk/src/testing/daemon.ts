@@ -163,14 +163,19 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
       return JSON.stringify(value.entries)
     },
     async watch<T>(key: string, { scope }: { scope?: string } = {}) {
+      // Heard from before the watch answers: a value read as it's first watched may be told before the answer comes.
+      const early: Notifications['value.changed'][] = []
+      let take = (params: Notifications['value.changed']) => { early.push(params) }
+      const off = peer.on('value.changed', (params: Notifications['value.changed']) => take(params))
       const { sub, value } = await peer.call<{ sub: string; value: T }>('value.watch', { key, ...(scope !== undefined ? { scope } : {}) })
       let now = value
       const seen = [value]
-      const off = peer.on('value.changed', (params: Notifications['value.changed']) => {
+      take = (params) => {
         if (params.sub !== sub) return
         now = params.value as T
         seen.push(now)
-      })
+      }
+      for (const params of early) take(params)
       return {
         get value() { return now },
         seen,

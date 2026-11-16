@@ -216,15 +216,12 @@ importers:
       '@lydell/node-pty':
         specifier: 1.2.0-beta.18
         version: 1.2.0-beta.18
-      '@superego/answer-ui':
+      '@superego/agent-ui':
         specifier: workspace:*
-        version: link:../extensions/answer-ui
+        version: link:../extensions/agent-ui
       '@superego/app':
         specifier: workspace:*
         version: link:../packages/app
-      '@superego/ask-user':
-        specifier: workspace:*
-        version: link:../extensions/ask-user
       '@superego/cli':
         specifier: workspace:*
         version: link:../packages/cli
@@ -252,9 +249,6 @@ importers:
       '@superego/mcp-servers':
         specifier: workspace:*
         version: link:../extensions/mcp-servers
-      '@superego/pane-ui':
-        specifier: workspace:*
-        version: link:../extensions/pane-ui
       '@superego/protocol':
         specifier: workspace:*
         version: link:../packages/protocol
@@ -299,7 +293,7 @@ importers:
         specifier: 6.0.0
         version: 6.0.0(vite@8.3.5(@types/node@24.19.2))
 
-  extensions/answer-ui:
+  extensions/agent-ui:
     dependencies:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
@@ -319,38 +313,10 @@ importers:
       '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@superego/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
     devDependencies:
-      '@types/react':
-        specifier: ^19
-        version: 19.3.0
-      react:
-        specifier: ^19
-        version: 19.3.1
-
-  extensions/ask-user:
-    dependencies:
-      '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
-      '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
-      '@superego/app':
+      '@superego/sdk':
         specifier: workspace:*
-        version: link:../../packages/app
-      '@superego/daemon':
-        specifier: workspace:*
-        version: link:../../packages/daemon
-      '@superego/protocol':
-        specifier: workspace:*
-        version: link:../../packages/protocol
-      '@superego/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-    devDependencies:
+        version: link:../../packages/sdk
       '@types/react':
         specifier: ^19
         version: 19.3.0
@@ -540,37 +506,6 @@ importers:
       zod:
         specifier: 4.6.7
         version: 4.6.7
-
-  extensions/pane-ui:
-    dependencies:
-      '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
-      '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
-      '@superego/app':
-        specifier: workspace:*
-        version: link:../../packages/app
-      '@superego/blocks':
-        specifier: workspace:*
-        version: link:../../packages/blocks
-      '@superego/daemon':
-        specifier: workspace:*
-        version: link:../../packages/daemon
-      '@superego/protocol':
-        specifier: workspace:*
-        version: link:../../packages/protocol
-      '@superego/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-    devDependencies:
-      '@types/react':
-        specifier: ^19
-        version: 19.3.0
-      react:
-        specifier: ^19
-        version: 19.3.1
 
   extensions/skills:
     dependencies:

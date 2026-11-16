@@ -33,7 +33,7 @@ export default defineProfile({
   panes: {                                           // pane kinds its UI adds, listed to the agent for pane_open
     order: 'an order, with its lines and status. Params: { id }',
   },
-  without: ['ask-user'],                             // built-ins to leave out
+  without: ['agent-ui'],                             // built-ins to leave out
   options: { worktrees: true },                      // what its threads ask extensions for, by name: a worktree each
   extends: 'user:default',                           // start from your profile of that name, and add to it
   mcpServers: [                                      // the mcp-servers extension's key: MCP servers its threads use
@@ -56,7 +56,7 @@ Every field is optional.
 - **`panes`** describes each pane kind the UI registers, so the agent knows it can open one and with which params.
 - **`without`** takes the names of optional extensions, the ones Settings → Extensions lists (and `superego
   extensions`): the core's `coding-tools` (read, write, edit, bash), `panes` (pane_open) and `agents-md`, and bundled
-  ones such as `thread-tools` (thread_start, thread_read, …), `ask-user`, `terminal` or `mcp-servers`. Its threads get
+  ones such as `thread-tools` (thread_start, thread_read, …), `agent-ui`, `terminal` or `mcp-servers`. Its threads get
   none of their tools or prompt sections, and the window shows none of their UI there. Required ones (the
   sidebar) can't be left out.
 - **`options`** is what its threads ask extensions for, by name, as `thread.start`'s `options` (a thread's own win):

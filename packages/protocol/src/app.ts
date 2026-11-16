@@ -44,7 +44,7 @@ export const remoteCommand = (app: AppConfig) => `${app.id} connect --start`
  * others), a profile can't do without it, and nothing else decides that. Unset: optional.
  */
 export type ExtensionAbout = {
-  /** Lowercase, unique in the app: `ask-user`, `files`. Everything it registers is named `<name>.<something>`. */
+  /** Lowercase, unique in the app: `agent-ui`, `files`. Everything it registers is named `<name>.<something>`. */
   name: string
   /** How Settings names it, and what it does there; the name, and nothing, when unset. */
   title?: string

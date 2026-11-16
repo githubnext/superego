@@ -73,7 +73,7 @@ it("takes the user's default profile: its prompt and model", async () => {
 it("runs a project's profile and its extensions only once allowed, and again after it changes", async () => {
   const profile = join(project, '.superego', 'profiles', 'support')
   write(profile, {
-    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ prompt: 'You answer customer email.', extensions: ['./orders.ts'], without: ['ask-user'] })\n`,
+    'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ prompt: 'You answer customer email.', extensions: ['./orders.ts'], without: ['agent-ui'] })\n`,
     'orders.ts': `import { defineExtension, defineTool, obj, str } from 'superego'
 export default defineExtension({
   name: 'orders',
@@ -97,7 +97,7 @@ export default defineExtension({
   const agent = await agentOf(peer, thread.id)
   expect(agent.extensions).toContain('project:support/orders')
   expect(agent.extensions).toContain('coding-tools')
-  expect(agent.extensions).not.toContain('ask-user')
+  expect(agent.extensions).not.toContain('agent-ui')
   expect(agent.instructions).toBe('You answer customer email.')
   // Loaded, it says what it brings.
   expect(await peer.call<ProfileInfo[]>('profile.list', { cwd: project })).toMatchObject([{ name: 'support', allowed: true, extensions: ['orders'] }])

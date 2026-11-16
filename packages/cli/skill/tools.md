@@ -86,7 +86,7 @@ state.
 ## Replacing built-in tools
 
 A profile's tool with the name of a built-in one (`read`, `bash`, …) replaces it in that profile's threads. To leave
-built-ins out entirely, use the profile's `without` (`coding-tools`, `ask-user`, `panes`, `thread-tools`, …).
+built-ins out entirely, use the profile's `without` (`coding-tools`, `agent-ui`, `panes`, `thread-tools`, …).
 
 `wrapTool`, `wrapSection` and `hook` are pi-durable's lower-level decorators (wrapping a tool or a section by name);
 prefer tools and sections. To hear every tool call a thread makes, a daemon half has `superego.toolCalls`:

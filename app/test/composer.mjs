@@ -128,7 +128,7 @@ void (async () => {
   const asking = await create('Pick an export')
   await submit(asking, 'Which export first?')
   await open('Pick an export')
-  await until(`Boolean(document.querySelector('.ask-user'))`, 'question')
+  await until(`Boolean(document.querySelector('.agent-ui-waiting'))`, 'question')
   await both('question')
   await phone('question-narrow')
 

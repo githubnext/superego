@@ -1,15 +1,13 @@
 // Every bundled extension's UI half. Whether each is required or optional is its own declaration (`about`), not decided
 // here; the sidebar's, required, comes first.
 import { mountApp } from '@superego/app/ui'
-import askUser from '@superego/ask-user/ui'
+import agentUi from '@superego/agent-ui/ui'
 import ego from '@superego/ego/ui'
 import files from '@superego/files/ui'
 import git from '@superego/git/ui'
 import images from '@superego/images/ui'
 import links from '@superego/links/ui'
 import mcpServers from '@superego/mcp-servers/ui'
-import paneUi from '@superego/pane-ui/ui'
-import answerUi from '@superego/answer-ui/ui'
 import skills from '@superego/skills/ui'
 import suggestions from '@superego/suggestions/ui'
 import tasks from '@superego/tasks/ui'
@@ -20,4 +18,4 @@ import webPanes from '@superego/web-panes/ui'
 import worktrees from '@superego/worktrees/ui'
 import app from '../../superego.config.ts'
 
-mountApp(app, { extensions: [threads, worktrees, askUser, ego, files, git, images, links, mcpServers, paneUi, answerUi, skills, suggestions, tasks, terminal, unread, webPanes] })
+mountApp(app, { extensions: [threads, worktrees, agentUi, ego, files, git, images, links, mcpServers, skills, suggestions, tasks, terminal, unread, webPanes] })

@@ -1,6 +1,0 @@
-/* A column that scrolls, the blocks at the pane's width (a whole screen on a phone). */
-.pane-ui { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; }
-.pane-ui__body { padding: var(--superego-space-4); }
-.pane-ui-note { font: var(--superego-text-sm)/1.6 var(--superego-mono); color: var(--superego-muted); }
-.pane-ui-note__link { all: unset; color: var(--superego-text); cursor: pointer; }
-.pane-ui-note__link:hover { text-decoration: underline; }

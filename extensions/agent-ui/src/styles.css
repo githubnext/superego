@@ -1,0 +1,37 @@
+/* Above the composer: "Needs you", then what the agent waits on. The thread's background behind it all, so the
+   transcript scrolls away under it. */
+.agent-ui-waiting { display: flex; flex-direction: column; background: var(--superego-bg); box-shadow: 0 -24px 24px var(--superego-bg); }
+.agent-ui-waiting__label { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-status-blocked-text, var(--superego-status-blocked)); }
+.agent-ui-waiting__label::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--superego-status-blocked); }
+/* A long one scrolls in itself, so the composer stays on screen. */
+.agent-ui-waiting__context { max-height: 45vh; overflow: auto; margin-bottom: var(--superego-space-4); font-size: var(--superego-text-body); line-height: var(--superego-leading-body); -webkit-user-select: text; user-select: text; }
+
+/* A question: a card on the composer with the question and its options. */
+.agent-ui-question { padding: 6px; }
+.agent-ui-question__ask { padding: 8px 10px 6px; font-size: var(--superego-text-body); font-weight: 600; line-height: 1.4; -webkit-user-select: text; user-select: text; }
+.agent-ui-question__ask .md { line-height: inherit; }
+.agent-ui-question__options { display: flex; flex-direction: column; padding-top: 2px; }
+.agent-ui-question__option { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; cursor: default; }
+.agent-ui-question__option:hover, .agent-ui-question__option:focus-visible, .agent-ui-question__option.is-active { background: var(--superego-hover); outline: none; }
+.agent-ui-question__key { flex: none; min-width: 22px; padding: 0 4px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--superego-line); font-size: var(--superego-text-xs); color: var(--superego-muted); font-variant-numeric: tabular-nums; }
+.agent-ui-question__option-text { display: flex; flex-direction: column; min-width: 0; }
+.agent-ui-question__option-label { font-size: var(--superego-text-ui); line-height: 20px; }
+.agent-ui-question__option-description { font-size: var(--superego-text-sm); line-height: 18px; color: var(--superego-muted); }
+.agent-ui-question__error { padding: 4px 10px 6px; color: var(--superego-status-error); font-size: var(--superego-text-sm); }
+
+/* A form: its title, then its blocks; a long one scrolls rather than pushing the composer away. */
+.agent-ui-form__title { margin-bottom: var(--superego-space-2); font-size: calc(15px * var(--superego-text-scale)); font-weight: 600; line-height: 1.4; }
+.agent-ui-form { max-height: 55vh; overflow-y: auto; margin: 0 -4px var(--superego-space-2); padding: 2px 4px; }
+
+/* In the transcript: blocks at the reply's own size, a title above when given; a line for the rest. */
+.agent-ui-blocks { display: flex; flex-direction: column; gap: var(--superego-space-2); margin: var(--superego-space-2) 0; }
+.agent-ui-blocks__title { margin: 0; font-size: var(--superego-text-body); font-weight: 600; }
+.agent-ui-blocks.is-answered .blocks { opacity: .85; }
+.agent-ui-asked__context { margin-bottom: var(--superego-space-2); -webkit-user-select: text; user-select: text; }
+.agent-ui-note { font: var(--superego-text-sm)/1.6 var(--superego-mono); color: var(--superego-muted); }
+.agent-ui-note__q { color: var(--superego-text); }
+.agent-ui-note__link { all: unset; color: var(--superego-text); cursor: pointer; }
+.agent-ui-note__link:hover { text-decoration: underline; }
+
+/* The `ui` pane: a column that scrolls, the blocks at the pane's width (a whole screen on a phone). */
+.agent-ui-pane { flex: 1; min-height: 0; overflow-y: auto; padding: var(--superego-space-4); }
