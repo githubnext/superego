@@ -255,7 +255,11 @@ it('queues builds and shows the thread its own', async () => {
 - **`mountUi({ extensions, profile, machines, layout, narrow, select })`**: `extensions` are set up as the app's,
   `profile: { ref, extensions }` as that profile's (drawn only in its threads). `machines` are test daemons
   (`daemonMachine(daemon, id)`) or fakes: `fakeMachine({ threads, values, methods, extensions, features })`, whose
-  `setValue(key, value, scope)` changes a live value, and whose `calls` say what the window asked. It has
+  `setValue(key, value, scope)` changes a live value, and whose `calls` say what the window asked. Without setup, a
+  fake is `local`, connected, with this build's features and no extensions. `threads.watch` and `thread.list` answer
+  `threads` (none archived or hidden), `value.watch` a key's value from `values` (`null` if it isn't there; give a scoped
+  value as `{ [scope]: value }`), `action.list` answers `actions`, and settings are empty. Any other method, and an
+  action, runs `methods[name]`; with none, it fails `not_found`. `calls` leaves out the watches. `mountUi` has
   `render({ view, place, thread })` (`text()`, `find(selector)`, `click(text)`), `placed(place, { thread })`,
   `press(keys)`, `dispatch`, `select`, `setMachine(id, { state: 'disconnected' })`, `installProfile`, `until`, and
   `unmount()`, which tears every extension down (their `signal`s abort).
