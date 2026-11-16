@@ -139,7 +139,7 @@ export const defineProfile = (spec: ProfileSpec) => spec
 export type ProfileRef = { scope: 'user' | 'project'; name: string; dir: string }
 
 /**
- * A daemon extension a profile names, and which: `key` is its file at the version loaded (the module's URL, versioned
+ * A daemon half a profile names, and which: `key` is its file at the version loaded (the module's URL, versioned
  * by it and every local file it imports: see module-graph.ts), so two profiles naming the same file (one extending the other, or both listing it) share one set-up of it. `prefix` names
  * its agent parts: `<prefix>/<part>`, the profile whose folder holds the file (else `file:<hash of its path>`).
  */
