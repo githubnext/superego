@@ -53,7 +53,7 @@ const Catalog = defineDoc<{ ids: number[] }>({
  * an extension's method can't be shadowed by the core's, nor its settings mixed in with them. A test keeps it in step.
  */
 export const RESERVED = new Set([
-  'action', 'agent', 'app', 'auth', 'core', 'daemon', 'extensions', 'file', 'hello', 'model', 'pane', 'profile', 'profiles',
+  'action', 'agent', 'app', 'auth', 'core', 'daemon', 'extension', 'extensions', 'file', 'hello', 'model', 'pane', 'profile', 'profiles',
   'providers', 'settings', 'thread', 'threads', 'unwatch', 'value', 'view', 'watch', 'web',
   // A connection's own (heartbeat, channels), who is connected, and the machines this one reaches.
   'ping', 'ch', 'clients', 'client', 'machine', 'machines', 'relay',
