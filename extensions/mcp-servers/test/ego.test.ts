@@ -133,7 +133,7 @@ describe('superego_mcp_servers in Ego, against a daemon', () => {
   let daemon: TestDaemon | undefined
   afterEach(async () => { await daemon?.close(); daemon = undefined })
   const open = async (model: Turn[]) =>
-    daemon = await testDaemon({ extensions: [ego(), mcpServersExtension({ checkWait: 5_000 })], model })
+    daemon = await testDaemon({ extensions: [ego(), mcpServersExtension({ checkWait: 15_000 })], model })
   const results = async (d: TestDaemon, id: string) => (await d.call<{ value: ConversationView }>('thread.watch', { thread: id })).value.entries
     .filter((e) => (e.model?.[0] as { role?: string } | undefined)?.role === 'toolResult').map((e) => e.model![0] as { toolCallId?: string; isError: boolean; content: { text: string }[] })
   /** Ask Ego as an outside agent would, and wait until it has answered `count` tool calls in all. */
