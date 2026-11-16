@@ -416,8 +416,8 @@ version(machine, 'git')          // '1.3.0'; '0.0.0' when it says none; undefine
 Ranges are the usual ones: `^1.2`, `~1.2`, `>=1.2 <3`, `1.2` (1.2.x), `*`, joined with `||`.
 
 The major is the window's to check: it draws a UI half for a machine's threads (its slots, views, panes, tool rows,
-entries, links, completions; its window actions while one is shown) only where that machine runs the extension at the
-UI half's own major, as it draws none for a thread that goes without the extension. A machine that doesn't announce it
+entries, links, completions; its window actions while one is shown; its settings section for that machine) only where
+that machine runs the extension at the UI half's own major (below 1.0, its own minor, as semver has it), as it draws none for a thread that goes without the extension. A machine that doesn't announce it
 (switched off there, or a UI-only extension) doesn't stop it. So a UI half asks `has` only for a minor it relies on
 (`@^1.<minor>`), or where it draws without a thread.
 

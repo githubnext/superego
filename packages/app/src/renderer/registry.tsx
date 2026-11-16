@@ -26,12 +26,16 @@ import type {
 export type Owner = { extension: string; optional: boolean; profile?: string; data?: true; speaks?(machine: string): boolean }
 
 /**
- * Whether a UI half at `version` works with a machine whose manifest of its extension is `there`: at the same major.
- * One the machine doesn't announce it does: its daemon half is off there (the thread goes without it), or it has none.
+ * Whether a UI half at `version` works with a machine whose manifest of its extension is `there`: at the same major
+ * (below 1.0, the same minor: semver's 0.x minors break). One the machine doesn't announce it does: its daemon half is
+ * off there (the thread goes without it), or it has none.
  */
 export const speaks = (version: string | undefined, there: ExtensionManifest | undefined) =>
   !there || major(version ?? UNVERSIONED) === major(there.version ?? UNVERSIONED)
-const major = (version: string) => parseVersion(version)?.[0] ?? 0
+const major = (version: string) => {
+  const [major = 0, minor = 0] = parseVersion(version) ?? []
+  return major > 0 ? `${major}` : `0.${minor}`
+}
 export type Owned<T> = T & { owner: Owner }
 
 /** A thread as lookups see it: on a machine, maybe with a profile. */
@@ -220,9 +224,13 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       life.add(() => { const at = list.indexOf(entry); if (at >= 0) list.splice(at, 1) })
       return entry
     }
-    /** A name of its own: `<extension>` or `<extension>.<more>` (the core's are any). */
-    const own = (name: string, what: string) => {
-      if (extension.name !== 'core' && name !== extension.name && !name.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its ${what} "${extension.name}.<name>", not "${name}"`)
+    /**
+     * A name of its own: `<extension>.<more>`, or for views, entry kinds and settings sections (`bare`) the extension's
+     * own name too (the core's are any).
+     */
+    const own = (name: string, what: string, bare = false) => {
+      if (extension.name === 'core' || name.startsWith(`${extension.name}.`) || (bare && name === extension.name)) return
+      throw new Error(`Extension ${extension.name} must name its ${what} "${extension.name}.<name>", not "${name}"`)
     }
     /** One of a kind per scope: a second registration of the same name is refused (the first stays), with a warning. */
     const unique = <T extends Record<K, string>, K extends keyof T>(list: Owned<T>[], key: K, item: T, what: string) => {
@@ -242,7 +250,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       app,
       signal: life.signal,
       view(id, view) {
-        own(id, 'views')
+        own(id, 'views', true)
         declare(id, view as View)
         // A thread view that fits a pane is a pane kind too, of its id: opened from the pane menu while it's placed there.
         if (view.context === 'thread' && view.fits.includes('pane')) {
@@ -271,7 +279,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         unique(registry.tools, 'name', { name, ...(isComponent(view) ? { component: view } : { row: view }), fold: options?.fold !== false }, 'tool')
       },
       entry(kind, component) {
-        own(kind, 'entry kinds')
+        own(kind, 'entry kinds', true)
         unique(registry.entries, 'kind', { kind, component }, 'entry kind')
       },
       link: (handler) => { add(registry.links, handler) },
@@ -280,7 +288,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         add(registry.work, { divide })
       },
       settings(ui, component) {
-        own(ui, 'settings sections')
+        own(ui, 'settings sections', true)
         unique(registry.settings, 'ui', { ui, component }, 'settings section')
       },
       pane(kind, pane) {

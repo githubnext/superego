@@ -70,9 +70,13 @@ export const entryView = (registry: Registry, kind: string, where: Where) => loo
 /** The extension that draws entries of `kind` for `where`, if one does. */
 export const entryOwner = (registry: Registry, kind: string, where: Where) => lookUp(registry.entries, where, (e) => e.kind === kind)?.owner.extension
 
-/** The component under the settings section that names `ui`, on `target` (a machine, or `APP`): a profile's there first, as lookups take it. */
+/**
+ * The component under the settings section that names `ui`, on `target` (a machine, or `APP`): a profile's there first,
+ * as lookups take it; an app's UI half only where it speaks with the machine's half.
+ */
 export function settingsView(registry: Registry, ui: string, target: string) {
-  return preferProfile(registry.settings.filter((s) => s.ui === ui && (!s.owner.profile || scopeIsOn(s.owner.profile, target))))?.component
+  const here = (s: Registry['settings'][number]) => s.owner.profile ? scopeIsOn(s.owner.profile, target) : s.owner.speaks?.(target) !== false
+  return preferProfile(registry.settings.filter((s) => s.ui === ui && here(s)))?.component
 }
 
 /** A run of work in parts, as the first extension (that `where` has) that divides it says; else whole. */

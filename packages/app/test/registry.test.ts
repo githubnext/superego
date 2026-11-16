@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
 import { Contained } from '../src/renderer/contained.tsx'
 import { defineUiExtension, type UiExtension } from '../src/renderer/extension-api.ts'
-import { createRegistry, seenIn } from '../src/renderer/registry.tsx'
+import { createRegistry, seenIn, speaks } from '../src/renderer/registry.tsx'
 import { entryView, paneKind, fileKind, settingsView, shownPanes, toolView, urlKind } from '../src/renderer/lookups.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
@@ -198,6 +198,23 @@ describe('versions', () => {
     expect(registry.router.offered('git.diff')).toBe(false)
   })
 
+  it("draws its settings section only for machines it speaks with", () => {
+    const sectioned = defineUiExtension({ name: 'git', version: '2.1.0', setup(superego) { superego.settings('git', Card) } })
+    const registry = createRegistry(app, [sectioned], () => {})
+    registry.setMachineExtensions('new', [{ name: 'git', version: '2.0.0' }])
+    registry.setMachineExtensions('old', [{ name: 'git', version: '1.4.0' }])
+    expect(settingsView(registry, 'git', 'new')).toBe(Card)
+    expect(settingsView(registry, 'git', 'old')).toBeUndefined()
+  })
+
+  it("counts each 0.x minor as a major of its own, as semver does", () => {
+    const early = (version: string) => ({ name: 'git', version })
+    expect(speaks('0.2.1', early('0.2.0'))).toBe(true)
+    expect(speaks('0.2.0', early('0.1.9'))).toBe(false)
+    expect(speaks('1.2.0', early('1.0.0'))).toBe(true)
+    expect(speaks(undefined, early('0.0.3'))).toBe(true)
+  })
+
   it("leaves a profile's UI, from the machine itself, to that machine", () => {
     const registry = createRegistry(app, [], () => {})
     registry.installProfile('box', profile, [orders()])
@@ -246,6 +263,13 @@ describe('names', () => {
   it("refuses entry kinds and settings sections outside the extension's name", () => {
     expect(() => createRegistry(app, [defineUiExtension({ name: 'a', setup(superego) { superego.entry('b.note', Order) } })], () => {})).toThrow(/must name its entry kinds/)
     expect(() => createRegistry(app, [defineUiExtension({ name: 'a', setup(superego) { superego.settings('b', Order) } })], () => {})).toThrow(/must name its settings sections/)
+  })
+
+  it("refuses an action or an app setting named the extension alone: those are `<extension>.<name>`", () => {
+    const named = (setup: UiExtension['setup']) => () => createRegistry(app, [defineUiExtension({ name: 'a', setup })], () => {})
+    expect(named((s) => s.action(defineWindowAction({ id: 'a', title: 'A', run: () => null })))).toThrow(/must name its actions/)
+    expect(named((s) => s.appSettings({ id: 'a', title: 'A', settings: [{ key: 'a', title: 'A', default: false, type: 'boolean' }] }))).toThrow(/must name its settings/)
+    expect(named((s) => { s.action(defineWindowAction({ id: 'a.go', title: 'Go', run: () => null })); s.settings('a', Order) })).not.toThrow()
   })
 })
 
