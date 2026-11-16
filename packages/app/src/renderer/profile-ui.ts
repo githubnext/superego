@@ -328,6 +328,11 @@ export function reopenUi(pending: PendingUi, open: boolean) {
   changed()
 }
 
+/** Tests: wait out every load of a profile's UI under way, and any one sets off, so none lands after its window is gone. */
+export async function profileUisLoaded() {
+  while (loading.size) await Promise.all(loading.values())
+}
+
 /** Tests: forget every profile's UI. */
 export function resetProfileUi() {
   known.clear(); loading.clear(); reopened.clear(); revokedRan.clear(); revokedList = []; allowed = []; declined = []; allowedLoad = undefined; load = loadProfileUi

@@ -9,14 +9,41 @@ import {
 } from '@superego/protocol'
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '@superego/app/shared'
 import {
-  bound, LAYOUT, layoutOf, normalize, PaneBody, paneKind, placedFor, PlacedViews, RegistryProvider, scopedViews, seenIn, setLocalState, ShellStateProvider, Slot,
+  bound, LAYOUT, layoutOf, normalize, PaneBody, paneKind, placedFor, PlacedViews, profileUisLoaded, RegistryProvider, resetProfileUi, scopedViews, seenIn, setLocalState, ShellStateProvider, Slot,
   ViewScopeProvider, useAllThreads, useMachines, useSelection, windowRegistry, type BehaviourSlot, type Layout, type Place, type Registry, type SlotProps,
   type UiExtension, type ViewProps,
 } from '@superego/app/internals'
 import type { TestDaemon } from './daemon.ts'
 import { useDom } from './dom.ts'
 
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+/**
+ * React's `act`, with React told it's in a test only while the window acts. What the window does (draw, click, select,
+ * settle, wait) goes through here, and what it sets off lands before it returns. A window over a machine is live too:
+ * answers and values come in between, as they would in the app, and React draws those on its own schedule then, rather
+ * than warning that they weren't in `act` (no test could have put them there).
+ */
+function inAct(work: () => Promise<unknown>): Promise<void> {
+  enterAct()
+  // Left as React lets go of its queue, not a microtask later: what resolves in between would draw outside it.
+  return new Promise((resolve, reject) => {
+    act(async () => { await work() }).then(() => { leaveAct(); resolve() }, (error: unknown) => { leaveAct(); reject(error) })
+  })
+}
+
+/**
+ * `inAct` for what's done at once (a machine's notification): drawn before it returns. While the window acts already,
+ * it's in that act's: an act of its own would end React's early, leaving the rest of that one outside.
+ */
+function inActNow(work: () => void) {
+  if (acting) return work()
+  enterAct()
+  try { act(work) } finally { leaveAct() }
+}
+
+let acting = 0
+const actEnvironment = (on: boolean) => { (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = on }
+function enterAct() { if (acting++ === 0) actEnvironment(true) }
+function leaveAct() { if (--acting === 0) actEnvironment(false) }
 
 /** A machine the window talks to: how it answers, and what it says. */
 export type TestMachine = {
@@ -239,7 +266,10 @@ export type TestWindow = {
   settle(): Promise<void>
   /** Wait until `check` holds, letting what's under way settle between tries (a machine's answer, a value changing). */
   until(check: () => boolean, what?: string, timeout?: number): Promise<void>
-  /** Take everything down: what's drawn, and every extension's setup (its signal aborted, its cleanup run). */
+  /**
+   * Take everything down: what's drawn, and every extension's setup (its signal aborted, its cleanup run). A profile's UI
+   * it's still fetching lands first: unmount before closing the daemons it's on.
+   */
   unmount(): Promise<void>
 }
 
@@ -273,7 +303,8 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   const appWatches = new Set<string>()
   let appSubs = 0
   const entries = () => machines.map((m) => ({ ...m.entry }))
-  const offs = machines.map((m) => m.listen((method, params) => emit({ machine: m.id, method, params })))
+  // What a machine says (a live value changing, a thread's status) re-renders what shows it: in `act`, as React asks of a test.
+  const offs = machines.map((m) => m.listen((method, params) => inActNow(() => emit({ machine: m.id, method, params }))))
   const bridge: SuperegoBridge = {
     async call(machine, method, params: any) {
       if (machine === 'app') {
@@ -342,14 +373,14 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   }
   const roots = new Set<Root>()
   const settle = async () => {
-    for (let i = 0; i < 3; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+    for (let i = 0; i < 3; i++) await inAct(async () => { await new Promise((r) => setTimeout(r, 0)) })
   }
   const draw = async (node: ReactNode) => {
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
     roots.add(root)
-    await act(async () => { root.render(<RegistryProvider registry={registry}><ShellStateProvider><Shell>{node}</Shell></ShellStateProvider></RegistryProvider>) })
+    await inAct(async () => { root.render(<RegistryProvider registry={registry}><ShellStateProvider><Shell>{node}</Shell></ShellStateProvider></RegistryProvider>) })
     await settle()
     return { container, root }
   }
@@ -409,10 +440,10 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
           const target = [...container.querySelectorAll<HTMLElement>('button, a, [role="button"]')].find((el) => el.textContent?.trim() === text)
             ?? container.querySelector<HTMLElement>(text)
           if (!target) throw new Error(`Nothing to click that says "${text}" in: ${container.textContent}`)
-          await act(async () => { target.click() })
+          await inAct(async () => { target.click() })
           await settle()
         },
-        async unmount() { await act(async () => root.unmount()); roots.delete(root); container.remove() },
+        async unmount() { await inAct(async () => root.unmount()); roots.delete(root); container.remove() },
       }
     },
     placed(place, where) {
@@ -421,12 +452,12 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       return placedFor(registry, layoutOf(appValues[LAYOUT]), { narrow, where: scope })[place]
     },
     async select(selection) {
-      await act(async () => { shell!.select(selection && { machine: machineOf(selection.machine), thread: selection.thread }) })
+      await inAct(async () => { shell!.select(selection && { machine: machineOf(selection.machine), thread: selection.thread }) })
       await settle()
     },
     async dispatch(id, params = {}, { machine } = {}) {
       let result: unknown
-      await act(async () => { result = await registry.router.dispatch(id, params, { source: 'test', ...(machine ? { machine } : {}) }) })
+      await inAct(async () => { result = await registry.router.dispatch(id, params, { source: 'test', ...(machine ? { machine } : {}) }) })
       await settle()
       return result
     },
@@ -441,11 +472,11 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       const m = machines.find((x) => x.id === id)
       if (!m) throw new Error(`No machine ${id}`)
       Object.assign(m.entry, change)
-      await act(async () => { emit({ machine: 'app', method: '$machines', params: entries() }) })
+      await inAct(async () => { emit({ machine: 'app', method: '$machines', params: entries() }) })
       await settle()
     },
     async installProfile(machine, ref, extensions) {
-      await act(async () => { install(registry, machine, ref, extensions) })
+      await inAct(async () => { install(registry, machine, ref, extensions) })
       await settle()
     },
     settle,
@@ -453,16 +484,20 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       const end = Date.now() + timeout
       while (!check()) {
         if (Date.now() > end) throw new Error(`Timed out waiting for ${what}`)
-        await act(async () => { await new Promise((r) => setTimeout(r, 20)) })
+        await inAct(async () => { await new Promise((r) => setTimeout(r, 20)) })
       }
     },
     async unmount() {
-      for (const root of [...roots]) await act(async () => root.unmount())
+      // A profile's UI the window is still fetching from a machine lands first: else closing a daemon next fails it.
+      await inAct(async () => { await profileUisLoaded() })
+      for (const root of [...roots]) await inAct(async () => root.unmount())
       roots.clear()
       base.container.remove()
       for (const off of offs) off()
       // Every profile's UI torn down; the app's extensions with the registry.
       registry.teardown()
+      // The next window fetches its profiles' UI afresh.
+      resetProfileUi()
       letGoOfDom()
     },
   }

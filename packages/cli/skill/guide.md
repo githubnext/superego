@@ -267,7 +267,8 @@ it('queues builds and shows the thread its own', async () => {
   action, runs `methods[name]`; with none, it fails `not_found`. `calls` leaves out the watches. `mountUi` has
   `render({ view, place, thread })` (`text()`, `find(selector)`, `click(text)`), `placed(place, { thread })`,
   `press(keys)`, `dispatch`, `select`, `setMachine(id, { state: 'disconnected' })`, `installProfile`, `until`, and
-  `unmount()`, which tears every extension down (their `signal`s abort).
+  `unmount()`, which lets a profile's UI the window is still fetching land, then tears every extension down (their
+  `signal`s abort): unmount before closing the daemons it's on.
 - **A pane kind or a slot**: `render({ pane: { kind, params } })` and `render({ slot, props })` draw them as the
   window does, for `thread`: an id the machine has, or a `ThreadInfo` as it is (`testThread({ cwd, profile, without })`);
   without one, the selected thread, the machine's first, or a made-up one of `mountUi`'s profile. A kind or slot that

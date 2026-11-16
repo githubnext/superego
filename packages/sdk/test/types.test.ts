@@ -100,7 +100,7 @@ it('declares no class with private members in more than one entry', () => {
     for (const statement of source.statements) {
       if (!ts.isClassDeclaration(statement) || !statement.name) continue
       const nominal = statement.members.some((m) => (m.name && ts.isPrivateIdentifier(m.name))
-        || ts.getModifiers(m)?.some((x) => x.kind === ts.SyntaxKind.PrivateKeyword || x.kind === ts.SyntaxKind.ProtectedKeyword))
+        || (ts.canHaveModifiers(m) && ts.getModifiers(m)?.some((x) => x.kind === ts.SyntaxKind.PrivateKeyword || x.kind === ts.SyntaxKind.ProtectedKeyword)))
       if (nominal) classes.set(statement.name.text, [...classes.get(statement.name.text) ?? [], file])
     }
   }

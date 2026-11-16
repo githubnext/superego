@@ -2,10 +2,10 @@
 // cases an extension has to survive: teardown, being set up twice, a helper edited, one profile on two machines, a
 // machine gone or older, and a phone with no spaces.
 import { createElement as h } from 'react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineDaemonExtension } from '../src/index.ts'
 import { defineAction, defineUiExtension, usePlacement, useValue, type ViewProps } from '../src/ui.ts'
-import { callTool, fakeMachine, mountUi, say, testDaemon, testThread, type TestDaemon, type TestWindow } from '../src/testing.ts'
+import { callTool, daemonMachine, fakeMachine, mountUi, say, testDaemon, testThread, type TestDaemon, type TestWindow } from '../src/testing.ts'
 
 const open: (TestDaemon | TestWindow)[] = []
 const keep = <T extends TestDaemon | TestWindow>(it: T) => { open.push(it); return it }
@@ -247,7 +247,6 @@ describe('a window on test daemons', () => {
     const laptop = keep(await testDaemon({ profile: PROFILE, model: [callTool('enqueue', { what: 'on laptop' }), say('ok')] }))
     const a = await box.thread('queue')
     const b = await laptop.thread('queue')
-    const { daemonMachine } = await import('../src/testing.ts')
     const ui = keep(await mountUi({ machines: [daemonMachine(box, 'box'), daemonMachine(laptop, 'laptop')] }))
     // The data view the profile declares, drawn by the window: once in each thread, from its own machine.
     expect(ui.placed('beside', { machine: 'box', thread: a.id })).toEqual(['queue.list'])
@@ -257,6 +256,44 @@ describe('a window on test daemons', () => {
     expect(onBox.text()).toContain('on box')
     expect(onBox.text()).not.toContain('on laptop')
     expect(onLaptop.text()).toContain('on laptop')
+  })
+
+  it("draws what the daemon says as it says it, quietly, and lets its profile's UI land before it's unmounted", async () => {
+    const errors: string[] = []
+    const quiet = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => { errors.push(args.map(String).join(' ')) })
+    try {
+      const profile = {
+        ...PROFILE,
+        'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./queue.ts'], ui: ['./ui.ts'] })\n`,
+        'ui.ts': `import { defineUiExtension } from 'superego/ui'\nexport default defineUiExtension({ name: 'queue-ui', setup() {} })\n`,
+      }
+      const daemon = keep(await testDaemon({ profile, model: [callTool('enqueue', { what: 'lint' }), say('ok'), callTool('enqueue', { what: 'test' }), say('ok')] }))
+      const thread = await daemon.thread('queue')
+      const ui = await mountUi({ machines: [daemon] })
+      const beside = await ui.render({ place: 'beside', thread: thread.id })
+      await ui.until(() => beside.text().includes('lint'), 'the queue')
+      // Changed outside anything the window does: drawn all the same, with nothing said about act().
+      await daemon.send(thread.id, 'queue another')
+      await ui.until(() => beside.text().includes('test'), 'the queue changed')
+      await ui.unmount()
+
+      // A window unmounted while it still fetches the profile's UI (its modules slow to come): closing the daemon right
+      // after fails nothing.
+      const slow = daemonMachine(daemon)
+      const call = slow.call
+      slow.call = async (method, params) => {
+        if (method === 'profile.module') await new Promise((r) => setTimeout(r, 200))
+        return call(method, params)
+      }
+      const again = await mountUi({ machines: [slow] })
+      await again.unmount()
+      await daemon.close()
+      // Long enough for a fetch let go of to have failed, and said so.
+      await new Promise((r) => setTimeout(r, 400))
+      expect(errors).toEqual([])
+    } finally {
+      quiet.mockRestore()
+    }
   })
 })
 
