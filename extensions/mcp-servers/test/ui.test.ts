@@ -255,5 +255,9 @@ describe('what it draws', () => {
     const profiled = rowOf(info({ id: '/p/.superego/profiles/default#docs', name: 'docs', from: { type: 'profile', profile: 'default', scope: 'project', dir: '/p/.superego/profiles/default', project: '/p' } }), false)
     expect(profiled).not.toContain('Use in threads without a profile')
     expect(profiled).toContain('profile <b>default</b> in /p')
+    expect(profiled).not.toContain('not loaded yet')
+    // From the cache, before its profile loads again: it says so.
+    const cached = rowOf(info({ name: 'docs', state: 'stopped', profileAllowed: false, from: { type: 'profile', profile: 'default', scope: 'project', dir: '/p/.superego/profiles/default', project: '/p' } }), false)
+    expect(cached).toContain('profile <b>default</b> in /p, not loaded yet')
   })
 })

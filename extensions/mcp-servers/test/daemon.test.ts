@@ -221,9 +221,9 @@ it('starts a server again after it crashes, and three crashes in a minute fail i
   // The fixture starts again after each crash, Node and the MCP SDK each time: seconds on a busy machine.
   await done(peer, thread.id, 40_000)
   const [first, back, , third, again] = await results(peer, thread.id)
-  expect(first).toMatch(/^error: fx\.crash failed: fx exited with code 3\. Its last words on stderr:\n[\s\S]*boom: the fixture fell over/)
+  expect(first).toMatch(/^error: fx\.crash was cut off before it answered: fx exited with code 3\. Its last words on stderr:\n[\s\S]*boom: the fixture fell over\nIt may or may not have taken effect/)
   expect(back).toBe('back')
-  expect(third).toMatch(/^error: fx\.crash failed: fx exited with code 3/)
+  expect(third).toMatch(/^error: fx\.crash was cut off before it answered: fx exited with code 3/)
   expect(again).toMatch(/^error: fx has failed and won't start until it's restarted/)
   expect((await section(peer)).servers[0]).toMatchObject({ state: 'failed', error: expect.stringMatching(/fx exited with code 3/) })
   expect(await serversOf(peer, thread.id)).toMatchObject({ servers: [{ name: 'fx', state: 'failed' }] })

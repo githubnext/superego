@@ -109,6 +109,11 @@ export type ServerInfo = {
   name: string
   title?: string
   from: ServerSource
+  /**
+   * A profile's server: whether its profile has loaded (so was allowed) since the daemon started. Until it has (a turn of
+   * one of its threads), it doesn't run: its tools are offered from the cache, and its calls fail saying so.
+   */
+  profileAllowed?: boolean
   /** What it runs, in a line: `npx -y @sentry/mcp-server`, or `mcp.linear.app`. */
   runs: string
   /** Its config: the machine's as in the file, a profile's as the profile says. */

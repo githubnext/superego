@@ -2,7 +2,7 @@
 // Streamable HTTP in the test's own process (`serveHttp`). Its tools:
 // - echo: says back its text, and the env variable FIXTURE_SECRET when asked
 // - hang: never answers, until the call is cancelled (and says so in the calls file)
-// - crash: writes to stderr and exits with code 3
+// - crash: writes to stderr (FIXTURE_LAST_WORDS, when it's set) and exits with code 3
 // - change: adds a tool `added` and takes itself away, so its list changes
 // - progress: reports progress twice, then answers
 // - picture: an image, a text resource and a blob
@@ -30,7 +30,7 @@ export function fixtureServer(note: (line: string) => void = () => {}) {
   })
   server.registerTool('crash', { description: 'Exits.', inputSchema: {} }, async () => {
     note('crash')
-    process.stderr.write('boom: the fixture fell over\n')
+    process.stderr.write(`${process.env.FIXTURE_LAST_WORDS ?? 'boom: the fixture fell over'}\n`)
     setTimeout(() => process.exit(3), 10)
     return new Promise(() => {})
   })

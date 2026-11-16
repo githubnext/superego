@@ -2,13 +2,18 @@
 // one's tools as an agent part (installed from the cache when the extension sets up, before interrupted runs resume, and
 // replaced as its tools change), and its sessions: one shared, or one per thread (`lifetime: 'thread'`). A session starts
 // lazily (a thread's turn starting, a call, a check), stops after 10 idle minutes, is restarted when its config changes
-// (once its calls finish), and a server that crashes three times within a minute is `failed` until Restart.
+// (once its calls finish), and a command that exits by itself three times within a minute is `failed` until Restart (a
+// URL that can't be reached is tried again a little later instead). A profile's server from the cache runs only once
+// its profile has loaded in this daemon, and goes when its profile's folder does. Every error that reaches the model,
+// Settings or a thread's facts has the store's secrets hidden (`#hide`).
 import { createHash } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { defineExtension, defineTool, type Extension, type ToolExecutionApi, type ToolExecutionResult } from '@earendil-works/pi-durable'
 import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
+import { StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
 import type { DaemonApi, AgentPart } from '@superego/daemon'
 import type { ProfileRef } from '@superego/daemon/sdk'
@@ -18,7 +23,7 @@ import { Connection, ServerLog, sessionGone, type Exit, type Listing } from './c
 import { OAuthAccess, resourceOf } from './oauth.ts'
 import { contentOf } from './results.ts'
 import { DEFAULTS, type CallDetails, type ServerConfig, type ServerInfo, type ServerSource, type ServerState } from './shared.ts'
-import { serverKey, type SecretStore, type ServerSecrets } from './store.ts'
+import { redact, serverKey, type SecretStore, type ServerSecrets } from './store.ts'
 import { offerTools, type OfferedTool } from './tools.ts'
 
 type Context = Parameters<ToolExecutionApi['details']>[1]
@@ -39,6 +44,8 @@ type Slot = {
   thread?: string
   connection?: Connection
   starting?: Promise<Connection>
+  /** Calls off the session that's starting (a stop, a restart). */
+  stop?: AbortController
   lastUsed: number
 }
 
@@ -56,6 +63,11 @@ export type Server = {
   listing?: Listing & { listedAt: number }
   /** Listed by this daemon: a cached listing is checked again on the first start. */
   listedNow: boolean
+  /**
+   * A profile's server: whether its profile has loaded in this daemon (so it's allowed now). One from the cache hasn't
+   * until a thread of the profile takes a turn, and doesn't run till then. Always true for the machine's own.
+   */
+  profileLoaded: boolean
   offered: OfferedTool[]
   skipped: { tool: string; why: string }[]
   deferred: boolean
@@ -83,6 +95,8 @@ export type RuntimeOptions = {
   idle?: number
   /** How long `agentParts` waits for a server it has never listed, in ms: 4s (the core gives it 5). */
   firstListing?: number
+  /** How long a URL that can't be reached is waited for before each try again, in ms: 1s, then 3s. */
+  retries?: number[]
 }
 
 const CRASHES = 3
@@ -90,16 +104,42 @@ const CRASH_WINDOW = 60_000
 const hash = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 8)
 const text = (value: string) => [{ type: 'text' as const, text: value }]
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error)
+/** A URL's error worth trying again: no answer at all, a 5xx, 408 or 429; not a server that said no. */
+const transient = (error: unknown) => !(error instanceof UnauthorizedError)
+  && !(error instanceof StreamableHTTPError && error.code !== undefined && error.code >= 400 && error.code < 500 && error.code !== 408 && error.code !== 429)
+const pause = (ms: number, signal: AbortSignal) => new Promise<void>((resolve) => {
+  const timer = setTimeout(resolve, ms)
+  signal.addEventListener('abort', () => { clearTimeout(timer); resolve() }, { once: true })
+})
+
+/** A call cut off before it answered (its session stopped, restarted or crashed): it may have run, as `interruptedText` says. */
+export function cutText(server: string, tool: string, why: string, ownSession: boolean): string {
+  return `${server}.${tool} was cut off before it answered: ${why}\nIt may or may not have taken effect on the server. `
+    + `Check (for example, list or read what it would have changed) before calling it again.`
+    + (ownSession ? ` ${server} ran for this thread only, so its session (anything it kept, such as an open page) is gone too.` : '')
+}
+
+/** `Runtime.selected`, with when each thread's was last set: one not working is forgotten after a while (its memo stays). */
+class Selected extends Map<string, string[]> {
+  readonly at = new Map<string, number>()
+  override set(thread: string, servers: string[]) { this.at.set(thread, Date.now()); return super.set(thread, servers) }
+  override delete(thread: string) { this.at.delete(thread); return super.delete(thread) }
+}
 /** An OAuth server's resource (its canonical URL): where its tokens are kept. */
 export const oauthResource = (config: ServerConfig) => config.auth?.type === 'oauth' && config.url ? safeResource(config.url) : undefined
 const safeResource = (url: string) => { try { return resourceOf(url) } catch { return undefined } }
+/** A 401: the key or token refused. */
+const refusal = (error: unknown) => {
+  const status = (error as { code?: unknown })?.code
+  return error instanceof UnauthorizedError || (status === 401 && /HTTP|401|nauthori/i.test(errorText(error)))
+}
 /** The folder that holds a profile's `.superego` (or, for the user's, the data folder): its servers run there. */
 export const projectOf = (ref: ProfileRef) => dirname(dirname(dirname(ref.dir)))
 
 export class Runtime {
   readonly servers = new Map<string, Server>()
   /** The servers each thread's last turn had, by thread. */
-  readonly selected = new Map<string, string[]>()
+  readonly selected: Map<string, string[]> = new Selected()
   /** Threads with a run going. */
   readonly working = new Set<string>()
   #api: DaemonApi
@@ -108,6 +148,7 @@ export class Runtime {
   readonly oauth: OAuthAccess
   #idle: number
   #firstListing: number
+  #retries: number[]
   #changed: () => void
   #cacheDir: string
   #logDir: string
@@ -119,29 +160,40 @@ export class Runtime {
     this.#changed = changed
     this.#idle = options.idle ?? 10 * 60_000
     this.#firstListing = options.firstListing ?? 4_000
+    this.#retries = options.retries ?? [1_000, 3_000]
     this.#cacheDir = join(api.dataDir, 'mcp', 'cache')
     this.#logDir = join(api.dataDir, 'logs', 'mcp')
     const sweep = setInterval(() => this.sweep(), Math.min(60_000, Math.max(250, this.#idle / 4)))
     sweep.unref?.()
     api.signal.addEventListener('abort', () => {
       clearInterval(sweep)
+      // Every session stops, and one still starting is called off (its process stopped with it) or closed once it's up.
       for (const server of this.servers.values()) {
         clearTimeout(server.relisting)
-        for (const slot of server.slots.values()) void slot.connection?.close()
+        for (const slot of server.slots.values()) {
+          slot.stop?.abort()
+          void slot.connection?.close('the MCP servers extension was reloaded')
+          void slot.starting?.then((connection) => connection.close(), () => {})
+        }
       }
     }, { once: true })
   }
 
   // ── Servers ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** Profiles' servers seen before, from the cache: their parts installed, so a run that resumes finds its tools. */
+  /**
+   * Profiles' servers seen before, from the cache: their parts installed, so a run that resumes finds its tools. None
+   * runs until its profile loads here (a turn of one of its threads), as the profile may need allowing again by now;
+   * those whose profile's folder is gone are forgotten.
+   */
   async loadCached() {
     const files = await readdir(this.#cacheDir).catch(() => [] as string[])
     for (const file of files.filter((f) => f.endsWith('.json'))) {
       const cache = await readFile(join(this.#cacheDir, file), 'utf8').then((t) => JSON.parse(t) as Cache, () => undefined)
       if (!cache?.from || !cache.config || this.servers.has(cache.id)) continue
-      const ref: ProfileRef = { scope: cache.from.scope, name: cache.from.profile, dir: cache.from.dir }
-      await this.profileServer(ref, cache.name, cache.config, cache)
+      if (!existsSync(cache.from.dir)) { await rm(join(this.#cacheDir, file), { force: true }); continue }
+      const config = profileConfig(cache.config)
+      await this.add(cache.name, cache.from, config, config.cwd ? resolve(cache.from.project, config.cwd) : cache.from.project, file.slice(0, -'.json'.length), cache, false)
     }
   }
 
@@ -157,22 +209,26 @@ export class Runtime {
     }
   }
 
-  /** A profile's server, as its spec says now: made the first time, updated after. */
-  async profileServer(ref: ProfileRef, name: string, given: ServerConfig, cache?: Cache): Promise<Server> {
+  /** A profile's server, as its spec says now (its profile loaded, so allowed): made the first time, updated after. */
+  async profileServer(ref: ProfileRef, name: string, given: ServerConfig): Promise<Server> {
     const id = `${ref.dir}#${name}`
     const config = profileConfig(given)
     const existing = this.servers.get(id)
-    if (existing) { await this.update(existing, config); return existing }
+    if (existing) {
+      existing.profileLoaded = true
+      await this.update(existing, config)
+      return existing
+    }
     const project = projectOf(ref)
     const from = { type: 'profile' as const, profile: ref.name, scope: ref.scope, dir: ref.dir, project }
-    return this.add(name, from, config, config.cwd ? resolve(project, config.cwd) : project, `${name}@${hash(id)}`, cache)
+    return this.add(name, from, config, config.cwd ? resolve(project, config.cwd) : project, `${name}@${hash(id)}`)
   }
 
   async #readCache(file: string): Promise<Cache | undefined> {
     return readFile(join(this.#cacheDir, `${file}.json`), 'utf8').then((t) => JSON.parse(t) as Cache, () => undefined)
   }
 
-  async add(name: string, from: ServerSource, config: ServerConfig, cwd: string, file: string, cached?: Cache): Promise<Server> {
+  async add(name: string, from: ServerSource, config: ServerConfig, cwd: string, file: string, cached?: Cache, profileLoaded = true): Promise<Server> {
     const id = from.type === 'machine' ? name : `${from.dir}#${name}`
     const cache = cached ?? await this.#readCache(file)
     const partName = from.type === 'machine' ? `mcp:${name}` : `mcp:${file}`
@@ -180,7 +236,7 @@ export class Runtime {
       id, name, from, config, cwd, file, partName,
       part: undefined as unknown as AgentPart,
       ...(cache ? { listing: { tools: cache.tools, ...(cache.instructions ? { instructions: cache.instructions } : {}), ...(cache.server ? { server: cache.server } : {}), listedAt: cache.listedAt } } : {}),
-      listedNow: false, offered: [], skipped: [], deferred: false, slots: new Map(), missing: [], crashes: [],
+      listedNow: false, profileLoaded, offered: [], skipped: [], deferred: false, slots: new Map(), missing: [], crashes: [],
       log: new ServerLog(join(this.#logDir, `${file}.log`), () => this.#store.secrets()),
     }
     const invalid = configProblem(name, config)
@@ -210,14 +266,14 @@ export class Runtime {
     }
     if (JSON.stringify([config.tools, config.title]) !== offered) this.#reoffer(server)
     server.missing = await this.#missing(server)
-    if (this.#gate(server)) this.stopAll(server)
+    if (this.#gate(server)) this.stopAll(server, `${server.name} ${this.#gate(server)!.state === 'off' ? 'was switched off' : 'was changed'}`)
     this.#changed()
   }
 
   async remove(server: Server) {
     this.servers.delete(server.id)
     server.part.remove()
-    this.stopAll(server)
+    this.stopAll(server, `${server.name} was removed`)
     clearTimeout(server.relisting)
     await rm(join(this.#cacheDir, `${server.file}.json`), { force: true })
     this.#changed()
@@ -252,6 +308,9 @@ export class Runtime {
     if (server.invalid) return { state: 'failed', why: `${name}'s config won't do: ${server.invalid}` }
     if (config.enabled === false) return { state: 'off', why: `${name} is switched off (Settings → MCP servers)` }
     if (config.allowed === false && config.command) return { state: 'waiting', why: `${name} hasn't been allowed to run yet: the user allows it in Settings → MCP servers` }
+    if (!server.profileLoaded && server.from.type === 'profile') {
+      return { state: 'stopped', why: `${name} is available after the next turn of a thread with the profile ${server.from.profile} (it hasn't loaded since Superego started)` }
+    }
     if (server.missing.length && oauthResource(config)) return { state: 'needs-sign-in', why: `${name} needs you to sign in (Settings → MCP servers → ${name} → Sign in)` }
     if (server.missing.length) {
       const what = config.auth?.type === 'api-key' ? 'its API key' : `its secret${server.missing.length > 1 ? 's' : ''} ${server.missing.join(', ')}`
@@ -283,6 +342,7 @@ export class Runtime {
     return {
       id: server.id, name: server.name, from: server.from, runs: runsOf(server.config), config: server.config, state,
       ...(server.config.title ? { title: server.config.title } : {}),
+      ...(server.from.type === 'profile' ? { profileAllowed: server.profileLoaded } : {}),
       ...(error && state !== 'running' && state !== 'stopped' ? { error } : server.error ? { error: server.error } : {}),
       ...(server.listing ? { tools: server.offered.length, deferred: server.deferred, listedAt: server.listing.listedAt } : {}),
       ...(server.skipped.length ? { skipped: server.skipped } : {}),
@@ -346,7 +406,7 @@ export class Runtime {
       server: server.name, tool: tool.tool, ...(tool.title ? { title: tool.title } : {}), ...(server.config.title ? { serverTitle: server.config.title } : {}),
       ...(tool.annotations ? { annotations: tool.annotations } : {}),
     }
-    const fail = (message: string): ToolExecutionResult => ({ isError: true, output: text(message), details })
+    const fail = (message: string): ToolExecutionResult => ({ isError: true, output: text(this.#hide(message)), details })
     // The server as it is now: removed, or replaced by another of its name, its calls fail.
     const current = this.servers.get(server.id)
     if (!current) return fail(`${server.name} is no longer set up on this machine.`)
@@ -393,6 +453,12 @@ export class Runtime {
       if (error instanceof McpError && error.code === ErrorCode.RequestTimeout) {
         return fail(`${server.name}.${tool.tool} took over ${timeout / 1000}s without a word of progress, so Superego stopped waiting (and told the server to stop).`)
       }
+      // Its session went while the call was out (stopped, restarted, crashed, the extension reloaded): it may have run.
+      const cutBy = connection as Connection | undefined
+      if (cutBy?.ended || (error instanceof McpError && error.code === ErrorCode.ConnectionClosed)) {
+        const own = (server.config.lifetime ?? DEFAULTS.lifetime) === 'thread'
+        return fail(cutText(server.name, tool.tool, cutBy?.stoppedBecause ?? errorText(error), own))
+      }
       return fail(`${server.name}.${tool.tool} failed: ${errorText(error)}`)
     } finally {
       slot.lastUsed = Date.now()
@@ -407,14 +473,13 @@ export class Runtime {
 
   /** A 401: the key or token was refused, so the server needs sign-in. */
   #refused(server: Server, error: unknown) {
-    const status = (error as { code?: unknown })?.code
-    if (!(error instanceof UnauthorizedError) && !(status === 401 && /HTTP|401|nauthori/i.test(errorText(error)))) return false
+    if (!refusal(error)) return false
     const type = server.config.auth?.type
-    server.refused = type === 'api-key' ? 'its API key was refused'
+    server.refused = this.#hide(type === 'api-key' ? 'its API key was refused'
       : type === 'oauth' ? (error instanceof UnauthorizedError ? error.message : 'it turned its sign-in away')
-        : 'it asks to be signed in to'
+        : 'it asks to be signed in to')
     server.log.write(`refused: ${server.refused}`)
-    this.stopAll(server)
+    this.stopAll(server, `${server.name} turned its sign-in away`)
     this.#changed()
     return true
   }
@@ -437,15 +502,32 @@ export class Runtime {
     if (gate) throw new RpcError('unavailable', gate.why)
     if (!server.slots.has(slot.key)) server.slots.set(slot.key, slot)
     let mine: Connection | undefined
+    const stop = slot.stop = new AbortController()
+    // Stopped with the extension, or when the start is called off.
+    const signal = AbortSignal.any([this.#api.signal, stop.signal])
     const starting = slot.starting = (async () => {
       const root = slot.thread ? (await this.#api.threads.get(slot.thread)).cwd : undefined
       const resource = oauthResource(server.config)
-      const connection = await Connection.open({
+      const launch = {
         name: server.name, config: server.config, cwd: root ?? server.cwd, secrets: await this.secretsOf(server), log: server.log,
         ...(root ? { root } : {}), ...(resource ? { fetch: this.oauth.fetchFor(resource) } : {}),
         onToolsChanged: () => this.#relistSoon(server, slot),
-        onClose: (exit) => { if (mine) this.#crashed(server, slot, mine, exit) },
-      })
+        onClose: (exit: Exit | undefined) => { if (mine) this.#crashed(server, slot, mine, exit) },
+      }
+      // A URL that doesn't answer (a network blip, its sign-in's server down) is tried again a little later.
+      let connection: Connection
+      for (let attempt = 0; ; attempt++) {
+        try {
+          connection = await Connection.open(launch, signal)
+          break
+        } catch (error) {
+          const wait = this.#retries[attempt]
+          if (server.config.command || wait === undefined || signal.aborted || refusal(error) || !transient(error)) throw error
+          server.log.write(`not reached; trying again in ${wait / 1000}s`)
+          await pause(wait, signal)
+          if (signal.aborted) throw error
+        }
+      }
       mine = connection
       slot.connection = connection
       slot.lastUsed = Date.now()
@@ -459,13 +541,15 @@ export class Runtime {
     try {
       return await starting
     } catch (error) {
-      if (!this.#refused(server, error)) {
-        server.error = errorText(error).split('\n')[0]
-        this.#count(server, errorText(error))
+      // Called off (stopped, restarted, the extension torn down): not the server's failing.
+      if (!signal.aborted && !this.#refused(server, error)) {
+        server.error = this.#hide(errorText(error).split('\n')[0]!)
+        // Only a command's exits count toward failing it: a URL is tried again the next time it's needed.
+        if (server.config.command) this.#count(server, server.error)
       }
       throw error
     } finally {
-      if (slot.starting === starting) delete slot.starting
+      if (slot.starting === starting) { delete slot.starting; delete slot.stop }
       this.#changed()
     }
   }
@@ -509,13 +593,16 @@ export class Runtime {
     }, 20)
   }
 
-  /** A session ended by itself: a crash, counted (three in a minute and it's failed); the next need starts it again. */
+  /**
+   * A session ended by itself: a command's exit is a crash, counted (three in a minute and it's failed); a URL's session
+   * ending isn't. The next need starts it again.
+   */
   #crashed(server: Server, slot: Slot, connection: Connection, exit: Exit | undefined) {
     if (slot.connection === connection) slot.connection = undefined
     if (!slot.connection && !slot.starting && server.slots.get(slot.key) === slot) server.slots.delete(slot.key)
     const how = exit ? (exit.error ?? (exit.signal ? `killed by ${exit.signal}` : `exited with code ${exit.code}`)) : 'its session ended'
-    server.error = `${server.name} ${how}${exit?.stderr.length ? `: ${exit.stderr.at(-1)}` : ''}`
-    this.#count(server, server.error)
+    server.error = this.#hide(`${server.name} ${how}${exit?.stderr.length ? `: ${exit.stderr.at(-1)}` : ''}`)
+    if (server.config.command) this.#count(server, server.error)
     this.#changed()
   }
 
@@ -523,11 +610,14 @@ export class Runtime {
     const now = Date.now()
     server.crashes = [...server.crashes.filter((at) => now - at < CRASH_WINDOW), now]
     if (server.crashes.length >= CRASHES && !server.failed) {
-      server.failed = why.split('\n')[0]!
+      server.failed = this.#hide(why.split('\n')[0]!)
       server.log.write(`failed ${CRASHES} times within a minute: not started again until it's restarted`)
-      this.stopAll(server)
+      this.stopAll(server, `${server.name} failed`)
     }
   }
+
+  /** Text for the model, Settings or a thread's facts: every value the store keeps hidden (any server's, any token). */
+  #hide(text: string) { return redact(text, this.#store.secrets()) }
 
   #forget(server: Server) {
     delete server.failed
@@ -546,18 +636,23 @@ export class Runtime {
     if (!connection.inflight) void connection.close()
   }
 
-  /** Stop a slot's session now, calls and all. */
-  async #close(server: Server, slot: Slot) {
+  /** Stop a slot's session now, calls and all (`why` is what a call it cuts off is told); one starting is called off. */
+  async #close(server: Server, slot: Slot, why?: string) {
     const connection = slot.connection
     slot.connection = undefined
+    const starting = slot.starting
+    slot.stop?.abort()
     if (server.slots.get(slot.key) === slot && !slot.starting) server.slots.delete(slot.key)
     this.#changed()
-    await connection?.close()
+    await connection?.close(why)
+    // Called off: settled (and out of the slot) before anything starts it again.
+    await starting?.catch(() => {})
+    if (server.slots.get(slot.key) === slot && !slot.starting && !slot.connection) server.slots.delete(slot.key)
   }
 
-  /** Stop every session of a server now. */
-  stopAll(server: Server) {
-    for (const slot of [...server.slots.values()]) void this.#close(server, slot)
+  /** Stop every session of a server now. `why`: what a call it cuts off is told. */
+  stopAll(server: Server, why = `${server.name} was stopped`) {
+    for (const slot of [...server.slots.values()]) void this.#close(server, slot, why)
   }
 
   /** Stop a thread's own sessions (it was archived). */
@@ -578,6 +673,25 @@ export class Runtime {
         server.log.write('idle: stopping')
         void this.#close(server, slot)
       }
+    }
+    this.#prune(now)
+  }
+
+  /**
+   * What would otherwise grow for as long as the daemon runs: profiles' servers whose profile's folder is gone (the
+   * project deleted, or moved), and what each thread's last turn had, for threads not working for a while (their memo
+   * keeps it).
+   */
+  #prune(now: number) {
+    for (const server of [...this.servers.values()]) {
+      if (server.from.type === 'profile' && !existsSync(server.from.dir)) {
+        server.log.write(`its profile's folder is gone: forgotten`)
+        void this.remove(server)
+      }
+    }
+    const at = (this.selected as Selected).at
+    for (const thread of [...this.selected.keys()]) {
+      if (!this.working.has(thread) && now - (at.get(thread) ?? 0) >= this.#idle) this.selected.delete(thread)
     }
   }
 
@@ -611,7 +725,7 @@ export class Runtime {
     this.#forget(server)
     delete server.refused
     server.missing = await this.#missing(server)
-    for (const slot of [...server.slots.values()]) await this.#close(server, slot)
+    for (const slot of [...server.slots.values()]) await this.#close(server, slot, `${server.name} was restarted`)
     await this.check(server, wait)
   }
 

@@ -85,6 +85,8 @@ export function ServerRow({ server, own, run, onEdit, onLog, onHelp, children }:
             <code title={config.command ? commandLine(config) : config.url}>{server.runs}</code> · {stateText(server)}
             {signedIn && <> · <span title={signInDetails(server.oauth)}>{signedIn}</span></>}
             {from && <> · profile <b>{from.profile}</b>{from.scope === 'project' ? ` in ${from.project.replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, '~')}` : ''}</>}
+            {/* From the cache: it runs once a thread of its profile takes a turn (and the profile is allowed). */}
+            {server.profileAllowed === false && <>, not loaded yet</>}
           </div>
           {/* Why it failed, or the last error of one that runs: what the state and the buttons don't say already. */}
           {server.error && (state === 'failed' || state === 'running' || state === 'stopped' || state === 'starting') && <div className="setting__error">{server.error}</div>}
@@ -104,7 +106,7 @@ export function ServerRow({ server, own, run, onEdit, onLog, onHelp, children }:
             <Menu.Popup>
               {own && <Menu.Item onClick={onEdit}>Edit…</Menu.Item>}
               {own && <Menu.Item onClick={() => run(ACTIONS.set, { name, enabled: config.enabled === false })}>{config.enabled === false ? 'Switch on' : 'Switch off'}</Menu.Item>}
-              <Menu.Item disabled={state === 'off' || state === 'waiting'} onClick={() => run(ACTIONS.restart, { server: server.id })}>Restart</Menu.Item>
+              <Menu.Item disabled={state === 'off' || state === 'waiting' || server.profileAllowed === false} onClick={() => run(ACTIONS.restart, { server: server.id })}>Restart</Menu.Item>
               <Menu.Item onClick={onLog}>Show log</Menu.Item>
               {menu.help && <Menu.Item onClick={() => onHelp()}>{menu.help}</Menu.Item>}
               {menu.clientSecret && <Menu.Item onClick={() => onHelp(true)}>Client secret…</Menu.Item>}

@@ -438,7 +438,7 @@ committed.
   On save, the server is started once to check it. The dialog shows "Connected · 23 tools", or the error, before
   it closes. A short list of well-known servers (`catalog.ts`) fills in the fields; Ego uses the same list.
 - **From profiles**, a second group: the project servers the daemon has seen, with their profile and project. Each
-  shows whether its profile is allowed, and has its sign-in. You can't edit them here; they're the profile's.
+  shows whether its profile has loaded since the daemon started (`profileAllowed`), and has its sign-in. You can't edit them here; they're the profile's.
 - For a remote machine, it all works the same through that machine's link (relayed in a browser), as Providers
   does.
 
@@ -639,7 +639,8 @@ Depends on Lane 1.
   names. Agent parts are `mcp:<name>` and `mcp:<name>@<hash>`, the shared one `mcp-servers`, and `tool_search` comes
   in `mcp-servers-search`.
 - **A profile's server's config is kept in its cache**, as the profile said when it was last loaded (so allowed then).
-  A run resumed after a restart can start it before the profile's next turn.
+  After a restart its tools are offered from the cache, but it doesn't run until its profile loads again (see Review
+  fixes, M1).
 - **Where commands run:** a machine server in `cwd` or the home folder; a profile's in the folder holding its
   `.superego` (the project's root; for a user profile, the data folder's parent), `cwd` resolved against it; a
   thread's own in the thread's folder.
@@ -823,6 +824,33 @@ From the independent review of the client support (`~/.superego/mcp-review.md`):
   mcp.linear.app."
 - **L8:** `mcp-servers.json` is written 0600 (an older 0644 file becomes 0600 on its next change). A file that doesn't
   parse is reported as "… isn't valid JSON (line L, column C)", never with the parser's quote of it.
+
+**Runtime hygiene (H2, M1, M3, M4, L4, L5).** In `servers.ts` and `connections.ts`, tested in `test/runtime.test.ts`:
+- **H2: a crash line is redacted.** Every string that becomes a server's `error`, `failed` or `refused`, or a call's
+  failure text, goes through `Runtime.#hide`: `redact(…, store.secrets())`. That covers any server's values and
+  OAuth tokens, not only the server's own `launch.secrets`.
+- **M1: a cached profile server waits for its profile.** One installed from the cache (`loadCached`) has
+  `profileLoaded: false` until `agentParts` hands its profile in, which happens only once the profile is allowed.
+  Until then it's gated: state `stopped`, nothing starts it (Restart, Set key, warm, check), and its calls fail with
+  "available after the next turn of a thread with the profile …". This includes a run resumed after a restart: its
+  calls fail, and the next turn brings the server back. `ServerInfo.profileAllowed` says this for a profile's row,
+  and Settings shows "not loaded yet" and disables Restart.
+- **L5: pruning.** `loadCached` deletes cache entries whose profile folder is gone, and the sweep forgets profile
+  servers whose folder goes while the daemon runs. `runtime.selected` forgets threads that haven't been working for
+  the idle time (10 minutes); their memo still holds the same thing.
+- **M3: a cut-off call may have run.** A call whose session was stopped, restarted, crashed or torn down while it was
+  out (`Connection.ended`, or the SDK's `ConnectionClosed`) is answered with `cutText`: "x.y was cut off before it
+  answered: <why>. It may or may not have taken effect on the server. Check … before calling it again." `stopAll`
+  and `#close` pass the why ("fx was restarted", "fx failed", "fx was switched off", …), and a crash gives its
+  exit and stderr.
+- **M4: a server still starting is stopped on teardown.** `Connection.open` takes a signal: the extension's, combined
+  with the slot's own `stop` controller. It goes to `spawnGroup`, so the process group stops even if `initialize`
+  never answers, and to the HTTP `connect`. Once open, the signal closes the connection. Teardown also closes
+  whatever `slot.starting` produces. `#close` calls off a start that's still going and waits for it to settle. A
+  group stopped by its signal isn't counted as a crash.
+- **L4: HTTP blips aren't crashes.** Only a command's exits count toward the three-in-a-minute limit. A URL that can't
+  be reached (no answer, 5xx, 408 or 429) is tried again after 1s and then 3s (`RuntimeOptions.retries`). If it still
+  fails, the error is the server's last error, and the next time something needs the server it tries again.
 
 ## Future
 

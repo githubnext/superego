@@ -69,8 +69,8 @@ class GroupTransport implements Transport {
   exit?: Exit
   command: string
   args: string[]
-  options: { cwd: string; env: Record<string, string>; log: ServerLog }
-  constructor(command: string, args: string[], options: { cwd: string; env: Record<string, string>; log: ServerLog }) {
+  options: { cwd: string; env: Record<string, string>; log: ServerLog; signal?: AbortSignal }
+  constructor(command: string, args: string[], options: { cwd: string; env: Record<string, string>; log: ServerLog; signal?: AbortSignal }) {
     this.command = command
     this.args = args
     this.options = options
@@ -78,7 +78,11 @@ class GroupTransport implements Transport {
 
   start() {
     return new Promise<void>((resolve, reject) => {
-      const group = this.#group = spawnGroup(this.command, this.args, { cwd: this.options.cwd, env: this.options.env, stdio: ['pipe', 'pipe', 'pipe'], grace: 2000 })
+      const group = this.#group = spawnGroup(this.command, this.args, {
+        cwd: this.options.cwd, env: this.options.env, stdio: ['pipe', 'pipe', 'pipe'], grace: 2000,
+        // Stopped with the signal (the extension torn down, or the start called off), started or not.
+        ...(this.options.signal ? { signal: this.options.signal } : {}),
+      })
       group.child.once('spawn', () => resolve())
       group.child.once('error', (error) => { if (group.child.pid === undefined) reject(error) })
       group.child.stdout!.on('data', (chunk: Buffer) => {
@@ -181,6 +185,8 @@ export class Connection {
   #transport: Transport
   #closing = false
   closed = false
+  /** Why it was stopped, when the runtime said (`close(why)`): what a call it cut off tells the model. */
+  stoppedBecause?: string
   /** Calls going on it now. */
   inflight = 0
   /** Replaced (its config changed, or it's stopping): closed once its calls end. */
@@ -192,8 +198,30 @@ export class Connection {
     this.#transport = transport
   }
 
-  /** Start it and say hello (`initialize`); throws when it can't. */
+  /** Stopped or stopping (not by itself): a call still going on it is cut off. */
+  get ended() { return this.closed || this.#closing }
+
+  /**
+   * Start it and say hello (`initialize`); throws when it can't. `signal` stops it, while it starts and after: a command's
+   * whole group, an HTTP session.
+   */
   static async open(launch: Launch, signal?: AbortSignal): Promise<Connection> {
+    const connection = await Connection.#open(launch, signal)
+    if (signal?.aborted) {
+      await connection.close()
+      throw signal.reason instanceof Error ? signal.reason : new Error('Stopped before it started')
+    }
+    if (signal) {
+      const stop = () => void connection.close()
+      signal.addEventListener('abort', stop, { once: true })
+      connection.#unhook = () => signal.removeEventListener('abort', stop)
+    }
+    return connection
+  }
+
+  #unhook?: () => void
+
+  static async #open(launch: Launch, signal?: AbortSignal): Promise<Connection> {
     const { config, log } = launch
     const make = () => {
       const client = new Client(CLIENT, { capabilities: launch.root ? { roots: { listChanged: false } } : {} })
@@ -208,7 +236,7 @@ export class Connection {
       return client
     }
     if (config.command) {
-      const transport = new GroupTransport(config.command, config.args ?? [], { cwd: launch.cwd, env: envOf(config, launch.secrets), log })
+      const transport = new GroupTransport(config.command, config.args ?? [], { cwd: launch.cwd, env: envOf(config, launch.secrets), log, ...(signal ? { signal } : {}) })
       const client = make()
       const connection = new Connection(launch, client, transport)
       transport.onclose = () => connection.#closed(transport.exit)
@@ -280,9 +308,11 @@ export class Connection {
   }
 
   /** Stop it: the command's whole group, or the HTTP session (ended with a DELETE where the server keeps sessions). */
-  async close() {
+  async close(why?: string) {
     if (this.#closing) return
     this.#closing = true
+    if (why) this.stoppedBecause = why
+    this.#unhook?.()
     this.launch.log.write('stopping')
     const http = this.#transport instanceof StreamableHTTPClientTransport ? this.#transport : undefined
     if (http?.sessionId) await http.terminateSession().catch(() => {})
@@ -294,7 +324,9 @@ export class Connection {
   #closed(exit: Exit | undefined) {
     if (this.closed) return
     this.closed = true
-    if (this.#closing) return
+    this.#unhook?.()
+    // Stopped by us (`close()`, or its signal stopped the group): not a crash.
+    if (this.#closing || exit?.stopped) return
     const how = exit ? (exit.error ?? (exit.signal ? `killed by ${exit.signal}` : `exited with code ${exit.code}`)) : 'the session ended'
     this.launch.log.write(`closed: ${how}`)
     this.launch.onClose?.(exit)
