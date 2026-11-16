@@ -33,8 +33,8 @@ export function provide(modules: Modules) {
 }
 
 /**
- * Load files as the daemon and the window do, from now on. CSS imported by a module of ours loads as nothing (in a
- * checkout, where it isn't bundled).
+ * Load files as the daemon and the window do, from now on. CSS imported by a module of ours loads as nothing, and a
+ * file imported by its URL (`./frame.html?url`) as its file: URL (in a checkout, where it isn't bundled).
  */
 export function hook() {
   nodeModule.registerHooks({
@@ -45,6 +45,7 @@ export function hook() {
     load(url, context, next) {
       if (!url.startsWith('file:')) return next(url, context)
       const path = url.replace(/[?#].*$/, '')
+      if (/\?(.*&)?url(&|$)/.test(url)) return { format: 'module', source: `export default ${JSON.stringify(path)}`, shortCircuit: true }
       if (path.endsWith('.css')) return { format: 'module', source: '', shortCircuit: true }
       if (!/\.[jt]sx$/.test(path)) return next(url, context)
       const file = fileURLToPath(path)
