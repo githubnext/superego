@@ -1,6 +1,6 @@
 // The app's windows on the desktop: each an AppWindow, the one record of everything the main process keeps for it
 // (its subscriptions, shortcuts, the thread it shows, what waits to be shown in it, its channels), torn down in one
-// place as it closes. Kept between launches by WindowList (windows.ts), and reopened as they were left.
+// place as its page loads again or it closes. Kept between launches by WindowList (windows.ts), and reopened as they were left.
 import { join } from 'node:path'
 import { app, BrowserWindow, screen, session, shell, type WebContents } from 'electron'
 import type { AppConfig, Channel } from '@superego/protocol'
@@ -22,7 +22,13 @@ export class AppWindow {
   readonly id: string
   readonly browser: BrowserWindow
   readonly contents: WebContents
-  /** Its subscriptions on the app's endpoint (`settings.watch`), by sub. */
+  /**
+   * Which page it has: one more each time a page starts loading in it, and as it closes. What its page starts and
+   * finishes later (opening a channel) belongs to it only while this is unchanged.
+   */
+  get page() { return this.#page }
+  #page = 0
+  /** Its page's subscriptions on the app's endpoint (`settings.watch`), by sub. */
   readonly subs = new Map<string, () => unknown>()
   /** The shortcuts that run its actions now, as it last said (`app.boundKeys`). */
   boundKeys = new Set<string>()
@@ -49,8 +55,21 @@ export class AppWindow {
   send(event: SuperegoEvent) { if (!this.contents.isDestroyed()) this.contents.send(CHANNEL.event, event) }
   /** Tell its page of one of the app's own events. */
   sendApp(method: string, params: unknown) { this.send({ machine: APP, method, params }) }
-  /** Abort its channels: its page loaded again, or it closed. */
-  dropChannels(reason = 'The window closed') { for (const held of this.channels.values()) held.channel.abort(reason) }
+
+  /**
+   * A page starts loading in it (the first, or a reload), or it closed (`reason`): what the last page had goes. Its
+   * subscriptions stop, its channels are aborted, and what it said (its shortcuts, the thread it shows) is forgotten;
+   * what's to show waits for the new page to listen, and `pending` is kept for it.
+   */
+  pageLoaded(reason = 'The page loaded again') {
+    this.#page++
+    for (const stop of this.subs.values()) stop()
+    this.subs.clear()
+    this.ready = false
+    this.boundKeys = new Set()
+    this.shown = undefined
+    for (const held of this.channels.values()) held.channel.abort(reason)
+  }
 
   /** Show what it was asked to, now if its page listens, else once it does. */
   show(what: Show) {
@@ -68,6 +87,7 @@ export function windowState(state: unknown): Record<string, string> | undefined 
   return entries.reduce((size, [key, value]) => size + key.length + (value as string).length, 0) > 200_000 ? undefined : Object.fromEntries(entries) as Record<string, string>
 }
 
+/** Its callbacks are never called while it's being made: what they reach may be made after it. */
 export type WindowsOptions = {
   app: AppConfig
   dataDir: string
@@ -76,8 +96,8 @@ export type WindowsOptions = {
   methods(window: AppWindow): AppHandlers
   /** One opened or closed. */
   changed(): void
-  /** One came to the front or left it. */
-  focusChanged(): void
+  /** What the window in front shows may have changed: one came to the front or left it, or its page loaded again. */
+  lookedAtChanged(): void
   /** One closed: what's kept for it elsewhere goes. */
   closed(window: AppWindow): void
 }
@@ -85,7 +105,7 @@ export type WindowsOptions = {
 export type Windows = ReturnType<typeof createWindows>
 
 /** The app's windows: opened, reopened, brought forward, and asked to show a thread or Settings. */
-export function createWindows({ app: appConfig, dataDir, headless, methods, changed, focusChanged, closed }: WindowsOptions) {
+export function createWindows({ app: appConfig, dataDir, headless, methods, changed, lookedAtChanged, closed }: WindowsOptions) {
   /** Every window, open or put away, kept between launches (see windows.ts). */
   const list = new WindowList(join(dataDir, 'windows.json'))
   /** The open ones, by their id. */
@@ -168,17 +188,22 @@ export function createWindows({ app: appConfig, dataDir, headless, methods, chan
     const moved = () => { if (!browser.isDestroyed()) list.moved(opened.id, browser.getNormalBounds()) }
     browser.on('moved', moved)
     browser.on('resized', moved)
+    // A page starting to load in it (not a move within it, nor a frame's): the last one's state goes. Here, not on word
+    // from the new page, which may say nothing.
+    contents.on('did-start-navigation', ({ isMainFrame, isSameDocument }) => {
+      if (!isMainFrame || isSameDocument) return
+      window.pageLoaded()
+      lookedAtChanged()
+    })
     browser.on('closed', () => {
       byId.delete(opened.id)
-      for (const stop of window.subs.values()) stop()
-      window.subs.clear()
-      window.dropChannels()
+      window.pageLoaded('The window closed')
       list.close(opened.id)
       closed(window)
       changed()
     })
-    browser.on('focus', () => { list.focused(opened.id); focusChanged() })
-    browser.on('blur', () => focusChanged())
+    browser.on('focus', () => { list.focused(opened.id); lookedAtChanged() })
+    browser.on('blur', () => lookedAtChanged())
     // The page learns which window it is (its storage is kept by that, see local-state.ts) from its address, which
     // a reload keeps; whether it's the app's first; and once, what it starts with.
     const query: Record<string, string> = { window: opened.id, ...(opened.first ? { first: '1' } : {}), ...(seed ? { seed: JSON.stringify(seed) } : {}) }

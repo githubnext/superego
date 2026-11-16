@@ -1,6 +1,7 @@
 // The windows' IPC: their calls (on a machine's daemon, or the app's own endpoint) and the machines list, answered as
 // CallResults; and their protocol channels (a terminal's bytes, say), held on the machine's link, each chunk passed to
-// its window and read there before the next, and every one of a window's aborted when its page loads again or it goes.
+// its window and read there before the next, and every one of a window's aborted when its page loads again or it goes
+// (AppWindow.pageLoaded).
 // The preload is the other half (preload.ts).
 import { randomUUID } from 'node:crypto'
 import { ipcMain, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
@@ -43,9 +44,15 @@ export function serveIpc({ machines, linkOf, windowOf, callApp }: IpcOptions) {
 
   ipcMain.handle(CHANNEL.open, (event, machine: string, kind: string, params: unknown) => answer(async () => {
     const window = windowFor(event)
+    const page = window.page
     const link = machine === APP ? undefined : linkOf(machine)
     if (!link) throw new RpcError('unknown_machine', `No machine ${machine}`)
     const channel = await link.channel(kind, params)
+    // The page that asked went while it opened (reloaded, or its window closed): nobody's to read it.
+    if (window.page !== page) {
+      channel.abort('The page that opened it is gone')
+      throw new RpcError('unknown_window', 'The page that opened it is gone')
+    }
     const id = randomUUID()
     const held: HeldChannel = { channel, reads: [], start: () => {} }
     window.channels.set(id, held)
@@ -70,5 +77,4 @@ export function serveIpc({ machines, linkOf, windowOf, callApp }: IpcOptions) {
   ipcMain.on(CHANNEL.start, (event, id: string) => { heldBy(event, id)?.start() })
   ipcMain.on(CHANNEL.ack, (event, id: string) => { heldBy(event, id)?.reads.shift()?.() })
   ipcMain.on(CHANNEL.close, (event, id: string) => { heldBy(event, id)?.channel.abort('Closed') })
-  ipcMain.on(CHANNEL.reset, (event) => windowOf(event.sender)?.dropChannels())
 }

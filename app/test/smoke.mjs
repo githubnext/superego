@@ -726,6 +726,36 @@ if (phase === 'first') {
   await run(`document.querySelector('.composer textarea').select()`)
   await key('Backspace', [])
   await until(`document.querySelector('.composer textarea').value === ''`, 'draft cleared')
+  // A reload leaves nothing of the page before: its settings watches stop (none hears a change made after it), and a
+  // thread asked for as it loads (a notification clicked, `superego open`) shows once the new page listens.
+  {
+    const contents = BrowserWindow.getAllWindows()[0].webContents
+    const heard = new Set()
+    const send = contents.send
+    contents.send = function (channel, event, ...rest) {
+      if (event?.method === 'settings.changed') heard.add(event.params.sub)
+      return send.call(this, channel, event, ...rest)
+    }
+    const changeHeard = async (value) => {
+      heard.clear()
+      await run(`window.superego.call('app', 'app.settings.set', { key: 'app.font.mono', value: ${JSON.stringify(value)} })`)
+      for (let i = 0; i < 50 && !heard.size; i++) await new Promise((r) => setTimeout(r, 100))
+      // Every watch hears it at once: a moment more for any slower.
+      await new Promise((r) => setTimeout(r, 300))
+      if (!heard.size) { await fail('no settings watch heard a change'); throw new Error('failed') }
+      return new Set(heard)
+    }
+    const before = await changeHeard('Menlo')
+    await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => !li.classList.contains('is-selected')).click()`)
+    await until(`document.querySelector('.thread__title')?.textContent !== 'panes'`, 'another thread, before the reload')
+    // Once the new page is in, before it listens: the last one can't keep it for it.
+    contents.once('did-navigate', () => app.emit('second-instance', {}, [`--superego-open=local/${paned}`]))
+    contents.reload()
+    await until(`document.querySelector('.thread__title')?.textContent === 'panes'`, 'the thread asked for during a reload, shown after it')
+    const stale = [...await changeHeard(null)].filter((sub) => before.has(sub))
+    contents.send = send
+    if (stale.length) { await fail(`${stale.length} settings watches of the page before the reload still hear changes`); throw new Error('failed') }
+  }
   // ⌘/ hides the sidebar and shows it again; Threads in the rail stays where it was.
   const toggleAt = () => run(`JSON.stringify(document.querySelector('.threads-rail__button').getBoundingClientRect())`)
   const before = await toggleAt()

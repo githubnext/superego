@@ -1,7 +1,7 @@
 // How the app sits on the desktop: the menu bar item, the Dock icon (and, run from source, its image) and the app menu.
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, Menu, nativeTheme, type MenuItemConstructorOptions } from 'electron'
+import { app, Menu, nativeTheme, type MenuItemConstructorOptions } from 'electron'
 import type { AppConfig } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
 import { HIDE_DOCK, MENU_BAR } from '../shared/app-settings.ts'
@@ -10,13 +10,14 @@ import type { Machines } from './machines.ts'
 import { MenuBar } from './menu-bar.ts'
 import type { Service } from './service.ts'
 
+/** Its callbacks are never called while it's being made. */
 export type DesktopOptions = {
   app: AppConfig
   headless: boolean
   settings: SettingsRegistry
   machines: Pick<Machines, 'entries' | 'threads'>
   service: Pick<Service, 'state' | 'act' | 'quitAndStop'>
-  windows: Pick<Windows, 'show' | 'focused' | 'recent' | 'reopen' | 'putAway'>
+  windows: Pick<Windows, 'all' | 'show' | 'focused' | 'recent' | 'reopen' | 'putAway'>
   /** Count the app icon's threads again. */
   refreshBadge(): void
 }
@@ -65,7 +66,7 @@ export function createDesktop({ app: appConfig, headless, settings, machines, se
     refreshBadge()
     menuBar.update(menuBarOn())
     if (!mac || headless) return
-    const open = BrowserWindow.getAllWindows().length > 0
+    const open = windows.all().length > 0
     const visible = !(dockHidden() || (!open && menuBarOn()))
     // Only on a change: Electron's dock.show() briefly activates the Dock to redraw the menu bar, which flashes the app.
     if (!app.dock || app.dock.isVisible() === visible) return

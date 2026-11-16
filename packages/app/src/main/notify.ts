@@ -2,17 +2,22 @@
 // no window open it notifies by itself when a thread starts wanting a look, or threads start waiting for sign-in; with
 // one, each window's notifications extension decides, and asks through `app.notify`. The settings that switch both on
 // (`NOTIFY`, `BADGE`) are that extension's: only once a window has declared them does the app notify or count.
-import { app, BrowserWindow, Notification } from 'electron'
+import { app, Notification } from 'electron'
 import { waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
 import type { ThreadRef } from '../shared/bridge.ts'
 import { BADGE, desktopNotification, NOTIFY, signInNotification, threadNotification, unreadCount, type ThreadNotification } from '../shared/notifications.ts'
 import type { Machines } from './machines.ts'
 
+/** Its callbacks are never called while it's being made: what they reach may be made after it. */
 export type NotifierOptions = {
   headless: boolean
   settings: SettingsRegistry
   machines: Pick<Machines, 'allThreads' | 'allLinks' | 'linkOf'>
+  /** Whether a window is open: then each one's notifications extension decides what to notify of. */
+  windowOpen(): boolean
+  /** Whether a window has the focus: nothing shows over it. */
+  windowFocused(): boolean
   /** The thread shown in the window with the focus, if one has it: being looked at. */
   lookedAt(): ThreadRef | undefined
   /** Show a thread, as clicking its notification asks. */
@@ -21,7 +26,7 @@ export type NotifierOptions = {
 
 export type Notifier = ReturnType<typeof createNotifier>
 
-export function createNotifier({ headless, settings, machines, lookedAt, open }: NotifierOptions) {
+export function createNotifier({ headless, settings, machines, windowOpen, windowFocused, lookedAt, open }: NotifierOptions) {
   /** Each thread's state as last heard, by `<machine>/<thread>`, to notify of changes alone. */
   const lastStatus = new Map<string, ThreadInfo['status']['state']>()
   /** How many of each machine's threads wait for sign-in. */
@@ -33,7 +38,7 @@ export function createNotifier({ headless, settings, machines, lookedAt, open }:
     // A provider rejecting the credentials: one notice when threads start waiting for sign-in, not one each.
     const before = signingIn.get(machine) ?? 0
     signingIn.set(machine, waiting.length)
-    if (announce && !before && waiting.length && !BrowserWindow.getAllWindows().length && settings.get(NOTIFY) === true) {
+    if (announce && !before && waiting.length && !windowOpen() && settings.get(NOTIFY) === true) {
       const notice = signInNotification(machine, { summary: waiting[0]!.status.msg ?? 'Sign in again', threads: waiting.map((t) => t.id) })
       if (notice) notify(notice)
     }
@@ -42,7 +47,7 @@ export function createNotifier({ headless, settings, machines, lookedAt, open }:
       const before = lastStatus.get(key)
       const now = thread.status.state
       lastStatus.set(key, now)
-      if (!announce || before === now || BrowserWindow.getAllWindows().length) continue
+      if (!announce || before === now || windowOpen()) continue
       // Only once a window has declared the setting: an app without the notifications extension never notifies.
       const notice = threadNotification(machine, thread)
       if (notice && settings.get(NOTIFY) === true && !thread.without?.includes('notifications')) notify(notice)
@@ -76,7 +81,7 @@ export function createNotifier({ headless, settings, machines, lookedAt, open }:
     if (Date.now() - (noticed.get(key) ?? 0) < 5_000) return
     noticed.set(key, Date.now())
     if (headless) return void (globalThis as { superegoNotifications?: ThreadNotification[] }).superegoNotifications?.push(notice)
-    if (BrowserWindow.getFocusedWindow() || !Notification.isSupported()) return
+    if (windowFocused() || !Notification.isSupported()) return
     const several = machines.allLinks().filter((link) => link.state === 'connected').length > 1
     const notification = new Notification(desktopNotification(notice, { label: machines.linkOf(notice.machine)?.label ?? notice.machine, several }))
     notification.on('click', () => open({ machine: notice.machine, thread: notice.thread }))

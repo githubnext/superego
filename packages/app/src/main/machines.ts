@@ -18,6 +18,7 @@ import { agentsAre, confirm } from './dialogs.ts'
 import { createSignInCatcher } from './sign-in-callback.ts'
 import { waitUntil } from './wait.ts'
 
+/** Its callbacks are never called while it's being made: what they reach may be made after it. */
 export type MachinesOptions = {
   app: AppConfig
   dataDir: string

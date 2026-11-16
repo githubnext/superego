@@ -33,8 +33,6 @@ ipcRenderer.on(CHANNEL.data, (_event: IpcRendererEvent, event: ChannelEvent) => 
   if ('data' in event) channel?.data(event.data)
   else channel?.closed(event.reason)
 })
-// A page (re)loaded has none of the channels its last one opened.
-ipcRenderer.send(CHANNEL.reset)
 
 function held(id: string): BridgeChannel {
   let reader: ((bytes: Uint8Array) => void | Promise<void>) | undefined

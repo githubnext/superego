@@ -5,7 +5,7 @@
 import { Channels, PROTOCOL_VERSION, RpcError, RpcPeer, versionOf, type ActionInfo, type Channel, type Hello, type Json, type Notifications } from '@superego/protocol'
 import { declaredSpec, serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { carriesFiles, uploadAttachments } from '@superego/client/uploads'
-import type { AppHandlers, BridgeChannel, MachineEntry, SuperegoBridge, SuperegoEvent } from '../shared/bridge.ts'
+import type { BridgeChannel, BrowserAppHandlers, MachineEntry, SuperegoBridge, SuperegoEvent } from '../shared/bridge.ts'
 import { APP, registerAppSettings } from '../shared/app-settings.ts'
 import { browserNotification } from '../shared/notifications.ts'
 import { askPairing, LIMITED, type Pairing } from './pair-gate.ts'
@@ -211,7 +211,9 @@ export function webBridge(): SuperegoBridge {
     // Another machine's profile UI (reached through this daemon) is allowed only on a desktop: none runs here.
     'profileUi.allowed': async () => [],
     'profileUi.declined': async () => [],
-  } satisfies Partial<AppHandlers>
+    // No app icon to count on: nothing to leave out of it.
+    'app.shown': async () => null,
+  } satisfies BrowserAppHandlers
   const answer = (method: string): ((params: never) => Promise<unknown>) | undefined =>
     method in app ? app[method as keyof typeof app] as (params: never) => Promise<unknown> : actions[method]?.run
 

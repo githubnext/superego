@@ -68,8 +68,8 @@ export const artifactUrl = (machine: MachineId, thread: string, path: string) =>
 export const CHANNEL = {
   call: 'superego:call', machines: 'superego:machines', event: 'superego:event',
   // A window's protocol channels, held for it by the main process: opened, ready for data (once the window knows its
-  // id), their data, written, read, closed, and all of a window's dropped as its page (re)loads.
-  open: 'superego:ch-open', start: 'superego:ch-start', data: 'superego:ch-data', write: 'superego:ch-write', ack: 'superego:ch-ack', close: 'superego:ch-close', reset: 'superego:ch-reset',
+  // id), their data, written, read and closed; the main process drops all of a window's as its page (re)loads.
+  open: 'superego:ch-open', start: 'superego:ch-start', data: 'superego:ch-data', write: 'superego:ch-write', ack: 'superego:ch-ack', close: 'superego:ch-close',
 } as const
 /** What the main process tells a window of one of its channels: a chunk, or that it closed (and why, when it failed). */
 export type ChannelEvent = { id: string; data: Uint8Array } | { id: string; closed: true; reason?: string }
@@ -119,3 +119,10 @@ export type AppHandlers = {
   /** How the app sits on the desktop now: for the smoke test. */
   'app.desktop'(): Promise<{ menuBar: boolean; dockHidden: boolean }>
 }
+/**
+ * The ones a page in a browser answers too (web-bridge.ts): the rest are the desktop's alone (its windows, folders,
+ * shortcuts over a pane's page, the Dock), and answer `unsupported` there.
+ */
+export type BrowserAppHandlers = Pick<AppHandlers,
+  'settings.watch' | 'unwatch' | 'settings.register' | 'action.list' | 'action.log' | 'service.get' | 'app.ready' | 'app.notify' |
+  'app.shown' | 'profileUi.allowed' | 'profileUi.declined'>

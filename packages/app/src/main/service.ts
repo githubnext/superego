@@ -10,6 +10,7 @@ import type { Machines } from './machines.ts'
 import { ServiceRestart } from './restart.ts'
 import { waitUntil } from './wait.ts'
 
+/** Its callbacks are never called while it's being made: what they reach may be made after it. */
 export type ServiceOptions = {
   app: AppConfig
   dataDir: string

@@ -56,6 +56,9 @@ export function startApp(appConfig: AppConfig) {
   const types = join(import.meta.dirname, '..', 'types')
   if (!headless && existsSync(join(types, 'stamp.json'))) setImmediate(() => { installTypes(types, dataDir).catch((error) => console.error('author types:', error)) })
 
+  // The parts below reach each other both ways (the machines tell the windows and the Dock of changes, the windows ask
+  // the machines), so each is made from those before it, and its callbacks may name those after it: none calls one
+  // while it's being made (each Options type says so), and nothing starts before every part is made (app.whenReady).
   const machines = createMachines({
     app: appConfig, dataDir, headless,
     broadcast: (event) => windows.broadcast(event),
@@ -82,7 +85,13 @@ export function startApp(appConfig: AppConfig) {
       desktop.refresh()
     },
   })
-  const notifier = createNotifier({ headless, settings, machines, lookedAt: () => windows.focused()?.shown, open: (open) => windows.show({ open }) })
+  const notifier = createNotifier({
+    headless, settings, machines,
+    windowOpen: () => windows.all().length > 0,
+    windowFocused: () => Boolean(windows.focused()),
+    lookedAt: () => windows.focused()?.shown,
+    open: (open) => windows.show({ open }),
+  })
 
   const router = new Router<AppActionContext>()
   machines.registerActions(router)
@@ -91,7 +100,7 @@ export function startApp(appConfig: AppConfig) {
     app: appConfig, dataDir, headless,
     methods: (window) => appMethods(window, { settings, router, service, notifier, machines, windows, desktop }),
     changed: () => desktop.refresh(),
-    focusChanged: () => notifier.refreshBadge(),
+    lookedAtChanged: () => notifier.refreshBadge(),
     closed(window) {
       if (window.declaredViews) void layoutFile.setViews(window.id, undefined).catch((error) => console.error('layout.json:', error))
     },
