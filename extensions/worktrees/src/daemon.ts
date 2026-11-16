@@ -1,10 +1,11 @@
 // worktrees, daemon half: a thread in a git repository can work in a worktree of its own, on a branch of its own, when
 // it's started with `worktree: true` (`options.worktrees`) or its profile says so. Archiving removes the worktree when
-// nothing in it is uncommitted (the branch stays), and unarchiving puts it back. Built on thread hooks, state with
-// each thread, and a fact clients see (`ext.worktrees`). Its state reads what the core kept before (`worktree`).
+// nothing in it is uncommitted, and its branch too once that's merged into the main branch (its tip kept with the
+// thread); unarchiving puts both back. Built on thread hooks, state with each thread, and a fact clients see
+// (`ext.worktrees`).
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdir, readdir, realpath, rename, rm, stat } from 'node:fs/promises'
+import { mkdir, readdir, realpath, rename, stat } from 'node:fs/promises'
 import { basename, dirname, join, relative } from 'node:path'
 import { defineDaemonExtension, slugOf, titleOf } from '@superego/daemon'
 import { RpcError } from '@superego/protocol'
@@ -12,6 +13,13 @@ import { about, type Worktree } from './shared.ts'
 
 /** What a worktree being deleted is renamed with, between its name and a random suffix (see removeWorktree). */
 const REMOVING = '.removing-'
+
+/**
+ * Deleting a folder, as plain Node does. The daemon runs in Electron, whose `fs` takes an `.asar` file for a folder: it
+ * reads into it rather than deleting it, so a worktree with Electron in its node_modules (`default_app.asar`) was never
+ * deleted (ENOTEMPTY). Electron's `original-fs` is `fs` without that; in plain Node there's none, and `fs` is plain.
+ */
+const { rm } = ((process.getBuiltinModule('original-fs') ?? process.getBuiltinModule('node:fs')) as typeof import('node:fs')).promises
 
 /** git in `cwd`: its output, trimmed; its own message when it fails. */
 function git(cwd: string, args: string[]): Promise<string> {
@@ -60,17 +68,49 @@ async function removeWorktree(path: string, root: string) {
   const aside = join(dirname(path), `.${basename(path)}${REMOVING}${randomUUID().slice(0, 8)}`)
   if (!await rename(path, aside).then(() => true, () => false)) return false
   await git(root, ['worktree', 'prune']).catch(() => {})
-  void rm(aside, { recursive: true, force: true }).catch(() => {})
+  void sweepRemoved(dirname(path))
   return true
 }
 
-/** The worktrees a previous process moved aside and didn't get to delete (see removeWorktree), deleted now. */
-async function sweepRemoved(root: string) {
-  for (const repo of await readdir(root).catch(() => [])) {
-    for (const name of await readdir(join(root, repo)).catch(() => [])) {
-      if (name.startsWith('.') && name.includes(REMOVING)) await rm(join(root, repo, name), { recursive: true, force: true }).catch(() => {})
-    }
+/** The folders being deleted now, so a sweep while one is doesn't start on it again. */
+const deleting = new Set<string>()
+
+/**
+ * The worktrees moved aside in a repository's folder (see removeWorktree), deleted: the one just moved, and any an
+ * earlier try didn't finish (the daemon ended mid-way, or it failed), so each removal tries those again too. A failure
+ * is logged, and left for the next.
+ */
+async function sweepRemoved(folder: string) {
+  for (const name of await readdir(folder).catch(() => [])) {
+    const path = join(folder, name)
+    if (!name.startsWith('.') || !name.includes(REMOVING) || deleting.has(path)) continue
+    deleting.add(path)
+    await rm(path, { recursive: true, force: true, maxRetries: 3 })
+      .catch((error: unknown) => console.error(`worktrees: deleting ${path} failed:`, error))
+      .finally(() => deleting.delete(path))
   }
+}
+
+/** Every repository's leftovers (see sweepRemoved), as the daemon starts. */
+async function sweepAll(root: string) {
+  for (const repo of await readdir(root).catch(() => [])) await sweepRemoved(join(root, repo))
+}
+
+/** A branch's tip, or undefined when there's no such branch. */
+const tipOf = (root: string, branch: string) => git(root, ['rev-parse', '-q', '--verify', `refs/heads/${branch}^{commit}`]).catch(() => undefined)
+
+/**
+ * Whether `commit` is merged: reachable from the repository's main branch (the branch its main checkout is on), or
+ * from that branch's upstream. Not when the main checkout is on no branch.
+ */
+async function merged(root: string, commit: string) {
+  const main = await git(root, ['symbolic-ref', '-q', '--short', 'HEAD']).catch(() => '')
+  if (!main) return false
+  const upstream = await git(root, ['rev-parse', '-q', '--verify', `${main}@{upstream}`]).catch(() => '')
+  for (const into of [main, upstream].filter(Boolean)) {
+    if (await git(root, ['merge-base', '--is-ancestor', commit, into]).then(() => true, () => false)) return true
+  }
+  return false
 }
 
 /** Worktrees for threads: kept in `<dataDir>/worktrees/<repo>/<slug>`, on branch `<appId>/<slug>`. */
@@ -102,7 +142,7 @@ export default defineDaemonExtension({
         await git(draft.checkout.top, ['worktree', 'prune']).catch(() => {})
         await git(draft.checkout.top, ['branch', '-D', tree.branch]).catch(() => {})
       },
-      // Gone with the thread when nothing in it is uncommitted; its branch stays, to come back to.
+      // Gone with the thread when nothing in it is uncommitted; its branch too once merged, its tip kept to come back to.
       async archived(thread) {
         const tree = await state.get(thread.id)
         if (!tree || tree.removed) return
@@ -112,10 +152,12 @@ export default defineDaemonExtension({
         if (exists && !(clean && await removeWorktree(tree.path, tree.root))) {
           return { note: clean ? `Kept the worktree ${tree.path}: it couldn't be removed.` : `Kept the worktree ${tree.path}: it has uncommitted changes.` }
         }
-        await state.set(thread.id, { ...tree, removed: true })
-        return { note: exists ? `Removed the worktree ${tree.path}; branch ${tree.branch} kept.` : `Its worktree ${tree.path} was already gone; branch ${tree.branch} kept.` }
+        // Deleted by hand, it's still git's until pruned, and so is its branch.
+        if (!exists) await git(tree.root, ['worktree', 'prune']).catch(() => {})
+        const branch = await settleBranch(thread.id, { ...tree, removed: true })
+        return { note: `${exists ? `Removed the worktree ${tree.path}` : `Its worktree ${tree.path} was already gone`}; ${branch}.` }
       },
-      // Back, on the branch it left.
+      // Back, on the branch it left: made again at the tip it had, if archiving deleted it.
       async unarchiving(thread) {
         const tree = await state.get(thread.id)
         if (!tree?.removed) return
@@ -125,11 +167,44 @@ export default defineDaemonExtension({
         await mkdir(dirname(tree.path), { recursive: true })
         // Pruned first, in case a process ended before letting go of it (see removeWorktree).
         await git(root, ['worktree', 'prune']).catch(() => {})
-        await git(root, ['worktree', 'add', '-q', tree.path, tree.branch])
-          .catch((error: Error) => { throw new RpcError('invalid', `Couldn't restore its worktree: ${error.message}`) })
+        const restore = (error: Error) => { throw new RpcError('invalid', `Couldn't restore its worktree: ${error.message}`) }
+        if (tree.commit && !await tipOf(root, tree.branch)) await git(root, ['branch', tree.branch, tree.commit]).catch(restore)
+        await git(root, ['worktree', 'add', '-q', tree.path, tree.branch]).catch(restore)
         await state.set(thread.id, { path: tree.path, branch: tree.branch, root })
       },
     })
-    void sweepRemoved(folder)
+
+    /**
+     * The branch of a thread whose worktree archiving removed: its tip kept with the thread first, then deleted if
+     * merged, kept if not (someone's unfinished work). What became of it, as archiving's note says it.
+     */
+    async function settleBranch(id: string, tree: Worktree) {
+      const tip = await tipOf(tree.root, tree.branch)
+      const next = tip ? { ...tree, commit: tip } : tree
+      // Written only when changed: the sweep comes here for every archived thread with its branch, each start.
+      if (JSON.stringify(next) !== JSON.stringify(await state.get(id))) await state.set(id, next)
+      if (!tip) return `branch ${tree.branch} already gone`
+      if (!await merged(tree.root, tip)) return `branch ${tree.branch} kept: not merged`
+      // git refuses one checked out in another worktree.
+      const gone = await git(tree.root, ['branch', '-D', tree.branch]).then(() => true, (error: Error) => {
+        console.error(`worktrees: deleting branch ${tree.branch} failed:`, error.message)
+        return false
+      })
+      return gone ? `branch ${tree.branch} deleted (merged)` : `branch ${tree.branch} kept: it couldn't be deleted`
+    }
+
+    /**
+     * As the daemon starts: what archiving left half done, finished. Leftover folders deleted, and the merged branches
+     * of archived threads whose worktree is removed deleted (archived before branches were, or the daemon ended between).
+     */
+    async function sweep() {
+      await sweepAll(folder)
+      for (const thread of await superego.threads.list({ archived: true })) {
+        const tree = await state.get(thread.id)
+        if (!tree?.removed || !await git(tree.root, ['rev-parse', '--git-dir']).then(() => true, () => false)) continue
+        if (await tipOf(tree.root, tree.branch)) await settleBranch(thread.id, tree)
+      }
+    }
+    void sweep().catch((error: unknown) => console.error('worktrees: sweeping up after archived threads failed:', error))
   },
 })
