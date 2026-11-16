@@ -59,6 +59,8 @@ export default defineDaemonExtension({
 
     /** Publish `entry` as waiting until it's answered (or the call is withdrawn): the answer. */
     async function wait(entry: Waiting, signal: AbortSignal | undefined): Promise<Reply> {
+      // Stopped before it was asked (while its details were kept): withdrawn at once, never published.
+      if (signal?.aborted) throw new Error('The question was withdrawn')
       const answered = new Promise<Reply>((resolve, reject) => {
         answers.set(entry.id, { tool: entry.tool, resolve })
         signal?.addEventListener('abort', () => reject(new Error('The question was withdrawn')), { once: true })
@@ -92,6 +94,8 @@ export default defineDaemonExtension({
         if (text !== undefined && !words) throw new RpcError('invalid', 'An answer in words needs some words')
         if (waiter.tool === ASK_USER && words === undefined) throw new RpcError('invalid', 'A question is answered in words (text)')
         if (values !== undefined && (typeof values !== 'object' || values === null || Array.isArray(values))) throw new RpcError('invalid', 'values must be an object')
+        // Taken now, so a second answer at the same moment (another window) is told it's no longer waiting.
+        answers.delete(id)
         waiter.resolve({ values: (values ?? {}) as Record<string, Value>, ...(button ? { button } : {}), ...(words !== undefined ? { text: words } : {}) })
         return null
       },

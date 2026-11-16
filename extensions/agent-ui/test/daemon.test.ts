@@ -69,7 +69,13 @@ it('takes an answer to ask_ui in words instead', async () => {
   daemon = await testDaemon({ extensions: [agentUi], model: [callTool('ask_ui', { blocks: BLOCKS }, 'f'), say('Fine.')] })
   const thread = await daemon.thread('set it up')
   expect(await statusOf(thread.id)).toMatchObject({ state: 'blocked', msg: 'Waiting for your answer' })
-  await daemon.dispatch(ANSWER, { id: 'f', text: ' whatever is fastest ' })
+  // Two answers at the same moment (two windows): the first is taken, the second told it's no longer waiting.
+  const [first, second] = await Promise.allSettled([
+    daemon.dispatch(ANSWER, { id: 'f', text: ' whatever is fastest ' }),
+    daemon.dispatch(ANSWER, { id: 'f', text: 'the other one' }),
+  ])
+  expect(first.status).toBe('fulfilled')
+  expect(second).toMatchObject({ status: 'rejected', reason: { kind: 'not_found' } })
   await daemon.until(async () => (await statusOf(thread.id)).state === 'done', 'the run to end')
   const [result] = await toolResults(thread.id)
   expect(JSON.parse(result!.content![0]!.text!)).toEqual({ text: 'whatever is fastest' })
@@ -124,4 +130,44 @@ it('opens a ui pane with { id }, updates its UI by id, and keeps it across a res
   const kept = await daemon.watch<ThreadPanes | null>(PANES, { scope: thread.id })
   await kept.until((value) => value !== null)
   expect(kept.value!.status?.blocks).toEqual(second)
+})
+
+it('withdraws what a stopped thread waits on, both kinds, and the queue empties', async () => {
+  daemon = await testDaemon({
+    extensions: [agentUi],
+    model: [callTools({ name: 'ask_user', id: 'q', args: { question: 'Which colour?' } }, { name: 'ask_ui', id: 'f', args: { blocks: BLOCKS } })],
+  })
+  const thread = await daemon.thread()
+  const waiting = await daemon.watch<Waiting[]>(WAITING, { scope: thread.id })
+  await daemon.call('thread.send', { thread: thread.id, text: 'ask me' })
+  await waiting.until((list) => list.length === 2, 'both to wait')
+  await daemon.dispatch('thread.stop', { thread: thread.id })
+  await waiting.until((list) => list.length === 0, 'the queue to empty')
+  await daemon.idle(thread.id)
+  expect((await statusOf(thread.id)).state).not.toBe('blocked')
+  const results = await toolResults(thread.id)
+  expect(results.map((r) => [r.isError, r.content![0]!.text])).toEqual([[true, expect.stringMatching(/aborted/)], [true, expect.stringMatching(/aborted/)]])
+  await expect(daemon.dispatch(ANSWER, { id: 'q', text: 'red' })).rejects.toMatchObject({ kind: 'not_found' })
+})
+
+it("tells a pane watching already of each change, live; a thread keeps its newest 20 panes' UI", async () => {
+  const blocks = (text: string): Json[] => [{ type: 'markdown', text }]
+  daemon = await testDaemon({
+    extensions: [agentUi],
+    model: [
+      callTool('open_ui', { id: 'status', title: 'Build', blocks: blocks('Building…') }),
+      callTool('update_ui', { id: 'status', blocks: blocks('Green.') }),
+      ...Array.from({ length: 20 }, (_, i) => callTool('open_ui', { id: `p${i}`, title: `P${i}`, blocks: blocks(`${i}`) })),
+      say('Done.'),
+    ],
+  })
+  const thread = await daemon.thread()
+  // Watched before anything is drawn: then told of the pane as it's opened and as it's updated.
+  const panes = await daemon.watch<ThreadPanes | null>(PANES, { scope: thread.id })
+  await daemon.send(thread.id, 'build it')
+  const drawn = panes.seen.map((value) => (value?.status?.blocks[0] as { text?: string } | undefined)?.text).filter((text) => text !== undefined)
+  expect([...new Set(drawn)]).toEqual(['Building…', 'Green.'])
+  // 21 opened: the oldest (status) let go of.
+  await panes.until((value) => Object.keys(value ?? {}).length === 20 && !value!.status, 'the oldest to go')
+  expect(Object.keys(panes.value!).sort()).toEqual(Array.from({ length: 20 }, (_, i) => `p${i}`).sort())
 })
