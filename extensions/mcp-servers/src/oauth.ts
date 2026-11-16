@@ -75,7 +75,10 @@ export class OAuthAccess {
   #store: SecretStore
   #fetch: FetchLike
   #timeout: number
-  /** Why a resource's tokens were last forgotten, for calls that wanted them at the same time: by resource. */
+  /**
+   * Why a resource's tokens were last refused and forgotten, for the calls that wanted them then or since: by resource.
+   * Signing out clears it; while it's signed in again, nothing reads it.
+   */
   #forgotten = new Map<string, string>()
   constructor(store: SecretStore, fetchFn: FetchLike = (url, init) => fetch(url, init), { timeout = TIMEOUT } = {}) {
     this.#store = store
@@ -105,7 +108,6 @@ export class OAuthAccess {
     const gone = () => new UnauthorizedError(this.#forgotten.get(resource) ?? 'it isn\'t signed in')
     const now = await this.signedIn(resource)
     if (!now) throw gone()
-    this.#forgotten.delete(resource)
     if (!stale(now)) return now.tokens.access_token
     let why: string | undefined
     const next = await this.#store.modify<Json>(key, async (stored) => {

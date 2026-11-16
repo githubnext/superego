@@ -40,6 +40,12 @@ async function open(model: Turn[] = [], options: McpServersOptions = {}, more: D
   })
 }
 
+/**
+ * A test's time for the fixture processes it starts (Node loading the MCP SDK, some 250 modules): a fraction of a second
+ * on an idle machine, several seconds on a busy one. An added server starts once to be checked, and again for a thread.
+ */
+const starting = (fixtures: number) => 10_000 + fixtures * 12_000
+
 const act = <T = CheckResult>(d: TestDaemon, id: string, params: object) => d.dispatch<T>(`mcp-servers.${id}`, params as Record<string, unknown>)
 const fixture = (more: Partial<ServerConfig> = {}): ServerConfig => ({ command: process.execPath, args: [FIXTURE], env: { FIXTURE_CALLS: calls }, ...more })
 const callsMade = async () => existsSync(calls) ? (await readFile(calls, 'utf8')).split('\n').filter(Boolean) : []
@@ -104,7 +110,7 @@ it('adds a command, checks it, and gives a thread its tools: text, progress, ima
   expect(await serversOf(d, thread.id)).toEqual({ servers: [{ id: 'fx', name: 'fx', title: 'Fixture', from: 'machine', state: 'running', tools: 6 }] })
   // One process for the whole run (and the check before it).
   expect((await callsMade()).filter((line) => line.startsWith('start'))).toHaveLength(2)
-})
+}, starting(2))
 
 it('reaches a URL server with an API key it keeps to itself, and needs sign-in when the key is refused', async () => {
   const http = await serveHttp()
@@ -188,7 +194,7 @@ it('times out a call that hangs, and tells the server to stop', async () => {
   const thread = await d.thread('go')
   expect(await results(d, thread.id)).toEqual(['error: fx.hang took over 1s without a word of progress, so Superego stopped waiting (and told the server to stop).'])
   await d.until(async () => (await callsMade()).includes('hang cancelled'), 'the server to hear it was cancelled')
-})
+}, starting(2))
 
 it('starts a server again after it crashes, and three crashes in a minute fail it until Restart', async () => {
   const d = await open([
@@ -217,7 +223,7 @@ it('starts a server again after it crashes, and three crashes in a minute fail i
   const log = await act<LogResult>(d, 'log', { server: 'fx', lines: 200 })
   expect(log.text).toContain('stderr: boom: the fixture fell over')
   expect(log.text).toContain('failed 3 times within a minute')
-}, 60_000)
+}, starting(5))
 
 it('offers a changed tool list from the next request of the same run, listed once for a burst of changes, and keeps it in the cache', async () => {
   const d = await open([callTool('mcp__fx__change'), callTool('mcp__fx__added'), callTool('mcp__fx__change'), say('Done.')])
@@ -233,7 +239,7 @@ it('offers a changed tool list from the next request of the same run, listed onc
   // Eight changes in a row (`change`'s burst) listed at most twice: one going, one queued that the rest join.
   const log = await act<LogResult>(d, 'log', { server: 'fx', lines: 200 })
   expect(log.text.match(/listed \d+ tools/g)!.length).toBeLessThanOrEqual(1 + 2)
-})
+}, starting(2))
 
 it('never runs a call again that was in flight across a restart, and tells the model it may have run', async () => {
   const first = await open([callTool('mcp__fx__hang')])
@@ -247,7 +253,7 @@ it('never runs a call again that was in flight across a restart, and tells the m
   const [text] = await results(d, thread.id)
   expect(text).toContain('fx.hang was running when Superego stopped.\nIt may or may not have taken effect on the server. Check')
   expect((await callsMade()).filter((line) => line === 'hang')).toHaveLength(1)
-})
+}, starting(2))
 
 it('gives a thread the servers its profile names, unprofiled ones to threads without, and none to hidden threads', async () => {
   let api!: DaemonApi
@@ -287,7 +293,7 @@ it('gives a thread the servers its profile names, unprofiled ones to threads wit
   expect(api.actions('cli').filter((a: ActionInfo) => a.id.startsWith('mcp-servers.')).map((a) => a.id).sort()).toEqual([
     'mcp-servers.add', 'mcp-servers.allow', 'mcp-servers.edit', 'mcp-servers.log', 'mcp-servers.remove', 'mcp-servers.restart', 'mcp-servers.set', 'mcp-servers.set-secret', 'mcp-servers.signIn', 'mcp-servers.signOut',
   ])
-})
+}, starting(2))
 
 it("runs a project profile's servers only once the profile is allowed, in the project's root", async () => {
   const project = join(dir, 'acme')
@@ -343,7 +349,7 @@ it("gives a command its secret env values from the store, hides them in its log,
   expect((await section(d)).servers[0]?.tools).toBe(6)
   // Forgotten, it needs sign-in again.
   expect((await act(d, 'signOut', { server: 'fx' })).server.state).toBe('needs-sign-in')
-})
+}, starting(2))
 
 it('runs a server of its own for each thread, in its folder, stopped when the thread is archived', async () => {
   const d = await open([callTool('mcp__fx__echo', { text: 'one' }), say('Done.'), callTool('mcp__fx__echo', { text: 'two' }), say('Done.')])
@@ -361,7 +367,7 @@ it('runs a server of its own for each thread, in its folder, stopped when the th
   expect((await section(d)).servers[0]?.running).toBe(2)
   await d.call('thread.archive', { thread: one.id })
   await d.until(async () => (await section(d)).servers[0]?.running === 1, 'its process to stop')
-})
+}, starting(3))
 
 it('defers a server whose tools are found by search: the thread gets tool_search, which loads them', async () => {
   const d = await open([callTool('tool_search', { query: 'echo text back' }), callTool('mcp__fx__echo', { text: 'found' }), say('Done.')])
@@ -373,4 +379,4 @@ it('defers a server whose tools are found by search: the thread gets tool_search
   expect(searched).toMatch(/^Loaded \d+ tools?\. .*\n- mcp__fx__echo: Say the text back\./s)
   expect(echoed).toBe('found')
   expect(await serversOf(d, thread.id)).toMatchObject({ servers: [{ name: 'fx', deferred: true, tools: 6 }] })
-})
+}, starting(2))
