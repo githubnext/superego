@@ -36,6 +36,9 @@ import { WebDevices } from './web-devices.ts'
 import { startServe, stopServe, tailnetNames, type TailscaleState } from './tailscale.ts'
 import { agentsInstructions, quote } from './agents-md.ts'
 import { writeOnce } from './write-atomic.ts'
+import { Values } from './values.ts'
+import { ATTACHMENT, attachmentsDir, contentOf } from './attachments.ts'
+import { inFolder, threadFiles } from './files.ts'
 import { broughtBy, defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, profileThere, provideSdk, relocated, Allowances, type LoadedProfile, type ProfileDaemonExtension, type ProfileRef } from './profiles.ts'
 import { serveConnection, UPLOAD_LIMIT, versionMismatch } from './connection.ts'
 import { Clients, type Via } from './clients.ts'
@@ -100,36 +103,6 @@ const ThreadDoc = defineDoc<ThreadMeta>({
 /** An extension's state with a thread. */
 const stateOf = (meta: ThreadMeta, name: string): Json | undefined =>
   meta.ext && Object.hasOwn(meta.ext, name) ? meta.ext[name] : undefined
-/**
- * A live value by name, as the daemon keeps it: a plain one's `value`, or a scoped one's value in each scope (`scopes`);
- * who watches it whole (`listeners`), and who watches one scope of it (`watchers`, by scope).
- */
-type ValueEntry = {
-  value: Json
-  owned: boolean
-  listeners: Set<(value: Json) => void>
-  watchers: Map<string, Set<(value: Json) => void>>
-  scopes?: { values: Map<string, Json>; initial: Json }
-}
-/** A value whole: a scoped one's, every scope's by scope. */
-const wholeOf = (entry: ValueEntry): Json => entry.scopes ? Object.fromEntries(entry.scopes.values) : entry.value
-/** A value's part in `scope`: a scoped one's value there (or what an unset scope reads); a plain one's entry of that key. */
-const partOf = (entry: ValueEntry, scope: string): Json => {
-  if (entry.scopes) return entry.scopes.values.get(scope) ?? entry.scopes.initial
-  const value = entry.value
-  return value && typeof value === 'object' && !Array.isArray(value) && Object.hasOwn(value, scope) ? value[scope]! : null
-}
-/** Tell everyone watching it: whole, and in each scope watched (each watcher hears only a change to its part). */
-function tellAll(entry: ValueEntry) {
-  if (entry.listeners.size) { const whole = wholeOf(entry); for (const listener of entry.listeners) listener(whole) }
-  for (const [scope, watchers] of entry.watchers) { const part = partOf(entry, scope); for (const listener of watchers) listener(part) }
-}
-/** Tell those watching one scope of it, and those watching it whole. */
-function tellScope(entry: ValueEntry, scope: string) {
-  const watchers = entry.watchers.get(scope)
-  if (watchers) { const part = partOf(entry, scope); for (const listener of watchers) listener(part) }
-  if (entry.listeners.size) { const whole = wholeOf(entry); for (const listener of entry.listeners) listener(whole) }
-}
 
 const clone = <T>(value: T): T => value === undefined ? value : JSON.parse(JSON.stringify(value)) as T
 
@@ -233,88 +206,15 @@ async function checkoutOf(dir: string): Promise<{ top: string; root: string } | 
   return { top, root: basename(common) === '.git' ? dirname(common) : top }
 }
 
-/** `path` in `folder`, refusing anything that resolves outside it. */
-function inFolder(folder: string, path: string) {
-  const file = resolvePath(folder, path)
-  if (file !== folder && !file.startsWith(folder.endsWith('/') ? folder : `${folder}/`)) throw new RpcError('invalid', `${path} is outside ${folder}`)
-  return file
-}
-
 /** The setting that lets outside agents (`superego mcp`) start threads here. Off unless turned on. */
 export const OUTSIDE_THREADS = 'outside.startThreads'
 /** An agent part as set up: as installed, how to take it away, and how to put another (of its name) in its place. */
 type Installed = { installed: Extension; undo(): void; replace(next: Extension): Extension }
-/** Attachments: what one may weigh, and how small a text file is to be shown to the model whole. */
-const ATTACHMENT_LIMIT = UPLOAD_LIMIT
-const INLINE_LIMIT = 100 * 1024
-const ATTACHMENT = obj({ name: str({ minLength: 1 }), mimeType: str(), data: str() })
-/** Images the models take as images. */
-const IMAGE = /^image\/(png|jpeg|gif|webp)$/
-const isText = (mimeType: string, name: string) =>
-  /^text\/|json|xml|javascript|typescript|yaml|toml|csv|markdown|x-sh/.test(mimeType)
-    || /\.(md|markdown|txt|ts|tsx|js|jsx|mjs|json|css|html|py|rs|go|rb|swift|kt|java|c|h|cpp|yml|yaml|toml|csv|log|sh|sql|ini|env)$/i.test(name)
-
-/** How large a file clients read whole (`file.read`, `file.watch`) may be. */
-const READ_LIMIT = 16 * 1024 * 1024
 
 /** A pane's params as given: models sometimes send them as a string of JSON, which is taken for what it says. */
 function paneParams(params: unknown): Json {
   if (typeof params !== 'string') return params as Json
   try { return JSON.parse(params) as Json } catch { throw new RpcError('invalid', 'params must be an object') }
-}
-
-/** Folders a file search never enters: tools' and dependencies' own. */
-const UNSEARCHED = new Set(['node_modules', '.git', '.obsidian', '.trash', '.superego', 'dist', 'out', 'build'])
-
-/**
- * A file in `root` by the name a link gives it, as Obsidian resolves [[links]]: a path if it is one (with or without
- * `.md`), else the file of that name, a note's without its `.md`, the shortest path first. Relative to `root`.
- */
-async function findFile(root: string, name: string): Promise<string | undefined> {
-  const wanted = name.trim().replace(/^\/+/, '').toLowerCase()
-  if (!wanted) return undefined
-  const given = name.trim().replace(/^\/+/, '')
-  for (const candidate of [given, `${given}.md`]) {
-    const file = (() => { try { return inFolder(root, candidate) } catch { return undefined } })()
-    if (file && await stat(file).then((s) => s.isFile(), () => false)) return candidate
-  }
-  const base = wanted.split('/').at(-1)!
-  let best: string | undefined
-  let seen = 0
-  const walk = async (dir: string, rel: string): Promise<void> => {
-    for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
-      if (++seen > 50_000) return
-      if (entry.name.startsWith('.') || UNSEARCHED.has(entry.name)) continue
-      const path = rel ? `${rel}/${entry.name}` : entry.name
-      if (entry.isDirectory()) await walk(join(dir, entry.name), path)
-      else {
-        const lower = entry.name.toLowerCase()
-        if ((lower === base || lower === `${base}.md`) && (!best || path.length < best.length)) best = path
-      }
-    }
-  }
-  await walk(root, '')
-  return best
-}
-/**
- * What a path in a message points at, in a thread's folder `root`: a file (by `findFile`), a folder, and a line when it
- * names one (`src/a.ts:12`, `src/a.ts#L12`). Absolute and `~` paths count when they're in the folder; `outside` when not.
- */
-async function locate(root: string, name: string): Promise<{ path: string | null; folder?: boolean; line?: number; outside?: boolean }> {
-  let given = name.trim()
-  let line: number | undefined
-  const at = /^(.+?)(?::(\d+)(?::\d+)?|#L(\d+)(?:-L?\d+)?)$/.exec(given)
-  if (at) { given = at[1]!; line = Number(at[2] ?? at[3]) }
-  if (given === '~' || given.startsWith('~/')) given = join(homedir(), given.slice(1))
-  if (isAbsolute(given)) {
-    const inside = relative(root, given)
-    if (inside.startsWith('..') || isAbsolute(inside)) return { path: null, outside: true }
-    given = inside
-  }
-  const folder = await (async () => { try { return (await stat(inFolder(root, given || '.'))).isDirectory() } catch { return false } })()
-  if (folder) return { path: given.replace(/\/+$/, ''), folder: true }
-  const path = await findFile(root, given)
-  return path ? { path, ...(line ? { line } : {}) } : { path: null }
 }
 
 export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
@@ -853,43 +753,24 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const clients = new Clients()
   /** Every intent this daemon answers, its own and its extensions'. Reads and watches are plain methods. */
   const router = new Router<DaemonContext>()
-  /**
-   * Live values by name. A name is watched, not a value: a watch on one no extension has set up yet (a profile's, before
-   * the profile loads) waits on null, and takes the value when it comes. `owned` while an extension publishes it.
-   */
-  const values = new Map<string, ValueEntry>()
-  const valueOf = (name: string) => {
-    let entry = values.get(name)
-    if (!entry) values.set(name, entry = { value: null, owned: false, listeners: new Set(), watchers: new Map() })
-    return entry
-  }
-  /** Forget a value nobody publishes or watches. */
-  const prune = (name: string) => {
-    const entry = values.get(name)
-    if (entry && !entry.owned && !entry.listeners.size && !entry.watchers.size) values.delete(name)
-  }
+  const values = new Values()
   // The core's own: which providers rejected this machine's credentials, and how many threads wait (ProviderRejection).
-  const rejectedValue = valueOf(AUTH_REJECTED)
-  rejectedValue.owned = true
+  const setRejected = values.core(AUTH_REJECTED, null)
   let rejectedJson = ''
   const publishRejected = () => {
     const now = rejectedNow()
     const json = JSON.stringify(now)
     if (json === rejectedJson) return
     rejectedJson = json
-    rejectedValue.value = now
-    tellAll(rejectedValue)
+    setRejected(now)
   }
   // The core's own: extensions' data views (`superego.view`), as the window draws them (DataViewInfo[]).
-  const viewsValue = valueOf(DATA_VIEWS)
-  viewsValue.owned = true
-  viewsValue.value = []
+  const setViews = values.core(DATA_VIEWS, [])
   /** Each with the profiles it's for (a profile's: their folders, which change as profiles share it). */
   const dataViews: { info: DataViewInfo; profiles?: Set<string> }[] = []
   /** Tell watchers the views as they are now: a profile's only once a profile has it. */
   const publishViews = () => {
-    viewsValue.value = dataViews.filter((v) => !v.profiles || v.profiles.size).map((v) => v.profiles ? { ...v.info, profiles: [...v.profiles] } : v.info)
-    tellAll(viewsValue)
+    setViews(dataViews.filter((v) => !v.profiles || v.profiles.size).map((v) => v.profiles ? { ...v.info, profiles: [...v.profiles] } : v.info))
   }
   const contributors: Owned<(threadId: string) => StatusContribution | undefined>[] = []
   /** Status contributors that threw once: logged then, not on every thread's info after. */
@@ -1095,58 +976,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       value<T extends Json>(key: string, initial: T): LiveValue<T> {
         const name = named(extension.name, key)
         life.live(`the value ${name}`)
-        const entry = valueOf(name)
-        if (entry.owned) throw new Error(`Value ${name} is already published`)
-        entry.owned = true
+        const value = values.publish(name, initial, life)
         note('values', name)
-        // Gone with it: watchers see null again (as before it was set up), and a later watch waits on null.
-        undo(() => {
-          entry.owned = false
-          entry.value = null
-          tellAll(entry)
-          prune(name)
-        }, 'a value')
-        // Its own: what it last published, which a later set-up of the same name (the next generation) never sees, nor
-        // overwrites from here. After teardown, `set` and `update` do nothing.
-        let mine = initial
-        const set = life.guard(`a change to ${name}`, (next: T) => {
-          mine = next
-          entry.value = next
-          tellAll(entry)
-        })
-        set(initial)
-        return { get: () => mine, set, update: life.guard(`a change to ${name}`, (edit: (current: T) => T) => set(edit(mine))) }
+        return value
       },
       scopedValue<T extends Json>(key: string, initial: T): ScopedValue<T> {
         const name = named(extension.name, key)
         life.live(`the value ${name}`)
-        const entry = valueOf(name)
-        if (entry.owned) throw new Error(`Value ${name} is already published`)
-        entry.owned = true
+        const value = values.publishScoped(name, initial, life)
         note('values', `${name} (scoped)`)
-        // Its own, as a plain value's is: a later set-up of the same name starts from nothing.
-        const mine = new Map<string, T>()
-        entry.scopes = { values: mine as Map<string, Json>, initial }
-        tellAll(entry)
-        undo(() => {
-          entry.owned = false
-          delete entry.scopes
-          entry.value = null
-          tellAll(entry)
-          prune(name)
-        }, 'a value')
-        const scopeOf = (scope: string) => {
-          if (typeof scope !== 'string' || !scope) throw new Error(`Value ${name}: a scope is a non-empty string (a thread's id, say)`)
-          return scope
-        }
-        const set = life.guard(`a change to ${name}`, (scope: string, next: T) => { mine.set(scopeOf(scope), next); tellScope(entry, scope) })
-        return {
-          get: (scope) => mine.get(scope) ?? initial,
-          set,
-          update: life.guard(`a change to ${name}`, (scope: string, edit: (current: T) => T) => set(scope, edit(mine.get(scope) ?? initial))),
-          delete: life.guard(`a change to ${name}`, (scope: string) => { if (mine.delete(scope)) tellScope(entry, scope) }),
-          scopes: () => [...mine.keys()],
-        }
+        return value
       },
       status(contribute) { own(contributors, contribute, 'a status'); note('status', 'a status') },
       beforeSend(transform) { own(transforms, transform, 'a send transform'); note('beforeSend', 'a send transform') },
@@ -1173,7 +1012,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         get: async (id) => info(id, await get(id)),
         conversation: async (id) => (await get(id)).conversation,
         of: (conversationId) => mounted.has(String(conversationId)) ? String(conversationId) : undefined,
-        attachments: attachmentsOf,
+        attachments: (id) => attachmentsDir(options.dataDir, id),
         // An extension's attachments are inline: it has no connection to upload on.
         start: ({ hidden, ...params }) => startThread({ ...params as Omit<NewThread, 'attachments'> & { attachments?: Attachment[] }, ...(hidden ? { hidden: extension.name } : {}), by: extension.name }),
         async send(id, text, { whenBusy = 'followUp', exposure } = {}) { await submit(id, text, randomUUID(), whenBusy, [], { by: extension.name, ...(exposure ? { exposure } : {}) }) },
@@ -1451,15 +1290,13 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** What each extension here is and does, and (given a thread) which don't take part in it and why: `extension.inspect`. */
   async function inspect(threadId?: string): Promise<ExtensionsReport> {
     const off = switchedOff()
-    const watchesOf = (name: string) => [...values].filter(([key, entry]) => key.startsWith(`${name}.`) && (entry.listeners.size || entry.watchers.size))
-      .map(([key, entry]) => ({ value: key, whole: entry.listeners.size, scopes: entry.watchers.size }))
     const dirName = new Map([...profiles.values()].map((p) => [p.dir, `${p.scope === 'project' ? 'project' : 'user'}:${p.name}`]))
     const reports: ExtensionReport[] = []
     for (const [name, { extension, from, profiles: dirs, registered }] of inspected) {
       reports.push({
         ...manifestOf(extension), ...(extension.title ? { title: extension.title } : {}), ...(extension.required ? { required: true } : {}),
         ...from, ...(dirs ? { profiles: [...dirs].map((dir) => dirName.get(dir) ?? dir) } : {}),
-        state: off.has(name) ? 'off' : 'set up', registered: Object.fromEntries(registered), watches: watchesOf(name),
+        state: off.has(name) ? 'off' : 'set up', registered: Object.fromEntries(registered), watches: values.watchedUnder(name),
       })
     }
     for (const name of declared) {
@@ -1577,7 +1414,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
     await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null, ...rest }, context)
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
-    const content = await transformed(id, m, { text, attachments, ...(by ? { by } : {}), ...(exposure ? { exposure } : {}) }, await contentOf(id, text, attachments))
+    const content = await transformed(id, m, { text, attachments, ...(by ? { by } : {}), ...(exposure ? { exposure } : {}) }, await contentOf(attachmentsDir(options.dataDir, id), text, attachments))
     const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}) }, context)
     return String(submission.id)
   }
@@ -1602,52 +1439,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return touched ? blocks : content
   }
 
-  /** Where a thread's files are kept on this machine: its attachments, and the images it showed. */
-  function attachmentsOf(id: string) { return join(options.dataDir, 'attachments', id) }
-  /** A file of a thread's that clients may read: in its folder, or among the files it keeps (attachments, images it showed). */
-  function threadFile(cwd: string, id: string, path: string) {
-    const kept = isAbsolute(path) && resolvePath(path).startsWith(`${attachmentsOf(id)}/`)
-    return kept ? resolvePath(path) : editable(cwd, path)
-  }
-  /**
-   * A file of a thread's that clients may edit: in its folder, or the app's layout (`layout.json` in the data folder,
-   * which the desktop app on this computer keeps: Edit layout… opens it beside any thread here).
-   */
-  function editable(cwd: string, path: string) {
-    const layout = join(options.dataDir, 'layout.json')
-    return isAbsolute(path) && resolvePath(path) === layout ? layout : inFolder(cwd, path)
-  }
+  /** A thread's files, as clients reach them. */
+  const files = threadFiles({ dataDir: options.dataDir, cwdOf: async (id) => (await get(id)).meta.cwd })
 
-  /**
-   * A message's content with its attachments: each file saved under attachments/<thread>/ on this machine and named to
-   * the agent by its path (a small text file inline too), images also given to the model as images.
-   */
-  async function contentOf(id: string, text: string, attachments: Attachment[]) {
-    if (!attachments.length) return text
-    const dir = attachmentsOf(id)
-    await mkdir(dir, { recursive: true })
-    const blocks: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[] = []
-    if (text.trim()) blocks.push({ type: 'text', text })
-    for (const attachment of attachments) {
-      const bytes = Buffer.from(attachment.data, 'base64')
-      if (bytes.length > ATTACHMENT_LIMIT) throw new RpcError('too_large', `${attachment.name} is larger than ${ATTACHMENT_LIMIT / 1024 / 1024} MB`)
-      const name = basename(attachment.name.replace(/\\/g, '/')).replace(/^\.+/, '') || 'attachment'
-      const dot = name.lastIndexOf('.')
-      const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, '']
-      let path = join(dir, name)
-      for (let n = 2; await stat(path).then(() => true, () => false); n++) path = join(dir, `${stem}-${n}${ext}`)
-      await writeFile(path, bytes)
-      const tag = `<attachment name="${quote(name)}" type="${quote(attachment.mimeType)}" path="${quote(path)}"`
-      if (IMAGE.test(attachment.mimeType)) {
-        blocks.push({ type: 'text', text: `${tag} />` }, { type: 'image', data: attachment.data, mimeType: attachment.mimeType })
-      } else if (bytes.length <= INLINE_LIMIT && isText(attachment.mimeType, name)) {
-        blocks.push({ type: 'text', text: `${tag}>\n${bytes.toString('utf8')}\n</attachment>` })
-      } else blocks.push({ type: 'text', text: `${tag} />` })
-    }
-    return blocks
-  }
-
-  // ── Panes and files ─────────────────────────────────────────────────────────────────────────────────────────────
+  // ── Panes ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
   /**
    * Open a pane beside thread `id` (or find the same one already open). Opening isn't focusing: the agent's pane opens
@@ -1998,11 +1793,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   router.register(defineAction({
     id: 'file.write', title: 'Save a file', expose: ['ui', 'cli'], ...thread,
     params: obj({ thread: str(), path: str({ minLength: 1 }), content: str() }),
-    async run({ thread: id, path, content }) {
-      const file = editable((await get(id)).meta.cwd, path)
-      await writeFile(file, content)
-      return { path: file }
-    },
+    async run({ thread: id, path, content }) { return { path: await files.write(id, path, content) } },
   }))
   router.register(defineAction({
     id: 'thread.rename', title: 'Rename the thread', expose: ['ui', 'cli', 'outside'], ...thread,
@@ -2158,25 +1949,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         'relay.call': ({ machine: target, method, params }: Methods['relay.call']['params']) => relayed.call(target, method, params),
         'thread.list': ({ archived, hidden }: { archived?: boolean; hidden?: boolean } = {}) => list({ archived: Boolean(archived), hidden: Boolean(hidden) }),
         'agent.models': async () => agent.catalog(),
-        'file.read': async ({ thread: id, path, base64 }: { thread: string; path: string; base64?: boolean }) => {
-          const file = threadFile((await get(id)).meta.cwd, id, path)
-          const info = await stat(file).catch(() => undefined)
-          if (!info?.isFile()) throw new RpcError('not_found', `No file ${path}`)
-          if (info.size > READ_LIMIT) throw new RpcError('too_large', `${path} is larger than ${READ_LIMIT / 1024 / 1024} MB`)
-          return { path: file, content: await readFile(file, base64 ? 'base64' : 'utf8'), mtimeMs: info.mtimeMs, size: info.size }
-        },
-        // Which version of each file there is, without its bytes: what the window checks its images against. A path
-        // file.read wouldn't read, or no file, is null.
-        'file.stat': async ({ thread: id, paths }: { thread: string; paths: string[] }) => {
-          const { cwd } = (await get(id)).meta
-          return {
-            files: await Promise.all(paths.map(async (path) => {
-              const info = await Promise.resolve().then(() => stat(threadFile(cwd, id, path))).catch(() => undefined)
-              return info?.isFile() ? { mtimeMs: info.mtimeMs, size: info.size } : null
-            })),
-          }
-        },
-        'file.find': async ({ thread: id, name }: { thread: string; name: string }) => locate((await get(id)).meta.cwd, name),
+        'file.read': ({ thread: id, path, base64 }: Methods['file.read']['params']) => files.read(id, path, base64),
+        // Which version of each file there is, without its bytes: what the window checks its images against.
+        'file.stat': async ({ thread: id, paths }: Methods['file.stat']['params']) => ({ files: await files.stat(id, paths) }),
+        'file.find': ({ thread: id, name }: Methods['file.find']['params']) => files.find(id, name),
         // A profile's UI is its code too: served only for a real profile folder, and only once it is allowed.
         'profile.ui': async (ref: ProfileRef) => {
           // One that was loaded and is gone now is let go of (profileOf), and the window's UI of it with it.
@@ -2232,24 +2008,18 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           return { sub, value }
         },
         'settings.watch': serveSettings(settings, (params) => notify('settings.changed', params), subs)['settings.watch'],
-        async 'file.watch'({ thread: id, path }: { thread: string; path: string }) {
-          const file = editable((await get(id)).meta.cwd, path)
-          const read = () => stat(file).then((info) => info.isFile() && info.size <= READ_LIMIT ? readFile(file, 'utf8') : null, () => null)
-          let last = await read()
+        async 'file.watch'({ thread: id, path }: Methods['file.watch']['params']) {
           const sub = randomUUID()
-          // The folder, not the file: an editor that saves by renaming a new file over it would end a watch on the file.
-          let timer: ReturnType<typeof setTimeout> | undefined
-          const watcher = watchFiles(dirname(file), [basename(file)], () => {
-            clearTimeout(timer)
-            timer = setTimeout(async () => {
-              const now = await read()
-              if (now !== last) { last = now; notify('file.changed', { sub, content: now }) }
-            }, 60)
-          })
-          subs.set(sub, () => { clearTimeout(timer); watcher.close() })
-          return { sub, content: last }
+          const { content, stop } = await files.watch(id, path, (content) => notify('file.changed', { sub, content }))
+          subs.set(sub, stop)
+          return { sub, content }
         },
-        'value.watch': ({ key, scope }: Methods['value.watch']['params']) => watchValue(key, scope, (sub, value) => notify('value.changed', { sub, key, value })),
+        'value.watch': ({ key, scope }: Methods['value.watch']['params']) => {
+          const sub = randomUUID()
+          const { value, stop } = values.watch(key, scope, (value) => notify('value.changed', { sub, key, value }))
+          subs.set(sub, stop)
+          return { sub, value }
+        },
         async unwatch({ sub }: { sub: string }) {
           const stop = subs.get(sub)
           subs.delete(sub)
@@ -2267,34 +2037,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         'extension.declare': async ({ extensions: abouts }: Methods['extension.declare']['params']) => { declare(Array.isArray(abouts) ? abouts : []); return null },
         'extension.inspect': ({ thread }: Methods['extension.inspect']['params'] = {}) => inspect(thread),
         ...connection.handlers,
-      }
-      /** A live value (or its part in `scope`), then `tell` with each new one, until unwatched. */
-      function watchValue(key: string, scope: string | undefined, tell: (sub: string, value: Json) => void) {
-        const entry = valueOf(key)
-        const sub = randomUUID()
-        if (typeof scope !== 'string') {
-          const listener = (value: Json) => tell(sub, value)
-          entry.listeners.add(listener)
-          subs.set(sub, () => { entry.listeners.delete(listener); prune(key) })
-          return { sub, value: wholeOf(entry) }
-        }
-        // Told only when its part changes.
-        const value = partOf(entry, scope)
-        let last = JSON.stringify(value)
-        const listener = (next: Json) => {
-          const json = JSON.stringify(next)
-          if (json === last) return
-          last = json
-          tell(sub, next)
-        }
-        const watchers = entry.watchers.get(scope) ?? new Set()
-        entry.watchers.set(scope, watchers.add(listener))
-        subs.set(sub, () => {
-          watchers.delete(listener)
-          if (!watchers.size && entry.watchers.get(scope) === watchers) entry.watchers.delete(scope)
-          prune(key)
-        })
-        return { sub, value }
       }
       const ctx = (): DaemonContext => ({ notify: (event, params) => notify(event as keyof Notifications, params as never), source: client })
       const open = (method: string, handler: (params: unknown) => unknown) => (params: unknown) => {
