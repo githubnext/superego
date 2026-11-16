@@ -12,6 +12,7 @@ import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
 import { scrollHalfPage } from './scroll.ts'
 import { startRename } from './rename.ts'
 import { setLocalState } from './local-state.ts'
+import { showOnboarding } from './Onboarding.tsx'
 import { maximizedPane, maximizedStore, NARROW, toggleMaximized } from './maximized.ts'
 
 /** What a window action gets besides its parameters. */
@@ -197,6 +198,8 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
     },
   }),
   defineWindowAction({ id: 'app.log', title: 'Show action log', run: (_p, c) => c.showLog() }),
+  // The first-launch page again, where it shows: with nothing selected.
+  defineWindowAction({ id: 'app.onboarding', title: 'Show onboarding', run: (_p, c) => { c.select(undefined); showOnboarding() } }),
   // Panes of the selected thread.
   defineWindowAction({
     // The pane with the focus; the focus moves left, to the pane before it or the thread. The thread itself stays.

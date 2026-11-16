@@ -95,6 +95,12 @@ export type ProviderRejection = {
 /** The value naming the providers that rejected a machine's credentials: `ProviderRejection[]`, empty when none. */
 export const AUTH_REJECTED = 'auth.rejected'
 
+/**
+ * The machine setting that says its onboarding (the window's first-launch page) was seen: false on a fresh data folder
+ * until "Get started"; a folder that already has threads counts as seen. Hidden from Settings.
+ */
+export const ONBOARDED = 'onboarding.seen'
+
 /** What a sign-in flow asks the user, mirroring pi-ai's AuthPrompt. */
 export type AuthPrompt =
   | { type: 'text' | 'secret' | 'manual_code'; message: string; placeholder?: string }

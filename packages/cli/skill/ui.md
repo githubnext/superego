@@ -97,6 +97,7 @@ Slots a profile can fill, each given `{ machine, thread }` (and for the editor o
 | `details.section` | in thread details (⌘I), after what the core says: an `<h5>` and what you know of the thread. |
 | `editor.side`, `editor.bar` | beside a file in the editor, and in its bar |
 | `overlay` | over everything: a dialog of your own, drawn while you want it |
+| `onboarding` | on the first-launch page, under its title: a word on what yours offers, and a way to it |
 
 ### A mark in the sidebar
 

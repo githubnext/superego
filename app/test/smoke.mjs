@@ -106,6 +106,27 @@ if (phase === 'generation') {
 await until(`Boolean(document.querySelector('.threads.is-ready'))`, 'local machine connected')
 
 if (phase === 'first') {
+  // A fresh home: the first-launch page, its switches Settings → Extensions' own, and Ego's word on it. Get started puts
+  // it away for good (see phase "reopen").
+  const localSetting = (key) => `window.superego.call('local', 'settings.watch', {}).then((r) => { void window.superego.call('local', 'unwatch', { sub: r.sub }); return r.value.values[${JSON.stringify(key)}] })`
+  await until(`document.querySelectorAll('.onboarding .onboarding__extension').length > 1`, 'onboarding on a fresh home')
+  await until(`document.querySelector('.onboarding .ego__welcome')?.textContent.includes('Ego')`, "Ego's word on the onboarding page")
+  for (const theme of ['light', 'dark']) {
+    nativeTheme.themeSource = theme
+    await new Promise((r) => setTimeout(r, 400))
+    await shot(`onboarding-${theme}`)
+  }
+  nativeTheme.themeSource = 'system'
+  const switched = await run(`document.querySelector('.onboarding__extension:not([data-extension="ego"])').dataset.extension`)
+  const toggle = `document.querySelector('.onboarding__extension[data-extension="${switched}"] [role="switch"]')`
+  await run(`${toggle}.click()`)
+  await until(`${toggle}.getAttribute('aria-checked') === 'false'`, `onboarding: ${switched} switched off`)
+  await until(`${localSetting(`extensions.${switched}`)}.then((v) => v === false)`, `onboarding: extensions.${switched} off on the machine`)
+  await run(`${toggle}.click()`)
+  await until(`${localSetting(`extensions.${switched}`)}.then((v) => v === true && ${toggle}.getAttribute('aria-checked') === 'true')`, `onboarding: ${switched} on again`)
+  await run(`[...document.querySelectorAll('.onboarding button')].find((b) => b.textContent === 'Get started').click()`)
+  await until(`!document.querySelector('.onboarding') && Boolean(document.querySelector('.app__empty'))`, 'onboarding put away')
+  await until(`${localSetting('onboarding.seen')}.then((v) => v === true)`, 'onboarding seen, on the machine')
   const id = await run(`window.superego.call('local', 'thread.start', { title: '' }).then((s) => s.id)`)
   await run(`window.superego.call('local', 'thread.send', { thread: '${id}', text: 'hello from smoke' })`)
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread in sidebar')
@@ -1268,6 +1289,8 @@ if (phase === 'first') {
   console.log('smoke(first): ok')
 } else {
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread after reopen')
+  // Seen in the first run (Get started): the onboarding page, for good, no more.
+  if (!await run(`window.superego.call('local', 'settings.watch', {}).then((r) => r.value.values['onboarding.seen'] === true)`) || await run(`Boolean(document.querySelector('.onboarding'))`)) { await fail('onboarding not put away for good'); throw new Error('failed') }
   // Right after start, the listed thread of the marked profile is marked, though none of its threads was shown.
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.querySelector('.smoke-mark')?.textContent === 'marked: marked thread')`, "a listed thread's profile UI after reopen, without opening it")
   if (await run(`document.querySelector('.thread__profile')?.textContent === 'marked'`)) { await fail('a thread of the marked profile was shown'); throw new Error('failed') }

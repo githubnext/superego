@@ -3,10 +3,10 @@
 // in ⌘K, which open its thread on the machine last chosen (this computer to start with; made the first time); and in
 // its thread's title bar, Clear instead of archiving and, where more than one machine has an Ego, which one's this is,
 // to switch to another's. Its thread is a hidden one: the window shows it while it's selected, as any. A message an
-// outside agent sent it shows a chip saying so.
-import { defineAction, defineUiExtension, has, useApp, useDispatch, useMachines, useSelection, type ViewProps } from '@superego/app/ui'
+// outside agent sent it shows a chip saying so. On the first-launch page, a word on what to ask it for, and where it is.
+import { defineAction, defineUiExtension, has, useApp, useDispatch, useMachines, useNarrow, useSelection, type ViewProps } from '@superego/app/ui'
 import { agentName, obj, opt, str, type ThreadInfo } from '@superego/protocol'
-import { BroomIcon, IconButton, LifebuoyIcon, PlugsConnectedIcon, Select } from '@superego/ui'
+import { BroomIcon, Button, IconButton, LifebuoyIcon, PlugsConnectedIcon, Select } from '@superego/ui'
 import type { MachineEntry } from '@superego/app/ui'
 import './styles.css'
 import { about, ASK, CLEAR, outsideBlocks } from './shared.ts'
@@ -33,6 +33,7 @@ export default defineUiExtension({
     })
     superego.view('ego.machine', { title: 'Machine', context: 'thread', fits: ['header'], default: 'header', component: MachineSwitch })
     superego.view('ego.clear', { title: 'Clear', context: 'thread', fits: ['header'], default: 'header', component: ClearButton })
+    superego.slot('onboarding', Welcome)
     superego.composer.sentWith({
       read: (blocks) => { const at = outsideBlocks(blocks); return at.length ? { items: [true], blocks: at } : undefined },
       component: OutsideChip,
@@ -66,6 +67,25 @@ function EgoButton({ place, chosen }: ViewProps<'window'> & { chosen: string }) 
       onClick={() => void dispatch(OPEN, {}, { source: place }).catch((error) => console.error(error))}>
       <span className="ego__dot" aria-hidden />
     </IconButton>
+  )
+}
+
+/** On the first-launch page: what to ask Ego for, where its button is (lit up there meanwhile), and a way in. */
+function Welcome() {
+  const app = useApp()
+  const dispatch = useDispatch()
+  const narrow = useNarrow()
+  if (!withEgo(useMachines()).length) return null
+  const name = agentName(app)
+  return (
+    <div className="ego__welcome">
+      <span className="ego__welcome-mark" aria-hidden><span className="ego__dot" /></span>
+      <p>
+        Tell <strong>{name}</strong> what you want — a tool, a pane, a board — and it builds it for you.
+        {' '}It lives {narrow ? 'at the foot of the side menu' : 'at the top of the rail'}.
+      </p>
+      <Button onClick={() => void dispatch(OPEN, {}, { source: 'onboarding' }).catch((error) => console.error(error))}>Open {name}</Button>
+    </div>
   )
 }
 

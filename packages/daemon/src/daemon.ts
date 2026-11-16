@@ -14,7 +14,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  arr, type Attachment, AUTH_REJECTED, type ChannelAcceptor, Channels, compareVersion, contractProblem, EXTENSION_API, type ExtensionManifest, manifestOf, parseVersion, UNVERSIONED, DATA_VIEWS, dataViewProblem, type DataViewInfo, type ExtensionReport, type ExtensionsReport, paramsParser, bool, defineAction, deriveStatus, FEATURES, Lifetime, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
+  arr, type Attachment, AUTH_REJECTED, ONBOARDED, type ChannelAcceptor, Channels, compareVersion, contractProblem, EXTENSION_API, type ExtensionManifest, manifestOf, parseVersion, UNVERSIONED, DATA_VIEWS, dataViewProblem, type DataViewInfo, type ExtensionReport, type ExtensionsReport, paramsParser, bool, defineAction, deriveStatus, FEATURES, Lifetime, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
@@ -2526,6 +2526,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   }))
   settings.register({ id: 'clients', title: 'Connected', order: 85, ui: 'clients', settings: [], description: 'Who is using this machine right now.' })
+  // Whether the window's first-launch page was seen here. Data from before it, with threads in it, has seen it.
+  settings.register({
+    id: 'onboarding', title: 'Onboarding',
+    settings: [{ key: ONBOARDED, title: 'Onboarding seen', default: false, type: { type: 'boolean' }, hidden: () => true }],
+  })
+  if (!settings.isSet(ONBOARDED) && (await harness.snapshot(Catalog, context))?.ids.length) await settings.set(ONBOARDED, true)
   settings.onChange(() => void applyWeb())
   await applyWeb()
   return daemon

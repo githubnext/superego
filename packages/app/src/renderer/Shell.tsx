@@ -26,6 +26,7 @@ import { Navigator } from './Navigator.tsx'
 import { ActionLog, runsBare } from './actions.tsx'
 import { performed } from './perform.ts'
 import { NewThreadDialog } from './NewThread.tsx'
+import { Onboarding, useOnboarding } from './Onboarding.tsx'
 import { bound, KEYMAP, shortcutOf, useActions, useShortcut, type Keymap } from './keys.ts'
 import { useAllThreads, useHistory, useMachines, useNewThreadDialog, useSelection, useProjects, useSettingsDialog, useShell, useSidebar, type Selection } from './state.tsx'
 
@@ -88,6 +89,7 @@ export function Shell() {
     back: history.back, forward: history.forward,
   })
   useAppEffects()
+  const onboarding = useOnboarding()
 
   const settingsButton = (
     <IconButton label="Settings" className={`app__settings ${tab === 'settings' ? 'is-on' : ''}`} onClick={openSettings}>
@@ -180,7 +182,7 @@ export function Shell() {
           )}
           {selection && thread && machine
             ? <StripSlot.Provider value={narrow ? null : strip}><ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} /></StripSlot.Provider>
-            : <div className="app__empty">{spaces.length ? 'Select or start a thread.' : `Start a thread with: ${registry.app.id}`}</div>}
+            : onboarding ? <Onboarding /> : <div className="app__empty">{spaces.length ? 'Select or start a thread.' : `Start a thread with: ${registry.app.id}`}</div>}
         </main>}
         {tab !== 'settings' && !narrow && where && viewsIn(registry, threadPlaced, 'beside', where).length > 0 && (
           <aside className="app__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></aside>

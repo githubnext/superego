@@ -356,7 +356,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       const given = what.thread
       if (typeof given === 'string' && !threadOf(at, given)) throw new Error(`No thread ${given} on ${at}: give it to the machine (threads), or give a ThreadInfo`)
       let node: ReactNode
-      if ('pane' in what || ('slot' in what && what.slot !== 'overlay')) {
+      if ('pane' in what || ('slot' in what && what.slot !== 'overlay' && what.slot !== 'onboarding')) {
         // A pane or a thread's slot is always some thread's.
         const thread = given ?? defaultThread(at)
         const info = typeof thread === 'string' ? threadOf(at, thread)! : thread

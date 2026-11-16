@@ -47,6 +47,8 @@ export type BehaviourSlot =
   | 'editor.bar'
   /** Always there, over everything: an extension's own dialogs (a quick open), drawn while it wants them. */
   | 'overlay'
+  /** On the first-launch page, under its title: a short word on what yours offers, and a way to it. */
+  | 'onboarding'
 
 /** What a slot beside a file editor gets: the file, and a way to show another. */
 export type EditorSlotProps = { machine: MachineEntry; thread: ThreadInfo; path: string; open(path: string, options?: { beside?: boolean }): void }
@@ -60,6 +62,7 @@ export type SlotProps = {
   'editor.side': EditorSlotProps
   'editor.bar': EditorSlotProps
   'overlay': Record<string, never>
+  'onboarding': Record<string, never>
 }
 
 /** What a view needs to be drawn: nothing but the window, or a thread. */
@@ -476,7 +479,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}),
       ...(version ? { version } : {}), ...(api ? { api } : {}), ...(capabilities?.length ? { capabilities } : {}),
     })),
-    slots: { 'header.chips': [], 'thread.badge': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [] },
+    slots: { 'header.chips': [], 'thread.badge': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [], 'onboarding': [] },
     views: [], dataViews: {}, tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
@@ -613,8 +616,8 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         }
       },
       slot(slot: BehaviourSlot, component: ComponentType<any>, options?: { order?: number }) {
-        // A profile's UI draws in its threads' slots; the overlay is the app's, with no thread.
-        if (profile && slot === 'overlay') return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
+        // A profile's UI draws in its threads' slots; the overlay and onboarding are the app's, with no thread.
+        if (profile && (slot === 'overlay' || slot === 'onboarding')) return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
         const list = registry.slots[slot as BehaviourSlot] as Owned<{ component: ComponentType<never>; order: number }>[]
         add(list, { component: component as never, order: options?.order ?? 100 })
         list.sort((a, b) => a.order - b.order)
