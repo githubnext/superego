@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DATA_VIEWS, defineApp, PROTOCOL_VERSION, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
-import { connectSocket, listen, openDaemon } from '../src/index.ts'
+import { connectSocket, defineDaemonExtension, listen, openDaemon } from '../src/index.ts'
 import { loadProfile, Allowances, type ProfileRef } from '../src/profiles.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
@@ -1070,4 +1070,19 @@ export default defineDaemonExtension({ name: 'stuck', async setup(superego) {
   const hello = await peer.call<{ methods: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
   expect(hello.methods).not.toContain('stuck.late')
   await close()
+})
+
+it("lists a profile's threads to an extension that reads them as it's set up, before the profiles load", async () => {
+  write(join(home, 'profiles', 'default'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ prompt: 'Hi.' })\n` })
+  const first = await open()
+  const thread = await first.peer.call<ThreadInfo>('thread.start', { cwd: project })
+  expect(thread.profile).toMatchObject({ name: 'default' })
+  await first.close()
+  // One reads the threads in the background, as setup should; the next takes a while, so the read runs during it.
+  let read: Promise<ThreadInfo[]> | undefined
+  const early = defineDaemonExtension({ name: 'early', setup(superego) { read = superego.threads.list() } })
+  const slow = defineDaemonExtension({ name: 'slow', async setup() { await new Promise((r) => setTimeout(r, 50)) } })
+  const daemon = await openDaemon({ app: SUPEREGO, dataDir: home, defaultCwd: dir, extensions: [early, slow] })
+  expect((await read!).map((t) => t.id)).toEqual([thread.id])
+  await daemon.close()
 })

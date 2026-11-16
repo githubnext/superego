@@ -397,6 +397,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return { choice, without }
   }
   const withoutOf = (id?: string, meta?: ThreadMeta, profile?: LoadedProfile) => choiceAndWithout(id, meta, profile).without
+  /**
+   * The profiles loaded, by folder (see Profiles below). Made here, before the bundled extensions are set up: their
+   * setup may read threads (`threads.list`) in the background while the daemon is still opening.
+   */
+  const profiles = new Map<string, LoadedProfile>()
   /** A thread's profile, if it's loaded yet. */
   const loadedProfile = (meta: ThreadMeta) => meta.profile && profiles.get(meta.profile.dir)
   /** The agent parts a thread has: every built-in but those of the extensions it goes without. */
@@ -1359,7 +1364,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   // ── Profiles ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  const profiles = new Map<string, LoadedProfile>()
   /** Profiles that failed to load, and why: until they load. */
   const profileErrors = new Map<string, { ref: ProfileRef; error: string }>()
   /**
