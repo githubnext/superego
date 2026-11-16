@@ -1,6 +1,6 @@
 // skills, daemon half: the skills in the folder agents share (see skills.ts), and the app's own (its `superego` skill).
 // The agent is told what each is for in a prompt section; a message that names one (`$commit`, `/skill:commit`)
-// carries its instructions, through a submit transform; the composer completes names from `skills.list`; and a data
+// carries its instructions, through a send transform; the composer completes names from `skills.list`; and a data
 // view (`skills.view`) lists them to browse.
 import { defineExtension, section } from '@earendil-works/pi-durable'
 import { defineDaemonExtension, type DaemonExtension } from '@superego/daemon'
@@ -25,7 +25,7 @@ export function skillsExtension({ own = [] }: SkillsOptions = {}): DaemonExtensi
       const skills = () => listSkills(dir, own)
       superego.agent(defineExtension({ name: 'skills', sections: [section('skills', async () => skillsPrompt(await skills()))] }))
       // Named skills go after the message's own content, in the order it names them.
-      superego.submit(async ({ text, content }) => {
+      superego.beforeSend(async ({ text, content }) => {
         if (!/[$/]/.test(text)) return
         const named = mentionedSkills(text, await skills())
         if (!named.length) return

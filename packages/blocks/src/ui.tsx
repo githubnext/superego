@@ -14,7 +14,7 @@ export type BlocksProps = {
   machine: MachineEntry
   thread: ThreadInfo
   blocks: Block[]
-  /** What the user's actions do; without it, the blocks are only shown. */
+  /** What pressing and picking does; without it, the blocks are only shown. */
   onReply?(reply: Reply): unknown
   /** The answer given: the inputs show it, and nothing can be changed or pressed. */
   answer?: Reply
@@ -33,7 +33,7 @@ type Form = {
   locked: boolean
   answered: boolean
   busy: boolean
-  /** The action of the answer given, or of the last reply sent from here. */
+  /** The button of the answer given, or of the last reply sent from here. */
   done: string | undefined
   /** Picking an option of the (only) choice answers at once. */
   picks: boolean
@@ -61,7 +61,7 @@ function BlockForm({ machine, thread, blocks, onReply, answer, submitLabel = 'Su
   const locked = Boolean(answer) || !onReply
   const submits = needsSubmit(blocks)
   const form: Form = {
-    machine, thread, values, locked, answered: Boolean(answer), busy, done: answer?.action ?? sent, picks: picksAnswer(blocks), submits: submits && !locked,
+    machine, thread, values, locked, answered: Boolean(answer), busy, done: answer?.button ?? sent, picks: picksAnswer(blocks), submits: submits && !locked,
     set: (id, value) => setValues((now) => ({ ...now, [id]: value })),
     act(reply) {
       if (locked || busy) return
@@ -69,7 +69,7 @@ function BlockForm({ machine, thread, blocks, onReply, answer, submitLabel = 'Su
       setBusy(true)
       setError(undefined)
       Promise.resolve(onReply!(full))
-        .then(() => setSent(full.action))
+        .then(() => setSent(full.button))
         .catch((e: Error) => setError(e.message))
         .finally(() => setBusy(false))
     },
@@ -78,9 +78,9 @@ function BlockForm({ machine, thread, blocks, onReply, answer, submitLabel = 'Su
     <FormContext.Provider value={form}>
       <div className={`blocks ${locked ? 'is-locked' : ''}`}>
         <BlockList blocks={blocks} />
-        {submits && (answer ? answer.action === 'submit' : onReply) && (
+        {submits && (answer ? answer.button === 'submit' : onReply) && (
           <div className="blocks-actions">
-            <Button variant="primary" disabled={busy || locked} aria-pressed={answer ? true : undefined} onClick={() => form.act({ action: 'submit' })}>
+            <Button variant="primary" disabled={busy || locked} aria-pressed={answer ? true : undefined} onClick={() => form.act({ button: 'submit' })}>
               {answer && <CheckIcon weight="bold" />}{submitLabel}
             </Button>
           </div>
@@ -165,7 +165,7 @@ function Choice({ block }: { block: Extract<Block, { type: 'choice' }> }) {
     if (block.multiple) {
       const list = Array.isArray(value) ? value : []
       form.set(block.id, list.includes(v) ? list.filter((x) => x !== v) : [...list, v])
-    } else if (form.picks) form.act({ values: { [block.id]: v }, action: 'submit' })
+    } else if (form.picks) form.act({ values: { [block.id]: v }, button: 'submit' })
     else form.set(block.id, v)
   }
   // Buttons for a few short options; a list where they say more.
@@ -233,7 +233,7 @@ function FieldInput({ block }: { block: Extract<Block, { type: 'text' | 'textare
     case 'text': return (
       <Field label={block.label}>
         <TextField value={String(value ?? '')} placeholder={block.placeholder} disabled={form.locked} onChange={(e) => form.set(block.id, e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && form.submits) { e.preventDefault(); form.act({ action: 'submit' }) } }} />
+          onKeyDown={(e) => { if (e.key === 'Enter' && form.submits) { e.preventDefault(); form.act({ button: 'submit' }) } }} />
       </Field>
     )
     case 'textarea': return (
@@ -267,7 +267,7 @@ function Buttons({ block }: { block: Extract<Block, { type: 'buttons' }> }) {
         const done = form.done === button.id
         return (
           <Button key={button.id} variant={button.style === 'primary' || done ? 'primary' : 'default'} className={button.style === 'danger' ? 'is-danger' : ''}
-            disabled={form.busy || form.locked && !done} aria-pressed={done || undefined} onClick={() => form.act({ action: button.id })}>
+            disabled={form.busy || form.locked && !done} aria-pressed={done || undefined} onClick={() => form.act({ button: button.id })}>
             {done && form.locked && <CheckIcon weight="bold" />}{button.label}
           </Button>
         )
@@ -344,7 +344,7 @@ function HtmlFrame({ block }: { block: Extract<Block, { type: 'html' }> }) {
       const { form, css, html } = latest.current
       if (data.kind === 'ready') frame.current.contentWindow!.postMessage({ superego: true, kind: 'render', html, css }, '*')
       else if (data.kind === 'resize' && !block.height && Number.isFinite(data.height)) setHeight(Math.min(Math.max(data.height, 20), 2000))
-      else if (data.kind === 'reply') form.act({ values: { [id]: data.value }, action: id })
+      else if (data.kind === 'reply') form.act({ values: { [id]: data.value }, button: id })
       else if (data.kind === 'send' && data.text.trim()) form.act({ text: data.text })
     }
     addEventListener('message', receive)

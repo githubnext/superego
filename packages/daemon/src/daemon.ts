@@ -22,8 +22,8 @@ import { createAgentSettings } from './agent-settings.ts'
 import { createAuthFlows } from './auth-flows.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import {
-  defineDaemonExtension, type AgentChoice, type AgentPartsThread, type ArchiveNote, type ArchiveNotes, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type OutgoingMessage, type ScopedValue, type StatusContribution, type SubmitTransform,
-  type ThreadCreating, type ThreadDraft, type ThreadHooks, type ToolCallRecord,
+  defineDaemonExtension, type AgentChoice, type AgentPartsThread, type ArchiveNote, type ArchiveNotes, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type OutgoingMessage, type ScopedValue, type StatusContribution, type SendTransform,
+  type ThreadStarting, type ThreadDraft, type ThreadHooks, type ToolCallRecord,
 } from './extension.ts'
 import { titleOf } from './names.ts'
 import { lastRun, recapOf, type RunRecord } from './recap.ts'
@@ -832,7 +832,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (typeof note === 'string' && note) notes[owner] = notes[owner] ? `${notes[owner]} ${note}` : note
   }
   /** Tell the hooks what happened, in order: one that throws is logged, and the rest are told all the same. */
-  async function tell(hook: 'created' | 'turnStart' | 'turnEnd' | 'blocked' | 'archived' | 'unarchived', id: string, as?: Partial<ThreadInfo>, notes: ArchiveNotes = {}) {
+  async function tell(hook: 'started' | 'turnStart' | 'turnEnd' | 'blocked' | 'archived' | 'unarchived', id: string, as?: Partial<ThreadInfo>, notes: ArchiveNotes = {}) {
     const m = await get(id)
     for (const { value, owner } of hooksOf(id, m)) {
       try {
@@ -923,8 +923,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const contributors: { contribute: (threadId: string) => StatusContribution | undefined; owner: string }[] = []
   /** Status contributors that threw once: logged then, not on every thread's info after. */
   const failedContributors = new WeakSet<object>()
-  /** Extensions' submit transforms, in the order registered: whose, and (a profile's) for which profiles' threads (their folders). */
-  const transforms: { transform: SubmitTransform; owner: string; profiles?: Set<string> }[] = []
+  /** Extensions' send transforms, in the order registered: whose, and (a profile's) for which profiles' threads (their folders). */
+  const transforms: { transform: SendTransform; owner: string; profiles?: Set<string> }[] = []
   /** The daemon's own: what it set up for its life (the bundled extensions), undone as it closes. */
   const daemonLife = new Lifetime('The daemon')
   const blockedOf = (id: string) => {
@@ -1188,12 +1188,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         contributors.push(entry)
         undo(() => { contributors.splice(contributors.indexOf(entry), 1) }, 'a status')
       },
-      submit(transform) {
-        life.live('a submit transform')
+      beforeSend(transform) {
+        life.live('a send transform')
         const entry = { transform, owner: extension.name, ...(profiles ? { profiles } : {}) }
-        note('submit', 'a submit transform')
+        note('beforeSend', 'a send transform')
         transforms.push(entry)
-        undo(() => { transforms.splice(transforms.indexOf(entry), 1) }, 'a submit transform')
+        undo(() => { transforms.splice(transforms.indexOf(entry), 1) }, 'a send transform')
       },
       invalidate() { changed(); heedStatus() },
       thread(hooks) { own(threadHooks, hooks as ThreadHooks, 'thread hooks'); note('thread hooks', Object.keys(hooks).join(', ')) },
@@ -1630,7 +1630,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
 
   /**
-   * A message's content as extensions' submit transforms leave it (a skill it names brought along, say): each in turn,
+   * A message's content as extensions' send transforms leave it (a skill it names brought along, say): each in turn,
    * those of extensions the thread goes without skipped, and a profile's for its own threads only. Untouched, it's sent
    * as it came.
    */
@@ -1755,7 +1755,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }))
   /**
    * A new thread as asked for: where, with what; a child of `parent` when a thread starts it (top-level when that one is
-   * hidden, an extension's own); `hidden`, in no list and the extension's of that name. Extensions' `creating` hooks
+   * hidden, an extension's own); `hidden`, in no list and the extension's of that name. Extensions' `starting` hooks
    * may move it (a worktree) and give it state.
    */
   async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree, parent, options: asked, hidden, by, exposure }: Omit<NewThread, 'attachments'> & { attachments?: Attachment[]; hidden?: string; by?: string; exposure?: Exposure }) {
@@ -1787,10 +1787,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     let id: string
     try {
       for (const hook of threadHooks) {
-        if (!hook.value.creating || !appliesTo(hook, off, meta)) continue
-        let made: ThreadCreating | void
+        if (!hook.value.starting || !appliesTo(hook, off, meta)) continue
+        let made: ThreadStarting | void
         try {
-          made = await hook.value.creating(clone(draft))
+          made = await hook.value.starting(clone(draft))
         } catch (error) {
           throw refusal(hook.owner, error)
         }
@@ -1817,7 +1817,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     if (prompt?.trim() || attachments?.length) await submit(id, prompt ?? '', randomUUID(), undefined, attachments, { ...(by ? { by } : {}), ...(exposure ? { exposure } : {}) })
     return info(id, await get(id))
   }
-  /** A new thread with `meta`: its id, once extensions were told it's there (`created`). */
+  /** A new thread with `meta`: its id, once extensions were told it's there (`started`). */
   async function createThread(meta: ThreadMeta) {
     const { model, thinkingLevel } = await agentOf(undefined, meta)
     const conversation = await harness.createConversation({
@@ -1830,7 +1830,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }, context)
     await mount(conversation.id)
     changed()
-    await tell('created', String(conversation.id))
+    await tell('started', String(conversation.id))
     return String(conversation.id)
   }
   /**

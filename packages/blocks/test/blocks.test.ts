@@ -41,13 +41,13 @@ it('answers at once from a lone choice, and otherwise needs submitting', () => {
 
 it('words a reply as the message it sends', () => {
   const choice: Block[] = [{ type: 'choice', id: 'c', options: [{ label: 'Option A', value: 'a' }, { label: 'Option B', value: 'b' }] }]
-  expect(describeReply(choice, { values: { c: 'b' }, action: 'submit' })).toBe('→ Option B')
+  expect(describeReply(choice, { values: { c: 'b' }, button: 'submit' })).toBe('→ Option B')
   const form: Block[] = [
     { type: 'select', id: 'env', label: 'Environment', options: [{ label: 'Staging' }, { label: 'Production' }] },
     { type: 'switch', id: 'force', label: 'Force' },
     { type: 'buttons', buttons: [{ id: 'deploy', label: 'Deploy' }] },
   ]
-  expect(describeReply(form, { values: { env: 'Staging', force: true }, action: 'deploy' })).toBe('→ Deploy\nEnvironment: Staging\nForce: yes')
-  expect(describeReply([{ type: 'html', html: 'x' }], { values: { html: { x: 1 } }, action: 'html' })).toBe('→ {"x":1}')
+  expect(describeReply(form, { values: { env: 'Staging', force: true }, button: 'deploy' })).toBe('→ Deploy\nEnvironment: Staging\nForce: yes')
+  expect(describeReply([{ type: 'html', html: 'x' }], { values: { html: { x: 1 } }, button: 'html' })).toBe('→ {"x":1}')
   expect(describeReply(form, { values: {}, text: 'never mind' })).toBe('never mind')
 })

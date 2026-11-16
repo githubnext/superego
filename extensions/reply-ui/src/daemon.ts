@@ -13,7 +13,7 @@ Use it when something is clearer seen than read: options side by side with previ
 
 ${BLOCKS_GUIDE}`
 
-const ASK_DESCRIPTION = `Ask the user something through UI and wait for their answer: options with descriptions or previews, a short form, buttons. Returns JSON { values, action }: values by input id; action is the pressed button's id, or "submit" (the form's submit button, or picking from a lone single choice). If they answer in words instead, it has "text".
+const ASK_DESCRIPTION = `Ask the user something through UI and wait for their answer: options with descriptions or previews, a short form, buttons. Returns JSON { values, button }: values by input id; button is the pressed button's id, or "submit" (the form's submit button, or picking from a lone single choice). If they answer in words instead, it has "text".
 Use it when the decision has several parts or the options need showing. For a plain question, ask in text (or with ask_user); don't build a form for one yes/no. Blocks as for ${SHOW}; "submit" labels the submit button.`
 
 export default defineDaemonExtension({
@@ -65,7 +65,7 @@ export default defineDaemonExtension({
             superego.invalidate()
             try {
               const answer = await answered
-              const result = answer.text !== undefined ? { text: answer.text } : { values: answer.values, action: answer.action ?? null }
+              const result = answer.text !== undefined ? { text: answer.text } : { values: answer.values, button: answer.button ?? null }
               return { output: [{ type: 'text', text: JSON.stringify(result) }], details: { ...details, answer } }
             } finally {
               settle(waiting)
@@ -82,13 +82,13 @@ export default defineDaemonExtension({
 
     superego.action(defineAction({
       id: ANSWER, title: 'Answer UI the agent is waiting on', runs: 'machine', expose: ['ui', 'cli'],
-      params: obj({ id: str(), values: opt(unknown()), action: opt(str()), text: opt(str()) }),
-      run({ id, values, action, text }) {
+      params: obj({ id: str(), values: opt(unknown()), button: opt(str()), text: opt(str()) }),
+      run({ id, values, button, text }) {
         const resolve = answers.get(id)
         if (!resolve) throw new RpcError('not_found', 'That question is no longer waiting')
         if (values !== undefined && (typeof values !== 'object' || values === null || Array.isArray(values))) throw new RpcError('invalid', 'values must be an object')
         if (text !== undefined && !text.trim()) throw new RpcError('invalid', 'An answer in words needs some words')
-        resolve({ values: (values ?? {}) as Record<string, Value>, ...(action ? { action } : {}), ...(text !== undefined ? { text: text.trim() } : {}) })
+        resolve({ values: (values ?? {}) as Record<string, Value>, ...(button ? { button } : {}), ...(text !== undefined ? { text: text.trim() } : {}) })
         return null
       },
     }))

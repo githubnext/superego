@@ -1,5 +1,5 @@
 // The daemon half of the extension API, as an extension sees it: methods (reads) apart from actions, threads by id,
-// pane kinds told to the agent, and submit transforms.
+// pane kinds told to the agent, and send transforms.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -80,7 +80,7 @@ it('transforms what a message gives the agent, in order, but not for a thread th
   const stamp = defineDaemonExtension({
     name: 'stamp',
     setup(superego) {
-      superego.submit(async ({ thread, text, content }) => {
+      superego.beforeSend(async ({ thread, text, content }) => {
         seen.push({ thread: thread.id, text, content })
         if (text.includes('stamp')) return [...content, { type: 'text', text: 'stamped' }]
       })
@@ -88,7 +88,7 @@ it('transforms what a message gives the agent, in order, but not for a thread th
   })
   const count = defineDaemonExtension({
     name: 'count',
-    setup(superego) { superego.submit(({ content }) => [...content, { type: 'text', text: `${content.length} before me` }]) },
+    setup(superego) { superego.beforeSend(({ content }) => [...content, { type: 'text', text: `${content.length} before me` }]) },
   })
   const { peer, close } = await open([stamp, count])
   const thread = await peer.call<ThreadInfo>('thread.start', {})
@@ -114,7 +114,7 @@ it('transforms what a message gives the agent, in order, but not for a thread th
 it("counts only what a transform returns, not what it changes in place, with attachments or without", async () => {
   const meddle = defineDaemonExtension({
     name: 'meddle',
-    setup(superego) { superego.submit(({ content }) => { content.push({ type: 'text', text: 'meddled' }) }) },
+    setup(superego) { superego.beforeSend(({ content }) => { content.push({ type: 'text', text: 'meddled' }) }) },
   })
   const { peer, close } = await open([meddle])
   const thread = await peer.call<ThreadInfo>('thread.start', {})

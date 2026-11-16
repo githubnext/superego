@@ -308,16 +308,16 @@ place, and the window's console has why.
 | `pane(kind, about)` | tell the agent about a pane kind, for `pane_open` |
 | `view('x.y', { title, icon, context, fits, default, value \| method })` | a view drawn from data (below): no UI code, so a remote machine's or a project profile's runs no code in the window; its buttons still have that machine's authority |
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
-| `submit(({ thread, text, attachments, content, by, exposure }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it. `by`: the extension that sent it (`threads.send`, `threads.start`'s prompt), absent for the user's; `exposure`: `outside` when an outside agent sent it, `cli` the command line |
+| `beforeSend(({ thread, text, attachments, content, by, exposure }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it. `by`: the extension that sent it (`threads.send`, `threads.start`'s prompt), absent for the user's; `exposure`: `outside` when an outside agent sent it, `cli` the command line |
 | `settings.register({ id: 'x', settings })`, `settings.get`, `settings.snapshot`, `settings.onChange` | machine settings of its own (`x.…`); read any |
 | `dispatch(id, params)`, `actions(exposure)` | run any action on the machine as this extension (`settings.set`); list them |
-| `thread({ creating, abandoned, created, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchiveAbandoned, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
-| `state()` → `get(id)`, `set(id, next)`, `update(id, edit)` | state of its own kept with each thread, across restarts; `creating` gives a new one its first |
+| `thread({ starting, abandoned, started, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchiveAbandoned, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
+| `state()` → `get(id)`, `set(id, next)`, `update(id, edit)` | state of its own kept with each thread, across restarts; `starting` gives a new one its first |
 | `facts(({ id, state }) => …)` | what clients are told of a thread, as `thread.facts.<name>`: worked out from its state |
 | `recap(({ thread, answer, calls }) => …)` | say in a line what a run did, once it ends: the thread's `done` status carries it (`msg`), and its notification says it. The first to answer wins; with none, the answer's first sentence. 1.6 |
 | `toolCalls(({ thread, call, result }) => …)` | hear each tool call a thread's agent makes, once it ends; read-only ([Watching tool calls](daemon.md#watching-tool-calls)). 1.8 |
 | `agentFor(({ id, state, profile }) => ({ instructions, model, extensions, without }))` | choose a thread's agent; the first to answer wins. `agent(part, { always: false })` gives a part only through this, or `agentParts` |
-| `agentParts(({ id, hidden, owner, profile }) => [part])` | add to whatever agent a thread has: asked at every submit, with its profile as loaded now (`profile.spec`); answers with parts given with `agent(part, { always: false })`. They add up: every extension's, after the chooser's and before the profile's. May be async, up to 5s; later, or a throw, adds nothing to that turn. 1.7 |
+| `agentParts(({ id, hidden, owner, profile }) => [part])` | add to whatever agent a thread has: asked at every send, with its profile as loaded now (`profile.spec`); answers with parts given with `agent(part, { always: false })`. They add up: every extension's, after the chooser's and before the profile's. May be async, up to 5s; later, or a throw, adds nothing to that turn. 1.7 |
 | `auth.flow(context, async (flow) => …)` → `{ flow }` | a sign-in flow of its own, for the client an action runs for (its context), carried as a provider's is: `flow.emit({ type: 'auth_url', url, callback })`, `await flow.prompt({ type: 'manual_code', message })`, `flow.signal`. It ends `done` when the function resolves, `failed` when it throws. The window draws it with `SignInFlow` (`superego/ui`). 1.7 |
 | `threads.list({ archived, hidden })`, `get(id)`, `of(conversationId)`, `conversation(id)`, `attachments(id)` | reach threads, and the folder a thread keeps files in |
 | `threads.start({ …, parent, hidden, options })`, `send(id, text)`, `lastAnswer(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)`, `clear(id)` | start and run threads as the thread tools do; `hidden`: in no list, an agent of its own with no profile, that takes no messages while the extension is off (find it by its `owner` in `list({ hidden: true })`, not by its facts, which are gone while the extension is off); `entries`: the newest since it was last cleared, as pi-durable's entry records (not a stable shape); `clear`: start it over |
@@ -329,7 +329,7 @@ place, and the window's console has why.
 |---|---|
 | `view('x.y', { title, icon, context, fits, default, narrow, withoutSpaces, order, component, railButton, width })` | UI the layout puts in places (below): a space, a rail button, beside the thread, the pane menu, the title bar; `default` where it goes unless the user moves it |
 | `slot(name, Component, { order })` | a component in a slot whose place behaviour decides (below): `header.chips` for a chip where the title bar says where a thread works, `thread.badge` for a small mark after its title in the sidebar (a `thread-badge`: a 12px icon with a `title`), `composer.above`, `details.section` (in thread details, ⌘I: an `<h5>` and what you know of the thread), `editor.side`, `editor.bar`, `overlay` |
-| `newThreadField({ component, from })` | a field in the New thread dialog: its value goes to `thread.start` as `options.<name>`, for the daemon half's `creating`; `from(thread)` its value for one started like `thread`; bundled only |
+| `newThreadField({ component, from })` | a field in the New thread dialog: its value goes to `thread.start` as `options.<name>`, for the daemon half's `starting`; `from(thread)` its value for one started like `thread`; bundled only |
 | `signal` | aborted at teardown (its profile's UI reloaded or revoked): for its own timers, listeners and fetches (below) |
 | `on(event, listener)` → off; `window` | hear the window: `thread.status` (`{ machine, thread, before }`; `before` undefined the first time it's seen), `select` (`{ selection, before }`), `focus` (`{ focused }`), `visibility` (`{ visible }`); `window` is `{ focused, visible, selection, thread }` now. In Electron and browsers alike |
 | `appSetting(key)` | one of the app's settings as it is now, outside React |
@@ -341,7 +341,7 @@ place, and the window's console has why.
 | `entry(kind, Component)` | transcript entries of a kind it writes |
 | `link({ match, open, render, target, scheme })` | claim links: `match` a scheme (`'ticket:'`), a pattern, or `(href, kind, where) => boolean` that sees inline code too (`kind: 'code'`); `open(href, { machine, thread, beside, openFile, openUrl })` follows one (a click, ⌘-click `beside`, ⌃O); `render` draws it; `scheme` names the scheme a pattern or test claims (`'thread'`), so HTML files keep its links. Claiming files, `[[wikilinks]]` or web pages overrides the core's: [Links](#links) |
 | `composer.complete({ title, word(text, caret), items(word, { machine, thread }) })` | complete the word being typed: `word` finds it (`{ start, query }`), `items` offers `{ label, detail, insert }` |
-| `composer.sentWith({ read(blocks), component })` | draw what its `submit` put in sent messages under them (a chip): `read` returns `{ items, blocks }`, and those blocks leave the text |
+| `composer.sentWith({ read(blocks), component })` | draw what its `beforeSend` put in sent messages under them (a chip): `read` returns `{ items, blocks }`, and those blocks leave the text |
 | `work(divide)` | split a run of work into titled parts (tasks); bundled only |
 | `action(defineAction({ id, keys, when, run }))` | a window action with keys, in ⌘K while `when(context)` holds; a profile's only while one of its threads is shown |
 | `store('open', initial, { persist })` → `get`, `set`, `use()` | window state its actions and components share, kept as `<name>.open` (`'<name>.open'` is the same one) |
@@ -592,13 +592,13 @@ drawer: `titlebar` views (the thread picker) and Settings are in the bar at the 
 `on` tells a UI half what happens in the window, whatever it draws. Listening is owned like everything else, and stops
 at teardown. A thread that goes without the extension isn't heard of; a profile hears only its own threads.
 
-<!-- check: ui; import { threadNotice } from 'superego/unstable' -->
+<!-- check: ui; import { threadNotification } from 'superego/unstable' -->
 ```ts
 // notifications: a thread wants a look while the window is in the background.
 superego.on('thread.status', ({ machine, thread, before }) => {
   if (before === undefined || (superego.window.focused && superego.window.visible)) return
-  const notice = threadNotice(machine, thread)          // finished, failed or needs you; else nothing
-  if (notice) void call('app', 'app.notify', notice)    // the desktop's notification, or the browser's
+  const notification = threadNotification(machine, thread)    // finished, failed or needs you; else nothing
+  if (notification) void call('app', 'app.notify', notification)    // the desktop's notification, or the browser's
 })
 ```
 
@@ -607,7 +607,7 @@ core marks a finished thread seen the same way, on `select`, `focus` and `thread
 
 `auth.rejected` is a machine's provider rejecting its credentials (`{ machine, rejection }`, a `ProviderRejection`):
 once, however many threads it stops. Those threads are `blocked` with kind `auth` (`waitingForSignIn`), quiet on their
-own, and go on by themselves once the machine is signed in again; `threadNotice` says nothing of them, `signInNotice`
+own, and go on by themselves once the machine is signed in again; `threadNotification` says nothing of them, `signInNotification`
 says it once for all.
 
 ## Lifecycle and ownership
@@ -677,14 +677,14 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
 
 ## A thread's life
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="guide/thread-life-dark.svg"><img src="guide/thread-life.svg" alt="creating makes a thread (a hook may move where it works and give it state, or refuse); created; turnStart and turnEnd around each run; archiving then archived on the way to archived, unarchiving then unarchived on the way back"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="guide/thread-life-dark.svg"><img src="guide/thread-life.svg" alt="starting makes a thread (a hook may move where it works and give it state, or refuse); started; turnStart and turnEnd around each run; archiving then archived on the way to archived, unarchiving then unarchived on the way back"></picture>
 
 <!-- check: daemon; declare function makeWorktree(top: string): Promise<{ path: string; branch: string }>; declare function removeWorktree(path: string): Promise<void>; declare function removeIfClean(path: string): Promise<boolean> -->
 ```ts
 const state = superego.state<{ path: string; branch: string }>()
 superego.facts(({ state }) => state)                   // thread.facts.worktrees
-superego.thread<{ path: string; branch: string }>({   // the state its creating gives a thread
-  async creating(draft) {                              // draft.options: what thread.start asked for, by extension
+superego.thread<{ path: string; branch: string }>({   // the state its starting gives a thread
+  async starting(draft) {                              // draft.options: what thread.start asked for, by extension
     if (draft.options.worktrees !== true || !draft.checkout) return
     const { path, branch } = await makeWorktree(draft.checkout.top)  // yours: git worktree add
     return { cwd: path, state: { path, branch } }
@@ -703,10 +703,10 @@ superego.thread<{ path: string; branch: string }>({   // the state its creating 
   for a thread that goes without the extension; a profile's only for that profile's threads (its profile is loaded
   first, so they run after a restart too). Facts and `agentFor` go by the same rule.
 - Archiving an archived thread, or unarchiving one in use, does nothing: the hooks see only real changes.
-- `creating`, `archiving` and `unarchiving` may refuse by throwing (an `RpcError` says it cleanly): nothing more
-  happens, and the hooks after don't run. `creating` may also move where the thread works and give it state, each
+- `starting`, `archiving` and `unarchiving` may refuse by throwing (an `RpcError` says it cleanly): nothing more
+  happens, and the hooks after don't run. `starting` may also move where the thread works and give it state, each
   hook seeing the draft as the one before left it. When a later hook refuses (or making the thread fails), those
-  whose `creating` already ran are told `abandoned(draft, state)`, in reverse, to undo it: a worktree goes again.
+  whose `starting` already ran are told `abandoned(draft, state)`, in reverse, to undo it: a worktree goes again.
   Likewise, when a later `unarchiving` refuses (or bringing the thread back fails), those whose `unarchiving` already
   ran are told `unarchiveAbandoned(thread)`, in reverse, to undo what they put back; the thread stays archived.
   `draft.options` is what the thread was asked for by extension: its profile's `options`, then `thread.start`'s.
@@ -733,7 +733,7 @@ superego.thread<{ path: string; branch: string }>({   // the state its creating 
   extension's, given with `agent(part, { always: false })`. Its `without` is what the thread goes without, its
   agent's parts, panes and UI alike.
 - `agentParts` adds to whatever agent a thread has, where `agentFor` chooses it: every extension's answer counts, not
-  only the first. It's asked at submit (not as often as `agentFor`), so it may do some work, up to 5s: start something
+  only the first. It's asked at each send (not as often as `agentFor`), so it may do some work, up to 5s: start something
   it has never listed, say. A turn already going keeps the parts it started with, but a part replaced
   (`agent()`'s `replace`) is picked up by its next request, as conversations select parts by name. So an extension
   whose tools change (an MCP server's list) replaces its part rather than waiting for the next turn.
@@ -770,8 +770,8 @@ source, at `extensions/<name>/src`, so only a checkout has them.
 | `links` | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
 | `unread` | UI only: a view in the rail `withoutSpaces` and in a phone's `drawer`, an action with keys reading projects, an app setting |
 | `notifications` | UI only: `on('thread.status')`, `on('auth.rejected')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
-| `threads` | the required one: views (the list a `space` with a `rail` of its own, details in the `beside` with ⌘I, the model in the `header`), app settings, tool rows and a `link`; its daemon half is two other, optional extensions: `thread-tools`, on `superego.threads`, and `thread-reports`, report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by a submit transform's `by`) |
-| `worktrees` | `thread` hooks (`creating` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `header.chips` chip, a `thread.badge` mark and a `newThreadField` |
+| `threads` | the required one: views (the list a `space` with a `rail` of its own, details in the `beside` with ⌘I, the model in the `header`), app settings, tool rows and a `link`; its daemon half is two other, optional extensions: `thread-tools`, on `superego.threads`, and `thread-reports`, report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by a send transform's `by`) |
+| `worktrees` | `thread` hooks (`starting` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `header.chips` chip, a `thread.badge` mark and a `newThreadField` |
 | `mcp-servers` | a settings section drawn by a component of its own (`settings(ui, …)`) from a live value, with dialogs and `SignInFlow`; tool rows by prefix (`mcp__*`) with a call's own `verb` and images; a `header` view, a `details.section` slot and a `composer.above` notice, all from the thread's facts |
 | `ego` | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `value` older windows follow (the rail button reads the selection); a view in the `rail`, and in a phone's `drawer` |
 

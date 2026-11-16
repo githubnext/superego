@@ -163,7 +163,7 @@ it("keeps an unmerged branch when archiving removes its worktree, and deletes it
 
 it("takes its worktree and branch back when a later extension refuses the thread", async () => {
   const git = repository()
-  const refuses = defineDaemonExtension({ name: 'refuses', setup(superego) { superego.thread({ creating() { throw new RpcError('refused', 'Not today') } }) } })
+  const refuses = defineDaemonExtension({ name: 'refuses', setup(superego) { superego.thread({ starting() { throw new RpcError('refused', 'Not today') } }) } })
   const { peer, close } = await open(dir, [refuses])
   await expect(peer.call('thread.start', { cwd: dir, title: 'Doomed', worktree: true })).rejects.toThrow(/Not today/)
   expect(await peer.call('thread.list', {})).toEqual([])

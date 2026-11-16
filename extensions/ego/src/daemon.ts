@@ -76,7 +76,7 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         },
       })
       // An outside agent's message to Ego says so.
-      superego.submit(({ thread, exposure, content }) => exposure === 'outside' && isEgo(thread) ? [{ type: 'text', text: OUTSIDE }, ...content] : undefined)
+      superego.beforeSend(({ thread, exposure, content }) => exposure === 'outside' && isEgo(thread) ? [{ type: 'text', text: OUTSIDE }, ...content] : undefined)
       // Its tools are for its thread only.
       superego.agent(tools, { always: false })
       const state = superego.state<true>()

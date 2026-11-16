@@ -132,7 +132,7 @@ export type PaneKind = {
 
 /**
  * A field of the New thread dialog: what it asks, on the machine and in the folder picked. Its value goes to
- * `thread.start` as `options[<extension>]`, for the extension's `creating` hook; undefined sends nothing.
+ * `thread.start` as `options[<extension>]`, for the extension's `starting` hook; undefined sends nothing.
  */
 export type NewThreadFieldProps = { machine: MachineEntry; cwd: string; value: Json | undefined; onChange(value: Json | undefined): void }
 
@@ -350,7 +350,7 @@ export type UiApi = {
   settings(ui: string, component: ComponentType<SettingsComponentProps>): void
   /**
    * A field in the New thread dialog, shown while the machine picked has this extension: what it's set to goes to
-   * `thread.start` as `options[<extension>]`, which its daemon half's `creating` hook reads. One per extension.
+   * `thread.start` as `options[<extension>]`, which its daemon half's `starting` hook reads. One per extension.
    */
   newThreadField(field: NewThreadField): void
   /**
@@ -384,7 +384,7 @@ export type UiApi = {
      */
     complete<W extends CompletionWord>(provider: CompletionProvider<W>): void
     /**
-     * Draw what this extension put in sent messages (by a submit transform, its daemon half's) under each one, and
+     * Draw what this extension put in sent messages (by a send transform, its daemon half's) under each one, and
      * leave those blocks out of its text. Drawn for a thread that goes without the extension now too: it went then.
      */
     sentWith<T>(sent: SentWith<T>): void

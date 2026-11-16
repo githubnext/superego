@@ -46,11 +46,11 @@ export const BLOCK_TYPES = [
 export type Value = string | number | boolean | null | Value[] | { [key: string]: Value }
 
 /**
- * What the user did: the inputs' values by id, and which action sent them: a button's id, `submit` (the form's submit,
+ * What the user did: the inputs' values by id, and which button sent them: its id, `submit` (the form's submit,
  * or picking from a choice that is the only input), or an html block's id (`superego.reply`). `text` is something
  * they wrote instead (the composer, or an html block's `superego.send`).
  */
-export type Reply = { values: Record<string, Value>; action?: string; text?: string }
+export type Reply = { values: Record<string, Value>; button?: string; text?: string }
 
 // ── The schema ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -202,14 +202,14 @@ export function describeReply(blocks: Block[], reply: Reply, { submit = 'Submit'
   const buttons: ActionButton[] = []
   const frames: Extract<Block, { type: 'html' }>[] = []
   walk(blocks, (block) => { if (block.type === 'buttons') buttons.push(...block.buttons); if (block.type === 'html') frames.push(block) })
-  const frame = frames.find((f) => (f.id ?? 'html') === reply.action)
+  const frame = frames.find((f) => (f.id ?? 'html') === reply.button)
   if (frame) {
     const value = reply.values[frame.id ?? 'html']
     return `→ ${typeof value === 'string' ? value : JSON.stringify(value ?? null)}`
   }
   const shown = inputs.filter((input) => input.id in reply.values)
-  if (reply.action === 'submit' && shown.length === 1 && shown[0]!.type === 'choice') return `→ ${showValue(shown[0], reply.values[shown[0]!.id])}`
-  const head = buttons.find((b) => b.id === reply.action)?.label ?? (reply.action === 'submit' || !reply.action ? submit : reply.action)
+  if (reply.button === 'submit' && shown.length === 1 && shown[0]!.type === 'choice') return `→ ${showValue(shown[0], reply.values[shown[0]!.id])}`
+  const head = buttons.find((b) => b.id === reply.button)?.label ?? (reply.button === 'submit' || !reply.button ? submit : reply.button)
   return [`→ ${head}`, ...shown.map((input) => `${input.label ?? input.id}: ${showValue(input, reply.values[input.id])}`)].join('\n')
 }
 
@@ -218,6 +218,6 @@ export const BLOCKS_GUIDE = `Blocks (JSON objects, by "type"; "?" marks optional
 - markdown {text} | callout {tone?: info|warn|success, title?, text} | code {code, language?, title?} | table {columns: string[], rows: cell[][]} | image {src: https or data: URL, or a file in the working folder; alt?, caption?} | kv {items: [{label, value}]}
 - stack {blocks} | row {blocks} (side by side) | card {title?, blocks} | divider {}
 - inputs, each with a unique id (its key in the answer) and label?: choice {options: [{label, value?, description?, preview?: block}], multiple?, style?: buttons|list, default?} | select {options: [{label, value?}], default?} | switch {label, default?} | text {placeholder?, default?} | textarea {placeholder?, default?} | number {min?, max?, step?, default?} | slider {min, max, step?, default?}
-- buttons {buttons: [{id, label, style?: primary|danger}]}: each sends {action: id} with every input's value. Without buttons, inputs get a submit button, and a lone single choice answers when picked.
+- buttons {buttons: [{id, label, style?: primary|danger}]}: each sends {button: id} with every input's value. Without buttons, inputs get a submit button, and a lone single choice answers when picked.
 - open {label, kind: editor|diff|preview|artifact, path?, url?, line?}: a link that opens a pane.
 - html {html, height?, id?}: your own HTML/CSS/JS in a sandboxed frame (no network access to the app, no same-origin). Theme variables (--superego-text, --superego-muted, --superego-accent, --superego-border, --superego-surface, --superego-font, --superego-mono, --superego-radius) follow light/dark. Scripts get superego.reply(value) (answers, as values[id]) and superego.send(text) (a message), both only on a click or key press, and superego.resize(). For what blocks can't draw: charts, diagrams, custom widgets.`

@@ -2,7 +2,7 @@
 // `<pkg>/daemon` runs here, next to the agents; `<pkg>/ui` runs in the app's window. This half can give the agents
 // tools, prompt sections and hooks (pi-durable extensions), register settings, define actions (intents) and methods
 // (reads), publish live values for the UI to watch, describe pane kinds to the agent, add to a thread's status, add to
-// what a message is sent with, take part in a thread's life (creating, turns, archiving), keep state with each thread
+// what a message is sent with, take part in a thread's life (starting, turns, archiving), keep state with each thread
 // and say things about it to clients, say what a run did, choose a thread's agent or add to it, and run sign-in flows
 // of its own.
 //
@@ -85,7 +85,7 @@ export type StatusContribution = { kind: BlockedKind; msg?: string }
 export type MessageBlock = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
 
 /**
- * A message on its way to a thread's agent, as submit transforms see it: what was typed, the files sent with it, and
+ * A message on its way to a thread's agent, as send transforms see it: what was typed, the files sent with it, and
  * the blocks the model will be given so far (the text first, then each file as the core names it).
  */
 export type OutgoingMessage = {
@@ -101,9 +101,9 @@ export type OutgoingMessage = {
 }
 
 /** Changes what a message gives the model: returns the blocks to send instead, or nothing to leave them. */
-export type SubmitTransform = (message: OutgoingMessage) => MessageBlock[] | void | Promise<MessageBlock[] | void>
+export type SendTransform = (message: OutgoingMessage) => MessageBlock[] | void | Promise<MessageBlock[] | void>
 
-/** A thread about to be made, as `creating` hooks see it: where it would work, and what was asked for. */
+/** A thread about to be made, as `starting` hooks see it: where it would work, and what was asked for. */
 export type ThreadDraft = {
   /** The folder it would work in: as asked, or as a hook before this one changed it. */
   cwd: string
@@ -136,14 +136,14 @@ export type ThreadHooks<S extends Json = Json> = {
    * Before a thread exists: may move where it works (`cwd`: a worktree, say) and give it this extension's state.
    * Each hook sees the draft as the ones before it left it.
    */
-  creating?(draft: ThreadDraft): ThreadCreating<S> | void | Promise<ThreadCreating<S> | void>
+  starting?(draft: ThreadDraft): ThreadStarting<S> | void | Promise<ThreadStarting<S> | void>
   /**
-   * The thread its `creating` took part in isn't made after all: a later hook refused, or making it failed. Undo what
-   * `creating` did (remove the worktree it added); `state` is what it gave the thread. Told in reverse order.
+   * The thread its `starting` took part in isn't made after all: a later hook refused, or making it failed. Undo what
+   * `starting` did (remove the worktree it added); `state` is what it gave the thread. Told in reverse order.
    */
   abandoned?(draft: ThreadDraft, state: S | undefined): void | Promise<void>
   /** It exists, before its first message is sent. */
-  created?(thread: ThreadInfo): void | Promise<void>
+  started?(thread: ThreadInfo): void | Promise<void>
   /**
    * A run started: the thread went busy. Per run, not per message: one steered or queued into a run that's going is
    * part of it. Not for a run resumed after a restart (that one ends with a `turnEnd` alone).
@@ -177,8 +177,8 @@ export type ThreadHooks<S extends Json = Json> = {
   /** A pane beside it closed: closed by someone, or gone as the thread was cleared. What the pane held can go. 1.5. */
   paneClosed?(thread: ThreadInfo, pane: Pane): void | Promise<void>
 }
-/** What a `creating` hook gives a new thread: the folder it works in instead, and this extension's state with it. */
-export type ThreadCreating<S extends Json = Json> = { cwd?: string; state?: S }
+/** What a `starting` hook gives a new thread: the folder it works in instead, and this extension's state with it. */
+export type ThreadStarting<S extends Json = Json> = { cwd?: string; state?: S }
 /** What archiving a thread did, in a line, from an extension's `archiving` or `archived`. */
 export type ArchiveNote = { note?: string }
 /** What archiving a thread did: each extension's note, by its name. */
@@ -222,7 +222,7 @@ export type AgentPart = (() => void) & {
   remove(): void
 }
 
-/** A thread as an `agentParts` sees it, at submit. 1.7. */
+/** A thread as an `agentParts` sees it, at each send. 1.7. */
 export type AgentPartsThread = {
   id: string
   /** An extension's own thread, in no list (`threads.start({ hidden })`): Ego's, say. */
@@ -258,7 +258,7 @@ export type DaemonApi = {
    */
   agent(extension: Extension, options?: { always?: boolean }): AgentPart
   /**
-   * Add to a thread's agent, whatever chose it: asked at every submit (before the turn starts), and answering with parts
+   * Add to a thread's agent, whatever chose it: asked at every send (before the turn starts), and answering with parts
    * this extension gave with `agent(part, { always: false })` (others are left out, with a warning). They come after the
    * parts an `agentFor` chose, and before its profile's. Every extension's is asked at once; each may take up to 5s (a
    * server it has to start, say), and one that takes longer, or throws, adds nothing to that turn. Not for threads that
@@ -321,7 +321,7 @@ export type DaemonApi = {
    * not for threads that go without this extension, and a profile's only for that profile's threads. Every message is
    * a user's or another thread's (thread tools); tool results aren't. A transform that throws fails the send.
    */
-  submit(transform: SubmitTransform): void
+  beforeSend(transform: SendTransform): void
   /**
    * Byte streams of kind `<name>.<kind>` that clients open (the protocol's channels: base64 chunks within credit the
    * receiver grants, behind every control message): a terminal's output and keystrokes, say. `accept` gets each one and
@@ -342,9 +342,9 @@ export type DaemonApi = {
    * `DataView`). A profile's fit only the places that show a thread, and only its own threads.
    */
   view(id: string, view: DataView): void
-  /** Take part in threads' lives: see ThreadHooks. `S`: the state its `creating` gives a thread (`state<S>()`). */
+  /** Take part in threads' lives: see ThreadHooks. `S`: the state its `starting` gives a thread (`state<S>()`). */
   thread<S extends Json = Json>(hooks: ThreadHooks<S>): void
-  /** This extension's state with each thread, kept under its name (`creating` can give a new thread its first). */
+  /** This extension's state with each thread, kept under its name (`starting` can give a new thread its first). */
   state<T extends Json = Json>(): ThreadState<T>
   /**
    * What clients are told about each thread, as `ThreadInfo.facts[<name>]`: small, and worked out from the thread's
@@ -366,7 +366,7 @@ export type DaemonApi = {
    */
   toolCalls(watch: (record: ToolCallRecord) => void | Promise<void>): void
   /**
-   * Choose a thread's agent, from this extension's state with it (no `id` yet while it's made; the state its `creating`
+   * Choose a thread's agent, from this extension's state with it (no `id` yet while it's made; the state its `starting`
    * gave). Its instructions hold only while it answers. The first chooser to answer wins, in the order extensions were
    * set up; a profile's only for its own threads. Called often, so quick and without side effects; a throw is logged
    * (once) and counts as no answer.
@@ -387,7 +387,7 @@ export type DaemonApi = {
      */
     attachments(id: string): string
     /**
-     * Start a thread, as `thread.start` does (its `creating` hooks too): `parent`, a thread's own child; `hidden`, in
+     * Start a thread, as `thread.start` does (its `starting` hooks too): `parent`, a thread's own child; `hidden`, in
      * no list, and this extension's (`owner`; a hidden parent's children are top-level). A hidden thread has no profile,
      * and takes no messages while the extension that made it is off, or goes without it. Find it again by its `owner`
      * in `list({ hidden: true })`: its facts aren't there while the extension is off.
@@ -396,7 +396,7 @@ export type DaemonApi = {
     /**
      * Send a thread a message, as a user would; when it's working, `whenBusy` says how (default: after this run).
      * `exposure`: whom for, when an action of this extension's sends it on a client's behalf (its context's `exposure`),
-     * for submit transforms to see.
+     * for send transforms to see.
      */
     send(id: string, text: string, options?: { whenBusy?: 'steer' | 'followUp'; exposure?: Exposure }): Promise<void>
     /** Its last answer, as text, if it has one. */

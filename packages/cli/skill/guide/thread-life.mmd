@@ -4,9 +4,9 @@ stateDiagram-v2
   state "Idle" as Idle
   state "Working" as Working
   state "Archived" as Archived
-  [*] --> Making: creating (cwd, state)
-  Making --> [*]: a creating hook throws
-  Making --> Idle: created
+  [*] --> Making: starting (cwd, state)
+  Making --> [*]: a starting hook throws
+  Making --> Idle: started
   Idle --> Working: turnStart
   Working --> Idle: turnEnd
   Idle --> Archived: archiving, then archived

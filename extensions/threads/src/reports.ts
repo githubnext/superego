@@ -124,7 +124,7 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
     s.threads.list().then((all) => Promise.all(all.map(check))).catch((error) => console.error('thread-reports: checking parents failed:', error))
     // Said to clients, so a child's own finishing or failing doesn't notify too: its parent hears it (see REPORTED).
     s.facts<boolean>(({ id, state }) => state === true && !unheard.has(id) ? REPORTED : undefined)
-    s.submit(async ({ thread, text, by }) => {
+    s.beforeSend(async ({ thread, text, by }) => {
       if (!thread.parent) return
       if (by === undefined) await working.set(thread.id, false)
       // thread_start's prompt, or the parent's thread_send; not another thread's.

@@ -1,6 +1,6 @@
 /// <reference path="./env.d.ts" />
 // notifications, UI half: a notification when a thread finishes, fails or needs you while the window is in the
-// background, saying what it did, asks or failed on (threadNotice; a child working for its parent only when it needs
+// background, saying what it did, asks or failed on (threadNotification; a child working for its parent only when it needs
 // you), and one when a provider rejects a machine's credentials (not one per thread it stops); clicking it shows the
 // thread. The desktop app shows it (once, however many windows ask, and only while none has the focus); a browser with
 // Web Notifications, once allowed: offered over the composer when you set a thread to work, never on load. With no
@@ -12,7 +12,7 @@ import {
   BADGE, call, defineUiExtension, NOTIFY, unreadCount, useAppSetting, useProjects, type ComposerWhere, type Selection, type Store, type WindowState,
 } from '@superego/app/ui'
 import { BellIcon, IconButton, XIcon } from '@superego/ui'
-import { noticeFor, rejectionNotice } from './notify.ts'
+import { notificationFor, rejectionNotification } from './notify.ts'
 import { about } from './shared.ts'
 import './styles.css'
 
@@ -43,13 +43,13 @@ export default defineUiExtension({
     }
     superego.on('thread.status', (event) => {
       if (superego.appSetting<boolean>(NOTIFY) === false) return
-      const notice = noticeFor(event, superego.window)
+      const notice = notificationFor(event, superego.window)
       if (notice) void call('app', 'app.notify', notice).catch(() => {})
     })
     // A provider rejecting the credentials: one notification, not one for each thread it stops (they're quiet).
     superego.on('auth.rejected', (event) => {
       if (superego.appSetting<boolean>(NOTIFY) === false) return
-      const notice = rejectionNotice(event, superego.window)
+      const notice = rejectionNotification(event, superego.window)
       if (notice) void call('app', 'app.notify', notice).catch(() => {})
     })
     superego.slot('composer.above', Offer, { order: 300 })

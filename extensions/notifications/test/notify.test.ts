@@ -1,12 +1,12 @@
 import { expect, it } from 'vitest'
-import { browserNotice, desktopNotice } from '@superego/app/ui'
+import { browserNotification, desktopNotification } from '@superego/app/ui'
 import type { Json, Status, ThreadInfo } from '@superego/protocol'
-import { noticeFor, rejectionNotice } from '../src/notify.ts'
+import { notificationFor, rejectionNotification } from '../src/notify.ts'
 
 const thread = (state: Status['state'], msg?: string, more: Partial<ThreadInfo> = {}): ThreadInfo =>
   ({ id: 't', title: 'Fix the build', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state, ...(msg ? { msg } : {}) }, ...more })
 const away = { focused: false, visible: true }
-const notice = (t: ThreadInfo) => noticeFor({ machine: 'box', thread: t, before: 'working' }, away)
+const notice = (t: ThreadInfo) => notificationFor({ machine: 'box', thread: t, before: 'working' }, away)
 
 it('says what happened: what a run did, the question it asks, why it failed', () => {
   expect(notice(thread('done', 'Merged the notices change into main'))).toEqual({ machine: 'box', thread: 't', title: 'Fix the build', status: 'Finished', text: 'Merged the notices change into main' })
@@ -28,12 +28,12 @@ it("falls back to today's words when there's nothing to say", () => {
 
 it('lays a notice out for the desktop (with a subtitle) and a browser (without)', () => {
   const done = notice(thread('done', 'Merged it'))!
-  expect(desktopNotice(done, { label: 'Studio', several: false })).toEqual({ title: 'Fix the build', subtitle: 'Finished', body: 'Merged it' })
-  expect(desktopNotice(done, { label: 'Studio', several: true })).toEqual({ title: 'Fix the build', subtitle: 'Finished · Studio', body: 'Merged it' })
-  expect(browserNotice(done)).toEqual({ title: 'Fix the build', body: 'Finished: Merged it' })
+  expect(desktopNotification(done, { label: 'Studio', several: false })).toEqual({ title: 'Fix the build', subtitle: 'Finished', body: 'Merged it' })
+  expect(desktopNotification(done, { label: 'Studio', several: true })).toEqual({ title: 'Fix the build', subtitle: 'Finished · Studio', body: 'Merged it' })
+  expect(browserNotification(done)).toEqual({ title: 'Fix the build', body: 'Finished: Merged it' })
   const bare = notice(thread('blocked'))!
-  expect(desktopNotice(bare, { label: 'Studio', several: false })).toEqual({ title: 'Fix the build', subtitle: 'Needs you', body: '' })
-  expect(browserNotice(bare)).toEqual({ title: 'Fix the build', body: 'Needs you' })
+  expect(desktopNotification(bare, { label: 'Studio', several: false })).toEqual({ title: 'Fix the build', subtitle: 'Needs you', body: '' })
+  expect(browserNotification(bare)).toEqual({ title: 'Fix the build', body: 'Needs you' })
 })
 
 it('stays quiet when a child working for its parent finishes or fails (its parent hears), not when it needs you', () => {
@@ -47,22 +47,22 @@ it('stays quiet when a child working for its parent finishes or fails (its paren
 })
 
 it('stays quiet while the window is in front, for other states, and for threads seen for the first time', () => {
-  expect(noticeFor({ machine: 'box', thread: thread('done'), before: 'working' }, { focused: true, visible: true })).toBeUndefined()
-  expect(noticeFor({ machine: 'box', thread: thread('done'), before: 'working' }, { focused: true, visible: false })).toBeDefined()
-  expect(noticeFor({ machine: 'box', thread: thread('working'), before: 'idle' }, away)).toBeUndefined()
-  expect(noticeFor({ machine: 'box', thread: thread('idle'), before: 'done' }, away)).toBeUndefined()
-  expect(noticeFor({ machine: 'box', thread: thread('done'), before: undefined }, away)).toBeUndefined()
+  expect(notificationFor({ machine: 'box', thread: thread('done'), before: 'working' }, { focused: true, visible: true })).toBeUndefined()
+  expect(notificationFor({ machine: 'box', thread: thread('done'), before: 'working' }, { focused: true, visible: false })).toBeDefined()
+  expect(notificationFor({ machine: 'box', thread: thread('working'), before: 'idle' }, away)).toBeUndefined()
+  expect(notificationFor({ machine: 'box', thread: thread('idle'), before: 'done' }, away)).toBeUndefined()
+  expect(notificationFor({ machine: 'box', thread: thread('done'), before: undefined }, away)).toBeUndefined()
 })
 
 it('stays quiet for a thread waiting for sign-in, and says it once for the provider', () => {
   const waiting = { ...thread('blocked', 'Anthropic rejected the API key'), status: { state: 'blocked' as const, kind: 'auth' as const, msg: 'Anthropic rejected the API key' } }
-  expect(noticeFor({ machine: 'box', thread: waiting, before: 'working' }, away)).toBeUndefined()
+  expect(notificationFor({ machine: 'box', thread: waiting, before: 'working' }, away)).toBeUndefined()
   const rejection = { provider: 'anthropic', name: 'Anthropic', summary: 'Anthropic rejected the API key', detail: '401 invalid x-api-key', since: 1, threads: ['t', 'u'] }
-  const once = rejectionNotice({ machine: 'box', rejection }, away)!
+  const once = rejectionNotification({ machine: 'box', rejection }, away)!
   expect(once).toEqual({ machine: 'box', thread: 't', title: 'Anthropic rejected the API key', text: '2 threads are waiting. Sign in again to go on.' })
   // As before: the machine under the title on the desktop, the text alone in a browser.
-  expect(desktopNotice(once, { label: 'Studio', several: false })).toEqual({ title: 'Anthropic rejected the API key', subtitle: 'Studio', body: '2 threads are waiting. Sign in again to go on.' })
-  expect(browserNotice(once).body).toBe('2 threads are waiting. Sign in again to go on.')
-  expect(rejectionNotice({ machine: 'box', rejection }, { focused: true, visible: true })).toBeUndefined()
-  expect(rejectionNotice({ machine: 'box', rejection: { ...rejection, threads: [] } }, away)).toBeUndefined()
+  expect(desktopNotification(once, { label: 'Studio', several: false })).toEqual({ title: 'Anthropic rejected the API key', subtitle: 'Studio', body: '2 threads are waiting. Sign in again to go on.' })
+  expect(browserNotification(once).body).toBe('2 threads are waiting. Sign in again to go on.')
+  expect(rejectionNotification({ machine: 'box', rejection }, { focused: true, visible: true })).toBeUndefined()
+  expect(rejectionNotification({ machine: 'box', rejection: { ...rejection, threads: [] } }, away)).toBeUndefined()
 })

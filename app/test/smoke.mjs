@@ -689,7 +689,7 @@ if (phase === 'first') {
   const elsewhere = `${process.env.SUPEREGO_HOME}/elsewhere`
   mkdirSync(elsewhere, { recursive: true })
   // With the window in the background, a thread finishing is a notification (headless, collected here, not shown).
-  globalThis.superegoNotices = []
+  globalThis.superegoNotifications = []
   await run(`window.dispatchEvent(new Event('blur'))`)
   const other = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(elsewhere)}, title: 'elsewhere', prompt: 'hi' }).then((t) => t.id)`)
   await until(`[...document.querySelectorAll('.threads-project__name')].some((n) => n.textContent.startsWith('elsewhere'))`, 'a project per folder')
@@ -697,8 +697,8 @@ if (phase === 'first') {
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('elsewhere') && li.querySelector('.superego-status--done'))`, 'other thread done, in the window')
   // What it did, too: its answer's first sentence (the daemon's recap).
   const finished = (n) => n.title === 'elsewhere' && n.thread === other && n.status === 'Finished' && n.text === 'echo: hi'
-  for (let i = 0; i < 50 && !globalThis.superegoNotices.some(finished); i++) await new Promise((r) => setTimeout(r, 100))
-  if (!globalThis.superegoNotices.some(finished)) { await fail(`no notification of the thread finishing: ${JSON.stringify(globalThis.superegoNotices)}`); throw new Error('failed') }
+  for (let i = 0; i < 50 && !globalThis.superegoNotifications.some(finished); i++) await new Promise((r) => setTimeout(r, 100))
+  if (!globalThis.superegoNotifications.some(finished)) { await fail(`no notification of the thread finishing: ${JSON.stringify(globalThis.superegoNotifications)}`); throw new Error('failed') }
   // The app icon counts it, as the main process sets it (headless, kept here, not shown).
   const unreadNow = await run(`window.superego.call('local', 'thread.list', {}).then((ts) => ts.filter((t) => ['done', 'error', 'blocked'].includes(t.status.state) && t.status.kind !== 'auth' && !t.facts?.['thread-reports']?.toParent).length)`)
   for (let i = 0; i < 50 && globalThis.superegoBadge !== unreadNow; i++) await new Promise((r) => setTimeout(r, 100))
@@ -1280,14 +1280,14 @@ if (phase === 'first') {
   const secondId = await run(`window.superego.machines().then((list) => list.find((m) => m.label === 'Second').id)`)
   const secondAuth = `${process.env.SUPEREGO_HOME}/second/auth.json`
   writeFileSync(secondAuth, JSON.stringify({ faux: { type: 'api_key', key: 'reject-me' } }))
-  globalThis.superegoNotices = []
+  globalThis.superegoNotifications = []
   await run(`window.dispatchEvent(new Event('blur'))`)
   for (const prompt of ['keyed one', 'keyed two']) await run(`window.superego.call('${secondId}', 'thread.start', { title: '${prompt}', prompt: '${prompt}' })`)
   await until(`document.querySelectorAll('.app__rail .rail-notice--auth').length === 1 && document.querySelector('.rail-notice--auth').getAttribute('aria-label') === 'faux rejected the API key on Second'`, 'one notice for the rejected key, naming the machine')
   await until(`[...document.querySelectorAll('.superego-list-item')].filter((li) => /keyed (one|two)/.test(li.textContent) && li.querySelector('.superego-status--signin')).length === 2`, 'the threads waiting quietly')
   await new Promise((r) => setTimeout(r, 500))
-  const keyNotices = globalThis.superegoNotices.filter((n) => n.machine === secondId)
-  if (keyNotices.length !== 1 || keyNotices[0].title !== 'faux rejected the API key') { await fail(`not one notification for the rejected key: ${JSON.stringify(globalThis.superegoNotices)}`); throw new Error('failed') }
+  const keyNotices = globalThis.superegoNotifications.filter((n) => n.machine === secondId)
+  if (keyNotices.length !== 1 || keyNotices[0].title !== 'faux rejected the API key') { await fail(`not one notification for the rejected key: ${JSON.stringify(globalThis.superegoNotifications)}`); throw new Error('failed') }
   await run(`window.dispatchEvent(new Event('focus'))`)
   // Shown, a waiting thread says why in place of its failure, and offers to sign in again.
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('keyed one')).click()`)

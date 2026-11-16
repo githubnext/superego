@@ -118,7 +118,7 @@ export type NewThread = {
   /** The thread starting it, on the same machine. */
   parent?: string
   /**
-   * What extensions are asked for, by name, as their `creating` hooks read it: `{ worktrees: true }`. `worktree` is
+   * What extensions are asked for, by name, as their `starting` hooks read it: `{ worktrees: true }`. `worktree` is
    * the shorthand for `worktrees`.
    */
   options?: Record<string, Json>

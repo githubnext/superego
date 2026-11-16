@@ -53,7 +53,7 @@ export type ProfileSpec = {
   panes?: Record<string, string>
   /**
    * What its threads ask extensions for, by name, unless a thread is started otherwise: as `thread.start`'s `options`,
-   * read by their `creating` hooks (`{ worktrees: true }`: a git worktree of its own).
+   * read by their `starting` hooks (`{ worktrees: true }`: a git worktree of its own).
    */
   options?: Record<string, Json>
   /** Shorthand for `options.worktrees`, as `thread.start`'s `worktree` is. */

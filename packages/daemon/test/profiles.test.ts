@@ -577,7 +577,7 @@ it("transforms the messages of a profile's threads, and of those extending it, b
   write(join(home, 'profiles', 'default'), {
     'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./stamp.ts'] })\n`,
     'stamp.ts': `import { defineDaemonExtension } from 'superego'
-export default defineDaemonExtension({ name: 'stamp', setup(superego) { superego.submit(({ content }) => [...content, { type: 'text', text: 'stamped' }]) } })
+export default defineDaemonExtension({ name: 'stamp', setup(superego) { superego.beforeSend(({ content }) => [...content, { type: 'text', text: 'stamped' }]) } })
 `,
   })
   write(join(home, 'profiles', 'work'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extends: 'user:default' })\n` })

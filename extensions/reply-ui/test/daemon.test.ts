@@ -59,7 +59,7 @@ it('show_ui returns at once, with the whole UI in its details; bad blocks get er
   await close()
 })
 
-it('ask_ui blocks the thread, takes an answer from any client, and returns values and action', async () => {
+it('ask_ui blocks the thread, takes an answer from any client, and returns values and the button', async () => {
   const { peer, done, view, close } = await start([
     turn([{ type: 'toolCall', id: 'call-1', name: 'ask_ui', arguments: { title: 'Pick a layout', blocks: BLOCKS } }], 'toolUse'),
     turn([{ type: 'text', text: 'Lists it is.' }], 'stop'),
@@ -79,15 +79,15 @@ it('ask_ui blocks the thread, takes an answer from any client, and returns value
 
   await expect(peer.call(ANSWER, { id: 'nope', values: {} })).rejects.toMatchObject({ kind: 'not_found' })
   await expect(peer.call(ANSWER, { id: 'call-1', values: ['x'] })).rejects.toMatchObject({ kind: 'invalid' })
-  await peer.call(ANSWER, { id: 'call-1', values: { layout: 'list' }, action: 'submit' })
+  await peer.call(ANSWER, { id: 'call-1', values: { layout: 'list' }, button: 'submit' })
   await until(done)
   await until(() => pending.length === 0)
   expect(others).toEqual([])
   const value = await view(thread.id)
   const [result] = toolResults(value)
-  expect(JSON.parse(result!.content![0]!.text!)).toEqual({ values: { layout: 'list' }, action: 'submit' })
+  expect(JSON.parse(result!.content![0]!.text!)).toEqual({ values: { layout: 'list' }, button: 'submit' })
   // Locked on the answer, with the UI it answered, after a reload too.
-  expect(result!.details).toMatchObject({ id: 'call-1', title: 'Pick a layout', blocks: BLOCKS, answer: { values: { layout: 'list' }, action: 'submit' } })
+  expect(result!.details).toMatchObject({ id: 'call-1', title: 'Pick a layout', blocks: BLOCKS, answer: { values: { layout: 'list' }, button: 'submit' } })
   expect(JSON.stringify(value.entries)).toContain('Lists it is.')
   await close()
 })

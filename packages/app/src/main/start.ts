@@ -9,7 +9,7 @@ import {
   type AppConfig, type Channel, type DeclaredSection, type Json, type Notifications, type ProfileRef, type ThreadInfo,
 } from '@superego/protocol'
 import { declaredSpec, serveSettings } from '@superego/settings'
-import { ARTIFACT_POLICY, ARTIFACT_TYPES, BADGE, CHANNEL, desktopNotice, NOTIFY, unreadCount, type ChannelEvent, signInNotice, threadNotice, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
+import { ARTIFACT_POLICY, ARTIFACT_TYPES, BADGE, CHANNEL, desktopNotification, NOTIFY, unreadCount, type ChannelEvent, signInNotification, threadNotification, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotification } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
 import { LayoutFile, type LayoutView } from './layout-file.ts'
 import { Link, loginInTerminal, MachineLinks, MachineStore, openLocal as openLocalSocket, runUpdate, UiAllowStore } from '@superego/client'
@@ -108,7 +108,7 @@ export function startApp(appConfig: AppConfig) {
         return null
       },
       /** A window's notifications extension: a thread wants a look. */
-      async 'app.notify'(notice: ThreadNotice) { notify(notice); return null },
+      async 'app.notify'(notice: ThreadNotification) { notify(notice); return null },
       /** The thread the window shows now (none: null): while the window has the focus, the app icon's count leaves it out. */
       async 'app.shown'({ selection }: { selection: { machine: string; thread: string } | null }) {
         if (!shownIn.has(contents.id)) contents.once('destroyed', () => { shownIn.delete(contents.id); refreshBadge() })
@@ -245,7 +245,7 @@ export function startApp(appConfig: AppConfig) {
     threadsOf.set(machine, threads)
     refreshDesktop()
     if (announce && !before && waiting.length && !BrowserWindow.getAllWindows().length && appSettings.get(NOTIFY) === true) {
-      const notice = signInNotice(machine, { summary: waiting[0]!.status.msg ?? 'Sign in again', threads: waiting.map((t) => t.id) })
+      const notice = signInNotification(machine, { summary: waiting[0]!.status.msg ?? 'Sign in again', threads: waiting.map((t) => t.id) })
       if (notice) notify(notice)
     }
     for (const thread of threads) {
@@ -255,7 +255,7 @@ export function startApp(appConfig: AppConfig) {
       lastStatus.set(key, now)
       if (!announce || before === now || BrowserWindow.getAllWindows().length) continue
       // Only once a window has declared the setting: an app without the notifications extension never notifies.
-      const notice = threadNotice(machine, thread)
+      const notice = threadNotification(machine, thread)
       if (notice && appSettings.get(NOTIFY) === true && !thread.without?.includes('notifications')) notify(notice)
     }
   }
@@ -283,17 +283,17 @@ export function startApp(appConfig: AppConfig) {
   const noticed = new Map<string, number>()
   /**
    * Show a notification of a thread that wants a look, unless a window has the focus; clicking it shows the thread.
-   * Headless (tests), nothing shows: a test may collect them in `globalThis.superegoNotices`.
+   * Headless (tests), nothing shows: a test may collect them in `globalThis.superegoNotifications`.
    */
-  function notify(notice: ThreadNotice) {
+  function notify(notice: ThreadNotification) {
     const key = JSON.stringify(notice)
     for (const [old, at] of noticed) if (Date.now() - at >= 5_000) noticed.delete(old)
     if (Date.now() - (noticed.get(key) ?? 0) < 5_000) return
     noticed.set(key, Date.now())
-    if (headless) return void (globalThis as { superegoNotices?: ThreadNotice[] }).superegoNotices?.push(notice)
+    if (headless) return void (globalThis as { superegoNotifications?: ThreadNotification[] }).superegoNotifications?.push(notice)
     if (BrowserWindow.getFocusedWindow() || !Notification.isSupported()) return
     const several = allLinks().filter((link) => link.state === 'connected').length > 1
-    const notification = new Notification(desktopNotice(notice, { label: linkOf(notice.machine)?.label ?? notice.machine, several }))
+    const notification = new Notification(desktopNotification(notice, { label: linkOf(notice.machine)?.label ?? notice.machine, several }))
     notification.on('click', () => show({ open: { machine: notice.machine, thread: notice.thread } }))
     notification.show()
   }

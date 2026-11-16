@@ -38,10 +38,10 @@ async function agentOf(peer: RpcPeer, id: string) {
   return { extensions: agent?.extensions ?? [], instructions: agent?.instructions }
 }
 
-it("takes part in a thread's life, in order: creating moves it and gives it state; then created, turns, archiving and back", async () => {
+it("takes part in a thread's life, in order: starting moves it and gives it state; then started, turns, archiving and back", async () => {
   const heard: string[] = []
   const hear = (name: string) => ({
-    created: (t: ThreadInfo) => { heard.push(`${name} created ${t.cwd}`) },
+    started: (t: ThreadInfo) => { heard.push(`${name} started ${t.cwd}`) },
     turnStart: () => { heard.push(`${name} turnStart`) },
     turnEnd: () => { heard.push(`${name} turnEnd`) },
     archiving: (t: ThreadInfo) => { heard.push(`${name} archiving ${Boolean(t.archived)}`) },
@@ -55,8 +55,8 @@ it("takes part in a thread's life, in order: creating moves it and gives it stat
       superego.facts(({ state }) => state)
       superego.thread({
         ...hear('nest'),
-        async creating(draft) {
-          heard.push(`nest creating ${JSON.stringify(draft.options)}`)
+        async starting(draft) {
+          heard.push(`nest starting ${JSON.stringify(draft.options)}`)
           if (draft.options.nest !== true) return
           const cwd = join(draft.cwd, 'nested')
           await mkdir(cwd, { recursive: true })
@@ -68,7 +68,7 @@ it("takes part in a thread's life, in order: creating moves it and gives it stat
   const after = defineDaemonExtension({
     name: 'after',
     setup(superego) {
-      superego.thread({ ...hear('after'), creating(draft) { heard.push(`after creating ${draft.cwd}`) } })
+      superego.thread({ ...hear('after'), starting(draft) { heard.push(`after starting ${draft.cwd}`) } })
     },
   })
   const { peer, close } = await open([nest, after])
@@ -78,8 +78,8 @@ it("takes part in a thread's life, in order: creating moves it and gives it stat
   await done(peer, thread.id)
   await until(() => heard.includes('after turnEnd'))
   expect(heard).toEqual([
-    'nest creating {"nest":true}', `after creating ${nested}`,
-    `nest created ${nested}`, `after created ${nested}`,
+    'nest starting {"nest":true}', `after starting ${nested}`,
+    `nest started ${nested}`, `after started ${nested}`,
     'nest turnStart', 'after turnStart', 'nest turnEnd', 'after turnEnd',
   ])
   heard.length = 0
@@ -102,7 +102,7 @@ it("takes part in a thread's life, in order: creating moves it and gives it stat
   heard.length = 0
   const plain = await peer.call<ThreadInfo>('thread.start', { options: { nest: true } })
   expect(plain.cwd).toBe(dir)
-  expect(heard).toEqual([`after creating ${dir}`, `after created ${dir}`])
+  expect(heard).toEqual([`after starting ${dir}`, `after started ${dir}`])
   await close()
 })
 
@@ -160,13 +160,13 @@ it('refuses when an -ing hook says no; a hook that throws otherwise is logged, a
     name: 'guard',
     setup(superego) {
       superego.thread({
-        creating(draft) {
+        starting(draft) {
           if (draft.options.guard === 'no') throw new RpcError('busy', 'Not now')
           if (draft.options.guard === 'plain') throw new Error('No way')
         },
         archiving() { if (refuse) throw new RpcError('busy', 'Still needed') },
         unarchiving() { if (refuse) throw new Error('nope') },
-        created() { throw new Error('broken') },
+        started() { throw new Error('broken') },
         turnStart() { throw new Error('broken') },
         turnEnd: async () => { throw new Error('broken') },
         archived() { throw new Error('broken') },
@@ -305,7 +305,7 @@ it("lets an extension choose a thread's agent: instructions, tools and what it g
     name: 'picker',
     setup(superego) {
       superego.agent(tools, { always: false })
-      superego.thread({ creating: (draft) => draft.options.picker === true ? { state: 'mine' } : undefined })
+      superego.thread({ starting: (draft) => draft.options.picker === true ? { state: 'mine' } : undefined })
       superego.agentFor(({ state }) => state === 'mine' ? { instructions: 'Picked.', extensions: [tools], without: ['coding-tools'] } : undefined)
     },
   })
@@ -396,7 +396,7 @@ export default defineDaemonExtension({
   setup(superego) {
     superego.facts(() => ({ version: ${version} }))
     superego.agentFor(() => ({ instructions: 'Version ${version}.' }))
-    superego.thread({ created: (t) => superego.state().set(t.id, ${version}) })
+    superego.thread({ started: (t) => superego.state().set(t.id, ${version}) })
   },
 })
 `

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { unread, type Json, type Status, type ThreadInfo } from '@superego/protocol'
-import { threadNotice, unreadCount } from '../src/shared.ts'
+import { threadNotification, unreadCount } from '../src/shared.ts'
 
 const thread = (id: string, status: Status, more: Partial<ThreadInfo> = {}): ThreadInfo =>
   ({ id, title: id, cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status, ...more })
@@ -30,7 +30,7 @@ it('notifies of exactly the threads it counts', () => {
     thread('done', { state: 'done' }), thread('idle', { state: 'idle' }), thread('auth', { state: 'blocked', kind: 'auth' }),
     thread('child', { state: 'done' }, { facts: toParent }), thread('asks', { state: 'blocked' }, { facts: toParent }), thread('gone', { state: 'error' }, { archived: true }),
   ]
-  expect(all.map((t) => Boolean(threadNotice('box', t)))).toEqual(all.map(unread))
+  expect(all.map((t) => Boolean(threadNotification('box', t)))).toEqual(all.map(unread))
 })
 
 it("counts every machine's, but the one being looked at", () => {

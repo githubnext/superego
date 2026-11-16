@@ -122,7 +122,7 @@ export default defineDaemonExtension({
     superego.facts<Worktree>(({ state }) => state)
     superego.thread({
       // Asked for by the thread, or its profile (both in `options`).
-      async creating(draft) {
+      async starting(draft) {
         if (!draft.checkout || draft.options.worktrees !== true) return
         const name = `${slugOf(draft.title || (draft.prompt ? titleOf(draft.prompt) : ''))}-${randomUUID().slice(0, 6)}`
         const path = join(folder, basename(draft.checkout.root), name)
