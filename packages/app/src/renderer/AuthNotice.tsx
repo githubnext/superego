@@ -13,7 +13,7 @@ export function AuthNotice({ rail = false }: { rail?: boolean }) {
   const rejections = useRejections()
   const { signIn } = useShell()
   const dispatch = useRegistry().router.dispatch
-  const [dismissed, setDismissed] = useLocalState<string[]>('auth.dismissed', [])
+  const [dismissed, setDismissed] = useLocalState<string[]>('auth.dismissed', [], { shared: true })
   const all = machines.flatMap((machine) => machine.state !== 'connected' ? [] : (rejections[machine.id] ?? []).map((rejection) => ({
     machine, rejection, key: `${machine.id}/${rejection.provider}/${rejection.since}`,
   })))

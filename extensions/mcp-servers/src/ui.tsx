@@ -164,7 +164,7 @@ export function Details({ thread }: SlotProps['details.section']) {
  */
 function SignInNotice({ machine, thread }: SlotProps['composer.above']) {
   const data = useValue<SectionData>(machine.id, machine.state === 'connected', SERVERS_VALUE)
-  const [dismissed, setDismissed] = useLocalState<string[]>('mcp-servers.dismissed', [])
+  const [dismissed, setDismissed] = useLocalState<string[]>('mcp-servers.dismissed', [], { shared: true })
   const [open, setOpen] = useState<ServerInfo>()
   const ids = new Set(serversOf(thread)?.servers.filter((s) => s.state === 'needs-sign-in').map((s) => s.id) ?? [])
   if (!ids.size || thread.archived) return null

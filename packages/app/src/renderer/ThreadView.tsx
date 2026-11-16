@@ -745,7 +745,7 @@ function Composer({ machine, thread, busy, inbox, onJump }: { machine: MachineEn
   }, [])
   const claim = claims.at(-1)
   // A draft per thread, kept until it's sent: switching threads or reloading doesn't lose it.
-  const [text, setText] = useLocalState(`draft.${machine.id}.${thread.id}`, '')
+  const [text, setText] = useLocalState(`draft.${machine.id}.${thread.id}`, '', { shared: true })
   const [error, setError] = useState<{ kind?: string; message: string }>()
   const input = useRef<HTMLTextAreaElement>(null)
   // Archived, it can be read, not written to, until it's brought back (the Unarchive button where Send would be).

@@ -81,7 +81,7 @@ there is no type checking.
 | `superego.settings(ui, component)` | draw below the settings section (of its daemon half) that names `ui` |
 | `superego.composer.complete({ title, word, items })` | complete a word as it's typed. `word(text, caret)` returns the word at the caret it completes, `{ start, query }` (and anything of its own), or nothing; the first provider to find one wins. `items(word, { machine, thread })` returns (or resolves to) `{ label, detail?, insert }[]`, best first; taken, `insert` replaces the word (end it with a space to go on typing). The composer draws the menu: ↑↓ pick, ⇥ or ⏎ take, esc leaves the word |
 | `superego.composer.sentWith({ read, component })` | draw what the daemon half's `beforeSend` put in sent messages. `read(blocks)` returns `{ items, blocks }`: what to draw and the indexes of the blocks it found them in, which the message's text then leaves out; `component` gets `{ machine, thread, items }` and draws under the message (chips: `className="attachment"`). Drawn for threads that go without the extension now too |
-| `superego.store(key, initial, { persist? })` | state of the extension kept in the window: `get()`, `set(next)`, `subscribe`, and `use()` in a component. Give the bare key (`superego.store('columns', [])`): it's kept as `<name>.columns`, and `'<name>.columns'` is the same store |
+| `superego.store(key, initial, { persist?, shared? })` | state of the extension kept in the window: `get()`, `set(next)`, `subscribe`, and `use()` in a component. Give the bare key (`superego.store('columns', [])`): it's kept as `<name>.columns`, and `'<name>.columns'` is the same store. `persist` keeps it across reloads, for this window alone (each desktop window has its own), or for all of them with `shared` |
 | `superego.dispatch(id, params, { machine })` | run an action outside React |
 
 A profile's module may draw its tool calls the way it likes; if two draw the same tool, the first stays (with a warning
@@ -162,7 +162,7 @@ mounts, opens the page in the browser, asks what the flow asks, and has Cancel),
 uses (`ArchiveIcon`, …).
 
 Others: `useComposer()` (the message box), `useComposerClaim({ placeholder, submit })` (take the message box over while
-something waits on the user), `useLocalState(key, initial)` (state kept in the window across reloads), `useShortcut(actionId)` (its key's
+something waits on the user), `useLocalState(key, initial, { shared? })` (state kept in the window across reloads; `shared` by every window), `useShortcut(actionId)` (its key's
 label), `score` (fuzzy matching), `transcriptLinks(machine, thread)` (the links a thread's transcript shows, in order: `{ text, href, target, open(beside) }`), `h` (`React.createElement`, for modules without JSX).
 
 ## Reading threads

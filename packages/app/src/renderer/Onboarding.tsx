@@ -8,6 +8,7 @@ import { ONBOARDED, type Json, type SettingInfo } from '@superego/protocol'
 import { Button, Switch } from '@superego/ui'
 import { useSettings } from './client.ts'
 import { Slot, useApp, useRegistry } from './extension.tsx'
+import { firstWindow } from './local-state.ts'
 import { useMachines, useSelection, useSettingsDialog } from './state.tsx'
 import './onboarding.css'
 
@@ -38,7 +39,8 @@ export function useOnboarding(): boolean {
   // Picking a thread puts it away; asked for, it comes out from behind Settings.
   useEffect(() => { if (selection) ask(false) }, [selection])
   useEffect(() => { if (wanted) settings.close() }, [wanted])
-  return !selection && (wanted || snapshot?.values[ONBOARDED] === false)
+  // On its own, in the app's first window only: another opened beside it starts on the threads.
+  return !selection && (wanted || (firstWindow && snapshot?.values[ONBOARDED] === false))
 }
 
 export function Onboarding() {

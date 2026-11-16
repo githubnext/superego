@@ -376,9 +376,10 @@ export type UiApi = {
   /**
    * State of this extension, kept in the window: read and changed by its actions and components alike (`store.use()`
    * in a component). Kept as `<extension>.<key>`: `store('open', …)` and `store('<extension>.open', …)` are the same
-   * one. `persist` keeps it across reloads.
+   * one. `persist` keeps it across reloads: for this window alone (the desktop app's windows each have their own), or
+   * for every window of the app (`shared`: a notice dismissed, say).
    */
-  store<T extends Json>(key: string, initial: T, options?: { persist?: boolean }): Store<T>
+  store<T extends Json>(key: string, initial: T, options?: { persist?: boolean; shared?: boolean }): Store<T>
   /** The composer of a thread. */
   composer: {
     /**

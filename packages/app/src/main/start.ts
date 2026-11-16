@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, protocol, session, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, protocol, screen, session, shell, type MenuItemConstructorOptions } from 'electron'
 import { appEnv, daemonStarting, defaultDataDir, pidPath, readBuild, socketPath, spawnDaemon } from '@superego/daemon/client'
 import {
   arr, bool, compareVersions, defineAction, int, lit, nullable, obj, opt, Router, RpcError, str, union, unknown, waitingForSignIn,
@@ -18,6 +18,7 @@ import { MenuBar } from './tray.ts'
 import { commandLine } from './command-line.ts'
 import { ServiceRestart, type ServiceAction } from './restart.ts'
 import { createSignInCatcher } from './sign-in-callback.ts'
+import { placeOn, WindowList, type Bounds } from './windows.ts'
 import { shortcutOf } from '../renderer/shortcuts.ts'
 
 /**
@@ -92,12 +93,16 @@ export function startApp(appConfig: AppConfig) {
     },
     /** How Superego sits on the desktop now. */
       async 'service.get'() { return service.state },
-      /** Another window, beside the one asking. */
-      async 'app.newWindow'() {
-        const window = createWindow(BrowserWindow.fromWebContents(contents) ?? undefined)
-        if (!headless) { window.show(); window.focus() }
+      /**
+       * Another window, beside the one asking, starting as a copy of it: `state` is its own state, as its storage keeps
+       * it (see local-state.ts), which the new one takes as its own.
+       */
+      async 'app.newWindow'({ state }: { state?: unknown }) {
+        createWindow({ near: BrowserWindow.fromWebContents(contents) ?? undefined, seed: windowState(state) })
         return null
       },
+      /** Every window's id, open or kept to reopen: a window's storage keeps the state of these alone. */
+      async 'app.windows'() { return windows.ids() },
       /**
        * The shortcuts that run actions in this window now. While a page in one of its panes has the keyboard, the
        * page gets key presses and the window never sees them: these are taken first (see createWindow) and sent on.
@@ -117,7 +122,7 @@ export function startApp(appConfig: AppConfig) {
         return null
       },
       /** The window's `machine.update` action, done here: the update's output shows on the machine's row in Settings. */
-      'machine.update': async ({ machine }: { machine: string }) => updateMachine(machine),
+      'machine.update': async ({ machine }: { machine: string }) => updateMachine(machine, BrowserWindow.fromWebContents(contents) ?? undefined),
       async 'app.desktop'() { return { menuBar: menuBar.shown, dockHidden: mac && dockHidden() } },
       /** The page is listening for app events: answer with a thread it was asked to show before it was. */
       async 'app.ready'() {
@@ -233,6 +238,12 @@ export function startApp(appConfig: AppConfig) {
     if (method === 'auth.event' && machine !== 'local') {
       const { flow, event } = params as Notifications['auth.event']
       signIns.heard(machine, flow, event)
+    }
+    // Another client asking the app to show something: one window does it, the one in front.
+    if (method === 'client.perform') {
+      const window = BrowserWindow.getFocusedWindow() ?? recentWindow()
+      if (window) window.webContents.send(CHANNEL.event, { machine, method, params })
+      return
     }
     broadcast({ machine, method, params })
   }
@@ -381,8 +392,9 @@ export function startApp(appConfig: AppConfig) {
   /** Windows whose page is listening for app events; until then, what to show waits in `pending`. */
   const ready = new Set<number>()
   const pending = new Map<number, Show>()
+  /** The window that goes in front: the one with the focus, else the one last in front, else those put away, reopened. */
   function show(what: Show = {}) {
-    const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? createWindow()
+    const window = BrowserWindow.getFocusedWindow() ?? recentWindow() ?? reopen()
     // Headless (tests), the window never comes forward: nothing on the screen, no focus taken from anyone.
     if (!headless) {
       if (window.isMinimized()) window.restore()
@@ -581,17 +593,19 @@ export function startApp(appConfig: AppConfig) {
    * Run a machine's own install script there (pull, install, build, restart its daemon), its output shown on the
    * machine's row as it goes, then reconnect to the new daemon. The restart interrupts agents at work there: asked first.
    */
-  async function updateMachine(id: string): Promise<{ updated: boolean }> {
+  async function updateMachine(id: string, window?: BrowserWindow): Promise<{ updated: boolean }> {
     const config = machineStore.get(id)
     if (!config) throw new RpcError(id === 'local' ? 'invalid' : 'not_found', id === 'local' ? `This computer's ${appConfig.name} is updated by hand.` : `No machine ${id}`)
     if (updates.get(id)?.state === 'running') throw new RpcError('busy', `${config.label} is updating already.`)
     const working = (threadsOf.get(id) ?? []).filter((t) => t.status.state === 'working')
     if (working.length && !headless) {
-      const { response } = await dialog.showMessageBox({
-        type: 'warning', buttons: ['Update and Restart', 'Cancel'], defaultId: 1, cancelId: 1,
+      const options = {
+        type: 'warning' as const, buttons: ['Update and Restart', 'Cancel'], defaultId: 1, cancelId: 1,
         message: `${working.length === 1 ? 'An agent is' : `${working.length} agents are`} working on ${config.label}`,
         detail: `Updating restarts ${appConfig.name} there: agents stop mid-turn and pick up again after. Threads and their history are kept.`,
-      })
+      }
+      // On the window that asked, as a sheet.
+      const { response } = window && !window.isDestroyed() ? await dialog.showMessageBox(window, options) : await dialog.showMessageBox(options)
       if (response !== 0) return { updated: false }
     }
     const pid = linkOf(id)?.hello?.machine.pid
@@ -713,12 +727,48 @@ export function startApp(appConfig: AppConfig) {
     app.quit()
   }
 
-  /** A window; beside `near` (down and right of it, as the system cascades), its size, when given. */
-  function createWindow(near?: BrowserWindow) {
-    const bounds = near && !near.isDestroyed() ? near.getBounds() : undefined
+  // ── Windows ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  /** Every window, open or put away, kept between launches (see windows.ts). */
+  const windows = new WindowList(join(dataDir, 'windows.json'))
+  /** The open ones, by their id. */
+  const windowById = new Map<string, BrowserWindow>()
+  /** The open window last in front. */
+  const recentWindow = () => windows.recent().map((id) => windowById.get(id)).find((w) => w && !w.isDestroyed())
+  /** A window's state as another passes it on (`app.newWindow`): its storage's keys and their values, as text. */
+  function windowState(state: unknown): Record<string, string> | undefined {
+    if (!state || typeof state !== 'object' || Array.isArray(state)) return undefined
+    const entries = Object.entries(state).filter(([key, value]) => key.length <= 200 && typeof value === 'string')
+    // It travels in the new window's address: a copy too big to be a window's state isn't one.
+    return entries.reduce((size, [key, value]) => size + key.length + (value as string).length, 0) > 200_000 ? undefined : Object.fromEntries(entries) as Record<string, string>
+  }
+  /**
+   * The windows put away (the last one closed, or every one open as the app quit), reopened where they were, the one
+   * last in front on top; none, a new one. Answers the one in front.
+   */
+  function reopen(): BrowserWindow {
+    const open = recentWindow()
+    if (open) return open
+    const closed = windows.closed()
+    if (!closed.length) return createWindow()
+    // The one last in front opens first (the app's first window), the others behind it.
+    const [front, ...others] = closed.map((entry) => createWindow({ id: entry.id, ...(entry.bounds ? { bounds: entry.bounds } : {}) }))
+    if (others.length && !headless) front!.focus()
+    return front!
+  }
+
+  /**
+   * A window: one put away (`id`, at its `bounds`), or a new one, beside `near` (down and right of it, as the system
+   * cascades) at its size, when given, starting with `seed` as its state.
+   */
+  function createWindow({ id, bounds, near, seed }: { id?: string; bounds?: Bounds; near?: BrowserWindow; seed?: Record<string, string> } = {}) {
+    const beside = near && !near.isDestroyed() ? near.getBounds() : undefined
+    const at: Partial<Bounds> = bounds ? placeOn(bounds, screen.getAllDisplays().map((d) => d.workArea))
+      : beside ? { x: beside.x + 24, y: beside.y + 24, width: beside.width, height: beside.height } : {}
+    const opened = windows.open(id)
     const window = new BrowserWindow({
-      width: bounds?.width ?? 1100, height: bounds?.height ?? 760, minWidth: 600, minHeight: 400,
-      ...(bounds ? { x: bounds.x + 24, y: bounds.y + 24 } : {}),
+      width: at.width ?? 1100, height: at.height ?? 760, minWidth: 600, minHeight: 400,
+      ...(at.x !== undefined && at.y !== undefined ? { x: at.x, y: at.y } : {}),
       title: appConfig.name,
       titleBarStyle: 'hiddenInset',
       // Centred in the 48pt title bar (see --superego-titlebar).
@@ -756,11 +806,24 @@ export function startApp(appConfig: AppConfig) {
       if (direction === 'left') go(-1)
       if (direction === 'right') go(1)
     })
-    window.on('closed', () => refreshDesktop())
-    window.on('focus', () => refreshBadge())
+    windowById.set(opened.id, window)
+    const moved = () => { if (!window.isDestroyed()) windows.moved(opened.id, window.getNormalBounds()) }
+    window.on('moved', moved)
+    window.on('resized', moved)
+    window.on('closed', () => {
+      windowById.delete(opened.id)
+      windows.close(opened.id)
+      refreshDesktop()
+    })
+    window.on('focus', () => { windows.focused(opened.id); refreshBadge() })
     window.on('blur', () => refreshBadge())
-    if (process.env.ELECTRON_RENDERER_URL) void window.loadURL(process.env.ELECTRON_RENDERER_URL)
-    else void window.loadFile(join(import.meta.dirname, '../renderer/index.html'))
+    // The page learns which window it is (its storage is kept by that, see local-state.ts) from its address, which
+    // a reload keeps; whether it's the app's first; and once, what it starts with.
+    const query: Record<string, string> = { window: opened.id, ...(opened.first ? { first: '1' } : {}), ...(seed ? { seed: JSON.stringify(seed) } : {}) }
+    if (process.env.ELECTRON_RENDERER_URL) void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}?${new URLSearchParams(query)}`)
+    else void window.loadFile(join(import.meta.dirname, '../renderer/index.html'), { query })
+    if (!bounds) moved()
+    if (!headless && near) window.focus()
     refreshDesktop()
     return window
   }
@@ -812,10 +875,10 @@ export function startApp(appConfig: AppConfig) {
     })
     restartLocal()
     remotes.follow()
-    const window = createWindow()
+    const window = reopen()
     const open = openArgument(process.argv)
     if (open) pending.set(window.webContents.id, { open })
-    app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
+    app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) reopen() })
   })
 
   // With the menu bar on, Superego stays there without windows; without it, closing the last window quits (except on macOS).
@@ -825,10 +888,19 @@ export function startApp(appConfig: AppConfig) {
   })
   // Every quit quits: the menu bar's Quit, SIGTERM (Electron turns it into app.quit), logout. Only the ⌘Q menu item
   // is softer: with the menu bar on, it closes the windows and leaves the app there.
-  app.on('before-quit', () => { signIns.close(); for (const link of allLinks()) link.stop() })
+  // Every window open as it quits comes back at the next launch.
+  app.on('before-quit', () => { windows.quitting(); signIns.close(); for (const link of allLinks()) link.stop() })
   const quitKey = () => {
-    if (menuBarOn() && !headless) for (const window of BrowserWindow.getAllWindows()) window.close()
-    else app.quit()
+    if (!menuBarOn() || headless) return app.quit()
+    // Put away, all of them, to come back as they were.
+    windows.keep(windows.recent())
+    for (const window of BrowserWindow.getAllWindows()) window.close()
+  }
+  /** File → New Window: the window in front runs its own action (it starts the new one as a copy of itself). */
+  const newWindow = () => {
+    const front = BrowserWindow.getFocusedWindow() ?? recentWindow()
+    if (front) front.webContents.send(CHANNEL.event, { machine: APP, method: 'app.action', params: { action: 'app.newWindow' } })
+    else reopen()
   }
   const setMenu = () => Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(mac ? [{
@@ -838,9 +910,15 @@ export function startApp(appConfig: AppConfig) {
         { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' },
         { label: `Quit ${appConfig.name}`, accelerator: 'CommandOrControl+Q', click: quitKey },
       ],
-    } satisfies MenuItemConstructorOptions] : [{
-      label: 'File', submenu: [{ label: 'Quit', accelerator: 'CommandOrControl+Q', click: quitKey }],
-    } satisfies MenuItemConstructorOptions]),
+    } satisfies MenuItemConstructorOptions] : []),
+    // The window's own action has the shortcut (Settings → Keyboard): the menu shows it without taking it first.
+    {
+      label: 'File',
+      submenu: [
+        { label: 'New Window', accelerator: 'CommandOrControl+Shift+N', registerAccelerator: false, click: newWindow },
+        ...(mac ? [] : [{ type: 'separator' as const }, { label: 'Quit', accelerator: 'CommandOrControl+Q', click: quitKey }]),
+      ],
+    },
     { role: 'editMenu' }, { role: 'viewMenu' },
     // ⌘W is the window's own (it closes the pane with the focus); closing the window is ⌘⇧W, and the app stays.
     {

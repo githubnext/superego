@@ -753,15 +753,43 @@ if (phase === 'first') {
   await until(`document.querySelector('.thread__title')?.textContent === ${JSON.stringify(nextTitle)}`, 'the back button')
   await run(`document.querySelector('.app__forward').click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'the forward button')
-  // ⌘⇧N: another window, on the same threads; closed again, so the rest goes on in the first.
-  const firstWindow = BrowserWindow.getAllWindows()[0]
-  await key('n', ['meta', 'shift'])
-  for (let i = 0; i < 50 && BrowserWindow.getAllWindows().length < 2; i++) await new Promise((r) => setTimeout(r, 100))
-  const newWindow = BrowserWindow.getAllWindows().find((w) => w !== firstWindow)
-  if (!newWindow) { await fail('cmd+shift+n opened no window'); throw new Error('failed') }
-  for (let i = 0; i < 100 && !(await newWindow.webContents.executeJavaScript(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`).catch(() => false)); i++) await new Promise((r) => setTimeout(r, 100))
-  if (!(await newWindow.webContents.executeJavaScript(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`).catch(() => false))) { await fail('the new window does not show the thread'); throw new Error('failed') }
-  newWindow.destroy()
+  // ⌘⇧N: another window, starting as a copy of this one; then each goes its own way, and closing it closes only it.
+  {
+    const main = BrowserWindow.getAllWindows()[0]
+    await key('n', ['meta', 'shift'])
+    let second
+    for (let i = 0; i < 100 && !second; i++) {
+      second = BrowserWindow.getAllWindows().find((w) => w !== main)
+      if (!second) await new Promise((r) => setTimeout(r, 100))
+    }
+    if (!second) { await fail('cmd+shift+n opened no window'); throw new Error('failed') }
+    const untilIn = async (window, js, label) => {
+      for (let i = 0; i < 150; i++) {
+        if (!window.webContents.isLoading() && await window.webContents.executeJavaScript(js).catch(() => false)) return
+        await new Promise((r) => setTimeout(r, 100))
+      }
+      await fail(`${window === main ? 'first' : 'second'} window: waiting for ${label}`)
+      throw new Error('failed')
+    }
+    const titled = (title) => `document.querySelector('.thread__title')?.textContent === ${JSON.stringify(title)}`
+    await untilIn(second, titled('elsewhere'), 'the new window, a copy of the first')
+    if (await second.webContents.executeJavaScript(`/[?&](seed|first)=/.test(location.search)`)) { await fail('the new window kept its seed, or is first'); throw new Error('failed') }
+    await second.webContents.executeJavaScript(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes(${JSON.stringify(nextTitle)})).click()`)
+    await untilIn(second, titled(nextTitle), 'its own thread')
+    await new Promise((r) => setTimeout(r, 300))
+    await untilIn(main, titled('elsewhere'), 'its thread, whatever the other shows')
+    // Reloaded, each window comes back to its own.
+    second.webContents.reload()
+    await untilIn(second, titled(nextTitle), 'its own thread after a reload')
+    const kept = () => JSON.parse(readFileSync(`${process.env.SUPEREGO_HOME}/windows.json`, 'utf8')).windows.map((w) => w.id)
+    if (kept().length !== 2) { await fail(`not two windows kept: ${kept()}`); throw new Error('failed') }
+    second.close()
+    for (let i = 0; i < 50 && !second.isDestroyed(); i++) await new Promise((r) => setTimeout(r, 100))
+    if (!second.isDestroyed() || main.isDestroyed() || BrowserWindow.getAllWindows().length !== 1) { await fail('closing one window closed another'); throw new Error('failed') }
+    const id = await main.webContents.executeJavaScript(`new URLSearchParams(location.search).get('window')`)
+    if (kept().join() !== id) { await fail(`the closed window was kept: ${kept()}`); throw new Error('failed') }
+    await untilIn(main, titled('elsewhere'), 'the first window as it was')
+  }
   // Archived: closed at the sidebar's end; opened, one list across projects.
   await run(`window.superego.call('local', 'thread.archive', { thread: '${other}' })`)
   await until(`![...document.querySelectorAll('.threads-project .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere'))`, 'archived out of its project')
@@ -975,7 +1003,7 @@ if (phase === 'first') {
   await key('R', ['meta', 'shift'])
   await until(`/⇧R|Shift\\+R/.test(${keysOf('app.sidebar')}?.textContent ?? '') && Boolean(document.querySelector('[data-action="app.sidebar"] button.keymap__reset'))`, 'new shortcut recorded')
   // (Settings covers the sidebar: what the window keeps, not the dots, says it ran.)
-  const hidden = `localStorage.getItem('superego.sidebar.open') === 'false'`
+  const hidden = `localStorage.getItem('superego.window.' + new URLSearchParams(location.search).get('window') + '.sidebar.open') === 'false'`
   await key('/')
   await new Promise((resolve) => setTimeout(resolve, 300))
   if (await run(hidden)) { await fail('the old shortcut still runs the action'); throw new Error('failed') }
@@ -1291,6 +1319,9 @@ if (phase === 'first') {
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread after reopen')
   // Seen in the first run (Get started): the onboarding page, for good, no more.
   if (!await run(`window.superego.call('local', 'settings.watch', {}).then((r) => r.value.values['onboarding.seen'] === true)`) || await run(`Boolean(document.querySelector('.onboarding'))`)) { await fail('onboarding not put away for good'); throw new Error('failed') }
+  // The one window left open reopened, and the state of the one closed is gone.
+  if (BrowserWindow.getAllWindows().length !== 1) { await fail('not the one window left open, reopened'); throw new Error('failed') }
+  await until(`(() => { const id = new URLSearchParams(location.search).get('window'); return Object.keys(localStorage).filter((k) => k.startsWith('superego.window.')).every((k) => k.startsWith('superego.window.' + id + '.')) })()`, "the closed window's state dropped")
   // Right after start, the listed thread of the marked profile is marked, though none of its threads was shown.
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.querySelector('.smoke-mark')?.textContent === 'marked: marked thread')`, "a listed thread's profile UI after reopen, without opening it")
   if (await run(`document.querySelector('.thread__profile')?.textContent === 'marked'`)) { await fail('a thread of the marked profile was shown'); throw new Error('failed') }

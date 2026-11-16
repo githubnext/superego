@@ -10,7 +10,7 @@ import { textScale, type MachineEntry } from '../shared.ts'
 import { machine as client, useSettings, watched } from './client.ts'
 import { paneMenu, PlacedViews, shownPanes, Slot, useLayout, useRegistry, viewsIn, whose, type SpaceRailProps, type View, type ViewProps } from './extension.tsx'
 import { Contained } from './contained.tsx'
-import { useLocalState } from './local-state.ts'
+import { forgetWindows, useLocalState } from './local-state.ts'
 import { ServiceNotice } from './ServiceNotice.tsx'
 import { RevokedUiNotice } from './profile-ui-notice.tsx'
 import { LayoutEditor, LayoutNotice, LayoutViews } from './layout-text.tsx'
@@ -407,8 +407,12 @@ function useAppEffects() {
       // Pressed while a page in a pane had the keyboard: the main process caught it before the page (see app.keys).
       if (event.method === 'app.key') runKeys((event.params as { keys: string }).keys)
       if (event.method === 'app.go') go((event.params as { by: number }).by)
+      // One of the window's actions, from the app's menu (File → New Window).
+      if (event.method === 'app.action') void registry.router.dispatch((event.params as { action: string }).action, {}, { source: 'menu' }).catch((error) => console.error(error))
     })
     void (window.superego.call('app', 'app.ready', {}) as Promise<{ open?: Selection; settings?: boolean }>).then(show)
+    // Windows closed for good leave their state behind: dropped here.
+    if (!window.superego.web) void (window.superego.call('app', 'app.windows', {}) as Promise<string[]>).then(forgetWindows, () => {})
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('mousedown', onMouse); window.removeEventListener('mouseup', onMouse); off() }
   }, [])
 }

@@ -11,7 +11,7 @@ import { threadBeside, type Project } from './projects.ts'
 import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
 import { scrollHalfPage } from './scroll.ts'
 import { startRename } from './rename.ts'
-import { setLocalState } from './local-state.ts'
+import { setLocalState, windowState } from './local-state.ts'
 import { showOnboarding } from './Onboarding.tsx'
 import { maximizedPane, maximizedStore, NARROW, toggleMaximized } from './maximized.ts'
 
@@ -169,10 +169,11 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
       key: PANE_LAYOUT, value: layout ?? (c.appSetting<PaneLayout>(PANE_LAYOUT) === 'stack' ? 'scroll' : 'stack'),
     }, { machine: 'app', source: 'panes' }),
   }),
-  // Another window (in a browser, another tab), showing what this one does.
+  // Another window (in a browser, another tab), starting as a copy of this one: the same thread, space and sidebar,
+  // from where each goes its own way.
   defineWindowAction({
     id: 'app.newWindow', title: 'New window', keys: 'mod+shift+n',
-    run: async () => { if (window.superego.web) window.open(location.href, '_blank'); else await window.superego.call('app', 'app.newWindow', {}) },
+    run: async () => { if (window.superego.web) window.open(location.href, '_blank'); else await window.superego.call('app', 'app.newWindow', { state: windowState() }) },
   }),
   // In dev only: restart the window's dev server so packages linked since it started resolve (see dev-packages.ts).
   ...(typeof __SUPEREGO_DEV_SERVER__ === 'string' ? [defineWindowAction({
