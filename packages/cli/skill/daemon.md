@@ -76,7 +76,7 @@ once.
 | `superego.settings.register({ id, title, settings })` | a settings section of its own: id `<name>`, keys `<name>.<key>`. `settings.get(key)` reads any setting, `settings.snapshot()` all of them with their sections, `settings.onChange(fn)` hears changes |
 | `superego.submit(({ thread, text, attachments, content, by, exposure }) => …)` | change what each message sent to a thread gives its agent, before the turn starts (`by`: the extension that sent it, absent for the user's, from a window or the command line; `exposure`: `outside` when an outside agent sent it, `cli` the command line, else what `threads.send` passed on): `content` is its blocks so far (`{ type: 'text', text }`, `{ type: 'image', data, mimeType }`), the text first; return the blocks to send instead, or nothing. Transforms run in order, each given the last one's; not for threads that go without the extension, a profile's only for its own threads. A throw fails the send |
 | `superego.status((threadId) => …)` | return `{ kind: 'question' \| 'permission' \| 'auth', msg? }` while a thread needs the user; it shows as blocked. Call `superego.invalidate()` when what it depends on changes |
-| `superego.threads.list({ archived?, hidden? })` | every thread: `{ id, title, cwd, status, profile, ext, … }`; `archived` or `hidden` lists those instead |
+| `superego.threads.list({ archived?, hidden? })` | every thread: `{ id, title, cwd, status, profile, facts, … }`; `archived` or `hidden` lists those instead |
 | `superego.threads.get(id)` | one thread, archived too; `not_found` if there's none |
 | `superego.threads.of(conversationId)` | the thread a tool call belongs to: `superego.threads.of(api.conversationId)` |
 | `superego.threads.conversation(id)` | a thread's pi-durable conversation, to submit to or watch |
@@ -88,7 +88,7 @@ once.
 | `superego.machines.list()`, `superego.machines.call(machine, method, params)` | the other machines this daemon reaches (its `machines.json`, with their links' states) and a call to one, as a client calls it (`thread.list`, `thread.start`, …); none when it reaches no others. Extension API 1.4 |
 | `superego.thread({ creating, created, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchived })` | take part in a thread's life. `blocked`: it came to need the user mid-run (a question), once each time. `creating(draft)` may return `{ cwd, state }` (work elsewhere: a worktree); `draft.options` is what its profile's `options` and `thread.start` asked of extensions, by name. `creating`, `archiving` and `unarchiving` refuse by throwing; the rest are told, a throw only logged. `abandoned(draft, state)`: a later `creating` refused after this one ran, so undo it; `unarchiveAbandoned(thread)`, the same for `unarchiving`. `archived` runs before clients see it archived: clean up there, idempotently (archiving goes on past a failed cleanup, and may be tried again); `archiving` and `archived` may return `{ note }`, what they did in a line (`threads.archive` and `thread.archive` answer `{ notes }`, by extension). In set-up order; not for threads that go without the extension, a profile's only for its own |
 | `superego.state<T>()` | its own state with each thread, kept in the thread (across restarts): `get(id)`, `set(id, next \| undefined)`, `update(id, edit)` |
-| `superego.facts(({ id, state }) => …)` | what clients see of each thread as `thread.ext.<name>`, worked out from its state; nothing for undefined |
+| `superego.facts(({ id, state }) => …)` | what clients see of each thread as `thread.facts.<name>`, worked out from its state; nothing for undefined |
 | `superego.recap(({ thread, answer, calls }) => …)` | say in a line what a run did, once it ends (`calls`: its tool calls, oldest first, each `{ name, arguments, failed }`): the thread's `done` status carries it, and its notification says it. The first to answer wins; with none, the answer's first sentence. Quick, no side effects. 1.6 |
 | `superego.toolCalls(({ thread, call, result }) => …)` | hear each tool call a thread's agent makes, once it ends: `call` is `{ id, name, args }`, `result` `{ isError, text? }` (`text`: what the model was told). Read-only: the run doesn't wait for it, and a throw is only logged. Not for threads that go without the extension, a profile's only for its own. See [Watching tool calls](#watching-tool-calls). 1.8 |
 | `superego.agentFor(({ id, state, profile }) => …)` | choose a thread's agent: `{ instructions?, model?, thinking?, extensions?, without? }`, or nothing. The first answer wins; quick, no side effects. Parts it names are given with `superego.agent(part, { always: false })`, which gives them to no other thread |
@@ -137,7 +137,7 @@ export default defineDaemonExtension({
   name: 'db',
   setup(superego) {
     const touched = superego.state<{ why: string }>()
-    superego.facts(({ state }) => state)              // clients see it as thread.ext.db
+    superego.facts(({ state }) => state)              // clients see it as thread.facts.db
     superego.toolCalls(async ({ thread, call }) => {
       const command = String((call.args as { command?: unknown }).command ?? '')
       if (call.name === 'bash' && /\bsqlite3\b/.test(command)) await touched.set(thread, { why: command.slice(0, 80) })

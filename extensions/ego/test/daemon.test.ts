@@ -40,7 +40,7 @@ const egoOf = async (peer: RpcPeer) => (await peer.call<ThreadInfo[]>('thread.li
 it("keeps superego's own agent as one hidden thread per machine, in its data folder, knowing superego, changing only its setup", async () => {
   const first = await open()
   const egoThread = await first.peer.call<ThreadInfo>('ego.ask', { prompt: 'help me add a machine' })
-  expect(egoThread).toMatchObject({ ext: { ego: true }, hidden: true, cwd: dir, title: 'superego' })
+  expect(egoThread).toMatchObject({ facts: { ego: true }, hidden: true, cwd: dir, title: 'superego' })
   const ego = async (peer: RpcPeer) => await egoOf(peer)
   await until(async () => (await ego(first.peer))!.status.state === 'done')
   // The same thread again, not another; and in no list.
@@ -127,7 +127,7 @@ export default defineExtension({ name: 'haiku', tools: [defineTool({ name: 'haik
   const egoThread = await peer.call<ThreadInfo>('ego.ask', { prompt: 'hi' })
   expect(egoThread.profile).toBeUndefined()
   expect(egoThread.without ?? []).not.toContain('ego')
-  expect(egoThread.ext).toEqual({ ego: true })
+  expect(egoThread.facts).toEqual({ ego: true })
   await until(async () => (await egoOf(peer))!.status.state === 'done')
   const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: egoThread.id })
   const all = JSON.stringify(value.entries)

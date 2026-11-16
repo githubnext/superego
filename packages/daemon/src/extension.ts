@@ -338,7 +338,7 @@ export type DaemonApi = {
   /**
    * A view drawn from data, named `<name>.<view>`: the window draws its content (facts, a list, a table, Markdown, buttons
    * that run this machine's actions) with its own components, so no UI code ships, and a remote machine's or a
-   * project profile's needs no trust. Its content comes from a live value of this extension's or a method of its (see
+   * project profile's needs no allowing. Its content comes from a live value of this extension's or a method of its (see
    * `DataView`). A profile's fit only the places that show a thread, and only its own threads.
    */
   view(id: string, view: DataView): void
@@ -347,7 +347,7 @@ export type DaemonApi = {
   /** This extension's state with each thread, kept under its name (`creating` can give a new thread its first). */
   state<T extends Json = Json>(): ThreadState<T>
   /**
-   * What clients are told about each thread, as `ThreadInfo.ext[<name>]`: small, and worked out from the thread's
+   * What clients are told about each thread, as `ThreadInfo.facts[<name>]`: small, and worked out from the thread's
    * state (this extension's) whenever its info is (`invalidate()` when something else it reads changed). Not for
    * threads that go without this extension, as for hooks. Nothing for undefined; a throw is logged and counts as nothing.
    */

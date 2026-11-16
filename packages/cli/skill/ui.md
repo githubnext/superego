@@ -101,7 +101,7 @@ Slots a profile can fill, each given `{ machine, thread }` (and for the editor o
 ### A mark in the sidebar
 
 A mark on some threads' rows goes from the daemon half to the window in four steps: the daemon half keeps what it found
-in the thread's `state`, publishes it with `facts`, each `ThreadInfo` carries it as `thread.ext.<name>`, and a
+in the thread's `state`, publishes it with `facts`, each `ThreadInfo` carries it as `thread.facts.<name>`, and a
 `thread.badge` slot draws it. The daemon half for this one is in [Watching tool calls](daemon.md#watching-tool-calls):
 
 ```tsx
@@ -109,7 +109,7 @@ in the thread's `state`, publishes it with `facts`, each `ThreadInfo` carries it
 import { defineUiExtension, TableIcon, type SlotProps } from 'superego/ui'
 
 function DbMark({ thread }: SlotProps['thread.badge']) {
-  const db = thread.ext?.db as { why: string } | undefined
+  const db = thread.facts?.db as { why: string } | undefined
   if (!db) return null
   return <span className="thread-badge" title={db.why} role="img" aria-label="touched the database"><TableIcon size={12} aria-hidden /></span>
 }
@@ -182,8 +182,8 @@ Archived threads aren't in the lists, nor hidden ones (an extension's own agent,
 A `ThreadInfo` (type from `'superego/ui'`): `id`, `title`, `cwd` (where it works), `createdAt`, `activeAt` (when
 anything last happened in it: a dependency for `useMethod`'s `refresh`), `project` (`{ root, name }`: its project),
 `parent` (the thread that started it), `profile` (`{ name, scope: 'user' | 'project', dir }`; absent: none), `model`,
-`cost` (dollars), `panes` and `pane` (what's open beside it), `without` (optional extensions it goes without), `ext`
-(each extension's facts about it, by name: `ext.worktrees`), and `status`.
+`cost` (dollars), `panes` and `pane` (what's open beside it), `without` (optional extensions it goes without), `facts`
+(each extension's facts about it, by name: `facts.worktrees`), and `status`.
 
 `status` is `{ state, kind?, msg? }` (type `Status`). The states, most pressing first:
 

@@ -206,22 +206,22 @@ it("reports only what the parent asked for: not the user's own conversation in t
     const reports = async () => (await entries(parent.id)).split(`From [Dates](thread:${child.id})`).length - 1
     expect(await reports()).toBe(1)
     // Clients are told it works for its parent (so its finishing doesn't notify); the parent itself doesn't.
-    const ext = async (id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)?.ext?.['thread-reports']
-    expect(await ext(child.id)).toEqual({ toParent: true })
-    expect(await ext(parent.id)).toBeUndefined()
+    const facts = async (id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)?.facts?.['thread-reports']
+    expect(await facts(child.id)).toEqual({ toParent: true })
+    expect(await facts(parent.id)).toBeUndefined()
     // The user's own message to the child, and its answer: not the parent's business.
     await peer.call('thread.send', { thread: child.id, text: 'and the icons?' })
     await until(async () => (await entries(child.id)).includes('zz-icons') && await idle(child.id))
     await new Promise((r) => setTimeout(r, 300))
     expect(await reports()).toBe(1)
-    expect(await ext(child.id)).toBeUndefined()
+    expect(await facts(child.id)).toBeUndefined()
     // The parent sends it more, after a restart (what the child does is kept): reported again.
     await close()
     await turns(turn([{ type: 'toolCall', id: 'c2', name: 'thread_send', arguments: { thread: child.id, text: 'More?' } }], 'toolUse'), say('zz-three'), say('zz-four'), say('zz-thanks'))
     ;({ peer, close } = await open())
     await peer.call('thread.send', { thread: parent.id, text: 'ask it for more' })
     await until(async () => await reports() === 2)
-    expect(await ext(child.id)).toEqual({ toParent: true })
+    expect(await facts(child.id)).toEqual({ toParent: true })
   } finally {
     await close()
     delete process.env.REPORTSTEST_MODEL
@@ -250,24 +250,24 @@ it("tells clients a child reports only while its parent hears: not once the pare
   }
   let { peer, close } = await open()
   const all = async () => [...await peer.call<ThreadInfo[]>('thread.list', {}), ...await peer.call<ThreadInfo[]>('thread.list', { archived: true })]
-  const ext = async (id: string) => (await all()).find((t) => t.id === id)?.ext?.['thread-reports']
+  const facts = async (id: string) => (await all()).find((t) => t.id === id)?.facts?.['thread-reports']
   const until = async (check: () => Promise<boolean>) => { for (let i = 0; i < 400 && !(await check()); i++) await new Promise((r) => setTimeout(r, 25)); expect(await check()).toBe(true) }
   const run = (id: string, params: Json) => peer.call('action.run', { id, params })
   try {
     const parent = await peer.call<ThreadInfo>('thread.start', { prompt: 'split the work', title: 'Lead' })
     await until(async () => JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { thread: parent.id })).value.entries).includes('zz-noted'))
     const child = (await all()).find((t) => t.parent === parent.id)!
-    expect(await ext(child.id)).toEqual({ toParent: true })
+    expect(await facts(child.id)).toEqual({ toParent: true })
     // Its parent archived, its report would reach no one: it notifies for itself.
     await run('thread.archive', { thread: parent.id })
-    await until(async () => await ext(child.id) === undefined)
+    await until(async () => await facts(child.id) === undefined)
     await run('thread.unarchive', { thread: parent.id })
-    await until(async () => JSON.stringify(await ext(child.id)) === '{"toParent":true}')
+    await until(async () => JSON.stringify(await facts(child.id)) === '{"toParent":true}')
     // Looked at again from the start, after a restart.
     await run('thread.archive', { thread: parent.id })
     await close()
     ;({ peer, close } = await open())
-    await until(async () => await ext(child.id) === undefined)
+    await until(async () => await facts(child.id) === undefined)
   } finally {
     await close()
     delete process.env.REPORTSTEST_MODEL

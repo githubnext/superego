@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DATA_VIEWS, defineApp, PROTOCOL_VERSION, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, listen, openDaemon } from '../src/index.ts'
-import { loadProfile, Trust, type ProfileRef } from '../src/profiles.ts'
+import { loadProfile, Allowances, type ProfileRef } from '../src/profiles.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
 
@@ -91,7 +91,7 @@ export default defineExtension({
   const { peer, close } = await open()
   const listed = await peer.call<ProfileInfo[]>('profile.list', { cwd: join(project, 'src') })
   expect(listed).toMatchObject([{ name: 'support', scope: 'project', allowed: false }])
-  await expect(peer.call('thread.start', { cwd: project, profile: 'support' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await expect(peer.call('thread.start', { cwd: project, profile: 'support' })).rejects.toMatchObject({ kind: 'profile_not_allowed' })
 
   await peer.call('profile.allow', { cwd: project, name: 'support' })
   const thread = await peer.call<ThreadInfo>('thread.start', { cwd: join(project, 'src'), profile: 'support', prompt: 'where is 42?' })
@@ -105,7 +105,7 @@ export default defineExtension({
 
   // An edit is new code: the next turn waits for it to be allowed.
   write(profile, { 'orders.ts': `export default { name: 'orders' }\n` })
-  await expect(peer.call('thread.send', { thread: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await expect(peer.call('thread.send', { thread: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'profile_not_allowed' })
   await close()
 })
 
@@ -179,7 +179,7 @@ describe("the user's own profiles, in the default data dir under ~", () => {
 
   it("loads one taken for a project's (a thread started before they were told apart) as the user's, unallowed", async () => {
     const ref: ProfileRef = { scope: 'project', name: 'chief', dir: chief() }
-    const loaded = await loadProfile(ref, join(dataDir, 'profiles'), new Trust(dataDir))
+    const loaded = await loadProfile(ref, join(dataDir, 'profiles'), new Allowances(dataDir))
     expect(loaded).toMatchObject({ scope: 'user', name: 'chief', spec: { prompt: 'Run my day.' } })
     const { peer, close } = await open(dataDir)
     expect(await peer.call('profile.ui', ref)).toMatchObject({ entries: ['./ui.ts'] })
@@ -222,7 +222,7 @@ it("serves a profile's UI modules, types stripped, only from inside it and only 
   })
   const { peer, close } = await open()
   const ref = { scope: 'project', name: 'default', dir: profile }
-  await expect(peer.call('profile.ui', ref)).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await expect(peer.call('profile.ui', ref)).rejects.toMatchObject({ kind: 'profile_not_allowed' })
   await peer.call('profile.allow', { cwd: project })
   expect(await peer.call('profile.ui', ref)).toMatchObject({ entries: ['./ui/badge.ts'] })
   const badge = await peer.call<{ path: string; code: string }>('profile.module', { ...ref, path: 'ui/badge' })
@@ -631,7 +631,7 @@ it("vouches, in allowing a project's profile, for the files it lists from outsid
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
   // Changed since: not run until allowed again.
   write(project, { 'tools/vault.ts': vault('two') })
-  await expect(peer.call('thread.send', { thread: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await expect(peer.call('thread.send', { thread: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'profile_not_allowed' })
   await peer.call('profile.allow', { cwd: project, name: 'support' })
   await peer.call('thread.send', { thread: thread.id, text: 'again' })
   await done(peer, thread.id)
@@ -721,7 +721,7 @@ describe('a thread whose profile moved or vanished', () => {
     expect(thread.profile).toMatchObject({ scope: 'user' })
     renameSync(yours(), chief())
 
-    await expect(peer.call('thread.send', { thread: thread.id, text: 'hi' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+    await expect(peer.call('thread.send', { thread: thread.id, text: 'hi' })).rejects.toMatchObject({ kind: 'profile_not_allowed' })
     expect((await threadOf(peer, thread.id)).profile).toEqual({ scope: 'project', name: 'chief', dir: chief() })
     await peer.call('profile.allow', { cwd: project, name: 'chief' })
     await peer.call('thread.send', { thread: thread.id, text: 'hi' })
@@ -740,7 +740,7 @@ describe('a thread whose profile moved or vanished', () => {
     await expect(peer.call('thread.send', { thread: thread.id, text: 'hi' })).rejects.toMatchObject({ kind: 'profile_missing' })
     // A project's profile that isn't allowed isn't taken.
     write(join(project, '.superego', 'profiles', 'support'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({})\n` })
-    await expect(peer.call('thread.setProfile', { thread: thread.id, profile: 'support' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+    await expect(peer.call('thread.setProfile', { thread: thread.id, profile: 'support' })).rejects.toMatchObject({ kind: 'profile_not_allowed' })
     await expect(peer.call('thread.setProfile', { thread: thread.id, profile: 'nope' })).rejects.toMatchObject({ kind: 'not_found' })
 
     expect(await peer.call('thread.setProfile', { thread: thread.id })).toMatchObject({ scope: 'user', name: 'default' })
@@ -884,10 +884,10 @@ it("runs a helper's new code under Node's own loader too, as the daemon does (no
   })
   const profiles = new URL('../src/profiles.ts', import.meta.url).href
   write(dir, { 'probe.ts': `import { writeFileSync } from 'node:fs'
-import { loadProfile, provideSdk, SDK_EXPORTS, Trust } from '${profiles}'
+import { loadProfile, provideSdk, SDK_EXPORTS, Allowances } from '${profiles}'
 provideSdk(Object.fromEntries(SDK_EXPORTS.map((key) => [key, (x) => x])))
 const ref = { scope: 'user', name: 'p', dir: ${JSON.stringify(profile)} }
-const load = () => loadProfile(ref, ${JSON.stringify(join(home, 'profiles'))}, new Trust(${JSON.stringify(home)}))
+const load = () => loadProfile(ref, ${JSON.stringify(join(home, 'profiles'))}, new Allowances(${JSON.stringify(home)}))
 const before = (await load()).daemon[0].extension.setup()
 writeFileSync(${JSON.stringify(join(profile, 'helper.ts'))}, "export const v = 'after'\\n")
 console.log(JSON.stringify([before, (await load()).daemon[0].extension.setup()]))
@@ -904,10 +904,10 @@ it('versions an extension by every local file it imports, and vouches for those 
     'vault.ts': `import { defineDaemonExtension } from 'superego'\nimport { tag } from '../../../shared/tag.ts'\nexport default defineDaemonExtension({ name: 'vault', setup() { void tag } })\n`,
   })
   write(dir, { 'shared/tag.ts': `export const tag = 'one'\n` })
-  const trust = new Trust(home)
-  const before = await loadProfile(userRef('default') as ProfileRef, join(home, 'profiles'), trust)
+  const allowances = new Allowances(home)
+  const before = await loadProfile(userRef('default') as ProfileRef, join(home, 'profiles'), allowances)
   write(dir, { 'shared/tag.ts': `export const tag = 'two'\n` })
-  const after = await loadProfile(userRef('default') as ProfileRef, join(home, 'profiles'), trust)
+  const after = await loadProfile(userRef('default') as ProfileRef, join(home, 'profiles'), allowances)
   // The helper is outside the folder: still part of what it runs, so of its hash and its extension's version.
   expect(after.hash).not.toBe(before.hash)
   expect(after.daemon[0]!.key).not.toBe(before.daemon[0]!.key)
@@ -924,7 +924,7 @@ it('versions an extension by every local file it imports, and vouches for those 
   await done(peer, thread.id)
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
   write(project, { 'tools/helper.ts': `export const answer = 'two'\n` })
-  await expect(peer.call('thread.send', { thread: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await expect(peer.call('thread.send', { thread: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'profile_not_allowed' })
   await close()
 })
 
@@ -942,10 +942,10 @@ export default defineDaemonExtension({ name: 'x', setup() { return v } })
   })
   const profiles = new URL('../src/profiles.ts', import.meta.url).href
   write(dir, { 'probe.ts': `import { writeFileSync } from 'node:fs'
-import { loadProfile, provideSdk, SDK_EXPORTS, Trust } from '${profiles}'
+import { loadProfile, provideSdk, SDK_EXPORTS, Allowances } from '${profiles}'
 provideSdk(Object.fromEntries(SDK_EXPORTS.map((key) => [key, (x) => x])))
 const ref = { scope: 'user', name: 'p', dir: ${JSON.stringify(profile)} }
-const load = () => loadProfile(ref, ${JSON.stringify(join(home, 'profiles'))}, new Trust(${JSON.stringify(home)}))
+const load = () => loadProfile(ref, ${JSON.stringify(join(home, 'profiles'))}, new Allowances(${JSON.stringify(home)}))
 const first = await load()
 writeFileSync(${JSON.stringify(join(profile, 'old.ts'))}, 'export const old = 2\\n')
 const second = await load()
@@ -971,17 +971,17 @@ it("vouches, in allowing a project's profile, for every file its code can run: h
   write(project, { 'tools/c.ts': `export const c = 'c'\n` })
   symlinkSync(join(project, 'tools', 'c.ts'), join(profile, 'linked.ts'))
   const ref: ProfileRef = { scope: 'project', name: 'support', dir: profile }
-  const trust = new Trust(home)
+  const allowances = new Allowances(home)
   for (const [file, content] of [['.helper.ts', `export const a = 'A'\n`], ['.lib/b.ts', `export const b = 'B'\n`], ['../../../tools/c.ts', `export const c = 'C'\n`], ['.listed.ts', `export default { name: 'listed' }\n`]] as const) {
-    await trust.allow(ref)
-    await loadProfile(ref, join(home, 'profiles'), trust)
+    await allowances.allow(ref)
+    await loadProfile(ref, join(home, 'profiles'), allowances)
     write(profile, { [file]: content })
-    await expect(loadProfile(ref, join(home, 'profiles'), trust), file).rejects.toMatchObject({ kind: 'untrusted_profile' })
+    await expect(loadProfile(ref, join(home, 'profiles'), allowances), file).rejects.toMatchObject({ kind: 'profile_not_allowed' })
   }
   // What its code doesn't import, and isn't in its folder, isn't part of it.
-  await trust.allow(ref)
+  await allowances.allow(ref)
   write(project, { 'tools/other.ts': `export const other = 1\n` })
-  await expect(loadProfile(ref, join(home, 'profiles'), trust)).resolves.toMatchObject({ name: 'support' })
+  await expect(loadProfile(ref, join(home, 'profiles'), allowances)).resolves.toMatchObject({ name: 'support' })
 })
 
 it('refuses a module that imports a path worked out as it runs: what it loads can be neither versioned nor vouched for', async () => {
@@ -990,7 +990,7 @@ it('refuses a module that imports a path worked out as it runs: what it loads ca
     'profile.ts': profileTs(['./vault.ts']),
     'vault.ts': `import { defineDaemonExtension } from 'superego'\nconst name = './helper.ts'\nexport default defineDaemonExtension({ name: 'vault', async setup() { await import(name) } })\n`,
   })
-  await expect(loadProfile(userRef('default') as ProfileRef, join(home, 'profiles'), new Trust(home)))
+  await expect(loadProfile(userRef('default') as ProfileRef, join(home, 'profiles'), new Allowances(home)))
     .rejects.toMatchObject({ kind: 'invalid', message: expect.stringMatching(/vault\.ts:3 .*import\(name\)/) })
 })
 

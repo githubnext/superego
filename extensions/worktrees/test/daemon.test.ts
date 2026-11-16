@@ -37,7 +37,7 @@ const until = async (check: () => boolean | Promise<boolean>, ms = 5000) => {
 const listed = async (peer: RpcPeer, archived = false) => peer.call<ThreadInfo[]>('thread.list', { archived })
 const find = async (peer: RpcPeer, id: string) => [...await listed(peer), ...await listed(peer, true)].find((t) => t.id === id)
 /** A thread's worktree, as clients see it: the extension's fact. */
-const treeOf = (thread: ThreadInfo | undefined) => thread?.ext?.worktrees as Worktree | undefined
+const treeOf = (thread: ThreadInfo | undefined) => thread?.facts?.worktrees as Worktree | undefined
 /** Archive a thread: what `thread.archive` says (`notes`). */
 const archive = (peer: RpcPeer, id: string) => peer.call<{ notes: Record<string, string> }>('thread.archive', { thread: id })
 /** A repository in the test's folder, with a first commit. */

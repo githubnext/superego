@@ -255,10 +255,10 @@ export function hashProfile(dir: string): string {
  * then (that's code it runs too). Kept in the daemon's data dir.
  */
 type Allowed = Record<string, string | { hash: string; files: Record<string, string> }>
-export class Trust {
+export class Allowances {
   #path: string
   #allowed: Allowed | undefined
-  constructor(dataDir: string) { this.#path = join(dataDir, 'trusted-profiles.json') }
+  constructor(dataDir: string) { this.#path = join(dataDir, 'allowed-profiles.json') }
   async #load() { return this.#allowed ??= JSON.parse(await readFile(this.#path, 'utf8').catch(() => '{}')) as Allowed }
   async #of(ref: ProfileRef) { const at = (await this.#load())[ref.dir]; return typeof at === 'string' ? { hash: at, files: {} } : at }
   async allowed(ref: ProfileRef, hash: string) { return ref.scope === 'user' || (await this.#of(ref))?.hash === hash }
@@ -363,11 +363,11 @@ export function scoped(ref: ProfileRef, userRoot: string): ProfileRef {
 }
 
 /** Load a profile (and what it extends) fresh from disk; refuses a project's profile that isn't allowed as it is now. */
-export async function loadProfile(given: ProfileRef, userRoot: string, trust: Trust): Promise<LoadedProfile> {
+export async function loadProfile(given: ProfileRef, userRoot: string, allowances: Allowances): Promise<LoadedProfile> {
   const ref = scoped(given, userRoot)
   const hash = hashProfile(ref.dir)
-  if (!(await trust.allowed(ref, hash))) {
-    throw new RpcError('untrusted_profile', `The profile ${ref.name} in ${dirname(dirname(dirname(ref.dir)))} runs that project's code: allow it first (again, if it changed since)`, {
+  if (!(await allowances.allowed(ref, hash))) {
+    throw new RpcError('profile_not_allowed', `The profile ${ref.name} in ${dirname(dirname(dirname(ref.dir)))} runs that project's code: allow it first (again, if it changed since)`, {
       hint: `Look it over, then: superego profile allow ${ref.name}`,
     })
   }
@@ -379,7 +379,7 @@ export async function loadProfile(given: ProfileRef, userRoot: string, trust: Tr
     const [scope, name] = spec.extends.split(':')
     if (scope !== 'user' || !name) throw new RpcError('invalid', `extends: '${spec.extends}' — use 'user:<name>'`)
     if (!existsSync(join(userRoot, name, 'profile.ts'))) throw new RpcError('not_found', `No user profile ${name} to extend`)
-    base = await loadProfile({ scope: 'user', name, dir: join(userRoot, name) }, userRoot, trust)
+    base = await loadProfile({ scope: 'user', name, dir: join(userRoot, name) }, userRoot, allowances)
   }
   const extensions: Extension[] = [...(base?.extensions ?? [])]
   const daemon: ProfileDaemonExtension[] = [...(base?.daemon ?? [])]
@@ -388,8 +388,8 @@ export async function loadProfile(given: ProfileRef, userRoot: string, trust: Tr
     const file = resolve(ref.dir, path)
     if (!existsSync(file)) throw new RpcError('not_found', `${path} in profile ${ref.name} doesn't exist`)
     const outside = !within(ref.dir, file)
-    if (outside && !(await trust.allowedFile(ref, file))) {
-      throw new RpcError('untrusted_profile', `The profile ${ref.name} runs ${file}, which changed since it was allowed (or wasn't listed then)`, {
+    if (outside && !(await allowances.allowedFile(ref, file))) {
+      throw new RpcError('profile_not_allowed', `The profile ${ref.name} runs ${file}, which changed since it was allowed (or wasn't listed then)`, {
         hint: `Look it over, then: superego profile allow ${ref.name}`,
       })
     }

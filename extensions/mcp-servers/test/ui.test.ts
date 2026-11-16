@@ -25,7 +25,7 @@ const servers: ThreadServers = {
 }
 const thread = (ext?: ThreadServers): ThreadInfo => ({
   id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' },
-  ...(ext ? { ext: { 'mcp-servers': ext } } : {}),
+  ...(ext ? { facts: { 'mcp-servers': ext } } : {}),
 })
 const html = (element: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(element).replace(/<!-- -->/g, '')
 const info = (patch: Partial<ServerInfo> = {}): ServerInfo => ({

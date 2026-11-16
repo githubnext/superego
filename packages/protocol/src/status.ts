@@ -48,7 +48,7 @@ export function unread(thread: ThreadInfo) {
 
 /** Whether a thread works for its parent, which hears how its runs end (the thread-reports extension says so). */
 export const reportsToParent = (thread: ThreadInfo) => {
-  const fact = thread.ext?.['thread-reports']
+  const fact = thread.facts?.['thread-reports']
   return Boolean(fact && typeof fact === 'object' && !Array.isArray(fact) && fact.toParent === true)
 }
 

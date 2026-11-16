@@ -136,5 +136,5 @@ export function Navigator({ onClose }: { onClose(): void }) {
   )
 }
 
-/** A thread's own branch, as the worktrees extension says (`ext.worktrees`). */
-const branchOf = (thread: ThreadInfo) => (thread.ext?.worktrees as { branch?: string } | undefined)?.branch
+/** A thread's own branch, as the worktrees extension says (`facts.worktrees`). */
+const branchOf = (thread: ThreadInfo) => (thread.facts?.worktrees as { branch?: string } | undefined)?.branch

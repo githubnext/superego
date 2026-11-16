@@ -35,7 +35,7 @@ import { serveWeb, type ServedByTailscale, type WebServer } from './web.ts'
 import { WebDevices } from './web-devices.ts'
 import { startServe, stopServe, tailnetNames, type TailscaleState } from './tailscale.ts'
 import { agentsInstructions } from './agents-md.ts'
-import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, profileThere, provideSdk, relocated, Trust, type LoadedProfile, type ProfileDaemonExtension, type ProfileRef } from './profiles.ts'
+import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, profileThere, provideSdk, relocated, Allowances, type LoadedProfile, type ProfileDaemonExtension, type ProfileRef } from './profiles.ts'
 import { serveConnection, versionMismatch } from './connection.ts'
 import { Clients, type Via } from './clients.ts'
 import { keepsRunning } from './service.ts'
@@ -526,7 +526,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
   // Profiles and their extensions import from 'superego'; this is what they get.
   provideSdk({ ...sdk })
-  const trust = new Trust(options.dataDir)
+  const allowances = new Allowances(options.dataDir)
   const userProfiles = join(options.dataDir, 'profiles')
 
   const storage = options.storage ?? await openNodeSqliteStorage(join(options.dataDir, `${options.app.id}.sqlite`))
@@ -686,18 +686,18 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return retried
   }
   /** What extensions say about a thread (`facts`), by extension: those it doesn't go without, as for hooks. */
-  const factsInfo = (id: string, meta: ThreadMeta, without: Set<string>): Pick<ThreadInfo, 'ext'> => {
-    const ext: Record<string, Json> = {}
+  const factsInfo = (id: string, meta: ThreadMeta, without: Set<string>): Pick<ThreadInfo, 'facts'> => {
+    const facts: Record<string, Json> = {}
     for (const source of factSources) {
       if (!appliesTo(source, without, meta)) continue
       try {
         const fact = source.value({ id, state: stateOf(meta, source.owner) })
-        if (fact !== undefined) ext[source.owner] = fact
+        if (fact !== undefined) facts[source.owner] = fact
       } catch (error) {
         console.error(`Extension ${source.owner}: facts of thread ${id} failed:`, error)
       }
     }
-    return Object.keys(ext).length ? { ext } : {}
+    return Object.keys(facts).length ? { facts } : {}
   }
   /** A thread's project, kept since it started (the folder, for a thread there's no record of). */
   const rootOf = (m: Mounted) => m.meta.root ?? m.meta.cwd
@@ -1447,7 +1447,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       // Its modules may hang as they load (a top-level await): given up on in time, so the profiles behind it load.
       let timer: ReturnType<typeof setTimeout> | undefined
       loaded = await Promise.race([
-        loadProfile(ref, userProfiles, trust),
+        loadProfile(ref, userProfiles, allowances),
         new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new RpcError('invalid', `Profile ${ref.name} didn't load in ${inTime}: one of its modules hangs as it loads`)), setupTimeout) }),
       ]).finally(() => clearTimeout(timer))
     } catch (error) {
@@ -1863,7 +1863,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       return Promise.all(listProfiles(dir, userProfiles).map(async (ref) => {
         const description = profiles.get(ref.dir)?.spec.description
         // One whose imports can't be told can't be allowed as it is: loading it says why.
-        const allowed = await Promise.resolve().then(() => trust.allowed(ref, hashProfile(ref.dir))).catch(() => false)
+        const allowed = await Promise.resolve().then(() => allowances.allowed(ref, hashProfile(ref.dir))).catch(() => false)
         return { ...ref, ...(description ? { description } : {}), allowed }
       }))
     },
@@ -1875,7 +1875,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
       const ref = findProfile(dir, userProfiles, name?.trim() || undefined)
       if (!ref) throw new RpcError('not_found', `No profile in ${dir}`)
-      return { ...ref, hash: await trust.allow(ref) }
+      return { ...ref, hash: await allowances.allow(ref) }
     },
   }))
   router.register(defineAction({
@@ -2461,7 +2461,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       for (const folder of new Set([defaultCwd, ...(await list()).map((t) => t.project.root)])) {
         for (const ref of listProfiles(folder, userProfiles)) found.set(ref.dir, ref)
       }
-      return Promise.all([...found.values()].map((ref) => describeProfile(ref, userProfiles, trust)))
+      return Promise.all([...found.values()].map((ref) => describeProfile(ref, userProfiles, allowances)))
     },
   })
   settings.register({

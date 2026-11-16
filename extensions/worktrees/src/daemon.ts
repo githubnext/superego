@@ -2,7 +2,7 @@
 // it's started with `worktree: true` (`options.worktrees`) or its profile says so. Archiving removes the worktree when
 // nothing in it is uncommitted, and its branch too once that's merged into the main branch (its tip kept with the
 // thread); unarchiving puts both back. Built on thread hooks, state with each thread, and a fact clients see
-// (`ext.worktrees`).
+// (`facts.worktrees`).
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir, readdir, realpath, rename, stat } from 'node:fs/promises'

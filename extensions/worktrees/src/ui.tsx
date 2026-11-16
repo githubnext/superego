@@ -7,7 +7,7 @@ import type { ThreadInfo } from '@superego/protocol'
 import { GitBranchIcon } from '@superego/ui'
 import { about, type Worktree } from './shared.ts'
 
-const treeOf = (thread: ThreadInfo) => thread.ext?.worktrees as Worktree | undefined
+const treeOf = (thread: ThreadInfo) => thread.facts?.worktrees as Worktree | undefined
 
 export default defineUiExtension({
   ...about,

@@ -1,6 +1,6 @@
 // What both halves agree on (and the command line, and Ego's tool): what the extension is, a server's config as
 // `<dataDir>/mcp-servers.json` keeps it, what Settings → MCP servers draws (the section's `data`, kept current as the
-// live value `mcp-servers.servers`), what a thread says of its servers (`thread.ext['mcp-servers']`), and the actions
+// live value `mcp-servers.servers`), what a thread says of its servers (`thread.facts['mcp-servers']`), and the actions
 // with their params. See docs/mcp.md.
 import { arr, bool, lit, num, obj, opt, str, union, type ExtensionAbout, type Json, type Static } from '@superego/protocol'
 import { map, oneOf } from '@earendil-works/pi-schema'
@@ -161,7 +161,7 @@ export const LEFT_OUT: Record<LeftOutReason, string> = {
 }
 
 /**
- * `thread.ext['mcp-servers']`: the servers the thread's last turn had, each as it stands now, and those it would have
+ * `thread.facts['mcp-servers']`: the servers the thread's last turn had, each as it stands now, and those it would have
  * had and why not. Absent for threads with none and none left out (and hidden threads, which never have any).
  */
 export type ThreadServers = {

@@ -61,7 +61,7 @@ it('keeps the UI through errors that pass, and lets go of it once the profile is
     await expect(ensureProfileUi(registry, 'm', p)).rejects.toThrow(kind)
   }
   expect(registry.installProfile).toHaveBeenCalledTimes(1)
-  for (const kind of ['not_found', 'invalid', 'untrusted_profile']) {
+  for (const kind of ['not_found', 'invalid', 'profile_not_allowed']) {
     const q = profile()
     answer = () => ({ hash: 'h1', entries: [] })
     await ensureProfileUi(registry, 'm', q)

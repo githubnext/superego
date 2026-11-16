@@ -649,7 +649,7 @@ Depends on Lane 1.
   once, until its secrets change or it's restarted.
 - **A thread's own server** stops when the thread is archived and after 10 idle minutes. Clearing a thread has no
   hook, so it doesn't stop it.
-- **`superego extensions --thread`** prints the thread's servers from its facts (`thread.ext['mcp-servers']`); the
+- **`superego extensions --thread`** prints the thread's servers from its facts (`thread.facts['mcp-servers']`); the
   core's report has no seam for extensions, and none was added.
 - **The interrupted rewrite** keeps the call's partial output and puts the message in the result's diagnostic, its code
   still `interrupted`.
@@ -668,7 +668,7 @@ Lane 4 should know:
 - Settings: draw `SectionData` from the live value `mcp-servers.servers` (`servers`: the machine's in the file's
   order; `profiles`: those seen from profiles). `ServerInfo.error` is why it's failed, waiting or needs sign-in, else
   its last error. The section is `order: 25`, just after Providers.
-- The thread's chip and details: `thread.ext['mcp-servers']` (`ThreadServers`), with `LEFT_OUT` for the reasons.
+- The thread's chip and details: `thread.facts['mcp-servers']` (`ThreadServers`), with `LEFT_OUT` for the reasons.
 - Rows: a call's `details` are `CallDetails` (server, tool, titles, annotations, saved files), set as the call starts,
   so an interrupted call's row has them too. An interrupted call is an `mcp__*` result with an `interrupted`
   diagnostic. `tool_search`'s details are `{ loaded }`.

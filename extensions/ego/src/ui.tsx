@@ -13,7 +13,7 @@ import { about, ASK, CLEAR, outsideBlocks } from './shared.ts'
 
 /** Open Ego's thread on a machine: the one given (then remembered), else the one last chosen, else this computer. */
 const OPEN = 'ego.open'
-const isEgo = (thread: ThreadInfo | undefined) => thread?.ext?.ego === true
+const isEgo = (thread: ThreadInfo | undefined) => thread?.facts?.ego === true
 /** The machines whose Ego the window can open now. */
 const withEgo = (machines: MachineEntry[]) => machines.filter((m) => m.state === 'connected' && has(m, 'ext:ego'))
 /** Where Ego opens without a machine named: the one last chosen while it has one, else this computer, else any. */

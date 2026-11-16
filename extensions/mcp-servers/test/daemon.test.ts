@@ -61,7 +61,7 @@ const fixture = (more: Partial<ServerConfig> = {}): ServerConfig => ({ command: 
 const callsMade = async () => existsSync(calls) ? (await readFile(calls, 'utf8')).split('\n').filter(Boolean) : []
 const find = async (peer: RpcPeer, id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)
 const done = (peer: RpcPeer, id: string, ms?: number) => until(async () => (await find(peer, id))?.status.state === 'done', 'the thread to be done', ms)
-const serversOf = async (peer: RpcPeer, id: string) => (await find(peer, id))?.ext?.['mcp-servers'] as ThreadServers | undefined
+const serversOf = async (peer: RpcPeer, id: string) => (await find(peer, id))?.facts?.['mcp-servers'] as ThreadServers | undefined
 async function partsOf(peer: RpcPeer, id: string) {
   const { value } = await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { thread: id })
   return (value.docs['pi.agent'] as { extensions?: string[] } | undefined)?.extensions ?? []

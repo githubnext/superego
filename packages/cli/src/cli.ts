@@ -185,7 +185,7 @@ async function startThread(args: { dir?: string; machine?: string; prompt?: stri
   if (args.open) openInApp(machine.id, thread.id)
   print({ machine: machine.id, ...thread }, () => {
     // Its worktree, as the worktrees extension says (`worktree` from an older daemon).
-    const tree = (thread.ext?.worktrees ?? (thread as { worktree?: unknown }).worktree) as { branch: string } | undefined
+    const tree = (thread.facts?.worktrees ?? (thread as { worktree?: unknown }).worktree) as { branch: string } | undefined
     const where = tree ? `its worktree ${thread.cwd} (branch ${tree.branch})` : thread.cwd
     if (args.open) console.log(`Opened thread ${thread.id} in ${where}${machine.config ? ` on ${machine.label}` : ''}`)
     else console.log(thread.id)
@@ -663,7 +663,7 @@ async function extensionCommand(sub: string | undefined, rest: string[], values:
     const { report, servers } = await on(machine, async (call) => {
       const report = await call('extensions.inspect', values.thread ? { thread: values.thread } : {})
       const thread = values.thread ? (await call('thread.list', {})).find((t) => t.id === values.thread) : undefined
-      return { report, servers: thread?.ext?.['mcp-servers'] as ThreadServers | undefined }
+      return { report, servers: thread?.facts?.['mcp-servers'] as ThreadServers | undefined }
     })
     return print(servers ? { ...report, mcpServers: servers } : report, () => console.log(formatReport(report, machine.label, servers)))
   }

@@ -920,7 +920,7 @@ function Composer({ machine, thread, busy, inbox, onJump }: { machine: MachineEn
       <div className="composer__error">
         {error.kind === 'no_model' ? <>No model is set up on {machine.label}. <Button onClick={onOpenSettings}>Open Settings</Button></>
           : error.kind === 'profile_missing' && switchable ? <ProfileSwitch machine={machine.id} thread={thread} onSwitched={() => void send()} />
-          : error.kind === 'untrusted_profile' && thread.profile ? <>{error.message} <Button onClick={() => void allowAndSend(thread.profile!.name)}>Allow and send</Button></>
+          : error.kind === 'profile_not_allowed' && thread.profile ? <>{error.message} <Button onClick={() => void allowAndSend(thread.profile!.name)}>Allow and send</Button></>
           : error.message}
       </div>
     )}

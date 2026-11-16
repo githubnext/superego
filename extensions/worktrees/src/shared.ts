@@ -1,4 +1,4 @@
-// What both halves of worktrees agree on: what it is, and what it keeps with a thread (its fact, `ext.worktrees`).
+// What both halves of worktrees agree on: what it is, and what it keeps with a thread (its fact, `facts.worktrees`).
 import type { ExtensionAbout } from '@superego/protocol'
 
 /**

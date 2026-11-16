@@ -37,7 +37,7 @@ it('lays a notice out for the desktop (with a subtitle) and a browser (without)'
 })
 
 it('stays quiet when a child working for its parent finishes or fails (its parent hears), not when it needs you', () => {
-  const child = (state: Status['state'], ext?: Record<string, Json>) => thread(state, undefined, { parent: 'p', ...(ext ? { ext } : {}) })
+  const child = (state: Status['state'], facts?: Record<string, Json>) => thread(state, undefined, { parent: 'p', ...(facts ? { facts } : {}) })
   const working = { 'thread-reports': { toParent: true } }
   expect(notice(child('done', working))).toBeUndefined()
   expect(notice(child('error', working))).toBeUndefined()

@@ -199,7 +199,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
         {error && (
           <div className="new-thread__error">
             <p>{error.message}</p>
-            {error.kind === 'untrusted_profile' && <Button onClick={() => void create({ allow: true })}>Allow and start</Button>}
+            {error.kind === 'profile_not_allowed' && <Button onClick={() => void create({ allow: true })}>Allow and start</Button>}
           </div>
         )}
       </div>

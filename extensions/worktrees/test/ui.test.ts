@@ -13,7 +13,7 @@ const app = defineApp({ name: 'superego', id: 'superego' })
 const machine = { id: 'local', label: 'This Mac', state: 'connected' } as never
 const thread = (tree?: Worktree): ThreadInfo => ({
   id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' },
-  ...(tree ? { ext: { worktrees: tree } } : {}),
+  ...(tree ? { facts: { worktrees: tree } } : {}),
 })
 
 it("marks a thread's row with its branch while it has a worktree of its own", () => {

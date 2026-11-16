@@ -72,7 +72,7 @@ This is the overview. Each topic is a file beside this one (`guide.md`, `ui.md`,
 |---|---|
 | `guide` | building an extension: the big picture, one end to end, testing, a cheat sheet of both halves, and examples (`examples/` beside it) |
 | `cli` | starting and scripting threads, machines, settings, actions, the daemon |
-| `profiles` | writing `profile.ts`: model, prompt, extensions, panes, trust, `extends`, when changes apply |
+| `profiles` | writing `profile.ts`: model, prompt, extensions, panes, allowing, `extends`, when changes apply |
 | `tools` | giving an agent tools and prompt sections (`defineExtension`, `defineTool`, `section`) |
 | `daemon` | daemon extensions: actions, live values, a thread's blocked status, reaching threads |
 | `ui` | UI extensions: panes, slots, tool renderers, reading threads, hooks and components from `superego/ui` |

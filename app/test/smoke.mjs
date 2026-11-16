@@ -700,7 +700,7 @@ if (phase === 'first') {
   for (let i = 0; i < 50 && !globalThis.superegoNotices.some(finished); i++) await new Promise((r) => setTimeout(r, 100))
   if (!globalThis.superegoNotices.some(finished)) { await fail(`no notification of the thread finishing: ${JSON.stringify(globalThis.superegoNotices)}`); throw new Error('failed') }
   // The app icon counts it, as the main process sets it (headless, kept here, not shown).
-  const unreadNow = await run(`window.superego.call('local', 'thread.list', {}).then((ts) => ts.filter((t) => ['done', 'error', 'blocked'].includes(t.status.state) && t.status.kind !== 'auth' && !t.ext?.['thread-reports']?.toParent).length)`)
+  const unreadNow = await run(`window.superego.call('local', 'thread.list', {}).then((ts) => ts.filter((t) => ['done', 'error', 'blocked'].includes(t.status.state) && t.status.kind !== 'auth' && !t.facts?.['thread-reports']?.toParent).length)`)
   for (let i = 0; i < 50 && globalThis.superegoBadge !== unreadNow; i++) await new Promise((r) => setTimeout(r, 100))
   if (!(unreadNow >= 1) || globalThis.superegoBadge !== unreadNow) { await fail(`the app icon says ${globalThis.superegoBadge} unread, not ${unreadNow}`); throw new Error('failed') }
   await run(`window.dispatchEvent(new Event('focus'))`)
@@ -781,7 +781,7 @@ if (phase === 'first') {
   await run(`document.querySelector('.ego__button').click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'Ego'`, 'the same one again')
   if (await run(`window.superego.call('local', 'ego.ask', {}).then((t) => t.id)`) !== ego) { await fail('a second Ego'); throw new Error('failed') }
-  if (await run(`window.superego.call('local', 'thread.list', {}).then((all) => all.some((t) => t.ext?.ego))`)) { await fail('Ego listed'); throw new Error('failed') }
+  if (await run(`window.superego.call('local', 'thread.list', {}).then((all) => all.some((t) => t.facts?.ego))`)) { await fail('Ego listed'); throw new Error('failed') }
   // Cleared from its title bar: the same thread, empty again.
   await run(`window.superego.call('local', 'thread.send', { thread: '${ego}', text: 'what is a profile?' })`)
   await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('what is a profile?'))`, 'asked Ego')
@@ -1253,7 +1253,7 @@ if (phase === 'first') {
   await shot('ego-machines')
   await pickEgo(secondId)
   await until(`document.querySelector('.ego__machine')?.value === '${secondId}' && document.querySelector('.thread__title')?.textContent === 'Ego' && document.querySelector('.ego__button').classList.contains('is-on')`, "the second machine's Ego")
-  if (await run(`window.superego.call('${secondId}', 'thread.list', {}).then((all) => all.some((t) => t.ext?.ego))`)) { await fail('Ego listed on the second machine'); throw new Error('failed') }
+  if (await run(`window.superego.call('${secondId}', 'thread.list', {}).then((all) => all.some((t) => t.facts?.ego))`)) { await fail('Ego listed on the second machine'); throw new Error('failed') }
   await run(`document.querySelector('.app__rail [aria-label="Threads"]').click()`)
   await until(`[...document.querySelectorAll('.app__sidebar .superego-list-item')].some((li) => li.textContent.includes('over on second'))`, 'the sidebar, from Ego')
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('over on second')).click()`)

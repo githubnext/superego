@@ -8,7 +8,7 @@
 // them: their own conversation with it isn't reported. Runs in between (the child's own children reporting, say) are
 // reported, so a grandchild's result makes its way up. Kept with the child (this extension's state: false, the
 // user's), so it holds across restarts; a child from before this was kept is reported as before. Clients are told
-// (`ext['thread-reports']`), so a child working for its parent notifies only when it needs the user; but only while
+// (`facts['thread-reports']`), so a child working for its parent notifies only when it needs the user; but only while
 // its parent hears (it's there, not archived, and not without thread-reports): a child whose report would reach no one
 // notifies for itself.
 //

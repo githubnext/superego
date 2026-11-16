@@ -71,8 +71,8 @@ export type ThreadInfo = {
   hidden?: boolean
   /** For a hidden thread, the extension whose it is: there whether that extension is on or off, unlike its facts. */
   owner?: string
-  /** What extensions say about it (their facts), by extension name: `ext.worktrees`, say. Absent: nothing. */
-  ext?: Record<string, Json>
+  /** What extensions say about it (their facts), by extension name: `facts.worktrees`, say. Absent: nothing. */
+  facts?: Record<string, Json>
   /** What it's doing: `idle`, `working`, `done`, `blocked` (on the user) or `error`, with a line saying more. */
   status: Status
 }

@@ -114,7 +114,7 @@ it('serves the actions exposed to outside agents as tools, and logs their runs a
 
 it("asks this machine's Ego, whose answer reads as any thread's, and which stays out of the list", async () => {
   const ego = JSON.parse(text(await client.callTool({ name: 'ego_ask', arguments: { prompt: 'how is this machine set up?' } })))
-  expect(ego).toMatchObject({ id: expect.any(String), hidden: true, ext: { ego: true } })
+  expect(ego).toMatchObject({ id: expect.any(String), hidden: true, facts: { ego: true } })
   await until(async () => JSON.parse(text(await client.callTool({ name: 'thread_read', arguments: { thread: ego.id, wait: true } }))).answer !== undefined)
   const listed = JSON.parse(text(await client.callTool({ name: 'thread_list', arguments: {} })))
   expect(listed.some((t: { id: string }) => t.id === ego.id)).toBe(false)

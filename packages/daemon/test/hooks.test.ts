@@ -74,7 +74,7 @@ it("takes part in a thread's life, in order: creating moves it and gives it stat
   const { peer, close } = await open([nest, after])
   const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'hi', options: { nest: true } })
   const nested = join(dir, 'nested')
-  expect(thread).toMatchObject({ cwd: nested, project: { root: dir }, ext: { nest: { made: nested } } })
+  expect(thread).toMatchObject({ cwd: nested, project: { root: dir }, facts: { nest: { made: nested } } })
   await done(peer, thread.id)
   await until(() => heard.includes('after turnEnd'))
   expect(heard).toEqual([
@@ -98,7 +98,7 @@ it("takes part in a thread's life, in order: creating moves it and gives it stat
   await peer.call('thread.unarchive', { thread: thread.id })
   // Switched off, an extension's hooks and facts aren't for the thread.
   await peer.call('settings.set', { key: 'extensions.nest', value: false })
-  expect((await find(peer, thread.id))!.ext).toBeUndefined()
+  expect((await find(peer, thread.id))!.facts).toBeUndefined()
   heard.length = 0
   const plain = await peer.call<ThreadInfo>('thread.start', { options: { nest: true } })
   expect(plain.cwd).toBe(dir)
@@ -209,21 +209,21 @@ it('keeps state with each thread, as facts clients see, across a restart', async
   })
   const first = await open([notes])
   const thread = await first.peer.call<ThreadInfo>('thread.start', {})
-  expect(thread.ext).toBeUndefined()
+  expect(thread.facts).toBeUndefined()
   await first.peer.call('notes.add', { id: thread.id })
   await first.peer.call('notes.add', { id: thread.id })
-  expect((await find(first.peer, thread.id))!.ext).toEqual({ notes: { notes: 2 } })
+  expect((await find(first.peer, thread.id))!.facts).toEqual({ notes: { notes: 2 } })
   await first.close()
 
   const { peer, close } = await open([notes])
-  expect((await find(peer, thread.id))!.ext).toEqual({ notes: { notes: 2 } })
+  expect((await find(peer, thread.id))!.facts).toEqual({ notes: { notes: 2 } })
   expect(await peer.call('notes.get', { id: thread.id })).toEqual({ count: 2 })
   await peer.call('notes.clear', { id: thread.id })
-  expect((await find(peer, thread.id))!.ext).toBeUndefined()
+  expect((await find(peer, thread.id))!.facts).toBeUndefined()
   await close()
   // Without the extension, its state stays with the thread, unsaid.
   const bare = await open([])
-  expect((await find(bare.peer, thread.id))!.ext).toBeUndefined()
+  expect((await find(bare.peer, thread.id))!.facts).toBeUndefined()
   await bare.close()
 })
 
@@ -403,7 +403,7 @@ export default defineDaemonExtension({
   write({ 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./tagged.ts'] })\n`, 'tagged.ts': extension(1) })
   const { peer, close } = await open([], home)
   const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt: 'hi' })
-  expect(thread.ext).toEqual({ tagged: { version: 1 } })
+  expect(thread.facts).toEqual({ tagged: { version: 1 } })
   await done(peer, thread.id)
   expect((await agentOf(peer, thread.id)).instructions).toBe('Version 1.')
   // Another thread, of no profile, has none of it.
@@ -412,11 +412,11 @@ export default defineDaemonExtension({
   writeFileSync(join(elsewhere, '.superego', 'profiles', 'default', 'profile.ts'), `import { defineProfile } from 'superego'\nexport default defineProfile({})\n`)
   await peer.call('profile.allow', { cwd: elsewhere })
   const plain = await peer.call<ThreadInfo>('thread.start', { cwd: elsewhere })
-  expect(plain.ext).toBeUndefined()
+  expect(plain.facts).toBeUndefined()
   // Changed, it's set up again: the old version's facts and choice are gone, not doubled.
   write({ 'tagged.ts': extension(2) })
   await peer.call('thread.send', { thread: thread.id, text: 'again' })
-  await until(async () => (await find(peer, thread.id))!.ext?.tagged !== undefined && JSON.stringify((await find(peer, thread.id))!.ext) === '{"tagged":{"version":2}}')
+  await until(async () => (await find(peer, thread.id))!.facts?.tagged !== undefined && JSON.stringify((await find(peer, thread.id))!.facts) === '{"tagged":{"version":2}}')
   await done(peer, thread.id)
   expect((await agentOf(peer, thread.id)).instructions).toBe('Version 2.')
   await close()
@@ -442,7 +442,7 @@ export default defineDaemonExtension({
   const heard = () => existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : []
   const first = await open([], home)
   const away = await first.peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Away' })
-  expect(away.ext).toEqual({ keeper: { kept: true } })
+  expect(away.facts).toEqual({ keeper: { kept: true } })
   await first.peer.call('thread.archive', { thread: away.id })
   expect(heard()).toEqual(['archiving Away', 'archived Away'])
   await first.close()
@@ -451,12 +451,12 @@ export default defineDaemonExtension({
   const second = await open([], home)
   await second.peer.call('thread.unarchive', { thread: away.id })
   expect(heard().slice(2)).toEqual(['unarchiving Away', 'unarchived Away'])
-  expect((await find(second.peer, away.id))!.ext).toEqual({ keeper: { kept: true } })
+  expect((await find(second.peer, away.id))!.facts).toEqual({ keeper: { kept: true } })
   await second.close()
 
   // A thread in use's profile loads at startup: its facts show, and its hooks run, without a turn.
   const { peer, close } = await open([], home)
-  await until(async () => (await find(peer, away.id))!.ext?.keeper !== undefined)
+  await until(async () => (await find(peer, away.id))!.facts?.keeper !== undefined)
   await peer.call('thread.archive', { thread: away.id })
   expect(heard().slice(4)).toEqual(['archiving Away', 'archived Away'])
   await close()

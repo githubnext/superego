@@ -4,7 +4,7 @@ import { artifactUrl, CHANNEL, type BridgeChannel, type CallResult, type Channel
 /**
  * The bridge as this (isolated) world has it: its calls answer with what happened (CallResult), not by throwing. An error
  * crosses the context bridge with its message only, and the window acts on an RPC error's `kind` (no_model,
- * untrusted_profile, profile_missing): `window.superego` is made in the page's own world (below), where it throws
+ * profile_not_allowed, profile_missing): `window.superego` is made in the page's own world (below), where it throws
  * errors that keep it.
  */
 const bridge = {

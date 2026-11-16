@@ -102,7 +102,7 @@ superego settings set outside.startThreads true   # Settings → Outside agents 
 ```
 
 Two tools of the server's own read: `thread_list` (`archived?`) and `thread_read` (`thread wait?`: its state and last
-answer, after it stops working with `wait`; Ego's thread too). Nothing that changes settings, signs in, trusts a
+answer, after it stops working with `wait`; Ego's thread too). Nothing that changes settings, signs in, allows a
 profile, writes files or restarts the daemon is a tool; an extension's action becomes one by adding `'outside'` to its
 `expose`. The tools follow the machine's extensions and settings as they change (`tools/list_changed`).
 

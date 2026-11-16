@@ -18,9 +18,9 @@ it('counts a result, a failure or a question; not work, nothing, or waiting for 
 it("doesn't count threads in no list, nor a child working for its parent unless it needs you", () => {
   expect(unread(thread('a', { state: 'done' }, { archived: true }))).toBe(false)
   expect(unread(thread('a', { state: 'done' }, { hidden: true }))).toBe(false)
-  expect(unread(thread('a', { state: 'done' }, { parent: 'p', ext: toParent }))).toBe(false)
-  expect(unread(thread('a', { state: 'error' }, { parent: 'p', ext: toParent }))).toBe(false)
-  expect(unread(thread('a', { state: 'blocked' }, { parent: 'p', ext: toParent }))).toBe(true)
+  expect(unread(thread('a', { state: 'done' }, { parent: 'p', facts: toParent }))).toBe(false)
+  expect(unread(thread('a', { state: 'error' }, { parent: 'p', facts: toParent }))).toBe(false)
+  expect(unread(thread('a', { state: 'blocked' }, { parent: 'p', facts: toParent }))).toBe(true)
   // Handed to the user: it counts as any thread does.
   expect(unread(thread('a', { state: 'done' }, { parent: 'p' }))).toBe(true)
 })
@@ -28,7 +28,7 @@ it("doesn't count threads in no list, nor a child working for its parent unless 
 it('notifies of exactly the threads it counts', () => {
   const all = [
     thread('done', { state: 'done' }), thread('idle', { state: 'idle' }), thread('auth', { state: 'blocked', kind: 'auth' }),
-    thread('child', { state: 'done' }, { ext: toParent }), thread('asks', { state: 'blocked' }, { ext: toParent }), thread('gone', { state: 'error' }, { archived: true }),
+    thread('child', { state: 'done' }, { facts: toParent }), thread('asks', { state: 'blocked' }, { facts: toParent }), thread('gone', { state: 'error' }, { archived: true }),
   ]
   expect(all.map((t) => Boolean(threadNotice('box', t)))).toEqual(all.map(unread))
 })

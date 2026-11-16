@@ -43,11 +43,11 @@ export const dbBadge: Task = {
     const threads: Record<string, Thread> = {}
     for (const p of PROBES) threads[p.key] = await world.rpc.call<Thread>('thread.start', { cwd: world.project, title: p.title, model: PROBE_MODEL, prompt: p.prompt })
     for (const p of PROBES) { await settle(world, threads[p.key]!.id); cost += await costOf(world, threads[p.key]!.id) }
-    const listed = await world.rpc.call<(Thread & { ext?: Record<string, unknown> })[]>('thread.list', {})
+    const listed = await world.rpc.call<(Thread & { facts?: Record<string, unknown> })[]>('thread.list', {})
     const info = (key: string) => listed.find((t) => t.id === threads[key]!.id)
     checks.probes_ran = PROBES.every((p) => info(p.key)?.status.state === 'done' || info(p.key)?.status.state === 'idle')
     // Facts: what extensions tell clients of each probe (the bundled ones' too: compared, so only a difference counts).
-    const facts = (key: string) => JSON.stringify(info(key)?.ext ?? {})
+    const facts = (key: string) => JSON.stringify(info(key)?.facts ?? {})
     for (const p of PROBES) notes.push(`${p.key} (${info(p.key)?.status.state}, ${info(p.key)?.profile?.name ?? 'no profile'}): facts ${facts(p.key).slice(0, 300)}`)
     checks.facts_differ = facts('query') !== facts('readme')
 

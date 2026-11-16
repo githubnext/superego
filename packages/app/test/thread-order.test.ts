@@ -13,7 +13,7 @@ const machines = [machine('local'), machine('box')]
 const threads = {
   local: [
     thread('parent', '/code/superego', 10),
-    thread('child', '/code/superego', 50, { parent: 'parent', cwd: '/code/superego.worktrees/child', ext: { worktrees: { path: '/code/superego.worktrees/child', branch: 'child' } } }),
+    thread('child', '/code/superego', 50, { parent: 'parent', cwd: '/code/superego.worktrees/child', facts: { worktrees: { path: '/code/superego.worktrees/child', branch: 'child' } } }),
     thread('grandchild', '/code/superego', 5, { parent: 'child' }),
     thread('solo', '/code/superego', 30),
     thread('site', '/code/site', 40),

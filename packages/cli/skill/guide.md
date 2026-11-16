@@ -313,7 +313,7 @@ place, and the window's console has why.
 | `dispatch(id, params)`, `actions(exposure)` | run any action on the machine as this extension (`settings.set`); list them |
 | `thread({ creating, abandoned, created, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchiveAbandoned, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
 | `state()` → `get(id)`, `set(id, next)`, `update(id, edit)` | state of its own kept with each thread, across restarts; `creating` gives a new one its first |
-| `facts(({ id, state }) => …)` | what clients are told of a thread, as `thread.ext.<name>`: worked out from its state |
+| `facts(({ id, state }) => …)` | what clients are told of a thread, as `thread.facts.<name>`: worked out from its state |
 | `recap(({ thread, answer, calls }) => …)` | say in a line what a run did, once it ends: the thread's `done` status carries it (`msg`), and its notification says it. The first to answer wins; with none, the answer's first sentence. 1.6 |
 | `toolCalls(({ thread, call, result }) => …)` | hear each tool call a thread's agent makes, once it ends; read-only ([Watching tool calls](daemon.md#watching-tool-calls)). 1.8 |
 | `agentFor(({ id, state, profile }) => ({ instructions, model, extensions, without }))` | choose a thread's agent; the first to answer wins. `agent(part, { always: false })` gives a part only through this, or `agentParts` |
@@ -661,19 +661,19 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
   reach, every machine's `call` and `dispatch` included: it runs in the window's own JavaScript, where narrowing its API
   wouldn't stop it calling `window.superego` directly. Real isolation is the sandboxed tier PLAN.md plans.
 
-### What each trust level means
+### What each kind of code may do
 
 - **A data-only view** (`superego.view` in a daemon half): no code of the extension's runs in the window, so it asks
   no consent to, and what it sends is checked where it lands. Its buttons still have that machine's authority: they
   run its extension's actions there, as the window may.
 - **A remote profile's UI**, once allowed: runs in the window's own JavaScript, with the window's full authority over
-  every machine it reaches. Allowing it is trusting that code as much as the window itself.
+  every machine it reaches. Allowing it gives that code as much reach as the window itself.
 - **Revoke** takes out what that UI registered (views, panes, actions, slots), aborts its `signal` and runs its
   `setup`'s cleanup, so what it stopped with those stops. It can't undo what its code already did, or stop what it left
   going otherwise (a timer it didn't tie to either, a global, a request). The window offers a reload, which does; what
   was done stays done.
-- A **daemon half** (a profile's or the app's) runs with Node's full access on its machine, as this computer's profiles
-  trust their daemon (a project's once `superego profile allow`ed).
+- A **daemon half** (a profile's or the app's) runs with Node's full access on its machine, as this computer's profiles do
+  in their daemon (a project's once `superego profile allow`ed).
 
 ## A thread's life
 
@@ -682,7 +682,7 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
 <!-- check: daemon; declare function makeWorktree(top: string): Promise<{ path: string; branch: string }>; declare function removeWorktree(path: string): Promise<void>; declare function removeIfClean(path: string): Promise<boolean> -->
 ```ts
 const state = superego.state<{ path: string; branch: string }>()
-superego.facts(({ state }) => state)                   // thread.ext.worktrees
+superego.facts(({ state }) => state)                   // thread.facts.worktrees
 superego.thread<{ path: string; branch: string }>({   // the state its creating gives a thread
   async creating(draft) {                              // draft.options: what thread.start asked for, by extension
     if (draft.options.worktrees !== true || !draft.checkout) return

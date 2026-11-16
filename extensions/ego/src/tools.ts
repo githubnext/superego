@@ -116,7 +116,7 @@ What ${name} is:
 
 Data folder layout (${dataDir}): settings.json (this machine's settings), app-settings.json (the app's), machines.json
 (the machines this computer reaches), mcp-servers.json (its MCP servers), profiles/, worktrees/, attachments/,
-trusted-profiles.json. Settings, machines and MCP servers change through your tools, the rest through actions
+allowed-profiles.json. Settings, machines and MCP servers change through your tools, the rest through actions
 (profile.allow, …) a thread runs, not by hand. auth.json and mcp-auth.json hold sign-ins and keys, and mcp-servers.json
 may too (in env and header values): you don't read them; superego_mcp_servers lists the servers.`
 }

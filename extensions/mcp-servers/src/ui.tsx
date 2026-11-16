@@ -6,7 +6,7 @@
 // - a chip in the header (`mcp-servers.chip`): how many servers the thread has, opening to each with its state, and
 //   why any were left out; the same list in thread details (⌘I)
 // - a notice over the composer when one of its servers needs the user to sign in or set a key
-// It draws only what the daemon half says (`thread.ext['mcp-servers']`, the live value `mcp-servers.servers`), so a
+// It draws only what the daemon half says (`thread.facts['mcp-servers']`, the live value `mcp-servers.servers`), so a
 // machine without the extension shows none of it.
 import { useState } from 'react'
 import {
@@ -45,7 +45,7 @@ export default defineUiExtension({
 })
 
 /** What a thread says of its servers, if it has any (or would have). */
-export const serversOf = (thread: ThreadInfo) => thread.ext?.[about.name] as ThreadServers | undefined
+export const serversOf = (thread: ThreadInfo) => thread.facts?.[about.name] as ThreadServers | undefined
 
 // ── Rows ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@
 // time it's asked for (`ego.ask`) and kept: never archived, cleared instead (`ego.clear`). Its agent is chosen for that
 // thread alone (`agentFor`): what Superego is (tools.ts's prompt) and tools that read and set up, instead of the coding
 // tools and the threads' own. Its thread is the hidden one it owns (`owner`), with this extension's state set (and the
-// fact `ext.ego` for windows).
+// fact `facts.ego` for windows).
 //
 // Outside agents (`superego mcp`) ask it too (`ego.ask`, or `thread.send` to its thread), but start threads through it
 // no more than they may themselves: each message one sends goes with a block saying so (`OUTSIDE`), and while

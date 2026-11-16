@@ -92,7 +92,7 @@ types [name]` gives it to profiles that were there before (all of this project's
 - `.gitignore`: `node_modules`, since the link is this computer's.
 
 The daemon doesn't load from `node_modules`, and neither it nor the `.gitignore` counts toward a project profile's
-trust; the `tsconfig.json` does, so `profile types` allows again a profile that was allowed. `superego extension test`
+allowance; the `tsconfig.json` does, so `profile types` allows again a profile that was allowed. `superego extension test`
 checks types with the same tsconfig before it runs the tests.
 
 ## What 'superego' exports
@@ -107,7 +107,7 @@ import {
 } from 'superego'
 ```
 
-## Trust
+## Allowing
 
 A project's profile runs code from that repository, so the daemon refuses it until it is allowed, and again whenever
 any file in its folder changes (the folder is hashed; `node_modules` and dotfiles aside):

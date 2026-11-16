@@ -186,7 +186,7 @@ async function settle() {
  * Errors that say the profile can't run here (gone, broken, no longer allowed): the window lets go of its UI. Any other
  * (the machine away or restarting, busy with another profile's run, a timeout, an older daemon) may pass, and keeps it.
  */
-const GONE = new Set(['not_found', 'invalid', 'untrusted_profile'])
+const GONE = new Set(['not_found', 'invalid', 'profile_not_allowed'])
 
 /**
  * Fetch `profile`'s UI on `machine` when its files changed, and run it if it may: always for this computer's (its daemon
