@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { extensionVersion, offers } from '@superego/protocol'
-import type { Client, Feature, Json, MethodName, Notifications, Params, Result, ThreadInfo, SettingsSnapshot } from '@superego/protocol'
+import type { Client, ClientInfo, Feature, Json, MethodName, Notifications, Params, Result, ThreadInfo, SettingsSnapshot } from '@superego/protocol'
 import type { BridgeChannel, MachineEntry, MachineId, SuperegoBridge } from '../shared.ts'
 import { useRegistry } from './extension.tsx'
 import { fonts } from './fonts.ts'
@@ -158,9 +158,10 @@ export class SharedWatch<T> {
 }
 
 const watches = new Map<string, SharedWatch<any>>()
+const watchKey = (machineId: MachineId, method: string, params: unknown) => `${machineId}\u0000${method}\u0000${JSON.stringify(params)}`
 
 export function sharedWatch<T>(machineId: MachineId, method: string, params: unknown, fold: (value: T, method: string, params: any) => T, events: (keyof Notifications)[]): SharedWatch<T> {
-  const id = `${machineId}\u0000${method}\u0000${JSON.stringify(params)}`
+  const id = watchKey(machineId, method, params)
   let watch = watches.get(id) as SharedWatch<T> | undefined
   if (!watch) watches.set(id, watch = new SharedWatch(id, machineId, method, params, fold, events))
   return watch
@@ -189,7 +190,7 @@ const noSubscription = () => () => {}
 
 /** What a watch shows now, outside React, if anything is watching it (else undefined). */
 export function watched<T>(machineId: MachineId, method: string, params: object): T | undefined {
-  return watches.get(`${machineId}\u0000${method}\u0000${JSON.stringify(params)}`)?.value as T | undefined
+  return watches.get(watchKey(machineId, method, params))?.value as T | undefined
 }
 
 const replace = <T,>(_value: T, _method: string, params: { value: T }) => params.value
@@ -277,6 +278,10 @@ export const useThreadView = (machineId: MachineId, connected: boolean, id: stri
   useWatch<ConversationView>(machineId, connected, 'thread.watch', id === undefined ? undefined : { thread: id },
     (value, method, params: Notifications['watch.ops']) => method === 'watch.ops' ? applyImmutable(value, params.ops as Op[]) : value,
     ['watch.ops'])
+
+/** Who is using a machine now: its daemon's clients. */
+export const useClients = (machineId: MachineId, connected: boolean) =>
+  useWatch<ClientInfo[]>(machineId, connected, 'clients.watch', {}, replace, ['clients.changed'])
 
 export const useSettings = (machineId: MachineId, connected: boolean) =>
   useWatch<SettingsSnapshot>(machineId, connected, 'settings.watch', {}, replace, ['settings.changed'])

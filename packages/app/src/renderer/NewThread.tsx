@@ -10,11 +10,11 @@ import { Button, Dialog, Select, TextArea, TextField } from '@superego/ui'
 import { has, machine as client } from './client.ts'
 import { shortPath } from './ThreadView.tsx'
 import { ProfileSelect } from './profile-pick.tsx'
+import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines, useSelection, type NewThreadStart } from './state.tsx'
 
-const LAST = 'superego.newThread'
+/** Where the last thread started from here was: its machine, and the folder on each machine. Every window's. */
 type Last = { machine?: string; cwd?: Record<string, string> }
-const readLast = (): Last => { try { return JSON.parse(localStorage.getItem(LAST) ?? '{}') } catch { return {} } }
 
 /**
  * What a thread started beside `thread` takes after it: its machine and project, profile, model, thinking, and what
@@ -40,7 +40,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
   const { select, selection, thread: shown } = useSelection()
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
-  const last = useMemo(readLast, [])
+  const [last, setLast] = useLocalState<Last>('newThread', {}, { shared: true })
   // It starts like the thread shown: asked for nothing in particular (⌘N, the title bar's button), or for its project
   // (the sidebar's + on its project). Asked for another, it starts there; asked for nothing with no thread shown, as last time.
   const [start] = useState(() => {
@@ -123,7 +123,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
         ...(model ? { model } : {}), ...(thinking && levels.length ? { thinking } : {}), ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
         ...(Object.keys(fieldOptions).length ? { options: fieldOptions } : {}),
       }, { machine: machine.id, source: 'new thread' }) as ThreadInfo
-      localStorage.setItem(LAST, JSON.stringify({ machine: machine.id, cwd: { ...last.cwd, [machine.id]: created.project.root } } satisfies Last))
+      setLast({ machine: machine.id, cwd: { ...last.cwd, [machine.id]: created.project.root } })
       onClose()
       select({ machine: machine.id, thread: created.id })
     } catch (e) {
