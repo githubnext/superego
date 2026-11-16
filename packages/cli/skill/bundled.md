@@ -2,7 +2,7 @@
 
 New to this? Start with [the guide](guide.md) (`superego --skill guide`): the big picture, a first extension end to end, and a cheat sheet.
 
-For changes to the Superego repository (github.com/mikker/superego): the core, or an extension bundled with the app.
+For changes to the Superego repository (github.com/githubnext/superego): the core, or an extension bundled with the app.
 A profile is the way to extend Superego for a project or for yourself; bundle an extension only when every Superego
 user should have it.
 

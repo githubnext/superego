@@ -15,7 +15,7 @@ it('links only to what ships with it', () => {
     for (const target of targets) {
       if (target.startsWith('#')) continue
       if (/^[a-z][\w+.-]*:/i.test(target)) {                // a web page, or a scheme of the app's own (thread:)
-        if (target.includes('github.com/mikker/superego')) broken.push(`${page}: ${target}`)
+        if (target.includes('github.com/githubnext/superego')) broken.push(`${page}: ${target}`)
         continue
       }
       const path = normalize(join(SKILL_DIR, target.replace(/#.*$/, '')))

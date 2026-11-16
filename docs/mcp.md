@@ -763,7 +763,7 @@ Owns everything the user sees and reads:
 Files:
 - `extensions/mcp-servers/src/{ui.tsx,styles.css,catalog.ts}`
 - `extensions/ego/src/{tools.ts,daemon.ts}`, `extensions/ego/test/*`
-- `README.md`, `PLAN.md`
+- `README.md`, `docs/plan.md`
 - `packages/cli/skill/{profiles.md,bundled.md}`
 - `app/test/look.sh` shots of the section and a transcript with MCP rows
 

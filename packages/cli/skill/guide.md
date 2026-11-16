@@ -659,7 +659,7 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
   `superego profile allow-ui <name> -m <machine>`), for a hash the window takes of the sources it received; any change
   to them asks again, and Revoke (Settings → Machines) takes out what it registered at once. Once running it has the window's full
   reach, every machine's `call` and `dispatch` included: it runs in the window's own JavaScript, where narrowing its API
-  wouldn't stop it calling `window.superego` directly. Real isolation is the sandboxed tier PLAN.md plans.
+  wouldn't stop it calling `window.superego` directly. Real isolation is the sandboxed tier the repository's docs/plan.md plans.
 
 ### What each kind of code may do
 

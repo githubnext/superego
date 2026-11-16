@@ -1,7 +1,7 @@
 # Releasing Superego
 
 A release is a signed, notarized `Superego.app` for Apple Silicon, zipped and attached to a GitHub release on
-`mikker/superego`. The repository is private, so only people with access to it can download a release. There are no
+`githubnext/superego`. The repository is private, so only people with access to it can download a release. There are no
 automatic updates: people download the zip and replace the app.
 
 ```sh
