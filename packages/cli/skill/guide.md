@@ -659,7 +659,7 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
   `superego profile allow-ui <name> -m <machine>`), for a hash the window takes of the sources it received; any change
   to them asks again, and Revoke (Settings → Machines) takes out what it registered at once. Once running it has the window's full
   reach, every machine's `call` and `dispatch` included: it runs in the window's own JavaScript, where narrowing its API
-  wouldn't stop it calling `window.superego` directly. Real isolation is the sandboxed tier the repository's docs/plan.md plans.
+  wouldn't stop it calling `window.superego` directly. Real isolation would take a sandboxed tier, which Superego doesn't have yet.
 
 ### What each kind of code may do
 
@@ -761,21 +761,24 @@ source, at `extensions/<name>/src`, so only a checkout has them.
 | [`build-queue`](examples/build-queue), [`build-queue-ui`](examples/build-queue-ui) | a profile's extension both ways: a tool, a `scopedValue` per thread, a Cancel action, a data view or a UI half's view, a shortcut; tests on `superego/testing` |
 | `tasks` | the smallest: two tools and a prompt section; a `work` divider |
 | `suggestions` | a hook, a side call, a `scopedValue` per thread, a `composer.above` slot |
-| `ask-user` | a tool that waits on you: `status`, an action to answer, a `scopedValue` per thread (and the old list kept for older windows), a `tool` view |
+| `ask-user` | a tool that waits on you: `status`, an action to answer, a `scopedValue` per thread, a `tool` view |
 | `images` | a tool with `{ fold: false }`, files kept with `threads.attachments` |
 | `git` | Changes: a `method` (a read), a `pane` the agent is told of, built on the kit's `Diff`, an `action` with keys |
 | `web-panes` | two pane kinds and nothing else; `urls: true` makes web links open in one |
-| `skills` | a prompt section, a `submit` transform, a `method`; `composer.complete` and `composer.sentWith` |
+| `skills` | a prompt section, a `beforeSend` transform, a `method`; `composer.complete` and `composer.sentWith` |
 | `files` | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | `links` | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
 | `unread` | UI only: a view in the rail `withoutSpaces` and in a phone's `drawer`, an action with keys reading projects, an app setting |
 | `notifications` | UI only: `on('thread.status')`, `on('auth.rejected')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
 | `threads` | the required one, UI only: views (the list a `space` with a `rail` of its own, details in the `beside` with ⌘I, the model in the `header`), app settings, tool rows and a `link` |
 | `thread-tools` | daemon only: the agent's thread tools, on `superego.threads` |
-| `thread-reports` | daemon only: report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by a send transform's `by`) |
+| `thread-reports` | daemon only: report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by `beforeSend`'s `by`) |
 | `worktrees` | `thread` hooks (`starting` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `header.chips` chip, a `thread.badge` mark and a `newThreadField` |
 | `mcp-servers` | a settings section drawn by a component of its own (`settings(ui, …)`) from a live value, with dialogs and `SignInFlow`; tool rows by prefix (`mcp__*`) with a call's own `verb` and images; a `header` view, a `details.section` slot and a `composer.above` notice, all from the thread's facts |
-| `ego` | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `value` older windows follow (the rail button reads the selection); a view in the `rail`, and in a phone's `drawer` |
+| `ego` | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `beforeSend` transform marking an outside agent's message; a view in the `rail`, and in a phone's `drawer`; an `onboarding` slot |
+| `answer-ui` | tools that draw blocks in the transcript and wait on an answer: a `scopedValue` per thread, `status` while it asks, a `composer.above` slot, `tool` views with `{ fold: false }` |
+| `pane-ui` | a pane kind drawn from what the agent sends: a `scopedValue` per thread, kept across restarts and dropped by an `archived` hook; a `method`, `tool` views |
+| `terminal` | bytes on a `channel` (the window's half with `channel` from `superego/unstable`), a `pane` in the pane menu, an action with keys, a `method` for its size, OSC 7501 status as a `scopedValue` and the thread's `status`, `thread` hooks to end its shells |
 
 Diagram sources are the `.mmd` files in [guide/](guide/); re-render with the `diagram` skill
 (`bun <skill>/scripts/render.ts x.mmd x.svg`, and `--dark` for `x-dark.svg`).

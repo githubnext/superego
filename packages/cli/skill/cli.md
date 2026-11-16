@@ -63,12 +63,12 @@ Useful ones:
 
 | Action | Does |
 |---|---|
-| `thread.start` `cwd? title? prompt? profile? model? worktree?` | start a thread |
-| `thread.send` `id text whenBusy?=steer\|followUp` | send a message |
-| `thread.stop` `id` | stop the agent |
-| `thread.rename` `id title`, `thread.archive` `id`, `thread.unarchive` `id` | `thread.archive` answers `{ notes }`, what extensions did (its worktree removed, say). Ego is never archived |
-| `pane.open` `id kind title? params?` | open a pane beside a thread (`editor`, `thread`; `diff` from git, `preview` and `artifact` from web-panes; a profile's own) |
-| `pane.close` `id pane`, `pane.focus` `id pane?` | |
+| `thread.start` `cwd? title? prompt? profile? model? worktree? parent?` | start a thread |
+| `thread.send` `thread text whenBusy?=steer\|followUp` | send a message |
+| `thread.stop` `thread` | stop the agent |
+| `thread.rename` `thread title`, `thread.archive` `thread`, `thread.unarchive` `thread` | `thread.archive` answers `{ notes }`, what extensions did (its worktree removed, say). Ego is never archived |
+| `pane.open` `thread kind title? params?` | open a pane beside a thread (`editor`, `thread`; `diff` from git, `preview` and `artifact` from web-panes; a profile's own) |
+| `pane.close` `thread pane`, `pane.focus` `thread pane?` | |
 | `profile.list` `cwd?`, `profile.allow` `cwd? name?` | |
 | `ego.ask` `prompt?` | ask Ego, Superego's own agent (one hidden thread per machine): it answers, changes settings and machines, and starts threads for any other work |
 | `ego.clear` | clear Ego's conversation: the same thread, empty again |
@@ -76,7 +76,7 @@ Useful ones:
 `pane.open` takes nested `params`, so give it JSON:
 
 ```sh
-superego do pane.open --params '{"id":"<thread>","kind":"editor","params":{"path":"README.md"}}'
+superego do pane.open --params '{"thread":"<thread>","kind":"editor","params":{"path":"README.md"}}'
 ```
 
 Extensions add their own actions (`ask-user.answer`, `vault.graph`); they show in the list too.

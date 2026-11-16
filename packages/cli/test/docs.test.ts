@@ -13,6 +13,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { setUpProfileTypes } from '@superego/client/author-types'
+import { paramsParser } from '@superego/protocol'
+import { parseDo } from '../src/cli.ts'
 import { sharedAuthorTypes } from './author-types.ts'
 
 const SKILL = fileURLToPath(new URL('../skill/', import.meta.url))
@@ -102,3 +104,70 @@ it("type-checks every TypeScript block in the skill against the stable surface",
   })
   expect(errors).toEqual([])
 }, 180_000)
+
+/** The words of a command line as a shell splits them: quotes kept together and taken off. */
+function words(line: string): string[] {
+  return [...line.matchAll(/'([^']*)'|"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]!)
+}
+
+/** Every `superego do <action> …` in the skill's pages (across a line break too), up to the end of its code. */
+export function doCommands(markdown: string): { line: number; argv: string[] }[] {
+  return [...markdown.matchAll(/superego\s+do\s+([a-z][\w-]*\.[\w.-]+)([^`\n#]*)/g)].map((m) => ({
+    line: markdown.slice(0, m.index).split('\n').length,
+    argv: [m[1]!, ...words(m[2]!).filter((w) => w !== '…' && w !== '...')],
+  }))
+}
+
+it("gives the core's actions params they take", async () => {
+  // The params of the core's released actions, as the daemon takes them.
+  const actions = JSON.parse(await readFile(new URL('../../protocol/src/released-actions.json', import.meta.url), 'utf8')) as Record<string, Parameters<typeof paramsParser>[1] | null>
+  const core = new Set(Object.keys(actions).map((id) => id.split('.')[0]))
+  const pages = (await readdir(SKILL)).filter((f) => f.endsWith('.md'))
+  const checked: string[] = []
+  const wrong: string[] = []
+  for (const page of pages) {
+    for (const { line, argv } of doCommands(await readFile(join(SKILL, page), 'utf8'))) {
+      const { id, params } = parseDo(argv)
+      const at = `packages/cli/skill/${page}:${line}: ${id}`
+      if (!(id! in actions)) {
+        // Another extension's action is its own; a core one the generation didn't release is a typo.
+        if (core.has(id!.split('.')[0])) wrong.push(`${at}: no such action`)
+        continue
+      }
+      checked.push(at)
+      try { paramsParser(id!, actions[id!] ?? undefined)(params) } catch (e) { wrong.push(`${at}: ${(e as Error).message}`) }
+    }
+  }
+  expect(checked.length).toBeGreaterThan(3)
+  expect(wrong).toEqual([])
+})
+
+it("names the core's actions' params in cli.md's table as they are", async () => {
+  const actions = JSON.parse(await readFile(new URL('../../protocol/src/released-actions.json', import.meta.url), 'utf8')) as Record<string, { properties?: Record<string, unknown>; required?: string[] } | null>
+  const rows = (await readFile(join(SKILL, 'cli.md'), 'utf8')).split('\n').filter((l) => l.startsWith('| `'))
+  const wrong: string[] = []
+  let checked = 0
+  for (const row of rows) {
+    // Each `id` `param param? param?=a\|b` pair in the row's first cell.
+    for (const [, id, names] of row.split(' | ')[0]!.matchAll(/`([a-z][\w-]*\.[\w.-]+)` `([^`]*)`/g)) {
+      const schema = actions[id!]
+      if (schema === undefined) continue
+      checked++
+      const given = names!.split(/\s+/).filter(Boolean).map((n) => ({ name: n.replace(/[?=].*$/, ''), optional: /\?/.test(n) }))
+      for (const { name, optional } of given) {
+        if (!(name in (schema?.properties ?? {}))) wrong.push(`${id}: no param ${name}`)
+        else if (!optional !== (schema?.required ?? []).includes(name)) wrong.push(`${id}: ${name} is ${optional ? 'required' : 'optional'}`)
+      }
+      for (const name of schema?.required ?? []) if (!given.some((g) => g.name === name)) wrong.push(`${id}: ${name} missing`)
+    }
+  }
+  expect(checked).toBeGreaterThan(5)
+  expect(wrong).toEqual([])
+})
+
+it('reads a `superego do` line as the command line would', () => {
+  expect(doCommands("x `superego do pane.open --params '{\"thread\":\"t\",\"kind\":\"editor\"}'` y")).toEqual([
+    { line: 1, argv: ['pane.open', '--params', '{"thread":"t","kind":"editor"}'] },
+  ])
+  expect(doCommands('`superego do\nthread.stop --thread <thread> …`')[0]!.argv).toEqual(['thread.stop', '--thread', '<thread>'])
+})

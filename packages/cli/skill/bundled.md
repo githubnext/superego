@@ -69,10 +69,10 @@ Where a window part and a machine part should differ, make them two extensions, 
 Then wire it in:
 
 1. `app/package.json`: `"@superego/orders": "workspace:*"`, then `pnpm install`.
-2. `app/src/daemon.ts`: add the daemon half to `extensions: [...]` (and to `app/native/daemon.ts`, the native shell's).
+2. `app/src/daemon.ts`: add the daemon half to `extensions: [...]`.
 3. `app/src/renderer/main.tsx`: add the UI half to `mountApp(app, { extensions: [...] })`.
 4. Root `tsconfig.json`: add `{ "path": "extensions/orders" }` to `references`, or `pnpm typecheck` skips it.
-5. The README's layout table: a line for it.
+5. `docs/overview.md`'s Layout table: a line for it.
 
 Bundled extensions get more than a profile's:
 
@@ -105,6 +105,10 @@ Bundled extensions get more than a profile's:
   remote machine works the same). Keep what it shows current as a live value and draw from that. A sign-in of the
   extension's own runs in its daemon (`superego.auth.flow(context, run)`, answered `{ flow }`) and shows in the window
   with `<SignInFlow machine title start onClose />`. `extensions/mcp-servers` does all of it.
+- **Byte streams**, for what doesn't fit JSON calls (a terminal's output and keystrokes): the daemon half accepts
+  them with `superego.channel(kind, accept)` (`<name>.<kind>`; `accept(channel, params)` throws an `RpcError` to
+  refuse, reads with `channel.onData`, writes with `channel.write`), and the window opens one with `channel(machine.id,
+  kind, params)` from `superego/unstable`. A channel ends with its connection. `extensions/terminal` does it.
 - A feature flag: the daemon announces `ext:<name>` for each extension set up and switched on there, and tells clients
   again whenever that changes, so `has(machine, 'ext:orders')` says whether a machine has it now (a profile's once the
   profile loads). Watching a value needs no check: it's null until the extension publishes it. Check it before calling the
@@ -127,4 +131,4 @@ Pure logic (parsing, dividing work, a composer provider's `word`, a `sentWith` r
 
 - Comments explain why and what something is for, in plain words, at the top of each file.
 - Name things after what the user sees: thread, pane, project, machine.
-- Keep this skill (`packages/cli/skill/`) and the README in step when the extension API, profiles or commands change.
+- Keep this skill (`packages/cli/skill/`) and `docs/overview.md` in step when the extension API, profiles or commands change.

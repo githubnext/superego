@@ -51,7 +51,7 @@ export default defineUiExtension({
 
 Then, in `profile.ts`: `ui: ['./ui/order.tsx'], panes: { order: 'an order, with its lines. Params: { id }' }` (or, from
 a daemon half, `superego.pane('order', '…')`). The agent opens it with `pane_open({ kind: 'order', params: { id: '1234' } })`; so can you, with
-`superego do pane.open --params '{"id":"<thread>","kind":"order","params":{"id":"1234"}}'`.
+`superego do pane.open --params '{"thread":"<thread>","kind":"order","params":{"id":"1234"}}'`.
 
 ## What a module can import
 
@@ -60,8 +60,8 @@ a daemon half, `superego.pane('order', '…')`). The agent opens it with `pane_o
   workings (`useRegistry`, `useShell`, …), which change with it.
 - Its own files, by relative path (`'./chart.ts'`).
 
-Nothing else: no npm packages, no CSS imports. TSX and TS are compiled by the daemon (types stripped, JSX for React);
-there is no type checking.
+Nothing else: no npm packages, no CSS imports. TSX and TS are compiled by the daemon (types stripped, JSX for React),
+which doesn't type-check them: `superego extension test` does.
 
 ## The setup API
 
@@ -134,8 +134,8 @@ Talking to the daemon:
   its result.
 - `useDispatch()` → `dispatch(id, params, { machine: machine.id })`: run an action (a daemon half's, or a
   built-in like `pane.open`, `thread.send`): something that changes things. Returns a promise of its result.
-- `useValue<T>(machine.id, machine.state === 'connected', 'orders.recent')`: a daemon half's live value, kept
-  current. Undefined until it arrives, null while nothing publishes it yet (the profile hasn't loaded). However many
+- `useValue<T>(machine, 'orders.recent')`: a daemon half's live value, kept current (`{ scope: thread.id }`: a
+  scoped value's part for that thread). Undefined until it arrives, null while nothing publishes it yet (the profile hasn't loaded). However many
   components watch the same value, the window holds one subscription.
 - `useThreads`, `useAllThreads`, `useProjects`, `useSelection`, `useMachines`: what the window knows ("Reading threads", below).
 
@@ -256,5 +256,5 @@ let it scroll.
 
 ## A complete example
 
-`~/.superego/profiles/obsidian/ui/` (if present on this machine): a graph pane on a canvas and a note pane built on
-`FileEditor`, both fed by the profile's daemon actions.
+[`examples/build-queue-ui`](examples/build-queue-ui): a daemon half with a tool, a scoped value and an action, and a
+UI half that draws the thread's queue beside it, with tests on `superego/testing`.

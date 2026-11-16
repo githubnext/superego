@@ -55,11 +55,10 @@ Every field is optional.
     line run, live values, a thread's blocked status, and agent parts of its own (`superego --skill daemon`).
 - **`ui`** are modules for the window (`superego --skill ui`). They draw only in this profile's threads.
 - **`panes`** describes each pane kind the UI registers, so the agent knows it can open one and with which params.
-- **`without`** takes the names of optional extensions, the ones Settings → Extensions lists: the core's
-  `coding-tools` (read, write, edit, bash), `panes` (pane_open), `agents-md`, and the bundled `thread-tools`
-  (thread_start, thread_read, thread_send, thread_list, thread_archive),
-  `thread-reports` (a thread started by another tells it when it finishes, fails or waits on a question), `ask-user`, `files`, `git`, `images`, `links`, `pane-ui` (open_ui, update_ui), `answer-ui` (show_ui, ask_ui), `skills`, `suggestions`, `tasks`, `web-panes`. Its
-  threads get none of their tools or prompt sections, and the window shows none of their UI there. Required ones (the
+- **`without`** takes the names of optional extensions, the ones Settings → Extensions lists (and `superego
+  extensions`): the core's `coding-tools` (read, write, edit, bash), `panes` (pane_open) and `agents-md`, and bundled
+  ones such as `thread-tools` (thread_start, thread_read, …), `ask-user`, `terminal` or `mcp-servers`. Its threads get
+  none of their tools or prompt sections, and the window shows none of their UI there. Required ones (the
   sidebar) can't be left out.
 - **`mcp`** names MCP servers the machine has (Settings → MCP servers), for its threads; a name it has none of is
   left out. **`mcpServers`** defines servers of the profile's own, by name, each a `command` (with `args`, `cwd`,
@@ -143,8 +142,8 @@ superego profile revoke-ui default -m box    # Settings → Machines lists them 
 
 ## An example
 
-`~/.superego/profiles/obsidian` (if present on this machine) is a complete one: a vault's notes as a graph pane and a
-note pane, `search_notes` and `backlinks` tools, and actions the panes call. Read it for a working pattern.
+[`examples/build-queue-ui`](examples/build-queue-ui) is a complete one: a tool, a scoped value per thread, a Cancel
+action, a view of its own beside the thread, and tests. Read it for a working pattern.
 
 A minimal one with a tool:
 
