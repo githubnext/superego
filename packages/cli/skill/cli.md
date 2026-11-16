@@ -18,6 +18,7 @@ superego open <thread>                         # show a thread in the app
 superego send <thread> <text...>               # send a message
 superego threads [--archived]                  # list them (also: ls)
 superego read <thread> [--wait]                # its state and last answer; --wait: once it stops working
+superego unread [--count]                      # what's done, failed or needs you, unseen: the app icon's count
 ```
 
 - `-P <profile>` picks a profile; without it a thread gets the folder's `default` profile, the project's before
@@ -41,6 +42,10 @@ superego send "$id" "Now the tests" && superego read "$id" --wait
 ```
 
 The command line prints a thread's last answer, not its transcript; open it in the app (`superego open <id>`).
+
+`superego unread` counts by the app icon's rule, on this computer and every machine its daemon is connected to. It
+never starts the daemon (with none running it prints 0), so a status bar can poll it:
+`superego unread --count`, or `--json` for `{ count, threads: [{ machine, id, title, state }] }`.
 
 ## Actions
 

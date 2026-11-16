@@ -27,7 +27,7 @@ import {
 // The daemon itself only for `daemon run`: loading it costs every other command most of its start.
 import { appEnv, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
 import {
-  AUTH_REJECTED, compareVersions, driftPhrase, FEATURES, PROTOCOL_VERSION, RpcError, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Notifications, type Params, type ProviderAuthInfo, type Result,
+  AUTH_REJECTED, compareVersions, driftPhrase, FEATURES, PROTOCOL_VERSION, RpcError, unread, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Notifications, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ProfileRef, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
@@ -132,8 +132,8 @@ function resolveMachine(name: string | undefined): Machine {
 }
 
 /** Connect to a machine, say hello, and check it is who it should be. */
-async function connect(machine: Machine, as: { client: string; label: string } = { client: `${app.id}-cli`, label: hostname() }): Promise<{ transport: Transport; hello: Hello }> {
-  const transport = machine.config ? await openMachine(machine.config, app, dataDir) : await openLocal(socket, startDaemon)
+async function connect(machine: Machine, as: { client: string; label: string } = { client: `${app.id}-cli`, label: hostname() }, { start = true }: { start?: boolean } = {}): Promise<{ transport: Transport; hello: Hello }> {
+  const transport = machine.config ? await openMachine(machine.config, app, dataDir) : await openLocal(socket, start ? startDaemon : undefined)
   try {
     const hello = await transport.peer.call<Hello>('hello', { ...as, version: PROTOCOL_VERSION, features: [...FEATURES] })
     if (machine.config) checkIdentity(hello, { target: routeOf(machine.config, app), ...(machine.config.daemonId ? { expected: machine.config.daemonId } : {}) }, [])
@@ -145,8 +145,8 @@ async function connect(machine: Machine, as: { client: string; label: string } =
 }
 
 /** Run `work` with typed calls on a machine, closing the connection after. */
-async function on<T>(machine: Machine, work: (call: <M extends MethodName>(method: M, params: Params<M>) => Promise<Result<M>>, hello: Hello) => Promise<T>) {
-  const { transport, hello } = await connect(machine)
+async function on<T>(machine: Machine, work: (call: <M extends MethodName>(method: M, params: Params<M>) => Promise<Result<M>>, hello: Hello) => Promise<T>, how?: { start?: boolean }) {
+  const { transport, hello } = await connect(machine, undefined, how)
   try {
     return await work((method, params) => transport.peer.call(method, params), hello)
   } finally {
@@ -202,6 +202,35 @@ async function threads(machineName?: string, archived = false) {
     if (!list.length) console.log(`No threads on ${machine.label}. Start one with: ${app.id}`)
     else table(list.map((s: ThreadInfo) => [s.id, stateOf(s.status), s.title, s.cwd]))
     sayRejected(rejected, machine)
+  })
+}
+
+/**
+ * The unread threads (protocol's `unread`, the app icon's count): this computer's, and those of every machine its
+ * daemon reaches and is connected to. Only a running daemon is asked: none is started, so a status bar polling this
+ * gets nothing (0) while there's none. `-m`, one machine's only.
+ */
+async function unreadCommand(machineName: string | undefined, countOnly: boolean) {
+  const found: { machine: string; label: string; thread: ThreadInfo }[] = []
+  const machine = resolveMachine(machineName)
+  if (machine.config || await isListening(socket)) {
+    await on(machine, async (call, hello) => {
+      const add = (id: string, label: string, list: ThreadInfo[]) => { for (const thread of list) if (unread(thread)) found.push({ machine: id, label, thread }) }
+      add(machine.id, machine.label, await call('thread.list', {}))
+      if (machine.config || !hello.features.includes('relay')) return
+      const { value } = await call('machines.watch', {})
+      await Promise.all(value.filter((m) => m.id !== 'local' && m.state === 'connected').map(async (m) => {
+        const list = await call('relay.call', { machine: m.id, method: 'thread.list', params: {} }).catch(() => []) as ThreadInfo[]
+        add(m.id, m.label, list)
+      }))
+    }, { start: false })
+  }
+  const threads = found.map(({ machine, thread }) => ({ machine, id: thread.id, title: thread.title, state: thread.status.state }))
+  if (countOnly && !json) return void console.log(String(threads.length))
+  print({ count: threads.length, threads }, () => {
+    if (!found.length) return void console.log('Nothing unread')
+    const several = new Set(found.map((f) => f.machine)).size > 1
+    table(found.map(({ label, thread }) => [thread.id, stateOf(thread.status), thread.title, ...(several ? [label] : [])]))
   })
 }
 
@@ -989,7 +1018,7 @@ async function main() {
       user: { type: 'boolean' }, archived: { type: 'boolean' }, ui: { type: 'boolean' }, 'data-only': { type: 'boolean' }, thread: { type: 'string' },
       all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
       start: { type: 'boolean' }, update: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, skill: { type: 'boolean' },
-      lines: { type: 'string' }, wait: { type: 'boolean' }, timeout: { type: 'string' },
+      lines: { type: 'string' }, wait: { type: 'boolean' }, timeout: { type: 'string' }, count: { type: 'boolean' },
     },
   })
   json = Boolean(values.json)
@@ -1012,6 +1041,7 @@ async function main() {
       return openInApp(machine.id, rest[0])
     }
     case 'threads': case 'ls': return threads(values.machine, Boolean(values.archived))
+    case 'unread': return unreadCommand(values.machine, Boolean(values.count))
     case 'new': case 'create': return startThread({ dir: rest[0], machine: values.machine, prompt: values.prompt, profile: values.profile, worktree: values.worktree, open: false })
     case 'profile': case 'profiles': return profileCommand(rest[0], rest.slice(1), values)
     case 'extension': case 'extensions': return extensionCommand(rest[0], rest.slice(1), values)

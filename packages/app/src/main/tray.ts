@@ -4,8 +4,8 @@
 // for the menu bar it sits in. Without one, the app's glyph is drawn as text.
 import { existsSync } from 'node:fs'
 import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
-import type { AppConfig, ThreadInfo } from '@superego/protocol'
-import { unread, type MachineEntry } from '../shared.ts'
+import { unread, type AppConfig, type ThreadInfo } from '@superego/protocol'
+import type { MachineEntry } from '../shared.ts'
 
 export type TrayModel = {
   machines(): MachineEntry[]

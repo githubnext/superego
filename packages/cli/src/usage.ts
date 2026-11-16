@@ -35,6 +35,11 @@ function groups(id: string, name: string): Entry[][] {
       { use: 'open <thread>', does: 'Open a thread in the app' },
       { use: 'threads [--archived]', does: `List threads, or the archived ones (also: ${id} ls)` },
       {
+        use: 'unread [--count]', does: "Threads that finished, failed or need you, unseen, on every machine this\ncomputer reaches: the app icon's count. 0 while the daemon isn't running.\n--json: { count, threads: [{ machine, id, title, state }] }",
+        options: [['    --count', 'Just how many']],
+        examples: [`${id} unread --count`, `${id} unread --json | jq .count`],
+      },
+      {
         use: 'create [dir] [-p prompt] [-P profile] [-w]', does: 'Start a thread without opening the app; prints its id (also: new)', options: [prompt, threadProfile, worktree],
         examples: [`${id} create . -p "Summarise the open TODOs"`],
       },

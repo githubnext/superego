@@ -1,7 +1,7 @@
 // The contract between the main process and the renderer, exposed as `window.superego` by the preload.
 import type { ConnectionState, MachineConfig, MachineEntry as Base, MachineId } from '@superego/client/shared'
 import type { SettingSpec } from '@superego/settings'
-import { firstLine, lastParagraph, shorten, waitingForSignIn, type Channel, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
+import { firstLine, lastParagraph, shorten, unread, type Channel, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
 
 export type { ConnectionState, MachineConfig, MachineId }
 
@@ -47,28 +47,9 @@ export function threadNotice(machine: MachineId, thread: ThreadInfo): ThreadNoti
   return { machine, thread: thread.id, title: thread.title, status, ...(text ? { text } : {}) }
 }
 
-/**
- * Whether a thread wants the user and they haven't looked: it finished, failed or asks something. Not one waiting for
- * sign-in (one notice for the machine says so), nor a child working for its parent (the parent hears how it ends;
- * it still counts when it needs you), nor one in no list (archived, Ego's). The one rule for the unread bell,
- * notifications, the menu bar's count and the app icon's.
- */
-export function unread(thread: ThreadInfo) {
-  const { state } = thread.status
-  if (state !== 'done' && state !== 'error' && state !== 'blocked') return false
-  if (waitingForSignIn(thread.status) || thread.archived || thread.hidden) return false
-  return state === 'blocked' || !reportsToParent(thread)
-}
-
 /** How many threads are unread, but the one being looked at (`shown`): the count on the app's icon. */
 export function unreadCount(threads: { machine: MachineId; thread: ThreadInfo }[], shown?: { machine: MachineId; thread: string }) {
   return threads.filter(({ machine, thread }) => unread(thread) && !(shown?.machine === machine && shown.thread === thread.id)).length
-}
-
-/** Whether a thread works for its parent, which hears how its runs end (the thread-reports extension says so). */
-export const reportsToParent = (thread: ThreadInfo) => {
-  const fact = thread.ext?.['thread-reports']
-  return Boolean(fact && typeof fact === 'object' && !Array.isArray(fact) && fact.toParent === true)
 }
 
 /**

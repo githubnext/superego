@@ -55,6 +55,13 @@ afterAll(async () => {
 })
 
 describe('superego', () => {
+  it('counts nothing unread without starting a daemon', async () => {
+    const empty = join(home, 'empty')
+    expect(await superego(['unread', '--count'], undefined, undefined, { SUPEREGO_HOME: empty })).toBe('0\n')
+    expect(JSON.parse(await superego(['unread', '--json'], undefined, undefined, { SUPEREGO_HOME: empty }))).toEqual({ count: 0, threads: [] })
+    expect(existsSync(join(empty, 'daemon.pid'))).toBe(false)
+  })
+
   it('starts the daemon on demand and runs threads', async () => {
     const created = await superegoJson(['create', home, '-p', 'hi from the cli'])
     expect(created).toMatchObject({ machine: 'local', cwd: home })
@@ -146,6 +153,13 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     expect(remote.machine).not.toBe('local')
     await until(async () => (await superegoJson(['threads', '-m', 'Second']))[0]?.status.state === 'done')
     expect((await superegoJson(['threads'])).some((s: any) => s.id === remote.id && s.title === 'over there')).toBe(false)
+    // Unread: this computer's, and the other machine's through this computer's daemon.
+    await until(async () => (await superegoJson(['unread'])).threads.some((t: any) => t.id === remote.id))
+    const unread = await superegoJson(['unread'])
+    expect(unread.threads).toContainEqual({ machine: expect.not.stringMatching(/^local$/), id: remote.id, title: 'over there', state: 'done' })
+    expect(unread.threads.some((t: any) => t.machine === 'local')).toBe(true)
+    expect(await superego(['unread', '--count'])).toBe(`${unread.count}\n`)
+    expect(unread.count).toBe(unread.threads.length)
 
     await superego(['settings', 'set', 'agent.model', 'faux/faux-1', '--all'])
     expect((await superegoJson(['settings', '-m', 'Second'])).values['agent.model']).toBe('faux/faux-1')

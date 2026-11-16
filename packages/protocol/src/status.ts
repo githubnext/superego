@@ -1,4 +1,5 @@
 // Agent status uses the OSC 7501 Program Status vocabulary, so Superego threads, Claude Code, Codex and pi all read alike.
+import type { ThreadInfo } from './methods.ts'
 
 /** What a thread is doing: nothing, running, finished a run, waiting on the user, or failed. */
 export type StatusState = 'idle' | 'working' | 'done' | 'blocked' | 'error'
@@ -18,6 +19,25 @@ const PRIORITY: Record<StatusState, number> = { blocked: 4, error: 3, done: 2, w
  * then going on by itself). One notice says so for them all: each is quiet, never wanting a look of its own.
  */
 export const waitingForSignIn = (status: Status) => status.state === 'blocked' && status.kind === 'auth'
+
+/**
+ * Whether a thread wants the user and they haven't looked: it finished, failed or asks something. Not one waiting for
+ * sign-in (one notice for the machine says so), nor a child working for its parent (the parent hears how it ends;
+ * it still counts when it needs you), nor one in no list (archived, Ego's). The one rule for the app's unread bell,
+ * notifications, menu bar and icon count, and `<id> unread`.
+ */
+export function unread(thread: ThreadInfo) {
+  const { state } = thread.status
+  if (state !== 'done' && state !== 'error' && state !== 'blocked') return false
+  if (waitingForSignIn(thread.status) || thread.archived || thread.hidden) return false
+  return state === 'blocked' || !reportsToParent(thread)
+}
+
+/** Whether a thread works for its parent, which hears how its runs end (the thread-reports extension says so). */
+export const reportsToParent = (thread: ThreadInfo) => {
+  const fact = thread.ext?.['thread-reports']
+  return Boolean(fact && typeof fact === 'object' && !Array.isArray(fact) && fact.toParent === true)
+}
 
 /** How pressing a status is, the higher the more. Waiting for sign-in ranks just above idle: the machine's notice speaks for it. */
 export const statusRank = (status: Status) => waitingForSignIn(status) ? 0.5 : PRIORITY[status.state]
