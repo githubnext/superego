@@ -8,6 +8,7 @@ clients watch), describe **pane kinds** to the agent, mark threads **blocked** (
 **threads**. A profile lists it in `extensions` like an agent extension; Superego tells them apart by the `setup`
 function.
 
+<!-- check: module; declare function lookUp(number: string): Promise<{ status: string } | undefined>; declare function refund(number: string): Promise<void> -->
 ```ts
 import { defineDaemonExtension, defineAction, defineExtension, defineTool, obj, str, RpcError } from 'superego'
 
@@ -43,8 +44,8 @@ export default defineDaemonExtension({
 })
 ```
 
-`setup` runs when the profile first loads (the first turn of a thread with it, a window showing one of its threads, or
-the daemon starting while one of its threads was working) and again after its files change, with the previous setup's
+`setup` runs when the profile first loads (the first turn of a thread with it, a window listing one of its threads in
+the sidebar ([ui.md](ui.md#when-the-ui-loads)), or the daemon starting while one of its threads was working) and again after its files change, with the previous setup's
 cleanup run first. Everything it registered (tools, actions, methods, values, settings, pane kinds, status) is its own
 and removed on reload, so register freely. Its name is the prefix of everything it registers; a second extension of
 the same name is refused. Profiles load one at a time, so keep `setup` quick, and don't await anything that loads a
@@ -101,10 +102,15 @@ once.
 
 **A tool that needs the thread's folder:**
 
+<!-- check: daemon -->
 ```ts
-async execute(args, api) {
-  const { cwd } = await superego.threads.get(superego.threads.of(api.conversationId)!)
-}
+const where = defineTool({
+  name: 'where', description: "Say the thread's folder.", parameters: obj({}),
+  async execute(args, api) {
+    const { cwd } = await superego.threads.get(superego.threads.of(api.conversationId)!)
+    return { output: [{ type: 'text', text: cwd }] }
+  },
+})
 ```
 
 (`api.env?.cwd` is the same folder, without a lookup.)
@@ -115,6 +121,41 @@ returns JSON. Keep actions for what changes something. See `superego --skill ui`
 **Waiting on the user** (as `ask-user` does): a tool stores a resolver in a `Map`, publishes the pending question as a
 live value, contributes `status` so the thread shows blocked, and an action (`<name>.answer`) resolves it. Mark the
 tool `replay: 'safe'` so a restart asks again.
+
+## Watching tool calls
+
+To see every tool call an agent makes, give the agent a hook on `ToolTask`. `afterTool(call, result, api)` runs as
+each call settles, before the model sees the result: return `result` to leave it as it is, or another result to
+replace it. `beforeTool(call, api)` runs first: return `{ block: 'why' }` to refuse the call, `{ arguments }` to change
+them, or nothing. `call` is `{ id, name, arguments }`; `api.conversationId` finds the thread. 1.8.
+
+This one marks threads that ran `sqlite3`, for the [sidebar mark in ui.md](ui.md#a-mark-in-the-sidebar):
+
+```ts
+// db.ts; in profile.ts: extensions: ['./db.ts']
+import { defineDaemonExtension, defineExtension, hook, ToolTask } from 'superego'
+
+export default defineDaemonExtension({
+  name: 'db',
+  setup(superego) {
+    const touched = superego.state<{ why: string }>()
+    superego.facts(({ state }) => state)              // clients see it as thread.ext.db
+    superego.agent(defineExtension({
+      name: 'db',
+      hooks: [hook(ToolTask, {
+        async afterTool(call, result, api) {
+          const command = String(call.arguments.command ?? '')
+          const thread = superego.threads.of(api.conversationId)
+          if (thread && /\bsqlite3\b/.test(command)) await touched.set(thread, { why: command.slice(0, 80) })
+          return result
+        },
+      })],
+    }))
+  },
+})
+```
+
+Keep hooks quick: the agent waits on them. A hook that throws is logged and skipped (`beforeTool`'s blocks the call).
 
 ## Trying it
 

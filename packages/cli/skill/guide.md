@@ -109,8 +109,8 @@ function Notes({ machine, thread }: PaneProps) {
 export default defineUiExtension({ name: 'notes', version: '1.0.0', api: '^1.2', setup: (superego) => superego.pane('notes', { title: 'Notes', component: Notes, menu: true }) })
 ```
 
-Send a thread a message: the daemon loads the profile and the agent has `add_note`; the window loads its UI when it
-shows the thread. After an edit, the daemon half reloads on the thread's next turn, the UI once the thread moves on.
+Send a thread a message: the daemon loads the profile and the agent has `add_note`. The window loads its UI once the
+sidebar lists the thread ([ui.md](ui.md#when-the-ui-loads)). After an edit, the daemon half reloads on the thread's next turn, the UI once the thread moves on.
 
 ## The build queue, two ways
 
@@ -351,7 +351,7 @@ Three versions, each for its own question:
 | Version | What it versions | Where it's said | Who checks it |
 |---|---|---|---|
 | **The release** | the code a machine runs: its git commit (the packages are `0.0.0`) | `hello.machine.commit`, Settings → Machines ("an older Superego") | the user, who updates |
-| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`1.7.0`; 1.1 added `signal`, a UI `setup`'s cleanup and `unarchiveAbandoned`; 1.2 `scopedValue` and `useValue`'s `scope`, `useMethod`, a profile's window actions, and `'superego/unstable'` apart; 1.3 `spawnGroup`; 1.4 `machines`; 1.5 channels and `paneClosed`; 1.6 `recap`; 1.7 `agentParts`, `agent()`'s handle, `auth.flow`, tool rows by prefix and `SignInFlow`) | `hello.api` | the host, setting an extension up |
+| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`1.8.0`; 1.1 added `signal`, a UI `setup`'s cleanup and `unarchiveAbandoned`; 1.2 `scopedValue` and `useValue`'s `scope`, `useMethod`, a profile's window actions, and `'superego/unstable'` apart; 1.3 `spawnGroup`; 1.4 `machines`; 1.5 channels and `paneClosed`; 1.6 `recap`; 1.7 `agentParts`, `agent()`'s handle, `auth.flow`, tool rows by prefix and `SignInFlow`; 1.8 `ToolTask`, to watch tool calls) | `hello.api` | the host, setting an extension up |
 | **The protocol** | the wire: a generation, `PROTOCOL_VERSION` (`1`), and in it the features each side announces | `hello.version`, `hello.features` | both ends, at `hello` |
 
 And each extension's own **version**, semver, which its other half, profiles and scripts rely on.
@@ -633,7 +633,7 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
   its place; the rest of the window carries on.
 - A name is claimed while set up: a second extension of the same name is refused. The core's namespaces (`thread`,
   `value`, `settings`, …) are never free.
-- A profile's daemon half loads with its first turn, when a window shows one of its threads, or before an interrupted
+- A profile's daemon half loads with its first turn, when a window lists one of its threads, or before an interrupted
   run of it resumes. A project's profile runs only once allowed (`superego profile allow`), as its files and those it
   lists from outside its folder are then. Profiles load one at a time: keep `setup` quick, and never await work that
   loads a profile (starting or reading a thread) in it.

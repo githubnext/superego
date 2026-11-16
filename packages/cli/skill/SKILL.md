@@ -23,7 +23,10 @@ the window, keyboard shortcuts and extensions all run actions. `superego actions
 ## Extending Superego: start with `extension new`
 
 To give agents a tool, or the window a pane or a view, scaffold a working extension and change it. Don't start from a
-blank file:
+blank file.
+
+**No Node needed.** `superego extension test` is the type checker and the test runner. Don't look for `node`, `npx`,
+`tsc` or `bun`: plain Node can't import `superego`.
 
 ```sh
 superego extension new orders           # in this project's default profile (.superego/profiles/default), made if there's none
@@ -88,4 +91,5 @@ Read only the topics the task needs. A profile with a tool needs `profiles` and 
 - Names are namespaced: an extension called `vault` names its actions and live values `vault.<something>`.
 - A profile's UI from another machine runs in this computer's window only once allowed here:
   `superego profile allow-ui <name> -m <machine>`.
-- A changed profile loads again on the thread's next turn; its UI loads again when the thread next changes.
+- The window loads a profile's UI once the sidebar lists one of its threads ([ui.md](ui.md#when-the-ui-loads)). A
+  changed profile loads again on the thread's next turn, and its UI when a shown thread of it moves on.

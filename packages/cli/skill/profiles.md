@@ -101,8 +101,9 @@ checks types with the same tsconfig before it runs the tests.
 import {
   defineProfile,                                     // profile.ts
   defineExtension, defineTool, section,              // agent extensions
-  wrapTool, wrapSection, hook,                       // decorating other extensions' tools and sections
-  defineDaemonExtension, defineAction, RpcError,     // daemon extensions (`runs: 'machine'` is implied)
+  wrapTool, wrapSection,                             // decorating other extensions' tools and sections
+  hook, ToolTask,                                    // watching tool calls: hook(ToolTask, { afterTool })
+  defineDaemonExtension, defineAction, RpcError, spawnGroup,   // daemon extensions (`runs: 'machine'` is implied)
   obj, str, num, int, bool, arr, opt, lit, union, nullable, unknown,   // JSON Schema for parameters
 } from 'superego'
 ```
@@ -137,7 +138,8 @@ superego profile revoke-ui default -m box    # Settings → Machines lists them 
 - The daemon loads a profile when a thread with it takes a turn, and again when its files changed: edit, then send the
   thread another message (a thread mid-run keeps what it started the run with). `superego extension reload` loads it
   now, and says why if it doesn't load. Daemon extensions are torn down (their cleanup runs) and set up again.
-- The window loads a profile's UI when it shows one of its threads, and again once the thread moves on after a change.
+- The window loads a profile's UI once its sidebar lists one of its threads, and again when a shown thread of it moves
+  on after a change ([ui.md](ui.md#when-the-ui-loads)).
 - `model`, `thinking` and `worktree` apply where a thread hasn't chosen its own.
 
 ## An example

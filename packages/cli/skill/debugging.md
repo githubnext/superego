@@ -26,8 +26,8 @@ With `SUPEREGO_MODEL=faux` in the daemon's environment, turns echo instead of ca
 - **"Action … is already defined"**: two extensions (or two profiles) define the same id; ids are per machine.
 - **A UI module "imports X"**: a profile's UI can import only `react`, `react/jsx-runtime`, `superego/ui` and its own
   files.
-- **A change doesn't show**: the daemon reloads a profile on the thread's next turn; the window reloads its UI when the
-  thread next changes. Send the thread a message. Changes to Superego's own code need `superego daemon restart`.
+- **A change doesn't show**: the daemon reloads a profile on the thread's next turn; the window reloads its UI when a
+  shown thread of it next moves on ([ui.md](ui.md#when-the-ui-loads)). Send the thread a message. Changes to Superego's own code need `superego daemon restart`.
 - **A pane kind isn't found**: it is registered by the profile's UI, which draws only for threads with that profile;
   check `ui` in `profile.ts` and the console.
 - **The agent never opens the pane**: describe it under `panes` in `profile.ts`, with its params, and say in `prompt`

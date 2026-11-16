@@ -1,11 +1,12 @@
-// The guide's code, compiled: every ```ts and ```tsx block in the guide (skill/guide.md) and the UI topic (skill/ui.md)
-// is type-checked against the stable surface ('superego', 'superego/ui', 'superego/testing'), as an author's profile
-// is: against the author types, with the tsconfig `superego profile types` writes. A block that's a fragment of a setup
-// says so in a comment just before it, `<!-- check: daemon -->` or `<!-- check: ui -->` (`superego` is then that half's
-// API, the stable names are imported, and anything after a `;` is added: declarations of what the fragment takes as
-// given), or `<!-- check: skip -->`. So the pages can't drift from the API.
+// The skill's code, compiled: every ```ts and ```tsx block in its pages (skill/*.md) is type-checked against the stable
+// surface ('superego', 'superego/ui', 'superego/testing'), as an author's profile is: against the author types, with
+// the tsconfig `superego profile types` writes. A block that's a fragment of a setup says so in a comment just before
+// it, `<!-- check: daemon -->` or `<!-- check: ui -->` (`superego` is then that half's API and the stable names are
+// imported), or `<!-- check: skip -->` where it's deliberately partial. Anything after a `;` is added, in any mode:
+// declarations of what the block takes as given (`<!-- check: module; declare const findOrder: … -->`). So the pages
+// can't drift from the API.
 import { spawn } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -15,13 +16,11 @@ import { setUpProfileTypes } from '@superego/client/author-types'
 import { sharedAuthorTypes } from './author-types.ts'
 
 const SKILL = fileURLToPath(new URL('../skill/', import.meta.url))
-/** The pages whose code is checked: the guide, and the UI topic's. */
-const PAGES = ['guide.md', 'ui.md']
 
 /** What a fragment of each half is given: its half's API as `superego`, and the stable names it might use. */
 const PRELUDES = {
   daemon: [
-    `import { arr, bool, defineAction, defineDaemonExtension, defineExtension, defineTool, int, lit, nullable, num, obj, opt, RpcError, spawnGroup, str, union, unknown } from 'superego'`,
+    `import { arr, bool, defineAction, defineDaemonExtension, defineExtension, defineTool, hook, int, lit, nullable, num, obj, opt, RpcError, section, spawnGroup, str, ToolTask, union, unknown } from 'superego'`,
     `import type { DaemonApi, ExtensionAbout, Json, SpawnedGroup, ThreadInfo, ViewContent } from 'superego'`,
     `declare const superego: DaemonApi`,
     `type Build = { id: string; command: string; state: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'; at: number }`,
@@ -65,8 +64,8 @@ beforeAll(async () => {
 }, 240_000)
 afterAll(async () => { await rm(dir, { recursive: true, force: true }) })
 
-/** Each page's blocks, with the page they're from. */
-const pageBlocks = async () => (await Promise.all(PAGES.map(async (page) => blocksOf(await readFile(join(SKILL, page), 'utf8')).map((block) => ({ ...block, page }))))).flat()
+/** Each page's blocks, with the page they're from: every page of the skill. */
+const pageBlocks = async () => (await Promise.all((await readdir(SKILL)).filter((f) => f.endsWith('.md')).map(async (page) => blocksOf(await readFile(join(SKILL, page), 'utf8')).map((block) => ({ ...block, page }))))).flat()
 
 it("finds the pages' blocks, each checked or skipped on purpose", async () => {
   const blocks = await pageBlocks()
@@ -74,12 +73,13 @@ it("finds the pages' blocks, each checked or skipped on purpose", async () => {
   for (const block of blocks) expect(['module', 'daemon', 'ui', 'skip'], `the check at ${block.page}:${block.line}`).toContain(block.mode)
 })
 
-it("type-checks every TypeScript block in the guide and the UI topic against the stable surface", async () => {
+it("type-checks every TypeScript block in the skill against the stable surface", async () => {
   const blocks = (await pageBlocks()).filter((b) => b.mode !== 'skip')
   const offsets = new Map<string, { page: string; line: number; prelude: number }>()
   for (const block of blocks) {
     const name = `${block.page.replace(/\.md$/, '')}-${block.line}.${block.lang}`
-    const prelude = block.mode === 'module' ? [] : [...PRELUDES[block.mode as 'daemon' | 'ui'], ...block.extra.split(';').map((l) => l.trim()).filter(Boolean)]
+    const given = block.extra.split(';').map((l) => l.trim()).filter(Boolean)
+    const prelude = [...(block.mode === 'module' ? [] : PRELUDES[block.mode as 'daemon' | 'ui']), ...given]
     // A fragment is a module of its own too, so its names don't meet another block's.
     const head = [...prelude, 'export {}']
     offsets.set(name, { page: block.page, line: block.line, prelude: head.length })

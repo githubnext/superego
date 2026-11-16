@@ -50,6 +50,7 @@ Copy `extensions/ask-user/package.json` for dependencies.
 
 **Required or optional.** An extension says what it is once, in `src/shared.ts`, and spreads that into both halves:
 
+<!-- check: module; import type { ExtensionAbout } from 'superego' -->
 ```ts
 export const about = { name: 'orders', version: '1.0.0', api: '^1', title: 'Orders', description: 'Look orders up.' } satisfies ExtensionAbout
 // daemon.ts: defineDaemonExtension({ ...about, setup(superego) { … } })

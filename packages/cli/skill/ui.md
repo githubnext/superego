@@ -7,6 +7,16 @@ a thread, and how its tool calls look in the transcript. List modules in the pro
 `defineUiExtension`. Everything a module registers belongs to it, and goes when the profile's files change and the
 window loads them again.
 
+## When the UI loads
+
+The window loads a profile's UI once the sidebar lists one of its threads, before any is opened: its badges, slots, tool
+rows and pane kinds are there from the start. That loads the profile's daemon half too. After you change its files, it
+loads again when a thread of it that's shown moves on: send that thread a message. Archived threads aren't listed, so
+they load nothing. Another machine's profile loads only once this computer has allowed its UI; until then, it waits
+for one of its threads to be shown, which asks.
+
+## A first module
+
 ```tsx
 // .superego/profiles/support/ui/order.tsx
 import { defineUiExtension, PaneHeader, FileTextIcon, useMethod, type PaneProps } from 'superego/ui'
@@ -78,10 +88,32 @@ Slots a profile can fill, each given `{ machine, thread }` (and for the editor o
 | Slot | |
 |---|---|
 | `thread.crumb` | among the chips that say where a thread works (a branch): draw a `<span className="titlebar__chip">` |
+| `thread.badge` | after a thread's title in the sidebar: a small mark of something about it. Draw a `<span className="thread-badge" title="…">` around a 12px icon, or nothing ([below](#a-mark-in-the-sidebar)) |
 | `composer.above` | above the message box: something waiting on the user |
 | `thread.details` | in thread details (⌘I), after what the core says: an `<h5>` and what you know of the thread. 1.7 |
 | `editor.side`, `editor.bar` | beside a file in the editor, and in its bar |
 | `overlay` | over everything: a dialog of your own, drawn while you want it |
+
+### A mark in the sidebar
+
+A mark on some threads' rows goes from the daemon half to the window in four steps: the daemon half keeps what it found
+in the thread's `state`, publishes it with `facts`, each `ThreadInfo` carries it as `thread.ext.<name>`, and a
+`thread.badge` slot draws it. The daemon half for this one is in [Watching tool calls](daemon.md#watching-tool-calls):
+
+```tsx
+// ui/db.tsx; in profile.ts: extensions: ['./db.ts'], ui: ['./ui/db.tsx']
+import { defineUiExtension, TableIcon, type SlotProps } from 'superego/ui'
+
+function DbMark({ thread }: SlotProps['thread.badge']) {
+  const db = thread.ext?.db as { why: string } | undefined
+  if (!db) return null
+  return <span className="thread-badge" title={db.why} role="img" aria-label="touched the database"><TableIcon size={12} aria-hidden /></span>
+}
+
+export default defineUiExtension({ name: 'db', setup: (superego) => superego.slot('thread.badge', DbMark) })
+```
+
+The mark shows from the window's start, as [the UI loads](#when-the-ui-loads) when the sidebar lists the thread.
 
 Spaces (the sidebar), the rail, work dividers, window actions, app settings and New thread fields are for bundled extensions
 (`superego --skill bundled`).
