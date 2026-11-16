@@ -42,13 +42,14 @@ export function newExtension(profileDir: string, name: string, kind: StarterKind
 /**
  * Check the profile's types (its tsconfig: what `new` wrote) and run its tests, or those of one extension in it
  * (`target`, a folder or file in it), as `superego/testing` runs them: in a process of its own, with the compiler and
- * runner this Superego carries (`built`: a packaged app's). Resolves to the exit code.
+ * runner this Superego carries (`built`: a packaged app's). A test file still running after `timeout` seconds is
+ * stopped, saying which test it was in. Resolves to the exit code.
  */
-export async function testExtension(profileDir: string, target: string | undefined, typesDir: string, built?: string): Promise<number> {
+export async function testExtension(profileDir: string, target: string | undefined, typesDir: string, { built, timeout }: { built?: string; timeout?: number } = {}): Promise<number> {
   // Its types, linked again if they aren't (a fresh clone of a project's).
   if (existsSync(join(profileDir, 'tsconfig.json'))) linkProfileTypes(profileDir, typesDir)
   return new Promise((done) => {
-    const child = spawn(process.execPath, [runner(built), '--types', typesDir, profileDir, ...(target ? [target] : [])], { cwd: profileDir, stdio: 'inherit' })
+    const child = spawn(process.execPath, [runner(built), '--types', typesDir, ...(timeout ? ['--timeout', String(timeout)] : []), profileDir, ...(target ? [target] : [])], { cwd: profileDir, stdio: 'inherit' })
     child.on('exit', (code) => done(code ?? 1))
   })
 }

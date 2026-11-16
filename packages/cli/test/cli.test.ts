@@ -64,6 +64,24 @@ describe('superego', () => {
     expect(await superegoJson(['daemon', 'status'])).toMatchObject({ running: true })
   }, starting(1))
 
+  it("reads a thread's last answer, waiting while it works, a message just sent too", async () => {
+    const created = await superegoJson(['create', home, '-p', 'first question'])
+    expect(await superegoJson(['read', created.id, '--wait'])).toMatchObject({ thread: { id: created.id, state: 'done' }, answer: 'echo: first question' })
+    await superego(['send', created.id, 'second question'])
+    // Right after the send: its answer to that, not the one before.
+    expect(await superego(['read', created.id, '--wait'])).toMatch(/^\* done · first question\n\necho: second question\n$/)
+    await expect(superego(['read', 'nope'])).rejects.toThrow(/No thread nope/)
+  }, starting(1))
+
+  it("prints a command's own usage with --help, and exits 0", async () => {
+    const usage = await superego(['extension', 'test', '--help'])
+    expect(usage).toMatch(/^Usage:\n {2}superego extension test \[extension\]/)
+    expect(usage).toContain('--timeout <seconds>')
+    expect(usage).not.toContain('machines')
+    expect(await superego(['help', 'profile'])).toContain('superego profile new [name] [--user]')
+    await expect(superego(['profile', 'bogus'])).rejects.toThrow(/See: superego profile --help/)
+  })
+
   it('reads and changes settings, and stores API keys', async () => {
     await superego(['settings', 'set', 'agent.model', 'faux/faux-1'])
     expect((await superegoJson(['settings'])).values['agent.model']).toBe('faux/faux-1')
@@ -240,6 +258,24 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     expect(await superego(['--skill', 'guide'])).toMatch(/^# Writing extensions\n/)
     await expect(superego(['--skill', 'nope'])).rejects.toThrow(/Topics: bundled, cli/)
   })
+
+  it('tells which profile extension commands act on: the one you are in, else the default, else how to pick', async () => {
+    await superego(['extension', 'new', 'notes', '--user'])
+    const profile = join(home, 'profiles', 'default')
+    // In its folder (deep in it), no -P or --user needed.
+    expect(await superego(['extension', 'reload'], undefined, join(profile, 'notes'))).toMatch(new RegExp(`^Profile default \\(yours, ${profile}\\): the one you're in\\.`))
+    const tested = await superego(['extension', 'test', 'notes.test.ts'], undefined, join(profile, 'notes'))
+    expect(tested).toMatch(/^Profile default \(yours, .*\): the one you're in/)
+    expect(tested).toContain('passed')
+    // Elsewhere, the folder's default; a profile that isn't there lists those that are.
+    const project = join(home, 'project')
+    mkdirSync(join(project, '.superego', 'profiles', 'lab'), { recursive: true })
+    writeFileSync(join(project, '.superego', 'profiles', 'lab', 'profile.ts'), `export default {}\n`)
+    expect(await superego(['extension', 'reload'], undefined, project)).toMatch(/: the folder's default\. Another: -P <name> --user/)
+    const error = await superego(['extension', 'reload', '-P', 'nope'], undefined, project).then(() => '', (e: Error) => e.message)
+    expect(error).toMatch(/No profile nope here or of yours\. The profiles here:\n {2}lab +project +.*lab\n {2}default +yours +/)
+    expect(error).toContain('Pick one: superego extension reload -P <name> (yours: -P <name> --user)')
+  }, starting(1) + 120_000)
 
   it('stops the daemon', async () => {
     expect(await superegoJson(['daemon', 'stop'])).toMatchObject({ stopped: true })

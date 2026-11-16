@@ -3,11 +3,11 @@
 // this computer or, with `-m <machine>`, on any machine the app knows. `<id> connect` is what `ssh <host> <id> connect`
 // runs on the far side. An app's bin calls `runCli(app, { appDir, bin })`.
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { createConnection } from 'node:net'
 import { hostname } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { renderUnicodeCompact } from 'uqr'
@@ -15,7 +15,9 @@ import { devApp } from './dev-app.ts'
 import { authorTypes, newExtension, testExtension } from './extensions.ts'
 import { setUpProfileTypes, type ProfileTypes } from '@superego/client/author-types'
 import { formatReport } from './inspect.ts'
+import { readThread } from './read.ts'
 import { skill } from './skill.ts'
+import { commandHelp, commandNames, help } from './usage.ts'
 import { catchRedirect } from '@superego/mcp-servers/loopback'
 import { ACTIONS as MCP_ACTIONS, SECTION as MCP_SECTION, type CheckResult as McpCheck, type LogResult as McpLog, type SectionData as McpServers, type ServerInfo as McpServer, type ThreadServers } from '@superego/mcp-servers/shared'
 import {
@@ -56,89 +58,6 @@ let options: CliOptions
 let dataDir: string
 let socket: string
 let machines: MachineStore
-
-const help = () => `${app.id}: ${app.name}
-
-Usage:
-  ${app.id} [dir] [-p prompt]          Start a thread in dir (default: here) and open it in the app
-  ${app.id} open <thread>             Open a thread in the app
-  ${app.id} threads [--archived]      List threads, or the archived ones (also: superego ls)
-  ${app.id} create [dir] [-p prompt]   Start a thread without opening the app; prints its id (also: new)
-  ${app.id} send <thread> <text...>   Send a message to a thread
-      -P, --profile <name>        Start with this profile (default: the folder's default, the project's before yours)
-  -w, --worktree                  In a git repository, work in a worktree of its own (~/.superego/worktrees) instead of the checkout
-
-  ${app.id} profile                    List the profiles a thread here could start with
-  ${app.id} profile new [name] [--user] Make a profile in this project's .superego/profiles (or yours, ~/.${app.id}/profiles)
-  ${app.id} profile types [name] [--user]
-                                Give this project's profiles (or one, or yours) types for an editor: a tsconfig.json,
-                                and node_modules linked to this computer's ~/.${app.id}/types
-  ${app.id} profile allow [name]       Let this project's profile run (again, after it changed)
-  ${app.id} profile allow-ui <name|dir> -m <machine>
-                                Let that machine's profile UI run in this computer's window, as it is now
-  ${app.id} profile revoke-ui <name|dir> -m <machine>
-                                Stop it running here
-
-  ${app.id} extensions [--thread T]    What each extension on this machine is, where it's from, how it stands and
-                                what it registered; with --thread, what that thread goes without, and why
-  ${app.id} extension new <name> [--ui] [-P profile] [--user]
-                                Make an extension in this project's profile (or yours): data-only, or with a UI half
-  ${app.id} extension test [name] [-P profile] [--user]
-                                Check its types and run its tests (superego/testing)
-  ${app.id} extension reload [-P profile] [--user]
-                                Load the profile's changes now, as its next turn would
-
-  ${app.id} machines                   List machines and whether they answer
-  ${app.id} machines add <ssh-target> [--name N] [--command C]
-  ${app.id} machines add --via '<cmd>' [--name N]
-                                Add a machine reached by any command piping stdio to it
-  ${app.id} machines login <machine>   Log in with ssh in this terminal (a password, a code), so connections can ride it
-  ${app.id} machines rm|enable|disable|trust <machine>
-  ${app.id} machines update <machine> [--now]
-                                Update ${app.name} there (its scripts/install-machine.sh) and restart its daemon;
-                                --now even while agents work there (they resume after)
-
-  ${app.id} settings                   List settings and their values
-  ${app.id} settings set <key> <value> Change a setting (value is JSON, or plain text)
-  ${app.id} settings reset <key>       Back to the default
-  ${app.id} layout                     Where the window's views go: layout.json (edit it; Edit layout… in ⌘K), with the
-                                views there are and the places each fits
-  ${app.id} auth                       List providers and how they are signed in
-  ${app.id} auth key <provider>        Store an API key (prompted, or read from stdin)
-  ${app.id} auth logout <provider>     Remove a stored credential
-  ${app.id} auth retry [provider]      Retry the threads waiting for sign-in now (they retry by themselves when the credentials change)
-
-  ${app.id} web pair                   Pair a browser or phone with this machine: a link, its QR code, and a code to type
-  ${app.id} web devices                The devices paired (and your own through Tailscale)
-  ${app.id} web revoke|rename <device> [name]
-
-  ${app.id} actions [--all]            List the actions a machine takes from the command line (--all: every action)
-  ${app.id} do <action> [--<param> <value>...] [--params '<json>']
-                                Run an action; values are coerced to the action's schema
-  ${app.id} actions log                Its newest dispatches, from anywhere
-  ${app.id} mcp                        Serve a machine's actions exposed to MCP as tools, over stdio, for agents elsewhere
-  ${app.id} mcp-servers                The MCP servers a machine's agents use (Settings → MCP servers): how each stands
-  ${app.id} mcp-servers logs <name> [--lines N]
-                                Its log: stderr, log messages, connection errors (secrets hidden)
-  ${app.id} mcp-servers restart <name> Stop it, forget that it failed, and start it again to check it
-  ${app.id} mcp-servers set-secret <name> [VAR]
-                                Store its API key, or the value of a secret env var (prompted, or read from stdin)
-  ${app.id} mcp-servers login <name>   Sign in to it with OAuth: open the page it prints, or paste where the browser ends up
-  ${app.id} mcp-servers logout <name>  Forget its secrets and its sign-in
-
-  ${app.id} daemon [status|stop]       Run this computer's daemon in the foreground, or check on it
-  ${app.id} daemon restart [--now]     Restart it onto the installed code; --now interrupts working agents
-  ${app.id} daemon install|uninstall   Run it as a service (systemd user unit, launchd agent) that outlives logouts and reboots
-  ${app.id} connect [--start]          Bridge stdio to this computer's daemon (ssh runs this)
-
-  ${app.id} --skill [topic]            How to use and extend ${app.name}, for agents: an overview and its topics
-
-Options:
-  -m, --machine <name>          Work on another machine (default: this computer)
-      --all                     settings set/reset: every enabled machine
-      --json                    Print JSON
-  -h, --help
-`
 
 // ── Output ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -655,18 +574,61 @@ async function profileCommand(sub: string | undefined, rest: string[], values: {
   throw new RpcError('usage', `Unknown: ${app.id} profile ${sub}`)
 }
 
-/** The folder of the profile `-P` names (default: `default`) that a thread here would start with, or yours with `--user`. */
-async function profileHere(values: { profile?: string; user?: boolean }, make = false): Promise<string> {
-  const name = values.profile ?? 'default'
-  if (values.user) return join(dataDir, 'profiles', name)
+/** A profile `extension …` acts on, and why that one: named with -P, the one whose folder you're in, or the folder's default. */
+type Chosen = ProfileRef & { by: 'name' | 'folder' | 'default' }
+
+const realPath = (path: string) => { try { return realpathSync(path) } catch { return resolve(path) } }
+const scopeOf = (p: ProfileRef) => p.scope === 'project' ? "this project's" : 'yours'
+
+/** Where `extension …` says which profile it acts on, and how to pick another. */
+const sayProfile = (p: Chosen) => `Profile ${p.name} (${scopeOf(p)}, ${p.dir})${
+  p.by === 'folder' ? ": the one you're in" : p.by === 'default' ? ": the folder's default" : ''}${p.by === 'name' ? '' : `. Another: -P <name>${p.scope === 'user' ? ' --user' : ''}`}`
+
+/**
+ * The profile `extension …` acts on: the one `-P` names (with `--user`, yours), else the one whose folder holds the
+ * working directory, else the one a thread here starts with (the project's default before yours). `make`: one to make
+ * an extension in, which may not be there yet (the project's default, unless named otherwise or you're in another).
+ */
+async function profileHere(values: { profile?: string; user?: boolean }, command: string, make = false): Promise<Chosen> {
+  const userRoot = join(dataDir, 'profiles')
+  const here = realPath(process.cwd())
+  const inside = (dir: string) => { const at = relative(realPath(dir), here); return !at.startsWith('..') && !isAbsolute(at) }
+  // Yours you're in: ~/.superego/profiles/<name>/…, a project's of that name or not.
+  const [yoursHere] = inside(userRoot) ? relative(realPath(userRoot), here).split(sep) : []
+  const yours = (name: string, by: Chosen['by']): Chosen => ({ scope: 'user', name, dir: join(userRoot, name), by })
+  const exists = (p: ProfileRef) => existsSync(join(p.dir, 'profile.ts'))
+  if (values.user || (yoursHere && !values.profile && exists(yours(yoursHere, 'folder')))) {
+    const chosen = values.profile ? yours(values.profile, 'name') : yoursHere && exists(yours(yoursHere, 'folder')) ? yours(yoursHere, 'folder') : yours('default', 'default')
+    if (make || exists(chosen)) return chosen
+  }
   const list = await on(resolveMachine(undefined), (call) => call('action.run', { id: 'profile.list', params: { cwd: process.cwd() }, exposure: 'cli' })) as ProfileInfo[]
-  const found = list.find((p) => p.name === name && p.scope === 'project') ?? (make ? undefined : list.find((p) => p.name === name))
-  if (found) return found.dir
-  if (make) return join(process.cwd(), '.superego', 'profiles', name)
-  throw new RpcError('not_found', `No profile ${name} here. Make one: ${app.id} extension new <name>${values.profile ? ` -P ${values.profile}` : ''}`)
+  if (!values.user) {
+    if (values.profile) {
+      const found = list.find((p) => p.name === values.profile && p.scope === 'project') ?? (make ? undefined : list.find((p) => p.name === values.profile))
+      if (found) return { scope: found.scope, name: found.name, dir: found.dir, by: 'name' }
+      if (make) return { scope: 'project', name: values.profile, dir: join(process.cwd(), '.superego', 'profiles', values.profile), by: 'name' }
+    } else {
+      // The innermost one you're in.
+      const enclosing = list.filter((p) => inside(p.dir)).sort((a, b) => b.dir.length - a.dir.length)[0]
+      if (enclosing) return { scope: enclosing.scope, name: enclosing.name, dir: enclosing.dir, by: 'folder' }
+      const fallback = list.find((p) => p.name === 'default' && (!make || p.scope === 'project'))
+      if (fallback) return { scope: fallback.scope, name: fallback.name, dir: fallback.dir, by: 'default' }
+      if (make) return { scope: 'project', name: 'default', dir: join(process.cwd(), '.superego', 'profiles', 'default'), by: 'default' }
+    }
+  }
+  // Which, then? The ones there are, and how to pick one.
+  const wanted = values.profile ?? 'default'
+  const missing = values.user ? `You have no profile ${wanted} (${join(userRoot, wanted)})`
+    : values.profile ? `No profile ${wanted} here or of yours` : `${here} isn't in a profile's folder, and has no default profile`
+  if (!list.length) throw new RpcError('not_found', `There are no profiles here or of yours.`, { hint: `Make one: ${app.id} extension new <name> --user` })
+  const width = Math.max(...list.map((p) => p.name.length))
+  const listed = list.map((p) => `  ${p.name.padEnd(width)}  ${p.scope === 'project' ? 'project' : 'yours  '}  ${p.dir}`).join('\n')
+  throw new RpcError('not_found', `${missing}. The profiles here:\n${listed}`, {
+    hint: `Pick one: ${app.id} extension ${command} -P <name> (yours: -P <name> --user), or run it in the profile's folder.`,
+  })
 }
 
-async function extensionCommand(sub: string | undefined, rest: string[], values: { profile?: string; user?: boolean; ui?: boolean; 'data-only'?: boolean; machine?: string; thread?: string }) {
+async function extensionCommand(sub: string | undefined, rest: string[], values: { profile?: string; user?: boolean; ui?: boolean; 'data-only'?: boolean; machine?: string; thread?: string; timeout?: string }) {
   if (!sub || sub === 'ls' || sub === 'list' || sub === 'inspect') {
     const machine = resolveMachine(values.machine)
     const { report, servers } = await on(machine, async (call) => {
@@ -680,32 +642,42 @@ async function extensionCommand(sub: string | undefined, rest: string[], values:
     const name = rest[0]
     if (!name) throw new RpcError('usage', `${app.id} extension new <name> [--ui] [-P profile] [--user]`)
     if (values.ui && values['data-only']) throw new RpcError('usage', 'Either --ui or --data-only')
-    const dir = await profileHere(values, true)
+    const profile = await profileHere(values, 'new', true)
+    const { dir } = profile
     const kind = values.ui ? 'ui' : 'data-only'
     const { written, madeProfile, missing, notes } = newExtension(dir, name, kind, await authorTypes(dataDir, options.types))
     // You wrote it, so it may run: a project's profile is allowed as it is now.
-    const project = !values.user && dir.startsWith(join(process.cwd(), '.superego'))
-    if (project) await on(resolveMachine(undefined), (call) => call('action.run', { id: 'profile.allow', params: { cwd: process.cwd(), name: values.profile ?? 'default' }, exposure: 'cli' }))
+    const project = profile.scope === 'project'
+    if (project) await on(resolveMachine(undefined), (call) => call('action.run', { id: 'profile.allow', params: { cwd: dir, name: profile.name }, exposure: 'cli' }))
     return print({ dir, written, madeProfile, missing }, () => {
       console.log(`Made ${name} (${kind === 'ui' ? 'a daemon half and a UI half' : 'data-only'}) in ${dir}${madeProfile ? ', a new profile' : ''}:`)
       for (const file of written) console.log(`  ${file}`)
       if (missing.length) console.log(`Add to its profile.ts's defineProfile({ … }): ${missing.join(', ')}`)
       for (const note of notes) console.log(note)
-      console.log(`\nNext: ${app.id} extension test ${name}${values.profile ? ` -P ${values.profile}` : ''}${values.user ? ' --user' : ''}, then send one of the profile's threads a message.`)
-      if (project) console.log(`After you edit it: ${app.id} profile allow${values.profile ? ` ${values.profile}` : ''} (a project's profile runs as it was allowed).`)
+      const pick = `${profile.by === 'name' || profile.name !== 'default' ? ` -P ${profile.name}` : ''}${project ? '' : ' --user'}`
+      console.log(`\nNext: ${app.id} extension test ${name}${pick}, then send one of the profile's threads a message.`)
+      if (project) console.log(`After you edit it: ${app.id} profile allow ${profile.name} (a project's profile runs as it was allowed).`)
     })
   }
   if (sub === 'test') {
-    const dir = await profileHere(values)
-    const target = rest[0] ? join(dir, rest[0]) : undefined
-    if (target && !existsSync(target)) throw new RpcError('not_found', `No ${rest[0]} in ${dir}`)
-    process.exitCode = await testExtension(dir, target, await authorTypes(dataDir, options.types), options.authorTest)
+    if (resolveMachine(values.machine).config) throw new RpcError('usage', `${app.id} extension test runs here; on another machine, run it there`)
+    const profile = await profileHere(values, 'test')
+    // An extension (its folder) or a test file: in the profile, or from here.
+    const target = rest[0] ? [resolve(rest[0]), join(profile.dir, rest[0])].find((at) => existsSync(at) && !relative(realPath(profile.dir), realPath(at)).startsWith('..')) : undefined
+    if (rest[0] && !target) throw new RpcError('not_found', `No extension or test file ${rest[0]} in ${profile.name} (${profile.dir})`)
+    const timeout = values.timeout === undefined ? undefined : Number(values.timeout)
+    if (timeout !== undefined && !(timeout > 0)) throw new RpcError('usage', '--timeout is in seconds: a number above 0')
+    console.log(sayProfile(profile))
+    process.exitCode = await testExtension(profile.dir, target, await authorTypes(dataDir, options.types), { built: options.authorTest, ...(timeout ? { timeout } : {}) })
     return
   }
   if (sub === 'reload') {
-    const name = values.profile ?? 'default'
-    const ref = await on(resolveMachine(values.machine), (call) => call('action.run', { id: 'profile.reload', params: { ...(values.user ? {} : { cwd: process.cwd() }), name }, exposure: 'cli' })) as ProfileRef
-    return print(ref, () => console.log(`Loaded ${ref.name} (${ref.dir}) again`))
+    const machine = resolveMachine(values.machine)
+    // Here: the profile as `test` picks it, by its own folder. Elsewhere: by name, as a thread in its default folder would.
+    const profile = machine.config ? undefined : await profileHere(values, 'reload')
+    const params = profile ? { cwd: profile.dir, name: profile.name } : { name: values.profile ?? 'default' }
+    const ref = await on(machine, (call) => call('action.run', { id: 'profile.reload', params, exposure: 'cli' })) as ProfileRef
+    return print(ref, () => console.log(profile ? `${sayProfile(profile)}\nLoaded it again` : `Loaded ${ref.name} (${ref.dir}) again`))
   }
   throw new RpcError('usage', `Unknown: ${app.id} extension ${sub}`)
 }
@@ -836,6 +808,21 @@ async function doCommand(argv: string[]) {
   print(result ?? { ok: true }, () => { if (result !== undefined && result !== null) console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2)) })
 }
 
+/** `read`: where a thread stands and its last answer (read.ts, as MCP's thread_read), with `--wait` once it's done working. */
+async function readCommand(id: string | undefined, values: { machine?: string; wait?: boolean }) {
+  if (!id) throw new RpcError('usage', `${app.id} read <thread> [--wait]`)
+  const machine = resolveMachine(values.machine)
+  const read = await on(machine, (call) => readThread((method, params) => call(method as MethodName, params as never) as never, id, { wait: Boolean(values.wait), label: machine.label }))
+  print(read, () => {
+    const { thread, answer } = read
+    // Its status, but when it's done: that's the start of its answer.
+    console.log(`${GLYPH[thread.state] ?? ''} ${thread.state}${thread.status && thread.state !== 'done' ? `: ${thread.status}` : ''} · ${thread.title || '(untitled)'}`)
+    console.log(answer ? `\n${answer}` : '\n(No answer yet)')
+  })
+  // It stopped on an error: say so to a script.
+  if (read.thread.state === 'error') process.exitCode = 1
+}
+
 /** `mcp`: an MCP server on stdio for one machine (mcp.ts), loaded only for this command. */
 async function mcpCommand(name: string | undefined) {
   const machine = resolveMachine(name)
@@ -914,7 +901,7 @@ async function mcpServersCommand(sub: string | undefined, rest: string[], values
     const { server } = await run<McpCheck>(MCP_ACTIONS.logout, { server: await idOf(name) })
     return print(server, () => console.log(`Signed out of ${name} on ${machine.label}.`))
   }
-  throw new RpcError('usage', `Unknown: ${app.id} mcp-servers ${sub}. See ${app.id} --help`)
+  throw new RpcError('usage', `Unknown: ${app.id} mcp-servers ${sub}`)
 }
 
 /**
@@ -986,12 +973,13 @@ function layoutCommand() {
 
 // ── Dispatch ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const COMMANDS = new Set(['extension', 'extensions', 'open', 'threads', 'ls', 'new', 'send', 'machines', 'settings', 'auth', 'daemon', 'connect', 'help', 'create', 'actions', 'do', 'profile', 'profiles', 'web', 'layout', 'mcp', 'mcp-servers'])
+const COMMANDS = new Set([...commandNames(), 'help'])
 
 async function main() {
   // `do` takes the action's own --params, which parseArgs would refuse.
   const at = process.argv.indexOf('do', 2)
   if (at >= 0 && process.argv.slice(2, at).every((a, i, all) => a === '--json' || a === '-m' || a === '--machine' || all[i - 1] === '-m' || all[i - 1] === '--machine')) {
+    if (process.argv.slice(at + 1).some((a) => a === '--help' || a === '-h')) return void process.stdout.write(commandHelp(app, ['do'])!)
     return doCommand([...process.argv.slice(2, at), ...process.argv.slice(at + 1)])
   }
   const { values, positionals } = parseArgs({
@@ -1001,12 +989,16 @@ async function main() {
       user: { type: 'boolean' }, archived: { type: 'boolean' }, ui: { type: 'boolean' }, 'data-only': { type: 'boolean' }, thread: { type: 'string' },
       all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
       start: { type: 'boolean' }, update: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, skill: { type: 'boolean' },
-      lines: { type: 'string' },
+      lines: { type: 'string' }, wait: { type: 'boolean' }, timeout: { type: 'string' },
     },
   })
   json = Boolean(values.json)
   const [first, ...rest] = positionals
-  if (values.help || first === 'help') return console.log(help())
+  // `<command> --help` and `help <command>`: that command's usage; else all of it.
+  if (values.help || first === 'help') {
+    const words = first === 'help' ? rest : positionals
+    return void process.stdout.write((words[0] && COMMANDS.has(words[0]) && commandHelp(app, words)) || help(app))
+  }
   if (values.skill) return void process.stdout.write(skill(first))
   // No command, or a directory: start a thread there and open it.
   if (!first || !COMMANDS.has(first)) return startThread({ dir: first, machine: values.machine, prompt: values.prompt, profile: values.profile, worktree: values.worktree, open: true })
@@ -1023,6 +1015,7 @@ async function main() {
     case 'new': case 'create': return startThread({ dir: rest[0], machine: values.machine, prompt: values.prompt, profile: values.profile, worktree: values.worktree, open: false })
     case 'profile': case 'profiles': return profileCommand(rest[0], rest.slice(1), values)
     case 'extension': case 'extensions': return extensionCommand(rest[0], rest.slice(1), values)
+    case 'read': return readCommand(rest[0], values)
     case 'send': {
       const [id, ...text] = rest
       if (!id || !text.length) throw new RpcError('usage', `${app.id} send <thread> <text...>`)
@@ -1050,7 +1043,11 @@ export function runCli(config: AppConfig, cliOptions: CliOptions) {
   socket = socketPath(app, dataDir)
   machines = new MachineStore(dataDir)
   main().catch((error: unknown) => {
-    const hint = error instanceof RpcError && error.hint ? `\n${error.hint}` : ''
+    // A command used wrong: where its usage is.
+    const misused = (error instanceof RpcError && error.kind === 'usage') || String((error as { code?: unknown }).code).startsWith('ERR_PARSE_ARGS')
+    const command = process.argv.slice(2).find((arg) => !arg.startsWith('-'))
+    const see = misused ? `\nSee: ${app.id}${command && COMMANDS.has(command) && command !== 'help' ? ` ${command}` : ''} --help` : ''
+    const hint = (error instanceof RpcError && error.hint ? `\n${error.hint}` : '') + see
     console.error(`${app.id}: ${error instanceof Error ? error.message : String(error)}${hint}`)
     process.exit(1)
   })

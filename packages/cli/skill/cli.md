@@ -6,7 +6,8 @@ everywhere:
 - `-m <machine>` works on another machine (by name or id from `superego machines`). Default: this computer.
 - `--json` prints JSON instead of a table. Use it whenever a program (or you) reads the output.
 
-`superego help` lists every command.
+`superego help` lists every command; `superego <command> --help` (`superego extension test --help`, say) gives one
+command's usage, options and examples.
 
 ## Threads
 
@@ -16,6 +17,7 @@ superego create [dir] [-p prompt] [-P profile] [-w]   # the same without the app
 superego open <thread>                         # show a thread in the app
 superego send <thread> <text...>               # send a message
 superego threads [--archived]                  # list them (also: ls)
+superego read <thread> [--wait]                # its state and last answer; --wait: once it stops working
 ```
 
 - `-P <profile>` picks a profile; without it a thread gets the folder's `default` profile, the project's before
@@ -30,14 +32,15 @@ superego threads [--archived]                  # list them (also: ls)
 A thread's status is `idle`, `working`, `done`, `blocked` (waiting on the user: a question, say) or `error`. Blocked
 with kind `auth` is waiting for sign-in: its provider rejected the machine's credentials, and it goes on by itself
 once they change (`superego threads` says which provider, and how to sign in again). To wait for an answer from a
-script, poll:
+script, `read --wait` (it waits for the answer to a message just sent too; `--json` for `{ thread, answer }`):
 
 ```sh
-id=$(superego create . -p "Summarise the open TODOs" --json | jq -r .id)
-until superego threads --json | jq -e --arg id "$id" '.[] | select(.id == $id) | .status.state | test("done|blocked|error")' > /dev/null; do sleep 2; done
+id=$(superego create . -p "Summarise the open TODOs")
+superego read "$id" --wait
+superego send "$id" "Now the tests" && superego read "$id" --wait
 ```
 
-The command line doesn't print a thread's transcript; open it in the app (`superego open <id>`).
+The command line prints a thread's last answer, not its transcript; open it in the app (`superego open <id>`).
 
 ## Actions
 

@@ -7,7 +7,7 @@ import { collect, expect, setFile, setRunning, type Running, type Suite, type Te
 /** How long a test or a hook may take unless it says, as `superego extension test` has always given them. */
 const TIMEOUT = 30_000
 
-type Tally = { passed: number; failed: number; skipped: number; todo: number }
+export type Tally = { passed: number; failed: number; skipped: number; todo: number }
 
 const tty = process.stdout.isTTY && !process.env.NO_COLOR
 const paint = (code: number) => (text: string) => tty ? `\x1b[${code}m${text}\x1b[0m` : text
@@ -48,38 +48,61 @@ function describeError(error: unknown, root: string): string {
 
 const indent = (text: string, by: string) => text.split('\n').map((line) => by + line).join('\n')
 
-/** Run each file's tests; resolves to how many passed, failed and were skipped, having printed each. */
-export async function runFiles(files: string[], root: string): Promise<Tally & { errors: number }> {
-  const tally: Tally = { passed: 0, failed: 0, skipped: 0, todo: 0 }
+/**
+ * What a runner outside this process is told as the tests go: the test (or hook) starting, by its suites' names and
+ * its own, and undefined when it's over. Waited on before it starts, so it's told even if the test never yields.
+ */
+export type Progress = (path: string[] | undefined) => unknown
+
+/** The line of the test running now, written up to its name; finished in place as it ends, unless something printed meanwhile. */
+let pending: string | undefined
+let write: (text: string) => void = (text) => { process.stdout.write(text) }
+
+/** Run a file's tests, adding to `tally` how each went, having printed it; resolves to how many errors came outside tests. */
+export async function runFile(file: string, root: string, tally: Tally, progress: Progress = () => {}): Promise<number> {
   // Errors no test caught (a promise left to reject, a throw in a timer): each fails the run.
   const stray: unknown[] = []
   const onStray = (error: unknown) => { stray.push(error) }
   process.on('unhandledRejection', onStray)
   process.on('uncaughtException', onStray)
+  // Anything else printed (a test's console.log) starts on a line of its own.
+  const streams = [process.stdout, process.stderr] as const
+  const originals = streams.map((stream) => stream.write)
+  const own = originals[0]!.bind(process.stdout) as (text: string) => boolean
+  write = (text) => { own(text) }
+  streams.forEach((stream, i) => {
+    stream.write = function (this: NodeJS.WriteStream, ...args: unknown[]) {
+      if (pending !== undefined) { pending = undefined; own('\n') }
+      return (originals[i] as (...a: unknown[]) => boolean).apply(this, args)
+    } as typeof stream.write
+  })
   let errors = 0
-  for (const file of files) {
+  try {
     const name = relative(root, file) || file
     setFile(file)
-    let suite: Suite
+    let suite: Suite | undefined
     try {
       suite = await collect(() => import(pathToFileURL(file).href))
     } catch (error) {
       errors++
       console.log(`${red('✗')} ${name}\n${indent(describeError(error, root), '    ')}`)
-      continue
     }
-    console.log(name)
-    const only = hasOnly(suite)
-    await runSuite(suite, { root, depth: 1, only, skipped: false, tally, eachBefore: [], eachAfter: [] })
+    if (suite) {
+      console.log(name)
+      await runSuite(suite, { root, depth: 1, path: [], only: hasOnly(suite), skipped: false, tally, eachBefore: [], eachAfter: [], progress })
+    }
     for (const error of stray.splice(0)) {
       errors++
       console.log(`  ${red('✗')} an error outside any test\n${indent(describeError(error, root), '      ')}`)
     }
+  } finally {
+    streams.forEach((stream, i) => { stream.write = originals[i]! })
+    write = (text) => { process.stdout.write(text) }
+    setFile(undefined)
+    process.off('unhandledRejection', onStray)
+    process.off('uncaughtException', onStray)
   }
-  setFile(undefined)
-  process.off('unhandledRejection', onStray)
-  process.off('uncaughtException', onStray)
-  return { ...tally, errors }
+  return errors
 }
 
 const hasOnly = (suite: Suite): boolean => suite.children.some((child) => child.mode === 'only' || (child.kind === 'suite' && hasOnly(child)))
@@ -87,6 +110,9 @@ const hasOnly = (suite: Suite): boolean => suite.children.some((child) => child.
 type Context = {
   root: string
   depth: number
+  /** The names of the suites it's in. */
+  path: string[]
+  progress: Progress
   only: boolean
   skipped: boolean
   tally: Tally
@@ -111,6 +137,7 @@ async function runSuite(suite: Suite, ctx: Context, inOnly = false): Promise<voi
     for (const hook of suite.hooks.beforeAll) {
       try {
         let back: unknown
+        await ctx.progress([...ctx.path, 'beforeAll'])
         await timed(async () => { back = await hook() }, TIMEOUT, 'beforeAll')
         if (typeof back === 'function') teardown.unshift(back as () => unknown)
       } catch (error) { failedSetup = error; break }
@@ -126,7 +153,7 @@ async function runSuite(suite: Suite, ctx: Context, inOnly = false): Promise<voi
     if (child.kind === 'suite') {
       console.log(`${pad}${child.name}`)
       await runSuite(child, {
-        ...ctx, depth: ctx.depth + 1, skipped: skipped || child.mode === 'skip',
+        ...ctx, depth: ctx.depth + 1, path: [...ctx.path, child.name], skipped: skipped || child.mode === 'skip',
         eachBefore: [...ctx.eachBefore, ...suite.hooks.beforeEach], eachAfter: [...suite.hooks.afterEach, ...ctx.eachAfter],
       }, chosenHere)
       continue
@@ -137,6 +164,7 @@ async function runSuite(suite: Suite, ctx: Context, inOnly = false): Promise<voi
     await runTest(child, { ...ctx, eachBefore: [...ctx.eachBefore, ...suite.hooks.beforeEach], eachAfter: [...suite.hooks.afterEach, ...ctx.eachAfter] }, pad)
   }
   for (const hook of [...teardown, ...(active ? suite.hooks.afterAll : [])]) {
+    await ctx.progress([...ctx.path, 'afterAll'])
     try { await timed(hook, TIMEOUT, 'afterAll') } catch (error) {
       ctx.tally.failed++
       console.log(`${pad}${red('✗')} ${suite.name ? `${suite.name}: ` : ''}afterAll\n${indent(describeError(error, ctx.root), pad + '    ')}`)
@@ -145,6 +173,26 @@ async function runSuite(suite: Suite, ctx: Context, inOnly = false): Promise<voi
 }
 
 async function runTest(test: Test, ctx: Context, pad: string) {
+  await ctx.progress([...ctx.path, test.name])
+  // Its name as it starts: which one it is, should it never end.
+  pending = tty ? `${pad}${dim('…')} ${test.name}` : `${pad}${test.name} …`
+  write(pending)
+  try {
+    await runTestNow(test, ctx, pad)
+  } finally {
+    pending = undefined
+    await ctx.progress(undefined)
+  }
+}
+
+/** Finish the test's line: in place, or on a line of its own when something printed since it started. */
+function finish(pad: string, glyph: string, name: string, after: string) {
+  if (pending !== undefined && !tty) write(` ${glyph}${after}\n`)
+  else write(`${pending !== undefined ? '\r\x1b[K' : ''}${pad}${glyph} ${name}${after}\n`)
+  pending = undefined
+}
+
+async function runTestNow(test: Test, ctx: Context, pad: string) {
   const started = Date.now()
   const timeout = test.timeout ?? TIMEOUT
   const state: Running = { name: test.name, finished: [], failed: [] }
@@ -185,16 +233,16 @@ async function runTest(test: Test, ctx: Context, pad: string) {
   setRunning(undefined)
   const ms = Date.now() - started
   const time = ms >= 100 ? dim(` ${ms}ms`) : ''
-  if (skippedInside && !errors.length) { ctx.tally.skipped++; console.log(`${pad}${dim(`○ ${test.name}`)}`); return }
+  if (skippedInside && !errors.length) { ctx.tally.skipped++; finish(pad, dim('○'), dim(test.name), ''); return }
   if (test.fails) {
-    if (errors.length) { ctx.tally.passed++; console.log(`${pad}${green('✓')} ${test.name} ${dim('(failed, as it should)')}${time}`) }
-    else { ctx.tally.failed++; console.log(`${pad}${red('✗')} ${test.name}\n${pad}    It passed, but is marked to fail`) }
+    if (errors.length) { ctx.tally.passed++; finish(pad, green('✓'), test.name, ` ${dim('(failed, as it should)')}${time}`) }
+    else { ctx.tally.failed++; finish(pad, red('✗'), test.name, ''); write(`${pad}    It passed, but is marked to fail\n`) }
     return
   }
-  if (!errors.length) { ctx.tally.passed++; console.log(`${pad}${green('✓')} ${test.name}${time}`); return }
+  if (!errors.length) { ctx.tally.passed++; finish(pad, green('✓'), test.name, time); return }
   ctx.tally.failed++
-  console.log(`${pad}${red('✗')} ${test.name}${time}`)
-  for (const error of errors) console.log(indent(describeError(error, ctx.root), pad + '    '))
+  finish(pad, red('✗'), test.name, time)
+  for (const error of errors) write(indent(describeError(error, ctx.root), pad + '    ') + '\n')
 }
 
 export const summary = (t: Tally & { errors: number }) => [

@@ -9,6 +9,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema, type CallToolResult, type Tool } from '@modelcontextprotocol/sdk/types.js'
 import { PROTOCOL_VERSION, RpcError, type ActionInfo, type AppConfig, type Hello, type ThreadInfo } from '@superego/protocol'
 import type { Transport } from '@superego/client'
+import { brief, readThread } from './read.ts'
 
 export type McpOptions = {
   app: AppConfig
@@ -27,24 +28,6 @@ const OBJECT = { type: 'object' as const, properties: {} }
 export function toolOf(action: ActionInfo): Tool {
   const schema = (action.params ?? OBJECT) as Tool['inputSchema']
   return { name: toolName(action.id), title: action.title, description: action.description ?? action.title, inputSchema: { ...schema, type: 'object' } }
-}
-
-/** What a thread is, for an agent elsewhere: no panes, no session internals. */
-const brief = (t: ThreadInfo) => ({
-  id: t.id, title: t.title, state: t.status.state, ...(t.status.msg ? { status: t.status.msg } : {}), cwd: t.cwd,
-  ...(t.parent ? { parent: t.parent } : {}), ...(t.profile ? { profile: t.profile.name } : {}), ...(t.model ? { model: t.model } : {}),
-  ...(t.archived ? { archived: true } : {}), activeAt: new Date(t.activeAt).toISOString(),
-})
-
-/** The text of the newest assistant answer among a conversation's entries, oldest first. */
-function lastAnswer(entries: { model?: unknown[] }[]): string | undefined {
-  for (const entry of [...entries].reverse()) {
-    const message = entry.model?.[0] as { role?: string; content?: unknown } | undefined
-    if (message?.role !== 'assistant' || !Array.isArray(message.content)) continue
-    const said = (message.content as { type: string; text?: string }[]).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim()
-    if (said) return said
-  }
-  return undefined
 }
 
 const READS: Tool[] = [
@@ -105,27 +88,7 @@ export async function serveMcp({ app, label, connect }: McpOptions): Promise<voi
   server.setRequestHandler(CallToolRequestSchema, async ({ params: { name, arguments: args = {} } }, { signal }) => {
     try {
       if (name === 'thread_list') return text((await call<ThreadInfo[]>('thread.list', { archived: Boolean(args.archived) })).map(brief))
-      if (name === 'thread_read') {
-        const id = String(args.id ?? '')
-        // Listed, archived, or hidden (Ego's, asked with ego_ask).
-        const find = async () => {
-          for (const which of [{}, { archived: true }, { hidden: true }]) {
-            const found = (await call<ThreadInfo[]>('thread.list', which)).find((t) => t.id === id)
-            if (found) return found
-          }
-          return undefined
-        }
-        let thread = await find()
-        if (!thread) throw new RpcError('not_found', `No thread ${id} on ${label}`)
-        while (args.wait && thread.status.state === 'working') {
-          if (signal.aborted) throw new Error('Stopped waiting')
-          await new Promise((resolve) => setTimeout(resolve, 500))
-          thread = (await find()) ?? thread
-        }
-        const { entries } = await call<{ entries: { model?: unknown[] }[] }>('thread.history', { id, before: Number.MAX_SAFE_INTEGER, limit: 50 })
-        const answer = lastAnswer(entries)
-        return text({ thread: brief(thread), ...(answer ? { answer } : {}) })
-      }
+      if (name === 'thread_read') return text(await readThread(call, String(args.id ?? ''), { wait: Boolean(args.wait), signal, label }))
       // Any other is an action, by its id: the daemon refuses one that isn't exposed, or isn't allowed now, saying why.
       return text(await call('action.run', { id: name.replaceAll('_', '.'), params: args, exposure: 'mcp' }) ?? { ok: true })
     } catch (error) {
