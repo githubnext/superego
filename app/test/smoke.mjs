@@ -309,6 +309,21 @@ if (phase === 'first') {
   for (const [nth, name] of [[1, 'lightbox-tall'], [2, 'lightbox-wide']]) {
     await run(`(() => { const f = document.querySelectorAll('.images--single')[${nth}]; f.scrollIntoView({ block: 'center' }); f.querySelector('.images__frame').click() })()`)
     await until(fitted, `${name}: the whole image, fitted`)
+    if (name === 'lightbox-tall') {
+      // A right-click on the enlarged image is Chromium's to answer, as an image: what the native menu offers Copy
+      // Image and Save Image As… for. The app's own handler is set aside meanwhile, so no menu opens.
+      const contents = BrowserWindow.getAllWindows()[0].webContents
+      const handlers = contents.listeners('context-menu')
+      contents.removeAllListeners('context-menu')
+      const asked = new Promise((resolve) => contents.once('context-menu', (_event, params) => resolve(params)))
+      const at = await run(`(() => { const r = document.querySelector('.lightbox__image').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } })()`)
+      for (const type of ['mouseDown', 'mouseUp']) contents.sendInputEvent({ type, button: 'right', clickCount: 1, ...at })
+      const params = await Promise.race([asked, new Promise((r) => setTimeout(() => r(undefined), 5000))])
+      contents.removeAllListeners('context-menu')
+      for (const handler of handlers) contents.on('context-menu', handler)
+      if (params?.mediaType !== 'image' || !params.srcURL) await fail(`no image menu on the lightbox's image: ${params?.mediaType}`)
+      if (!await run(`Boolean(document.querySelector('.lightbox:not(:has(.is-zoomed))'))`)) await fail('a right-click zoomed or closed the lightbox')
+    }
     await new Promise((r) => setTimeout(r, 300))
     await shot(name)
     await key2('Escape')
