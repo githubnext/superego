@@ -4,28 +4,65 @@
 // with their params. See docs/mcp.md.
 import { arr, bool, lit, num, obj, opt, str, union, type ExtensionAbout, type Json, type Static } from '@superego/protocol'
 import { map, oneOf } from '@earendil-works/pi-schema'
-import type { ProfileMcpServer } from '@superego/daemon/sdk'
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
 export const about = {
-  name: 'mcp-servers', version: '1.0.0', api: '^2', title: 'MCP servers',
+  name: 'mcp-servers', version: '1.0.0', api: '^2.3', title: 'MCP servers',
   description: "Give agents other people's tools: the MCP servers this machine runs or reaches, signed in to once.",
 } satisfies ExtensionAbout
 
 // ── Config ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** A server's name: its tools' prefix (`mcp__<name>__<tool>`), and what a profile's `mcp` names it by. */
+/** A server's name: its tools' prefix (`mcp__<name>__<tool>`), and what a profile's `mcpServers` names it by. */
 export const SERVER_NAME = /^[a-z][a-z0-9-]{0,23}$/
 
-/** How a server signs in: OAuth (lane 3), an API key, or a command's secret environment variables. */
-export type ServerAuth = NonNullable<ProfileMcpServer['auth']>
+/**
+ * An MCP server a profile defines (in `mcpServers`, as an object of servers by name): a command (stdio) or a URL
+ * (Streamable HTTP), and how it signs in. Field names as Claude Code's and Cursor's `mcpServers`.
+ */
+export type ProfileServer = {
+  title?: string
+  command?: string
+  args?: string[]
+  /** Where a command runs: the project's root (the folder holding the profile's `.superego`) unless this says. */
+  cwd?: string
+  /** Plain values only: a secret goes in `auth: { type: 'env', names }`, its value entered in Settings. */
+  env?: Record<string, string>
+  url?: string
+  headers?: Record<string, string>
+  auth?: ServerAuth
+  /** One process (or session) for every thread that has it, or one per thread. Default `machine`. */
+  lifetime?: 'machine' | 'thread'
+  /** How its tools reach the model: as they are, found by search, or decided by how many (`auto`, the default). */
+  tools?: 'auto' | 'all' | 'search'
+  /** Seconds a call may take, reset by its progress. */
+  timeout?: number
+}
+
+/** How a server signs in: OAuth, an API key, or a command's secret environment variables. */
+export type ServerAuth =
+  | { type: 'oauth'; scopes?: string[]; clientId?: string }
+  /** Sent as `<header>: <scheme> <key>`; by default `Authorization: Bearer <key>`. */
+  | { type: 'api-key'; header?: string; scheme?: string }
+  /** Secret environment variables of a command, by name. */
+  | { type: 'env'; names: string[] }
 
 /**
- * A server of the machine's (`mcp-servers.json`), or one a profile defines (`mcpServers`, without the last three): a
+ * A profile's `mcpServers` (its key in profiles: see `profileKey`): the machine's servers its threads use, by name, and
+ * servers of its own, as objects of servers by name: `['linear', { docs: { command: 'node', args: ['docs.js'] } }]`.
+ * With `extends`, both profiles' together, a server of its own by name the profile's winning.
+ */
+export type ProfileServers = (string | Record<string, ProfileServer>)[]
+
+/** This extension's key in profiles. */
+export const PROFILE_KEY = 'mcpServers'
+
+/**
+ * A server of the machine's (`mcp-servers.json`), or one a profile defines (in `mcpServers`, without the last three): a
  * command (stdio) or a URL (Streamable HTTP; SSE is tried when the URL answers as SSE). Field names as Claude Code's
  * and Cursor's `mcpServers`. It holds no secrets: those are in `mcp-auth.json`, set with `mcp-servers.set-secret`.
  */
-export type ServerConfig = ProfileMcpServer & {
+export type ServerConfig = ProfileServer & {
   /** Used by threads without a profile ("Use in threads without a profile"). Default false. */
   unprofiled?: boolean
   /** Default true. Off, no thread has it, and it doesn't run. */

@@ -129,6 +129,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     agentsDir: options.agentsDir ?? join(homedir(), '.agents'),
     userProfiles: join(options.dataDir, 'profiles'),
     allowances: new Allowances(options.dataDir),
+    profileKeys: new Map(),
     setupTimeout,
     inTime: setupTimeout < 1000 ? `${setupTimeout}ms` : `${Math.round(setupTimeout / 1000)}s`,
   }

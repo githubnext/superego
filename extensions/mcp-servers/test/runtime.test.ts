@@ -166,7 +166,7 @@ const starts = () => callsMade().filter((l) => l.startsWith('start')).length
 
 it("doesn't run a cached profile's server after a restart until its profile loads again, and forgets it with its folder", async () => {
   const project = join(dir, 'acme')
-  writeProfile(project, { mcpServers: { docs: fixture() } })
+  writeProfile(project, { mcpServers: [{ docs: fixture() }] })
   const first = await open([calling('mcp__docs__echo', { text: 'one' }), answer('Done.')])
   await first.peer.call('profile.allow', { cwd: project })
   const thread = await first.peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'go' })
@@ -175,7 +175,7 @@ it("doesn't run a cached profile's server after a restart until its profile load
   await first.close()
 
   // Changed while the daemon was down: it needs allowing again.
-  writeProfile(project, { mcpServers: { docs: fixture({ args: [FIXTURE, '--changed'] }) } })
+  writeProfile(project, { mcpServers: [{ docs: fixture({ args: [FIXTURE, '--changed'] }) }] })
   const second = await open([calling('mcp__docs__echo', { text: 'two' }), answer('Done.')])
   const [docs] = (await section(second.peer)).profiles
   expect(docs).toMatchObject({ name: 'docs', state: 'stopped', profileAllowed: false })

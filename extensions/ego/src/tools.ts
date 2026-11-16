@@ -34,7 +34,7 @@ export type EgoThreads = {
   info(id: string): Promise<ThreadInfo | undefined>
   list(): Promise<ThreadInfo[]>
   /** A new, ordinary thread: top-level in its project, never Ego's child. */
-  start(params: { prompt: string; cwd: string; title?: string; profile?: string; worktree?: boolean }): Promise<ThreadInfo>
+  start(params: { prompt: string; cwd: string; title?: string; profile?: string; options?: Record<string, Json> }): Promise<ThreadInfo>
   answer(id: string): Promise<string | undefined>
 }
 
@@ -86,9 +86,9 @@ What ${name} is:
       prompt: 'You answer customer email for Acme.', // instructions for its agent
       extensions: ['./tools.ts'],                    // agent tools, prompt sections, hooks (defineExtension from '${id}')
       ui: ['./ui/badge.tsx'],                        // window extensions (defineUiExtension from '${id}/ui')
-      mcp: ['linear'],                               // the machine's MCP servers its threads use, by name
+      mcpServers: ['linear'],                        // the machine's MCP servers its threads use, by name, or its own
       without: ['ask-user'],                         // optional extensions it does without: coding-tools, panes, skills, agents-md, thread-tools, thread-reports, ask-user, ego, files, git, images, links, mcp-servers, suggestions, tasks, web-panes
-      worktree: true,                                // its threads get worktrees
+      options: { worktrees: true },                  // what its threads ask extensions for: worktrees of their own
       extends: 'user:default',                       // a project's profile building on the user's
     })
   A project's profile is code from that repo: it runs only once allowed (the profile.allow action, or \`${id} profile
@@ -100,7 +100,7 @@ What ${name} is:
   thread's folder, are standing instructions for every agent.
 - MCP servers are other people's tools for the agents in threads (Linear, GitHub, Sentry, a browser): a command a
   machine runs or a URL it reaches, set up per machine in Settings → MCP servers. A thread uses those its profile
-  names (\`mcp: ['linear']\`, or servers of its own in \`mcpServers\`), or without a profile those switched to "Use in
+  names (\`mcpServers: ['linear']\`, with servers of its own as objects there), or without a profile those switched to "Use in
   threads without a profile". You set them up with superego_mcp_servers: a well-known one by name (op catalog lists
   them), else a command or a URL. A command you add doesn't run until the user allows it (Settings → MCP servers
   shows the whole command line, with Allow): say so. Signing in is the user's: never ask for a key, token or password
@@ -227,10 +227,10 @@ export function egoTools({ dir, dispatch, actions, snapshot, machines, threads, 
         cwd: str({ minLength: 1, description: 'Where it works: the project the work belongs to (~ is home).' }),
         title: opt(str()), profile: opt(str()), worktree: opt(bool({ description: 'Work in a git worktree of its own.' })),
       }),
-      async execute({ cwd, ...args }, api) {
+      async execute({ cwd, worktree, ...args }, api) {
         const refused = await refuseStart?.(Number(api.conversationId), api.callId)
         if (refused) throw new Error(refused)
-        const thread = await threads.start({ ...args, cwd: folder(cwd) })
+        const thread = await threads.start({ ...args, cwd: folder(cwd), ...(worktree !== undefined ? { options: { worktrees: worktree } } : {}) })
         return { ...text(`Started ${linkTo(thread)} (id ${thread.id}), in ${thread.cwd}.`), details: { id: thread.id, title: thread.title } }
       },
     }),

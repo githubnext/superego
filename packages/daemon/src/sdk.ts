@@ -12,7 +12,7 @@ export type {
 } from './extension.ts'
 export type { DaemonContext } from './host.ts'
 export { defineProfile } from './profiles.ts'
-export type { ProfileSpec, ProfileRef, ProfileMcpServer } from './profiles.ts'
+export type { ProfileSpec, ProfileRef, ProfileKey } from './profiles.ts'
 export { defineExtension, defineTool, hook, section, wrapSection, wrapTool } from '@earendil-works/pi-durable'
 export type { Extension as AgentExtension } from '@earendil-works/pi-durable'
 export { arr, bool, int, lit, nullable, num, obj, opt, RpcError, str, union, unknown } from '@superego/protocol'

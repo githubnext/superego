@@ -477,7 +477,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
    * hidden, an extension's own); `hidden`, in no list and the extension's of that name. Extensions' `starting` hooks
    * may move it (a worktree) and give it state.
    */
-  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, worktree, parent, options: asked, hidden, by, exposure }: ThreadStart) {
+  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, parent, options: asked, hidden, by, exposure }: ThreadStart) {
     // Uploads are inline again by now (see connection.ts).
     const dir = folderOf(cwd)
     if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${hostname()}`)
@@ -492,11 +492,8 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     const draft: ThreadDraft = {
       cwd: dir, root: checkout?.root ?? dir, ...(checkout ? { checkout } : {}), title: title?.trim() ?? '',
       ...(prompt ? { prompt } : {}), ...(parent ? { parent } : {}), ...(ref && loaded ? { profile: { ref, spec: loaded.spec } } : {}),
-      // Its profile's, then what it was started with: `worktree` the shorthand for `worktrees`, in both.
-      options: {
-        ...clone(loaded?.spec.options), ...(loaded?.spec.worktree !== undefined ? { worktrees: loaded.spec.worktree } : {}),
-        ...(worktree !== undefined ? { worktrees: worktree } : {}), ...clone(asked),
-      },
+      // Its profile's, then what it was started with.
+      options: { ...clone(loaded?.spec.options), ...clone(asked) },
     }
     const ext: Record<string, Json> = {}
     const meta = { ...(ref ? { profile: ref } : {}) } as ThreadMeta

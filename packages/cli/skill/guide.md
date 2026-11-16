@@ -369,7 +369,7 @@ Three versions, each for its own question:
 | Version | What it versions | Where it's said | Who checks it |
 |---|---|---|---|
 | **The release** | the code a machine runs: its git commit (the packages are `0.0.0`) | `hello.machine.commit`, Settings → Machines ("an older Superego") | the user, who updates |
-| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`2.2.0`; a minor version adds, a major one renames or removes) | `hello.api` | the host, setting an extension up |
+| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`2.3.0`; a minor version adds, a major one renames or removes) | `hello.api` | the host, setting an extension up |
 | **The protocol** | the wire: a generation, `PROTOCOL_VERSION` (`2`), and in it the features each side announces | `hello.version`, `hello.features` | both ends, at `hello` |
 
 And each extension's own **version**, semver, which its other half, profiles and scripts rely on.
@@ -777,13 +777,13 @@ source, at `extensions/<name>/src`, so only a checkout has them.
 | `links` | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
 | `unread` | UI only: a view in the rail `withoutSpaces` and in a phone's `drawer`, an action with keys reading projects, an app setting |
 | `threads` | the required one, UI only: views (the list a `space` with a `rail` of its own, details in the `beside` with ⌘I, the model in the `header`), app settings, tool rows and a `link` |
-| `thread-tools` | daemon only: the agent's thread tools, on `superego.threads` |
-| `thread-reports` | daemon only: report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by `beforeSend`'s `by`); `quiet` for a child whose parent hears it |
+| `thread-tools` | daemon only: the agent's thread tools, on `superego.threads` (`send` with `from`, `noteRead` for what a thread read) |
+| `thread-reports` | daemon only: report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by `beforeSend`'s `by` and `from`), not what the parent has read (`threads.parentRead`); `quiet` for a child whose parent hears it |
 | `worktrees` | `thread` hooks (`starting` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `header.chips` chip, a `thread.badge` mark and a `newThreadField` |
-| `mcp-servers` | a settings section drawn by a component of its own (`settings(ui, …)`) from a live value, with dialogs and `SignInFlow`; tool rows by prefix (`mcp__*`) with a call's own `verb` and images; a `header` view, a `details.section` slot and a `composer.above` notice, all from the thread's facts |
-| `ego` | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `beforeSend` transform marking an outside agent's message; a view in the `rail`, and in a phone's `drawer`; an `onboarding` slot |
+| `mcp-servers` | a key of its own in profiles (`profileKey('mcpServers', …)`); a settings section drawn by a component of its own (`settings(ui, …)`) from a live value (the section's `value`), with dialogs and `SignInFlow`; tool rows by prefix (`mcp__*`) with a call's own `verb` and images; a `header` view, a `details.section` slot and a `composer.above` notice, all from the thread's facts |
+| `ego` | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `beforeSend` transform marking an outside agent's message and `threads.answering` to tell a call that answers one; the machines list through `machines.add`/`update`/`remove`; a view in the `rail`, and in a phone's `drawer`; an `onboarding` slot |
 | `answer-ui` | tools that draw blocks in the transcript and wait on an answer: a `scopedValue` per thread, `status` while it asks, a `composer.above` slot, `tool` views with `{ fold: false }` |
-| `pane-ui` | a pane kind drawn from what the agent sends: a `scopedValue` per thread, kept across restarts and dropped by an `archived` hook; a `method`, `tool` views |
+| `pane-ui` | a pane kind drawn from what the agent sends: its `state` with each thread, published per thread (`state({ publish })`), so it's kept across restarts; `tool` views |
 | `terminal` | bytes on a `channel` (the window's half with `channel` from `superego/unstable`), a `pane` in the pane menu, an action with keys, a `method` for its size, OSC 7501 status as a `scopedValue` and the thread's `status`, `thread` hooks to end its shells |
 
 Diagram sources are the `.mmd` files in [guide/](guide/); re-render with the `diagram` skill

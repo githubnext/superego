@@ -34,13 +34,12 @@ export default defineProfile({
     order: 'an order, with its lines and status. Params: { id }',
   },
   without: ['ask-user'],                             // built-ins to leave out
-  worktree: true,                                    // its threads get a worktree each (in a git repository)
-  options: { worktrees: true },                      // what its threads ask extensions for, by name (the same, longhand)
+  options: { worktrees: true },                      // what its threads ask extensions for, by name: a worktree each
   extends: 'user:default',                           // start from your profile of that name, and add to it
-  mcp: ['linear'],                                   // the machine's MCP servers its threads use, by name
-  mcpServers: {                                      // MCP servers of its own: a command or a URL each
-    docs: { command: 'node', args: ['./tools/docs-mcp.js'], auth: { type: 'env', names: ['DOCS_TOKEN'] } },
-  },
+  mcpServers: [                                      // the mcp-servers extension's key: MCP servers its threads use
+    'linear',                                        // the machine's, by name
+    { docs: { command: 'node', args: ['./tools/docs-mcp.js'], auth: { type: 'env', names: ['DOCS_TOKEN'] } } },  // its own
+  ],
 })
 ```
 
@@ -60,18 +59,22 @@ Every field is optional.
   ones such as `thread-tools` (thread_start, thread_read, …), `ask-user`, `terminal` or `mcp-servers`. Its threads get
   none of their tools or prompt sections, and the window shows none of their UI there. Required ones (the
   sidebar) can't be left out.
-- **`mcp`** names MCP servers the machine has (Settings → MCP servers), for its threads; a name it has none of is
-  left out. **`mcpServers`** defines servers of the profile's own, by name, each a `command` (with `args`, `cwd`,
-  plain `env`) or a `url` (with `headers`), and how it signs in (`auth`: `oauth`, `api-key`, or secret `env` names,
-  their values entered in Settings, never in the file). Names are lower-case letters, digits and hyphens, up to 24.
-  With `extends`, `mcp` lists add up and `mcpServers` merge by name, this profile's winning. The `mcp-servers`
-  extension reads them each turn; a machine without it (or a profile `without` it) runs no servers. A command of the
-  profile's runs in the project's root (its `cwd` defaults there), and only once the profile is allowed: its command
-  line is part of `profile.ts`, so changing it means allowing the profile again. Their secrets (`auth.names`' values,
-  an API key) are set in Settings → MCP servers → From profiles, or `superego mcp-servers set-secret`; OAuth signs in
-  there too, or with `superego mcp-servers sign-in`. A server named as one of the machine's replaces it in this
-  profile's threads. The thread's header says which servers it has (`3 servers`), and why any it names were left out;
-  `superego extensions --thread <id>` too.
+- **`options`** is what its threads ask extensions for, by name, as `thread.start`'s `options` (a thread's own win):
+  `{ worktrees: true }` gives each a git worktree of its own, in a git repository.
+- **Extensions' keys.** Besides these, a profile takes keys an extension registers (`superego.profileKey`,
+  [daemon.md](daemon.md)); that extension checks them as the profile loads (a problem fails it) and merges them over
+  `extends`. The one bundled: **`mcpServers`**, the `mcp-servers` extension's, a list of the MCP servers its threads
+  use: a string names one the machine has (Settings → MCP servers; a name it has none of is left out), and an object
+  defines servers of the profile's own, by name, each a `command` (with `args`, `cwd`, plain `env`) or a `url` (with
+  `headers`), and how it signs in (`auth`: `oauth`, `api-key`, or secret `env` names, their values entered in Settings,
+  never in the file). Names are lower-case letters, digits and hyphens, up to 24. With `extends`, the two lists add
+  up, a server of its own by name this profile's winning. The extension reads it each turn; a machine without it (or a
+  profile `without` it) runs no servers. A command of the profile's runs in the project's root (its `cwd` defaults
+  there), and only once the profile is allowed: its command line is part of `profile.ts`, so changing it means allowing
+  the profile again. Their secrets (`auth.names`' values, an API key) are set in Settings → MCP servers → From
+  profiles, or `superego mcp-servers set-secret`; OAuth signs in there too, or with `superego mcp-servers sign-in`. A
+  server of its own named as one of the machine's replaces it in this profile's threads. The thread's header says
+  which servers it has (`3 servers`), and why any it names were left out; `superego extensions --thread <id>` too.
 
 Profile files are TypeScript (the daemon strips the types as it loads them) or JavaScript. They may import each other
 and Node's built-ins (`node:fs/promises`, …). `'superego'` is the only package they get (and `'superego/ui'` and
@@ -138,7 +141,7 @@ superego profile revoke-ui default -m box    # Settings → Machines lists them 
   now, and says why if it doesn't load. Daemon halves are torn down (their cleanup runs) and set up again.
 - The window loads a profile's UI as soon as it lists one of its threads (sidebar or navigator), and again when a
   shown thread of it moves on after a change ([ui.md](ui.md#when-the-ui-loads)).
-- `model`, `thinking` and `worktree` apply where a thread hasn't chosen its own.
+- `model`, `thinking` and `options` apply where a thread hasn't chosen its own.
 
 ## An example
 

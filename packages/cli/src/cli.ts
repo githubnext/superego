@@ -19,7 +19,7 @@ import { readThread } from './read.ts'
 import { skill } from './skill.ts'
 import { commandHelp, commandNames, help } from './usage.ts'
 import { catchRedirect } from '@superego/mcp-servers/loopback'
-import { ACTIONS as MCP_ACTIONS, SECTION as MCP_SECTION, type CheckResult as McpCheck, type LogResult as McpLog, type SectionData as McpServers, type ServerInfo as McpServer, type ThreadServers } from '@superego/mcp-servers/shared'
+import { ACTIONS as MCP_ACTIONS, SERVERS_VALUE as MCP_SERVERS, type CheckResult as McpCheck, type LogResult as McpLog, type SectionData as McpServers, type ServerInfo as McpServer, type ThreadServers } from '@superego/mcp-servers/shared'
 import {
   checkIdentity, collectProfileUi, controlPath, filesOf, hashProfileUi, loginArgs, machineHub, MachineStore, masterAlive, openLocal, openMachine, routeOf, runUpdate, UiAllowStore, updateScript,
   type MachineConfig, type Transport,
@@ -179,7 +179,7 @@ async function startThread(args: { dir?: string; machine?: string; prompt?: stri
   const cwd = machine.config ? args.dir : resolve(args.dir ?? '.')
   const thread = await on(machine, async (call) => {
     // Actions take their parameters by name; thread.start picks the folder's profile unless one is named.
-    const created = await call('action.run', { id: 'thread.start', params: { ...(cwd ? { cwd } : {}), ...(args.profile ? { profile: args.profile } : {}), ...(args.prompt ? { prompt: args.prompt } : {}), ...(args.worktree ? { worktree: true } : {}) }, exposure: 'cli' }) as ThreadInfo
+    const created = await call('action.run', { id: 'thread.start', params: { ...(cwd ? { cwd } : {}), ...(args.profile ? { profile: args.profile } : {}), ...(args.prompt ? { prompt: args.prompt } : {}), ...(args.worktree ? { options: { worktrees: true } } : {}) }, exposure: 'cli' }) as ThreadInfo
     return created
   })
   if (args.open) openInApp(machine.id, thread.id)
@@ -868,11 +868,11 @@ async function mcpServersCommand(sub: string | undefined, rest: string[], values
     s.runs,
     s.state + (s.tools !== undefined ? ` · ${s.tools} tool${s.tools === 1 ? '' : 's'}${s.deferred ? ', by search' : ''}` : '') + (s.config.unprofiled ? ' · without a profile too' : ''),
   ]
+  /** The machine's servers, as Settings → MCP servers draws them (the extension's live value): null while it's off. */
+  const listed = () => on(machine, (call) => call('value.watch', { key: MCP_SERVERS }).then((r) => r.value as McpServers | null))
   if (!sub || sub === 'ls' || sub === 'list') {
-    const snapshot = await on(machine, (call) => call('settings.watch', {}).then((r) => r.value))
-    const section = snapshot.sections.find((s) => s.id === MCP_SECTION)
-    if (!section) throw new RpcError('not_found', `${machine.label} has no MCP servers: its daemon is older, or the extension is off (Settings → Extensions)`)
-    const data = section.data as McpServers
+    const data = await listed()
+    if (!data) throw new RpcError('not_found', `${machine.label} has no MCP servers: its daemon is older, or the extension is off (Settings → Extensions)`)
     return print(data, () => {
       if (!data.servers.length && !data.profiles.length) return console.log(`No MCP servers on ${machine.label} yet. Add one in the app's Settings → MCP servers.`)
       table([...data.servers, ...data.profiles].map(line))
@@ -884,8 +884,7 @@ async function mcpServersCommand(sub: string | undefined, rest: string[], values
   /** A profile's server goes by its id; a name finds it when it's the only one of that name. */
   const idOf = async (given: string) => {
     if (given.includes('#')) return given
-    const snapshot = await on(machine, (call) => call('settings.watch', {}).then((r) => r.value))
-    const data = snapshot.sections.find((s) => s.id === MCP_SECTION)?.data as McpServers | undefined
+    const data = await listed()
     const found = [...data?.servers ?? [], ...data?.profiles ?? []].filter((s) => s.name === given)
     if (found.length > 1 && !found.some((s) => s.id === given)) throw new RpcError('usage', `More than one server is called ${given}: name one by its id (${found.map((s) => s.id).join(', ')})`)
     return found[0]?.id ?? given
@@ -901,8 +900,7 @@ async function mcpServersCommand(sub: string | undefined, rest: string[], values
   }
   if (sub === 'set-secret') {
     const id = await idOf(name)
-    const snapshot = await on(machine, (call) => call('settings.watch', {}).then((r) => r.value))
-    const data = snapshot.sections.find((s) => s.id === MCP_SECTION)?.data as McpServers | undefined
+    const data = await listed()
     const server = [...data?.servers ?? [], ...data?.profiles ?? []].find((s) => s.id === id)
     if (!server) throw new RpcError('not_found', `No MCP server ${name} on ${machine.label}`)
     const names = server.secrets.map((s) => s.name)
@@ -918,8 +916,7 @@ async function mcpServersCommand(sub: string | undefined, rest: string[], values
     const id = await idOf(name)
     const { transport } = await connect(machine)
     try { await mcpSignIn(transport, machine, id, name) } finally { transport.close() }
-    const snapshot = await on(machine, (call) => call('settings.watch', {}).then((r) => r.value))
-    const data = snapshot.sections.find((s) => s.id === MCP_SECTION)?.data as McpServers | undefined
+    const data = await listed()
     const server = [...data?.servers ?? [], ...data?.profiles ?? []].find((s) => s.id === id)
     return print(server ?? { id }, () => { console.log(`Signed in to ${name} on ${machine.label}.`); if (server) table([line(server)]) })
   }

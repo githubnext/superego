@@ -14,7 +14,7 @@ import type { ActionDef, ActionInfo, AppConfig, Attachment, ChannelAcceptor, Blo
 import type { SectionSpec } from '@superego/settings'
 import type { AuthFlow } from './auth-flows.ts'
 import type { DaemonContext } from './host.ts'
-import type { ProfileRef, ProfileSpec } from './profiles.ts'
+import type { ProfileKey, ProfileRef, ProfileSpec } from './profiles.ts'
 import type { RunRecord } from './recap.ts'
 import type { MachineDraft, MachinePatch } from './relay.ts'
 
@@ -123,10 +123,7 @@ export type ThreadDraft = {
   parent?: string
   /** The profile it starts with, as loaded. */
   profile?: { ref: ProfileRef; spec: ProfileSpec }
-  /**
-   * What extensions were asked for, by name: its profile's `options`, then `NewThread.options` over them (`worktree`,
-   * in either, is `options.worktrees`).
-   */
+  /** What extensions were asked for, by name: its profile's `options`, then `NewThread.options` over them. */
   options: Record<string, Json>
 }
 
@@ -318,6 +315,14 @@ export type DaemonApi = {
    * A `thread` data view (`view`) reading it shows each thread its own scope.
    */
   scopedValue<T extends Json>(key: string, initial: T): ScopedValue<T>
+  /**
+   * A key of this extension's own in profiles (`mcpServers`, say: a word in camelCase, not one of the core's), its
+   * value any JSON: checked as a profile loads (`check`; a problem fails the load), merged over `extends` (`merge`), and
+   * told where profiles are listed (`brings`: `ProfileInfo.brings`, by `title`). The extension reads it from a
+   * thread's profile (`agentParts`' `profile.spec[key]`, a `starting` hook's `draft.profile`). A bundled extension's
+   * only; for profiles loaded while it's set up.
+   */
+  profileKey(key: string, spec: ProfileKey): void
   /** Say a thread needs the user (it shows as blocked) while `contribute` returns something for it. */
   status(contribute: (threadId: string) => StatusContribution | undefined): void
   /** Something `status` depends on changed: recompute and tell clients. */

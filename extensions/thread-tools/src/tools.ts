@@ -8,7 +8,8 @@
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { bool, linkTo, obj, opt, str, type Json, type MachineEntry, type ThreadInfo } from '@superego/protocol'
 
-type NewChild = { prompt: string; title?: string; cwd?: string; profile?: string; worktree?: boolean }
+/** A thread to start, as `thread.start` takes it. */
+type NewChild = { prompt: string; title?: string; cwd?: string; profile?: string; options?: Record<string, Json> }
 
 /** What the tools need of the daemon. Threads are named by id, as strings. */
 export type ThreadsHost = {
@@ -148,8 +149,10 @@ export function threadTools(host: ThreadsHost) {
           profile: opt(str()), worktree: opt(bool({ description: 'Work in a git worktree of its own.' })),
           machine: MACHINE,
         }),
-        async execute({ machine, ...args }, api) {
+        async execute({ machine, worktree, ...rest }, api) {
           const parent = await here(api.conversationId)
+          // A worktree is the worktrees extension's to make: asked of it by name.
+          const args: NewChild = { ...rest, ...(worktree !== undefined ? { options: { worktrees: worktree } } : {}) }
           const place = placeOf(host, machine)
           if (place.start) {
             const child = await place.start(args)

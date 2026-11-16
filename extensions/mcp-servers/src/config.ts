@@ -1,8 +1,8 @@
 // A machine's servers, kept in `<dataDir>/mcp-servers.json` (no secrets: those are in the store), and what can be said
 // of a config without running it: whether it'll do, what it runs in a line, and the secrets it needs.
 import { readFile, rename, writeFile } from 'node:fs/promises'
-import { RpcError } from '@superego/protocol'
-import { CLIENT_SECRET, SERVER_NAME, type ServerConfig, type ServersFile } from './shared.ts'
+import { RpcError, type Json } from '@superego/protocol'
+import { CLIENT_SECRET, SERVER_NAME, type ProfileServers, type ServerConfig, type ServersFile } from './shared.ts'
 
 /** The file, read whole and written whole (atomically), one change at a time. */
 export class ConfigFile {
@@ -114,4 +114,51 @@ export function runKey(config: ServerConfig): string {
 export function profileConfig(config: ServerConfig): ServerConfig {
   const { unprofiled: _u, enabled: _e, allowed: _a, ...rest } = config
   return rest
+}
+
+// ── A profile's `mcpServers` ────────────────────────────────────────────────────────────────────────────────────────
+
+/** What a profile's `mcpServers` says: the machine's servers by name, and its own by name (a later one of a name winning). */
+export function profileServers(value: ProfileServers | undefined): { names: string[]; own: Record<string, ServerConfig> } {
+  const names: string[] = []
+  const own: Record<string, ServerConfig> = {}
+  for (const item of value ?? []) {
+    if (typeof item === 'string') { if (!names.includes(item)) names.push(item) } else Object.assign(own, item)
+  }
+  return { names: names.filter((name) => !(name in own)), own }
+}
+
+/** Why a profile's `mcpServers` won't do, if it won't: a list of server names and objects of servers by name. */
+export function profileServersProblem(value: Json): string | undefined {
+  if (!Array.isArray(value)) return "mcpServers must be a list: the machine's servers by name, and servers of its own as objects ({ docs: { command: … } })"
+  for (const item of value) {
+    if (typeof item === 'string') {
+      if (!SERVER_NAME.test(item)) return `mcpServers: ${JSON.stringify(item)} isn't a server name: lower-case letters, digits and hyphens, starting with a letter, up to 24`
+    } else if (item && typeof item === 'object' && !Array.isArray(item)) {
+      for (const [name, config] of Object.entries(item)) {
+        if (!config || typeof config !== 'object' || Array.isArray(config)) return `mcpServers: ${name} must be an object`
+        const problem = configProblem(name, config as ServerConfig) ?? shapeProblem(name, config as Record<string, Json>)
+        if (problem) return `mcpServers: ${problem}`
+      }
+    } else {
+      return `mcpServers: ${JSON.stringify(item)} is neither a server's name nor an object of servers by name`
+    }
+  }
+  return undefined
+}
+
+/** What `configProblem` takes for granted of a hand-written config: lists of strings, and objects of strings. */
+function shapeProblem(name: string, config: Record<string, Json>): string | undefined {
+  if (config.args !== undefined && (!Array.isArray(config.args) || config.args.some((arg) => typeof arg !== 'string'))) return `${name}.args must be a list of strings`
+  for (const key of ['env', 'headers']) {
+    const map = config[key]
+    if (map !== undefined && (!map || typeof map !== 'object' || Array.isArray(map) || Object.values(map).some((v) => typeof v !== 'string'))) return `${name}.${key} must be an object of strings`
+  }
+  return undefined
+}
+
+/** The servers of a profile's `mcpServers` by name, for where profiles are told about: the machine's it names, and its own. */
+export const profileServerNames = (value: ProfileServers) => {
+  const { names, own } = profileServers(value)
+  return [...names, ...Object.keys(own)]
 }

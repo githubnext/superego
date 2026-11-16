@@ -24,7 +24,7 @@ import type { Threads } from './threads.ts'
 type Shared = { key: string; file: string; profiles: Set<string>; parts: Extension[]; teardown: () => void }
 
 export function createProfileHost(host: Host, extensions: ExtensionHost, later: { threads(): Threads }) {
-  const { registry, mounted, changed, userProfiles, allowances, settings, router, folderOf } = host
+  const { registry, mounted, changed, userProfiles, allowances, profileKeys, settings, router, folderOf } = host
   /** The profiles loaded, by folder. */
   const profiles = new Map<string, LoadedProfile>()
   /** Profiles that failed to load, and why: until they load. */
@@ -116,7 +116,7 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
       // Its modules may hang as they load (a top-level await): given up on in time, so the profiles behind it load.
       let timer: ReturnType<typeof setTimeout> | undefined
       loaded = await Promise.race([
-        loadProfile(ref, userProfiles, allowances),
+        loadProfile(ref, userProfiles, allowances, profileKeys),
         new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new RpcError('invalid', `Profile ${ref.name} didn't load in ${host.inTime}: one of its modules hangs as it loads`)), host.setupTimeout) }),
       ]).finally(() => clearTimeout(timer))
     } catch (error) {
@@ -175,7 +175,7 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
         const description = loaded?.spec.description
         // One whose imports can't be told can't be allowed as it is: loading it says why.
         const allowed = await Promise.resolve().then(async () => allowances.allowed(ref, await hashProfile(ref.dir))).catch(() => false)
-        return { ...ref, ...(description ? { description } : {}), allowed, ...(loaded ? broughtBy(loaded) : {}) }
+        return { ...ref, ...(description ? { description } : {}), allowed, ...(loaded ? broughtBy(loaded, profileKeys) : {}) }
       }))
     },
   }))
@@ -211,7 +211,7 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
       for (const folder of new Set([host.defaultCwd, ...(await later.threads().list()).map((t) => t.project.root)])) {
         for (const ref of listProfiles(folder, userProfiles)) found.set(ref.dir, ref)
       }
-      return Promise.all([...found.values()].map((ref) => describeProfile(ref, userProfiles, allowances)))
+      return Promise.all([...found.values()].map((ref) => describeProfile(ref, userProfiles, allowances, profileKeys)))
     },
   })
 

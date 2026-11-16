@@ -1,7 +1,8 @@
 // mcp-servers, daemon half: the MCP servers agents in threads use (docs/mcp.md). A machine's servers are in
 // `<dataDir>/mcp-servers.json`, changed through this extension's actions (Settings → MCP servers, `superego
-// mcp-servers`); their secrets in `mcp-auth.json`. A profile opts in by name (`mcp`) and may define its own
-// (`mcpServers`, run only once the profile is allowed, as the profile isn't loaded before); a thread without a profile
+// mcp-servers`); their secrets in `mcp-auth.json`. A profile opts in by name and may define its own, both in its
+// `mcpServers` (this extension's key in profiles: `['linear', { docs: { … } }]`; its own run only once the profile is
+// allowed, as the profile isn't loaded before); a thread without a profile
 // gets those marked "Use in threads without a profile"; hidden threads (an extension's own: Ego's) get none. Each turn
 // works out its servers again (`agentParts`), so an edit applies from the next turn.
 import { watch } from 'node:fs'
@@ -11,14 +12,14 @@ import { createToolSearchTool } from '@earendil-works/pi-durable/tool-search'
 import { defineAction, defineDaemonExtension, type AgentPartsThread, type DaemonExtension } from '@superego/daemon'
 import type { DaemonContext } from '@superego/daemon/sdk'
 import { RpcError, type Json } from '@superego/protocol'
-import { checkConfig, ConfigFile, optionalSecretNames, secretNames } from './config.ts'
+import { checkConfig, ConfigFile, optionalSecretNames, profileServerNames, profileServers, profileServersProblem, secretNames } from './config.ts'
 import { Callbacks, DEFAULT_CALLBACK_PORT, redirectOf } from './loopback.ts'
 import { signIn } from './oauth.ts'
 import { interruptedText } from './results.ts'
 import { oauthResource, Runtime, type RuntimeOptions, type Server } from './servers.ts'
 import {
-  about, ACTIONS, ADD_PARAMS, CLIENT_SECRET, DEFAULTS, EDIT_PARAMS, INTERRUPTED, LOG_PARAMS, NAME_PARAMS, SECTION, SERVER_PARAMS, SERVERS_VALUE, SET_PARAMS, SET_SECRET_PARAMS, TOOL_PREFIX,
-  type CheckResult, type LeftOutReason, type LogResult, type SectionData, type ServerConfig, type ServerInfo, type ThreadServers,
+  about, ACTIONS, ADD_PARAMS, CLIENT_SECRET, DEFAULTS, EDIT_PARAMS, INTERRUPTED, LOG_PARAMS, NAME_PARAMS, PROFILE_KEY, SECTION, SERVER_PARAMS, SERVERS_VALUE, SET_PARAMS, SET_SECRET_PARAMS, TOOL_PREFIX,
+  type CheckResult, type LeftOutReason, type LogResult, type ProfileServers, type SectionData, type ServerConfig, type ServerInfo, type ThreadServers,
 } from './shared.ts'
 import { SecretStore, serverKey, type ServerSecrets } from './store.ts'
 
@@ -77,6 +78,8 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
           superego.invalidate()
         }, 10)
       }
+      /** Settings' value as things are now, before an action answers: whoever acted reads it next. */
+      const publish = async () => { if (!superego.signal.aborted) live.set(await sectionData() as SectionData & Json) }
       const runtime = new Runtime(superego, store, changed, options)
       const checkWait = options.checkWait ?? 30_000
       // Where sign-in pages send the browser back to: fixed per app, as authorization servers register it.
@@ -220,9 +223,9 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         }
         if (thread.profile) {
           const { ref, spec } = thread.profile
-          const own = spec.mcpServers ?? {}
-          for (const [name, config] of Object.entries(own)) chosen.push(await runtime.profileServer(ref, name, config as ServerConfig))
-          for (const name of spec.mcp ?? []) if (!(name in own)) usable(runtime.machine(name), name)
+          const { names, own } = profileServers(spec[PROFILE_KEY] as ProfileServers | undefined)
+          for (const [name, config] of Object.entries(own)) chosen.push(await runtime.profileServer(ref, name, config))
+          for (const name of names) usable(runtime.machine(name), name)
         } else {
           for (const server of runtime.servers.values()) if (server.from.type === 'machine' && server.config.unprofiled) usable(server, server.name)
         }
@@ -274,11 +277,19 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         return { servers, ...(memo.left?.length ? { left: memo.left } : {}) } satisfies ThreadServers as Json
       })
 
+      // A profile's servers: the machine's by name, and its own (see ProfileServers).
+      superego.profileKey(PROFILE_KEY, {
+        title: 'MCP servers',
+        check: profileServersProblem,
+        merge: (base, own) => [...base as ProfileServers, ...own as ProfileServers],
+        brings: (value) => profileServerNames(value as ProfileServers),
+      })
+
       // ── Settings ──────────────────────────────────────────────────────────────────────────────────────────────────
 
       superego.settings.register({
         id: SECTION, title: 'MCP servers', order: 25, ui: SECTION, settings: [],
-        description: "Tools from other services for this machine's agents. A profile uses them by name (mcp: ['linear']); threads without one, those marked so.",
+        description: "Tools from other services for this machine's agents. A profile uses them by name (mcpServers: ['linear']); threads without one, those marked so.",
         value: SERVERS_VALUE,
       })
       changed()
@@ -301,6 +312,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
       const checked = async (server: Server | undefined): Promise<CheckResult> => {
         if (!server) throw new RpcError('not_found', 'The server is gone')
         await runtime.check(server, checkWait)
+        await publish()
         return { server: await runtime.info(server) as ServerInfo & Json }
       }
       const save = async (edit: (servers: Record<string, ServerConfig>) => void | Promise<void>) => {
@@ -451,6 +463,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
             flow.emit({ type: 'progress', message: `Connecting to ${server.name}…` })
             await runtime.check(server, checkWait)
             if (runtime.stateOf(server) === 'needs-sign-in') throw new Error(runtime.whyNot(server) ?? `${server.name} turned the sign-in away`)
+            await publish()
           })
         },
       }))

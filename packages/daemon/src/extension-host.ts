@@ -11,7 +11,7 @@ import { registerExtensionSettings } from './extension-settings.ts'
 import type { AgentChoice, AgentPartsThread, DaemonApi, DaemonExtension, LiveValue, ScopedValue, SendTransform, StatusContribution, ThreadHooks, ToolCallRecord } from './extension.ts'
 import { clone, stateOf, type Host, type ThreadMeta } from './host.ts'
 import type { ProfileHost } from './profile-host.ts'
-import type { LoadedProfile, ProfileRef } from './profiles.ts'
+import { CORE_KEYS, type LoadedProfile, type ProfileRef } from './profiles.ts'
 import type { RunRecord } from './recap.ts'
 import type { Relay } from './relay.ts'
 import type { Threads } from './threads.ts'
@@ -524,6 +524,18 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         const value = values.publishScoped(name, initial, life)
         note('values', `${name} (scoped)`)
         return value
+      },
+      profileKey(key, spec) {
+        life.live(`the profile key ${key}`)
+        if (profiles) throw new Error(`Profile key ${key}: only a bundled extension takes profile keys, not a profile's`)
+        if (!/^[a-z][A-Za-z0-9]*$/.test(key)) throw new Error(`Profile key ${key} must be a word in camelCase`)
+        if (CORE_KEYS.has(key)) throw new Error(`Profile key ${key} is the core's own`)
+        const taken = host.profileKeys.get(key)
+        if (taken) throw new Error(`Profile key ${key} is ${taken.owner}'s already`)
+        const entry = { ...spec, owner: extension.name }
+        host.profileKeys.set(key, entry)
+        note('profile keys', key)
+        undo(() => { if (host.profileKeys.get(key) === entry) host.profileKeys.delete(key) }, 'a profile key')
       },
       status(contribute) { own(contributors, contribute, 'a status'); note('status', 'a status') },
       beforeSend(transform) { own(transforms, transform, 'a send transform'); note('beforeSend', 'a send transform') },

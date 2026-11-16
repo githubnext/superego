@@ -13,7 +13,7 @@ Superego will speak MCP in both directions. They share a protocol and nothing el
 | What they get | a machine's actions as tools: `thread_start`, `thread_send`, … | other people's tools: `mcp__linear__create_issue` |
 | Where | `superego mcp` (`packages/cli/src/mcp.ts`) | the bundled extension `mcp-servers` (`extensions/mcp-servers`) |
 | Settings | Settings → Outside agents (`mcp.*`) | Settings → MCP servers (`mcp-servers.*`) |
-| Profile | — | `mcp: ['linear']`, `mcpServers: { … }` |
+| Profile | — | `mcpServers: ['linear', { docs: { … } }]` |
 
 The doc, the code and the UI always say "outside agents" for the first and "MCP servers" for the second. The `mcp.*`
 keys and the `superego mcp` command keep meaning Outside agents. That's why the new extension is `mcp-servers`, not
@@ -27,13 +27,13 @@ Three layers, as decided with the user:
    or a URL (Streamable HTTP), and how each signs in (OAuth, an API key, or secret env vars). You sign in once per
    machine. Secrets and tokens stay on that machine, next to its provider credentials. A remote machine has its own
    list, which the window edits the way it edits that machine's providers.
-2. **A profile opts in, by name:** `mcp: ['github', 'linear']`. A name means the machine's server of that name, so a
+2. **A profile opts in, by name:** `mcpServers: ['github', 'linear']`. A name means the machine's server of that name, so a
    repo's profile works on any machine that has a server by that name. There's room to narrow tools per server
    later (§Future).
 3. **Threads without a profile** get the servers whose "Use in threads without a profile" switch is on. It's off by
    default.
 
-Also, **a project's profile can define servers of its own** (`mcpServers`). They come under profile trust: the
+Also, **a project's profile can define servers of its own**, as objects in the same list (`mcpServers: [{ docs: { … } }]`). They come under profile trust: the
 profile isn't loaded until it's allowed, so its commands can't run before that. Their sign-in still goes in the
 machine's store.
 
@@ -142,25 +142,27 @@ and the expiry.
 import { defineProfile } from 'superego'
 export default defineProfile({
   prompt: 'You triage bugs for Acme.',
-  mcp: ['linear', 'sentry'],            // the machine's servers, by name
-  mcpServers: {                         // this profile's own: on for its threads, no need to list them in `mcp`
-    docs: {
-      command: 'node', args: ['./tools/docs-mcp.js'],   // runs in the project's root
-      auth: { type: 'env', names: ['DOCS_TOKEN'] },     // the value is entered in Settings, kept in the store
+  mcpServers: [
+    'linear', 'sentry',                 // the machine's servers, by name
+    {                                   // this profile's own: on for its threads
+      docs: {
+        command: 'node', args: ['./tools/docs-mcp.js'],   // runs in the project's root
+        auth: { type: 'env', names: ['DOCS_TOKEN'] },     // the value is entered in Settings, kept in the store
+      },
+      status: { url: 'https://status.acme.dev/mcp', auth: { type: 'oauth' } },
     },
-    status: { url: 'https://status.acme.dev/mcp', auth: { type: 'oauth' } },
-  },
+  ],
 })
 ```
 
-- `mcp` takes names only for now. The per-tool narrowing to come will also take
-  `{ server: 'linear', tools: ['list_*', 'create_issue'] }` (§Future).
-- `mcpServers` has the same shape as a Settings entry, minus `unprofiled`, `enabled` and `allowed`, which don't
+- A string names one of the machine's servers. The per-tool narrowing to come needs a shape of its own there, since an
+  object already defines servers (§Future).
+- An object holds servers of the profile's own by name, each the same shape as a Settings entry, minus `unprofiled`, `enabled` and `allowed`, which don't
   apply. Its `cwd` defaults to the project's root, which is the folder holding `.superego`.
 - If a profile's server has the same name as one of the machine's, the profile's wins in that profile's threads,
   just as a project's profile replaces yours. `superego extensions --thread` says so.
-- `extends: 'user:<name>'` merges both fields: `mcp` as a union, and `mcpServers` by name, with the project's
-  winning.
+- `extends: 'user:<name>'` puts the two lists together: names as a union, and servers of its own by name, with the
+  project's winning.
 - `without: ['mcp-servers']` drops every server, the same as switching the extension off.
 - A user profile's servers run like the rest of the user's profile, with no allowing. A project's run only once the
   profile is allowed, because the profile isn't loaded before then. Its command line is in `profile.ts`, so any
@@ -230,19 +232,19 @@ The extension API has four seams for it:
 4. **Tool rows by prefix** in the UI half: `superego.tool('mcp__*', row)`. A `*` may only end the name. A tool's own
    row wins over a prefix, and a longer prefix wins over a shorter one.
 
-`ProfileSpec` gains `mcp` and `mcpServers` (in `profiles.ts`, with the `extends` merge and checks). The checks cover
-names, exactly one of `command` or `url`, `args` as strings, and `env` and `headers` as maps of strings. The rest,
-such as `auth`'s shape, is left to the extension. The core only carries them; the extension reads them. The server's
-type is `ProfileMcpServer`, exported from `'superego'`. The extension's `ServerConfig` is that type plus
-`unprofiled`, `enabled` and `allowed`.
+`mcpServers` is the extension's own key in profiles (`superego.profileKey('mcpServers', { check, merge, brings })`):
+the core carries it as JSON and calls the extension's check as a profile loads (the same rules as a Settings entry:
+names, exactly one of `command` or `url`, `https` off loopback, `args` as strings, `env` and `headers` as maps of
+strings), its merge for `extends`, and its `brings` for the profile card. The server's type is the extension's
+`ProfileServer`; its `ServerConfig` is that type plus `unprofiled`, `enabled` and `allowed`.
 
 ### Which servers a turn has
 
 The extension's `agentParts`, for a thread:
 
 - **Hidden threads** (an extension's own: Ego's) get none.
-- **With a profile:** the servers in `spec.mcp` that the machine has, are enabled and aren't waiting on Allow, plus
-  every server in `spec.mcpServers`.
+- **With a profile:** the servers its `mcpServers` names that the machine has, are enabled and aren't waiting on
+  Allow, plus every server of its own there.
 - **Without a profile:** every server with `unprofiled: true`.
 - A name that matches no server, a disabled server, or one waiting on Allow is left out, and the thread says why
   (§UI).
@@ -532,7 +534,8 @@ These were settled with the user.
 
 - **Importing** servers from Claude Code (`~/.claude.json`, `.mcp.json`) and Cursor (`~/.cursor/mcp.json`). The
   config shapes already match, so it's a copy, plus moving secrets into the store.
-- **Per-tool narrowing** in profiles: `mcp: [{ server: 'linear', tools: ['list_*', 'create_issue'] }]`.
+- **Per-tool narrowing** in profiles: a machine's server with only some of its tools (`list_*`, `create_issue`), in a
+  shape of its own in `mcpServers`.
 - **Code mode** over MCP tools (`@earendil-works/pi-durable/codemode` with `namespaces`): scripts call the tools,
   and only the output reaches the model.
 - **Elicitation** as `ask_ui` blocks; **prompts** as `/` commands in the composer; **resources** as `@` mentions.

@@ -15,8 +15,9 @@
 // no one is unread and notifies for itself.
 //
 // Reports are best-effort, a convenience, not delivery to rely on: which children their parents have read
-// (`threads.noteRead`), the reports waiting to go (however long the parent's run) and which runs answered the parent are in memory, so after a restart a report that
-// was waiting is lost, a run resumed then may report what the parent had read already, and a reply reads as "finished".
+// (`threads.noteRead`), the reports waiting to go (however long the parent's run) and which runs answered the parent
+// are in memory, so after a restart a report that was waiting is lost, a run resumed then may report what the parent
+// had read already, and a reply reads as "finished".
 // A workflow that must know a child finished asks it (thread_read), not its report.
 import { defineExtension, section } from '@earendil-works/pi-durable'
 import { defineDaemonExtension } from '@superego/daemon'

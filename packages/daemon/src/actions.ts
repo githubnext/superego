@@ -39,7 +39,7 @@ export function registerCoreActions(host: Host, { harness, machine, threads, pro
     description: 'Start a thread: an agent working in `cwd` (default: the machine\'s), with `prompt` as its first message. Its id comes back; thread.send sends it more.',
     params: obj({
       cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), attachments: opt(arr(ATTACHMENT)), profile: opt(str()),
-      worktree: opt(bool()), parent: opt(str()), options: opt(obj({}, { open: true })),
+      parent: opt(str()), options: opt(obj({}, { open: true })),
     }),
     run(params, { exposure }) {
       if (exposure === 'outside' && !outsideMayStart()) {

@@ -400,9 +400,6 @@
       "profile": {
         "type": "string"
       },
-      "worktree": {
-        "type": "boolean"
-      },
       "parent": {
         "type": "string"
       },

@@ -1,5 +1,5 @@
 // worktrees, daemon half: a thread in a git repository can work in a worktree of its own, on a branch of its own, when
-// it's started with `worktree: true` (`options.worktrees`) or its profile says so. Archiving removes the worktree when
+// it's started with `options: { worktrees: true }` or its profile's `options` say so. Archiving removes the worktree when
 // nothing in it is uncommitted, and its branch too once that's merged into the main branch (its tip kept with the
 // thread); unarchiving puts both back. Built on thread hooks, state with each thread, and a fact clients see
 // (`facts.worktrees`).

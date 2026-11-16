@@ -100,9 +100,11 @@ Bundled extensions get more than a profile's:
   read with `useAppSetting('orders.x')`, or `context.appSetting('orders.x')` in an action.
 - **Machine settings** from the daemon half: `superego.settings.register({ id: 'orders', title, settings: [{ key: 'orders.x', title, default, type }] })`.
 - **A settings section drawn your own way**, for what isn't a list of settings (a machine's MCP servers, its
-  providers): the daemon half registers `{ id, title, ui: 'orders', settings: [], data }`, the UI half draws it with
-  `superego.settings('orders', Component)` (given `{ target, section }`: run actions with `{ machine: target }`, so a
-  remote machine works the same). Keep what it shows current as a live value and draw from that. A sign-in of the
+  providers): the daemon half registers `{ id, title, ui: 'orders', settings: [], value: 'orders.list' }`, naming a
+  live value of its own that it keeps current, and the UI half draws it with `superego.settings('orders', Component)`
+  (given `{ target, section }`, the value as `section.data`, kept current: run actions with `{ machine: target }`, so a
+  remote machine works the same). `data: () => …` instead is read with each snapshot, for what doesn't change between
+  them. A sign-in of the
   extension's own runs in its daemon (`superego.auth.flow(context, run)`, answered `{ flow }`) and shows in the window
   with `<SignInFlow machine title start onClose />`. `extensions/mcp-servers` does all of it.
 - **Byte streams**, for what doesn't fit JSON calls (a terminal's output and keystrokes): the daemon half accepts

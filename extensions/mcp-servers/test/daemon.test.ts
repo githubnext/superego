@@ -276,7 +276,7 @@ it('gives a thread the servers its profile names, unprofiled ones to threads wit
   const { peer, close } = await open([], {}, [helper])
   await act(peer, 'add', { name: 'fx', server: fixture() })
   await act(peer, 'add', { name: 'other', server: fixture(), allowed: false })
-  write(join(dir, 'profiles', 'tri'), { 'profile.ts': profileTs({ mcp: ['fx', 'nope', 'other'] }) })
+  write(join(dir, 'profiles', 'tri'), { 'profile.ts': profileTs({ mcpServers: ['fx', 'nope', 'other'] }) })
 
   const plain = await peer.call<ThreadInfo>('thread.start', { prompt: 'hi' })
   await done(peer, plain.id)
@@ -316,7 +316,7 @@ it('gives a thread the servers its profile names, unprofiled ones to threads wit
 
 it("runs a project profile's servers only once the profile is allowed, in the project's root", async () => {
   const project = join(dir, 'acme')
-  write(join(project, '.superego', 'profiles', 'default'), { 'profile.ts': profileTs({ mcpServers: { docs: fixture() } }) })
+  write(join(project, '.superego', 'profiles', 'default'), { 'profile.ts': profileTs({ mcpServers: [{ docs: fixture() }] }) })
   const { peer, close } = await open([calling('mcp__docs__echo', { text: 'from the project' }), answer('Done.')])
   await expect(peer.call('thread.start', { cwd: project, prompt: 'go' })).rejects.toThrow(/allow it first/)
   expect(await callsMade()).toEqual([])
@@ -330,7 +330,7 @@ it("runs a project profile's servers only once the profile is allowed, in the pr
   expect(profiles[0]!.id).toMatch(/#docs$/)
   // Changed, it waits to be allowed again: the thread doesn't run, nor does the server start again.
   const starts = (await callsMade()).filter((l) => l.startsWith('start')).length
-  write(join(project, '.superego', 'profiles', 'default'), { 'profile.ts': profileTs({ mcpServers: { docs: fixture({ args: [FIXTURE, '--changed'] }) } }) })
+  write(join(project, '.superego', 'profiles', 'default'), { 'profile.ts': profileTs({ mcpServers: [{ docs: fixture({ args: [FIXTURE, '--changed'] }) }] }) })
   await expect(peer.call('thread.send', { thread: thread.id, text: 'again' })).rejects.toThrow(/allow it first/)
   expect((await callsMade()).filter((l) => l.startsWith('start'))).toHaveLength(starts)
   await close()

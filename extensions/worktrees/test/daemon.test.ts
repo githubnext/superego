@@ -64,7 +64,7 @@ it('gives a thread in a repository a worktree of its own when asked, in the same
   const root = await realpath(dir)
   const { peer, close } = await open()
   // Started in a folder below the top: the same folder, in its own worktree.
-  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: join(dir, 'app'), title: 'Fix the login flow', worktree: true })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: join(dir, 'app'), title: 'Fix the login flow', options: { worktrees: true } })
   const tree = treeOf(thread)!
   expect(tree.branch).toMatch(/^superego\/fix-the-login-flow-[0-9a-f]{6}$/)
   expect(thread.cwd).toBe(join(tree.path, 'app'))
@@ -123,7 +123,7 @@ it('deletes the worktrees a previous process was deleting when it ended, and say
 it("deletes a merged branch when archiving removes its worktree, and makes it again where it was when unarchived", async () => {
   const git = repository()
   const { peer, close } = await open()
-  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Merged', worktree: true })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Merged', options: { worktrees: true } })
   const tree = treeOf(thread)!
   writeFileSync(join(tree.path, 'work.md'), 'work\n')
   execFileSync('git', ['-C', tree.path, 'add', 'work.md'])
@@ -146,7 +146,7 @@ it("deletes a merged branch when archiving removes its worktree, and makes it ag
 it("keeps an unmerged branch when archiving removes its worktree, and deletes it as the daemon starts once it's merged", async () => {
   const git = repository()
   const first = await open()
-  const thread = await first.peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Unfinished', worktree: true })
+  const thread = await first.peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Unfinished', options: { worktrees: true } })
   const tree = treeOf(thread)!
   writeFileSync(join(tree.path, 'wip.md'), 'wip\n')
   execFileSync('git', ['-C', tree.path, 'add', 'wip.md'])
@@ -165,7 +165,7 @@ it("takes its worktree and branch back when a later extension refuses the thread
   const git = repository()
   const refuses = defineDaemonExtension({ name: 'refuses', setup(superego) { superego.thread({ starting() { throw new RpcError('refused', 'Not today') } }) } })
   const { peer, close } = await open(dir, [refuses])
-  await expect(peer.call('thread.start', { cwd: dir, title: 'Doomed', worktree: true })).rejects.toThrow(/Not today/)
+  await expect(peer.call('thread.start', { cwd: dir, title: 'Doomed', options: { worktrees: true } })).rejects.toThrow(/Not today/)
   expect(await peer.call('thread.list', {})).toEqual([])
   expect(git('branch', '--list', 'superego/*')).toBe('')
   expect(git('worktree', 'list').split('\n')).toHaveLength(1)
@@ -180,14 +180,14 @@ it("gives a profile's threads worktrees through its options, unless a thread is 
   const { peer, close } = await open(join(dir, 'data'))
   await peer.call('profile.allow', { cwd: dir })
   expect(treeOf(await peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'From the profile' }))?.branch).toMatch(/^superego\/from-the-profile-/)
-  expect(treeOf(await peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'In place', worktree: false }))).toBeUndefined()
+  expect(treeOf(await peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'In place', options: { worktrees: false } }))).toBeUndefined()
   await close()
 })
 
 it("brings a thread back without its worktree when there's no checkout to restore it from", async () => {
   repository()
   const { peer, close } = await open()
-  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Orphan', worktree: true })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Orphan', options: { worktrees: true } })
   expect(Object.values((await archive(peer, thread.id)).notes)[0]).toMatch(/^Removed the worktree/)
   // Its main checkout is no repository any more: nothing to put it back from, so it comes back without rather than refusing.
   rmSync(join(dir, '.git'), { recursive: true, force: true })
@@ -201,7 +201,7 @@ it('stops what still runs from a worktree before archiving removes it, but leave
   repository()
   const { spawn } = await import('node:child_process')
   const { peer, close } = await open()
-  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Busy', worktree: true })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Busy', options: { worktrees: true } })
   const tree = treeOf(thread)!
   // One working in it (a shell left there), one run from a file in it (a dev server), each in a group of its own.
   const working = spawn('sleep', ['60'], { cwd: tree.path, detached: true, stdio: 'ignore' })
@@ -222,7 +222,7 @@ it("is removed when the thread tools archive a thread, a thread's own only once 
   const { default: threadTools } = await import('@superego/thread-tools/daemon')
   const turn = (content: Json[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
   const first = await open(dir, [threadTools])
-  const child = await first.peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Child', worktree: true })
+  const child = await first.peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Child', options: { worktrees: true } })
   await first.close()
   // The child archived, then itself; and it carries on in its worktree to the end of its turn.
   writeFileSync(join(dir, 'turns.jsonl'), [
@@ -232,7 +232,7 @@ it("is removed when the thread tools archive a thread, a thread's own only once 
     turn([{ type: 'text', text: 'Done.' }], 'stop'),
   ].join('\n') + '\n')
   const { peer, close } = await open(dir, [threadTools], `replay:${join(dir, 'turns.jsonl')}`)
-  const self = await peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Self', worktree: true, prompt: 'tidy up' })
+  const self = await peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Self', options: { worktrees: true }, prompt: 'tidy up' })
   const selfTree = treeOf(self)!
   // What archiving itself did is said in it, as Superego's note.
   await until(async () => JSON.stringify((await peer.call<{ value: { entries: unknown[] } }>('thread.watch', { thread: self.id })).value.entries).includes(`Archived. Removed the worktree ${selfTree.path}; branch ${selfTree.branch} deleted (merged).`))

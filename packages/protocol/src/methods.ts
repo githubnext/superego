@@ -115,9 +115,10 @@ export type Pane = { id: string; kind: string; title?: string; params?: Json }
 export type ProfileRef = { name: string; scope: 'user' | 'project'; dir: string }
 /**
  * A profile a thread in some folder could start with (see the daemon's profiles.ts). Once loaded, what it brings: its
- * extensions (by name, with those of the profile it extends) and the MCP servers its threads use (by name).
+ * extensions (by name, with those of the profile it extends), and what extensions' keys in it bring, by what they are
+ * (`{ 'MCP servers': ['linear'] }`: see `profileKey`).
  */
-export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean; extensions?: string[]; mcp?: string[] }
+export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean; extensions?: string[]; brings?: Record<string, string[]> }
 
 /** A file sent with a message: images go to the model as images; any file is saved on the thread's machine. */
 export type Attachment = { name: string; mimeType: string; /** Base64. */ data: string }
@@ -136,15 +137,13 @@ export type NewThread = {
   prompt?: string
   /** Files sent with the first message. */
   attachments?: AttachmentRef[]
-  /** In a git repository: a worktree of its own, rather than the checkout (its profile's choice when unset; else no). */
-  worktree?: boolean
   /** The profile to run with; unset takes the folder's default (the project's, else the user's). */
   profile?: string
   /** The thread starting it, on the same machine. */
   parent?: string
   /**
-   * What extensions are asked for, by name, as their `starting` hooks read it: `{ worktrees: true }`. `worktree` is
-   * the shorthand for `worktrees`.
+   * What extensions are asked for, by name, as their `starting` hooks read it, over its profile's `options`:
+   * `{ worktrees: true }`, a git worktree of its own.
    */
   options?: Record<string, Json>
 }

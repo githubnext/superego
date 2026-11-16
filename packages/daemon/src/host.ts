@@ -9,7 +9,7 @@ import type { SettingsRegistry } from '@superego/settings'
 import type { AgentSettings } from './agent-settings.ts'
 import type { AuthFlows } from './auth-flows.ts'
 import type { DaemonOptions } from './daemon.ts'
-import type { Allowances, ProfileRef } from './profiles.ts'
+import type { Allowances, ProfileKeys, ProfileRef } from './profiles.ts'
 import type { Values } from './values.ts'
 
 /** The context the daemon's own work runs in: none of it is cancelled from outside. */
@@ -108,6 +108,8 @@ export type Host = {
   /** The user's own profiles, and which projects' may run. */
   userProfiles: string
   allowances: Allowances
+  /** The keys extensions own in profiles (`superego.profileKey`). */
+  profileKeys: ProfileKeys
   /** How long an extension's setup (or a profile's modules loading) may take, in ms, and that said in words. */
   setupTimeout: number
   inTime: string

@@ -125,7 +125,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `extensions/threads` | the sidebar: projects and their threads; the thread tools' rows and `thread:` links (UI; required) |
 | `extensions/thread-tools` | the agent's `thread_*` tools (daemon; optional) |
 | `extensions/thread-reports` | a thread started by another tells it when what it was asked finishes, fails or waits on a question, until the user takes it over by writing to it; meanwhile the child is `quiet`, unread and notified only when it needs you (daemon; optional) |
-| `extensions/worktrees` | a git worktree of its own for a thread that asks (`-w`, the New thread checkbox, a profile's `worktree: true`): made on a branch, removed when archived clean (what still runs from it stopped first), put back when unarchived; the branch in the title bar (daemon + UI; required) |
+| `extensions/worktrees` | a git worktree of its own for a thread that asks (`-w`, the New thread checkbox, `options: { worktrees: true }` in a profile): made on a branch, removed when archived clean (what still runs from it stopped first), put back when unarchived; the branch in the title bar (daemon + UI; required) |
 | `extensions/ego` | Ego, Superego's own agent: one hidden thread per machine, its prompt and tools that read and set up; the rail's lifebuoy (a phone's drawer's too), *Ask Ego* in ⌘K, *Clear* (daemon + UI) |
 | `extensions/ask-user` | an `ask_user` tool; the question card and blocked status (daemon + UI) |
 | `extensions/answer-ui` | `show_ui` (blocks in the transcript, pressed later as a message) and `ask_ui` (blocks above the composer, waiting for an answer); both drawn out of the run's fold (daemon + UI) |
@@ -198,7 +198,7 @@ threads use **MCP servers**: Settings → MCP servers lists a machine's, each a 
 reaches (Streamable HTTP), with how it signs in: OAuth in the browser, an API key, or secret environment variables.
 Secrets stay on that machine, in `mcp-auth.json` (mode 0600), never in `mcp-servers.json`. Add server offers well-known
 ones to start from, and checks a server as it's saved ("Connected · 23 tools"). A thread uses the servers its profile
-names (`mcp: ['linear']`, below), or, without a profile, those switched to *Use in threads without a profile*. Its
+names (`mcpServers: ['linear']`, below), or, without a profile, those switched to *Use in threads without a profile*. Its
 calls show as rows (*Called Linear · create_issue*), its header says how many servers it has (`3 servers`, opening to each
 with its state and why any were left out), and a server needing sign-in puts a notice over its composer. Ego sets
 servers up too ("connect Linear"), but never takes a key in chat, and a command it adds waits for **Allow** in
@@ -248,20 +248,21 @@ export default defineProfile({
   extensions: ['./orders.ts'],     // agent parts, or daemon halves (actions, live values), from 'superego'
   ui: ['./ui/order.tsx'],          // defineUiExtension({ name, setup(superego) { superego.pane('order', …) } }) from 'superego/ui'
   panes: { order: 'an order, with its lines and status. Params: { id }' },  // told to the agent, for pane_open
-  mcp: ['linear', 'sentry'],       // the machine's MCP servers its threads use (Settings → MCP servers), by name
-  mcpServers: {                    // servers of its own: a command (run in the project's root) or a URL
-    docs: { command: 'node', args: ['./tools/docs-mcp.js'], auth: { type: 'env', names: ['DOCS_TOKEN'] } },
-  },
+  mcpServers: [                    // the mcp-servers extension's key: the MCP servers its threads use
+    'linear', 'sentry',            // the machine's (Settings → MCP servers), by name
+    { docs: { command: 'node', args: ['./tools/docs-mcp.js'], auth: { type: 'env', names: ['DOCS_TOKEN'] } } },  // its own
+  ],
   without: ['ask-user'],           // optional extensions its threads go without
-  worktree: false,                 // its threads work in place (the default); true: each in a worktree of its own
-  options: { worktrees: false },   // what its threads ask extensions for, by name (`worktree` is the shorthand for this one)
+  options: { worktrees: true },    // what its threads ask extensions for, by name: each a worktree of its own
 })
 ```
 
-A profile's `mcpServers` take the shape of a Settings entry (`command`, `args`, `cwd`, `env`, or `url`, `headers`;
+`mcpServers` is a key of the mcp-servers extension's own (an extension registers one with `superego.profileKey`, and
+checks and merges it; the core only carries it). A name in it is one of the machine's servers; an object, servers of
+the profile's own by name, each the shape of a Settings entry (`command`, `args`, `cwd`, `env`, or `url`, `headers`;
 `auth`, `lifetime`, `tools`, `timeout`); their secrets are entered in Settings → MCP servers → From profiles, never in
-the file. A project's run only once its profile is allowed, like the rest of it. With `extends`, `mcp` lists add up and
-`mcpServers` merge by name, the project's winning; `without: ['mcp-servers']` drops them all.
+the file. A project's run only once its profile is allowed, like the rest of it. With `extends`, the two lists add
+up, a server of its own by name the project's winning; `without: ['mcp-servers']` drops them all.
 
 A profile's UI is TSX or TS, compiled when the daemon serves it; it imports `react` and `superego/ui` (the window's own
 hooks and components, the file editor among them). Examples to read: the skill's build queue

@@ -1,13 +1,14 @@
 // The seams an extension adds to whatever agent a thread has, and signs in with: `agentParts` (parts that add up, asked
 // at submit with the profile as loaded now), `agent()`'s handle (a part replaced mid-run, or removed), `auth.flow`
-// (a sign-in flow of an extension's own), and a profile's `mcp` and `mcpServers` (checked, and merged over `extends`).
+// (a sign-in flow of an extension's own), and an extension's own keys in profiles (`profileKey`: checked, merged over
+// `extends`, and told in profile.list).
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
-import { defineApp, obj, PROTOCOL_VERSION, type AuthEvent, type Notifications, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { defineApp, obj, PROTOCOL_VERSION, type AuthEvent, type Notifications, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineAction, defineDaemonExtension, listen, openDaemon, type AgentPartsThread, type DaemonApi, type DaemonExtension } from '../src/index.ts'
 import { until } from './until.ts'
 
@@ -177,39 +178,46 @@ it("runs an extension's own sign-in flow as a provider's: events, a prompt answe
   await close()
 })
 
-it("gives agentParts the profile as loaded now: mcp and mcpServers merged over extends, and checked", async () => {
+it("gives agentParts the profile as loaded now: an extension's keys checked and merged over extends, as it says", async () => {
   const home = join(dir, 'profiles', 'default')
   const project = join(dir, 'acme')
   const projectProfile = join(project, '.superego', 'profiles', 'default')
-  write(home, { 'profile.ts': profileTs({ mcp: ['linear', 'sentry'], mcpServers: { docs: { command: 'node', args: ['user.js'] }, status: { url: 'https://status.example/mcp' } } }) })
-  write(projectProfile, { 'profile.ts': profileTs({ extends: 'user:default', mcp: ['sentry', 'github'], mcpServers: { docs: { command: 'node', args: ['project.js'] } } }) })
+  write(home, { 'profile.ts': profileTs({ colors: ['red', 'blue'], shade: 'dark', loose: 1 }) })
+  write(projectProfile, { 'profile.ts': profileTs({ extends: 'user:default', colors: ['blue', 'green'], shade: 'light' }) })
   const specs: unknown[] = []
-  const reader = defineDaemonExtension({ name: 'reader', setup(s) { s.agentParts(({ profile }) => { specs.push(profile && { ref: profile.ref.scope, mcp: profile.spec.mcp, mcpServers: profile.spec.mcpServers }) }) } })
+  const reader = defineDaemonExtension({
+    name: 'reader',
+    setup(s) {
+      s.profileKey('colors', {
+        title: 'Colours',
+        check: (value) => Array.isArray(value) && value.every((c) => typeof c === 'string' && /^[a-z]+$/.test(c)) ? undefined : 'colors: lower-case names, please',
+        merge: (base, own) => [...new Set([...base as string[], ...own as string[]])],
+        brings: (value) => value as string[],
+      })
+      // Without a merge, a profile's own replaces what it extends.
+      s.profileKey('shade', {})
+      for (const taken of ['model', 'colors', 'bad-key']) expect(() => s.profileKey(taken, {})).toThrow()
+      s.agentParts(({ profile }) => { specs.push(profile && { ref: profile.ref.scope, colors: profile.spec.colors, shade: profile.spec.shade, loose: profile.spec.loose }) })
+    },
+  })
   const { peer, close } = await open([reader])
   await peer.call('profile.allow', { cwd: project })
   const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'hi' })
   await done(peer, thread.id)
-  expect(specs.at(-1)).toEqual({
-    ref: 'project',
-    mcp: ['linear', 'sentry', 'github'],
-    mcpServers: { docs: { command: 'node', args: ['project.js'] }, status: { url: 'https://status.example/mcp' } },
-  })
+  // A key no extension here has is carried as it is.
+  expect(specs.at(-1)).toEqual({ ref: 'project', colors: ['red', 'blue', 'green'], shade: 'light', loose: 1 })
+  // What it brings, by what the extension calls it.
+  const listed = await peer.call<ProfileInfo[]>('profile.list', { cwd: project })
+  expect(listed.find((p) => p.scope === 'project')).toMatchObject({ brings: { Colours: ['red', 'blue', 'green'] } })
   // Edited (and allowed again), the next turn has it.
-  write(projectProfile, { 'profile.ts': profileTs({ extends: 'user:default', mcp: [] }) })
+  write(projectProfile, { 'profile.ts': profileTs({ extends: 'user:default', colors: [] }) })
   await peer.call('profile.allow', { cwd: project })
   await peer.call('thread.send', { thread: thread.id, text: 'again' })
   await done(peer, thread.id)
-  expect(specs.at(-1)).toMatchObject({ mcp: ['linear', 'sentry'], mcpServers: { docs: { args: ['user.js'] } } })
-  // Names a tool prefix can carry, and a command or a URL each.
-  for (const [spec, error] of [
-    [{ mcp: ['Linear'] }, /mcp: "Linear" isn't a server name/],
-    [{ mcpServers: { my__docs: { command: 'node' } } }, /"my__docs" isn't a server name/],
-    [{ mcpServers: { docs: { command: 'node', url: 'https://x' } } }, /mcpServers.docs needs one of command or url, not both/],
-    [{ mcpServers: { docs: { args: ['x'] } } }, /mcpServers.docs needs one of command or url$/],
-  ] as const) {
-    write(projectProfile, { 'profile.ts': profileTs(spec) })
-    await peer.call('profile.allow', { cwd: project })
-    await expect(peer.call('thread.start', { cwd: project })).rejects.toThrow(error)
-  }
+  expect(specs.at(-1)).toMatchObject({ colors: ['red', 'blue'], shade: 'dark' })
+  // Its check refuses what won't do: the profile doesn't load.
+  write(projectProfile, { 'profile.ts': profileTs({ colors: ['Red'] }) })
+  await peer.call('profile.allow', { cwd: project })
+  await expect(peer.call('thread.start', { cwd: project })).rejects.toThrow(/colors: lower-case names, please/)
   await close()
 })

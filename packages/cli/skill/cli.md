@@ -63,7 +63,7 @@ Useful ones:
 
 | Action | Does |
 |---|---|
-| `thread.start` `cwd? title? prompt? profile? model? worktree? parent?` | start a thread |
+| `thread.start` `cwd? title? prompt? profile? model? parent? options?` | start a thread; `options: { worktrees: true }` gives it a git worktree of its own |
 | `thread.send` `thread text whenBusy?=steer\|followUp` | send a message |
 | `thread.stop` `thread` | stop the agent |
 | `thread.rename` `thread title`, `thread.archive` `thread`, `thread.unarchive` `thread` | `thread.archive` answers `{ notes }`, what extensions did (its worktree removed, say). Ego is never archived |
