@@ -7,6 +7,7 @@
 .ask-user__context { max-height: 45vh; overflow: auto; margin-bottom: var(--superego-space-4); font-size: var(--superego-text-body); line-height: var(--superego-leading-body); -webkit-user-select: text; user-select: text; }
 .ask-user__card { padding: 6px; }
 .ask-user__ask { padding: 8px 10px 6px; font-size: var(--superego-text-body); font-weight: 600; line-height: 1.4; -webkit-user-select: text; user-select: text; }
+.ask-user__ask .md { line-height: inherit; }
 .ask-user__options { display: flex; flex-direction: column; padding-top: 2px; }
 .ask-user__option { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; cursor: default; }
 .ask-user__option:hover, .ask-user__option:focus-visible, .ask-user__option.is-active { background: var(--superego-hover); outline: none; }

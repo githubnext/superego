@@ -144,7 +144,7 @@ dispatch('thread.submit', { id: thread.id, text: 'Ship it' }, { machine: machine
 ```
 
 Components: `Button`, `IconButton`, `TextField`, `TextArea`, `Select`, `Switch`, `List`, `ListItem`, `Panel`,
-`Dialog`, `Menu`, `Popover`, `Tooltip`, `StatusGlyph`, `Markdown` (render Markdown text), `FileEditor` (the file editor,
+`Dialog`, `Menu`, `Popover`, `Tooltip`, `StatusGlyph`, `Markdown` (an agent's text set exactly as the transcript sets it, its links followed by the same handlers: `<Markdown text={answer} />`; for a preview, `<Markdown text={answer} compact lines={4} />`: `lines` cuts it to that many lines with an ellipsis, `compact` sets it at the UI's size with tighter spacing), `FileEditor` (the file editor,
 Markdown in live preview: `<FileEditor machine={machine} thread={thread} path={path} actions={…} />`; its links follow the link handlers, as a message's do), `Diff`
 (a unified diff, file by file: `<Diff diff={text} />`; `parseDiff(text)` for its files and counts), `Picker` (a dialog
 with a list that narrows as you type, as the palette is: `<Picker label placeholder items={list} filter={(items, query) => …}

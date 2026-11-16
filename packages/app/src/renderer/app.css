@@ -223,16 +223,23 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .turn-end { display: flex; gap: 6px; margin-top: -4px; font-size: calc(11.5px * var(--superego-text-scale)); color: var(--superego-faint); font-variant-numeric: tabular-nums; }
 .turn-end > * + *::before { content: '·'; margin-right: 6px; }
 
-/* Markdown: the reading column's rhythm, one step of space between blocks. */
+/* Markdown: the reading column's size and rhythm, one step of space between blocks, wherever it's put. Where it sits in
+   text set its own way (a note in the work, your bubble, a notice), it takes that text's size. */
+.md { font-size: var(--superego-text-body); line-height: var(--superego-leading-body); }
+:is(.step__note, .msg--user, .profile-ui-notice) .md { font-size: inherit; line-height: inherit; }
 .md > :first-child { margin-top: 0; }
 .md > :last-child { margin-bottom: 0; }
-.md p, .md ul, .md ol, .md pre, .md blockquote, .md .md__table, .md .md__code { margin: 0 0 var(--superego-space-3); }
+.md p, .md ul, .md ol, .md pre, .md blockquote, .md .md__table, .md .md__code { margin: 0 0 var(--md-gap, var(--superego-space-3)); }
 .md .md__code > pre { margin: 0; }
 .md h1, .md h2, .md h3, .md h4 { font-size: 1em; font-weight: 650; line-height: 1.35; margin: 22px 0 6px; }
 .md h1 { font-size: 1.35em; }
 .md h2 { font-size: 1.2em; }
 .md h3 { font-size: 1.07em; }
 .md ul, .md ol { padding-left: 1.35em; }
+/* Bullets by their depth in the text, not the page's (in a list of the page's own, a browser would draw them as nested). */
+.md ul { list-style-type: disc; }
+.md :is(ul, ol) ul { list-style-type: circle; }
+.md :is(ul, ol) :is(ul, ol) ul { list-style-type: square; }
 .md li { margin: 0 0 var(--superego-space-1); padding-left: 2px; }
 .md li > p { margin: 0; }
 .md li::marker { color: var(--superego-muted); }
@@ -269,6 +276,14 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .md th, .md td { text-align: left; padding: 6px 24px 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--superego-border) 45%, transparent); vertical-align: top; }
 .md th { font-size: var(--superego-text-sm); font-weight: 600; color: var(--superego-muted); border-bottom-color: var(--superego-border); }
 .md tr:last-child td { border-bottom: 0; }
+/* Compact: the UI's size, half the space between blocks, headings no bigger than the text. */
+.md.md--compact { --md-gap: var(--superego-space-2); font-size: var(--superego-text-ui); line-height: var(--superego-leading-ui); }
+.md--compact :is(h1, h2, h3, h4) { font-size: 1em; margin: var(--superego-space-3) 0 var(--superego-space-1); }
+.md--compact li { margin-bottom: 0; }
+.md--compact hr { margin: var(--superego-space-3) 0; }
+/* Clamped to a few lines (its style sets how many), the last ending in an ellipsis; nothing in it to press but links. */
+.md--clamped { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.md--clamped .md__copy { display: none; }
 
 .dock { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); width: calc(var(--superego-column) + 2 * var(--superego-space-4)); max-width: calc(100% - 2 * var(--superego-space-4)); display: flex; flex-direction: column; }
 .dock__above:not(:empty) { margin-bottom: 10px; }

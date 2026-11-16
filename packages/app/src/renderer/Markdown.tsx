@@ -289,11 +289,20 @@ const noPrefix = { clobberPrefix: '' }
 const gfm = [remarkGfm]
 const gfmWithBreaks = [remarkGfm, remarkBreaks]
 
-/**
- * `text` as Markdown; with `html`, its HTML too (sanitized), as a document's; with `breaks`, each newline a line break,
- * as a person typed it.
- */
-export const Markdown = memo(function Markdown({ text, html = false, breaks = false }: { text: string; html?: boolean; breaks?: boolean }) {
+export type MarkdownProps = {
+  text: string
+  /** Its HTML too (sanitized), as a document's. */
+  html?: boolean
+  /** Each newline a line break, as a person typed it. */
+  breaks?: boolean
+  /** Cut to this many lines, the last ending in an ellipsis: a preview. */
+  lines?: number
+  /** Set small, for a narrow pane or a preview: the UI's size, a step of space between blocks, headings at the text's size. */
+  compact?: boolean
+}
+
+/** `text` as Markdown, typeset as the transcript sets it (its size and leading too) wherever it's put. */
+export const Markdown = memo(function Markdown({ text, html = false, breaks = false, lines, compact = false }: MarkdownProps) {
   const registry = useOptionalRegistry()
   // Drawn again when extensions come or go: a profile's UI, loaded once its thread shows, claims links drawn before.
   const version = () => registry?.version ?? 0
@@ -304,7 +313,7 @@ export const Markdown = memo(function Markdown({ text, html = false, breaks = fa
   const claimed = (url: string) => Boolean(registry && linkHandler(registry, url, 'link', where))
   const urlTransform = (url: string, key: string) => imageUrl(url, key) || (key === 'href' && claimed(url)) ? url : defaultUrlTransform(url)
   const rendered = (
-    <div className="md">
+    <div className={`md${compact ? ' md--compact' : ''}${lines ? ' md--clamped' : ''}`} {...(lines ? { style: { WebkitLineClamp: lines } } : {})}>
       <ReactMarkdown remarkPlugins={breaks ? gfmWithBreaks : gfm} {...(html ? { rehypePlugins: htmlPlugins(registry ? linkSchemes(registry, where) : []), remarkRehypeOptions: noPrefix } : {})} components={components} urlTransform={urlTransform}>
         {claimed(`${WIKILINK}x`) ? wikilinks(text) : text}
       </ReactMarkdown>
