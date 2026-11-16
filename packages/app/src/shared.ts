@@ -39,16 +39,30 @@ export type NoticeStatus = 'Finished' | 'Needs you' | 'Failed'
  */
 export type ThreadNotice = { machine: MachineId; thread: string; title: string; status?: NoticeStatus; text?: string }
 export function threadNotice(machine: MachineId, thread: ThreadInfo): ThreadNotice | undefined {
+  if (!unread(thread)) return undefined
   const { state, msg } = thread.status
-  // Waiting for sign-in: one notice for the machine says so (signInNotice), not one per thread.
-  if (waitingForSignIn(thread.status)) return undefined
-  // A child working for its parent: the parent hears it finish or fail. It still says when it needs you.
-  if (state !== 'blocked' && reportsToParent(thread)) return undefined
-  const status = state === 'done' ? 'Finished' : state === 'error' ? 'Failed' : state === 'blocked' ? 'Needs you' : undefined
-  if (!status) return undefined
+  const status = state === 'done' ? 'Finished' : state === 'error' ? 'Failed' : 'Needs you'
   // Done, the daemon's recap; blocked, the question (its last paragraph, after any context); error, its first line.
   const text = msg ? state === 'done' ? shorten(msg) : state === 'error' ? firstLine(msg) : lastParagraph(msg) : undefined
   return { machine, thread: thread.id, title: thread.title, status, ...(text ? { text } : {}) }
+}
+
+/**
+ * Whether a thread wants the user and they haven't looked: it finished, failed or asks something. Not one waiting for
+ * sign-in (one notice for the machine says so), nor a child working for its parent (the parent hears how it ends;
+ * it still counts when it needs you), nor one in no list (archived, Ego's). The one rule for the unread bell,
+ * notifications, the menu bar's count and the app icon's.
+ */
+export function unread(thread: ThreadInfo) {
+  const { state } = thread.status
+  if (state !== 'done' && state !== 'error' && state !== 'blocked') return false
+  if (waitingForSignIn(thread.status) || thread.archived || thread.hidden) return false
+  return state === 'blocked' || !reportsToParent(thread)
+}
+
+/** How many threads are unread, but the one being looked at (`shown`): the count on the app's icon. */
+export function unreadCount(threads: { machine: MachineId; thread: ThreadInfo }[], shown?: { machine: MachineId; thread: string }) {
+  return threads.filter(({ machine, thread }) => unread(thread) && !(shown?.machine === machine && shown.thread === thread.id)).length
 }
 
 /** Whether a thread works for its parent, which hears how its runs end (the thread-reports extension says so). */
@@ -87,6 +101,8 @@ export function signInNotice(machine: MachineId, rejection: Pick<ProviderRejecti
 
 /** The notifications extension's setting: whether to notify at all (the desktop app reads it with no window open too). */
 export const NOTIFY = 'notifications.enabled'
+/** The notifications extension's setting: whether the app's icon shows how many threads are unread (the Dock's, an installed web app's). */
+export const BADGE = 'notifications.badge'
 
 /**
  * Where the window's views go (see renderer/layout.ts): edited as text (layout.json, see main/layout-file.ts; in a

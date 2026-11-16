@@ -683,6 +683,10 @@ if (phase === 'first') {
   const finished = (n) => n.title === 'elsewhere' && n.thread === other && n.status === 'Finished' && n.text === 'echo: hi'
   for (let i = 0; i < 50 && !globalThis.superegoNotices.some(finished); i++) await new Promise((r) => setTimeout(r, 100))
   if (!globalThis.superegoNotices.some(finished)) { await fail(`no notification of the thread finishing: ${JSON.stringify(globalThis.superegoNotices)}`); throw new Error('failed') }
+  // The app icon counts it, as the main process sets it (headless, kept here, not shown).
+  const unreadNow = await run(`window.superego.call('local', 'thread.list', {}).then((ts) => ts.filter((t) => ['done', 'error', 'blocked'].includes(t.status.state) && t.status.kind !== 'auth' && !t.ext?.['thread-reports']?.toParent).length)`)
+  for (let i = 0; i < 50 && globalThis.superegoBadge !== unreadNow; i++) await new Promise((r) => setTimeout(r, 100))
+  if (!(unreadNow >= 1) || globalThis.superegoBadge !== unreadNow) { await fail(`the app icon says ${globalThis.superegoBadge} unread, not ${unreadNow}`); throw new Error('failed') }
   await run(`window.dispatchEvent(new Event('focus'))`)
   // Each press goes to the next unread one; looking at it marks it seen, so the presses reach the new one.
   for (let press = 0; press < 6 && await run(`document.querySelector('.thread__title')?.textContent`) !== 'elsewhere'; press++) {
@@ -692,6 +696,9 @@ if (phase === 'first') {
     await new Promise((r) => setTimeout(r, 300))
   }
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'cmd+. reached the unread thread')
+  // Seen, it's no longer counted.
+  for (let i = 0; i < 50 && !(globalThis.superegoBadge < unreadNow); i++) await new Promise((r) => setTimeout(r, 100))
+  if (!(globalThis.superegoBadge < unreadNow)) { await fail(`the app icon still says ${globalThis.superegoBadge} unread once the thread was seen`); throw new Error('failed') }
   await key(']', ['meta', 'shift'])
   await until(`document.querySelector('.thread__title')?.textContent !== 'elsewhere'`, 'cmd+shift+] to the next thread')
   const nextTitle = await run(`document.querySelector('.thread__title')?.textContent`)

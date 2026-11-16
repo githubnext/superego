@@ -4,9 +4,13 @@
 // you), and one when a provider rejects a machine's credentials (not one per thread it stops); clicking it shows the
 // thread. The desktop app shows it (once, however many windows ask, and only while none has the focus); a browser with
 // Web Notifications, once allowed: offered over the composer when you set a thread to work, never on load. With no
-// window open, the desktop app notifies by itself, by this extension's setting.
-import { useState } from 'react'
-import { call, defineUiExtension, NOTIFY, useAppSetting, type ComposerWhere, type Store } from '@superego/app/ui'
+// window open, the desktop app notifies by itself, by this extension's setting. And how many threads are unread, on
+// the app's icon: the desktop app counts them itself (the windows say what they show), a browser where it badges an
+// installed web app.
+import { useEffect, useState } from 'react'
+import {
+  BADGE, call, defineUiExtension, NOTIFY, unreadCount, useAppSetting, useSessions, type ComposerWhere, type Selection, type Store, type WindowState,
+} from '@superego/app/ui'
 import { BellIcon, IconButton, XIcon } from '@superego/ui'
 import { noticeFor, rejectionNotice } from './notify.ts'
 import { about } from './shared.ts'
@@ -24,8 +28,19 @@ export default defineUiExtension({
       settings: [{
         key: NOTIFY, title: 'Notify when a thread needs a look', default: true, type: 'boolean',
         description: 'A notification when a thread finishes, fails or needs you while the window is in the background.',
-      }],
+      }, { key: BADGE, title: 'Show unread count on the app icon', default: true, type: 'boolean' }],
     })
+    if (window.superego.web) {
+      looking = superego.store<Selection | null>('looking', lookingAt(superego.window))
+      const look = () => looking.set(lookingAt(superego.window))
+      for (const event of ['select', 'focus', 'visibility'] as const) superego.on(event, look)
+      if ('setAppBadge' in navigator) superego.slot('overlay', WebBadge)
+    } else {
+      // The desktop app counts, but the thread a window with the focus shows: it's being looked at.
+      const shown = (selection: Selection | undefined) => void call('app', 'app.shown', { selection: selection ?? null }).catch(() => {})
+      shown(superego.window.selection)
+      superego.on('select', ({ selection }) => shown(selection))
+    }
     superego.on('thread.status', (event) => {
       if (superego.appSetting<boolean>(NOTIFY) === false) return
       const notice = noticeFor(event, superego.window)
@@ -40,6 +55,22 @@ export default defineUiExtension({
     superego.slot('composer.above', Offer, { order: 300 })
   },
 })
+
+/** The thread being looked at: the one shown while the window has the focus and shows. */
+const lookingAt = ({ focused, visible, selection }: Readonly<WindowState>) => focused && visible && selection ? { machine: selection.machine, thread: selection.thread } : null
+let looking: Store<Selection | null>
+
+/** In a browser that badges an installed web app: how many threads are unread, but the one being looked at. */
+function WebBadge() {
+  const [on] = useAppSetting<boolean>(BADGE)
+  const { sessions } = useSessions()
+  const shown = looking.use()
+  const count = on === false ? 0 : unreadCount(sessions.flatMap((s) => s.threads.map((thread) => ({ machine: s.machine.id, thread }))), shown ?? undefined)
+  useEffect(() => {
+    void (count ? navigator.setAppBadge(count) : navigator.clearAppBadge()).catch(() => {})
+  }, [count])
+  return null
+}
 
 /**
  * Whether this browser shows notifications from a page: a phone's (Android Chrome, say) has `Notification` but shows

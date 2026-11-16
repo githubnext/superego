@@ -9,7 +9,7 @@ import {
   type AppConfig, type Channel, type DeclaredSection, type Json, type Notifications, type ProfileRef, type ThreadInfo,
 } from '@superego/protocol'
 import { declaredSpec, serveSettings } from '@superego/settings'
-import { ARTIFACT_POLICY, ARTIFACT_TYPES, CHANNEL, desktopNotice, NOTIFY, type ChannelEvent, signInNotice, threadNotice, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
+import { ARTIFACT_POLICY, ARTIFACT_TYPES, BADGE, CHANNEL, desktopNotice, NOTIFY, unreadCount, type ChannelEvent, signInNotice, threadNotice, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
 import { LayoutFile, type LayoutView } from './layout-file.ts'
 import { Link, loginInTerminal, MachineLinks, MachineStore, openLocal as openLocalSocket, runUpdate, UiAllowStore } from '@superego/client'
@@ -109,6 +109,13 @@ export function startApp(appConfig: AppConfig) {
       },
       /** A window's notifications extension: a thread wants a look. */
       async 'app.notify'(notice: ThreadNotice) { notify(notice); return null },
+      /** The thread the window shows now (none: null): while the window has the focus, the app icon's count leaves it out. */
+      async 'app.shown'({ selection }: { selection: { machine: string; thread: string } | null }) {
+        if (!shownIn.has(contents.id)) contents.once('destroyed', () => { shownIn.delete(contents.id); refreshBadge() })
+        shownIn.set(contents.id, selection ?? undefined)
+        refreshBadge()
+        return null
+      },
       async 'app.desktop'() { return { menuBar: menuBar.shown, dockHidden: mac && dockHidden() } },
       /** The page is listening for app events: answer with a thread it was asked to show before it was. */
       async 'app.ready'() {
@@ -248,6 +255,26 @@ export function startApp(appConfig: AppConfig) {
       const notice = threadNotice(machine, thread)
       if (notice && appSettings.get(NOTIFY) === true && !thread.without?.includes('notifications')) notify(notice)
     }
+  }
+  /** The thread each window shows, as it last said (`app.shown`). */
+  const shownIn = new Map<number, { machine: string; thread: string } | undefined>()
+  let badge = 0
+  /**
+   * The app icon's count (the Dock's on macOS): every machine's unread threads, but the one shown in the window with
+   * the focus (being looked at), while the notifications extension's setting is on. Only once a window has declared
+   * it, as for notifying. On macOS it shows only with the app allowed to notify. Headless (tests), nothing shows: a
+   * test may read it in `globalThis.superegoBadge`.
+   */
+  function refreshBadge() {
+    if (!app.isReady()) return
+    const focused = BrowserWindow.getFocusedWindow()
+    const shown = focused ? shownIn.get(focused.webContents.id) : undefined
+    const threads = [...threadsOf].flatMap(([machine, list]) => linkOf(machine) ? list.map((thread) => ({ machine, thread })) : [])
+    const count = appSettings.get(BADGE) === true ? unreadCount(threads, shown) : 0
+    if (count === badge) return
+    badge = count
+    if (headless) (globalThis as { superegoBadge?: number }).superegoBadge = count
+    else app.setBadgeCount(count)
   }
   /** When each notice was last shown: every window asks, and the first asking shows it. */
   const noticed = new Map<string, number>()
@@ -411,6 +438,7 @@ export function startApp(appConfig: AppConfig) {
   function refreshDesktop() {
     // Settings announce changes from the start; the menu bar and the Dock exist only once the app is ready.
     if (!app.isReady()) return
+    refreshBadge()
     menuBar.update(menuBarOn())
     if (!mac || headless) return
     const windows = BrowserWindow.getAllWindows().length > 0
@@ -706,6 +734,8 @@ export function startApp(appConfig: AppConfig) {
       if (direction === 'right') go(1)
     })
     window.on('closed', () => refreshDesktop())
+    window.on('focus', () => refreshBadge())
+    window.on('blur', () => refreshBadge())
     if (process.env.ELECTRON_RENDERER_URL) void window.loadURL(process.env.ELECTRON_RENDERER_URL)
     else void window.loadFile(join(import.meta.dirname, '../renderer/index.html'))
     refreshDesktop()

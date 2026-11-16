@@ -4,8 +4,8 @@
 // for the menu bar it sits in. Without one, the app's glyph is drawn as text.
 import { existsSync } from 'node:fs'
 import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
-import { waitingForSignIn, type AppConfig, type ThreadInfo } from '@superego/protocol'
-import type { MachineEntry } from '../shared.ts'
+import type { AppConfig, ThreadInfo } from '@superego/protocol'
+import { unread, type MachineEntry } from '../shared.ts'
 
 export type TrayModel = {
   machines(): MachineEntry[]
@@ -20,7 +20,6 @@ export type TrayModel = {
 }
 
 const GLYPH: Record<string, string> = { working: '●', done: '*', blocked: '?', error: '!' }
-const WANTS_A_LOOK = new Set(['done', 'blocked', 'error'])
 
 export class MenuBar {
   #tray: Tray | undefined
@@ -65,7 +64,7 @@ export class MenuBar {
     }
     const machines = this.#model.machines().filter((m) => m.state !== 'disabled')
     const all = machines.flatMap((m) => this.#model.threads(m.id).map((thread) => ({ machine: m, thread })))
-    const wanting = all.filter(({ thread }) => WANTS_A_LOOK.has(thread.status.state) && !waitingForSignIn(thread.status))
+    const wanting = all.filter(({ thread }) => unread(thread))
     const working = all.filter(({ thread }) => thread.status.state === 'working')
     const glyph = this.#app.glyph ?? this.#app.name
     const count = wanting.length ? String(wanting.length) : ''

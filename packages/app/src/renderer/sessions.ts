@@ -4,7 +4,7 @@
 // shows, top to bottom, whether it's open or not. The sort (the window's own setting, `app.sort`, which the sidebar's
 // menu changes) sets it; a thread another started sits right under it.
 import { useMemo } from 'react'
-import { rollup, statusRank, waitingForSignIn, type Status, type ThreadInfo } from '@superego/protocol'
+import { rollup, statusRank, type Status, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { useAppSetting } from './client.ts'
 
@@ -60,9 +60,6 @@ export function groupSessions(machines: MachineEntry[], threads: Record<string, 
       : sort === 'status' ? statusRank(b.status) - statusRank(a.status) || b.activeAt - a.activeAt
         : b.activeAt - a.activeAt)
 }
-
-/** Whether a thread has something the user hasn't seen: a result, a failure, or a question. */
-export const unread = (thread: ThreadInfo) => ['done', 'error', 'blocked'].includes(thread.status.state) && !waitingForSignIn(thread.status)
 
 /**
  * A session's threads with each one a thread started right under it, a level deeper (and its own under it), in the
