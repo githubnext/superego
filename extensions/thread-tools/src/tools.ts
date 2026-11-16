@@ -6,7 +6,7 @@
 // its parent isn't in that machine's catalog.
 // Plain tools on a host, so Ego's own (`thread_read`, its `thread_start`) are built from the same parts.
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
-import { bool, obj, opt, str, type Json, type MachineEntry, type ThreadInfo } from '@superego/protocol'
+import { bool, linkTo, obj, opt, str, type Json, type MachineEntry, type ThreadInfo } from '@superego/protocol'
 
 type NewChild = { prompt: string; title?: string; cwd?: string; profile?: string; worktree?: boolean }
 
@@ -16,15 +16,16 @@ export type ThreadsHost = {
   info(id: string): Promise<ThreadInfo | undefined>
   list(): Promise<ThreadInfo[]>
   start(parent: string, params: NewChild): Promise<ThreadInfo>
-  send(id: string, text: string): Promise<void>
+  /** Send it a message from thread `from`. */
+  send(id: string, text: string, from: string): Promise<void>
   /** Its last answer, as text, if it has one. */
   answer(id: string): Promise<string | undefined>
   /** Put it away now, and say what that did: each extension's line (its worktree removed, say), by extension. */
   archive(id: string): Promise<{ notes: Record<string, string> }>
   /** Put it away once its run ends: how a thread archives itself, mid-turn. */
   archiveWhenDone(id: string): Promise<void>
-  /** `reader` read `thread` (thread_read), as it stood: so a report of it isn't relayed again (reads.ts). */
-  read?(reader: string, thread: ThreadInfo): void
+  /** `reader` read thread `id` (thread_read), as it stands: so a report of it isn't relayed again (`threads.noteRead`). */
+  read?(reader: string, id: string): Promise<void>
   /** This machine's name, for messages to threads elsewhere. */
   hostname?(): string
   /** The other machines this daemon reaches, and a call to one; absent, the tools stay on this machine. */
@@ -43,13 +44,8 @@ export function lastAnswer(entries: { model?: unknown[] }[]): string | undefined
   return undefined
 }
 
-/** A thread as a link in a message: what the window shows as one, and what the agent is told to write. */
-export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.title.replace(/[[\]]/g, '')}](thread:${thread.id})`
-
-/** A message from another thread, as thread_send sends it (and thread-reports relays a report): from whom. */
-export const fromLine = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `From ${linkTo(thread)}:`
-/** The thread a message says it's from (`fromLine`), if it does. */
-export const senderOf = (message: string) => /^From \[[^\]]*\]\(thread:([^)\s]+)\):/.exec(message)?.[1]
+/** A message from another thread, as thread_send sends it: from whom, for the agent reading it. */
+const fromLine = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `From ${linkTo(thread)}:`
 
 const text = (value: string) => ({ output: [{ type: 'text' as const, text: value }] })
 const LIMIT = 6_000
@@ -63,7 +59,8 @@ type Place = {
   info(id: string): Promise<ThreadInfo | undefined>
   list(): Promise<ThreadInfo[]>
   answer(id: string): Promise<string | undefined>
-  send(id: string, text: string): Promise<void>
+  /** Send it a message from thread `from` (of this machine's: a thread elsewhere hears only the text). */
+  send(id: string, text: string, from: string): Promise<void>
   /** How a message names one of its threads. */
   name(thread: Pick<ThreadInfo, 'id' | 'title'>): string
   /** The machine's name, for a place elsewhere, and how a thread starts there. */
@@ -119,7 +116,7 @@ export function readTool(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'r
       const parent = thread.parent ? all.find((t) => t.id === thread!.parent) : undefined
       const children = all.filter((t) => t.parent === id)
       const answer = await place.answer(id)
-      if (!place.away) host.read?.(String(api.conversationId), thread)
+      if (!place.away) await host.read?.(String(api.conversationId), thread.id)
       return text([
         lineOf(thread, place.name),
         parent && `Started by ${place.name(parent)}.`,
@@ -177,7 +174,7 @@ export function threadTools(host: ThreadsHost) {
           if (!to) throw new Error(`No thread ${id}${place.away ? ` on ${place.away}` : ''}`)
           // Elsewhere a link would name the wrong thread: this one is named in words, with its machine.
           const signed = place.away ? `From "${from.title}" (thread ${from.id} on ${host.hostname?.() ?? 'another machine'}):` : fromLine(from)
-          await place.send(id, `${signed}\n\n${message}`)
+          await place.send(id, `${signed}\n\n${message}`, from.id)
           return text(`Sent to ${place.name(to)}.`)
         },
       }),

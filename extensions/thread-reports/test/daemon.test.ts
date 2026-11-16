@@ -7,12 +7,19 @@ import type { ConversationView } from '@earendil-works/pi-durable'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
 import { defineApp, PROTOCOL_VERSION, type Json, type ThreadInfo } from '@superego/protocol'
 import threadTools from '@superego/thread-tools/daemon'
-import { readLog } from '@superego/thread-tools/reads'
 import threadReports, { excerpt, reporter, threadReports as withBatching, type ReportsHost } from '../src/daemon.ts'
-import { threadTools as tools } from '@superego/thread-tools/tools'
 
 const thread = (id: string, title: string, extra: Partial<ThreadInfo> = {}): ThreadInfo =>
   ({ id, title, cwd: '/p', createdAt: 0, activeAt: 1, project: { root: '/p', name: 'p' }, status: { state: 'done' }, ...extra })
+
+/** What parents read of their children, as the daemon keeps it (`threads.noteRead`, `threads.parentRead`). */
+function readLog() {
+  const seen = new Map<string, number>()
+  return {
+    note(reader: string, t: ThreadInfo) { if (t.parent === reader && t.status.state !== 'working') seen.set(t.id, Math.max(seen.get(t.id) ?? 0, t.activeAt)) },
+    read: (t: ThreadInfo) => (seen.get(t.id) ?? -1) >= t.activeAt,
+  }
+}
 
 /** Threads 1 (the parent), 2 and 3 (its children) and 4 (2's child), with their answers; what's sent, by whom. */
 function host() {
@@ -208,19 +215,6 @@ it('keeps a long answer to its first lines', () => {
   expect(excerpt('a\nb')).toBe('a\nb')
   expect(excerpt('1\n2\n3\n4\n5\n6\n7\n8')).toBe('1\n2\n3\n4\n5\n6\n\n(thread_read has the rest.)')
   expect(excerpt('x'.repeat(700))).toBe(`${'x'.repeat(600)}…\n\n(thread_read has the rest.)`)
-})
-
-it('notes a parent reading its child through thread_read', async () => {
-  const { reads, find } = host()
-  const h = {
-    info: async (id: string) => [find('1'), find('2')].find((t) => t.id === id), list: async () => [find('1'), find('2')],
-    answer: async () => 'ok', read: reads.note, start: async () => find('2'), send: async () => {},
-    archive: async () => ({ notes: {} }), archiveWhenDone: async () => {},
-  }
-  const read = tools(h).tools!.find((t) => t.name === 'thread_read')!
-  expect(reads.read(find('2'))).toBe(false)
-  await read.execute({ thread: '2' } as never, { conversationId: 1 } as never, {} as never)
-  expect(reads.read(find('2'))).toBe(true)
 })
 
 // End to end: a daemon with the thread tools and reports, its model replayed.

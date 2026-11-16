@@ -19,6 +19,6 @@ export { arr, bool, int, lit, nullable, num, obj, opt, RpcError, str, union, unk
 export { spawnGroup } from './process-group.ts'
 export type { GroupExit, SpawnedGroup, SpawnGroupOptions } from './process-group.ts'
 export type {
-  ActionDef, ActionInfo, AuthEvent, AuthPrompt, DataIcon, DataPlace, DataView, ExtensionAbout, Exposure, Json, JsonSchema, Static, ThreadInfo,
+  ActionDef, ActionInfo, AuthEvent, AuthPrompt, DataIcon, DataPlace, DataView, ExtensionAbout, Exposure, Json, JsonSchema, MessageOrigin, Static, ThreadInfo,
   ViewAction, ViewContent, ViewItem,
 } from '@superego/protocol'

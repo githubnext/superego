@@ -14,8 +14,7 @@ import { defineAction, defineApp, obj, PROTOCOL_VERSION, Router, type Json, type
 import { ACTIONS, ADD_PARAMS, EDIT_PARAMS, NAME_PARAMS, SET_PARAMS, type SectionData, type ServerConfig, type ServerInfo } from '@superego/mcp-servers/shared'
 import { CATALOG } from '@superego/mcp-servers/catalog'
 import { mcpServersExtension } from '@superego/mcp-servers/daemon'
-import { answersOutside, ego as egoExtension } from '../src/daemon.ts'
-import { OUTSIDE } from '../src/shared.ts'
+import { ego as egoExtension } from '../src/daemon.ts'
 import { egoTools } from '../src/tools.ts'
 import { configFrom, serversTool, userStep } from '../src/servers-tool.ts'
 
@@ -121,24 +120,6 @@ describe('superego_mcp_servers', () => {
     expect(asked).toEqual([1, 1, 1])
     const off = serversTool({ dispatch: at.dispatch, snapshot: async () => ({ sections: [], values: {} }) }) as unknown as Tool
     await expect(call(off, { op: 'list' })).rejects.toThrow(/extension is off/)
-  })
-})
-
-describe('whether a call answers an outside agent', () => {
-  const user = (text: string, outside = false) => ({ model: [{ role: 'user', content: [...outside ? [{ type: 'text', text: OUTSIDE }] : [], { type: 'text', text }] }] })
-  const calls = (...ids: string[]) => ({ model: [{ role: 'assistant', content: ids.map((id) => ({ type: 'toolCall', id, name: 'superego_mcp_servers', arguments: {} })) }] })
-  const result = (id: string) => ({ model: [{ role: 'toolResult', toolCallId: id, content: [] }] })
-
-  it("goes by the message the call answers, not the newest: the user typing during an outside agent's turn changes nothing for it", () => {
-    // Newest first: the outside agent asked, the model called c1; the user typed in the window meanwhile; then c2.
-    const entries = [calls('c2'), user('and this, from the window'), result('c1'), calls('c1'), user('set up my servers', true), calls('c0'), user('hi, from the window')]
-    expect(answersOutside(entries, 'c1')).toBe(true)
-    expect(answersOutside(entries, 'c2')).toBe(false)
-    expect(answersOutside(entries, 'c0')).toBe(false)
-    // Several calls in one message; and the user's message placed after the model's, before its calls ran.
-    expect(answersOutside([user('mine'), calls('a', 'b'), user('theirs', true)], 'b')).toBe(true)
-    // A call that isn't there counts as an outside agent's.
-    expect(answersOutside(entries, 'nope')).toBe(true)
   })
 })
 

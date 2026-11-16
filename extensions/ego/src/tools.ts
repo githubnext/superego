@@ -8,10 +8,10 @@ import { homedir } from 'node:os'
 import { basename, dirname, resolve } from 'node:path'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { createReadTool } from '@earendil-works/pi-durable/tools'
-import { lineOf, linkTo, readTool } from '@superego/thread-tools/tools'
+import { lineOf, readTool } from '@superego/thread-tools/tools'
 import { SECTION as SERVERS, type SectionData } from '@superego/mcp-servers/shared'
 import { briefSection, serversTool } from './servers-tool.ts'
-import { bool, lit, obj, opt, str, union, unknown, type ActionInfo, type Exposure, type Json, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
+import { bool, linkTo, lit, obj, opt, str, union, unknown, type ActionInfo, type Exposure, type Json, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 
 /** The machines a computer reaches, as the app keeps them (`machines.json`). */
 export type MachineDirectory = {

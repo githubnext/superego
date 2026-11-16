@@ -4,8 +4,9 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { AUTH_REJECTED, DATA_VIEWS, defineAction, defineApp, obj, PROTOCOL_VERSION, str, type ActionInfo, type DataViewInfo, type Hello, type Notifications, type ThreadInfo, type ViewContent } from '@superego/protocol'
-import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonExtension, type LiveValue, type ScopedValue } from '../src/index.ts'
+import { AUTH_REJECTED, DATA_VIEWS, defineAction, defineApp, MESSAGE_ENTRY, obj, PROTOCOL_VERSION, str, type ActionInfo, type MessageOrigin, type DataViewInfo, type Hello, type Notifications, type ThreadInfo, type ViewContent } from '@superego/protocol'
+import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi, type DaemonExtension, type LiveValue, type ScopedValue } from '../src/index.ts'
+import { answeredBy } from '../src/threads.ts'
 import { until } from './until.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
@@ -269,4 +270,56 @@ it('publishes a scoped value: a watcher of one scope hears only its changes; who
   await until(async () => heard.some((h) => h.sub === count.sub))
   expect(heard.filter((h) => h.sub === count.sub).map((h) => h.value)).toEqual([3])
   await close()
+})
+
+it('keeps how a message came with it: who sent it, from which thread, for whom; and what parents read of their children', async () => {
+  let api: DaemonApi | undefined
+  const seen: unknown[] = []
+  const relay = defineDaemonExtension({
+    name: 'passer',
+    setup(superego) {
+      api = superego
+      superego.beforeSend(({ by, from, exposure }) => { seen.push({ by, from, exposure }) })
+    },
+  })
+  const { peer, close } = await open([relay])
+  const parent = await peer.call<ThreadInfo>('thread.start', { prompt: 'lead' })
+  const child = await api!.threads.start({ parent: parent.id, prompt: 'go' })
+  await api!.threads.send(child.id, 'and more', { from: parent.id, exposure: 'outside' })
+  const done = async (id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)?.status.state === 'done'
+  await until(async () => await done(child.id) && await done(parent.id))
+  // The window's message is the user's own; the rest say how they came.
+  expect(seen).toEqual([
+    { by: undefined, from: undefined, exposure: undefined },
+    { by: 'passer', from: parent.id, exposure: undefined },
+    { by: 'passer', from: parent.id, exposure: 'outside' },
+  ])
+  const { value } = await peer.call<{ value: { entries: { kind: string; data?: unknown; model?: { role: string }[] }[] } }>('thread.watch', { thread: child.id })
+  expect(value.entries.filter((e) => e.model?.[0]?.role === 'user').map((e) => [e.kind, e.data])).toEqual([
+    [MESSAGE_ENTRY, { by: 'passer', from: parent.id }],
+    [MESSAGE_ENTRY, { by: 'passer', from: parent.id, exposure: 'outside' }],
+  ])
+  // Read by its parent as it stands: a report of it can go unsaid; not by another thread, and not once it moves on.
+  const now = await api!.threads.get(child.id)
+  expect(api!.threads.parentRead(now)).toBe(false)
+  await api!.threads.noteRead('someone', child.id)
+  expect(api!.threads.parentRead(now)).toBe(false)
+  await api!.threads.noteRead(parent.id, child.id)
+  expect(api!.threads.parentRead(now)).toBe(true)
+  expect(api!.threads.parentRead({ ...now, activeAt: now.activeAt + 1 })).toBe(false)
+  await close()
+})
+
+it('tells the message a tool call answers: the user message before the call, not the newest', () => {
+  const user = (text: string, data?: MessageOrigin) => ({ kind: data ? MESSAGE_ENTRY : 'pi.user', ...(data ? { data } : {}), model: [{ role: 'user', content: [{ type: 'text', text }] }] }) as never
+  const calls = (...ids: string[]) => ({ kind: 'pi.assistant', model: [{ role: 'assistant', content: ids.map((id) => ({ type: 'toolCall', id, name: 'x', arguments: {} })) }] }) as never
+  const result = (id: string) => ({ kind: 'pi.toolResult', model: [{ role: 'toolResult', toolCallId: id, content: [] }] }) as never
+  // Newest first: an outside agent asked, the model called c1; the user typed in the window meanwhile; then c2.
+  const entries = [calls('c2'), user('and this, from the window'), result('c1'), calls('c1'), user('set up my servers', { exposure: 'outside' }), calls('c0'), user('hi, from the window')]
+  expect(answeredBy(entries, 'c1')).toEqual({ exposure: 'outside' })
+  expect(answeredBy(entries, 'c2')).toEqual({})
+  expect(answeredBy(entries, 'c0')).toEqual({})
+  // Several calls in one message; and the user's message placed after the model's, before its calls ran.
+  expect(answeredBy([user('mine'), calls('a', 'b'), user('theirs', { from: '7' })], 'b')).toEqual({ from: '7' })
+  expect(answeredBy(entries, 'nope')).toBeUndefined()
 })

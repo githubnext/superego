@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
-import { defineApp, obj, PROTOCOL_VERSION, RpcError, str, type Json, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { defineApp, MESSAGE_ENTRY, obj, PROTOCOL_VERSION, RpcError, str, type Json, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi, type DaemonExtension } from '../src/index.ts'
 import { until } from './until.ts'
 
@@ -367,7 +367,8 @@ it('gives extensions the thread operations: create (hidden, as a child), submit,
   // Its newest entries first: the answer, then the message.
   const entries = await api.threads.entries(top.id, 50)
   expect(entries[0]!.kind).toBe('pi.assistant')
-  expect(entries.find((e) => e.kind === 'pi.user')?.model?.[0]).toMatchObject({ content: 'hello' })
+  // Sent by an extension, it says so.
+  expect(entries.find((e) => e.kind === MESSAGE_ENTRY)).toMatchObject({ data: { by: 'ops' }, model: [{ content: 'hello' }] })
   expect(await api.threads.entries(top.id, 1)).toHaveLength(1)
   // Cleared: nothing from before, the answer neither.
   await api.threads.clear(top.id)

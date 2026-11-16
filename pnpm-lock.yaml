@@ -692,6 +692,7 @@ importers:
       '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+    devDependencies:
       '@superego/thread-tools':
         specifier: workspace:*
         version: link:../thread-tools

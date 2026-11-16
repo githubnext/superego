@@ -10,7 +10,7 @@
 // stops, or (a profile's) when the profile's files change. Torn down, its `signal` aborts, what it registers after is
 // refused, and its live values' `set` and `update` do nothing.
 import type { Conversation, EntryRecord, Extension } from '@earendil-works/pi-durable'
-import type { ActionDef, ActionInfo, AppConfig, Attachment, ChannelAcceptor, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, MachineEntry, NewThread, Pane, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
+import type { ActionDef, ActionInfo, AppConfig, Attachment, ChannelAcceptor, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, MachineEntry, MessageOrigin, NewThread, Pane, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
 import type { AuthFlow } from './auth-flows.ts'
 import type { DaemonContext } from './host.ts'
@@ -98,6 +98,11 @@ export type OutgoingMessage = {
    * for a window's.
    */
   exposure?: Exposure
+  /**
+   * The thread it was sent from, when that's said: what an extension's `threads.send` passed on (thread_send's), or, for
+   * `threads.start`'s prompt, the parent starting it.
+   */
+  from?: string
 }
 
 /** Changes what a message gives the model: returns the blocks to send instead, or nothing to leave them. */
@@ -401,10 +406,25 @@ export type DaemonApi = {
     start(params: NewThread & { hidden?: boolean }): Promise<ThreadInfo>
     /**
      * Send a thread a message, as a user would; when it's working, `whenBusy` says how (default: after this run).
-     * `exposure`: whom for, when an action of this extension's sends it on a client's behalf (its context's `exposure`),
-     * for send transforms to see.
+     * `exposure`: whom for, when an action of this extension's sends it on a client's behalf (its context's `exposure`).
+     * `from`: the thread it's from, when one thread writes another. Both are kept with the message (`answering`), and
+     * send transforms see them.
      */
-    send(id: string, text: string, options?: { whenBusy?: 'steer' | 'followUp'; exposure?: Exposure }): Promise<void>
+    send(id: string, text: string, options?: { whenBusy?: 'steer' | 'followUp'; exposure?: Exposure; from?: string }): Promise<void>
+    /**
+     * How the message a tool call answers came (`MessageOrigin`: `{}` for a window's user's), by the call's
+     * conversation and id, as a tool's `execute` has them: the user message before the model's message that made the
+     * call, not whichever is newest (the user may write while another's turn runs). Undefined when the call isn't found
+     * in the thread's newest few hundred entries, or the conversation isn't a thread's own (a subagent's).
+     */
+    answering(conversationId: number, callId: string): Promise<MessageOrigin | undefined>
+    /**
+     * `reader` read thread `id` as it stands now (thread_read, say). Kept, in memory, only when `reader` is its parent
+     * and it isn't working: see `parentRead`.
+     */
+    noteRead(reader: string, id: string): Promise<void>
+    /** Whether its parent has read it (`noteRead`) as it stood at `thread.activeAt`, or later: a report of it can go unsaid. */
+    parentRead(thread: Pick<ThreadInfo, 'id' | 'activeAt'>): boolean
     /** Its last answer, as text, if it has one. */
     lastAnswer(id: string): Promise<string | undefined>
     /**

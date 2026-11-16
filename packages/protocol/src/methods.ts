@@ -21,6 +21,23 @@ export const PROTOCOL_VERSION = 2
 export const NOTE_ENTRY = 'superego.note'
 
 /**
+ * A message to a thread's agent that someone other than a window's user sent: an entry of this kind, with the model's
+ * user message as a plain one has it and `data` saying how it came (`MessageOrigin`). A window's user's is pi-durable's
+ * own `pi.user`.
+ */
+export const MESSAGE_ENTRY = 'superego.message'
+
+/**
+ * How a message to a thread came: `by` the extension that sent it (`threads.send`, `threads.start`'s prompt), `from`
+ * the thread it was sent from (`thread_send`'s, a child's first message from its parent), `exposure` whom for when a
+ * client ran it as the command line (`cli`) or an outside agent (`outside`). Empty for a window's user's.
+ */
+export type MessageOrigin = { by?: string; from?: ThreadId; exposure?: Exposure }
+
+/** A thread as a link in a message, `[its title](thread:<id>)`: what a window shows as one, and what agents are told to write. */
+export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.title.replace(/[[\]]/g, '')}](thread:${thread.id})`
+
+/**
  * What a daemon of this build offers beyond what its generation began with, announced in `hello`. Clients check a
  * feature before using it, so an older daemon of the generation keeps working with a newer app (and the other way
  * round) for whatever both know. Generation 2 has added none yet: everything it began with is there.

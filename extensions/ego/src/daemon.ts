@@ -5,37 +5,16 @@
 // fact `facts.ego` for windows).
 //
 // Outside agents (`superego mcp`) ask it too (`ego.ask`, or `thread.send` to its thread), but start threads through it
-// no more than they may themselves: each message one sends goes with a block saying so (`OUTSIDE`), and while
-// `outside.startThreads` is off, thread_start refuses when the message its call answers has it: the user message before
-// the model's message that made the call, not whichever is newest (the user may type while an outside agent's turn
-// runs). A turn the user asks for in the window, in the same conversation, still starts threads. Nor do they set up MCP servers through it:
+// no more than they may themselves: each message one sends goes with a block saying so (`OUTSIDE`, for the model and the
+// window), and while `outside.startThreads` is off, thread_start refuses when the message its call answers came from one
+// (`threads.answering`). A turn the user asks for in the window, in the same conversation, still starts threads. Nor do they set up MCP servers through it:
 // superego_mcp_servers refuses whenever the message it's answering came from one, whatever the setting.
 import { hostname } from 'node:os'
 import { MachineStore } from '@superego/client'
 import { defineDaemonExtension, OUTSIDE_THREADS, type DaemonExtension } from '@superego/daemon'
 import { agentName, defineAction, obj, opt, RpcError, str, type ThreadInfo } from '@superego/protocol'
-import { about, ASK, CLEAR, OUTSIDE, outsideBlocks } from './shared.ts'
+import { about, ASK, CLEAR, OUTSIDE } from './shared.ts'
 import { egoPrompt, egoTools, type MachineDirectory } from './tools.ts'
-
-type Message = { role?: string; content?: unknown }
-
-/**
- * Whether tool call `callId` answers a message from an outside agent, by a thread's transcript, newest entry first: the
- * last user message before the model's message that made the call. A call not to be found counts as an outside agent's.
- */
-export function answersOutside(entries: readonly { model?: readonly unknown[] }[], callId: string): boolean {
-  let found = false
-  for (const entry of entries) {
-    for (const message of [...entry.model ?? []].reverse() as Message[]) {
-      if (!found) {
-        found = message.role === 'assistant' && Array.isArray(message.content) && message.content.some((c: { type?: string; id?: string }) => c.type === 'toolCall' && c.id === callId)
-        continue
-      }
-      if (message.role === 'user') return Array.isArray(message.content) && outsideBlocks(message.content as { type: string; text?: string }[]).length > 0
-    }
-  }
-  return true
-}
 
 /** What Ego goes without, of what every thread has: it changes nothing itself, and starts threads its own way. */
 const WITHOUT = ['coding-tools', 'thread-tools']
@@ -51,8 +30,11 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
       const name = agentName(superego.app)
       const { dataDir, threads } = superego
       const isEgo = (thread: ThreadInfo) => thread.owner === about.name
-      /** Whether tool call `callId` in a thread answers an outside agent's message (`answersOutside`). */
-      const fromOutside = async (id: string, callId: string) => answersOutside(await threads.entries(id, 500), callId)
+      /** Whether tool call `callId` answers an outside agent's message: one not to be found counts as one. */
+      const fromOutside = async (conversation: number, callId: string) => {
+        const origin = await threads.answering(conversation, callId)
+        return !origin || origin.exposure === 'outside'
+      }
       const tools = egoTools({
         dir: dataDir,
         dispatch: (id, params) => superego.dispatch(id, params),
@@ -64,14 +46,12 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         // Read as it's called: the setting may have changed since the message came.
         async refuseStart(conversation, callId) {
           if (superego.settings.get(OUTSIDE_THREADS) === true) return undefined
-          const at = threads.of(conversation)
-          if (at && !await fromOutside(at, callId)) return undefined
+          if (!await fromOutside(conversation, callId)) return undefined
           return "An outside agent asked for this, and outside agents can't start threads on this machine. The user can allow it in Settings → Outside agents → Can start threads."
         },
         // MCP servers run commands and reach the user's accounts: never set up for an outside agent, whatever it may do.
         async refuseServers(conversation, callId) {
-          const at = threads.of(conversation)
-          if (at && !await fromOutside(at, callId)) return undefined
+          if (!await fromOutside(conversation, callId)) return undefined
           return 'An outside agent asked for this. Outside agents never set up MCP servers: the user does, in Settings → MCP servers (or asks here in the window).'
         },
       })

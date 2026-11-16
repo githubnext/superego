@@ -14,16 +14,13 @@
 // while its parent hears (it's there, not archived, and not without thread-reports): a child whose report would reach
 // no one is unread and notifies for itself.
 //
-// Reports are best-effort, a convenience, not delivery to rely on: the read log (reads.ts), the reports waiting to go
-// (however long the parent's run) and which runs answered the parent are in memory, so after a restart a report that
+// Reports are best-effort, a convenience, not delivery to rely on: which children their parents have read
+// (`threads.noteRead`), the reports waiting to go (however long the parent's run) and which runs answered the parent are in memory, so after a restart a report that
 // was waiting is lost, a run resumed then may report what the parent had read already, and a reply reads as "finished".
 // A workflow that must know a child finished asks it (thread_read), not its report.
 import { defineExtension, section } from '@earendil-works/pi-durable'
 import { defineDaemonExtension } from '@superego/daemon'
-import { waitingForSignIn, type ThreadInfo } from '@superego/protocol'
-import { readsOf } from '@superego/thread-tools/reads'
-import { about as toolsAbout } from '@superego/thread-tools/shared'
-import { fromLine, linkTo, senderOf } from '@superego/thread-tools/tools'
+import { linkTo, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { about as reportsAbout } from './shared.ts'
 
 /** What reporting needs of the daemon. */
@@ -34,7 +31,7 @@ export type ReportsHost = {
   send(id: string, text: string): Promise<void>
   /** Whether it's in a run: its reports wait for `idle`. */
   busy(thread: ThreadInfo): boolean
-  /** Whether its parent read it as it stands (or later). */
+  /** Whether its parent read it as it stands (or later): `threads.parentRead`. */
   read(thread: ThreadInfo): boolean
 }
 
@@ -59,7 +56,7 @@ const hears = (parent: ThreadInfo | undefined): parent is ThreadInfo => Boolean(
 
 /** A thread's run ended, or it waits on a question, as its parent hears it. */
 async function describe(thread: ThreadInfo, host: ReportsHost, replied: boolean): Promise<string> {
-  const from = fromLine(thread)
+  const from = `From ${linkTo(thread)}:`
   const { state, msg } = thread.status
   if (state === 'blocked') return `${from} is waiting on a question${msg ? `:\n\n${excerpt(msg)}` : '.'}`
   if (state === 'error') return `${from} errored${msg ? ` (${msg.split('\n')[0]!.slice(0, 200)})` : ''}.`
@@ -136,12 +133,11 @@ export function reporter(host: ReportsHost, { quietMs, maxMs }: Batching = BATCH
 export const threadReports = (batching: Batching = BATCHING) => defineDaemonExtension({
   ...reportsAbout,
   setup(s) {
-    const reads = readsOf(s.dataDir, s.signal)
     const info = (id: string) => s.threads.get(id).catch(() => undefined)
     // The threads in a run, as the hooks tell it; one resumed after a restart (no turnStart) shows working.
     const running = new Set<string>()
     const reports = reporter({
-      info, answer: (id) => s.threads.lastAnswer(id), read: (thread) => reads.read(thread),
+      info, answer: (id) => s.threads.lastAnswer(id), read: (thread) => s.threads.parentRead(thread),
       busy: (thread) => running.has(thread.id) || thread.status.state === 'working',
       send: (id, text) => s.threads.send(id, text, { whenBusy: 'followUp' }),
     }, batching)
@@ -164,18 +160,23 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
     s.threads.list().then((all) => Promise.all(all.map(check))).catch((error) => console.error('thread-reports: checking parents failed:', error))
     // Quiet, so a child's own finishing or failing isn't unread too: its parent hears it.
     s.quiet<boolean>(({ id, state }) => state === true && !unheard.has(id))
-    s.beforeSend(async ({ thread, text, by }) => {
+    // The children just made, whose next message is the prompt they were started with: what they answer then "finished".
+    const fresh = new Set<string>()
+    s.beforeSend(async ({ thread, by, from }) => {
+      const first = fresh.delete(thread.id)
       if (!thread.parent) return
-      const sender = by === toolsAbout.name ? senderOf(text) : undefined
-      if (sender === thread.parent) asked.add(thread.id)
       if (by === undefined) await working.set(thread.id, false)
-      // thread_start's prompt, or the parent's thread_send; not another thread's.
-      else if (by === toolsAbout.name && (sender ?? thread.parent) === thread.parent) await working.set(thread.id, true)
+      // From its parent: the prompt it was started with, or the parent's thread_send; not another thread's.
+      else if (from === thread.parent) {
+        if (!first) asked.add(thread.id)
+        await working.set(thread.id, true)
+      }
     })
     const report = async (thread: ThreadInfo, replied = false) => {
       if (thread.parent && await working.get(thread.id) !== false) await reports.report(thread, { replied })
     }
     s.thread({
+      started: (thread) => { if (thread.parent) fresh.add(thread.id) },
       turnStart: async (thread) => { running.add(thread.id); await check(thread) },
       turnEnd: async (thread) => {
         running.delete(thread.id)

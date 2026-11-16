@@ -4,10 +4,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { MemorySettingsStore } from '@superego/settings'
-import { defineApp, NOTE_ENTRY, PROTOCOL_VERSION, type Json, type RpcPeer, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
+import { defineApp, linkTo, NOTE_ENTRY, PROTOCOL_VERSION, type Json, type RpcPeer, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '@superego/daemon'
 import threadTools from '../src/daemon.ts'
-import { linkTo, threadTools as tools, type ThreadsHost } from '../src/tools.ts'
+import { threadTools as tools, type ThreadsHost } from '../src/tools.ts'
 
 const app = defineApp({ name: 'test', id: 'threadstest' })
 let dir: string
@@ -161,18 +161,18 @@ it('is a switch of its own in Settings: off, the agent goes without the tools', 
 })
 
 /** The tools against a made-up set of threads. */
-function host(): ThreadsHost & { threads: ThreadInfo[]; sent: [string, string][]; archived: string[] } {
+function host(): ThreadsHost & { threads: ThreadInfo[]; sent: [string, string, string][]; archived: string[] } {
   const thread = (id: string, title: string, extra: Partial<ThreadInfo> = {}): ThreadInfo =>
     ({ id, title, cwd: '/p', createdAt: 0, activeAt: 0, project: { root: '/p', name: 'p' }, status: { state: 'idle' }, ...extra })
   const threads = [thread('1', 'Parent'), thread('2', 'Child [one]', { parent: '1', status: { state: 'working' } }), thread('3', 'Elsewhere', { project: { root: '/q', name: 'q' } })]
-  const sent: [string, string][] = []
+  const sent: [string, string, string][] = []
   const archived: string[] = []
   return {
     threads, sent, archived,
     info: async (id) => threads.find((t) => t.id === id),
     list: async () => threads,
     start: async () => { throw new Error('not here') },
-    send: async (id, text) => { sent.push([id, text]) },
+    send: async (id, text, from) => { sent.push([id, text, from]) },
     answer: async (id) => id === '2' ? 'The dates are UTC now.' : undefined,
     archive: async (id) => { archived.push(id); threads.find((t) => t.id === id)!.archived = true; return { notes: { worktrees: 'Kept the worktree /w: it has uncommitted changes.' } } },
     archiveWhenDone: async (id) => { archived.push(`${id} when done`) },
@@ -196,10 +196,17 @@ it('reads a thread: where it stands, who started it, and its last answer, waitin
   await expect(run(h, 'thread_read', { thread: '9' })).rejects.toThrow(/No thread 9/)
 })
 
+it('notes what a thread read, for its reports (threads.noteRead)', async () => {
+  const reads: [string, string][] = []
+  const h = { ...host(), read: async (reader: string, id: string) => { reads.push([reader, id]) } }
+  await run(h, 'thread_read', { thread: '2' })
+  expect(reads).toEqual([['1', '2']])
+})
+
 it('messages a thread from this one, and lists the threads in its project', async () => {
   const h = host()
   expect(await run(h, 'thread_send', { thread: '2', text: 'Also ISO dates.' })).toBe('Sent to [Child one](thread:2).')
-  expect(h.sent).toEqual([['2', 'From [Parent](thread:1):\n\nAlso ISO dates.']])
+  expect(h.sent).toEqual([['2', 'From [Parent](thread:1):\n\nAlso ISO dates.', '1']])
   const listed = await run(h, 'thread_list', {})
   expect(listed).toContain('[Child one](thread:2)')
   expect(listed).not.toContain('Elsewhere')

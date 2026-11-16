@@ -5,8 +5,8 @@ import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { basename, dirname } from 'node:path'
-import type { ConversationId, ConversationView, EntryId, Harness, LiveState } from '@earendil-works/pi-durable'
-import { deriveStatus, NOTE_ENTRY, RpcError, type Attachment, type Exposure, type Json, type NewThread, type Pane, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
+import type { ConversationId, ConversationView, EntryId, EntryRecord, Harness, LiveState } from '@earendil-works/pi-durable'
+import { deriveStatus, MESSAGE_ENTRY, NOTE_ENTRY, RpcError, type Attachment, type Exposure, type Json, type MessageOrigin, type NewThread, type Pane, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
 import { attachmentsDir, contentOf } from './attachments.ts'
 import type { ExtensionHost } from './extension-host.ts'
 import type { ArchiveNote, ArchiveNotes, DaemonApi, MessageBlock, OutgoingMessage, ThreadDraft, ThreadStarting } from './extension.ts'
@@ -34,6 +34,28 @@ async function checkoutOf(dir: string): Promise<{ top: string; root: string } | 
 export function paneParams(params: unknown): Json {
   if (typeof params !== 'string') return params as Json
   try { return JSON.parse(params) as Json } catch { throw new RpcError('invalid', 'params must be an object') }
+}
+
+/** An origin with only what it says: no undefined keys, to keep in an entry. */
+const originOf = ({ by, from, exposure }: MessageOrigin): MessageOrigin => ({ ...(by ? { by } : {}), ...(from ? { from } : {}), ...(exposure ? { exposure } : {}) })
+
+/**
+ * How the message tool call `callId` answers came, by a thread's transcript, newest entry first: the user message
+ * before the model's message that made the call (a `MESSAGE_ENTRY`'s origin, else a window's user's, `{}`). Undefined
+ * when the call isn't among them.
+ */
+export function answeredBy(entries: readonly Pick<EntryRecord, 'kind' | 'data' | 'model'>[], callId: string): MessageOrigin | undefined {
+  let found = false
+  for (const entry of entries) {
+    for (const message of [...entry.model ?? []].reverse() as { role?: string; content?: unknown }[]) {
+      if (!found) {
+        found = message.role === 'assistant' && Array.isArray(message.content) && message.content.some((c: { type?: string; id?: string }) => c.type === 'toolCall' && c.id === callId)
+        continue
+      }
+      if (message.role === 'user') return entry.kind === MESSAGE_ENTRY ? originOf((entry.data ?? {}) as MessageOrigin) : {}
+    }
+  }
+  return undefined
 }
 
 /** A new thread as `startThread` takes it: an extension's attachments are inline (it has no connection to upload on). */
@@ -370,11 +392,12 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     return undefined
   }
   /**
-   * Send `text` to a thread, with the model and thinking it chose, else what this machine's settings say now. `by`: the
-   * extension sending it (`threads.send`, `threads.start`'s prompt); none for a client's (a window, the command line).
-   * `exposure`: whom for, when a client ran it as the command line or an outside agent (`DaemonContext.exposure`).
+   * Send `text` to a thread, with the model and thinking it chose, else what this machine's settings say now. `origin`,
+   * how it came (`MessageOrigin`): `by` the extension sending it (`threads.send`, `threads.start`'s prompt), none for a
+   * client's (a window, the command line); `exposure`, whom for, when a client ran it as the command line or an outside
+   * agent (`DaemonContext.exposure`); `from`, the thread it's from. Kept with it, as a `MESSAGE_ENTRY` (`answering`).
    */
-  async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp', attachments: Attachment[] = [], { by, exposure }: { by?: string; exposure?: Exposure } = {}) {
+  async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp', attachments: Attachment[] = [], origin: MessageOrigin = {}) {
     if (!text.trim() && !attachments.length) throw new RpcError('invalid', 'Nothing to send')
     const m = await get(id)
     // Put away: it can be read, not written to, until it's brought back.
@@ -388,9 +411,25 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
     await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null, ...rest }, context)
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
-    const content = await transformed(id, m, { text, attachments, ...(by ? { by } : {}), ...(exposure ? { exposure } : {}) }, await contentOf(attachmentsDir(options.dataDir, id), text, attachments))
-    const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}) }, context)
+    const said = originOf(origin)
+    const content = await transformed(id, m, { text, attachments, ...said }, await contentOf(attachmentsDir(options.dataDir, id), text, attachments))
+    const entry = Object.keys(said).length ? { entry: { kind: MESSAGE_ENTRY, data: said } } : {}
+    const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}), ...entry }, context)
     return String(submission.id)
+  }
+
+  /** How the message tool call `callId` answers came (`answeredBy`), in a thread's newest entries. */
+  async function answering(conversationId: number, callId: string): Promise<MessageOrigin | undefined> {
+    const id = String(conversationId)
+    return mounted.has(id) ? answeredBy(await newest(id, 500), callId) : undefined
+  }
+
+  /** What parents have read of their children (`noteRead`): the activity each child was read at, newest. In memory. */
+  const readAt = new Map<string, number>()
+  async function noteRead(reader: string, id: string) {
+    const thread = info(id, await get(id))
+    if (thread.parent !== reader || thread.status.state === 'working') return
+    readAt.set(id, Math.max(readAt.get(id) ?? 0, thread.activeAt))
   }
 
   /**
@@ -398,7 +437,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
    * those of extensions the thread goes without skipped, and a profile's for its own threads only. Untouched, it's sent
    * as it came.
    */
-  async function transformed(id: string, m: Mounted, message: Pick<OutgoingMessage, 'text' | 'attachments' | 'by' | 'exposure'>, content: string | MessageBlock[]) {
+  async function transformed(id: string, m: Mounted, message: Pick<OutgoingMessage, 'text' | 'attachments' | 'by' | 'exposure' | 'from'>, content: string | MessageBlock[]) {
     const without = extensions.withoutFor(id, m.meta)
     const applying = extensions.transformsFor(without, m.meta)
     if (!applying.length) return content
@@ -494,7 +533,8 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
       throw error
     }
     // Made: a first message that fails (no model yet) leaves it made, and says why.
-    if (prompt?.trim() || attachments?.length) await submit(id, prompt ?? '', randomUUID(), undefined, attachments, { ...(by ? { by } : {}), ...(exposure ? { exposure } : {}) })
+    // From its parent, when one starts it.
+    if (prompt?.trim() || attachments?.length) await submit(id, prompt ?? '', randomUUID(), undefined, attachments, { by, exposure, from: parent })
     return info(id, await get(id))
   }
   /** A new thread with `meta`: its id, once extensions were told it's there (`started`). */
@@ -630,7 +670,10 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
       attachments: (id) => attachmentsDir(options.dataDir, id),
       // An extension's attachments are inline: it has no connection to upload on.
       start: ({ hidden, ...params }) => startThread({ ...params as ThreadStart, ...(hidden ? { hidden: owner } : {}), by: owner }),
-      async send(id, text, { whenBusy = 'followUp', exposure } = {}) { await submit(id, text, randomUUID(), whenBusy, [], { by: owner, ...(exposure ? { exposure } : {}) }) },
+      async send(id, text, { whenBusy = 'followUp', exposure, from } = {}) { await submit(id, text, randomUUID(), whenBusy, [], { by: owner, exposure, from }) },
+      answering: (conversationId, callId) => answering(conversationId, callId),
+      noteRead: (reader, id) => noteRead(reader, id),
+      parentRead: (thread) => (readAt.get(thread.id) ?? -1) >= thread.activeAt,
       lastAnswer: (id) => answerOf(id),
       entries: (id, limit = 20) => newest(id, limit),
       async archive(id, { whenIdle = false } = {}) {
