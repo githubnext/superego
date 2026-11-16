@@ -137,8 +137,8 @@ superego profile revoke-ui default -m box    # Settings → Machines lists them 
 - The daemon loads a profile when a thread with it takes a turn, and again when its files changed: edit, then send the
   thread another message (a thread mid-run keeps what it started the run with). `superego extension reload` loads it
   now, and says why if it doesn't load. Daemon extensions are torn down (their cleanup runs) and set up again.
-- The window loads a profile's UI once its sidebar lists one of its threads, and again when a shown thread of it moves
-  on after a change ([ui.md](ui.md#when-the-ui-loads)).
+- The window loads a profile's UI as soon as it lists one of its threads (sidebar or navigator), and again when a
+  shown thread of it moves on after a change ([ui.md](ui.md#when-the-ui-loads)).
 - `model`, `thinking` and `worktree` apply where a thread hasn't chosen its own.
 
 ## An example

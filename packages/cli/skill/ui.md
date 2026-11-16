@@ -9,11 +9,15 @@ window loads them again.
 
 ## When the UI loads
 
-The window loads a profile's UI once the sidebar lists one of its threads, before any is opened: its badges, slots, tool
-rows and pane kinds are there from the start. That loads the profile's daemon half too. After you change its files, it
-loads again when a thread of it that's shown moves on: send that thread a message. Archived threads aren't listed, so
-they load nothing. Another machine's profile loads only once this computer has allowed its UI; until then, it waits
-for one of its threads to be shown, which asks.
+The window loads a profile's UI as soon as it lists one of that profile's threads, in the sidebar or the navigator. It
+doesn't wait for one to be opened, so its badges, slots, tool rows and pane kinds are there from the start.
+
+- Archived and hidden threads don't count.
+- It loads once per profile per machine, however many threads share it. That loads the profile's daemon half too.
+- Another machine's profile loads this way only if its UI was allowed here before. One never allowed waits until a
+  thread of it is opened, which asks.
+- It stays loaded until the window reloads, even once its last listed thread goes; it shows only on its own threads.
+- After you change its files, it loads again when a shown thread of it moves on: send that thread a message.
 
 ## A first module
 
@@ -113,7 +117,7 @@ function DbMark({ thread }: SlotProps['thread.badge']) {
 export default defineUiExtension({ name: 'db', setup: (superego) => superego.slot('thread.badge', DbMark) })
 ```
 
-The mark shows from the window's start, as [the UI loads](#when-the-ui-loads) when the sidebar lists the thread.
+The mark shows before the thread is opened: [the UI loads](#when-the-ui-loads) as soon as the window lists it.
 
 Spaces (the sidebar), the rail, work dividers, window actions, app settings and New thread fields are for bundled extensions
 (`superego --skill bundled`).

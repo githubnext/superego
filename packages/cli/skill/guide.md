@@ -109,8 +109,8 @@ function Notes({ machine, thread }: PaneProps) {
 export default defineUiExtension({ name: 'notes', version: '1.0.0', api: '^1.2', setup: (superego) => superego.pane('notes', { title: 'Notes', component: Notes, menu: true }) })
 ```
 
-Send a thread a message: the daemon loads the profile and the agent has `add_note`. The window loads its UI once the
-sidebar lists the thread ([ui.md](ui.md#when-the-ui-loads)). After an edit, the daemon half reloads on the thread's next turn, the UI once the thread moves on.
+Send a thread a message: the daemon loads the profile and the agent has `add_note`. The window loads its UI as soon as it
+lists the thread ([ui.md](ui.md#when-the-ui-loads)). After an edit, the daemon half reloads on the thread's next turn, the UI once the thread moves on.
 
 ## The build queue, two ways
 

@@ -44,8 +44,8 @@ export default defineDaemonExtension({
 })
 ```
 
-`setup` runs when the profile first loads (the first turn of a thread with it, a window listing one of its threads in
-the sidebar ([ui.md](ui.md#when-the-ui-loads)), or the daemon starting while one of its threads was working) and again after its files change, with the previous setup's
+`setup` runs when the profile first loads (the first turn of a thread with it, a window listing one of its threads
+([ui.md](ui.md#when-the-ui-loads)), or the daemon starting while one of its threads was working) and again after its files change, with the previous setup's
 cleanup run first. Everything it registered (tools, actions, methods, values, settings, pane kinds, status) is its own
 and removed on reload, so register freely. Its name is the prefix of everything it registers; a second extension of
 the same name is refused. Profiles load one at a time, so keep `setup` quick, and don't await anything that loads a
