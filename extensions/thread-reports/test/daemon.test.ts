@@ -1,6 +1,7 @@
 // Report-back: a child's run ending (or its question) told to its parent, batched, and not when the parent read it.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ThreadInfo } from '@superego/protocol'
+import { defineDaemonExtension, type DaemonApi } from '@superego/daemon'
 import { callTool, say, testDaemon, type TestDaemon } from '@superego/sdk/testing'
 import threadTools from '@superego/thread-tools/daemon'
 import threadReports, { excerpt, reporter, threadReports as withBatching, type ReportsHost } from '../src/daemon.ts'
@@ -8,11 +9,14 @@ import threadReports, { excerpt, reporter, threadReports as withBatching, type R
 const thread = (id: string, title: string, extra: Partial<ThreadInfo> = {}): ThreadInfo =>
   ({ id, title, cwd: '/p', createdAt: 0, activeAt: 1, project: { root: '/p', name: 'p' }, status: { state: 'done' }, ...extra })
 
-/** What parents read of their children, as the daemon keeps it (`threads.noteRead`, `threads.parentRead`). */
+/**
+ * What parents have read of their children, for `read` (`threads.parentRead`): `note(t)`, its parent read `t` as it
+ * stands. Whose read counts, and when, is the daemon's to say (its own tests); the end-to-end case below runs both.
+ */
 function readLog() {
   const seen = new Map<string, number>()
   return {
-    note(reader: string, t: ThreadInfo) { if (t.parent === reader && t.status.state !== 'working') seen.set(t.id, Math.max(seen.get(t.id) ?? 0, t.activeAt)) },
+    note(t: ThreadInfo) { seen.set(t.id, Math.max(seen.get(t.id) ?? 0, t.activeAt)) },
     read: (t: ThreadInfo) => (seen.get(t.id) ?? -1) >= t.activeAt,
   }
 }
@@ -77,20 +81,17 @@ it('says when a child errored or waits on a question', async () => {
   ])
 })
 
-it("skips what the parent read already: by thread_read, waiting on it or after; not another's read, nor one from before", async () => {
+it("skips what the parent read already, before the report or after; not a read from before", async () => {
   const { h, sent, find, reads } = host()
   const reports = reporter(h, { quietMs: 1_000, maxMs: 1_000 })
-  // Read while it was still working: not the answer. Read by another thread: not the parent's.
-  reads.note('1', { ...find('2'), status: { state: 'working' } })
-  reads.note('3', find('2'))
   await reports.report(find('2'))
   await vi.advanceTimersByTimeAsync(1_000)
   expect(sent).toHaveLength(1)
   // Read by its parent once done (a wait returning), before or after the report: nothing more.
-  reads.note('1', find('2'))
+  reads.note(find('2'))
   await reports.report(find('2'))
   await reports.report(find('3'))
-  reads.note('1', find('3'))
+  reads.note(find('3'))
   await vi.advanceTimersByTimeAsync(1_000)
   expect(sent).toHaveLength(1)
   // Its next answer is news again.
@@ -136,7 +137,7 @@ it("holds a busy parent's reports until its run ends, then sends what it hasn't 
   await vi.advanceTimersByTimeAsync(60_000)
   expect(sent).toEqual([])
   // Read during the run: it has that one already.
-  reads.note('1', find('2'))
+  reads.note(find('2'))
   busy.delete('1')
   reports.idle('1')
   await vi.advanceTimersByTimeAsync(0)
@@ -184,7 +185,7 @@ it('sends a busy parent one report after its run, however long, and none for a c
   busy.add('1')
   await reports.report(find('2'))
   await vi.advanceTimersByTimeAsync(10)
-  reads.note('1', find('2'))
+  reads.note(find('2'))
   busy.delete('1')
   reports.idle('1')
   await vi.advanceTimersByTimeAsync(0)
@@ -285,6 +286,34 @@ it("makes a child quiet only while its parent hears: not once the parent is arch
     await daemon.dispatch('thread.archive', { thread: parent.id })
     daemon = await daemon.restart()
     await daemon.until(async () => await quiet(daemon, child.id) === undefined, 'the child to be unquiet after a restart')
+  } finally {
+    await daemon.close()
+  }
+}, 40_000)
+
+it('sends no report of a run its parent read with thread_read; one it didn\'t read is reported', async () => {
+  vi.useRealTimers()
+  // The parent's own messages to its child (`from`, as thread_send's), sent from here so each turn has one thread to go to.
+  let threads!: DaemonApi['threads']
+  const probe = defineDaemonExtension({ name: 'probe', version: '1.0.0', setup(s) { threads = s.threads } })
+  const batching = { quietMs: 2_000, maxMs: 2_000 }
+  let daemon = await testDaemon({ extensions: [threadTools, withBatching(batching), probe] })
+  try {
+    const parent = await daemon.thread(undefined, { title: 'Lead' })
+    const child = await daemon.call<ThreadInfo>('thread.start', { cwd: parent.cwd, parent: parent.id, title: 'Dates' })
+    daemon = await daemon.restart({ model: [say('zz-dates'), callTool('thread_read', { thread: child.id }), say('zz-read'), say('zz-more')] })
+    const reports = async () => (await daemon.transcript(parent.id)).split(`From [Dates](thread:${child.id})`).length - 1
+    // The child answers its parent; the parent reads it before the report goes: none goes.
+    await threads.send(child.id, 'dates?', { from: parent.id })
+    await daemon.until(async () => (await daemon.transcript(child.id)).includes('zz-dates'), 'the child to answer')
+    await daemon.idle(child.id)
+    await daemon.send(parent.id, 'how did Dates do?')
+    expect(await daemon.transcript(parent.id)).toContain('zz-read')
+    await new Promise((r) => setTimeout(r, batching.maxMs + 500))
+    expect(await reports()).toBe(0)
+    // Its next run, unread: reported.
+    await threads.send(child.id, 'and more?', { from: parent.id })
+    await daemon.until(async () => await reports() === 1, 'the report of the unread run')
   } finally {
     await daemon.close()
   }

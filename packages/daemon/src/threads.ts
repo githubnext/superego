@@ -450,10 +450,9 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
 
   /** What parents have read of their children (`noteRead`): the activity each child was read at, newest. In memory. */
   const readAt = new Map<string, number>()
-  async function noteRead(reader: string, id: string) {
-    const thread = info(id, await get(id))
-    if (thread.parent !== reader || thread.status.state === 'working') return
-    readAt.set(id, Math.max(readAt.get(id) ?? 0, thread.activeAt))
+  async function noteRead(reader: string, read: Pick<ThreadInfo, 'id' | 'activeAt' | 'status'>) {
+    if ((await get(read.id)).meta.parent !== reader || read.status.state === 'working') return
+    readAt.set(read.id, Math.max(readAt.get(read.id) ?? 0, read.activeAt))
   }
 
   /** Once a thread isn't working (its run ended, or it needs the user), or `signal` aborts: its info then. */
@@ -712,7 +711,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
       start: ({ hidden, ...params }) => startThread({ ...params as ThreadStart, ...(hidden ? { hidden: owner } : {}), by: owner }),
       async send(id, text, { whenBusy = 'followUp', exposure, from } = {}) { await submit(id, text, randomUUID(), whenBusy, [], { by: owner, exposure, from }) },
       answering: (conversationId, callId) => answering(conversationId, callId),
-      noteRead: (reader, id) => noteRead(reader, id),
+      noteRead: (reader, read) => noteRead(reader, read),
       parentRead: (thread) => (readAt.get(thread.id) ?? -1) >= thread.activeAt,
       lastAnswer: (id) => answerOf(id),
       idle: (id, { signal } = {}) => idle(id, signal),

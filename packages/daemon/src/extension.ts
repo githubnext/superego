@@ -439,10 +439,11 @@ export type DaemonApi = {
      */
     answering(conversationId: number, callId: string): Promise<MessageOrigin | undefined>
     /**
-     * `reader` read thread `id` as it stands now (thread_read, say). Kept, in memory, only when `reader` is its parent
-     * and it isn't working: see `parentRead`.
+     * `reader` read a thread as `read` says it stood (thread_read's info, taken before it read the answer): not looked
+     * up again, so a run the thread finished since isn't counted read. Kept, in memory, only when `reader` is its
+     * parent and it wasn't working: see `parentRead`.
      */
-    noteRead(reader: string, id: string): Promise<void>
+    noteRead(reader: string, read: Pick<ThreadInfo, 'id' | 'activeAt' | 'status'>): Promise<void>
     /** Whether its parent has read it (`noteRead`) as it stood at `thread.activeAt`, or later: a report of it can go unsaid. */
     parentRead(thread: Pick<ThreadInfo, 'id' | 'activeAt'>): boolean
     /** Its last answer, as text, if it has one. */

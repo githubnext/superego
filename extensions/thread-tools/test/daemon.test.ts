@@ -177,10 +177,10 @@ it('reads a thread: where it stands, who started it, and its last answer, waitin
 })
 
 it('notes what a thread read, for its reports (threads.noteRead)', async () => {
-  const reads: [string, string][] = []
-  const h = { ...host(), read: async (reader: string, id: string) => { reads.push([reader, id]) } }
+  const reads: [string, ThreadInfo][] = []
+  const h = { ...host(), read: async (reader: string, read: ThreadInfo) => { reads.push([reader, read]) } }
   await run(h, 'thread_read', { thread: '2' })
-  expect(reads).toEqual([['1', '2']])
+  expect(reads).toEqual([['1', h.threads[1]]])
 })
 
 it('messages a thread from this one, and lists the threads in its project', async () => {

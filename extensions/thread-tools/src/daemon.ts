@@ -17,7 +17,7 @@ export default defineDaemonExtension({
       idle: (id, signal) => s.threads.idle(id, { signal }),
       archive: (id) => s.threads.archive(id),
       archiveWhenDone: async (id) => { await s.threads.archive(id, { whenIdle: true }) },
-      read: (reader, id) => s.threads.noteRead(reader, id),
+      read: (reader, read) => s.threads.noteRead(reader, read),
       hostname: () => hostname(),
       machines: () => s.machines.list(),
       remote: (machine, method, params) => s.machines.call(machine, method, params),

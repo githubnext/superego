@@ -28,8 +28,8 @@ export type ThreadsHost = {
   archive(id: string): Promise<{ notes: Record<string, string> }>
   /** Put it away once its run ends: how a thread archives itself, mid-turn. */
   archiveWhenDone(id: string): Promise<void>
-  /** `reader` read thread `id` (thread_read), as it stands: so a report of it isn't relayed again (`threads.noteRead`). */
-  read?(reader: string, id: string): Promise<void>
+  /** `reader` read a thread (thread_read) as `read` says it stood: so a report of it isn't relayed again (`threads.noteRead`). */
+  read?(reader: string, read: ThreadInfo): Promise<void>
   /** This machine's name, for messages to threads elsewhere. */
   hostname?(): string
   /** The other machines this daemon reaches, and a call to one; absent, the tools stay on this machine. */
@@ -108,7 +108,7 @@ export function readTool(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'i
       const parent = thread.parent ? all.find((t) => t.id === thread!.parent) : undefined
       const children = all.filter((t) => t.parent === id)
       const answer = await place.answer(id)
-      if (!place.away) await host.read?.(String(api.conversationId), thread.id)
+      if (!place.away) await host.read?.(String(api.conversationId), thread)
       return text([
         lineOf(thread, place.name),
         parent && `Started by ${place.name(parent)}.`,

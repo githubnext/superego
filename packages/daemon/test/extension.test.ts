@@ -328,9 +328,13 @@ it('keeps how a message came with it: who sent it, from which thread, for whom; 
   // Read by its parent as it stands: a report of it can go unsaid; not by another thread, and not once it moves on.
   const now = await api!.threads.get(child.id)
   expect(api!.threads.parentRead(now)).toBe(false)
-  await api!.threads.noteRead('someone', child.id)
+  await api!.threads.noteRead('someone', now)
   expect(api!.threads.parentRead(now)).toBe(false)
-  await api!.threads.noteRead(parent.id, child.id)
+  // Read while it worked: not counted.
+  await api!.threads.noteRead(parent.id, { ...now, status: { state: 'working' } })
+  expect(api!.threads.parentRead(now)).toBe(false)
+  // What was read, not what it is when the note is made: a run it finished since isn't read.
+  await api!.threads.noteRead(parent.id, now)
   expect(api!.threads.parentRead(now)).toBe(true)
   expect(api!.threads.parentRead({ ...now, activeAt: now.activeAt + 1 })).toBe(false)
   await close()
