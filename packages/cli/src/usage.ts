@@ -144,7 +144,7 @@ const wordsOf = (entry: Entry) => {
 }
 
 /** Other names commands go by, as the dispatch takes them. */
-const ALIASES: Record<string, string> = { ls: 'threads', new: 'start', profiles: 'profile' }
+const ALIASES: Record<string, string> = { ls: 'threads', new: 'start' }
 
 /** The commands the table names, first words: what `superego <word>` runs rather than taking as a folder. */
 export function commandNames(): Set<string> {
@@ -183,9 +183,7 @@ export function help(app: AppConfig): string {
  */
 export function commandHelp(app: AppConfig, given: string[]): string | undefined {
   const entries = groups(app.id, app.name).flat()
-  let words = given.map((word, i) => i === 0 ? ALIASES[word] ?? word : word)
-  // `extensions test` is `extension test`, as the dispatch takes it.
-  if (words[0] === 'extensions' && words.length > 1) words = ['extension', ...words.slice(1)]
+  const words = given.map((word, i) => i === 0 ? ALIASES[word] ?? word : word)
   const matches = (entry: Entry, count: number) => {
     const own = wordsOf(entry)
     return own.length >= count && words.slice(0, count).every((word, i) => own[i]!.split('|').includes(word))

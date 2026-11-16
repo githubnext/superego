@@ -115,8 +115,6 @@ it("sets up a profile made before, and leaves what's an author's own", () => {
   // As `profile types` does for each one that's there (cli.test.ts runs it through the daemon).
   const dir = join(home, 'profiles', 'older')
   mkdirSync(dir, { recursive: true })
-  // What `extension new` wrote before: 'superego' mapped to this computer's checkout.
-  writeFileSync(join(dir, 'tsconfig.json'), JSON.stringify({ compilerOptions: { paths: { superego: ['/somewhere/packages/sdk/src/index.ts'] } } }, null, 2))
   writeFileSync(join(dir, '.gitignore'), 'dist')
   writeFileSync(join(dir, 'profile.ts'), `import { defineProfile } from 'superego'\nexport default defineProfile({ prompt: 'Hi' })\n`)
   const types = join(home, 'types')

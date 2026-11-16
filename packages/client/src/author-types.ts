@@ -86,8 +86,8 @@ export function linkProfileTypes(dir: string, typesDir: string): { written?: str
 }
 
 /**
- * Give the profile at `dir` types: link its node_modules to `typesDir`'s, write its tsconfig.json (or replace one an
- * older Superego wrote, which named this computer's checkout), and keep node_modules out of git.
+ * Give the profile at `dir` types: link its node_modules to `typesDir`'s, write its tsconfig.json, and keep
+ * node_modules out of git.
  */
 export function setUpProfileTypes(dir: string, typesDir: string): ProfileTypes {
   const written: string[] = []
@@ -100,9 +100,7 @@ export function setUpProfileTypes(dir: string, typesDir: string): ProfileTypes {
 
   const tsconfig = join(dir, 'tsconfig.json')
   const had = existsSync(tsconfig) ? readFileSync(tsconfig, 'utf8') : undefined
-  // One `superego extension new` wrote before: 'superego' mapped to this computer's checkout.
-  const older = had !== undefined && /"superego": \[\s*"\//.test(had)
-  if (had === undefined || older) { writeFileSync(tsconfig, PROFILE_TSCONFIG); written.push(tsconfig) }
+  if (had === undefined) { writeFileSync(tsconfig, PROFILE_TSCONFIG); written.push(tsconfig) }
   else if (had !== PROFILE_TSCONFIG) notes.push(`${tsconfig} is there already, so it's left as it is (what Superego would write: \`superego --skill profiles\`)`)
 
   const ignore = join(dir, '.gitignore')

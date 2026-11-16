@@ -70,9 +70,9 @@ function table(rows: string[][]) {
 const GLYPH: Record<string, string> = { idle: '○', working: '●', done: '*', blocked: '?', error: '!' }
 const stateOf = (status: ThreadInfo['status']) => waitingForSignIn(status) ? '~ waiting for sign-in' : `${GLYPH[status.state]} ${status.state}`
 
-/** The providers that rejected a machine's credentials; none from a daemon too old to say. */
+/** The providers that rejected a machine's credentials. */
 const rejectedOn = (call: <M extends MethodName>(method: M, params: Params<M>) => Promise<Result<M>>) =>
-  call('value.watch', { key: AUTH_REJECTED }).then((r) => (r.value ?? []) as ProviderRejection[], () => [])
+  call('value.watch', { key: AUTH_REJECTED }).then((r) => (r.value ?? []) as ProviderRejection[])
 
 /** What to say of each rejected provider: what happened, what waits, and how to sign in again. */
 function sayRejected(rejections: ProviderRejection[], machine: Machine) {
@@ -220,7 +220,11 @@ async function unreadCommand(machineName: string | undefined, countOnly: boolean
       if (machine.config) return
       const { value } = await call('machines.watch', {})
       await Promise.all(value.filter((m) => m.id !== 'local' && m.state === 'connected').map(async (m) => {
-        const list = await call('relay.call', { machine: m.id, method: 'thread.list', params: {} }).catch(() => []) as ThreadInfo[]
+        // One that went away since it was listed counts as nothing, and says so: the rest still count.
+        const list = await call('relay.call', { machine: m.id, method: 'thread.list', params: {} }).then((list) => list as ThreadInfo[], (error: Error) => {
+          console.error(`${app.id}: ${m.label}: ${error.message}`)
+          return []
+        })
         add(m.id, m.label, list)
       }))
     }, { start: false })
@@ -291,7 +295,7 @@ async function loginCommand(machine: Machine) {
 }
 
 async function machinesCommand(sub: string | undefined, rest: string[], options: { name?: string; command?: string; via?: string; now?: boolean }) {
-  if (!sub || sub === 'ls' || sub === 'list') return listMachines()
+  if (!sub) return listMachines()
   if (sub === 'add') {
     const added = await machines.add({ target: rest[0], label: options.name, command: options.command, via: options.via })
     // Learn who answers there now, so a different machine later is refused.
@@ -312,7 +316,7 @@ async function machinesCommand(sub: string | undefined, rest: string[], options:
   if (sub === 'login') return loginCommand(machine)
   if (sub === 'update') return updateMachine(machine as Machine & { config: MachineConfig }, Boolean(options.now))
   // Its profiles' UI allowed here goes with it: a machine added again is asked again.
-  if (sub === 'rm' || sub === 'remove') { await machines.remove(machine.id); await new UiAllowStore(dataDir).revoke(machine.id) }
+  if (sub === 'rm') { await machines.remove(machine.id); await new UiAllowStore(dataDir).revoke(machine.id) }
   else if (sub === 'enable' || sub === 'disable') await machines.update(machine.id, { enabled: sub === 'enable' })
   else if (sub === 'trust') await machines.forgetIdentity(machine.id)
   else throw new RpcError('usage', `Unknown: ${app.id} machines ${sub}`)
@@ -351,7 +355,7 @@ const parseValue = (text: string): Json => { try { return JSON.parse(text) } cat
 async function settingsCommand(sub: string | undefined, rest: string[], options: { machine?: string; all?: boolean }) {
   const targets = options.all ? [{ id: 'local', label: 'This computer' }, ...machines.list().filter((m) => m.enabled).map((config) => ({ id: config.id, label: config.label, config }))]
     : [resolveMachine(options.machine)]
-  if (!sub || sub === 'ls' || sub === 'list') {
+  if (!sub) {
     if (options.all) throw new RpcError('usage', '--all is for set and reset')
     const snapshot = await on(targets[0]!, (call) => call('settings.watch', {}).then((r) => r.value)) as SettingsSnapshot
     return print(snapshot, () => {
@@ -398,7 +402,7 @@ async function readSecret(prompt: string): Promise<string> {
 
 async function providersCommand(sub: string | undefined, rest: string[], machineName?: string) {
   const machine = resolveMachine(machineName)
-  if (!sub || sub === 'ls' || sub === 'list') {
+  if (!sub) {
     const { snapshot, rejected } = await on(machine, async (call) => ({ snapshot: await call('settings.watch', {}).then((r) => r.value), rejected: await rejectedOn(call) }))
     const providers = (snapshot.sections.find((s) => s.id === 'providers')?.data ?? []) as ProviderAuthInfo[]
     const listed = providers.map((p) => ({ ...p, ...(rejected.some((r) => r.provider === p.id) ? { rejected: rejected.find((r) => r.provider === p.id) } : {}) }))
@@ -568,7 +572,7 @@ async function profileCommand(sub: string | undefined, rest: string[], values: {
   const machine = resolveMachine(values.machine)
   const run = (id: string, params: Record<string, unknown>) => on(machine, (call) => call('action.run', { id, params, exposure: 'cli' }))
   const cwd = machine.config ? undefined : process.cwd()
-  if (!sub || sub === 'ls' || sub === 'list') {
+  if (!sub) {
     const list = await run('profile.list', cwd ? { cwd } : {}) as ProfileInfo[]
     return print(list, () => {
       if (!list.length) return console.log(`No profiles here. Make one: ${app.id} profile new`)
@@ -654,20 +658,21 @@ async function profileHere(values: { profile?: string; user?: boolean }, command
   })
 }
 
-async function extensionCommand(sub: string | undefined, rest: string[], values: { profile?: string; user?: boolean; ui?: boolean; 'data-only'?: boolean; machine?: string; thread?: string; timeout?: string }) {
-  if (!sub || sub === 'ls' || sub === 'list' || sub === 'inspect') {
-    const machine = resolveMachine(values.machine)
-    const { report, servers } = await on(machine, async (call) => {
-      const report = await call('extension.inspect', values.thread ? { thread: values.thread } : {})
-      const thread = values.thread ? (await call('thread.list', {})).find((t) => t.id === values.thread) : undefined
-      return { report, servers: thread?.facts?.['mcp-servers'] as ThreadServers | undefined }
-    })
-    return print(servers ? { ...report, mcpServers: servers } : report, () => console.log(formatReport(report, machine.label, servers)))
-  }
+/** `extensions`: what each extension on a machine is and does (inspect.ts), with `--thread`, what that thread goes without. */
+async function extensionsCommand(values: { machine?: string; thread?: string }) {
+  const machine = resolveMachine(values.machine)
+  const { report, servers } = await on(machine, async (call) => {
+    const report = await call('extension.inspect', values.thread ? { thread: values.thread } : {})
+    const thread = values.thread ? (await call('thread.list', {})).find((t) => t.id === values.thread) : undefined
+    return { report, servers: thread?.facts?.['mcp-servers'] as ThreadServers | undefined }
+  })
+  return print(servers ? { ...report, mcpServers: servers } : report, () => console.log(formatReport(report, machine.label, app.id, servers)))
+}
+
+async function extensionCommand(sub: string | undefined, rest: string[], values: { profile?: string; user?: boolean; ui?: boolean; machine?: string; timeout?: string }) {
   if (sub === 'new') {
     const name = rest[0]
     if (!name) throw new RpcError('usage', `${app.id} extension new <name> [--ui] [-P profile] [--user]`)
-    if (values.ui && values['data-only']) throw new RpcError('usage', 'Either --ui or --data-only')
     const profile = await profileHere(values, 'new', true)
     const { dir } = profile
     const kind = values.ui ? 'ui' : 'data-only'
@@ -705,7 +710,7 @@ async function extensionCommand(sub: string | undefined, rest: string[], values:
     const ref = await on(machine, (call) => call('action.run', { id: 'profile.reload', params, exposure: 'cli' })) as ProfileRef
     return print(ref, () => console.log(profile ? `${sayProfile(profile)}\nLoaded it again` : `Loaded ${ref.name} (${ref.dir}) again`))
   }
-  throw new RpcError('usage', `Unknown: ${app.id} extension ${sub}`)
+  throw new RpcError('usage', sub ? `Unknown: ${app.id} extension ${sub}` : `${app.id} extension new|test|reload; the extensions there are: ${app.id} extensions`)
 }
 
 /**
@@ -759,7 +764,7 @@ async function webCommand(sub: string | undefined, rest: string[], values: { mac
       console.log(`or enter ${ticket.code} on the device. Works once, for 5 minutes.`)
     })
   }
-  if (!sub || sub === 'devices' || sub === 'ls') {
+  if (sub === 'devices') {
     const devices = await run('web.devices') as { id: string; name: string; lastSeen: number; address: string; tailscale?: true }[]
     return print(devices, () => {
       if (!devices.length) return console.log(`No devices paired. Pair one: ${app.id} web pair`)
@@ -776,7 +781,7 @@ async function webCommand(sub: string | undefined, rest: string[], values: { mac
     const device = await run('web.rename', { id: rest[0], name: rest.slice(1).join(' ') })
     return print(device, () => console.log(`Renamed ${rest[0]}`))
   }
-  throw new RpcError('usage', `Unknown: ${app.id} web ${sub}`)
+  throw new RpcError('usage', sub ? `Unknown: ${app.id} web ${sub}` : `${app.id} web pair|devices|revoke|rename`)
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -870,9 +875,9 @@ async function mcpServersCommand(sub: string | undefined, rest: string[], values
   ]
   /** The machine's servers, as Settings → MCP servers draws them (the extension's live value): null while it's off. */
   const listed = () => on(machine, (call) => call('value.watch', { key: MCP_SERVERS }).then((r) => r.value as McpServers | null))
-  if (!sub || sub === 'ls' || sub === 'list') {
+  if (!sub) {
     const data = await listed()
-    if (!data) throw new RpcError('not_found', `${machine.label} has no MCP servers: its daemon is older, or the extension is off (Settings → Extensions)`)
+    if (!data) throw new RpcError('not_found', `${machine.label} has no MCP servers: the extension is off (Settings → Extensions)`)
     return print(data, () => {
       if (!data.servers.length && !data.profiles.length) return console.log(`No MCP servers on ${machine.label} yet. Add one in the app's Settings → MCP servers.`)
       table([...data.servers, ...data.profiles].map(line))
@@ -889,7 +894,7 @@ async function mcpServersCommand(sub: string | undefined, rest: string[], values
     if (found.length > 1 && !found.some((s) => s.id === given)) throw new RpcError('usage', `More than one server is called ${given}: name one by its id (${found.map((s) => s.id).join(', ')})`)
     return found[0]?.id ?? given
   }
-  if (sub === 'logs' || sub === 'log') {
+  if (sub === 'logs') {
     const lines = values.lines ? Number(values.lines) : 100
     const log = await run<McpLog>(MCP_ACTIONS.log, { server: await idOf(name), lines })
     return print(log, () => console.log(log.text || `Nothing in ${log.path} yet.`))
@@ -1009,7 +1014,7 @@ async function main() {
     allowPositionals: true,
     options: {
       machine: { type: 'string', short: 'm' }, prompt: { type: 'string', short: 'p' }, json: { type: 'boolean' }, profile: { type: 'string', short: 'P' }, worktree: { type: 'boolean', short: 'w' },
-      user: { type: 'boolean' }, archived: { type: 'boolean' }, ui: { type: 'boolean' }, 'data-only': { type: 'boolean' }, thread: { type: 'string' },
+      user: { type: 'boolean' }, archived: { type: 'boolean' }, ui: { type: 'boolean' }, thread: { type: 'string' },
       all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
       start: { type: 'boolean' }, update: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, skill: { type: 'boolean' },
       lines: { type: 'string' }, wait: { type: 'boolean' }, timeout: { type: 'string' }, count: { type: 'boolean' },
@@ -1037,8 +1042,9 @@ async function main() {
     case 'threads': case 'ls': return threads(values.machine, Boolean(values.archived))
     case 'unread': return unreadCommand(values.machine, Boolean(values.count))
     case 'new': case 'start': return startThread({ dir: rest[0], machine: values.machine, prompt: values.prompt, profile: values.profile, worktree: values.worktree, open: false })
-    case 'profile': case 'profiles': return profileCommand(rest[0], rest.slice(1), values)
-    case 'extension': case 'extensions': return extensionCommand(rest[0], rest.slice(1), values)
+    case 'profile': return profileCommand(rest[0], rest.slice(1), values)
+    case 'extensions': return extensionsCommand(values)
+    case 'extension': return extensionCommand(rest[0], rest.slice(1), values)
     case 'read': return readCommand(rest[0], values)
     case 'send': {
       const [id, ...text] = rest

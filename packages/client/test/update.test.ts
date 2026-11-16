@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { defineApp } from '@superego/protocol'
-import { runUpdate, updateCommand, updateScript, wrapperOf, type MachineConfig } from '../src/index.ts'
+import type { MachineConfig } from '../src/shared.ts'
+import { runUpdate, updateCommand, updateScript, wrapperOf } from '../src/update.ts'
 
 const app = defineApp({ name: 'Superego', id: 'superego' })
 const machine = (patch: Partial<MachineConfig>): MachineConfig => ({ id: 'm', label: 'mbp', target: 'mbp', enabled: true, ...patch })
@@ -20,6 +21,7 @@ describe('updating a machine', () => {
     mkdirSync(join(origin, 'scripts'), { recursive: true })
     writeFileSync(join(origin, 'scripts/install-machine.sh'), '#!/bin/sh\necho "installed $(git rev-parse --short HEAD) now=${SUPEREGO_RESTART_NOW:-}"\n')
     chmodSync(join(origin, 'scripts/install-machine.sh'), 0o755)
+    writeFileSync(join(origin, 'scripts/machine-path.sh'), 'PATH="$HOME/bin:$PATH"; export PATH\n')
     git(origin, 'init', '-q', '-b', 'main')
     git(origin, 'add', '-A')
     git(origin, 'commit', '-qm', 'one')

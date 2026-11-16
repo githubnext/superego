@@ -1,6 +1,6 @@
-// `superego mcp`: an MCP server over stdio, made from a machine's actions. Every action exposed to `mcp` is a tool
+// `superego mcp`: an MCP server over stdio, made from a machine's actions. Every action exposed to `outside` is a tool
 // (`thread.start` as `thread_start`, its params schema as the tool's), run through the daemon's `action.run` with
-// `exposure: 'outside'`, so it is refused if it isn't exposed there and logged with the source `mcp` like any other
+// `exposure: 'outside'`, so it is refused if it isn't exposed there and logged with the source `outside` like any other
 // dispatch. Reads aren't actions (they stay plain methods), so two tools of the server's own read on them: `thread_list`
 // and `thread_read`. One server serves one machine (`-m`); its tools change as that machine's extensions and settings
 // do (starting threads is a tool only while the machine lets outside agents: `outside.startThreads`).
@@ -57,27 +57,30 @@ export async function serveMcp({ app, label, connect }: McpOptions): Promise<voi
       'thread_read (wait: true) gets its answer, thread_list lists them. Every other tool is an action of that machine.',
   })
 
+  /** Log a failure off any request to stderr, which MCP clients keep as the server's log: nobody waits on it to answer. */
+  const said = (what: string) => (error: Error) => console.error(`${app.id} mcp: ${what}: ${error.message}`)
   let link: Promise<{ transport: Transport; hello: Hello }> | undefined
   let reconnected = false
   const daemon = () => link ??= (async () => {
     const client = server.getClientVersion()
     const opened = await connect(client ? `${client.title ?? client.name} (outside agent)` : 'An outside agent')
     // Its extensions changed what it takes; after a reconnect (a restart) it may have too.
-    opened.transport.peer.on('features.changed', () => void server.sendToolListChanged().catch(() => {}))
-    if (reconnected) void server.sendToolListChanged().catch(() => {})
-    // A setting may have changed what it lets outside agents run: told only when the list did.
+    opened.transport.peer.on('features.changed', () => void server.sendToolListChanged().catch(said('telling the tools changed')))
+    if (reconnected) void server.sendToolListChanged().catch(said('telling the tools changed'))
+    // A setting may have changed what it lets outside agents run: told only when the list did. The settings are
+    // watched only to hear that, for as long as this connection lasts (the daemon drops the watch with it).
     let offered = ''
     const ids = async () => (await opened.transport.peer.call<ActionInfo[]>('action.list', { exposure: 'outside' })).map((a) => a.id).join()
     opened.transport.peer.on('settings.changed', () => void ids().then((now) => {
       if (now !== offered) { offered = now; return server.sendToolListChanged() }
-    }).catch(() => {}))
-    void Promise.all([ids(), opened.transport.peer.call('settings.watch', {})]).then(([now]) => { offered = now }).catch(() => {})
+    }).catch(said('following the settings')))
+    ;[offered] = await Promise.all([ids(), opened.transport.peer.call('settings.watch', {})])
     void opened.transport.closed.then(() => { link = undefined; reconnected = true })
     return opened
   })().catch((error: unknown) => { link = undefined; throw error })
   const call = async <T,>(method: string, params: unknown) => (await daemon()).transport.peer.call<T>(method, params)
 
-  const actions = async () => (await call<ActionInfo[]>('action.list', { exposure: 'outside' })).filter((a) => a.expose.includes('outside'))
+  const actions = () => call<ActionInfo[]>('action.list', { exposure: 'outside' })
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const tools = new Map(READS.map((t) => [t.name, t]))
@@ -102,5 +105,6 @@ export async function serveMcp({ app, label, connect }: McpOptions): Promise<voi
   process.stdin.once('end', () => void server.close())
   await server.connect(transport)
   await done
+  // A connection that failed told the request that wanted it; there's nothing to close.
   if (link) (await link.catch(() => undefined))?.transport.close()
 }

@@ -7,7 +7,7 @@ import { LEFT_OUT, type ThreadServers } from '@superego/mcp-servers/shared'
 const from = (e: ExtensionReport) => e.source === 'profile' ? `profile ${e.profiles?.join(', ') || '(none now)'}${e.file ? ` · ${e.file}` : ''}` : e.source === 'window' ? 'a window (no daemon half)' : e.source
 
 /** The report, as lines to read. */
-export function formatReport(report: ExtensionsReport, machine: string, servers?: ThreadServers): string {
+export function formatReport(report: ExtensionsReport, machine: string, id: string, servers?: ThreadServers): string {
   const lines = [`Extensions on ${machine} (extension API ${report.api})`, '']
   const order = { failed: 0, refused: 0, 'timed out': 0, off: 1, 'set up': 2 } as const
   for (const e of [...report.extensions].sort((a, b) => order[a.state] - order[b.state] || a.name.localeCompare(b.name))) {
@@ -34,6 +34,6 @@ export function formatReport(report: ExtensionsReport, machine: string, servers?
       if (!servers.servers.length && !servers.left?.length) lines.push('    none')
     }
   }
-  lines.push('', 'The window draws what the UI halves register; a UI half that throws says so in its place. Reload a profile: superego extension reload [-P name]')
+  lines.push('', `The window draws what the UI halves register; a UI half that throws says so in its place. Reload a profile: ${id} extension reload [-P name]`)
   return lines.join('\n')
 }

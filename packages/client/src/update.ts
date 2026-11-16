@@ -6,12 +6,6 @@ import { remoteCommand, RpcError, type AppConfig } from '@superego/protocol'
 import type { MachineConfig } from './shared.ts'
 
 /**
- * Where git, mise and pnpm usually are. A non-login ssh shell may have none of them on PATH (no /opt/homebrew/bin for
- * `gh`, git's credential helper, nor ~/.local/bin for mise).
- */
-export const USUAL_PATH = '$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin'
-
-/**
  * A POSIX sh script updating the checkout at `dir`, or the one whose `wrapper` (as a shell word) install-machine.sh
  * wrote. It refuses a checkout with changes and a pull that fails, before the install script (which only warns) runs;
  * `now` lets the install restart the daemon though threads are working there.
@@ -19,7 +13,6 @@ export const USUAL_PATH = '$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin'
 export function updateScript(where: { dir: string } | { wrapper: string }, now = false): string {
   const quote = (text: string) => `'${text.replaceAll("'", `'\\''`)}'`
   return [
-    `PATH="${USUAL_PATH}:$PATH"; export PATH`,
     'fail() { echo "superego update: $*" >&2; exit 1; }',
     ...'dir' in where ? [`d=${quote(where.dir)}`] : [
       `w=${where.wrapper}`,
@@ -28,6 +21,9 @@ export function updateScript(where: { dir: string } | { wrapper: string }, now =
       '[ -n "$d" ] || fail "$w was not written by scripts/install-machine.sh: update it by hand"',
     ],
     '[ -x "$d/scripts/install-machine.sh" ] || fail "no scripts/install-machine.sh in $d"',
+    '[ -f "$d/scripts/machine-path.sh" ] || fail "no scripts/machine-path.sh in $d: update it by hand once (git pull there, then scripts/install-machine.sh)"',
+    // Where git and its credential helper are, as the install script finds them.
+    '. "$d/scripts/machine-path.sh"',
     'cd "$d" || fail "no checkout at $d"',
     'echo "Updating $d"',
     '[ -z "$(git status --porcelain --untracked-files=no)" ] || fail "$d has uncommitted changes: commit or discard them there first"',

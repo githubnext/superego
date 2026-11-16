@@ -3,6 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts", "./shared": "./src/shared.ts", "./profile-ui": "./src/profile-ui.ts", "./link": "./src/link.ts", "./uploads": "./src/uploads.ts", "./author-types": "./src/author-types.ts", "./lock": "./src/lock.ts" },
+  "exports": { ".": "./src/index.ts", "./shared": "./src/shared.ts", "./profile-ui": "./src/profile-ui.ts", "./uploads": "./src/uploads.ts", "./author-types": "./src/author-types.ts", "./lock": "./src/lock.ts" },
   "dependencies": { "@superego/protocol": "workspace:*", "@superego/daemon": "workspace:*" }
 }

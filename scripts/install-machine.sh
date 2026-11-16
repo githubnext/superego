@@ -14,9 +14,7 @@ bin=${SUPEREGO_BIN:-$HOME/.local/bin}
 registry=${SUPEREGO_REGISTRY:-https://packagefeedproxy.microsoft.io/npm/}
 cd "$dir"
 
-# Where git, mise and pnpm usually are: a non-login ssh shell (as Update in the app runs this) may have none of them on
-# PATH, nor `gh`, git's credential helper.
-export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+. "$dir/scripts/machine-path.sh"
 
 # Where mise is now, for the wrapper below: ssh's PATH may not have it (~/.local/bin, say).
 mise=$(command -v mise || true)
