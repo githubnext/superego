@@ -777,7 +777,7 @@ source, at `extensions/<name>/src`, so only a checkout has them.
 | `links` | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
 | `unread` | UI only: a view in the rail `withoutSpaces` and in a phone's `drawer`, an action with keys reading projects, an app setting |
 | `threads` | the required one, UI only: views (the list a `space` with a `rail` of its own, details in the `beside` with ⌘I, the model in the `header`), app settings, tool rows and a `link` |
-| `thread-tools` | daemon only: the agent's thread tools, on `superego.threads` (`send` with `from`, `noteRead` for what a thread read) |
+| `thread-tools` | daemon only: the agent's thread tools, on `superego.threads` (`send` with `from`, `noteRead` for what a thread read, `idle` for thread_read's wait); it exports `readTool` and `listTool` for reuse (Ego) |
 | `thread-reports` | daemon only: report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by `beforeSend`'s `by` and `from`), not what the parent has read (`threads.parentRead`); `quiet` for a child whose parent hears it |
 | `worktrees` | `thread` hooks (`starting` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `header.chips` chip, a `thread.badge` mark and a `newThreadField` |
 | `mcp-servers` | a key of its own in profiles (`profileKey('mcpServers', …)`); a settings section drawn by a component of its own (`settings(ui, …)`) from a live value (the section's `value`), with dialogs and `SignInFlow`; tool rows by prefix (`mcp__*`) with a call's own `verb` and images; a `header` view, a `details.section` slot and a `composer.above` notice, all from the thread's facts |
