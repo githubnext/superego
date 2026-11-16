@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { ArrowClockwiseIcon, Button } from '@superego/ui'
 import { useRegistry } from './extension.tsx'
 import { RailNotice } from './rail-notice.tsx'
-import type { ServiceAction, ServiceState } from '../main/restart.ts'
+import type { ServiceAction, ServiceState } from '../shared/service.ts'
 
 export function ServiceNotice({ rail = false }: { rail?: boolean }) {
   const [state, setState] = useState<ServiceState>()

@@ -3,7 +3,8 @@
 import { useEffect } from 'react'
 import type { SectionInfo, SettingsSnapshot } from '@superego/protocol'
 import { Dialog, StatusGlyph } from '@superego/ui'
-import type { MachineEntry } from '../shared.ts'
+import { APP } from '../shared/app-settings.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import { useSettings } from './client.ts'
 import { Contained } from './contained.tsx'
 import { settingsView, useRegistry } from './extension.tsx'
@@ -11,7 +12,6 @@ import { useLocalState } from './local-state.ts'
 import { Setting } from './settings/controls.tsx'
 import { AllMachines, machineGlyph, Machines } from './settings/machines.tsx'
 
-const APP = 'app'
 /** Settings → Machines (also opened by Update: see actions.tsx). */
 const MACHINES = '$machines'
 const ALL = '$all'

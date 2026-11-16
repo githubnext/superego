@@ -1,7 +1,7 @@
 // Shared watches (client.ts), against a fake `window.superego`: one subscription however many want it, let go after
 // the last, watched again on reconnecting, after the daemon ends it, and after a failed call.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { SuperegoBridge, SuperegoEvent } from '../src/shared.ts'
+import type { SuperegoBridge, SuperegoEvent } from '../src/shared/bridge.ts'
 import { sharedWatch } from '../src/renderer/client.ts'
 
 type Call = { method: string; params: any }

@@ -5,6 +5,7 @@
 // it printed, and passes keys and sizes back. Native libghostty on the desktop is a later step (docs/design.md, Next).
 import { useEffect, useRef, useState } from 'react'
 import { call, channel as openChannel, defineAction, defineUiExtension, has, StatusGlyph, useAppSetting, useTabNote, useValue, type BridgeChannel, type PaneProps } from '@superego/app/ui'
+import { MONO_FONT } from '@superego/app/app-settings'
 import type { Pane } from '@superego/protocol'
 import { TerminalIcon } from '@superego/ui'
 import './styles.css'
@@ -70,7 +71,7 @@ function windowTakes(event: KeyboardEvent) {
 function TerminalPane({ machine, thread, pane }: PaneProps) {
   const host = useRef<HTMLDivElement>(null)
   const dark = useDark()
-  const [font] = useAppSetting<string | null>('app.font.mono')
+  const [font] = useAppSetting<string | null>(MONO_FONT)
   const [problem, setProblem] = useState<string>()
   const [attempt, setAttempt] = useState(0)
   const connected = machine.state === 'connected'

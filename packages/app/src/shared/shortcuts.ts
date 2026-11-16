@@ -1,9 +1,8 @@
 // Shortcuts as data. A shortcut is `[mod+][ctrl+][meta+][alt+][shift+]<key>`, with `mod` ⌘ on macOS and Ctrl elsewhere,
 // and the key as the keyboard reports it (`k`, `,`, `\`, `arrowdown`, `space`, `f5`). Actions carry a default; the app
-// setting `app.keys` holds what the user changed, by action id (`null`: no shortcut).
+// setting `KEYMAP` (shared/app-settings.ts) holds what the user changed, by action id (`null`: no shortcut).
 import type { ActionInfo } from '@superego/protocol'
 
-export const KEYMAP = 'app.keys'
 export type Keymap = Record<string, string | null>
 
 // The window asks its navigator; the main process (which reads key presses on the window's behalf) its process.

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AUTH_REJECTED, type ProviderAuthInfo, type ProviderRejection, type SectionInfo } from '@superego/protocol'
 import { Button, TextField } from '@superego/ui'
-import { waitingPhrase } from '../../shared.ts'
+import { waitingPhrase } from '../../shared/notifications.ts'
 import { useValue } from '../client.ts'
 import { useRegistry } from '../extension.tsx'
 import { takeProviderFocus } from '../provider-focus.ts'

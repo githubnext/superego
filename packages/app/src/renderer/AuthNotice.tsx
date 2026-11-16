@@ -2,7 +2,7 @@
 // how many wait, and signing in again (or retrying now). The threads go on by themselves once it's signed in again.
 // Dismissed, it stays away until the provider rejects them again. Wide, each in the rail (`rail`).
 import { Button, IconButton, KeyIcon, XIcon } from '@superego/ui'
-import { waitingPhrase } from '../shared.ts'
+import { waitingPhrase } from '../shared/notifications.ts'
 import { useRegistry } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
 import { RailNotice } from './rail-notice.tsx'

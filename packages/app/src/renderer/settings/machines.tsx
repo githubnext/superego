@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { remoteCommand, type Json, type SettingsSnapshot, type Status } from '@superego/protocol'
 import { Button, Select, StatusGlyph, Switch, TextField } from '@superego/ui'
-import type { MachineEntry } from '../../shared.ts'
+import type { MachineEntry } from '../../shared/bridge.ts'
 import { useSettings } from '../client.ts'
 import { useApp, useRegistry } from '../extension.tsx'
 import { driftNote, MachineDrift } from '../machine-drift.tsx'

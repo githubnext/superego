@@ -1,5 +1,5 @@
 import type { ThreadInfo } from '@superego/protocol'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import { useProfileUi } from './profile-ui.ts'
 import { ThreadPanes } from './panes.tsx'
 import { ThreadBody } from './thread-body.tsx'

@@ -46,7 +46,8 @@
     "./preload": "./src/preload/preload.ts",
     "./vite": "./src/vite.ts",
     "./package": "./src/package.ts",
-    "./shared": "./src/shared.ts",
+    "./shared": "./src/shared/bridge.ts",
+    "./app-settings": "./src/shared/app-settings.ts",
     "./sdk-ui": "./src/renderer/sdk-ui.ts",
     "./sdk-unstable": "./src/renderer/sdk-unstable.ts",
     "./internals": "./src/renderer/internals.ts"

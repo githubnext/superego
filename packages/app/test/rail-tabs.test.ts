@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { defineApp } from '@superego/protocol'
 import { coreActions, type WindowContext } from '../src/renderer/actions.tsx'
-import { conflicts } from '../src/renderer/shortcuts.ts'
+import { conflicts } from '../src/shared/shortcuts.ts'
 import { RAIL_TABS, railTabs, tabAction, type RailTab } from '../src/renderer/rail-tabs.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })

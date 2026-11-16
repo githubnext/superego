@@ -7,7 +7,7 @@ import { defineApp, type DataViewInfo, type ThreadInfo } from '@superego/protoco
 import { checkContent, checkDataViews, contentOf, LIMITS } from '../src/renderer/data-view-check.ts'
 import { DataContent, DataViewBoundary, runViewAction } from '../src/renderer/data-views.tsx'
 import { createRegistry, defineUiExtension, paneKind, paneMenu, RegistryProvider, viewsIn } from '../src/renderer/extension.tsx'
-import { resolveLayout } from '../src/renderer/layout.ts'
+import { resolveLayout } from '../src/shared/layout.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
 const thread = (more: Partial<ThreadInfo> = {}): ThreadInfo => ({ id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' }, ...more })

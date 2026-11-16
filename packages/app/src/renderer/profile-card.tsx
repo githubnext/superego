@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import type { ProfileInfo, ThreadInfo } from '@superego/protocol'
 import { IdentificationBadgeIcon, Popover } from '@superego/ui'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import { useRegistry } from './extension.tsx'
 import { shortPath } from './short-path.ts'
 

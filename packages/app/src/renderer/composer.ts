@@ -4,7 +4,7 @@
 // it put in one (a skill's instructions, say) and draws them under it, kept out of the message's own text.
 import type { ComponentType } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 
 /** The word a provider completes: where it starts (its trigger included) and what to look up. Providers may add their own. */
 export type CompletionWord = { start: number; query: string }

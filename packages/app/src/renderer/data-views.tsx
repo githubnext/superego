@@ -11,11 +11,11 @@ import {
   ArchiveIcon, BellIcon, Button, ChatsIcon, CheckIcon, ColumnsIcon, FileTextIcon, FolderSimpleIcon, GearSixIcon, GlobeIcon, IconButton, ListIcon, Panel,
   SparkleIcon, StatusGlyph, TableIcon, TerminalIcon, WrenchIcon,
 } from '@superego/ui'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import { call, useMethod, useValue } from './client.ts'
 import { checkContent, warnDropped } from './data-view-check.ts'
 import { useRegistry, type Registry } from './extension.tsx'
-import type { Place } from './layout.ts'
+import type { Place } from '../shared/layout.ts'
 import { Markdown } from './Markdown.tsx'
 import { useAllThreads, useMachines } from './state.tsx'
 import { ThreadRef } from './thread-ref.tsx'

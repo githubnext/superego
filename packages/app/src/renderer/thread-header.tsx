@@ -3,7 +3,7 @@
 import { useRef } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import { ArchiveIcon, ArrowCounterClockwiseIcon, Button, IconButton, Menu, PencilSimpleIcon, PanePlusIcon, StatusGlyph } from '@superego/ui'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import { paneMenu, PlacedViews, Slot, useLayout, useRegistry } from './extension.tsx'
 import { ViewContextMenu, withContextMenu } from './view-menu.tsx'
 import { ThreadRef } from './thread-ref.tsx'

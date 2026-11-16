@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ServiceRestart, type ServiceSnapshot, type ServiceState } from '../src/main/restart.ts'
+import { ServiceRestart, type ServiceSnapshot } from '../src/main/restart.ts'
+import type { ServiceState } from '../src/shared/service.ts'
 
 function service(snapshot: ServiceSnapshot) {
   const changes: ServiceState[] = []

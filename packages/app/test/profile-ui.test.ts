@@ -4,7 +4,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { RpcError } from '@superego/protocol'
 import { collectProfileUi, hashProfileUi, type AllowedUi } from '@superego/client/profile-ui'
-import type { SuperegoBridge, SuperegoEvent } from '../src/shared.ts'
+import type { SuperegoBridge, SuperegoEvent } from '../src/shared/bridge.ts'
 import { declineUi, dismissRevokedUi, ensureProfileUi, loadListedProfileUis, pendingUi, reopenUi, resetProfileUi, revokedUi, setLoader } from '../src/renderer/profile-ui.ts'
 
 let answer: () => unknown

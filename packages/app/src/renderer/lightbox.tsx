@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { CaretLeftIcon, CaretRightIcon, ImageBrokenIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, XIcon } from '@superego/ui'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import { describeImage, imageSourceOf, useImageSource, type ImageItem } from './images.tsx'
 import { CLICK_SCALE, clampPan, FIT, toggleAt, zoomAt, type Bounds, type Point, type View } from './zoom.ts'
 

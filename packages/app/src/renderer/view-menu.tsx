@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import { ContextMenu, DotsThreeIcon, IconButton, Menu } from '@superego/ui'
 import { placeScope, placingIn, scopedViews, usePlaced, useRegistry } from './extension.tsx'
-import { NARROW_PLACES, WIDE_PLACES, type Place } from './layout.ts'
+import { NARROW_PLACES, WIDE_PLACES, type Place } from '../shared/layout.ts'
 
 /** What each place is called, wherever the user moves views. */
 export const PLACE_TITLES: Record<Place, string> = {

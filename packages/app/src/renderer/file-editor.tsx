@@ -15,7 +15,7 @@ import { closeSearchPanel, findNext, findPrevious, openSearchPanel } from '@code
 import { tags } from '@lezer/highlight'
 import type { ThreadInfo } from '@superego/protocol'
 import { Button } from '@superego/ui'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import { machine as client } from './client.ts'
 import { fileKind, linkHandler, Slot, useRegistry, type EditorSlotProps } from './extension.tsx'
 import { Images, imagesIn, Markdown } from './Markdown.tsx'

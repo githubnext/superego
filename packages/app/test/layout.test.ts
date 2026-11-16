@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { defineApp, type Json, type ThreadInfo } from '@superego/protocol'
 import { createRegistry, defineUiExtension, paneMenu, placedFor, viewsIn, type UiExtension } from '../src/renderer/extension.tsx'
-import { isLayout, placesNow, placeView, resolveLayout, type Layout, type Placeable } from '../src/renderer/layout.ts'
+import { isLayout, placesNow, placeView, resolveLayout, type Layout, type Placeable } from '../src/shared/layout.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
 const None = () => null

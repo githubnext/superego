@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { ImageBrokenIcon } from '@superego/ui'
 import type { ThreadInfo } from '@superego/protocol'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import { fileImage, onImageChange, recheckImages } from './image-cache.ts'
 export { onImageChange, recheckImages }
 import './images.css'

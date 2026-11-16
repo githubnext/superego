@@ -6,7 +6,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, rmSync, s
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AppConfig } from '@superego/protocol'
-import type { CommandLineInfo } from '../shared.ts'
+import type { CommandLineInfo } from '../shared/bridge.ts'
 
 export type CommandLineOptions = {
   app: AppConfig

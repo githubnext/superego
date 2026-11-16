@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import type { Status, ThreadInfo } from '@superego/protocol'
-import type { MachineEntry } from '../src/shared.ts'
+import type { MachineEntry } from '../src/shared/bridge.ts'
 import { freeze, groupProjects, threadBeside, type Project } from '../src/renderer/projects.ts'
 
 const machine = (id: string): MachineEntry => ({ id, label: id === 'local' ? 'This computer' : 'Build box', state: 'connected' })

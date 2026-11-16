@@ -3,7 +3,7 @@
 import { act, createElement as h } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it } from 'vitest'
-import type { MachineEntry } from '../src/shared.ts'
+import type { MachineEntry } from '../src/shared/bridge.ts'
 import { useValue } from '../src/renderer/client.ts'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true

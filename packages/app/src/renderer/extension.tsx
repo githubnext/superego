@@ -1,5 +1,5 @@
 // The UI half of an extension: `<pkg>/ui`, listed in the app's renderer entry. It declares views (which the layout puts
-// in the shell's places: see layout.ts), fills named slots where behaviour decides the place, draws
+// in the shell's places: see shared/layout.ts), fills named slots where behaviour decides the place, draws
 // tool calls and entries in the transcript, adds pane kinds, custom settings components and actions (with keys), and
 // completions and what's drawn with a sent message to the composer. It hears what happens in the window (a thread's
 // status changing, the thread shown changing, the window's focus) through `on`.
@@ -13,13 +13,14 @@
 import { createContext, Fragment, useContext, useEffect, useMemo, useState, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type ReactNode } from 'react'
 import { contractProblem } from '@superego/protocol'
 import type { AppConfig, DataViewInfo, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, ProviderRejection, SectionInfo, SettingsSnapshot, Status, ThreadInfo } from '@superego/protocol'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import { useSelection, type Selection } from './state.tsx'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowContext, type WindowRouter } from './actions.tsx'
 import { useSettings, watched } from './client.ts'
 import { createStore, type Store } from './local-state.ts'
 import { NARROW } from './maximized.ts'
-import { isLayout, LAYOUT, PLACES, resolveLayout, THREAD_PLACES, type Layout, type Place, type Placed, type Placement } from './layout.ts'
+import { LAYOUT } from '../shared/app-settings.ts'
+import { isLayout, PLACES, resolveLayout, THREAD_PLACES, type Layout, type Place, type Placed, type Placement } from '../shared/layout.ts'
 import type { CompletionProvider, CompletionWord, SentWith } from './composer.ts'
 import { dataIcon, DataViewBody } from './data-views.tsx'
 import { Contained } from './contained.tsx'

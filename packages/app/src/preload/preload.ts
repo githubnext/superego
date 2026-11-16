@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import { artifactUrl, CHANNEL, type BridgeChannel, type CallResult, type ChannelEvent, type SuperegoBridge, type SuperegoEvent } from '../shared.ts'
+import { artifactUrl, CHANNEL, type BridgeChannel, type CallResult, type ChannelEvent, type SuperegoBridge, type SuperegoEvent } from '../shared/bridge.ts'
 
 /**
  * The bridge as this (isolated) world has it: its calls answer with what happened (CallResult), not by throwing. An error

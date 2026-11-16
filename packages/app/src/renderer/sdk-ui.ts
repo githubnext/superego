@@ -16,7 +16,7 @@ export type {
   ToolRowCall, ToolState, EntryProps, LinkHandler, LinkProps, LinkWhere, LinkAttributes, NewThreadField, NewThreadFieldProps, SettingsComponentProps,
   WindowEvent, WindowEvents, WindowState, WorkRun, WorkPart, WorkBlock, WorkStatus,
 } from './extension.tsx'
-export type { Place, Placement } from './layout.ts'
+export type { Place, Placement } from '../shared/layout.ts'
 export type { Store } from './local-state.ts'
 export type { Completion, CompletionProvider, CompletionWord, ComposerWhere, SentBlock, SentWith } from './composer.ts'
 
@@ -30,7 +30,7 @@ export { useShortcut, useRailShortcut, keyLabel } from './keys.ts'
 export { useComposer, useComposerClaim, type Composer, type ComposerClaim } from './composer-view.tsx'
 export { EXTENSION_API } from '@superego/protocol'
 export type { Json, Status, StatusState, ThreadInfo } from '@superego/protocol'
-export type { MachineEntry } from '../shared.ts'
+export type { MachineEntry } from '../shared/bridge.ts'
 
 // Components to build from; `h` for a module that isn't JSX.
 export { createElement as h, Fragment } from 'react'

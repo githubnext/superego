@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react'
 import { lit, obj, opt, Router, str, union, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
 import { Dialog } from '@superego/ui'
 import type { ThreadInfo } from '@superego/protocol'
-import { PANE_LAYOUT, type MachineEntry, type PaneLayout } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
+import { PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
 import { threadBeside, type Project } from './projects.ts'
 import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
@@ -209,7 +210,7 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
       setLocalState('settings.target', '$machines', 'app')
       c.openSettings()
       if (!id) return
-      await window.superego.call('app', 'machine.update', { machine: id })
+      await window.superego.call('app', 'app.updateMachine', { machine: id })
     },
   }),
   defineWindowAction({ id: 'app.log', title: 'Show action log', run: (_p, c) => c.showLog() }),

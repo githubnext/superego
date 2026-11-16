@@ -1,7 +1,7 @@
 // The window's image files (image-cache.ts), against a fake `window.superego`: read once and kept while the file stays
 // the same version, and read again and swapped (the old blob let go of) when it changes.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { SuperegoBridge } from '../src/shared.ts'
+import type { SuperegoBridge } from '../src/shared/bridge.ts'
 import { fileImage, onImageChange, recheckImages } from '../src/renderer/image-cache.ts'
 
 type Call = { machine: string; method: string; params: any }

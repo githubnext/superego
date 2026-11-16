@@ -6,21 +6,26 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, p
 import { appEnv, daemonStarting, defaultDataDir, pidPath, readBuild, socketPath, spawnDaemon } from '@superego/daemon/client'
 import {
   arr, bool, compareVersions, defineAction, int, lit, nullable, obj, opt, Router, RpcError, str, union, unknown, waitingForSignIn,
-  type AppConfig, type Channel, type DeclaredSection, type Json, type Notifications, type ProfileRef, type ThreadInfo,
+  type AppConfig, type Channel, type Json, type Notifications, type ProfileRef, type ThreadInfo,
 } from '@superego/protocol'
-import { declaredSpec, serveSettings } from '@superego/settings'
-import { ARTIFACT_POLICY, ARTIFACT_TYPES, BADGE, CHANNEL, desktopNotification, NOTIFY, unreadCount, type ChannelEvent, signInNotification, threadNotification, type CallResult, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent, type ThreadNotification } from '../shared.ts'
-import { APP, APP_KEYS, createAppSettings } from './app-settings.ts'
-import { LayoutFile, type LayoutView } from './layout-file.ts'
+import { declaredSpec, serveSettings, SettingsRegistry } from '@superego/settings'
+import { FileSettingsStore } from '@superego/settings/file'
+import { CHANNEL, type AppHandlers, type CallResult, type ChannelEvent, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent } from '../shared/bridge.ts'
+import { APP, HIDE_DOCK, MENU_BAR, registerAppSettings } from '../shared/app-settings.ts'
+import type { LayoutView } from '../shared/layout.ts'
+import { BADGE, desktopNotification, NOTIFY, signInNotification, threadNotification, unreadCount, type ThreadNotification } from '../shared/notifications.ts'
+import type { ServiceAction } from '../shared/service.ts'
+import { shortcutOf } from '../shared/shortcuts.ts'
+import { ARTIFACT_POLICY, ARTIFACT_TYPES } from './artifacts.ts'
+import { LayoutFile } from './layout-file.ts'
 import { Link, loginInTerminal, MachineLinks, MachineStore, openLocal as openLocalSocket, runUpdate, UiAllowStore } from '@superego/client'
 import { installTypes } from '@superego/client/author-types'
 import { MenuBar } from './tray.ts'
 import { attachContextMenu } from './context-menu.ts'
 import { commandLine } from './command-line.ts'
-import { ServiceRestart, type ServiceAction } from './restart.ts'
+import { ServiceRestart } from './restart.ts'
 import { createSignInCatcher } from './sign-in-callback.ts'
 import { placeOn, WindowList, type Bounds } from './windows.ts'
-import { shortcutOf } from '../renderer/shortcuts.ts'
 
 /**
  * Run an app's main process: its window, the links to every machine (starting this computer's daemon, which outlives
@@ -47,7 +52,9 @@ export function startApp(appConfig: AppConfig) {
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send(CHANNEL.event, event)
   }
 
-  const appSettings = createAppSettings(dataDir, appConfig)
+  // The app's own settings, kept in its data dir; the windows' extensions declare theirs beside them.
+  const appSettings = new SettingsRegistry(new FileSettingsStore(join(dataDir, 'app-settings.json')))
+  registerAppSettings(appSettings, { app: appConfig, mac: process.platform === 'darwin' })
   // The layout as text: layout.json, read in as it's saved, and what's wrong with it told to the windows.
   const layoutFile = new LayoutFile(dataDir, appSettings, () => appSettings.invalidate())
   appSettings.register({
@@ -72,7 +79,7 @@ export function startApp(appConfig: AppConfig) {
 
   /** The app's own endpoint: its settings, per window so a closed window's subscriptions go with it. */
   const appSubs = new Map<number, Map<string, () => unknown>>()
-  /** Each window's bound shortcuts, as it last said (see `app.keys`). */
+  /** Each window's bound shortcuts, as it last said (see `app.boundKeys`). */
   const boundKeys = new Map<number, Set<string>>()
   function appEndpoint(contents: Electron.WebContents) {
     let subs = appSubs.get(contents.id)
@@ -82,50 +89,17 @@ export function startApp(appConfig: AppConfig) {
       contents.once('destroyed', () => { for (const stop of created.values()) stop(); appSubs.delete(contents.id) })
     }
     const send = (method: string, params: unknown) => { if (!contents.isDestroyed()) contents.send(CHANNEL.event, { machine: APP, method, params }) }
-    const handlers: Record<string, (params: any) => Promise<unknown>> = {
+    const methods: AppHandlers = {
       'settings.watch': serveSettings(appSettings, (params) => send('settings.changed', params), subs)['settings.watch'],
-      async unwatch({ sub }: { sub: string }) { subs.get(sub)?.(); subs.delete(sub); return null },
-      /** A folder on this computer, chosen in the system's dialog; null when cancelled. */
-    async 'app.pickFolder'({ defaultPath }: { defaultPath?: string }) {
-      const window = BrowserWindow.fromWebContents(contents)
-      const options = { properties: ['openDirectory', 'createDirectory'] as ('openDirectory' | 'createDirectory')[], ...(defaultPath ? { defaultPath } : {}) }
-      const { canceled, filePaths } = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
-      return canceled ? null : filePaths[0] ?? null
-    },
-    /** How Superego sits on the desktop now. */
+      async unwatch({ sub }) { subs.get(sub)?.(); subs.delete(sub); return null },
+      async 'settings.register'({ section }) {
+        if (!section?.id || !Array.isArray(section.settings)) throw new RpcError('invalid', 'A section needs an id and settings')
+        appSettings.upsert(declaredSpec(section))
+        return null
+      },
+      'action.list': async () => appRouter.list(),
+      'action.log': async () => appRouter.log(),
       async 'service.get'() { return service.state },
-      /**
-       * Another window, beside the one asking, starting as a copy of it: `state` is its own state, as its storage keeps
-       * it (see local-state.ts), which the new one takes as its own.
-       */
-      async 'app.newWindow'({ state }: { state?: unknown }) {
-        createWindow({ near: BrowserWindow.fromWebContents(contents) ?? undefined, seed: windowState(state) })
-        return null
-      },
-      /** Every window's id, open or kept to reopen: a window's storage keeps the state of these alone. */
-      async 'app.windows'() { return windows.ids() },
-      /**
-       * The shortcuts that run actions in this window now. While a page in one of its panes has the keyboard, the
-       * page gets key presses and the window never sees them: these are taken first (see createWindow) and sent on.
-       */
-      async 'app.keys'({ keys }: { keys: string[] }) {
-        if (!boundKeys.has(contents.id)) contents.once('destroyed', () => boundKeys.delete(contents.id))
-        boundKeys.set(contents.id, new Set(keys))
-        return null
-      },
-      /** A window's notifications extension: a thread wants a look. */
-      async 'app.notify'(notice: ThreadNotification) { notify(notice); return null },
-      /** The thread the window shows now (none: null): while the window has the focus, the app icon's count leaves it out. */
-      async 'app.shown'({ selection }: { selection: { machine: string; thread: string } | null }) {
-        if (!shownIn.has(contents.id)) contents.once('destroyed', () => { shownIn.delete(contents.id); refreshBadge() })
-        shownIn.set(contents.id, selection ?? undefined)
-        refreshBadge()
-        return null
-      },
-      /** The window's `machine.update` action, done here: the update's output shows on the machine's row in Settings. */
-      'machine.update': async ({ machine }: { machine: string }) => updateMachine(machine, BrowserWindow.fromWebContents(contents) ?? undefined),
-      async 'app.desktop'() { return { menuBar: menuBar.shown, dockHidden: mac && dockHidden() } },
-      /** The page is listening for app events: answer with a thread it was asked to show before it was. */
       async 'app.ready'() {
         ready.add(contents.id)
         contents.once('destroyed', () => ready.delete(contents.id))
@@ -133,19 +107,36 @@ export function startApp(appConfig: AppConfig) {
         pending.delete(contents.id)
         return what ?? {}
       },
-      /** A window's UI halves declare their settings; the app keeps them in its own settings file. */
-    'settings.register': async ({ section }: { section: DeclaredSection }) => {
-      if (!section?.id || !Array.isArray(section.settings)) throw new RpcError('invalid', 'A section needs an id and settings')
-      appSettings.upsert(declaredSpec(section))
-      return null
-    },
-      /** The profile UIs from other machines allowed to run in this computer's windows (see profile-ui.ts). */
+      async 'app.notify'(notice) { notify(notice); return null },
       'profileUi.allowed': async () => uiAllowed.list(),
-      /** The ones put off ("Not now"), for the sources they were then: the window doesn't ask about those again. */
       'profileUi.declined': async () => uiAllowed.declinedList(),
-      'action.list': async () => appRouter.list(),
-      'action.log': async () => appRouter.log(),
+      async 'app.pickFolder'({ defaultPath }) {
+        const window = BrowserWindow.fromWebContents(contents)
+        const options = { properties: ['openDirectory', 'createDirectory'] as ('openDirectory' | 'createDirectory')[], ...(defaultPath ? { defaultPath } : {}) }
+        const { canceled, filePaths } = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
+        return canceled ? null : filePaths[0] ?? null
+      },
+      async 'app.newWindow'({ state }) {
+        createWindow({ near: BrowserWindow.fromWebContents(contents) ?? undefined, seed: windowState(state) })
+        return null
+      },
+      async 'app.windows'() { return windows.ids() },
+      // Taken first, see createWindow.
+      async 'app.boundKeys'({ keys }) {
+        if (!boundKeys.has(contents.id)) contents.once('destroyed', () => boundKeys.delete(contents.id))
+        boundKeys.set(contents.id, new Set(keys))
+        return null
+      },
+      async 'app.shown'({ selection }) {
+        if (!shownIn.has(contents.id)) contents.once('destroyed', () => { shownIn.delete(contents.id); refreshBadge() })
+        shownIn.set(contents.id, selection ?? undefined)
+        refreshBadge()
+        return null
+      },
+      'app.updateMachine': async ({ machine }) => updateMachine(machine, BrowserWindow.fromWebContents(contents) ?? undefined),
+      async 'app.desktop'() { return { menuBar: menuBar.shown, dockHidden: mac && dockHidden() } },
     }
+    const handlers: Record<string, (params: any) => Promise<unknown>> = { ...methods }
     // The app's intents, served under their ids like a daemon's.
     for (const action of appRouter.list()) handlers[action.id] = (params) => appRouter.dispatch(action.id, params, { window: contents }, { source: 'window' })
     return handlers
@@ -417,8 +408,8 @@ export function startApp(appConfig: AppConfig) {
   // ── On the desktop: the menu bar item and the Dock icon ─────────────────────────────────────────────────────────────
 
   const mac = process.platform === 'darwin'
-  const menuBarOn = () => appSettings.get<boolean>(APP_KEYS.menuBar)
-  const dockHidden = () => menuBarOn() && appSettings.get<boolean>(APP_KEYS.hideDock)
+  const menuBarOn = () => appSettings.get<boolean>(MENU_BAR)
+  const dockHidden = () => menuBarOn() && appSettings.get<boolean>(HIDE_DOCK)
 
   // The app's own files: `resources/` next to its package.json (the build puts main.js in out/main).
   const resources = join(import.meta.dirname, '../../resources')

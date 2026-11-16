@@ -7,9 +7,10 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { SettingsSnapshot } from '@superego/protocol'
 import { Button, Dialog, TextArea, WarningIcon } from '@superego/ui'
 import { useAppSetting, useSettings, watched } from './client.ts'
-import { isLayout, LAYOUT, PLACES, type Place, type Placement } from './layout.ts'
+import { LAYOUT } from '../shared/app-settings.ts'
+import { parseLayout, PLACES, type LayoutView } from '../shared/layout.ts'
 import { defineWindowAction } from './actions.tsx'
-import { useRegistry, type EditorSlotProps, type UiApi } from './extension.tsx'
+import { useRegistry, type EditorSlotProps, type Registry, type UiApi } from './extension.tsx'
 import { RailNotice } from './rail-notice.tsx'
 
 type LayoutData = { file: string; problem?: string; missing?: string[] }
@@ -33,21 +34,28 @@ export function registerLayoutText(core: UiApi) {
 /** What's wrong with the layout file, if anything. */
 const useLayoutData = () => window.superego.web ? undefined : dataOf(useSettings('app', true))
 
-/** Tell the layout file the views there are, as they come and go. */
-export function LayoutViews() {
-  const registry = useRegistry()
-  // One entry an id, as the layout keeps it: declared in several scopes (a profile's on two machines), it fits where
-  // any of them does, and goes by default where the first says.
-  const views = new Map<string, { id: string; title: string; fits: Place[]; default?: Placement; narrow?: Placement }>()
-  for (const { id, title, fits, default: initial, narrow } of registry.views) {
+/**
+ * The window's views, as the layout knows them: one entry an id. Declared in several scopes (a profile's on two
+ * machines), it fits where any of them does, and goes by default where the first says.
+ */
+function layoutViews(declared: Registry['views']): LayoutView[] {
+  const views = new Map<string, LayoutView>()
+  for (const { id, title, fits, default: initial, narrow } of declared) {
     const had = views.get(id)
     if (had) had.fits = PLACES.filter((p) => had.fits.includes(p) || fits.includes(p))
     else views.set(id, { id, title, fits, ...(initial !== undefined ? { default: initial } : {}), ...(narrow !== undefined ? { narrow } : {}) })
   }
-  const key = JSON.stringify([...views.values()])
+  return [...views.values()]
+}
+
+/** Tell the layout file the views there are, as they come and go. */
+export function LayoutViews() {
+  const registry = useRegistry()
+  const views = layoutViews(registry.views)
+  const key = JSON.stringify(views)
   useEffect(() => {
     if (window.superego.web) return
-    const timer = setTimeout(() => void registry.router.dispatch('app.layout.views', { views: [...views.values()] }, { machine: 'app', source: 'layout' }).catch(() => {}), 500)
+    const timer = setTimeout(() => void registry.router.dispatch('app.layout.views', { views }, { machine: 'app', source: 'layout' }).catch(() => {}), 500)
     return () => clearTimeout(timer)
   }, [key])
   return null
@@ -97,17 +105,6 @@ const editing = (() => {
   }
 })()
 
-/** What's wrong with `text` as a layout, if anything; else the layout. */
-function readLayout(text: string): { layout: object } | { problem: string } {
-  let value: unknown
-  try { value = text.trim() ? JSON.parse(text) : {} } catch (error) { return { problem: `Not JSON: ${(error as Error).message}` } }
-  if (!isLayout(value as never)) return { problem: 'Not a layout: an object of "place", "order" and "narrow", with view ids and place names' }
-  const layout = value as { place?: Record<string, unknown>; order?: Record<string, unknown>; narrow?: { place?: Record<string, unknown>; order?: Record<string, unknown> } }
-  const named = [layout, layout.narrow ?? {}].flatMap((l) => [...Object.values(l.place ?? {}).flat(), ...Object.keys(l.order ?? {})]).filter((p): p is string => typeof p === 'string')
-  const unknown = named.filter((p) => !(PLACES as string[]).includes(p))
-  return unknown.length ? { problem: `No place ${unknown.map((p) => `"${p}"`).join(', ')}` } : { layout: layout as object }
-}
-
 /** In a browser, the layout as text in a dialog: saved, it applies; a mistake is said, and nothing changes. */
 export function LayoutEditor() {
   const open = useSyncExternalStore(editing.subscribe, editing.get)
@@ -116,13 +113,13 @@ export function LayoutEditor() {
 
 function LayoutDialog({ onClose }: { onClose(): void }) {
   const [stored] = useAppSetting(LAYOUT)
-  const dispatch = useRegistry().router.dispatch
+  const registry = useRegistry()
   const [text, setText] = useState(() => JSON.stringify(stored ?? {}, null, 2))
   const [problem, setProblem] = useState<string>()
   const save = () => {
-    const read = readLayout(text)
+    const read = parseLayout(text, layoutViews(registry.views))
     if ('problem' in read) return setProblem(read.problem)
-    dispatch('app.settings.set', { key: LAYOUT, value: read.layout as never }, { machine: 'app', source: 'layout' }).then(onClose, (error: Error) => setProblem(error.message))
+    registry.router.dispatch('app.settings.set', { key: LAYOUT, value: read.layout }, { machine: 'app', source: 'layout' }).then(onClose, (error: Error) => setProblem(error.message))
   }
   return (
     <Dialog title="Layout" size="medium" onClose={onClose} className="layout-editor">

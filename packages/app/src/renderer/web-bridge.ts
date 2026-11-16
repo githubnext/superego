@@ -2,10 +2,12 @@
 // page (its Web access setting), instead of Electron's preload. That daemon is "local", and every machine it reaches is
 // here too: calls for them go through it (`relay.call`) and their news comes back from it (`relay.event`). What the
 // desktop keeps in its main process (the app's own settings) is kept in this browser.
-import { Channels, PROTOCOL_VERSION, RpcError, RpcPeer, versionOf, type DeclaredSection, type Hello, type Notifications } from '@superego/protocol'
+import { Channels, PROTOCOL_VERSION, RpcError, RpcPeer, versionOf, type ActionInfo, type Channel, type Hello, type Json, type Notifications } from '@superego/protocol'
 import { declaredSpec, serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { carriesFiles, uploadAttachments } from '@superego/client/uploads'
-import { bridgeChannel, browserNotification, LAYOUT_SETTING, PANE_LAYOUT_SETTING, type MachineEntry, type SuperegoBridge, type SuperegoEvent, type ThreadNotification } from '../shared.ts'
+import type { AppHandlers, BridgeChannel, MachineEntry, SuperegoBridge, SuperegoEvent } from '../shared/bridge.ts'
+import { APP, registerAppSettings } from '../shared/app-settings.ts'
+import { browserNotification } from '../shared/notifications.ts'
 import { askPairing, LIMITED, type Pairing } from './pair-gate.ts'
 
 const SETTINGS = 'superego.appSettings'
@@ -154,8 +156,6 @@ export function webBridge(): SuperegoBridge {
     })
     ready.catch(() => {})
   }
-  // Web access had one token, kept here; devices pair now, and it's no longer accepted.
-  localStorage.removeItem('superego.webToken')
   const ticket = takeTicket()
   // Calls wait for a ticket to be spent, so the first connection is a paired one.
   const starting = !ticket ? Promise.resolve(connect()) : admitted().catch(() => 'wrong' as const)
@@ -165,41 +165,35 @@ export function webBridge(): SuperegoBridge {
 
   // ── The app's own endpoint, here in the page ───────────────────────────────────────────────────────────────────
   const settings = new SettingsRegistry(store)
-  settings.register({
-    id: 'appearance', title: 'Appearance', order: 50,
-    settings: [
-      { key: 'app.font.interface', title: 'Interface font', default: null, type: { type: 'font', nullLabel: 'System' } },
-      { key: 'app.font.mono', title: 'Monospace font', default: null, description: 'Code, tool output and paths.', type: { type: 'font', monospace: true, nullLabel: 'System monospace' } },
-      { key: 'app.accent', title: 'Accent colour', default: 'color(display-p3 0.155 0.319 0.654)', description: 'Focus rings, primary buttons, links and selection. Any CSS colour.', type: { type: 'color' } },
-      PANE_LAYOUT_SETTING,
-      LAYOUT_SETTING,
-    ],
-  })
-  settings.register({
-    id: 'keyboard', title: 'Keyboard', order: 65,
-    settings: [{ key: 'app.keys', title: 'Shortcuts', default: {}, description: 'Every action that runs without asking for more. Click a shortcut and press new keys; ⌫ removes it, Esc keeps it.', type: { type: 'keymap' } }],
-  })
+  registerAppSettings(settings)
   const subs = new Map<string, () => unknown>()
-  const served = serveSettings(settings, (params) => emit({ machine: 'app', method: 'settings.changed', params }), subs)
-  const appActions = [
-    { id: 'app.settings.set', title: 'Change an app setting', runs: 'app', expose: ['ui'] },
-    { id: 'machine.reconnect', title: 'Reconnect a machine', runs: 'app', expose: ['ui'] },
-  ]
-  const app: Record<string, (params: never) => unknown> = {
-    'settings.watch': served['settings.watch'] as never,
-    'app.settings.set': async ({ key, value }: { key: string; value: never }) => { await settings.set(key, value); return null },
-    'settings.register': async ({ section }: { section: DeclaredSection }) => {
-      try { settings.register(declaredSpec(section)) } catch { /* registered already, by another mount */ }
-      return null
+  const served = serveSettings(settings, (params) => emit({ machine: APP, method: 'settings.changed', params }), subs)
+  /** The app's actions a page can run: the desktop's main process has more (adding machines, updating them, …). */
+  const actions: Record<string, { info: ActionInfo; run(params: never): Promise<unknown> }> = {
+    'app.settings.set': {
+      info: { id: 'app.settings.set', title: 'Change an app setting', runs: 'app', expose: ['ui'] },
+      run: async ({ key, value }: { key: string; value: Json }) => { await settings.set(key, value); return null },
     },
-    'unwatch': async ({ sub }: { sub: string }) => { await subs.get(sub)?.(); subs.delete(sub); return null },
-    'action.list': async () => appActions,
+    /** This page's own connection, or the serving daemon's link to another machine. */
+    'machine.reconnect': {
+      info: { id: 'machine.reconnect', title: 'Reconnect a machine', runs: 'app', expose: ['ui'] },
+      run: async ({ id }: { id: string }) => {
+        if (id !== 'local') return (peer ?? await ready).call('machine.reconnect', { id })
+        socket?.close()
+        return null
+      },
+    },
+  }
+  const app = {
+    'settings.watch': served['settings.watch'],
+    'settings.register': async ({ section }) => { settings.upsert(declaredSpec(section)); return null },
+    unwatch: async ({ sub }) => { await subs.get(sub)?.(); subs.delete(sub); return null },
+    'action.list': async () => Object.values(actions).map((action) => action.info),
     'action.log': async () => [],
     'app.ready': async () => ({}),
-    'app.desktop': async () => ({ web: true }),
     // A thread wants a look: a Web Notification, once permission is granted (the notifications extension asks).
     // One per thread (its tag), however many tabs show it; clicking it brings this one forward, showing the thread.
-    'app.notify': async (notice: ThreadNotification) => {
+    'app.notify': async (notice) => {
       if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return null
       const { machine, thread } = notice
       try {
@@ -208,22 +202,18 @@ export function webBridge(): SuperegoBridge {
         notification.onclick = () => {
           window.focus()
           notification.close()
-          emit({ machine: 'app', method: 'app.select', params: { machine, thread } })
+          emit({ machine: APP, method: 'app.select', params: { machine, thread } })
         }
       } catch { /* a phone's browser, which shows them only from a service worker */ }
       return null
     },
-    'service.get': async () => ({ phase: 'current', busy: false }),
+    'service.get': async () => ({ phase: 'current', busy: false, deferred: false }),
     // Another machine's profile UI (reached through this daemon) is allowed only on a desktop: none runs here.
     'profileUi.allowed': async () => [],
     'profileUi.declined': async () => [],
-    /** This page's own connection, or the serving daemon's link to another machine. Adding, removing, logging in and updating are the desktop app's. */
-    'machine.reconnect': async ({ id }: { id: string }) => {
-      if (id !== 'local') return (peer ?? await ready).call('machine.reconnect', { id })
-      socket?.close()
-      return null
-    },
-  }
+  } satisfies Partial<AppHandlers>
+  const answer = (method: string): ((params: never) => Promise<unknown>) | undefined =>
+    method in app ? app[method as keyof typeof app] as (params: never) => Promise<unknown> : actions[method]?.run
 
   /** A call on the daemon, its larger attachments sent ahead as uploads (see @superego/client's uploads.ts). */
   const send = async (method: string, params: unknown) => {
@@ -235,8 +225,8 @@ export function webBridge(): SuperegoBridge {
 
   return {
     async call(machine, method, params) {
-      if (machine === 'app') {
-        const handler = app[method]
+      if (machine === APP) {
+        const handler = answer(method)
         if (!handler) throw new RpcError('unsupported', `${method} is part of the desktop app`)
         return handler(params as never)
       }
@@ -256,5 +246,25 @@ export function webBridge(): SuperegoBridge {
       `/artifact/${encodeURIComponent(machine === 'local' ? thread : `${thread}@${machine}`)}/${path.split('/').map(encodeURIComponent).join('/')}`,
     onEvent(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
     web: true,
+  }
+}
+
+/** A protocol channel as a bridge hands it to the window. */
+export function bridgeChannel(channel: Channel): BridgeChannel {
+  const listeners = new Set<(reason?: string) => void>()
+  let closed: { reason?: string } | undefined
+  const end = (reason?: string) => {
+    if (closed) return
+    closed = reason ? { reason } : {}
+    // Its own half too, once the other side ended: nothing more will be written.
+    channel.end()
+    for (const listener of listeners) listener(reason)
+  }
+  channel.ended.then(() => end(), (error: Error) => end(error.message))
+  return {
+    write: (bytes) => { channel.write(bytes).catch(() => {}) },
+    onData: (listener) => channel.onData(listener),
+    onClose: (listener) => { if (closed) listener(closed.reason); else listeners.add(listener) },
+    close: () => channel.abort('Closed'),
   }
 }

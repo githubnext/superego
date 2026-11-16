@@ -2,12 +2,13 @@
 // start, the column beside the thread; on a phone, the drawer), with the views the layout puts there; the selected
 // thread, the notices (restart required, a provider rejecting the credentials), Settings, and the app-wide reactions
 // (fonts, ⌘, , threads shown from the command line or a notification). It knows no extension: what's where is the
-// layout's (see layout.ts).
+// layout's (see shared/layout.ts).
 import { useEffect, useRef, useState, type ComponentType } from 'react'
 import type { SettingsSnapshot, ThreadInfo } from '@superego/protocol'
 import { ArrowLeftIcon, ArrowRightIcon, Button, CaretDownIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select, StatusGlyph } from '@superego/ui'
-import { textScale, type MachineEntry } from '../shared.ts'
-import { machine as client, useSettings, watched } from './client.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
+import { ACCENT, APP, INTERFACE_FONT, KEYMAP, MONO_FONT, TEXT_SIZE, textScale } from '../shared/app-settings.ts'
+import { useSettings, watched } from './client.ts'
 import { paneMenu, PlacedViews, shownPanes, Slot, useLayout, useRegistry, viewsIn, whose, type SpaceRailProps, type View, type ViewProps } from './extension.tsx'
 import { Contained } from './contained.tsx'
 import { forgetWindows, useLocalState } from './local-state.ts'
@@ -28,7 +29,7 @@ import { ActionLog, runsBare } from './actions.tsx'
 import { performed } from './perform.ts'
 import { NewThreadDialog } from './NewThread.tsx'
 import { Onboarding, useOnboarding } from './Onboarding.tsx'
-import { bound, KEYMAP, RailTabNumber, shortcutOf, useActions, useRailShortcut, useShortcut, type Keymap } from './keys.ts'
+import { bound, RailTabNumber, shortcutOf, useActions, useRailShortcut, useShortcut, type Keymap } from './keys.ts'
 import { railTabs } from './rail-tabs.ts'
 import { useAllThreads, useHistory, useMachines, useNewThreadDialog, useSelection, useProjects, useSettingsDialog, useShell, useSidebar, type Selection } from './state.tsx'
 
@@ -48,9 +49,8 @@ export function Shell() {
   const { selection, select, machine, thread, hidden: alone, listed } = useSelection()
   const settings = useSettingsDialog()
   const newThread = useNewThreadDialog()
-  const { openSettings } = useShell()
+  const { openSettings, newThread: openNewThread } = useShell()
   const allThreads = useAllThreads()
-  const { newThread: openNewThread } = useShell()
   const history = useHistory()
   // A phone (or a narrow window): the sidebar becomes a drawer over the thread, opened from a bar at the top.
   const { placed, narrow } = useLayout()
@@ -107,7 +107,8 @@ export function Shell() {
   })
   // Each tab's number, for its tooltip.
   const tabNumber = new Map(tabsNow().map((tab, i) => [tab.id, i + 1]))
-  useAppEffects()
+  useAppearance()
+  useAppEvents(useKeyRouting())
   const onboarding = useOnboarding()
 
   const settingsButton = (
@@ -336,21 +337,13 @@ function ThreadMenu() {
   )
 }
 
-/** Fonts from the app's settings; ⌘, ; threads and Settings shown from the command line, a notification or the menu bar. */
-function useAppEffects() {
-  const { selection } = useSelection()
-  const selectionRef = useRef(selection)
-  selectionRef.current = selection
-  const appSettings = useSettings('app', true)
-  const keymapRef = useRef<Keymap | undefined>(undefined)
-  keymapRef.current = appSettings?.values[KEYMAP] as Keymap | undefined
-  const { select } = useSelection()
-  const { openSettings } = useShell()
-  const interfaceFont = appSettings?.values['app.font.interface']
-  const monoFont = appSettings?.values['app.font.mono']
-  const accent = appSettings?.values['app.accent']
-  const textSize = appSettings?.values['app.font.size']
-  const registry = useRegistry()
+/** The app's look, from its settings: fonts, the accent colour and the text size, as CSS variables. */
+function useAppearance() {
+  const values = useSettings(APP, true)?.values
+  const interfaceFont = values?.[INTERFACE_FONT]
+  const monoFont = values?.[MONO_FONT]
+  const accent = values?.[ACCENT]
+  const textSize = values?.[TEXT_SIZE]
   useEffect(() => {
     const style = document.documentElement.style
     const set = (variable: string, family: unknown) => typeof family === 'string' ? style.setProperty(variable, `"${family.replace(/"/g, '')}", var(${variable}-fallback)`) : style.removeProperty(variable)
@@ -362,32 +355,59 @@ function useAppEffects() {
     else style.removeProperty('--superego-accent-base')
     style.setProperty('--superego-text-scale', String(textScale(textSize)))
   }, [interfaceFont, monoFont, accent, textSize])
-  // The shortcuts bound now, for the main process: a page in a pane (Preview, an artifact) that has the keyboard gets
-  // key presses before this window could, so the main process takes these ones first and hands them here.
+}
+
+/**
+ * Key presses to the actions bound to them, and the shortcuts bound now told to the main process: a page in a pane
+ * (Preview, an artifact) that has the keyboard gets key presses before this window could, so the main process takes
+ * these ones first and hands them back (`app.key`, see useAppEvents). Answers `runKeys`, which runs the action bound
+ * to a shortcut, through the same router the palette and other code dispatch through; with two on one shortcut, the
+ * first registered wins (Settings → Keyboard shows the clash). It says whether one ran.
+ */
+function useKeyRouting() {
+  const registry = useRegistry()
+  const { selection } = useSelection()
+  const keymap = useSettings(APP, true)?.values[KEYMAP] as Keymap | undefined
+  const current = useRef({ selection, keymap })
+  current.current = { selection, keymap }
+  const runKeys = useRef((pressed: string) => {
+    const { selection, keymap } = current.current
+    for (const action of registry.router.all(selection?.machine)) {
+      if (runsBare(action) && bound(action, keymap) === pressed && registry.router.offered(action.id)) {
+        void registry.router.dispatch(action.id, {}, { source: 'keys' }).catch((error) => console.error(error))
+        return true
+      }
+    }
+    return false
+  }).current
   const actions = useActions(selection?.machine)
-  const boundKeys = [...new Set(actions.filter(runsBare).map((action) => bound(action, keymapRef.current)).filter((k): k is string => Boolean(k)))].sort().join(' ')
+  const boundKeys = [...new Set(actions.filter(runsBare).map((action) => bound(action, keymap)).filter((k): k is string => Boolean(k)))].sort().join(' ')
   useEffect(() => {
     if (window.superego.web) return
-    void window.superego.call('app', 'app.keys', { keys: boundKeys ? boundKeys.split(' ') : [] }).catch(() => {})
+    void window.superego.call(APP, 'app.boundKeys', { keys: boundKeys ? boundKeys.split(' ') : [] }).catch(() => {})
   }, [boundKeys])
   useEffect(() => {
-    document.title = registry.app.name
-    // Every shortcut is an action's: the same router the palette and other code dispatch through. With two on one
-    // shortcut, the first registered wins (Settings → Keyboard shows the clash).
-    const runKeys = (pressed: string) => {
-      for (const action of registry.router.all(selectionRef.current?.machine)) {
-        if (runsBare(action) && bound(action, keymapRef.current) === pressed && registry.router.offered(action.id)) {
-          void registry.router.dispatch(action.id, {}, { source: 'keys' }).catch((error) => console.error(error))
-          return true
-        }
-      }
-      return false
-    }
     const onKey = (event: KeyboardEvent) => {
       const pressed = shortcutOf(event)
       if (pressed && runKeys(pressed)) event.preventDefault()
     }
     window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  return runKeys
+}
+
+/**
+ * What comes from outside the page: the mouse's back and forward buttons, and the app's events (threads and Settings
+ * shown from the command line, a notification or the menu bar; keys and swipes the main process caught; the app menu's
+ * actions; another client's).
+ */
+function useAppEvents(runKeys: (pressed: string) => boolean) {
+  const registry = useRegistry()
+  const { select } = useSelection()
+  const { openSettings } = useShell()
+  useEffect(() => {
+    document.title = registry.app.name
     // The mouse's back and forward buttons, and the main process's word of them or of a swipe. Some systems send a
     // button both ways; one press goes once.
     let wentAt = 0
@@ -409,25 +429,25 @@ function useAppEffects() {
       if (settings) openSettings()
     }
     const off = window.superego.onEvent((event) => {
-      // Another client asks for one of this window's own actions (see perform.ts). Every window of the app hears it;
-      // the ones on screen run it.
+      // Another client asks for one of this window's own actions (see perform.ts). On the desktop the main process
+      // sends it to the window in front; in a browser every tab hears it, and the ones on screen run it.
       if (event.method === 'client.perform') {
         const asked = document.visibilityState === 'visible' ? performed(event) : undefined
         if (asked && registry.router.router.has(asked.action)) void registry.router.dispatch(asked.action, asked.params, { source: asked.source }).catch((error) => console.error(error))
         return
       }
-      if (event.machine !== 'app') return
+      if (event.machine !== APP) return
       if (event.method === 'app.select') show({ open: event.params as Selection })
       if (event.method === 'app.settings') show({ settings: true })
-      // Pressed while a page in a pane had the keyboard: the main process caught it before the page (see app.keys).
+      // Pressed while a page in a pane had the keyboard: the main process caught it before the page (see app.boundKeys).
       if (event.method === 'app.key') runKeys((event.params as { keys: string }).keys)
       if (event.method === 'app.go') go((event.params as { by: number }).by)
       // One of the window's actions, from the app's menu (File → New Window).
       if (event.method === 'app.action') void registry.router.dispatch((event.params as { action: string }).action, {}, { source: 'menu' }).catch((error) => console.error(error))
     })
-    void (window.superego.call('app', 'app.ready', {}) as Promise<{ open?: Selection; settings?: boolean }>).then(show)
+    void (window.superego.call(APP, 'app.ready', {}) as Promise<{ open?: Selection; settings?: boolean }>).then(show)
     // Windows closed for good leave their state behind: dropped here.
-    if (!window.superego.web) void (window.superego.call('app', 'app.windows', {}) as Promise<string[]>).then(forgetWindows, () => {})
-    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('mousedown', onMouse); window.removeEventListener('mouseup', onMouse); off() }
+    if (!window.superego.web) void (window.superego.call(APP, 'app.windows', {}) as Promise<string[]>).then(forgetWindows, () => {})
+    return () => { window.removeEventListener('mousedown', onMouse); window.removeEventListener('mouseup', onMouse); off() }
   }, [])
 }

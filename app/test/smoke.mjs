@@ -1222,7 +1222,7 @@ if (phase === 'first') {
     text.dispatchEvent(new Event('input', { bubbles: true }))
     ;[...document.querySelectorAll('.layout-editor button')].find((b) => b.textContent === 'Save').click()
   })()`)
-  await inBrowser(`document.querySelector('.layout-editor .layout-note.is-problem')?.textContent.includes('No place "sidebar"')`, 'a layout that does not read, noted')
+  await inBrowser(`document.querySelector('.layout-editor .layout-note.is-problem')?.textContent.includes('no place "sidebar"')`, 'a layout that does not read, noted')
   await browser.webContents.executeJavaScript(`(() => {
     const text = document.querySelector('.layout-editor__text')
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(text, '{}')

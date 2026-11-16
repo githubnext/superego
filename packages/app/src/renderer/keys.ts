@@ -3,10 +3,11 @@ import { createContext, useContext, useSyncExternalStore } from 'react'
 import type { ActionInfo } from '@superego/protocol'
 import { useAppSetting } from './client.ts'
 import { useRegistry } from './extension.tsx'
-import { bound, KEYMAP, keyLabel, type Keymap } from './shortcuts.ts'
+import { KEYMAP } from '../shared/app-settings.ts'
+import { bound, keyLabel, type Keymap } from '../shared/shortcuts.ts'
 import { tabAction } from './rail-tabs.ts'
 
-export * from './shortcuts.ts'
+export * from '../shared/shortcuts.ts'
 
 /** Every action this window can dispatch (with `machine`'s), kept current as machines connect. */
 export function useActions(machine?: string): ActionInfo[] {

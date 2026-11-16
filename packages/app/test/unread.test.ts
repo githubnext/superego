@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { unread, type Json, type Status, type ThreadInfo } from '@superego/protocol'
-import { threadNotification, unreadCount } from '../src/shared.ts'
+import { threadNotification, unreadCount } from '../src/shared/notifications.ts'
 
 const thread = (id: string, status: Status, more: Partial<ThreadInfo> = {}): ThreadInfo =>
   ({ id, title: id, cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status, ...more })

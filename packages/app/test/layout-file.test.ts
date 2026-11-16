@@ -5,8 +5,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MemorySettingsStore, SettingsRegistry } from '@superego/settings'
-import { bodyOf, LayoutFile, layoutHead, parseLayout, withComments, type LayoutView } from '../src/main/layout-file.ts'
-import { LAYOUT_SETTING } from '../src/shared.ts'
+import { bodyOf, LayoutFile, layoutHead, withComments } from '../src/main/layout-file.ts'
+import { LAYOUT_SETTING } from '../src/shared/app-settings.ts'
+import { parseLayout, type LayoutView } from '../src/shared/layout.ts'
 
 const views: LayoutView[] = [
   { id: 'threads.details', title: 'Thread details', fits: ['beside', 'pane'] },

@@ -2,7 +2,7 @@
 // (its row in Settings → Machines, its projects in the sidebar). Also how its Update goes.
 import { describeDrift, drifted } from '@superego/protocol'
 import { Tooltip } from '@superego/ui'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import { useApp } from './extension.tsx'
 
 /** What to say about a machine's Superego, if anything: its update going on or failed, else how it differs from ours. */

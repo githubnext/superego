@@ -5,7 +5,7 @@ import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { extensionVersion, offers } from '@superego/protocol'
 import type { Client, ClientInfo, Feature, Json, MethodName, Notifications, Params, Result, ThreadInfo, SettingsSnapshot } from '@superego/protocol'
-import type { BridgeChannel, MachineEntry, MachineId, SuperegoBridge } from '../shared.ts'
+import type { BridgeChannel, MachineEntry, MachineId, SuperegoBridge } from '../shared/bridge.ts'
 import { useRegistry } from './extension.tsx'
 import { fonts } from './fonts.ts'
 

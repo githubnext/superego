@@ -4,7 +4,7 @@
 // See profile-ui.ts.
 import { useState } from 'react'
 import { Button, FileTextIcon, ShieldWarningIcon } from '@superego/ui'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import type { PaneProps, UiApi } from './extension.tsx'
 import type { ThreadInfo } from '@superego/protocol'
 import { Markdown } from './Markdown.tsx'

@@ -17,7 +17,7 @@ import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef
 import { createPortal, flushSync } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
 import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, CornersInIcon, CornersOutIcon, DotsThreeIcon, FileTextIcon, IconButton, Menu, SegmentedControl, XIcon, type SegmentedOption } from '@superego/ui'
-import { PANE_LAYOUT, type PaneLayout } from '../shared.ts'
+import { PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
 import { useAppSetting } from './client.ts'
 import { fileKind, paneKind, paneTitle, shownPanes, useNarrow, useRegistry, ViewScopeProvider, whose, type PaneKind, type PaneProps, type UiApi } from './extension.tsx'
 import { Contained } from './contained.tsx'

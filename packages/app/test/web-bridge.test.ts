@@ -1,7 +1,7 @@
 // The browser's bridge (web-bridge.ts) against a fake WebSocket: what the daemon offers follows `features.changed`.
 import { expect, it, vi } from 'vitest'
 import { PROTOCOL_VERSION } from '@superego/protocol'
-import type { MachineEntry, SuperegoEvent } from '../src/shared.ts'
+import type { MachineEntry, SuperegoEvent } from '../src/shared/bridge.ts'
 
 class FakeSocket {
   static OPEN = 1
@@ -41,7 +41,7 @@ it('follows what the daemon offers as it changes', async () => {
 
 it('pairs with the ticket in the address, after taking it out of the address, then connects by cookie alone', async () => {
   vi.resetModules()
-  const storage = new Map<string, string>([['superego.webToken', 'old']])
+  const storage = new Map<string, string>()
   const location = { hash: '#pair=tick', hostname: 'box', host: 'box:1', protocol: 'http:', pathname: '/', search: '' }
   const steps: string[] = []
   vi.stubGlobal('location', location)
@@ -60,6 +60,5 @@ it('pairs with the ticket in the address, after taking it out of the address, th
   for (let i = 0; i < 50 && entries.at(-1)?.state !== 'connected'; i++) await new Promise((r) => setTimeout(r, 0))
   expect(steps).toEqual(['replace /', 'GET /rpc (hash "")', 'POST /pair {"ticket":"tick"} (hash "")'])
   expect(sockets).toEqual(['ws://box:1/rpc'])
-  expect(storage.has('superego.webToken')).toBe(false)
   vi.unstubAllGlobals()
 })

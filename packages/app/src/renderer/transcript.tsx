@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { ConversationView, EntryRecord, LiveState } from '@earendil-works/pi-durable'
 import { NOTE_ENTRY, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { Button, CheckIcon, FileIcon, type Icon as PhosphorIcon, MinusIcon, PauseIcon, StatusGlyph, XIcon } from '@superego/ui'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import { divideWork, entryOwner, entryView, sentWithIn, toolOwner, toolRow, toolView, unfoldedTool, useRegistry, type ToolRowCall, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useRejections, useShell } from './state.tsx'
 import { Markdown } from './Markdown.tsx'

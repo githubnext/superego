@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import type { SectionInfo } from '@superego/protocol'
 import { Button } from '@superego/ui'
-import type { CommandLineInfo } from '../shared.ts'
+import type { CommandLineInfo } from '../shared/bridge.ts'
 import { useApp, useRegistry } from './extension.tsx'
 import { shortPath } from './short-path.ts'
 

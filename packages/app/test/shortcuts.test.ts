@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bound, conflicts, ctrlDigit, keyLabel, normalize, safe, shortcutOf } from '../src/renderer/shortcuts.ts'
+import { bound, conflicts, ctrlDigit, keyLabel, normalize, safe, shortcutOf } from '../src/shared/shortcuts.ts'
 
 const press = (key: string, mods: Partial<Record<'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey', boolean>> = {}) =>
   ({ key, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...mods })

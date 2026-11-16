@@ -2,7 +2,7 @@
 // machine: the desktop's 'local' daemon, or in a browser the daemon that served the page. A machine it merely reaches
 // doesn't steer it. And only the navigation in PERFORMABLE, whatever the daemon let through.
 import { PERFORMABLE, type Notifications } from '@superego/protocol'
-import type { SuperegoEvent } from '../shared.ts'
+import type { SuperegoEvent } from '../shared/bridge.ts'
 
 /** What to dispatch for `event`, if it is a perform this window takes. */
 export function performed(event: SuperegoEvent): { action: string; params: Record<string, unknown>; source: string } | undefined {

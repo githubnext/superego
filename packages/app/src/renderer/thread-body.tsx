@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
 import type { ThreadInfo } from '@superego/protocol'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import { machine as client, useThreadView } from './client.ts'
 import { Images, imagesIn } from './Markdown.tsx'
 import { collector, LinkPlace, useLinkPlace, type LinkPlaceValue } from './links.tsx'

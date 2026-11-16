@@ -25,7 +25,7 @@ export const THREAD_PLACES: Place[] = ['beside', 'pane', 'header']
 /** Where a view goes: a place, several, or none (`false`, `null`: offered, not placed). */
 export type Placement = Place | Place[] | false | null
 
-/** The app setting `app.layout`: only what differs from the views' own defaults, by view id. Unknown ids are ignored. */
+/** The app setting `LAYOUT` (shared/app-settings.ts): only what differs from the views' own defaults, by view id. Unknown ids are ignored. */
 export type Layout = {
   /** Where each view goes; `null` hides it. */
   place?: Record<string, Place | Place[] | null>
@@ -34,8 +34,6 @@ export type Layout = {
   /** On a phone or narrow window, changes on top: unset, what's above applies. */
   narrow?: Omit<Layout, 'narrow'>
 }
-
-export const LAYOUT = 'app.layout'
 
 /** What resolving needs of a view: its id, where it fits, and its defaults. */
 export type Placeable = {
@@ -157,4 +155,41 @@ export function isLayout(value: Json | undefined, nested = false): value is Layo
   if (order !== undefined && (!order || typeof order !== 'object' || Array.isArray(order) || !Object.values(order).every((ids) => Array.isArray(ids) && strings(ids)))) return false
   if (narrow !== undefined && (nested || !isLayout(narrow, true))) return false
   return true
+}
+
+/** A view as the layout's checks need it: enough to list it, and to check a layout naming it. */
+export type LayoutView = { id: string; title: string; fits: Place[]; default?: Placement; narrow?: Placement }
+
+/** Whether a line is a comment: layout.json's are whole lines starting with `//`. */
+export const isComment = (line: string) => line.trim().startsWith('//')
+
+/**
+ * The layout `text` holds (its comment lines left out), or what's wrong with it. With `views`, the places it puts the
+ * views it knows are checked against where they fit, and the ids it names that aren't among them are noted
+ * (`missing`): applied all the same, as an extension switched off or a machine away comes back.
+ */
+export function parseLayout(text: string, views?: readonly LayoutView[]): { layout: Layout; missing?: string[] } | { problem: string } {
+  const json = text.split('\n').map((line) => isComment(line) ? '' : line).join('\n')
+  if (!json.trim()) return { layout: {} }
+  let value: Json
+  try { value = JSON.parse(json) } catch (error) { return { problem: `Not JSON: ${(error as Error).message}` } }
+  if (!isLayout(value)) return { problem: 'Not a layout: an object of "place", "order" and "narrow", with view ids and place names' }
+  const problems: string[] = []
+  const missing = new Set<string>()
+  const byId = new Map(views?.map((v) => [v.id, v]))
+  const known = (id: string) => !views || byId.has(id) || void missing.add(id)
+  const knownPlace = (place: string) => (PLACES as string[]).includes(place) || void problems.push(`no place "${place}"`)
+  for (const layer of [value, value.narrow ?? {}]) {
+    for (const [id, placed] of Object.entries(layer.place ?? {})) {
+      const places = placed === null ? [] : Array.isArray(placed) ? placed : [placed]
+      const view = known(id) ? byId.get(id) : undefined
+      for (const place of places) if (knownPlace(place) && view && !view.fits.includes(place)) problems.push(`${id} doesn't fit "${place}" (only ${view.fits.join(', ')})`)
+    }
+    for (const [place, ids] of Object.entries(layer.order ?? {})) {
+      knownPlace(place)
+      for (const id of ids ?? []) known(id)
+    }
+  }
+  if (problems.length) return { problem: [...new Set(problems)].join('; ') }
+  return { layout: value, ...(missing.size ? { missing: [...missing] } : {}) }
 }

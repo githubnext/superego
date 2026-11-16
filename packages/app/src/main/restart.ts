@@ -1,20 +1,8 @@
 // Restarting this computer's daemon onto newer code, after tremolo's: the app notices the code on disk differs from the
 // running daemon's, and offers a restart. One intention for every window: restart now, when idle, or later. A restart
 // never cuts off work unasked: the daemon refuses while threads work, unless interrupting was confirmed.
+import type { ServiceAction, ServiceState } from '../shared/service.ts'
 
-export type ServicePhase = 'current' | 'required' | 'waiting' | 'restarting' | 'error'
-export type ServiceState = {
-  phase: ServicePhase
-  installedBuild?: string
-  runningBuild?: string
-  /** Whether the daemon refused this app for speaking another protocol generation: it can only be stopped. */
-  refused?: boolean
-  busy: boolean
-  /** "Later": the notice shrinks to a quiet reminder until reviewed. */
-  deferred: boolean
-  error?: string
-}
-export type ServiceAction = 'restart' | 'interrupt' | 'later' | 'review'
 /** `runningBuild`: unknown of a daemon that refuses this app's protocol generation, and so never this one's. */
 export type ServiceSnapshot = { installedBuild: string; runningBuild?: string; busy: boolean; refused: boolean }
 

@@ -5,7 +5,7 @@
 // menu changes) sets it; a thread another started sits right under it.
 import { useMemo } from 'react'
 import { rollup, statusRank, type Status, type ThreadInfo } from '@superego/protocol'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import { useAppSetting } from './client.ts'
 
 export type Sort = 'recent' | 'created' | 'status'

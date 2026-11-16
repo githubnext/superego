@@ -3,7 +3,7 @@
 // across reloads; and where the window has been, to go back and forward.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { AUTH_REJECTED, DATA_VIEWS, type Json, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import { has, machine as client, useHiddenThreads, useMachineList, useThreads as useThreadsWatch, useValue } from './client.ts'
 import { checkDataViews, warnDropped } from './data-view-check.ts'
 import { clearProblem, reportProblem } from './machine-problems.ts'

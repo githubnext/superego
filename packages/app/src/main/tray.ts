@@ -5,7 +5,7 @@
 import { existsSync } from 'node:fs'
 import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
 import { unread, type AppConfig, type ThreadInfo } from '@superego/protocol'
-import type { MachineEntry } from '../shared.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 
 export type TrayModel = {
   machines(): MachineEntry[]
