@@ -1,52 +1,41 @@
-// The kanban task's window check: the installed app, headless, on the run's daemon. It starts a thread in the project
-// (with the profile the run made), shows it, opens each candidate pane kind beside it, and reports what the pane drew:
-// its text, whether it failed, a screenshot, and whether a thread started afterwards shows up in it (live data).
-// Run by evals/tasks/kanban.ts as `Electron pane-check.mjs`, with EVAL_PANE_CHECK set to its JSON input.
-import { app, BrowserWindow } from 'electron'
-import { writeFileSync } from 'node:fs'
+// The kanban task's window check. For each profile a thread in the project can start with, it starts a thread with
+// it, shows it (its profile's UI loads), asks the window which pane kinds that profile registered
+// (window.superegoRegistered), opens each beside the thread, and reports what the pane drew: its text, whether it
+// failed, a screenshot of the pane, and whether a thread started afterwards shows up in it (live data).
+// Run by evals/tasks/kanban.ts as `Electron pane-check.mjs`, with EVAL_WINDOW_CHECK set to its JSON input.
+import { openWindow } from './window.mjs'
 
-const input = JSON.parse(process.env.EVAL_PANE_CHECK)
-const result = { kinds: {}, errors: [], console: [] }
-const finish = (code = 0) => { writeFileSync(input.out, JSON.stringify(result, null, 2)); app.exit(code) }
-process.on('uncaughtException', (error) => { result.errors.push(`uncaught: ${error.stack ?? error}`); finish(1) })
-app.on('web-contents-created', (_e, contents) => contents.on('console-message', (event) => {
-  if (event.level === 'error' || event.level === 'warning') result.console.push(String(event.message).slice(0, 500))
-}))
-setTimeout(() => { result.errors.push('timed out'); finish(1) }, 150_000)
-
-await import(input.main)
-void (async () => {
-  await app.whenReady()
-  const win = () => BrowserWindow.getAllWindows()[0]
-  const run = (js) => win().webContents.executeJavaScript(js)
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-  const until = async (js, ms = 20_000) => {
-    for (let i = 0; i < ms / 200; i++) {
-      if (win() && !win().webContents.isLoading()) { const value = await run(js).catch(() => undefined); if (value) return value }
-      await sleep(200)
-    }
-    return undefined
-  }
-  const call = (method, params) => run(`window.superego.call('local', ${JSON.stringify(method)}, ${JSON.stringify(params)})`)
-  if (!await until(`window.superego.machines().then((list) => list.find((m) => m.id === 'local')?.state === 'connected')`, 30_000)) {
-    result.errors.push('the window never connected'); return finish(1)
-  }
-  win().setContentSize(1500, 900)
+// Not awaited at the top: Electron's `ready` comes only once the entry module has run.
+void openWindow().then(async (w) => {
+  if (!w) return
+  const { input, result, finish, run, sleep, until, call, show, shoot, registered } = w
+  result.kinds = {}
+  result.registered = {}
   for (const [i, probe] of input.probes.entries()) {
+    const name = probe.profile ?? 'default'
     const title = `Board probe ${i + 1} (${Date.now() % 100000})`
     let thread
     try { thread = await call('thread.create', { cwd: input.project, title, ...(probe.profile ? { profile: probe.profile } : {}) }) } catch (error) {
-      result.errors.push(`thread.create (${probe.profile ?? 'default'}): ${error.message}`); continue
+      result.errors.push(`thread.create (${name}): ${error.message}`); continue
     }
-    await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes(${JSON.stringify(title)}))`)
-    await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes(${JSON.stringify(title)}))?.click()`)
-    await sleep(1500)
-    for (const kind of probe.kinds) {
-      const key = `${probe.profile ?? 'default'}:${kind}`
-      const report = result.kinds[key] = { profile: probe.profile ?? 'default', kind, opened: false, text: '', failed: false, live: false }
+    await show(title)
+    // The pane kinds of the thread's profile, as the window registered them: the profile's UI, and its data views.
+    const dir = (await call('thread.list', {})).find((t) => t.id === thread.id)?.profile?.dir
+    let kinds = []
+    for (let tries = 0; tries < 10 && !kinds.length; tries++) {
+      const now = await registered()
+      if (!now) { result.errors.push('window.superegoRegistered is missing: an app from before it'); break }
+      kinds = [...new Set(now.panes.filter((p) => p.profile && (!dir || p.profile.replace(/\/private(?=\/tmp)/g, "").includes(dir.replace(/^\/private(?=\/tmp)/, "")))).map((p) => p.kind))]
+      if (!kinds.length) await sleep(500)
+    }
+    result.registered[name] = kinds
+    // Most likely first: kinds that sound like a board.
+    kinds.sort((a, b) => Number(!/kanban|board/i.test(a)) - Number(!/kanban|board/i.test(b)))
+    for (const kind of kinds.slice(0, 3)) {
+      const key = `${name}:${kind}`
+      const report = result.kinds[key] = { profile: name, kind, opened: false, text: '', failed: false, live: false }
       try { await call('pane.open', { id: thread.id, kind }) } catch (error) { report.error = `pane.open: ${error.message}`; continue }
-      const list = await call('thread.list', {})
-      const pane = list.find((t) => t.id === thread.id)?.panes?.find((p) => p.kind === kind)
+      const pane = (await call('thread.list', {})).find((t) => t.id === thread.id)?.panes?.find((p) => p.kind === kind)
       if (!pane) { report.error = 'no pane after pane.open'; continue }
       const column = `document.querySelector('.panes > [data-column="${pane.id}"]')`
       report.opened = Boolean(await until(`Boolean(${column})`, 10_000))
@@ -55,9 +44,7 @@ void (async () => {
       await sleep(1000)
       report.text = String(await run(`${column}?.innerText ?? ''`).catch(() => '')).slice(0, 4000)
       report.failed = Boolean(await run(`Boolean(${column}?.querySelector('.extension-failed'))`).catch(() => false))
-      const shot = `${input.shots}/${key.replace(/[^\w.-]+/g, '_')}.png`
-      writeFileSync(shot, (await win().webContents.capturePage()).toPNG())
-      report.screenshot = shot
+      report.screenshot = await shoot(`${input.shots}/${key.replace(/[^\w.-]+/g, '_')}.png`, column)
       // Live: a thread started now shows up without anything else happening.
       const fresh = `Live check ${Date.now() % 10000}`
       await call('thread.create', { cwd: input.project, title: fresh })
@@ -65,4 +52,4 @@ void (async () => {
     }
   }
   finish(0)
-})()
+})

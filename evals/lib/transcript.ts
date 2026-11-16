@@ -79,10 +79,10 @@ export function condensed(thread: Thread, entries: any[], { result = 1500 } = {}
 }
 
 /** Every tool call in the entries, with its result. */
-export function toolCalls(entries: any[]): { name: string; args: any; result?: string; isError?: boolean }[] {
-  const calls = new Map<string, { name: string; args: any; result?: string; isError?: boolean }>()
+export function toolCalls(entries: any[]): { id: string; name: string; args: any; result?: string; isError?: boolean }[] {
+  const calls = new Map<string, { id: string; name: string; args: any; result?: string; isError?: boolean }>()
   for (const entry of entries) for (const message of entry.model ?? []) {
-    if (message.role === 'assistant') for (const b of message.content ?? []) if (b.type === 'toolCall') calls.set(b.id, { name: b.name, args: b.arguments })
+    if (message.role === 'assistant') for (const b of message.content ?? []) if (b.type === 'toolCall') calls.set(b.id, { id: b.id, name: b.name, args: b.arguments })
     if (message.role === 'toolResult') {
       const call = calls.get(message.toolCallId)
       if (call) Object.assign(call, { result: textOf(message.content), isError: Boolean(message.isError) })

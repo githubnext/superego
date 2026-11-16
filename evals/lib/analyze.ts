@@ -33,7 +33,7 @@ const HELP = `The shipped help an agent extending Superego has:
 - The SDK's types: a profile's node_modules linked to ~/.superego/types (declarations of 'superego', 'superego/ui', 'superego/testing').
 Anything else (reading the app's bundled JavaScript in out/main or out/renderer, guessing at paths, web searches, the GitHub repository) is a detour outside the help.`
 
-export async function analyzeRun({ request, route, transcript, pass, checks, notes = [] }: { request: string; route: string; transcript: string; pass: boolean; checks: Record<string, boolean>; notes?: string[] }): Promise<{ analysis?: Analysis; cost: number; error?: string }> {
+export async function analyzeRun({ request, route, transcript, pass, checks, notes = [], model = ANALYSIS_MODEL }: { request: string; route: string; transcript: string; pass: boolean; checks: Record<string, boolean>; notes?: string[]; model?: string }): Promise<{ analysis?: Analysis; cost: number; error?: string }> {
   const prompt = `${HELP}
 
 An agent was asked to extend Superego for a user. Route: ${route === 'ego' ? "the user asked Ego (Superego's own agent, which reads and explains and hands building work to an ordinary thread it starts)" : 'the user asked an ordinary thread directly'}. The user's request: "${request}".
@@ -54,7 +54,7 @@ Be specific and only report what the transcript shows. Mark as eval-setup anythi
 ${transcript}
 </transcript>`
   try {
-    const { text, cost } = await claude(prompt, 6000)
+    const { text, cost } = await claude(prompt, 6000, model)
     const json = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)
     return { analysis: JSON.parse(json), cost }
   } catch (error) {
@@ -80,11 +80,15 @@ ${JSON.stringify(input, null, 1)}`
   }
 }
 
-/** One request to Anthropic's API (the analysis model), and what it cost. */
+/** One request to Anthropic's API (the analysis model: Opus for the rollup, a run's as its plan says), and what it cost. */
 export const ANALYSIS_MODEL = 'claude-opus-5-5'
-const PRICE = { input: 4, output: 20 } // $ per million tokens
+const PRICES: Record<string, { input: number; output: number }> = { // $ per million tokens
+  'claude-opus-5-5': { input: 4, output: 20 }, 'claude-sonnet-5-5': { input: 2, output: 10 }, 'claude-haiku-5-5': { input: 0.1, output: 0.5 },
+}
 
-async function claude(prompt: string, maxTokens: number): Promise<{ text: string; cost: number }> {
+async function claude(prompt: string, maxTokens: number, model = ANALYSIS_MODEL): Promise<{ text: string; cost: number }> {
+  const price = PRICES[model]
+  if (!price) throw new Error(`No price for ${model}`)
   const key = process.env.ANTHROPIC_API_KEY
   if (!key) throw new Error('ANTHROPIC_API_KEY is not set')
   // The answer as a tool's input, so it comes back as valid JSON.
@@ -92,14 +96,14 @@ async function claude(prompt: string, maxTokens: number): Promise<{ text: string
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: ANALYSIS_MODEL, max_tokens: maxTokens, messages: [{ role: 'user', content: `${prompt}\n\nGive it by calling the report tool, with the JSON as its input.` }],
+      model, max_tokens: maxTokens, messages: [{ role: 'user', content: `${prompt}\n\nGive it by calling the report tool, with the JSON as its input.` }],
       tools: [{ name: 'report', description: 'Give the JSON asked for.', input_schema: { type: 'object', additionalProperties: true } }],
     }),
     signal: AbortSignal.timeout(300_000),
   })
   const body = await response.json() as any
   if (!response.ok) throw new Error(`${response.status} ${JSON.stringify(body).slice(0, 300)}`)
-  const cost = (body.usage.input_tokens * PRICE.input + body.usage.output_tokens * PRICE.output) / 1e6
+  const cost = (body.usage.input_tokens * price.input + body.usage.output_tokens * price.output) / 1e6
   const input = body.content.find((b: any) => b.type === 'tool_use')?.input
   return { text: input ? JSON.stringify(input) : body.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join(''), cost }
 }

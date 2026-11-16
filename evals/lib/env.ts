@@ -3,18 +3,33 @@
 // their credentials live.
 //
 //   <run>/home                 HOME for the daemon and everything it runs
-//   <run>/home/.superego       SUPEREGO_HOME: settings, threads, profiles
+//   <run>/home/.superego       SUPEREGO_HOME: settings, threads, profiles, and the SDK's types (types/) as the app installs them
 //   <run>/home/.agents         SUPEREGO_AGENTS: empty; the skills extension offers the app's own `superego` skill (out/skill)
 //   <run>/home/code/myproject  the user's project: a small git repository, where a plain thread starts
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Install } from './install.ts'
 import { openRpc, type Rpc } from './rpc.ts'
 
-/** Optional extensions a run keeps; every other optional one is turned off. */
-export const KEEP = new Set(['coding-tools', 'panes', 'agents-md', 'skills', 'ego'])
+/** The spike's optional extensions: every other optional one was turned off (thread-reports too, wrongly). */
+export const SPIKE_KEEP = new Set(['coding-tools', 'panes', 'agents-md', 'skills', 'ego'])
+/**
+ * Optional extensions a run turns off by default, from the app's defaults: suggestions makes a side call to the thread's
+ * model after every answer, which no thread's cost counts (so no budget would), and has nothing to do with the work.
+ */
+export const OFF_BY_DEFAULT = new Set(['suggestions'])
+
+export type WorldOptions = {
+  model: string
+  /** A finished run's world, its daemon started again (to check it again). */
+  reuse?: boolean
+  /** Which optional extensions are on: the spike's few, or the app's defaults (but `OFF_BY_DEFAULT`). */
+  extensions?: 'spike' | 'defaults'
+  /** Install the SDK's types in ~/.superego/types first, as the app does when it starts. */
+  types?: boolean
+}
 
 export type World = {
   dir: string
@@ -30,12 +45,14 @@ export type World = {
 }
 
 /** A run's world, new; or with `reuse`, the one a finished run left, its daemon started again (to check it again). */
-export async function makeWorld(dir: string, install: Install, { model, reuse = false }: { model: string; reuse?: boolean }): Promise<World> {
+export async function makeWorld(dir: string, install: Install, { model, reuse = false, extensions: keep = 'defaults', types = true }: WorldOptions): Promise<World> {
   const home = join(dir, 'home')
   const dataDir = join(home, '.superego')
   const agents = join(home, '.agents')
   const project = join(home, 'code', 'myproject')
   for (const d of [dataDir, join(agents, 'skills'), project, join(dir, 'tmp')]) mkdirSync(d, { recursive: true })
+  // The SDK's types, as the app installs them at start (main/start.ts): there before anything asks for them.
+  if (types && !existsSync(join(dataDir, 'types', 'stamp.json'))) cpSync(join(install.out, 'types'), join(dataDir, 'types'), { recursive: true })
   if (!reuse) {
     writeFileSync(join(project, 'README.md'), '# myproject\n\nA small project of mine.\n')
     const git = (...args: string[]) => execFileSync('git', args, { cwd: project, stdio: 'ignore', env: { ...gitEnv, HOME: home } })
@@ -70,7 +87,10 @@ export async function makeWorld(dir: string, install: Install, { model, reuse = 
   const snapshot = await rpc.call<{ sections: { id: string; settings: { key: string }[] }[] }>('settings.watch', {})
   const extensions = (snapshot as any).value.sections.find((s: any) => s.id === 'extensions')?.settings ?? []
   await rpc.call('unwatch', { sub: (snapshot as any).sub }).catch(() => {})
-  for (const { key } of extensions) if (!KEEP.has(key.replace(/^extensions\./, ''))) await rpc.call('settings.set', { key, value: false })
+  for (const { key } of extensions) {
+    const name = key.replace(/^extensions\./, '')
+    if (keep === 'spike' ? !SPIKE_KEEP.has(name) : OFF_BY_DEFAULT.has(name)) await rpc.call('settings.set', { key, value: false })
+  }
 
   return {
     dir, home, dataDir, project, env, rpc, daemon,
