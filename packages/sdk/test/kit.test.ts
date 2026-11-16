@@ -139,6 +139,20 @@ describe('a window for a UI half', () => {
     expect(tornDown).toBe(before + 1)
   })
 
+  it("leaves the app's own app.shown out of calls, and versions a fake for each window it's mounted in", async () => {
+    const machine = fakeMachine({ extensions: ['queue'], threads: [testThread({ id: 't1' }), testThread({ id: 't2' })] })
+    const first = keep(await mountUi({ extensions: [queueUi], machines: [machine], select: { thread: 't1' } }))
+    await first.select({ thread: 't2' })
+    // The window telling the app which thread it shows isn't a call of the test's.
+    expect(first.calls.filter((c) => c.machine === 'app')).toEqual([])
+    expect(first.machines[0]!.entry.extensions).toEqual([{ name: 'queue', version: '1.0.0' }])
+    await first.unmount()
+    open.splice(open.indexOf(first), 1)
+    const newer = keep(await mountUi({ extensions: [{ ...queueUi, version: '2.0.0' }], machines: [machine] }))
+    expect(newer.machines[0]!.entry.extensions).toEqual([{ name: 'queue', version: '2.0.0' }])
+    expect(machine.entry.extensions).toEqual([{ name: 'queue' }])
+  })
+
   it("replaces a profile's UI installed again: the first torn down, nothing drawn twice", async () => {
     const ref = { scope: 'user' as const, name: 'default', dir: '/profiles/default' }
     const thread = testThread({ id: 't1', profile: ref })

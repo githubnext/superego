@@ -288,12 +288,16 @@ const isDaemon = (m: TestMachine | TestDaemon): m is TestDaemon => 'peer' in m
 export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   const letGoOfDom = useDom()
   const app = options.app ?? defineApp({ name: 'Superego test', id: 'superego-test' })
-  // A fake's extension named alone is at the version of the UI half mounted here: the two speak.
-  const versioned = (m: TestMachine) => {
-    m.entry.extensions = m.entry.extensions?.map((e) => e.version !== undefined ? e
-      : { ...e, version: options.extensions?.find((x) => x.name === e.name)?.version ?? '1.0.0' })
-    return m
-  }
+  // A fake's extension named alone is at the version of the UI half mounted here: the two speak. On this window's copy
+  // of its entry, so a fake mounted again takes the next window's versions.
+  const versioned = (m: TestMachine): TestMachine => ({
+    ...m,
+    entry: {
+      ...m.entry,
+      ...(m.entry.extensions ? { extensions: m.entry.extensions.map((e) => e.version !== undefined ? e
+        : { ...e, version: options.extensions?.find((x) => x.name === e.name)?.version ?? '1.0.0' }) } : {}),
+    },
+  })
   const machines = (options.machines ?? [fakeMachine()]).map((m) => isDaemon(m) ? daemonMachine(m) : versioned(m))
   const calls: TestWindow['calls'] = []
   const eventListeners = new Set<(event: SuperegoEvent) => void>()
@@ -316,6 +320,8 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
         }
         if (method === 'unwatch') { appWatches.delete(params.sub); return null }
         if (method === 'action.list') return []
+        // The window says which thread it shows, on every selection: the app's business, not a test's.
+        if (method === 'app.shown') return null
         calls.push({ machine, method, params })
         return null
       }
