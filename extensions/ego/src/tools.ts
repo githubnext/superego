@@ -70,7 +70,7 @@ What ${name} is:
 - A machine runs a daemon that keeps agents going while the app is closed. "This computer" is always there; others are
   reached over ssh (or any command piping stdio), and need ${id} installed and on PATH there: the app runs
   \`ssh <target> ${id} connect --start\`. A machine is added by its ssh target (user@host, or a Host from ~/.ssh/config).
-- A session is a project on a machine: a git repository (with its worktrees) or a folder. A thread is one conversation with
+- A project is a git repository (with its worktrees) or a folder, on a machine. A thread is one conversation with
   an agent, in a folder, or in a git worktree of its own (${dataDir}/worktrees/<repo>/<slug>, branch ${id}/<slug>).
   Archived threads stay readable and take no messages until unarchived.
 - Panes sit beside a thread: the file editor, another thread, and the kinds extensions add (changes, web pages…). You
@@ -211,8 +211,8 @@ export function egoTools({ dir, dispatch, actions, snapshot, machines, threads, 
         const all = await threads.list()
         if (!all.length) return text('No threads yet.')
         const projects = new Map<string, ThreadInfo[]>()
-        for (const thread of all) projects.set(thread.session.root, [...(projects.get(thread.session.root) ?? []), thread])
-        return text([...projects].map(([root, list]) => `${list[0]!.session.name} (${root}):\n${list.map((t) => `- ${lineOf(t)}${t.parent ? `, started by thread ${t.parent}` : ''}`).join('\n')}`).join('\n\n'))
+        for (const thread of all) projects.set(thread.project.root, [...(projects.get(thread.project.root) ?? []), thread])
+        return text([...projects].map(([root, list]) => `${list[0]!.project.name} (${root}):\n${list.map((t) => `- ${lineOf(t)}${t.parent ? `, started by thread ${t.parent}` : ''}`).join('\n')}`).join('\n\n'))
       },
     }),
     readTool(threads),

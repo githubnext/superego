@@ -1,11 +1,11 @@
 import { expect, it } from 'vitest'
 import type { Status, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../src/shared.ts'
-import { freeze, groupSessions, threadBeside, type Session } from '../src/renderer/sessions.ts'
+import { freeze, groupProjects, threadBeside, type Project } from '../src/renderer/projects.ts'
 
 const machine = (id: string): MachineEntry => ({ id, label: id === 'local' ? 'This computer' : 'Build box', state: 'connected' })
 const thread = (id: string, root: string, activeAt: number, more: Partial<ThreadInfo> = {}): ThreadInfo =>
-  ({ id, title: id, cwd: root, createdAt: 0, activeAt, session: { root, name: root.split('/').at(-1)! }, status: { state: 'idle' as Status['state'] }, ...more })
+  ({ id, title: id, cwd: root, createdAt: 0, activeAt, project: { root, name: root.split('/').at(-1)! }, status: { state: 'idle' as Status['state'] }, ...more })
 
 // Two machines with the same project; a thread started by another, in a worktree, a level under it, and its own under
 // it; one whose parent is gone (archived), on its own.
@@ -22,35 +22,35 @@ const threads = {
   box: [thread('far', '/code/superego', 60), thread('far-child', '/code/superego', 70, { parent: 'far' })],
 }
 
-/** What the sidebar shows, top to bottom: each session's threads as it lists them (see extensions/threads). */
-const shown = (sessions: Session[]) => sessions.flatMap((s) => s.threads.map((t) => `${s.machine.id}/${t.id}`))
+/** What the sidebar shows, top to bottom: each project's threads as it lists them (see extensions/threads). */
+const shown = (projects: Project[]) => projects.flatMap((s) => s.threads.map((t) => `${s.machine.id}/${t.id}`))
 /** Where ⌘⇧] goes, press after press, from nothing selected. */
-const visits = (sessions: Session[], presses: number, by = 1) => {
+const visits = (projects: Project[], presses: number, by = 1) => {
   const out: string[] = []
   let at: { machine: string; thread: string } | undefined
-  for (let i = 0; i < presses; i++) { at = threadBeside(sessions, at, by); out.push(`${at!.machine}/${at!.thread}`) }
+  for (let i = 0; i < presses; i++) { at = threadBeside(projects, at, by); out.push(`${at!.machine}/${at!.thread}`) }
   return out
 }
 
 it('steps through the threads in the order the sidebar shows them, children under their parents', () => {
-  const sessions = groupSessions(machines, threads, 'recent')
+  const projects = groupProjects(machines, threads, 'recent')
   const order = ['box/far', 'box/far-child', 'local/solo', 'local/parent', 'local/child', 'local/grandchild', 'local/site', 'local/stray']
-  expect(shown(sessions)).toEqual(order)
-  expect(sessions.map((s) => s.threads.map((t) => s.depth[t.id]))).toEqual([[0, 1], [0, 0, 1, 2], [0, 0]])
-  expect(visits(sessions, order.length)).toEqual(order)
+  expect(shown(projects)).toEqual(order)
+  expect(projects.map((s) => s.threads.map((t) => s.depth[t.id]))).toEqual([[0, 1], [0, 0, 1, 2], [0, 0]])
+  expect(visits(projects, order.length)).toEqual(order)
   // Around at the ends, both ways.
-  expect(visits(sessions, order.length + 1).at(-1)).toBe(order[0])
-  expect(visits(sessions, order.length, -1)).toEqual([...order].reverse())
+  expect(visits(projects, order.length + 1).at(-1)).toBe(order[0])
+  expect(visits(projects, order.length, -1)).toEqual([...order].reverse())
 })
 
 it('holds still under the pointer, and stepping goes down the rows as they stand', () => {
-  const before = groupSessions(machines, threads, 'recent')
+  const before = groupProjects(machines, threads, 'recent')
   // Meanwhile: the parent gets busy (it would rise to the top), and starts another thread.
   const later = { ...threads, local: [...threads.local.map((t) => t.id === 'parent' ? { ...t, activeAt: 99 } : t), thread('new-child', '/code/superego', 100, { parent: 'parent' })] }
-  const held = freeze(before, groupSessions(machines, later, 'recent'))
+  const held = freeze(before, groupProjects(machines, later, 'recent'))
   const order = ['box/far', 'box/far-child', 'local/solo', 'local/parent', 'local/child', 'local/grandchild', 'local/new-child', 'local/site', 'local/stray']
   expect(shown(held)).toEqual(order)
   expect(visits(held, order.length)).toEqual(order)
   // Let go, it follows activity again.
-  expect(shown(groupSessions(machines, later, 'recent')).slice(0, 5)).toEqual(['local/parent', 'local/new-child', 'local/child', 'local/grandchild', 'local/solo'])
+  expect(shown(groupProjects(machines, later, 'recent')).slice(0, 5)).toEqual(['local/parent', 'local/new-child', 'local/child', 'local/grandchild', 'local/solo'])
 })

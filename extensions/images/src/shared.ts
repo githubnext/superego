@@ -2,7 +2,7 @@
 import type { ExtensionAbout } from '@superego/protocol'
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
-export const about = { name: 'images', version: '1.0.0', api: '^1', title: 'Images', description: 'Show images and screenshots in the thread.' } satisfies ExtensionAbout
+export const about = { name: 'images', version: '1.0.0', api: '^2', title: 'Images', description: 'Show images and screenshots in the thread.' } satisfies ExtensionAbout
 
 export const TOOL = 'show_images'
 

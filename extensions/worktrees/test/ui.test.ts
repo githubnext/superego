@@ -12,7 +12,7 @@ import type { Worktree } from '../src/shared.ts'
 const app = defineApp({ name: 'superego', id: 'superego' })
 const machine = { id: 'local', label: 'This Mac', state: 'connected' } as never
 const thread = (tree?: Worktree): ThreadInfo => ({
-  id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, session: { root: '/', name: '/' }, status: { state: 'idle' },
+  id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' },
   ...(tree ? { ext: { worktrees: tree } } : {}),
 })
 

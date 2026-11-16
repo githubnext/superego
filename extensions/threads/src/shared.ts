@@ -2,17 +2,17 @@
 import type { ExtensionAbout } from '@superego/protocol'
 
 /**
- * The UI half: required. The sidebar is how the window goes between sessions and threads, for every thread on every
+ * The UI half: required. The sidebar is how the window goes between projects and threads, for every thread on every
  * machine at once, and a thread's rows and links name other threads whatever its agent can do, so neither a machine's
  * switch nor a profile's `without` could mean anything for it.
  */
 export const about = {
-  name: 'threads', version: '1.0.0', api: '^1', title: 'Sidebar', description: 'Sessions and their threads, sorted, as a list or a rail, with thread details.', required: true,
+  name: 'threads', version: '1.0.0', api: '^2', title: 'Sidebar', description: 'Projects and their threads, sorted, as a list or a rail, with thread details.', required: true,
 } satisfies ExtensionAbout
 
 /** The daemon half: the agent's thread tools, optional. */
 export const toolsAbout = {
-  name: 'thread-tools', version: '1.1.0', api: '^1.4', title: 'Thread tools', description: 'Start threads of their own, read, message and archive others, on this machine and those it reaches.',
+  name: 'thread-tools', version: '1.1.0', api: '^2', title: 'Thread tools', description: 'Start threads of their own, read, message and archive others, on this machine and those it reaches.',
 } satisfies ExtensionAbout
 
 /**
@@ -21,7 +21,7 @@ export const toolsAbout = {
  * while keeping the tools, and a thread without the tools still reports.
  */
 export const reportsAbout = {
-  name: 'thread-reports', version: '1.0.0', api: '^1', title: 'Thread reports', description: 'Tell the thread that started one when it finishes, fails or waits on a question.',
+  name: 'thread-reports', version: '1.0.0', api: '^2', title: 'Thread reports', description: 'Tell the thread that started one when it finishes, fails or waits on a question.',
 } satisfies ExtensionAbout
 
 /** What clients are told of a child working for its parent (`ext['thread-reports']`): its runs are reported to it. */

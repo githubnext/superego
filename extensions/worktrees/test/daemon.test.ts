@@ -54,7 +54,7 @@ it('is required, and announced', async () => {
   await close()
 })
 
-it('gives a thread in a repository a worktree of its own when asked, in the same session, removed when archived clean', async () => {
+it('gives a thread in a repository a worktree of its own when asked, in the same project, removed when archived clean', async () => {
   const git = (...args: string[]) => execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { encoding: 'utf8' }).trim()
   execFileSync('git', ['init', '-q', dir])
   await mkdir(join(dir, 'app'))
@@ -67,12 +67,12 @@ it('gives a thread in a repository a worktree of its own when asked, in the same
   const tree = treeOf(thread)!
   expect(tree.branch).toMatch(/^superego\/fix-the-login-flow-[0-9a-f]{6}$/)
   expect(thread.cwd).toBe(join(tree.path, 'app'))
-  expect(thread.session).toEqual({ root, name: basename(root) })
+  expect(thread.project).toEqual({ root, name: basename(root) })
   expect(git('branch', '--list', tree.branch)).toContain(tree.branch)
-  // Otherwise in place: the same session.
+  // Otherwise in place: the same project.
   const here = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
   expect(treeOf(here)).toBeUndefined()
-  expect(here.session.root).toBe(root)
+  expect(here.project.root).toBe(root)
   // Archived with nothing uncommitted: the worktree goes, the branch stays; unarchived, it's back.
   expect(await archive(peer, thread.id)).toEqual({ notes: { worktrees: `Removed the worktree ${tree.path}; branch ${tree.branch} kept.` } })
   expect(existsSync(tree.path)).toBe(false)

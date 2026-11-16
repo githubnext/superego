@@ -10,7 +10,7 @@ import { DescribedCall, describeRun, mainKind, registerToolRows } from '../../..
 import { registerLinks, registerRows } from '../src/rows.tsx'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
-const thread: ThreadInfo = { id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, session: { root: '/', name: '/' }, status: { state: 'idle' } }
+const thread: ThreadInfo = { id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' } }
 const where = { machine: 'local', thread }
 // Only the rows and links, not the sidebar.
 const threads = defineUiExtension({ name: 'threads', required: true, setup(superego) { registerRows(superego); registerLinks(superego) } })

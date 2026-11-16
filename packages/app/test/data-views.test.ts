@@ -10,7 +10,7 @@ import { createRegistry, defineUiExtension, paneKind, paneMenu, RegistryProvider
 import { resolveLayout } from '../src/renderer/layout.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
-const thread = (more: Partial<ThreadInfo> = {}): ThreadInfo => ({ id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, session: { root: '/', name: '/' }, status: { state: 'idle' }, ...more })
+const thread = (more: Partial<ThreadInfo> = {}): ThreadInfo => ({ id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' }, ...more })
 const recent: DataViewInfo = { id: 'orders.recent', extension: 'orders', title: 'Recent orders', icon: 'list', context: 'window', fits: ['space', 'aside'], default: 'space', value: 'orders.recent' }
 const notes: DataViewInfo = { id: 'orders.notes', extension: 'orders', title: 'Notes', context: 'thread', fits: ['aside', 'pane'], default: 'pane', method: 'orders.notes' }
 const board: DataViewInfo = { id: 'staff.board', extension: 'staff', title: 'Board', context: 'thread', fits: ['aside', 'pane'], default: 'aside', value: 'staff.board', profiles: ['/p/staff'] }

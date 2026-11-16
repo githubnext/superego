@@ -13,7 +13,7 @@ const text = async (tools: readonly unknown[], name: string, params: unknown) =>
 const run = async (tools: readonly unknown[], name: string, params: unknown) => JSON.parse(await text(tools, name, params)) as unknown
 
 const thread = (id: string, title: string, extra: Partial<ThreadInfo> = {}): ThreadInfo =>
-  ({ id, title, cwd: '/p', createdAt: 0, activeAt: 0, session: { root: '/p', name: 'p' }, status: { state: 'idle' }, ...extra })
+  ({ id, title, cwd: '/p', createdAt: 0, activeAt: 0, project: { root: '/p', name: 'p' }, status: { state: 'idle' }, ...extra })
 
 /** What the tools run actions with: `router`'s, as the daemon gives an extension its own. */
 const on = (router: Router) => ({ dispatch: (id: string, params: unknown) => router.dispatch(id, params, {}, { source: 'ego' }), actions: router.list.bind(router) })
@@ -24,8 +24,8 @@ describe("Ego's tools", () => {
     values: { 'agent.model': 'faux/faux-1' },
   })
   const threads = (started: Parameters<EgoThreads['start']>[0][] = []): EgoThreads => ({
-    info: async (id) => [thread('1', 'Fix login'), thread('2', 'Notes', { session: { root: '/q', name: 'q' } })].find((t) => t.id === id),
-    list: async () => [thread('1', 'Fix login'), thread('2', 'Notes', { session: { root: '/q', name: 'q' } })],
+    info: async (id) => [thread('1', 'Fix login'), thread('2', 'Notes', { project: { root: '/q', name: 'q' } })].find((t) => t.id === id),
+    list: async () => [thread('1', 'Fix login'), thread('2', 'Notes', { project: { root: '/q', name: 'q' } })],
     start: async (params) => { started.push(params); return thread('3', params.title ?? 'New', { cwd: params.cwd }) },
     answer: async () => undefined,
   })

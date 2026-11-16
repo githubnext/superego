@@ -7,7 +7,7 @@ import { Dialog } from '@superego/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import { PANE_LAYOUT, type MachineEntry, type PaneLayout } from '../shared.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
-import { threadBeside, type Session } from './sessions.ts'
+import { threadBeside, type Project } from './projects.ts'
 import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
 import { scrollHalfPage } from './scroll.ts'
 import { startRename } from './rename.ts'
@@ -26,8 +26,8 @@ export type WindowContext = {
   showLog(): void
   /** The thread a selection points at, as the window has it. */
   threadOf(selection: Selection): ThreadInfo | undefined
-  /** Every session, in the sidebar's order, and the thread last shown in each (by session key). */
-  sessions: Session[]
+  /** Every project, in the sidebar's order, and the thread last shown in each (by project key). */
+  projects: Project[]
   lastThread: Record<string, string>
   toggleSidebar(): void
   toggleNavigator(): void
@@ -139,13 +139,13 @@ declare const __SUPEREGO_DEV_SERVER__: string | undefined
 /** The shell's own actions. Extensions add theirs with `superego.action`. */
 export const coreActions = (app: AppConfig): WindowAction[] => [
   defineWindowAction({ id: 'app.palette', title: 'Commands', keys: 'mod+k', run: (_p, c) => c.togglePalette() }),
-  defineWindowAction({ id: 'app.navigator', title: 'Go to a session, thread or pane', keys: 'mod+l', run: (_p, c) => c.toggleNavigator() }),
+  defineWindowAction({ id: 'app.navigator', title: 'Go to a project, thread or pane', keys: 'mod+l', run: (_p, c) => c.toggleNavigator() }),
   defineWindowAction({ id: 'app.sidebar', title: 'Toggle sidebar', keys: 'mod+/', run: (_p, c) => c.toggleSidebar() }),
-  // Through every thread, in the sidebar's order, across sessions; and between sessions, at the thread last shown in each.
+  // Through every thread, in the sidebar's order, across projects; and between projects, at the thread last shown in each.
   defineWindowAction({ id: 'thread.next', title: 'Next thread', keys: 'mod+shift+]', run: (_p, c) => stepThread(c, 1) }),
   defineWindowAction({ id: 'thread.previous', title: 'Previous thread', keys: 'mod+shift+[', run: (_p, c) => stepThread(c, -1) }),
-  defineWindowAction({ id: 'session.next', title: 'Next session', run: (_p, c) => stepSession(c, 1) }),
-  defineWindowAction({ id: 'session.previous', title: 'Previous session', run: (_p, c) => stepSession(c, -1) }),
+  defineWindowAction({ id: 'project.next', title: 'Next project', run: (_p, c) => stepProject(c, 1) }),
+  defineWindowAction({ id: 'project.previous', title: 'Previous project', run: (_p, c) => stepProject(c, -1) }),
   // Where this window has been, as a browser goes back and forward.
   defineWindowAction({ id: 'app.back', title: 'Back', keys: 'mod+[', run: (_p, c) => c.back() }),
   defineWindowAction({ id: 'app.forward', title: 'Forward', keys: 'mod+]', run: (_p, c) => c.forward() }),
@@ -250,27 +250,27 @@ function updatable(c: WindowContext): string | undefined {
   return behind.length === 1 ? behind[0]!.id : undefined
 }
 
-/** The session the selected thread is in, and where it is in the order. */
+/** The project the selected thread is in, and where it is in the order. */
 function current(c: WindowContext) {
-  const index = c.sessions.findIndex((s) => s.machine.id === c.selection?.machine && s.threads.some((t) => t.id === c.selection?.thread))
-  return { index, session: c.sessions[index] }
+  const index = c.projects.findIndex((s) => s.machine.id === c.selection?.machine && s.threads.some((t) => t.id === c.selection?.thread))
+  return { index, project: c.projects[index] }
 }
 
-/** Show a session: the thread last shown in it, else its first. */
-export function showSession(c: Pick<WindowContext, 'select' | 'lastThread'>, session: Session) {
-  const thread = session.threads.find((t) => t.id === c.lastThread[session.key]) ?? session.threads[0]
-  if (thread) c.select({ machine: session.machine.id, thread: thread.id })
+/** Show a project: the thread last shown in it, else its first. */
+export function showProject(c: Pick<WindowContext, 'select' | 'lastThread'>, project: Project) {
+  const thread = project.threads.find((t) => t.id === c.lastThread[project.key]) ?? project.threads[0]
+  if (thread) c.select({ machine: project.machine.id, thread: thread.id })
 }
 
-function stepSession(c: WindowContext, by: number) {
-  if (!c.sessions.length) return
+function stepProject(c: WindowContext, by: number) {
+  if (!c.projects.length) return
   const { index } = current(c)
-  const next = c.sessions[index < 0 ? (by > 0 ? 0 : c.sessions.length - 1) : (index + by + c.sessions.length) % c.sessions.length]
-  if (next) showSession(c, next)
+  const next = c.projects[index < 0 ? (by > 0 ? 0 : c.projects.length - 1) : (index + by + c.projects.length) % c.projects.length]
+  if (next) showProject(c, next)
 }
 
 function stepThread(c: WindowContext, by: number) {
-  const next = threadBeside(c.sessions, c.selection, by)
+  const next = threadBeside(c.projects, c.selection, by)
   if (next) c.select(next)
 }
 

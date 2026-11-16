@@ -9,7 +9,7 @@
 // installed web app.
 import { useEffect, useState } from 'react'
 import {
-  BADGE, call, defineUiExtension, NOTIFY, unreadCount, useAppSetting, useSessions, type ComposerWhere, type Selection, type Store, type WindowState,
+  BADGE, call, defineUiExtension, NOTIFY, unreadCount, useAppSetting, useProjects, type ComposerWhere, type Selection, type Store, type WindowState,
 } from '@superego/app/ui'
 import { BellIcon, IconButton, XIcon } from '@superego/ui'
 import { noticeFor, rejectionNotice } from './notify.ts'
@@ -63,9 +63,9 @@ let looking: Store<Selection | null>
 /** In a browser that badges an installed web app: how many threads are unread, but the one being looked at. */
 function WebBadge() {
   const [on] = useAppSetting<boolean>(BADGE)
-  const { sessions } = useSessions()
+  const { projects } = useProjects()
   const shown = looking.use()
-  const count = on === false ? 0 : unreadCount(sessions.flatMap((s) => s.threads.map((thread) => ({ machine: s.machine.id, thread }))), shown ?? undefined)
+  const count = on === false ? 0 : unreadCount(projects.flatMap((s) => s.threads.map((thread) => ({ machine: s.machine.id, thread }))), shown ?? undefined)
   useEffect(() => {
     void (count ? navigator.setAppBadge(count) : navigator.clearAppBadge()).catch(() => {})
   }, [count])

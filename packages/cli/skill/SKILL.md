@@ -12,7 +12,7 @@ Superego runs agents. A **daemon** on each machine keeps them running while the 
 
 ```text
 machine   a daemon (this computer, or one reached over ssh)
-└─ session  a project on that machine: a git repository (and its worktrees) or a folder
+└─ project  a git repository (and its worktrees) or a folder, on that machine
    └─ thread  one conversation with an agent, in the folder or a worktree of its own
       └─ pane   a view beside the thread: a diff, a file, a web page, a profile's own
 ```

@@ -52,7 +52,7 @@ Copy `extensions/ask-user/package.json` for dependencies.
 
 <!-- check: module; import type { ExtensionAbout } from 'superego' -->
 ```ts
-export const about = { name: 'orders', version: '1.0.0', api: '^1', title: 'Orders', description: 'Look orders up.' } satisfies ExtensionAbout
+export const about = { name: 'orders', version: '1.0.0', api: '^2', title: 'Orders', description: 'Look orders up.' } satisfies ExtensionAbout
 // daemon.ts: defineDaemonExtension({ ...about, setup(superego) { … } })
 // ui.tsx:    defineUiExtension({ ...about, setup(superego) { … } })
 ```
@@ -92,7 +92,7 @@ Bundled extensions get more than a profile's:
   started like that one (⌘N). Shown while the machine picked has the extension. `worktrees` has one.
 - **Window actions** with keys: `superego.action(defineAction({ id: 'orders.open', title, keys: 'mod+shift+o', when, run(params, context) { … } }))`;
   ids start with the extension's name. `when(context)` says when keys and the palette offer it (`(c) => Boolean(c.selection)`);
-  `context` has the selection, sessions, `appSetting(key)` and `dispatch`.
+  `context` has the selection, projects, `appSetting(key)` and `dispatch`.
 - **Window state** for actions and components to share: `const open = superego.store('orders.open', false)` in setup,
   `open.set(true)` in an action, `open.use()` in a component; `{ persist: true }` keeps it across reloads. No module
   globals that rendering sets.
@@ -126,5 +126,5 @@ Pure logic (parsing, dividing work, a composer provider's `word`, a `sentWith` r
 ## Conventions
 
 - Comments explain why and what something is for, in plain words, at the top of each file.
-- Name things after what the user sees: thread, pane, session, machine.
+- Name things after what the user sees: thread, pane, project, machine.
 - Keep this skill (`packages/cli/skill/`) and the README in step when the extension API, profiles or commands change.

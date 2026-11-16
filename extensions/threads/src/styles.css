@@ -1,4 +1,4 @@
-/* The list: "Threads" and +, then each session's threads under its name, quiet, on the window's colour. */
+/* The list: "Threads" and +, then each project's threads under its name, quiet, on the window's colour. */
 .threads { display: flex; flex-direction: column; }
 .threads__head { display: flex; justify-content: space-between; align-items: center; height: 28px; padding: 0 2px 0 8px; font-size: var(--superego-text-sm); font-weight: 600; color: var(--superego-muted); }
 .threads__actions { display: flex; align-items: center; gap: 2px; }
@@ -7,18 +7,18 @@
 .threads-menu-trigger { opacity: 0; transition: opacity .1s; }
 .threads:hover .threads-menu-trigger, .threads-menu-trigger:focus-visible, .threads-menu-trigger[data-popup-open] { opacity: 1; }
 .threads__empty { padding: var(--superego-space-2) 8px; font-size: var(--superego-text-sm); color: var(--superego-muted); }
-.threads-session { margin-top: 14px; }
-.threads-session__head { display: flex; align-items: center; gap: 4px; padding: 0 2px 2px 8px; min-height: 22px; }
-.threads-session__name { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; border: 0; background: none; padding: 0; font: inherit; font-size: var(--superego-text-xs); font-weight: 600; color: var(--superego-muted); text-align: left; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.threads-session__name em { font-style: normal; font-weight: 400; color: var(--superego-faint); overflow: hidden; text-overflow: ellipsis; }
-.threads-session .threads__new { width: 20px; height: 20px; min-height: 20px; box-shadow: none; background: none; color: var(--superego-muted); opacity: 0; transition: opacity .1s; }
-.threads-session:hover .threads__new, .threads-session .threads__new:focus-visible { opacity: 1; }
+.threads-project { margin-top: 14px; }
+.threads-project__head { display: flex; align-items: center; gap: 4px; padding: 0 2px 2px 8px; min-height: 22px; }
+.threads-project__name { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; border: 0; background: none; padding: 0; font: inherit; font-size: var(--superego-text-xs); font-weight: 600; color: var(--superego-muted); text-align: left; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.threads-project__name em { font-style: normal; font-weight: 400; color: var(--superego-faint); overflow: hidden; text-overflow: ellipsis; }
+.threads-project .threads__new { width: 20px; height: 20px; min-height: 20px; box-shadow: none; background: none; color: var(--superego-muted); opacity: 0; transition: opacity .1s; }
+.threads-project:hover .threads__new, .threads-project .threads__new:focus-visible { opacity: 1; }
 .threads .superego-list-item { color: var(--superego-text); }
 /* The title truncates; the marks after it (thread.badge) stay. */
-.threads-session .superego-list-item__body { display: flex; align-items: center; gap: 5px; }
+.threads-project .superego-list-item__body { display: flex; align-items: center; gap: 5px; }
 .threads__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .superego-list-item.threads-child { padding-left: calc(8px + var(--depth) * 14px); }
-.threads-session.is-stale .superego-list-item, .threads-session.is-stale .threads-session__name { color: var(--superego-muted); }
+.threads-project.is-stale .superego-list-item, .threads-project.is-stale .threads-project__name { color: var(--superego-muted); }
 .threads__why { color: var(--superego-status-blocked-text); font-weight: 500; }
 .threads__why--error { color: var(--superego-status-error-text); }
 .threads__why--quiet { color: var(--superego-muted); font-weight: 400; }

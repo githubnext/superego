@@ -3,7 +3,7 @@ import type { Json, Status, ThreadInfo } from '@superego/protocol'
 import { threadNotice, unread, unreadCount } from '../src/shared.ts'
 
 const thread = (id: string, status: Status, more: Partial<ThreadInfo> = {}): ThreadInfo =>
-  ({ id, title: id, cwd: '/', createdAt: 0, activeAt: 0, session: { root: '/', name: '/' }, status, ...more })
+  ({ id, title: id, cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status, ...more })
 const toParent: Record<string, Json> = { 'thread-reports': { toParent: true } }
 
 it('counts a result, a failure or a question; not work, nothing, or waiting for sign-in', () => {

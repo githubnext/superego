@@ -1,5 +1,5 @@
 /// <reference path="./env.d.ts" />
-// threads: the sidebar. Sessions (a project on a machine) and the threads in each; the machine is said on the session,
+// threads: the sidebar. Projects (a repository or folder on a machine) and the threads in each; the machine is said on the project,
 // where it isn't this computer. Its views:
 // - the list (`threads.list`), a space: sorted recently active, newest first, or needs you first (an app setting); with
 //   the sidebar folded, a rail of status glyphs. A row's title is followed by other extensions' marks (the
@@ -10,8 +10,8 @@
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are its daemon half's.
 import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
-  call, defineAction, defineUiExtension, MachineDrift, showSession, Slot, SORT, unread, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useSessions, useThreadView, useShell, useShortcut,
-  type MachineEntry, type Session, type Sort, type SpaceRailProps, type WindowContext,
+  call, defineAction, defineUiExtension, MachineDrift, showProject, Slot, SORT, unread, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut,
+  type MachineEntry, type Project, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, ChatsIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
@@ -24,7 +24,7 @@ import { about } from './shared.ts'
 const DETAILS = 'threads.details'
 /** The shell's action that folds the sidebar, and shows it again: folded, the list is dots in the rail. */
 const FOLD = 'app.sidebar'
-/** How a session's machine is described while it isn't connected; anything else is offline. */
+/** How a project's machine is described while it isn't connected; anything else is offline. */
 const STATE_WORDS: Partial<Record<MachineEntry['state'], string>> = { connecting: 'connecting', 'needs-login': 'needs login', 'host-key': 'host key to check', disabled: 'off' }
 
 /** Settings and commands act through the app's settings, so every window and the menu agree. */
@@ -53,18 +53,18 @@ export default defineUiExtension({
 
 function Threads() {
   const machines = useMachines().filter((m) => m.state !== 'disabled')
-  const { sessions, lastThread, hold } = useSessions()
+  const { projects, lastThread, hold } = useProjects()
   const { selection, select } = useSelection()
   // While the pointer is over the list, rows keep their places: a thread changing state doesn't move under it. The
   // order is held for the whole window, so ⌘⇧[ and ⌘⇧] go down the rows as they stand.
   useEffect(() => () => hold(false), [])
 
-  const isOn = (session: Session, thread: ThreadInfo) => selection?.machine === session.machine.id && selection.thread === thread.id
-  // The machine is a fact about a session, said where it isn't this computer (or there are several to tell apart).
+  const isOn = (project: Project, thread: ThreadInfo) => selection?.machine === project.machine.id && selection.thread === thread.id
+  // The machine is a fact about a project, said where it isn't this computer (or there are several to tell apart).
   const several = machines.length > 1
-  const where = (session: Session) => session.machine.state !== 'connected'
-    ? `${session.machine.label} · ${STATE_WORDS[session.machine.state] ?? 'offline'}`
-    : several || session.machine.id !== 'local' ? session.machine.label : undefined
+  const where = (project: Project) => project.machine.state !== 'connected'
+    ? `${project.machine.label} · ${STATE_WORDS[project.machine.state] ?? 'offline'}`
+    : several || project.machine.id !== 'local' ? project.machine.label : undefined
   const local = machines.find((m) => m.id === 'local')
   const ready = local?.state === 'connected'
 
@@ -77,33 +77,33 @@ function Threads() {
           <NewThreadButton label="New thread…" />
         </span>
       </div>
-      {sessions.length === 0 && <div className="threads__empty">{ready ? 'Start a thread in a project folder: it becomes a session here.' : 'Connecting…'}</div>}
-      {sessions.map((session) => (
-        <section key={session.key} className={`threads-session ${session.machine.state !== 'connected' ? 'is-stale' : ''}`}>
-          <div className="threads-session__head">
-            <button className="threads-session__name" title={session.root} onClick={() => showSession({ select, lastThread }, session)}>
-              {session.name}
-              {where(session) && <em>{where(session)}</em>}
-              {session.machine.remote && <MachineDrift machine={session.machine} />}
+      {projects.length === 0 && <div className="threads__empty">{ready ? 'Start a thread in a folder to see its project here.' : 'Connecting…'}</div>}
+      {projects.map((project) => (
+        <section key={project.key} className={`threads-project ${project.machine.state !== 'connected' ? 'is-stale' : ''}`}>
+          <div className="threads-project__head">
+            <button className="threads-project__name" title={project.root} onClick={() => showProject({ select, lastThread }, project)}>
+              {project.name}
+              {where(project) && <em>{where(project)}</em>}
+              {project.machine.remote && <MachineDrift machine={project.machine} />}
             </button>
-            <NewThreadButton label={`New thread in ${session.name}`} machine={session.machine} cwd={session.root} />
+            <NewThreadButton label={`New thread in ${project.name}`} machine={project.machine} cwd={project.root} />
           </div>
           <List>
-            {session.threads.map((thread) => {
-              const level = session.depth[thread.id] ?? 0
+            {project.threads.map((thread) => {
+              const level = project.depth[thread.id] ?? 0
               return (
-                <ListItem key={thread.id} selected={isOn(session, thread)} leading={<StatusGlyph status={thread.status} />}
+                <ListItem key={thread.id} selected={isOn(project, thread)} leading={<StatusGlyph status={thread.status} />}
                   {...(level ? { className: 'threads-child', style: { '--depth': level } as CSSProperties } : {})}
-                  trailing={waitingForSignIn(thread.status) ? <span className="threads__why threads__why--quiet">waiting</span> : thread.status.state === 'blocked' ? <span className="threads__why">needs you</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">failed</span> : ago(activity(thread))} onClick={() => select({ machine: session.machine.id, thread: thread.id })}>
+                  trailing={waitingForSignIn(thread.status) ? <span className="threads__why threads__why--quiet">waiting</span> : thread.status.state === 'blocked' ? <span className="threads__why">needs you</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">failed</span> : ago(activity(thread))} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
                   <span className="threads__title">{thread.title}</span>
-                  <Slot name="thread.badge" props={{ machine: session.machine, thread }} />
+                  <Slot name="thread.badge" props={{ machine: project.machine, thread }} />
                 </ListItem>
               )
             })}
           </List>
         </section>
       ))}
-      <Archived machines={machines} live={sessions} />
+      <Archived machines={machines} live={projects} />
     </div>
   )
 }
@@ -112,7 +112,7 @@ function Threads() {
  * Threads put away, from every machine and project in one list, newest activity first; folded until opened. Picking one
  * shows it, read only; its Unarchive button brings it back.
  */
-function Archived({ machines, live }: { machines: MachineEntry[]; live: Session[] }) {
+function Archived({ machines, live }: { machines: MachineEntry[]; live: Project[] }) {
   const [open, setOpen] = useLocalState('threads.archived.open', false)
   const { selection, select } = useSelection()
   const [threads, setThreads] = useState<{ machine: MachineEntry; thread: ThreadInfo }[]>()
@@ -144,7 +144,7 @@ function Archived({ machines, live }: { machines: MachineEntry[]; live: Session[
                 selected={selection?.machine === machine.id && selection.thread === thread.id}
                 onClick={() => select({ machine: machine.id, thread: thread.id })}>
                 {thread.title}
-                <em className="threads-archived__where">{thread.session?.name ?? thread.cwd.split('/').filter(Boolean).at(-1)}{machine.id !== 'local' ? ` · ${machine.label}` : ''}</em>
+                <em className="threads-archived__where">{thread.project?.name ?? thread.cwd.split('/').filter(Boolean).at(-1)}{machine.id !== 'local' ? ` · ${machine.label}` : ''}</em>
               </ListItem>
             ))}
           </List>
@@ -153,7 +153,7 @@ function Archived({ machines, live }: { machines: MachineEntry[]; live: Session[
   )
 }
 
-/** +: the New thread dialog, in a session's folder on its machine when given one. */
+/** +: the New thread dialog, in a project's folder on its machine when given one. */
 function NewThreadButton({ label, machine, cwd }: { label: string; machine?: MachineEntry; cwd?: string }) {
   const { newThread } = useShell()
   return (
@@ -195,14 +195,14 @@ function Options() {
  * Something unread you can't see from here shows as a dot on the button, in the most pressing one's colour.
  */
 function ThreadsRail({ open, folded: sidebarFolded, show }: SpaceRailProps) {
-  const { sessions } = useSessions()
+  const { projects } = useProjects()
   const { selection, select } = useSelection()
   const folded = open && sidebarFolded
   const toggleKeys = useShortcut(FOLD)
-  const waiting = sessions.flatMap((s) => s.threads.filter((t) => unread(t) && !(s.machine.id === selection?.machine && t.id === selection.thread)).map((t) => t.status))
+  const waiting = projects.flatMap((s) => s.threads.filter((t) => unread(t) && !(s.machine.id === selection?.machine && t.id === selection.thread)).map((t) => t.status))
   const badge = !folded && waiting.length ? rollup(waiting).state : undefined
   const click = () => show(!open || folded)
-  const isOn = (session: Session, thread: ThreadInfo) => selection?.machine === session.machine.id && selection.thread === thread.id
+  const isOn = (project: Project, thread: ThreadInfo) => selection?.machine === project.machine.id && selection.thread === thread.id
   return (
     <TooltipProvider>
       <Tooltip content={`Threads: ${!open ? 'show' : folded ? 'show the list' : 'fold to dots'}${toggleKeys ? ` (${toggleKeys})` : ''}`} side="right">
@@ -213,13 +213,13 @@ function ThreadsRail({ open, folded: sidebarFolded, show }: SpaceRailProps) {
       </Tooltip>
       {folded && (
         <nav className="threads-rail" aria-label="Threads">
-          {sessions.map((session, index) => (
-            <div key={session.key} className="threads-rail__group">
+          {projects.map((project, index) => (
+            <div key={project.key} className="threads-rail__group">
               {index > 0 && <div className="threads-rail__sep" />}
-              {session.threads.map((thread) => (
+              {project.threads.map((thread) => (
                 <Tooltip key={thread.id} side="right" content={<>{thread.title}<small className="threads-rail__tipnote">{waitingForSignIn(thread.status) ? 'waiting for sign-in' : thread.status.state === 'blocked' ? 'needs you' : ago(activity(thread))}</small></>}>
-                  <button className={`threads-rail__dot ${isOn(session, thread) ? 'is-on' : ''} ${session.machine.state !== 'connected' ? 'is-stale' : ''}`}
-                    aria-label={`${thread.title}, ${thread.status.state}`} onClick={() => select({ machine: session.machine.id, thread: thread.id })}>
+                  <button className={`threads-rail__dot ${isOn(project, thread) ? 'is-on' : ''} ${project.machine.state !== 'connected' ? 'is-stale' : ''}`}
+                    aria-label={`${thread.title}, ${thread.status.state}`} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
                     <StatusGlyph status={thread.status} />
                   </button>
                 </Tooltip>

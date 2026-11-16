@@ -9,7 +9,7 @@ Superego was a framework with a generator (`superego new`, each app its own buil
 - **One app** (`app/`): the desktop app, its daemon and the `superego` command. No generator, no per-app builds.
 - **Profiles** (§3b): `profile.ts` (`defineProfile` from `'superego'`) in `~/.superego/profiles/<name>` or `<repo>/.superego/profiles/<name>`, with a model, a prompt, agent extensions (tools, prompt sections, hooks) and UI extensions. A thread takes its folder's profile when it starts; a project's profile runs only once allowed.
 - **Web and phone** (§3c): a machine's daemon serves the same window to browsers (Web access), over a WebSocket open to paired devices and the owner's Tailscale login; narrow windows get a phone layout, and it installs as a PWA.
-- **Sessions, threads, panes** (§3d, 2026-11-09): a session is a project on a machine; it holds threads (conversations, each in the folder or a worktree of its own); a thread holds panes beside it. Navigation follows Fut; focus follows Tremolo.
+- **Projects, threads, panes** (§3d, 2026-11-09): a project is a repository or folder on a machine; it holds threads (conversations, each in the folder or a worktree of its own); a thread holds panes beside it. Navigation follows Fut; focus follows Tremolo.
 - Packaging the one app (`pnpm --filter superego package`) builds a signed `superego.app`.
 
 Principle 6 below (no network listener) gave way: Web access is a network listener, off by default, on loopback; `tailscale serve` takes it to the tailnet with HTTPS. Devices pair one by one; the owner's Tailscale login gets in by name.
@@ -97,7 +97,7 @@ clients.watch                             → snapshot + clients.changed (id, ki
 client.perform {client, action, params}   → the other client gets client.perform and runs its own window action (navigation only)
 thread.list {archived?}                   agent.models
 thread.watch {id}                         → snapshot + watch.ops (Chord delta ops)
-threads.watch                             → snapshot + threads.changed (status, model, cost, activeAt, session, worktree, panes)
+threads.watch                             → snapshot + threads.changed (status, model, cost, activeAt, project, worktree, panes)
 file.read / file.find / file.watch {id, path} → file.changed      git.diff {id} (git)
 profile.ui / profile.module               settings.watch          value.watch {key} → value.changed
 action.list / action.run {id, params, exposure} / action.log            unwatch {sub}
@@ -122,13 +122,13 @@ Reads and streams (`*.list`, `*.watch`) stay plain methods. Everything that chan
 
 ```
 Machine
-└─ Session (derived: a project, by the folder threads belong to; a repository's main checkout holds its worktrees)
+└─ Project (derived: by the folder threads belong to; a repository's main checkout holds its worktrees)
    └─ Thread (= pi-durable conversation + folder + title + profile + worktree? + panes)
       ├─ Pane (a kind and its params: kept with the thread, so every client shows the same)
       └─ child threads (subagents; die with parent unless detached)
 ```
 
-Sessions aren't stored: each thread keeps the project it belongs to, and clients group by it. What a client shows and where its focus is (the selected thread, a draft, an editor's scroll) are the client's own.
+Projects aren't stored: each thread keeps the project it belongs to, and clients group by it. What a client shows and where its focus is (the selected thread, a draft, an editor's scroll) are the client's own.
 
 ---
 
@@ -162,7 +162,7 @@ As built (2026-11-04). An extension is a package with up to two halves, imported
 - `superego.appSettings(section)`: the UI half's own settings, kept by the app
 - `superego.action(defineAction({ id, title, keys, when, run }))`: window actions, for keys and the ⌘K palette (offered while `when` holds); `superego.dispatch` runs any action
 - `superego.store(key, initial, { persist })`: the extension's window state, for its actions and components
-- Hooks: `useMachines`, `useThreads`, `useSessions`, `useSelection`, `useSidebar`, `useThreadView`, `useValue`, `useAppSetting`, `useLocalState`, `useComposerClaim`, `useDispatch`, `useShortcut`, `call`, `has`.
+- Hooks: `useMachines`, `useThreads`, `useProjects`, `useSelection`, `useSidebar`, `useThreadView`, `useValue`, `useAppSetting`, `useLocalState`, `useComposerClaim`, `useDispatch`, `useShortcut`, `call`, `has`.
 - Components: `Markdown`, `FileEditor` (live preview, saves as you type, follows its file on disk; links, bar actions and what goes below are the caller's).
 
 **Kit:** `@superego/ui` (Base UI underneath for dialog, menu, popover and tooltip) and its tokens.
@@ -170,7 +170,7 @@ As built (2026-11-04). An extension is a package with up to two halves, imported
 **Trust:** in-process, like pi. A sandboxed tier comes later, for agent-written UI.
 
 **Bundled extensions:**
-- `threads`: the sidebar (sessions and their threads), with sort, rail and details modes
+- `threads`: the sidebar (projects and their threads), with sort, rail and details modes
 - `files`: the file tree beside the editor, and quick open (⌘P)
 - `ask-user`: a tool, the blocked status, and the question in the composer
 - `terminal`: a shell beside a thread (below)
@@ -217,14 +217,14 @@ Every intent is an action: an id, a title, a params schema (pi-schema), where it
 - **Phones:** under 760px wide, one column: a bar with the threads in a drawer, the composer at the bottom, full-screen dialogs. A web manifest and icons for the home screen.
 - Not yet: a service worker for offline, the desktop app as a wrapper of a remote daemon's web UI.
 
-## 3d. Sessions, threads, panes
+## 3d. Projects, threads, panes
 
-The window's model, after Fut: **session → thread → pane**.
+The window's model, after Fut: **project → thread → pane**.
 
-- **A session** is a project on a machine: a git repository (worktrees included) or a folder. The machine is a fact about it, not a level above it. The sidebar lists sessions and their threads; ⌘⇧[ ⌘⇧] go between sessions, to the thread last shown in each.
+- **A project** is a git repository (worktrees included) or a folder, on a machine. The machine is a fact about it, not a level above it. The sidebar lists projects and their threads; ⌘⇧[ ⌘⇧] go between projects, to the thread last shown in each.
 - **A thread** is a conversation, by topic. It works in the folder it's started in, or (asked for when starting: the dialog's checkbox, `superego -w`, a profile's `worktree: true`) in a worktree of its own under `~/.superego/worktrees/<repo>/<slug>` on branch `superego/<slug>`. Archiving removes a clean worktree and keeps the branch; unarchiving brings it back.
 - **Panes** are views beside a thread, kept with it, laid out one of two ways (the app setting Panes, switched from the strip's icons or ⌘⇧\\; Scroll to start). **Scroll:** the thread and its panes are a row of columns scrolled sideways (Dinky's scrolling layout): a lone thread fills the width; each column has its own width, dragged at its edge; the focused column scrolls just far enough to show. **Stack:** the thread, and beside it one column its panes share, one in front at a time, so the row never passes the window's edge; the strip's tabs choose it, and a pane comes to the front as it gets the focus (a click, ⌃Tab, ⌘⌥←/→, the navigator, `pane.focus` from anywhere) or opens. ⌃Tab moves along. On a phone, either way, each column is the screen's width.
-- **Navigation:** ⌘L is the navigator (sessions, threads and panes as one searchable tree), ⌘K commands only, ⌘. the next unread thread, ⌘/ the sidebar (its button stays put, open or closed), ⌘P a file.
+- **Navigation:** ⌘L is the navigator (projects, threads and panes as one searchable tree), ⌘K commands only, ⌘. the next unread thread, ⌘/ the sidebar (its button stays put, open or closed), ⌘P a file.
 - **Focus** (after Tremolo): always visible: the region holding it wears one solid ring, its own border, and nothing inside it does but a small control reached from the keyboard. The window is a row of regions (sidebar, thread, panes); ⌘⌥← ⌘⌥→ move between them, ⌃I goes to the prompt; focus moving into a pane makes it the focused one.
 - **Files:** the editor shows Markdown in live preview and follows its file on disk (`file.watch`); files named in a thread open beside it in the pane kind that takes them; messages carry attachments (images to the model as images, every file saved on the thread's machine).
 - **The window's own state** (the selection, Settings, drafts, editors' places) survives a reload; it's never on a machine.

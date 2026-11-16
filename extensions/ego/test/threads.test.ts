@@ -41,7 +41,7 @@ it('lets Ego hand work to a thread of its own: top-level in its project, listed,
   const ego = await peer.call<ThreadInfo>('ego.ask', { prompt: 'turn on web access' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {})).length === 1)
   const [started] = await peer.call<ThreadInfo[]>('thread.list', {})
-  expect(started).toMatchObject({ title: 'Web', cwd: project, session: { root: project } })
+  expect(started).toMatchObject({ title: 'Web', cwd: project, project: { root: project } })
   expect(started!.parent).toBeUndefined()
   await until(async () => (await egoOf(peer))!.status.state === 'done')
   const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: ego.id })

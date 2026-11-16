@@ -10,7 +10,7 @@ import { ARTIFACT, PREVIEW } from '../src/shared.ts'
 const app = defineApp({ name: 'superego', id: 'superego' })
 const profile = { scope: 'user' as const, name: 'default', dir: '/home/me/.superego/profiles/default' }
 const thread = (more: Partial<ThreadInfo> = {}): ThreadInfo => ({
-  id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, session: { root: '/', name: '/' }, status: { state: 'idle' }, ...more,
+  id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' }, ...more,
 })
 const View = () => null
 

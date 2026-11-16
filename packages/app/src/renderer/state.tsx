@@ -13,7 +13,7 @@ import { emptyHistory, step, visit, type History, type Place } from './history.t
 import { setLocalState, useLocalState } from './local-state.ts'
 import { focusProvider } from './provider-focus.ts'
 import { useWindowEvents } from './window-events.ts'
-import { freeze, sessionKey, useSessionList, type Session } from './sessions.ts'
+import { freeze, projectKey, useProjectList, type Project } from './projects.ts'
 import { isFolded, showSidebar, TIGHT, type SidebarMode } from './sidebar-mode.ts'
 
 /** The thread the window shows: its machine's id and its own. */
@@ -36,11 +36,11 @@ type ShellState = {
   openSettings(open?: boolean): void
   newThread: NewThreadStart | undefined
   openNewThread(start?: NewThreadStart | false): void
-  /** Every session, in the sidebar's order; held still while `hold` says so. */
-  sessions: Session[]
+  /** Every project, in the sidebar's order; held still while `hold` says so. */
+  projects: Project[]
   /** Hold the order still (the pointer is over the sidebar), or let it follow activity again. */
   hold(held: boolean): void
-  /** The thread last shown in a session, by its key. */
+  /** The thread last shown in a project, by its key. */
   lastThread: Record<string, string>
   /** Whether the sidebar is folded (see sidebar-mode.ts). */
   sidebarFolded: boolean
@@ -84,10 +84,10 @@ export function useSelection() {
   /** `hidden`: the thread is one no list shows (an extension's own, like Ego's). `listed`: the listed one last selected. */
   return { selection, select, machine, thread, hidden: Boolean(own), listed }
 }
-/** Every session, in the sidebar's order, and the thread last shown in each. */
-export function useSessions() {
-  const { sessions, lastThread, hold } = useShellState()
-  return { sessions, lastThread, hold }
+/** Every project, in the sidebar's order, and the thread last shown in each. */
+export function useProjects() {
+  const { projects, lastThread, hold } = useShellState()
+  return { projects, lastThread, hold }
 }
 /** Whether the sidebar is folded, and a way to show it in full or fold it (`show()` the other way). */
 export function useSidebar() {
@@ -143,15 +143,15 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   useImageRechecks(threads)
   // One order for the sidebar and everything that walks it (⌘⇧[ ⌘⇧], the navigator): held, a thread changing state
   // doesn't move under the pointer, nor out from under the next press.
-  const live = useSessionList(machines, threads)
+  const live = useProjectList(machines, threads)
   const [held, hold] = useState(false)
   const frozen = useRef(live)
   if (!held) frozen.current = live
-  const sessions = useMemo(() => held ? freeze(frozen.current, live) : live, [held, live])
-  // Each session remembers the thread last shown in it: going back to the session goes back to that thread.
-  const [lastThread, setLastThread] = useLocalState<Record<string, string>>('sessions.last', {})
+  const projects = useMemo(() => held ? freeze(frozen.current, live) : live, [held, live])
+  // Each project remembers the thread last shown in it: going back to the project goes back to that thread.
+  const [lastThread, setLastThread] = useLocalState<Record<string, string>>('projects.last', {})
   const shown = selection && threads[selection.machine]?.find((t) => t.id === selection.thread)
-  const shownKey = shown && sessionKey(selection!.machine, shown.session?.root ?? shown.cwd)
+  const shownKey = shown && projectKey(selection!.machine, shown.project?.root ?? shown.cwd)
   useEffect(() => {
     if (shownKey && lastThread[shownKey] !== shown!.id) setLastThread((last) => ({ ...last, [shownKey]: shown!.id }))
   }, [shownKey, shown?.id])
@@ -189,7 +189,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const exists = (p: Place) => 'settings' in p || Boolean(hiddenAll[p.thread.machine]?.some((t) => t.id === p.thread.thread))
     || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread))
   const value = useMemo<ShellState>(() => ({
-    machines, threads, rejections, selection, settingsOpen, newThread, sessions, hold, lastThread, sidebarFolded: isFolded(sidebarMode, tight), archived, hidden, listed,
+    machines, threads, rejections, selection, settingsOpen, newThread, projects, hold, lastThread, sidebarFolded: isFolded(sidebarMode, tight), archived, hidden, listed,
     canBack: Boolean(step(history, -1, place, exists)),
     canForward: Boolean(step(history, 1, place, exists)),
     go: (by) => {
@@ -209,7 +209,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setSidebarOpen(next.open)
       setSidebarUnfolded(next.unfolded)
     },
-  }), [machines, threads, rejections, selection, settingsOpen, newThread, sessions, lastThread, sidebarOpen, sidebarUnfolded, tight, archived, hidden, hiddenAll, history, listed])
+  }), [machines, threads, rejections, selection, settingsOpen, newThread, projects, lastThread, sidebarOpen, sidebarUnfolded, tight, archived, hidden, hiddenAll, history, listed])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onHidden={onHidden} onRejections={onRejections} />)}

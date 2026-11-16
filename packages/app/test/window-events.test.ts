@@ -8,7 +8,7 @@ import { rejectionChanges, statusChanges, type Statuses } from '../src/renderer/
 const app = defineApp({ name: 'superego', id: 'superego' })
 const profile = { scope: 'user' as const, name: 'default', dir: '/home/me/.superego/profiles/default' }
 const thread = (id: string, state: Status['state'], more: Partial<ThreadInfo> = {}): ThreadInfo => ({
-  id, title: id, cwd: '/', createdAt: 0, activeAt: 0, session: { root: '/', name: '/' }, status: { state }, ...more,
+  id, title: id, cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state }, ...more,
 })
 
 /** An extension that writes down what it hears. */

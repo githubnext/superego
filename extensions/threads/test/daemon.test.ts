@@ -163,8 +163,8 @@ it('is a switch of its own in Settings: off, the agent goes without the tools', 
 /** The tools against a made-up set of threads. */
 function host(): ThreadsHost & { threads: ThreadInfo[]; sent: [string, string][]; archived: string[] } {
   const thread = (id: string, title: string, extra: Partial<ThreadInfo> = {}): ThreadInfo =>
-    ({ id, title, cwd: '/p', createdAt: 0, activeAt: 0, session: { root: '/p', name: 'p' }, status: { state: 'idle' }, ...extra })
-  const threads = [thread('1', 'Parent'), thread('2', 'Child [one]', { parent: '1', status: { state: 'working' } }), thread('3', 'Elsewhere', { session: { root: '/q', name: 'q' } })]
+    ({ id, title, cwd: '/p', createdAt: 0, activeAt: 0, project: { root: '/p', name: 'p' }, status: { state: 'idle' }, ...extra })
+  const threads = [thread('1', 'Parent'), thread('2', 'Child [one]', { parent: '1', status: { state: 'working' } }), thread('3', 'Elsewhere', { project: { root: '/q', name: 'q' } })]
   const sent: [string, string][] = []
   const archived: string[] = []
   return {

@@ -189,7 +189,7 @@ export function threadTools(host: ThreadsHost) {
           const self = await here(api.conversationId)
           const place = placeOf(host, machine)
           const all = await place.list()
-          const others = place.away ? all.slice(0, 30) : all.filter((t) => t.session.root === self.session.root && t.id !== self.id)
+          const others = place.away ? all.slice(0, 30) : all.filter((t) => t.project.root === self.project.root && t.id !== self.id)
           const parentOf = (t: ThreadInfo) => all.find((p) => p.id === t.parent)
           return text(others.length ? others.map((t) => `- ${lineOf(t, place.name)}${parentOf(t) ? `, started by ${place.name(parentOf(t)!)}` : ''}`).join('\n') : `No other threads ${place.away ? `on ${place.away}` : 'here'}.`)
         },

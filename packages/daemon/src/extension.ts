@@ -107,7 +107,7 @@ export type SubmitTransform = (message: OutgoingMessage) => MessageBlock[] | voi
 export type ThreadDraft = {
   /** The folder it would work in: as asked, or as a hook before this one changed it. */
   cwd: string
-  /** Its session: the project it belongs to (a repository's main checkout, or the folder). */
+  /** Its project: the repository it belongs to (by its main checkout), or the folder. */
   root: string
   /** The repository the asked-for folder is in: its checkout's top, and the main checkout. */
   checkout?: { top: string; root: string }

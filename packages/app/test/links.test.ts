@@ -11,7 +11,7 @@ import { Markdown } from '../src/renderer/Markdown.tsx'
 const app = defineApp({ name: 'superego', id: 'superego' })
 const profile = { scope: 'user' as const, name: 'obsidian', dir: '/home/me/.superego/profiles/obsidian' }
 const thread = (withProfile = false): ThreadInfo => ({
-  id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, session: { root: '/', name: '/' }, status: { state: 'idle' },
+  id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' },
   ...(withProfile ? { profile } : {}),
 })
 const inThread = (withProfile = false): LinkWhere => ({ machine: 'local', thread: thread(withProfile), openFile: async () => undefined })

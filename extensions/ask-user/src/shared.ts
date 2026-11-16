@@ -16,4 +16,4 @@ export type Question = { id: string; thread: string; question: string; options: 
 export type AskDetails = { id: string; question: string; options: Option[]; answer?: string }
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
-export const about = { name: 'ask-user', version: '2.0.0', api: '^1.2', title: 'Ask the user', description: 'Put a question to you and wait for the answer.' } satisfies ExtensionAbout
+export const about = { name: 'ask-user', version: '2.0.0', api: '^2', title: 'Ask the user', description: 'Put a question to you and wait for the answer.' } satisfies ExtensionAbout

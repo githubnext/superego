@@ -76,7 +76,7 @@ type ThreadMeta = {
   /** The panes open beside it, and the one in front. */
   panes?: Pane[]
   pane?: string
-  /** Its session: the project folder it belongs to (a repository's main checkout, or where it started). */
+  /** Its project: the folder it belongs to (a repository's main checkout, or where it started). */
   root?: string
   /** In no list: an extension's own thread, opened by id. */
   hidden?: boolean
@@ -458,14 +458,14 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * can do without it. Set up first, through the same API as the bundled ones.
    */
   const core: DaemonExtension[] = [
-    { name: 'coding-tools', version: '1.0.0', api: '^1', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools()) },
+    { name: 'coding-tools', version: '1.0.0', api: '^2', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools()) },
     {
       // How messages show is the window's, not something to turn off.
-      name: 'markdown', version: '1.0.0', api: '^1', title: 'Markdown', description: 'Know how the thread shows messages, and write for it.', required: true,
+      name: 'markdown', version: '1.0.0', api: '^2', title: 'Markdown', description: 'Know how the thread shows messages, and write for it.', required: true,
       setup: (s) => s.agent(defineExtension({ name: 'markdown', sections: [section('markdown', () => MARKDOWN_PROMPT)] })),
     },
     {
-      name: 'panes', version: '1.0.0', api: '^1', title: 'Panes', description: 'Open panes beside a thread: files, other threads, and the kinds extensions add.',
+      name: 'panes', version: '1.0.0', api: '^2', title: 'Panes', description: 'Open panes beside a thread: files, other threads, and the kinds extensions add.',
       setup(s) {
         s.agent(panesPart)
         // The window's built-in kinds (its panes.tsx); extensions describe their own (git's Changes, web-panes').
@@ -474,7 +474,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       },
     },
     {
-      name: 'agents-md', version: '1.0.0', api: '^1', title: 'AGENTS.md', description: 'Follow the standing instructions in AGENTS.md files.',
+      name: 'agents-md', version: '1.0.0', api: '^2', title: 'AGENTS.md', description: 'Follow the standing instructions in AGENTS.md files.',
       setup: (s) => s.agent(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] })),
     },
   ]
@@ -621,7 +621,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     ...(m.meta.model || m.meta.thinking ? { chosen: { ...(m.meta.model ? { model: m.meta.model } : {}), ...(m.meta.thinking ? { thinking: m.meta.thinking } : {}) } } : {}),
     ...(m.meta.profile ? { profile: m.meta.profile } : {}),
     ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),
-    session: { root: rootOf(m), name: basename(rootOf(m)) },
+    project: { root: rootOf(m), name: basename(rootOf(m)) },
     ...factsInfo(id, m.meta, without),
     ...(m.meta.archived ? { archived: true } : {}),
     ...(m.meta.hidden ? { hidden: true, ...(m.meta.owner ? { owner: m.meta.owner } : {}) } : {}),
@@ -699,7 +699,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     return Object.keys(ext).length ? { ext } : {}
   }
-  /** A thread's session, kept since it started (the folder, for a thread there's no record of). */
+  /** A thread's project, kept since it started (the folder, for a thread there's no record of). */
   const rootOf = (m: Mounted) => m.meta.root ?? m.meta.cwd
   /** Only an assistant answer makes a thread "done"; the user's own message does not. */
   const lastAnswer = (m: Mounted) => m.live?.run ? undefined : m.lastEntryId
@@ -1768,7 +1768,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     // None for an extension's own thread: it runs as that extension makes it, whatever profiles say.
     const ref = hidden ? undefined : findProfile(dir, userProfiles, profileName?.trim() || undefined)
     const loaded = ref ? await profileOf(ref) : undefined
-    // Its session is the project; where in it it works is the folder given, unless a hook moves it.
+    // Its project is the checkout (or folder) it starts in; where in it it works is the folder given, unless a hook moves it.
     const checkout = await checkoutOf(dir)
     const draft: ThreadDraft = {
       cwd: dir, root: checkout?.root ?? dir, ...(checkout ? { checkout } : {}), title: title?.trim() ?? '',
@@ -2458,7 +2458,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     description: 'Your own, and those of the projects you have threads in.',
     data: async () => {
       const found = new Map<string, ProfileRef>()
-      for (const folder of new Set([defaultCwd, ...(await list()).map((t) => t.session.root)])) {
+      for (const folder of new Set([defaultCwd, ...(await list()).map((t) => t.project.root)])) {
         for (const ref of listProfiles(folder, userProfiles)) found.set(ref.dir, ref)
       }
       return Promise.all([...found.values()].map((ref) => describeProfile(ref, userProfiles, trust)))

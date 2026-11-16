@@ -8,7 +8,7 @@ import type { ProfileMcpServer } from '@superego/daemon/sdk'
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
 export const about = {
-  name: 'mcp-servers', version: '1.0.0', api: '^1.7', title: 'MCP servers',
+  name: 'mcp-servers', version: '1.0.0', api: '^2', title: 'MCP servers',
   description: "Give agents other people's tools: the MCP servers this machine runs or reaches, signed in to once.",
 } satisfies ExtensionAbout
 

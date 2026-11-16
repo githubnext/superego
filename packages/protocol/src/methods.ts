@@ -56,8 +56,8 @@ export type ThreadInfo = {
   pane?: string
   /** The profile it runs with: one of the project's, or one of the user's. Absent: plain Superego. */
   profile?: ProfileRef
-  /** The session it belongs to, on its machine: a project, by the folder it lives in (a repository's main checkout). */
-  session: { root: string; name: string }
+  /** The project it belongs to, on its machine: a repository (by its main checkout, worktrees included) or a folder. */
+  project: { root: string; name: string }
   /** The thread that started it, if one did (an agent's thread_start, say): it shows nested under that one. */
   parent?: ThreadId
   /** Put away: listed only with `archived`, readable, and taking no messages until unarchived. */
@@ -376,5 +376,5 @@ export type Client = {
  * machine's daemon (see the app's perform.ts).
  */
 export const PERFORMABLE: ReadonlySet<string> = new Set([
-  'thread.select', 'thread.next', 'thread.previous', 'thread.unread', 'session.next', 'session.previous', 'pane.next', 'pane.previous',
+  'thread.select', 'thread.next', 'thread.previous', 'thread.unread', 'project.next', 'project.previous', 'pane.next', 'pane.previous',
 ])

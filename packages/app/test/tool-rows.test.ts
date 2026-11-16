@@ -8,7 +8,7 @@ import { createRegistry, defineUiExtension, toolRow, toolView, unfoldedTool, typ
 import { DescribedCall, describeRun, mainKind, registerToolRows, statOf } from '../src/renderer/tool-rows.tsx'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
-const thread: ThreadInfo = { id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, session: { root: '/', name: '/' }, status: { state: 'idle' } }
+const thread: ThreadInfo = { id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' } }
 const where = { machine: 'local', thread }
 const machine = { id: 'local', label: 'This Mac', state: 'connected' } as never
 const call = (name: string, args: Record<string, unknown>, more: Partial<ToolRowCall> = {}): ToolRowCall =>

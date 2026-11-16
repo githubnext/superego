@@ -72,7 +72,7 @@
    whatever it holds. Nor does anything in it come and go with the pointer: what fits shows. */
 .titlebar__crumb { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 0 1 auto; font-weight: 500; }
 .titlebar__seg { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border-radius: 6px; white-space: nowrap; min-width: 0; }
-.titlebar__session { color: var(--superego-muted); flex: none; max-width: 30%; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 26px; }
+.titlebar__project { color: var(--superego-muted); flex: none; max-width: 30%; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 26px; }
 .titlebar__dot { margin: 0 5px; color: var(--superego-faint); }
 .titlebar__sep { color: var(--superego-faint); font-size: var(--superego-text-sm); }
 .titlebar__title { color: var(--superego-text); }
@@ -499,7 +499,7 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .app__scrim--sheet { z-index: 30; }
 .thread-sheet { position: fixed; z-index: 31; left: 0; right: 0; bottom: 0; max-height: 85dvh; overflow: auto; padding: var(--superego-space-4) var(--superego-space-4) calc(env(safe-area-inset-bottom) + var(--superego-space-4)); background: var(--superego-bg); border-radius: 14px 14px 0 0; box-shadow: var(--superego-shadow-float); display: flex; flex-direction: column; gap: var(--superego-space-4); }
 .thread-sheet__head { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.thread-sheet__session { font-size: var(--superego-text-sm); color: var(--superego-muted); }
+.thread-sheet__project { font-size: var(--superego-text-sm); color: var(--superego-muted); }
 .thread-sheet__title { display: flex; align-items: center; gap: 8px; font-weight: 600; overflow-wrap: anywhere; }
 .thread-sheet__title > .superego-status { flex: none; }
 .thread-sheet__tools .thread__tools { display: flex; flex-wrap: wrap; row-gap: var(--superego-space-2); }
@@ -714,7 +714,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 
 
 /* The navigator (⌘L): the palette's list, as a tree. */
-.navigator__row--session .palette__title { font-weight: 600; }
+.navigator__row--project .palette__title { font-weight: 600; }
 .navigator__row--pane .palette__title { color: var(--superego-muted); }
 .navigator__row.is-current .palette__title::after { content: ' ·'; color: var(--superego-accent); }
 .navigator__crumb { color: var(--superego-faint); font-size: var(--superego-text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }

@@ -8,7 +8,7 @@ import { EXTENSION_API } from '@superego/protocol'
 
 export type StarterKind = 'data-only' | 'ui'
 
-/** The extension API a new extension asks for: this one's minor (`^1.2`). */
+/** The extension API a new extension asks for: this one's minor (`^2.0`). */
 const apiRange = () => `^${EXTENSION_API.split('.').slice(0, 2).join('.')}`
 
 const words = (name: string) => name.split('-')

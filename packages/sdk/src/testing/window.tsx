@@ -57,7 +57,7 @@ export type FakeMachineOptions = {
 export function testThread(thread: Partial<ThreadInfo> = {}): ThreadInfo {
   const id = thread.id ?? `t${++threads}`
   return {
-    id, title: `Thread ${id}`, cwd: '/work', createdAt: 0, activeAt: 0, session: { root: '/work', name: 'work' }, status: { state: 'idle' },
+    id, title: `Thread ${id}`, cwd: '/work', createdAt: 0, activeAt: 0, project: { root: '/work', name: 'work' }, status: { state: 'idle' },
     ...thread,
   }
 }
@@ -327,7 +327,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     shell = { select, ...(selection ? { selection } : {}), threads: all }
     registry.router.setContext({
       app, machines: list, selection, select, openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, showLog() {},
-      threadOf: (s) => all[s.machine]?.find((t) => t.id === s.thread), sessions: [], lastThread: {},
+      threadOf: (s) => all[s.machine]?.find((t) => t.id === s.thread), projects: [], lastThread: {},
       appSetting: (key) => appValues[key] as never, toggleSidebar() {}, back() {}, forward() {},
     })
     return <>{children}</>

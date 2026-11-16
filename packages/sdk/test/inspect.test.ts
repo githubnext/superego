@@ -13,7 +13,7 @@ const profile = (queue: string) => ({
   'queue.ts': queue,
 })
 const QUEUE = `import { defineDaemonExtension, defineAction } from 'superego'
-export default defineDaemonExtension({ name: 'queue', version: '1.0.0', api: '^1.2', setup(superego) {
+export default defineDaemonExtension({ name: 'queue', version: '1.0.0', api: '^2', setup(superego) {
   superego.scopedValue('queue.items', [])
   superego.method('queue.read', () => null)
   superego.action(defineAction({ id: 'queue.show', title: 'Show', runs: 'machine', keys: 'mod+shift+q', run: () => null }))
@@ -28,7 +28,7 @@ it('reports what each extension is, has registered and has watched; and what a t
   const watch = await daemon.watch('queue.items', { scope: thread.id })
   const report = await daemon.call<ExtensionsReport>('extensions.inspect', { thread: thread.id })
   const queue = report.extensions.find((e) => e.name === 'queue')!
-  expect(queue).toMatchObject({ version: '1.0.0', api: '^1.2', source: 'profile', state: 'set up', profiles: ['user:default'] })
+  expect(queue).toMatchObject({ version: '1.0.0', api: '^2', source: 'profile', state: 'set up', profiles: ['user:default'] })
   expect(queue.file).toMatch(/queue\.ts$/)
   expect(queue.registered).toMatchObject({
     values: ['queue.items (scoped)'], methods: ['queue.read'], actions: ['queue.show (mod+shift+q)'], views: ['queue.list (aside; from queue.items)'],
@@ -43,10 +43,10 @@ it('reports what each extension is, has registered and has watched; and what a t
 })
 
 it("says why one isn't set up: refused for the API it needs, or failed, with the profile it broke", async () => {
-  daemon = await testDaemon({ profile: profile(QUEUE.replace("api: '^1.2'", "api: '^9'")) })
+  daemon = await testDaemon({ profile: profile(QUEUE.replace("api: '^2'", "api: '^9'")) })
   await expect(daemon.reload()).rejects.toThrow(/needs extension API \^9/)
   let report = await daemon.call<ExtensionsReport>('extensions.inspect')
-  expect(report.extensions.find((e) => e.name === 'queue')).toMatchObject({ state: 'refused', error: expect.stringMatching(/needs extension API \^9, and this Superego has 1\.\d+\.\d+/) })
+  expect(report.extensions.find((e) => e.name === 'queue')).toMatchObject({ state: 'refused', error: expect.stringMatching(/needs extension API \^9, and this Superego has 2\.\d+\.\d+/) })
   expect(report.profiles).toEqual([expect.objectContaining({ name: 'default', state: 'failed', error: expect.stringMatching(/\^9/) })])
   // Fixed, and loaded: it's set up, and no longer reported as refused.
   await daemon.edit('queue.ts', QUEUE.replace("superego.method('queue.read', () => null)", "throw new Error('broke on purpose')"))

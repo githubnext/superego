@@ -1,4 +1,4 @@
-// How the sidebar reads times, without React. Its order is the app's (sessions.ts in @superego/app).
+// How the sidebar reads times, without React. Its order is the app's (projects.ts in @superego/app).
 import type { ThreadInfo } from '@superego/protocol'
 
 /** When a thread last did something; a daemon from before last-activity was reported gives its creation. */

@@ -20,6 +20,6 @@ export type AskDetails = Spec & { id: string; answer?: Reply }
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
 export const about = {
-  name: 'reply-ui', version: '1.0.0', api: '^1.2', title: 'UI in replies',
+  name: 'reply-ui', version: '1.0.0', api: '^2', title: 'UI in replies',
   description: 'Let the agent reply with buttons, choices, forms, tables and pages of its own, in the transcript.',
 } satisfies ExtensionAbout

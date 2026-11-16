@@ -20,7 +20,7 @@ export type TerminalStatuses = Record<string, TerminalStatus>
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
 export const about = {
-  name: 'terminal', version: '1.0.0', api: '^1.5', title: 'Terminal',
+  name: 'terminal', version: '1.0.0', api: '^2', title: 'Terminal',
   description: 'A shell beside a thread (⌃`), run by the machine so it outlives the window.',
 } satisfies ExtensionAbout
 

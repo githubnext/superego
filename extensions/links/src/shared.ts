@@ -3,4 +3,4 @@
 import type { ExtensionAbout } from '@superego/protocol'
 
 /** What this extension is: optional, so a machine can turn it off and a profile can do without it. */
-export const about = { name: 'links', version: '1.0.0', api: '^1', title: 'Links', description: '⌃O: the links in a thread, newest first, to follow from the keyboard.' } satisfies ExtensionAbout
+export const about = { name: 'links', version: '1.0.0', api: '^2', title: 'Links', description: '⌃O: the links in a thread, newest first, to follow from the keyboard.' } satisfies ExtensionAbout

@@ -15,7 +15,7 @@ import { CommandLine } from './command-line.tsx'
 import { WebAccess } from './web-access.tsx'
 import { ConnectedClients } from './connected.tsx'
 import { Shell, ThreadPicker } from './Shell.tsx'
-import { SORT } from './sessions.ts'
+import { SORT } from './projects.ts'
 import { DEFAULT_WIDTH, MAX_WIDTH, MIN_WIDTH, SIDEBAR_WIDTH } from './sidebar-width.ts'
 import { ShellStateProvider } from './state.tsx'
 import { coreActions, defineWindowAction } from './actions.tsx'
@@ -79,7 +79,7 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
     core.appSettings({
       id: 'navigation', title: 'Navigation', order: 60,
       settings: [
-        { key: SORT, title: 'Sort sessions and threads', default: 'recent', type: 'choice', options: [
+        { key: SORT, title: 'Sort projects and threads', default: 'recent', type: 'choice', options: [
           { value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' },
         ] },
       ],

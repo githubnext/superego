@@ -24,16 +24,16 @@ Releasing, and what a Mac needs to sign and notarize: [docs/releasing.md](docs/r
 Tests, typecheck, smoke and showcase take turns across the machine (two at a time; `SUPEREGO_CHECK_SLOTS`), and smoke
 and showcase build the app only when its sources changed. See [AGENTS.md](AGENTS.md) for when to run which.
 
-## Sessions, threads, panes
+## Projects, threads, panes
 
 ```text
-session    a project on a machine: a git repository (its worktrees too) or a folder
+project    a git repository (its worktrees too) or a folder, on a machine
 └─ thread  one conversation with an agent, by topic; in the folder, or a worktree of its own
    └─ pane a view beside the thread: changes, a file, a page, a profile's own
 ```
 
-- **The machine** is a fact about a session, said where it isn't this computer. Machines are reached over ssh (or any
-  command), and a session on one works like a local one.
+- **The machine** is a fact about a project, said where it isn't this computer. Machines are reached over ssh (or any
+  command), and a project on one works like a local one.
 - **A thread** starts in the folder you give it; New thread (⌘N) starts like the thread shown: its machine, project, profile, model, thinking and worktree choice. Ask for a worktree (the New thread checkbox, `superego -w`) and it works in
   `~/.superego/worktrees/<repo>/<slug>` on branch `superego/<slug>`; archiving removes a clean worktree and keeps its branch.
   Archived threads stay readable from the sidebar's Archived list, taking no messages until you unarchive them.
@@ -81,13 +81,13 @@ session    a project on a machine: a git repository (its worktrees too) or a fol
 
 | Keys | |
 |---|---|
-| `⌘L` | Go to a session, thread or pane (the navigator, after Fut's: ←→ parent and child, `⌃S` `⌃T` `⌃P` one kind) |
+| `⌘L` | Go to a project, thread or pane (the navigator, after Fut's: ←→ parent and child, `⌃P` `⌃T` `⌃G` one kind) |
 | `⌘K` | Commands |
 | `⌘P` | Open a file in the thread's folder |
 | `⌘N` | New thread |
 | `⌘⇧N` | New window |
-| `⌘.` | Next unread thread (everywhere, or in this session: Settings → Unread) |
-| `⌘⇧[` `⌘⇧]` | Previous / next thread: up or down the sidebar's rows as shown (threads a thread started sit under it), across sessions and around |
+| `⌘.` | Next unread thread (everywhere, or in this project: Settings → Unread) |
+| `⌘⇧[` `⌘⇧]` | Previous / next thread: up or down the sidebar's rows as shown (threads a thread started sit under it), across projects and around |
 | `⌘[` `⌘]` | Back / forward through the threads (and Settings) this window has shown, as a browser goes; the arrows in the title bar and the mouse's back and forward buttons too |
 | `⌃Tab` `⌃⇧Tab` | The thread and its panes, in turn |
 | `⌘⇧\` | Panes scrolled or stacked |
@@ -121,7 +121,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `packages/blocks` | UI an agent writes as JSON blocks: the strict schema (checked by the daemon half that takes them and again in the window that draws them), the words an answer sends, and the renderer (an `html` block runs in a sandboxed frame, replying only as the user acts) |
 | `packages/app` | main process, window, preload, build and packaging; panes, the editor, the navigator; the UI half of the extension API |
 | `packages/sdk` | what an extension's author imports: `superego`, `superego/ui`, `superego/testing` (a test daemon, a test window), `superego/unstable` |
-| `extensions/threads` | the sidebar: sessions and their threads; the thread tools' rows and `thread:` links (UI; required). Its daemon half is `thread-tools`, the agent's `thread_*` tools (optional), and `thread-reports`: a thread started by another tells it when what it was asked finishes, fails or waits on a question, until the user takes it over by writing to it (optional) |
+| `extensions/threads` | the sidebar: projects and their threads; the thread tools' rows and `thread:` links (UI; required). Its daemon half is `thread-tools`, the agent's `thread_*` tools (optional), and `thread-reports`: a thread started by another tells it when what it was asked finishes, fails or waits on a question, until the user takes it over by writing to it (optional) |
 | `extensions/worktrees` | a git worktree of its own for a thread that asks (`-w`, the New thread checkbox, a profile's `worktree: true`): made on a branch, removed when archived clean (what still runs from it stopped first), put back when unarchived; the branch in the title bar (daemon + UI; required) |
 | `extensions/ego` | Ego, Superego's own agent: one hidden thread per machine, its prompt and tools that read and set up; the rail's lifebuoy (a phone's drawer's too), *Ask Ego* in ⌘K, *Clear* (daemon + UI) |
 | `extensions/ask-user` | an `ask_user` tool; the question card and blocked status (daemon + UI) |
@@ -131,7 +131,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `extensions/web-panes` | Preview, a web page beside the thread (a link it names, opened beside), and Artifact, an HTML file the agent wrote, sandboxed (daemon + UI) |
 | `extensions/files` | the file tree beside the editor and quick open (`⌘P`) (daemon + UI) |
 | `extensions/images` | a `show_images` tool; the images in the thread, as one, a grid or a carousel, and a lightbox to zoom (daemon + UI) |
-| `extensions/unread` | the bell with what agents have for you that you haven't seen (in the rail when the sidebar isn't there, beside Settings on a phone), most pressing first; `⌘.` to the next, everywhere or in this session (UI only) |
+| `extensions/unread` | the bell with what agents have for you that you haven't seen (in the rail when the sidebar isn't there, beside Settings on a phone), most pressing first; `⌘.` to the next, everywhere or in this project (UI only) |
 | `extensions/notifications` | a notification when a thread finishes, fails or needs you while the window is in the background, saying what it did, asks or failed on (a thread working for its parent says only when it needs you: its parent hears the rest); clicking it shows the thread. On the desktop, and in a browser once you allow it (offered over the composer while a thread works). With no window open, the desktop app notifies by itself; the menu bar keeps its count either way (UI only) |
 | `extensions/links` | ⌃O: the links in the thread, newest first, fuzzy filtered; ⏎ follows one, ⌘⏎ opens it in a pane, ⌃1–9 / ⌃⌘1–9 the first nine (UI only) |
 | `extensions/skills` | skills from `~/.agents/skills`: what each is for in the prompt, `$name` completed in the composer and sent with the message, a chip under it, and a data view listing them (daemon + UI) |

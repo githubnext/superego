@@ -39,7 +39,7 @@ describe('a new extension', () => {
     const spec = await readFile(join(profile, 'profile.ts'), 'utf8')
     expect(spec).toContain(`extensions: ['./builds/daemon.ts', './notes/daemon.ts']`)
     expect(spec).toContain(`ui: ['./notes/ui.tsx']`)
-    expect(await readFile(join(profile, 'notes', 'shared.ts'), 'utf8')).toMatch(/version: '0\.1\.0', api: '\^1\.\d+'/)
+    expect(await readFile(join(profile, 'notes', 'shared.ts'), 'utf8')).toMatch(/version: '0\.1\.0', api: '\^2\.\d+'/)
     expect(() => newExtension(profile, 'builds', 'ui', types)).toThrow(/there already/)
     expect(await testExtension(profile, undefined, types)).toBe(0)
   }, 240_000)

@@ -45,7 +45,7 @@ describe('what went with a sent message', () => {
 describe('composer registrations', () => {
   const app = defineApp({ name: 'superego', id: 'superego' })
   const thread = (without?: string[]): ThreadInfo => ({
-    id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, session: { root: '/', name: '/' }, status: { state: 'idle' }, ...(without ? { without } : {}),
+    id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' }, ...(without ? { without } : {}),
   })
   const sent: SentWith = { read: () => undefined, component: () => null }
   const tags = defineUiExtension({ name: 'tags', setup(superego) { superego.composer.complete(hash); superego.composer.sentWith(sent) } })

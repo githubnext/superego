@@ -18,7 +18,7 @@ import { about, FOLDER, LIST, type FileList } from './shared.ts'
 /** The tree beside the editor: closed until asked for, then as last left. */
 let treeShown: Store<boolean>
 let quickOpen: Store<boolean>
-/** Folders open in the tree, by session. */
+/** Folders open in the tree, by project. */
 let expanded: Store<Record<string, string[]>>
 
 /** A thread's files, again whenever it moves on. */
@@ -80,17 +80,17 @@ function Tree({ machine, thread, path, open }: EditorSlotProps) {
   const shown = treeShown.use()
   const list = useFiles(shown ? machine.id : undefined, thread)
   const root = useMemo(() => treeOf(list?.files ?? []), [list])
-  const session = thread.session?.root ?? thread.cwd
+  const project = thread.project?.root ?? thread.cwd
   const all = expanded.use()
   // The open file's folders start open.
   const ancestors = path.split('/').slice(0, -1).map((_, i, parts) => parts.slice(0, i + 1).join('/'))
-  const isOpen = (folder: string) => ancestors.includes(folder) || (all[session] ?? []).includes(folder)
+  const isOpen = (folder: string) => ancestors.includes(folder) || (all[project] ?? []).includes(folder)
   const toggle = (folder: string) => {
-    const now = new Set(all[session] ?? [])
+    const now = new Set(all[project] ?? [])
     if (isOpen(folder) && now.has(folder)) now.delete(folder)
     else if (isOpen(folder)) return // an ancestor of the open file: stays open
     else now.add(folder)
-    expanded.set({ ...all, [session]: [...now] })
+    expanded.set({ ...all, [project]: [...now] })
   }
   const here = useRef<HTMLDivElement>(null)
   useEffect(() => { here.current?.querySelector('.is-current')?.scrollIntoView({ block: 'nearest' }) }, [path, list])
@@ -184,7 +184,7 @@ function QuickOpenDialog({ machineId, threadId, onClose }: { machineId: string; 
     if (kind) void dispatch('pane.open', { id: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'quick open' })
   }
   return (
-    <Picker label="Open a file" className="files-open" placeholder={thread ? `Open a file in ${thread.session?.name ?? 'this thread'}` : 'Open a file'}
+    <Picker label="Open a file" className="files-open" placeholder={thread ? `Open a file in ${thread.project?.name ?? 'this thread'}` : 'Open a file'}
       items={files} onPick={go} onClose={onClose} empty={list ? 'Nothing matches' : 'Reading…'}
       filter={(all, query) => !query.trim() ? all.slice(0, 50)
         : all.map((file) => ({ file, r: rank(file, query) })).filter((m) => m.r > 0).sort((a, b) => b.r - a.r || a.file.length - b.file.length).slice(0, 50).map((m) => m.file)}

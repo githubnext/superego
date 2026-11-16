@@ -4,7 +4,7 @@ import type { Json, Status, ThreadInfo } from '@superego/protocol'
 import { noticeFor, rejectionNotice } from '../src/notify.ts'
 
 const thread = (state: Status['state'], msg?: string, more: Partial<ThreadInfo> = {}): ThreadInfo =>
-  ({ id: 't', title: 'Fix the build', cwd: '/', createdAt: 0, activeAt: 0, session: { root: '/', name: '/' }, status: { state, ...(msg ? { msg } : {}) }, ...more })
+  ({ id: 't', title: 'Fix the build', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state, ...(msg ? { msg } : {}) }, ...more })
 const away = { focused: false, visible: true }
 const notice = (t: ThreadInfo) => noticeFor({ machine: 'box', thread: t, before: 'working' }, away)
 

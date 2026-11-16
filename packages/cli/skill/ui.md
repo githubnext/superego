@@ -136,7 +136,7 @@ Talking to the daemon:
 - `useValue<T>(machine.id, machine.state === 'connected', 'orders.recent')`: a daemon extension's live value, kept
   current. Undefined until it arrives, null while nothing publishes it yet (the profile hasn't loaded). However many
   components watch the same value, the window holds one subscription.
-- `useThreads`, `useAllThreads`, `useSessions`, `useSelection`, `useMachines`: what the window knows ("Reading threads", below).
+- `useThreads`, `useAllThreads`, `useProjects`, `useSelection`, `useMachines`: what the window knows ("Reading threads", below).
 
 Opening things:
 
@@ -173,14 +173,14 @@ read them. A profile's UI sees them all, not just its own profile's.
 |---|---|
 | `useThreads(machine.id)` | that machine's threads, `ThreadInfo[]`, newest first; `undefined` until the machine says (or while it's away and never answered) |
 | `useAllThreads()` | every machine's: `Record<machineId, ThreadInfo[] \| undefined>` |
-| `useSessions()` | `{ sessions, lastThread, hold }`: `sessions` in the sidebar's order, each a `Session`, `{ key, machine, root, name, threads, depth, activeAt, status }` (a project's threads, `depth` how far each is nested under the thread that started it, `status` the most pressing of theirs); `lastThread[key]` the thread last shown in it |
+| `useProjects()` | `{ projects, lastThread, hold }`: `projects` in the sidebar's order, each a `Project`, `{ key, machine, root, name, threads, depth, activeAt, status }` (a project's threads, `depth` how far each is nested under the thread that started it, `status` the most pressing of theirs); `lastThread[key]` the thread last shown in it |
 | `useSelection()` | `{ selection, select, machine, thread }`: the thread shown (`selection` is `{ machine, thread }` ids, `thread` its `ThreadInfo`), and `select({ machine, thread })` to show another, or `select(undefined)` |
 | `useMachines()` | every machine, `MachineEntry`: `id`, `label`, `state` (`'connected'`, …) |
 
 Archived threads aren't in the lists, nor hidden ones (an extension's own agent, like Ego's).
 
 A `ThreadInfo` (type from `'superego/ui'`): `id`, `title`, `cwd` (where it works), `createdAt`, `activeAt` (when
-anything last happened in it: a dependency for `useMethod`'s `refresh`), `session` (`{ root, name }`: its project),
+anything last happened in it: a dependency for `useMethod`'s `refresh`), `project` (`{ root, name }`: its project),
 `parent` (the thread that started it), `profile` (`{ name, scope: 'user' | 'project', dir }`; absent: none), `model`,
 `cost` (dollars), `panes` and `pane` (what's open beside it), `without` (optional extensions it goes without), `ext`
 (each extension's facts about it, by name: `ext.worktrees`), and `status`.
@@ -219,7 +219,7 @@ function Board({ machine }: PaneProps) {
       <h3>{title}</h3>
       {threads.filter((t) => t.status.state === state).map((t) => (
         <button key={t.id} type="button" onClick={() => select({ machine: machine.id, thread: t.id })}>
-          <StatusGlyph status={t.status} /> {t.title} <small>{t.session.name}</small>
+          <StatusGlyph status={t.status} /> {t.title} <small>{t.project.name}</small>
         </button>
       ))}
     </section>

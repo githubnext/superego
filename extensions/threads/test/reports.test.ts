@@ -12,7 +12,7 @@ import threadReports, { excerpt, reporter, threadReports as withBatching, type R
 import { threadTools as tools } from '../src/tools.ts'
 
 const thread = (id: string, title: string, extra: Partial<ThreadInfo> = {}): ThreadInfo =>
-  ({ id, title, cwd: '/p', createdAt: 0, activeAt: 1, session: { root: '/p', name: 'p' }, status: { state: 'done' }, ...extra })
+  ({ id, title, cwd: '/p', createdAt: 0, activeAt: 1, project: { root: '/p', name: 'p' }, status: { state: 'done' }, ...extra })
 
 /** Threads 1 (the parent), 2 and 3 (its children) and 4 (2's child), with their answers; what's sent, by whom. */
 function host() {

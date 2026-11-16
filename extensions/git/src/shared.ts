@@ -8,4 +8,4 @@ export type Changes = { diff: string; untracked: string[]; repo: boolean }
 export const CHANGES = 'diff'
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
-export const about = { name: 'git', version: '1.0.0', api: '^1', title: 'Git', description: 'Changes (⌘⇧D): what changed in a thread\'s folder, beside it.' } satisfies ExtensionAbout
+export const about = { name: 'git', version: '1.0.0', api: '^2', title: 'Git', description: 'Changes (⌘⇧D): what changed in a thread\'s folder, beside it.' } satisfies ExtensionAbout

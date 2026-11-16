@@ -24,7 +24,7 @@ const servers: ThreadServers = {
   left: [{ name: 'sentry', why: 'missing' }],
 }
 const thread = (ext?: ThreadServers): ThreadInfo => ({
-  id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, session: { root: '/', name: '/' }, status: { state: 'idle' },
+  id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' },
   ...(ext ? { ext: { 'mcp-servers': ext } } : {}),
 })
 const html = (element: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(element).replace(/<!-- -->/g, '')

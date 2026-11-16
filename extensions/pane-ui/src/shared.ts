@@ -21,6 +21,6 @@ export type ThreadSpecs = Record<string, PaneSpec>
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
 export const about = {
-  name: 'pane-ui', version: '1.0.0', api: '^1.2', title: 'UI in panes',
+  name: 'pane-ui', version: '1.0.0', api: '^2', title: 'UI in panes',
   description: 'Let the agent open panes of its own UI beside the thread: dashboards, checklists, controls.',
 } satisfies ExtensionAbout

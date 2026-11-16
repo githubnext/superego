@@ -68,7 +68,7 @@ async function restartOntoNewCode(change, { atRest = false } = {}) {
   await until(`!document.querySelector('.rail-notice--service') && !document.querySelector('.rail-notice__popup')`, 'restart done', 40_000)
   if (atRest) {
     await key('/')
-    await until(`Boolean(document.querySelector('.app__sidebar .threads-session'))`, 'the list again after the restart')
+    await until(`Boolean(document.querySelector('.app__sidebar .threads-project'))`, 'the list again after the restart')
   }
   const after = await run(`window.superego.call('local', 'hello', { client: 'smoke', version: 2 })`)
   if (after.machine.id !== before.machine.id || !(await run(`window.superego.call('local', 'thread.list', {})`)).length) { await fail('restart lost the machine or its threads'); throw new Error('failed') }
@@ -290,7 +290,7 @@ if (phase === 'first') {
   await key('/')
   await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail .threads-rail__dot'))`, 'folded: the sidebar gone, the threads as dots')
   await key('/')
-  await until(`Boolean(document.querySelector('.threads-session')) && !document.querySelector('.threads-rail')`, 'list again')
+  await until(`Boolean(document.querySelector('.threads-project')) && !document.querySelector('.threads-rail')`, 'list again')
   // From the ··· menu too.
   await run(`document.querySelector('.threads-menu-trigger').click()`)
   await until(`[...document.querySelectorAll('.superego-menu .superego-menu__item')].some((i) => i.textContent.includes('Fold to dots'))`, 'sidebar menu open again')
@@ -298,7 +298,7 @@ if (phase === 'first') {
   await until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('.threads-rail .threads-rail__dot'))`, 'folded from the menu')
   // Threads in the rail shows the list again.
   await run(`document.querySelector('.threads-rail__button').click()`)
-  await until(`Boolean(document.querySelector('.threads-session'))`, 'the list from the rail')
+  await until(`Boolean(document.querySelector('.threads-project'))`, 'the list from the rail')
   // Its edge: dragged, a width kept for every window; let go short, folded into the rail, then ⌘/ brings it back as
   // wide as it was; dragged out from the rail, the list again.
   const edge = (dx) => run(`(() => { const h = document.querySelector('.app__edge'); const r = h.getBoundingClientRect(); const x = r.left, y = r.top + r.height / 2
@@ -315,7 +315,7 @@ if (phase === 'first') {
   await edge(-200)
   await until(`Boolean(document.querySelector('.threads-rail'))`, 'folded again')
   await edge(250)
-  await until(`Boolean(document.querySelector('.threads-session')) && ${sidebarIs(250)}`, 'dragged out from the rail')
+  await until(`Boolean(document.querySelector('.threads-project')) && ${sidebarIs(250)}`, 'dragged out from the rail')
   await run(`document.querySelector('.app__edge').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`)
   await until(sidebarIs(232), 'width put back')
   await key('i')
@@ -388,7 +388,7 @@ if (phase === 'first') {
   await key('Escape', [])
   await until(`!document.querySelector('.rail-notice__popup')`, 'the layout notice closed')
   await key('/')
-  await until(`Boolean(document.querySelector('.app__sidebar .threads-session'))`, 'unfolded with the layout notice up')
+  await until(`Boolean(document.querySelector('.app__sidebar .threads-project'))`, 'unfolded with the layout notice up')
   writeFileSync(layoutFile, '{ "place": { "threads.detail": "aside" } }')
   await until(`document.querySelector('.layout-note:not(.is-problem)')?.textContent.includes('not here now, kept for when they\\'re back: threads.detail') && !document.querySelector('.rail-notice--layout')`, 'a view not here applied, and noted')
   writeFileSync(layoutFile, '{}')
@@ -668,7 +668,7 @@ if (phase === 'first') {
   await until(`Boolean(document.activeElement?.closest('[data-column]:not([data-column="thread"])'))`, 'and to the pane again')
   await key('w')
   await until(`!document.querySelector('.panes__tab')`, 'diff closed')
-  // Sessions: the panes repository is one, the home folder another; ⌘⇧[ and ⌘⇧] go through every thread, across them.
+  // Projects: the panes repository is one, the home folder another; ⌘⇧[ and ⌘⇧] go through every thread, across them.
   const { mkdirSync } = await import('node:fs')
   const elsewhere = `${process.env.SUPEREGO_HOME}/elsewhere`
   mkdirSync(elsewhere, { recursive: true })
@@ -676,7 +676,7 @@ if (phase === 'first') {
   globalThis.superegoNotices = []
   await run(`window.dispatchEvent(new Event('blur'))`)
   const other = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'elsewhere', prompt: 'hi' }).then((t) => t.id)`)
-  await until(`[...document.querySelectorAll('.threads-session__name')].some((n) => n.textContent.startsWith('elsewhere'))`, 'a session per project')
+  await until(`[...document.querySelectorAll('.threads-project__name')].some((n) => n.textContent.startsWith('elsewhere'))`, 'a project per folder')
   // ⌘. : the next thread with something unread, here the new one once it has answered.
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('elsewhere') && li.querySelector('.superego-status--done'))`, 'other thread done, in the window')
   // What it did, too: its answer's first sentence (the daemon's recap).
@@ -727,7 +727,7 @@ if (phase === 'first') {
   newWindow.destroy()
   // Archived: folded at the sidebar's end; opened, one list across projects.
   await run(`window.superego.call('local', 'thread.archive', { id: '${other}' })`)
-  await until(`![...document.querySelectorAll('.threads-session .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere'))`, 'archived out of its session')
+  await until(`![...document.querySelectorAll('.threads-project .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere'))`, 'archived out of its project')
   await until(`document.querySelector('.threads-archived__head')?.getAttribute('aria-expanded') === 'false'`, 'archived folded')
   await run(`document.querySelector('.threads-archived__head').click()`)
   await until(`[...document.querySelectorAll('.threads-archived .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere'))`, 'archived listed')
@@ -737,12 +737,12 @@ if (phase === 'first') {
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere' && Boolean(document.querySelector('.titlebar__archived')) && document.querySelector('.composer textarea').disabled && Boolean(document.querySelector('.composer__unarchive'))`, 'archived thread shown read only')
   await until(`[...document.querySelectorAll('.threads-archived .superego-list-item')].some(${isElsewhere})`, 'and still archived')
   await run(`document.querySelector('.composer__unarchive').click()`)
-  await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere' && !document.querySelector('.titlebar__archived') && !document.querySelector('.composer textarea').disabled && [...document.querySelectorAll('.threads-session .superego-list-item')].some(${isElsewhere}) && ![...document.querySelectorAll('.threads-archived .superego-list-item')].some(${isElsewhere})`, 'unarchived and shown')
+  await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere' && !document.querySelector('.titlebar__archived') && !document.querySelector('.composer textarea').disabled && [...document.querySelectorAll('.threads-project .superego-list-item')].some(${isElsewhere}) && ![...document.querySelectorAll('.threads-archived .superego-list-item')].some(${isElsewhere})`, 'unarchived and shown')
   await run(`document.querySelector('.threads-archived__head').click()`)
   // A thread another started sits right under it, though newer; ⌘⇧] and ⌘⇧[ go down and up the rows as shown, the
   // sidebar open or not.
   const offshoot = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'offshoot', parent: '${other}' }).then((t) => t.id)`)
-  await until(`(() => { const rows = [...document.querySelectorAll('.threads-session .superego-list-item')], body = (li) => li?.querySelector('.superego-list-item__body')?.textContent ?? '', at = rows.findIndex((li) => body(li).startsWith('elsewhere')); return at >= 0 && body(rows[at + 1]).startsWith('offshoot') && rows[at + 1].classList.contains('threads-child') })()`, 'the offshoot under its parent')
+  await until(`(() => { const rows = [...document.querySelectorAll('.threads-project .superego-list-item')], body = (li) => li?.querySelector('.superego-list-item__body')?.textContent ?? '', at = rows.findIndex((li) => body(li).startsWith('elsewhere')); return at >= 0 && body(rows[at + 1]).startsWith('offshoot') && rows[at + 1].classList.contains('threads-child') })()`, 'the offshoot under its parent')
   await key(']', ['meta', 'shift'])
   await until(`document.querySelector('.thread__title')?.textContent === 'offshoot'`, 'cmd+shift+] down to the offshoot')
   await key('/')
@@ -752,7 +752,7 @@ if (phase === 'first') {
   await key('/')
   await until(`Boolean(document.querySelector('.app__sidebar'))`, 'sidebar back after stepping')
   await run(`window.superego.call('local', 'thread.archive', { id: '${offshoot}' })`)
-  await until(`![...document.querySelectorAll('.threads-session .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('offshoot'))`, 'offshoot put away')
+  await until(`![...document.querySelectorAll('.threads-project .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('offshoot'))`, 'offshoot put away')
   // Superego's own agent: from the rail, one thread in Superego's data folder, the same one each time, in no list. Its
   // tab is in front while it shows, alone: no sidebar. The Threads tab goes back to the listed thread it left.
   const threadsTab = `document.querySelector('.app__rail [aria-label="Threads"]')`
@@ -875,7 +875,7 @@ if (phase === 'first') {
   await until(`document.querySelector('.composer textarea').value === 'read this'`, 'text typed')
   await key('Enter', [])
   await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('read this') && m.querySelector('.msg__files .attachment__name')?.textContent === 'plan.md') && !document.querySelector('.composer__files')`, 'file sent with the message')
-  await shot('sessions')
+  await shot('projects')
   // Scrolling back: a thread longer than its watch holds pages in its earlier messages as the top comes near.
   const long = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'long' }).then((t) => t.id)`)
   for (let i = 0; i < 30; i++) {

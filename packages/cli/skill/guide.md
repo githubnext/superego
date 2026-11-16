@@ -27,7 +27,7 @@ A profile's halves import `'superego'` and `'superego/ui'`. A bundled extension'
 | `'superego'` | the daemon half and a profile: `defineDaemonExtension`, `defineProfile`, `defineExtension`, `defineTool`, `defineAction`, the schema helpers (`obj`, `str`, …), `RpcError`, `spawnGroup` (a command run as a process tree that stops as one), and their types (`DaemonApi`, `ScopedValue`, `ViewContent`, …) | stable: follows the extension API's version |
 | `'superego/ui'` | the UI half: `defineUiExtension`, `defineAction`, hooks (`useMethod`, `useValue`, `useDispatch`, `useSelection`, …), `call`, `has`, `version`, components to build from (`Markdown`, `PaneHeader`, `Picker`, `Diff`, `FileEditor`, `Button`, the icons), and their types | stable |
 | `'superego/testing'` | test helpers: a daemon with a scripted model, a window with a fake bridge, `isRunning(pid)` (see [Testing](#testing)) | stable |
-| `'superego/unstable'` | the window's workings the bundled extensions build on: `useRegistry`, `useShell`, `useSidebar`, `fileKind`, the session list, `useWatch`, `useThreadView`, … | none: changes with the window |
+| `'superego/unstable'` | the window's workings the bundled extensions build on: `useRegistry`, `useShell`, `useSidebar`, `fileKind`, the project list, `useWatch`, `useThreadView`, … | none: changes with the window |
 
 On a `DaemonApi`, `harness` (pi-durable itself) and `threads.entries`' records are pi-durable's shapes, unstable too.
 Everything else in the tables below is stable.
@@ -72,7 +72,7 @@ import { join } from 'node:path'
 import { defineDaemonExtension, defineExtension, defineTool, obj, str } from 'superego'
 
 export default defineDaemonExtension({
-  name: 'notes', version: '1.0.0', api: '^1.2',
+  name: 'notes', version: '1.0.0', api: '^2',
   setup(superego) {
     const fileOf = async (id: string) => join((await superego.threads.get(id)).cwd, 'NOTES.md')
     const read = async (id: string) => readFile(await fileOf(id), 'utf8').catch(() => '')
@@ -106,7 +106,7 @@ function Notes({ machine, thread }: PaneProps) {
   return <pre className="pane-scroll">{data?.text || 'No notes yet.'}</pre>
 }
 
-export default defineUiExtension({ name: 'notes', version: '1.0.0', api: '^1.2', setup: (superego) => superego.pane('notes', { title: 'Notes', component: Notes, menu: true }) })
+export default defineUiExtension({ name: 'notes', version: '1.0.0', api: '^2', setup: (superego) => superego.pane('notes', { title: 'Notes', component: Notes, menu: true }) })
 ```
 
 Send a thread a message: the daemon loads the profile and the agent has `add_note`. The window loads its UI as soon as it
@@ -350,7 +350,7 @@ place, and the window's console has why.
 | `dispatch(id, params, { machine })` | run any action outside React |
 
 Names: everything is `<extension>.<something>`, except tool and pane kind names. In components: `useThreads`,
-`useAllThreads`, `useSessions`, `useSelection`, `useMachines` (what each gives, and a thread's `status`: "Reading threads" in
+`useAllThreads`, `useProjects`, `useSelection`, `useMachines` (what each gives, and a thread's `status`: "Reading threads" in
 [ui.md](ui.md)), `useValue(machine, key, { scope })`, `useMethod(machine.id, method, params, { enabled, refresh })` (a method's answer, with `error`, `loading` and `refetch`; called again as `params` or `refresh` change, answers to stale calls dropped), `useDispatch`, `call`, `has(machine, 'ext:x')` (whether a machine has an
 extension set up and switched on now, kept current; UI-only extensions never appear; `'ext:x@^1.2'` at a version in
 a range, see [Versions and compatibility](#versions-and-compatibility)), `version(machine, 'x')`; in panes `<PaneHeader>` and
@@ -367,7 +367,7 @@ Three versions, each for its own question:
 | Version | What it versions | Where it's said | Who checks it |
 |---|---|---|---|
 | **The release** | the code a machine runs: its git commit (the packages are `0.0.0`) | `hello.machine.commit`, Settings → Machines ("an older Superego") | the user, who updates |
-| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`1.8.0`; 1.1 added `signal`, a UI `setup`'s cleanup and `unarchiveAbandoned`; 1.2 `scopedValue` and `useValue`'s `scope`, `useMethod`, a profile's window actions, and `'superego/unstable'` apart; 1.3 `spawnGroup`; 1.4 `machines`; 1.5 channels and `paneClosed`; 1.6 `recap`; 1.7 `agentParts`, `agent()`'s handle, `auth.flow`, tool rows by prefix and `SignInFlow`; 1.8 `toolCalls`) | `hello.api` | the host, setting an extension up |
+| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`2.0.0`; 2.0 renamed sessions to projects and dropped generation 1's compatibility names; in 1.x, 1.1 added `signal`, a UI `setup`'s cleanup and `unarchiveAbandoned`; 1.2 `scopedValue` and `useValue`'s `scope`, `useMethod`, a profile's window actions, and `'superego/unstable'` apart; 1.3 `spawnGroup`; 1.4 `machines`; 1.5 channels and `paneClosed`; 1.6 `recap`; 1.7 `agentParts`, `agent()`'s handle, `auth.flow`, tool rows by prefix and `SignInFlow`; 1.8 `toolCalls`) | `hello.api` | the host, setting an extension up |
 | **The protocol** | the wire: a generation, `PROTOCOL_VERSION` (`2`), and in it the features each side announces | `hello.version`, `hello.features` | both ends, at `hello` |
 
 And each extension's own **version**, semver, which its other half, profiles and scripts rely on.
@@ -378,15 +378,15 @@ An extension says its version and the extension API it needs in `about` (bundled
 
 <!-- check: daemon -->
 ```ts
-export const about = { name: 'orders', version: '1.2.0', api: '^1', title: 'Orders' } satisfies ExtensionAbout
+export const about = { name: 'orders', version: '1.2.0', api: '^2', title: 'Orders' } satisfies ExtensionAbout
 ```
 
 - `version`: a **major** when something relying on its methods, actions, values or data views could no longer follow
   (a method's result changes shape, an action goes); a **minor** when something's added; a patch otherwise. Bundled
   extensions started at `1.0.0`. Unset: it counts as `0.0.0`.
-- `api`: the range of extension APIs it works with: `^1` for any 1.x, `^1.3` once it uses something 1.3 added. A host
-  outside the range refuses it before `setup` runs, with why: *Extension orders needs extension API ^2, and this
-  Superego has 1.4.0: update Superego*. A bundled one fails the build's tests; a profile's fails its profile's load
+- `api`: the range of extension APIs it works with: `^2` for any 2.x, `^2.1` once it uses something 2.1 added. A host
+  outside the range refuses it before `setup` runs, with why: *Extension orders needs extension API ^3, and this
+  Superego has 2.0.0: update Superego*. A bundled one fails the build's tests; a profile's fails its profile's load
   (the thread says so); a profile UI's is left out, the rest of the profile set up. Unset: any.
 - `capabilities`: optional, finer than a version: things it can do that a client may ask about (`['stat']`).
 
@@ -768,7 +768,7 @@ source, at `extensions/<name>/src`, so only a checkout has them.
 | `skills` | a prompt section, a `submit` transform, a `method`; `composer.complete` and `composer.sentWith` |
 | `files` | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | `links` | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
-| `unread` | UI only: a view in the rail `withoutSpaces` and in a phone's `drawer`, an action with keys reading sessions, an app setting |
+| `unread` | UI only: a view in the rail `withoutSpaces` and in a phone's `drawer`, an action with keys reading projects, an app setting |
 | `notifications` | UI only: `on('thread.status')`, `on('auth.rejected')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
 | `threads` | the required one: views (the list a `space` with a `rail` of its own, details in the `aside` with ⌘I, the model in the `header`), app settings, tool rows and a `link`; its daemon half is two other, optional extensions: `thread-tools`, on `superego.threads`, and `thread-reports`, report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by a submit transform's `by`) |
 | `worktrees` | `thread` hooks (`creating` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `thread.crumb` chip, a `thread.badge` mark and a `newThreadField` |

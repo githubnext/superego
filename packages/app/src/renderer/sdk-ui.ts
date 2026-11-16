@@ -22,8 +22,8 @@ export type { Completion, CompletionProvider, CompletionWord, ComposerWhere, Sen
 
 // Reaching machines and the window: calls, live values, threads, the selection, features and versions.
 export { useValue, useMethod, call, has, version, useAppSetting, type MethodState } from './client.ts'
-export { useMachines, useThreads, useAllThreads, useSelection, useSessions, type Selection } from './state.tsx'
-export type { Session } from './sessions.ts'
+export { useMachines, useThreads, useAllThreads, useSelection, useProjects, type Selection } from './state.tsx'
+export type { Project } from './projects.ts'
 export { useDispatch } from './Shell.tsx'
 export { usePlacement, useApp, useNarrow } from './extension.tsx'
 export { useShortcut, keyLabel } from './keys.ts'

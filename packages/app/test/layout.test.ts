@@ -172,7 +172,7 @@ describe('views in the registry', () => {
       superego.pane('orders.log', { title: 'Log', component: None, menu: true })
     },
   })
-  const thread: ThreadInfo = { id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, session: { root: '/', name: '/' }, status: { state: 'idle' } }
+  const thread: ThreadInfo = { id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' } }
 
   it("declares views, and a pane menu that's the layout's", () => {
     const registry = createRegistry(app, [orders], () => {})

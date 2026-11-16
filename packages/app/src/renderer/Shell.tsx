@@ -27,7 +27,7 @@ import { ActionLog, runsBare } from './actions.tsx'
 import { performed } from './perform.ts'
 import { NewThreadDialog } from './NewThread.tsx'
 import { bound, KEYMAP, shortcutOf, useActions, useShortcut, type Keymap } from './keys.ts'
-import { useAllThreads, useHistory, useMachines, useNewThreadDialog, useSelection, useSessions, useSettingsDialog, useShell, useSidebar, type Selection } from './state.tsx'
+import { useAllThreads, useHistory, useMachines, useNewThreadDialog, useSelection, useProjects, useSettingsDialog, useShell, useSidebar, type Selection } from './state.tsx'
 
 /** Dispatch an action from this window: `dispatch('app.sidebar')`, `dispatch('thread.select', { machine, thread })`. */
 export function useDispatch() {
@@ -39,7 +39,7 @@ export function Shell() {
   const [palette, setPalette] = useState(false)
   const [navigator, setNavigator] = useState(false)
   const sidebar = useSidebar()
-  const { sessions, lastThread } = useSessions()
+  const { projects, lastThread } = useProjects()
   const [log, setLog] = useState(false)
   const machines = useMachines()
   const { selection, select, machine, thread, hidden: alone, listed } = useSelection()
@@ -83,7 +83,7 @@ export function Shell() {
       const found = allThreads[s.machine]?.find((x) => x.id === s.thread) ?? (s.machine === selection?.machine && s.thread === selection.thread ? thread : undefined)
       return found?.panes ? { ...found, panes: shownPanes(registry, { machine: s.machine, thread: found }) } : found
     },
-    sessions, lastThread, appSetting: (key) => watched<SettingsSnapshot>('app', 'settings.watch', {})?.values[key] as never,
+    projects, lastThread, appSetting: (key) => watched<SettingsSnapshot>('app', 'settings.watch', {})?.values[key] as never,
     toggleSidebar: () => narrow ? setDrawer((open) => !open) : sidebar.show(),
     back: history.back, forward: history.forward,
   })
@@ -257,7 +257,7 @@ function ThreadSheet({ machine, thread, onClose }: { machine: MachineEntry; thre
       <div className="app__scrim app__scrim--sheet" onClick={onClose} />
       <div className="thread-sheet" role="dialog" aria-label={thread.title}>
         <div className="thread-sheet__head">
-          <span className="thread-sheet__session">{machine.id !== 'local' && `${machine.label} · `}{thread.session?.name}</span>
+          <span className="thread-sheet__project">{machine.id !== 'local' && `${machine.label} · `}{thread.project?.name}</span>
           <span className="thread-sheet__title"><StatusGlyph status={thread.status} />{thread.title}</span>
         </div>
         <div className="thread-sheet__tools"><ThreadTools machine={machine} thread={thread} panes={false} /></div>

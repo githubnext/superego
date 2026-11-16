@@ -88,7 +88,7 @@ export function ThreadView({ machine, thread }: { machine: MachineEntry; thread:
 }
 
 /**
- * Where you are, in the window's title bar: the thread's session (and machine, where it isn't this one), then its status
+ * Where you are, in the window's title bar: the thread's project (and machine, where it isn't this one), then its status
  * and title, with a button to rename it (or the name being edited), and the key that goes anywhere else.
  */
 export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
@@ -98,9 +98,9 @@ export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread
   const navigate = () => void dispatch('app.navigator', {}, { source: 'titlebar' }).catch((error) => console.error(error))
   return (
     <span className="titlebar__crumb">
-      <span className="titlebar__seg titlebar__session" title={`${thread.session?.name ?? folderName(thread.cwd)}\n${thread.cwd}`}>
+      <span className="titlebar__seg titlebar__project" title={`${thread.project?.name ?? folderName(thread.cwd)}\n${thread.cwd}`}>
         {machine.id !== 'local' && <>{machine.label}<span className="titlebar__dot">·</span></>}
-        {thread.session?.name ?? folderName(thread.cwd)}
+        {thread.project?.name ?? folderName(thread.cwd)}
       </span>
       <span className="titlebar__sep" aria-hidden>›</span>
       <span className="titlebar__seg titlebar__title">
@@ -116,7 +116,7 @@ export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread
       </span>
       {thread.archived && <span className="titlebar__archived">Archived</span>}
       {goKeys && !editing && (
-        <button type="button" className="titlebar__go" title="Go to a session, thread or pane" onClick={navigate}>{goKeys}</button>
+        <button type="button" className="titlebar__go" title="Go to a project, thread or pane" onClick={navigate}>{goKeys}</button>
       )}
     </span>
   )
@@ -176,7 +176,7 @@ export function ThreadTools({ machine, thread, panes = true }: { machine: Machin
   )
 }
 
-/** Brings an archived thread back: into its session, with its worktree, taking messages again. */
+/** Brings an archived thread back: into its project, with its worktree, taking messages again. */
 function UnarchiveButton({ machine, thread, className = '' }: { machine: MachineEntry; thread: ThreadInfo; className?: string }) {
   const dispatch = useRegistry().router.dispatch
   return (

@@ -20,7 +20,7 @@ const PROFILE = {
   'queue.ts': `import { defineDaemonExtension, defineExtension, defineTool, obj, str } from 'superego'
 import { label } from './label.ts'
 export default defineDaemonExtension({
-  name: 'queue', version: '1.0.0', api: '^1.2',
+  name: 'queue', version: '1.0.0', api: '^2',
   setup(superego) {
     const queue = superego.scopedValue('queue.items', { items: [], empty: 'Nothing queued.' })
     superego.method('queue.label', () => label)
@@ -80,7 +80,7 @@ describe('a daemon with a scripted model', () => {
 const cleared: string[] = []
 let tornDown = 0
 const queueUi = defineUiExtension({
-  name: 'queue', version: '1.0.0', api: '^1.2',
+  name: 'queue', version: '1.0.0', api: '^2',
   setup(superego) {
     superego.view('queue.list', {
       title: 'Queue', context: 'thread', fits: ['aside', 'pane'], default: 'aside',

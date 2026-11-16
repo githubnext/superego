@@ -74,7 +74,7 @@ it("takes part in a thread's life, in order: creating moves it and gives it stat
   const { peer, close } = await open([nest, after])
   const thread = await peer.call<ThreadInfo>('thread.create', { prompt: 'hi', options: { nest: true } })
   const nested = join(dir, 'nested')
-  expect(thread).toMatchObject({ cwd: nested, session: { root: dir }, ext: { nest: { made: nested } } })
+  expect(thread).toMatchObject({ cwd: nested, project: { root: dir }, ext: { nest: { made: nested } } })
   await done(peer, thread.id)
   await until(() => heard.includes('after turnEnd'))
   expect(heard).toEqual([

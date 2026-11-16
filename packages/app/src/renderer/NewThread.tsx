@@ -27,7 +27,7 @@ export function startFrom(registry: Registry, machine: string, thread: ThreadInf
     if (value !== undefined) options[field.name] = value
   }
   return {
-    machine, cwd: thread.session?.root ?? thread.cwd,
+    machine, cwd: thread.project?.root ?? thread.cwd,
     ...(thread.profile ? { profile: thread.profile.name } : {}),
     ...(thread.chosen?.model ? { model: thread.chosen.model } : {}), ...(thread.chosen?.thinking ? { thinking: thread.chosen.thinking } : {}),
     ...(Object.keys(options).length ? { options } : {}),
@@ -42,7 +42,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
   const dispatch = registry.router.dispatch
   const last = useMemo(readLast, [])
   // It starts like the thread shown: asked for nothing in particular (⌘N, the title bar's button), or for its project
-  // (the sidebar's + on its session). Asked for another, it starts there; asked for nothing with no thread shown, as last time.
+  // (the sidebar's + on its project). Asked for another, it starts there; asked for nothing with no thread shown, as last time.
   const [start] = useState(() => {
     if (!selection || !shown) return asked
     const like = startFrom(registry, selection.machine, shown)
@@ -101,10 +101,10 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
   }, [machine?.id, cwd])
   const picked = profiles.find((p) => p.name === (profile ?? 'default'))
 
-  /** This machine's sessions (projects threads worked in), most recent first. */
+  /** This machine's projects (where its threads worked), most recent first. */
   const recent = useMemo(() => {
     const list = (threads[machine?.id ?? ''] ?? []).slice().sort((a, b) => (b.activeAt ?? b.createdAt) - (a.activeAt ?? a.createdAt))
-    return [...new Set(list.map((t) => t.session?.root ?? t.cwd))].slice(0, 6)
+    return [...new Set(list.map((t) => t.project?.root ?? t.cwd))].slice(0, 6)
   }, [threads, machine?.id])
 
   const chosen = catalog?.models.find((m) => m.value === (model ?? catalog.default.model))
@@ -123,7 +123,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
         ...(model ? { model } : {}), ...(thinking && levels.length ? { thinking } : {}), ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
         ...(Object.keys(fieldOptions).length ? { options: fieldOptions } : {}),
       }, { machine: machine.id, source: 'new thread' }) as ThreadInfo
-      localStorage.setItem(LAST, JSON.stringify({ machine: machine.id, cwd: { ...last.cwd, [machine.id]: created.session?.root ?? created.cwd } } satisfies Last))
+      localStorage.setItem(LAST, JSON.stringify({ machine: machine.id, cwd: { ...last.cwd, [machine.id]: created.project?.root ?? created.cwd } } satisfies Last))
       onClose()
       select({ machine: machine.id, thread: created.id })
     } catch (e) {

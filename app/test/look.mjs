@@ -95,7 +95,7 @@ void (async () => {
   await sleep(300)
   await both('sidebar-folded')
   await edge(300)
-  await until(`!!document.querySelector('.threads-session')`, 'dragged out from the rail')
+  await until(`!!document.querySelector('.threads-project')`, 'dragged out from the rail')
   await sleep(300)
   console.log('sidebar dragged out:', await sidebarWidth())
   await both('sidebar-out')

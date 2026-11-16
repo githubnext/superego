@@ -56,7 +56,7 @@ export default defineProfile({ description: 'A desk', thinking: 'low', extension
 import { defineAction, defineDaemonExtension, defineExtension, defineTool, obj, str, type ViewContent } from 'superego'
 
 export default defineDaemonExtension({
-  name: 'desk', version: '0.1.0', api: '^1.0',
+  name: 'desk', version: '0.1.0', api: '^2.0',
   setup(superego) {
     const notes = superego.scopedValue<string[]>('desk.notes', [])
     superego.agent(defineExtension({
@@ -91,7 +91,7 @@ function Board({ machine, thread }: PaneProps) {
   )
 }
 
-export default defineUiExtension({ name: 'desk', version: '0.1.0', api: '^1.0', setup: (superego) => superego.pane('board', { title: 'Board', component: Board }) })
+export default defineUiExtension({ name: 'desk', version: '0.1.0', api: '^2.0', setup: (superego) => superego.pane('board', { title: 'Board', component: Board }) })
 `)
   expect(check(dir)).toEqual({ ok: true, output: '' })
 
