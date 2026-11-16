@@ -50,5 +50,3 @@ has, and spends no more than what's left.
 
 Needs `ANTHROPIC_API_KEY` (and `OPENAI_API_KEY` for Sol) in the environment, macOS (`sandbox-exec`), `sqlite3`, and the
 app buildable here.
-
-Reports: [the spike](REPORT-spike.md), [its re-run](REPORT-rerun.md), [round 2](REPORT-round2.md).

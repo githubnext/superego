@@ -12,4 +12,4 @@ pnpm install
 pnpm dev
 ```
 
-More in [docs/](docs/): [overview](docs/overview.md), [plan](docs/plan.md), [releasing](docs/releasing.md).
+More in [docs/](docs/): [overview](docs/overview.md), [design](docs/design.md), [releasing](docs/releasing.md).

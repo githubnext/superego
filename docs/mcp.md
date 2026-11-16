@@ -1,7 +1,6 @@
 # MCP servers for Superego's agents
 
-A design, 2026-11-15. All four lanes are built: 1 (the core seams), 2 (the runtime), 3 (OAuth), and 4 (UI, Ego and docs). It covers how agents in Superego threads use MCP servers: what the
-user sets up, where it lives, how it runs, and four lanes to build it in.
+How agents in Superego threads use MCP servers: what the user sets up, where it lives, and how it runs.
 
 ## Two MCPs, named apart
 
@@ -201,7 +200,7 @@ export default defineProfile({
 (the section, transcript rows, the thread's chip). It's optional, like every bundled extension: a machine can switch
 it off, and a profile can go without it.
 
-The extension API is short of four things, and Lane 1 adds them:
+The extension API has four seams for it:
 
 1. **`superego.agentParts(fn)`: parts that add up.** `agentFor` gives a thread's agent to the first chooser that
    answers. MCP has to add its parts to whatever agent a thread has, so it can't use `agentFor`. The new hook:
@@ -510,347 +509,24 @@ Ego helps set up a server ("connect Linear"), within its settings-only powers:
 ### Protocol and compatibility
 
 - **The extension announces `ext:mcp-servers`** in `hello`, like every extension. The window draws the section, chip
-  and rows only for machines that have it. An older daemon has no section and no rows. An older app drawing a newer
-  daemon's settings gets the section's text without its custom part: it can't edit servers, and nothing breaks.
-- **New core pieces are additive, so no new `FEATURES` entry is needed:**
-  - **`auth_url.callback`** is an optional field, and older apps ignore it, so pasting still works.
-  - **`auth.event` and `auth.respond` for extensions' flows** keep their shape. A flow is a flow.
-  - **The `agentParts` hook, `agent()`'s handle, `auth.flow`, the prefix rows and `SignInFlow`** are extension API.
-    They went in as `EXTENSION_API` 1.7.0, and an extension asks for them with `api: '^1.7'`.
-- **Actions** (`mcp-servers.add`, `edit`, `remove`, `allow`, `signIn`, `signOut`, `set-secret`, `restart`) are new, so
-  `released-actions.json` only grows.
-- **A profile with `mcp` on an older daemon** loads without it, because the core ignores keys it doesn't know. Its
-  threads run without servers, and `superego extensions --thread` is where to look.
+  and rows only for machines that have it.
+- **The core pieces it uses are generation 2's:** `auth_url.callback`, `auth.event` and `auth.respond` for
+  extensions' flows, and the extension API's `agentParts` hook, `agent()`'s handle, `auth.flow`, the prefix rows and
+  `SignInFlow`.
+- **Its actions** (`mcp-servers.add`, `edit`, `remove`, `allow`, `signIn`, `signOut`, `set-secret`, `restart`) are
+  the extension's own, versioned with it: a window checks its daemon half with `has(machine, 'ext:mcp-servers@<range>')`.
 
 ## Decided questions
 
-These were open in the first draft; the user settled them.
+These were settled with the user.
 
 1. **Outside agents' threads get MCP servers**, like any thread of that profile. A thread an outside agent starts
    (`outside.startThreads`) works out its servers as any other does. The Can start threads setting says so in its
-   description (Lanes 2 and 4).
+   description.
 2. **No Client ID Metadata Documents for now.** There's no site to host Superego's client metadata on, so
    registration is a configured `clientId`, else dynamic client registration. CIMD is future work (§Future).
 3. **A command Ego adds waits for the user's Allow.** It's saved with `allowed: false` and doesn't run until the user
    allows it in Settings (§Ego).
-
-## Lanes
-
-Four lanes, each one thread's work. Order: **1, then 2, then 3 and 4 side by side.** Each lane runs the checks in
-AGENTS.md. Lanes 1 and 4 touch `packages/app`, so they run smoke.
-
-### Lane 1: Core seams
-
-Owns the API the extension needs, with nothing MCP-specific in it.
-
-- `superego.agentParts(fn)`: parts that add up, asked at submit in `agentOf` with the live profile spec, async with a
-  5s limit
-- `agent()` returning `{ replace, remove }`
-- `superego.auth.flow(run)` over `auth.event`, `auth.respond` and `auth.cancel`. Provider flows move onto the same
-  machinery (`auth-flows.ts`).
-- `auth_url.callback`, and the desktop app's loopback catcher that answers the `manual_code` prompt for a remote
-  machine's flow
-- `ProfileSpec.mcp` and `mcpServers`: types, checks, the `extends` merge
-- tool rows by prefix (`tool('mcp__*')`), and `SignInFlow` moved out of Settings and exported from `superego/ui`
-
-Files:
-- `packages/daemon/src/{extension.ts,daemon.ts,profiles.ts,agent-settings.ts}`, and a new `auth-flows.ts`
-- `packages/protocol/src/settings.ts` (`AuthEvent`)
-- `packages/sdk` (types)
-- `packages/app/src/renderer/{extension.tsx,tool-rows.tsx,SettingsView.tsx,sdk-ui.ts}`
-- `packages/app/src/main` (the catcher)
-- `packages/cli/skill/{profiles.md,daemon.md,ui.md}` for the new API
-
-Tests: daemon tests for parts adding up, a part replaced mid-run, a flow from an extension, and the profile merge; a
-smoke step for a provider sign-in that still works.
-
-Depends on nothing.
-
-**Built.** As above, except:
-- `auth.flow` takes the action's context: `superego.auth.flow(context, run)`.
-- The catcher is `packages/app/src/main/sign-in-callback.ts`.
-- `SignInFlow` lives in `packages/app/src/renderer/sign-in-flow.tsx`.
-- `DaemonOptions.agentPartsLimit` shortens the 5s limit for tests.
-
-Its tests are `packages/daemon/test/agent-parts.test.ts`, `packages/app/test/sign-in-callback.test.ts`, the prefix
-case in `packages/app/test/tool-rows.test.ts`, and a smoke step (an API key through Settings → Providers, then Sign
-out).
-
-Lane 2 should know:
-- Give each server's part with `agent(part, { always: false })` at setup, from the cache, and keep the handle.
-  Return those parts from `agentParts` and call `replace` when the tools change. Don't install a part per thread;
-  `agentParts` picks among installed parts.
-- `profile.spec.mcpServers` is the *merged* map, so a server that came from the user's profile through `extends`
-  can't be told from the project's. `profile.ref` is the thread's profile, so a server's id is
-  `<ref.dir>#<name>`, and `cwd` defaults to the project root above `ref.dir`.
-- Hidden threads (`hidden: true`) get no servers: that's the extension's rule, applied to `hidden` and `owner`.
-- `ProfileMcpServer` is the shared base type to extend.
-
-### Lane 2: The runtime
-
-Owns `extensions/mcp-servers`'s daemon half, with every way to sign in except OAuth:
-
-- the config file and its actions; the secret store (`mcp-auth.json`)
-- connections over the SDK (stdio and Streamable HTTP, with none, API key or env auth)
-- the clean environment and process groups
-- lifetime: shared or per thread, lazy, the cache, idle stop, restarts, crashes, logs
-- the tool bridge: names, schemas, results, progress, cancellation, `list_changed`, instructions, the prompt section,
-  deferred loading with `tool_search`
-- the `afterTool` rewrite for interrupted calls
-- `agentParts` selection: profile, unprofiled, hidden
-- profile servers under trust
-- facts, the inspect report, the settings section's `data`
-- `superego mcp-servers` (list, logs, restart, set-secret)
-
-Files:
-- `extensions/mcp-servers/{package.json,tsconfig.json}`
-- `extensions/mcp-servers/src/{shared.ts,daemon.ts,config.ts,store.ts,connections.ts,tools.ts,results.ts}`
-- `extensions/mcp-servers/test/*`, with a fixture server built on the SDK's `McpServer`: stdio and HTTP, a tool that
-  hangs, one that crashes, one that changes its list
-- registration in `app/src/daemon.ts`
-- the root `tsconfig.json` references
-- a `packages/cli/src` command
-
-`shared.ts` (the config, the section's `data` and the action params) lands first, so Lane 4 can start on it.
-
-Depends on Lane 1.
-
-**Built.** As above, except:
-- The runtime is in `servers.ts` (`Runtime`: the servers, their parts, sessions, idle stop, crashes, the cache);
-  `daemon.ts` wires it to the API. Tests: `test/connections.test.ts`, `test/daemon.test.ts` (against a real daemon,
-  the fixture `test/fixture.ts` as a command and over HTTP), `test/tools.test.ts`, and
-  `packages/cli/test/mcp-servers.test.ts`.
-- **Settings' data is also a live value.** An extension can't tell the settings registry its section's `data` changed,
-  so the section's `data` is right when Settings is read, and the live value `mcp-servers.servers` (the same
-  `SectionData`) is kept current as servers start, stop and fail. Draw from the value.
-- **Actions:** `add`, `edit` (whole config; `rename`), `remove`, `set` (`unprofiled` or `enabled` alone), `allow`,
-  `set-secret` (`{ server, values }`, `null` forgets one), `signOut` (forgets the server's stored secrets),
-  `restart`, `log`; and lane 3's `signIn`. Add, edit, allow, set-secret and restart start the
-  server to check it (up to 30s) and answer `{ server: ServerInfo }`. All are `['ui', 'cli']`; none `mcp`.
-- **Who added a command isn't guessed.** An action can't tell Ego from the window (`context.source` is a name either
-  way), so `add` and `edit` take `allowed: false`, and Ego's tool must pass it for a command. An edit without it keeps
-  what the server had: a waiting server stays waiting until `allow`.
-- **The prompt section leaves out running and stopped.** The section renders before every request, so a state that
-  flips would break the prompt cache. A server reads as its tool count (and "find them with tool_search" when
-  deferred), or as unavailable with why (off, waiting, needs sign-in, failed), or "still starting" before its first
-  listing.
-- **Names on disk:** the cache is `<dataDir>/mcp/cache/<name>.json` for the machine's servers and
-  `<name>@<hash>.json` for a profile's (`<hash>`: eight hex of its id); logs are `<dataDir>/logs/mcp/` by the same
-  names. Agent parts are `mcp:<name>` and `mcp:<name>@<hash>`, the shared one `mcp-servers`, and `tool_search` comes
-  in `mcp-servers-search`.
-- **A profile's server's config is kept in its cache**, as the profile said when it was last loaded (so allowed then).
-  After a restart its tools are offered from the cache, but it doesn't run until its profile loads again (see Review
-  fixes, M1).
-- **Where commands run:** a machine server in `cwd` or the home folder; a profile's in the folder holding its
-  `.superego` (the project's root; for a user profile, the data folder's parent), `cwd` resolved against it; a
-  thread's own in the thread's folder.
-- **API keys:** `scheme` defaults to `Bearer` only for the `Authorization` header; another header gets the bare key.
-- **A `401`** (a refused key, or a server that wants OAuth) puts the server in `needs-sign-in`, its calls failing at
-  once, until its secrets change or it's restarted.
-- **A thread's own server** stops when the thread is archived and after 10 idle minutes. Clearing a thread has no
-  hook, so it doesn't stop it.
-- **`superego extensions --thread`** prints the thread's servers from its facts (`thread.facts['mcp-servers']`); the
-  core's report has no seam for extensions, and none was added.
-- **The interrupted rewrite** keeps the call's partial output and puts the message in the result's diagnostic, its code
-  still `interrupted`.
-- `Settings → Outside agents → Can start threads` says that a thread one starts has its servers like any other.
-
-Lane 3 should know:
-- `connections.ts`'s `Launch.oauth` is an `OAuthClientProvider`, passed to the HTTP transports. Nothing sets it yet:
-  `Runtime.connect` (servers.ts) builds the launch, and should give one for `auth.type === 'oauth'`.
-- A `401` sets `server.refused` (`needs-sign-in`); `Runtime.secretsChanged(server)` clears it and restarts the
-  sessions. Call that once a sign-in or sign-out changes the store.
-- `SecretStore.modify(key, edit)` runs under the store's lock, for refresh. Every stored string is hidden in logs
-  (`SecretStore.secrets()`), tokens included.
-- `signOut` forgets `server:<id>`; add the server's `oauth:<resource>` tokens.
-
-Lane 4 should know:
-- Settings: draw `SectionData` from the live value `mcp-servers.servers` (`servers`: the machine's in the file's
-  order; `profiles`: those seen from profiles). `ServerInfo.error` is why it's failed, waiting or needs sign-in, else
-  its last error. The section is `order: 25`, just after Providers.
-- The thread's chip and details: `thread.facts['mcp-servers']` (`ThreadServers`), with `LEFT_OUT` for the reasons.
-- Rows: a call's `details` are `CallDetails` (server, tool, titles, annotations, saved files), set as the call starts,
-  so an interrupted call's row has them too. An interrupted call is an `mcp__*` result with an `interrupted`
-  diagnostic. `tool_search`'s details are `{ loaded }`.
-- Ego's tool passes `allowed: false` to `add` and `edit` for a command.
-
-### Lane 3: OAuth
-
-Owns sign-in to remote servers:
-
-- an `OAuthClientProvider` over the store
-- discovery, registration (a configured `clientId`, then DCR), PKCE, `resource`
-- refresh under the store's lock, and `needs-sign-in` on `invalid_grant`
-- `mcp-servers.signIn` and `signOut` through `superego.auth.flow`, with the daemon's loopback listener and the fixed
-  redirect URI (`AppConfig`)
-- `superego mcp-servers sign-in`
-
-Files:
-- `extensions/mcp-servers/src/oauth.ts`
-- the auth hook in `connections.ts`
-- `extensions/mcp-servers/test/oauth.test.ts`, against a fake authorization server: the SDK's server-side
-  `mcpAuthRouter` with an in-memory provider. It covers discovery, DCR, refresh, a rotated refresh token with two
-  threads at once, `invalid_grant`, and a pasted redirect URL.
-
-Depends on Lanes 1 and 2.
-
-**Built.** As above, except:
-- **Tokens reach the server through a `fetch`, not the SDK's `authProvider`.** `Launch.oauth` became `Launch.fetch`:
-  `OAuthAccess.fetchFor(resource)` (oauth.ts) puts the access token on every request to the resource's origin, and only
-  there. It refreshes a token with under a minute left first, under its key's lock: it reads without the lock, and
-  takes it only to refresh, checking again inside, so a call that waited finds the token another call refreshed. A
-  `401` refreshes once (only if the stored token is still the one refused) and tries again. The SDK's own `401`
-  handling would refresh outside the lock, and would start a browser sign-in from inside a tool call; neither is
-  wanted. So the SDK's `auth()` and an `OAuthClientProvider` (`SignInProvider`) are used for signing in only.
-- **Signing in** (`signIn`): the server is first asked without a token, and its `WWW-Authenticate` gives the
-  resource metadata URL and scope. Then `auth()` runs discovery, registration, PKCE and `state`. The scope is the
-  config's `scopes`, else what the `401` asked for, else the metadata's `scopes_supported`. `resource` is what the
-  protected resource metadata names, sent as written, as the SDK does: a server without that metadata (an older spec)
-  gets none. A sign-in always goes to the browser; tokens kept from before aren't refreshed by it. Registration is a
-  configured `clientId`, with its secret as the optional secret `client-secret` (`set-secret`; `SecretInfo.optional`),
-  else DCR, kept under `client:<issuer> <redirect>`. It's used again on the next sign-in, and dropped and made again
-  when the authorization server says `invalid_client`. An authorization server without registration fails the flow
-  with "give the server a client id (auth.clientId)".
-- **The redirect** is `http://127.0.0.1:<port>/mcp/callback`, with `port` the new `AppConfig.callbackPort` (Superego's
-  is 1456, also the default). `loopback.ts`'s `Callbacks` is one listener for the daemon while any flow waits. It
-  hands each flow its redirect by `state`, and answers `Connection: close` so a kept-alive browser connection can't
-  outlive it. A taken port is logged and left: pasting, or the app's catcher, is how then. The flow emits `auth_url`
-  (with `callback`), then a `manual_code` prompt, closed through its `signal` when the listener catches the redirect.
-  A pasted address (or its query) with the wrong `state` asks again and says why. An `error=` from the authorization
-  server fails the flow with it.
-- **`mcp-servers.signIn {server}`** answers `{ flow }`. The flow is done once the tokens are kept, every server
-  signing in to the same resource has been restarted on them (`secretsChanged`), and the server was checked. If the
-  server still refuses, the flow fails with why.
-- **Not signed in** is `needs-sign-in` without trying the server: `missing` is `['sign-in']` for an OAuth server with
-  no `oauth:<resource>`. A refresh refused (`invalid_grant`, `invalid_client`, `unauthorized_client`) forgets the
-  tokens, and a `401` that a refresh doesn't fix (or no refresh token) is an `UnauthorizedError`. Either way the
-  runtime sets `refused` with the reason, so a call answers "fx needs you to sign in again (Settings → MCP servers):
-  refreshing its sign-in was refused (…)". When the authorization server can't be reached, a token with time left is
-  still used.
-- **`signOut`** forgets `server:<id>` and the `oauth:<resource>` tokens, and restarts every server sharing them. It
-  keeps the registration. `remove` forgets the tokens too, unless another server signs in to the same resource.
-- **Settings:** `ServerInfo.oauth` (`SignInInfo`): `signedIn`, `since`, `expires`, `refreshes`, `scope`. Never a token.
-  "Signed in as …" isn't there: tokens don't carry who, and nothing more is fetched to find out.
-  The row says "Signed in 3 days ago" ("Signed in, expires in 40 min" when the token won't renew and runs out within a
-  day), with when, renewal and scope in its tooltip. Its menu has Sign in… when not signed in, Sign out when it is, and
-  Client secret… (the field marked Optional) for a client registered by hand.
-- **The command line:** `superego mcp-servers sign-in <name> [-m machine]` prints the page and asks for the address on
-  stdin. It answers the prompt itself when the redirect is caught: by the machine's daemon, or for `-m` by its own
-  listener on this computer (`catchRedirect`, from `@superego/mcp-servers/loopback`), as the desktop app does.
-  `superego mcp-servers sign-out <name>` signs out.
-- Tests: `test/oauth.test.ts` against `test/auth-server.ts` (the SDK's `mcpAuthRouter` and `requireBearerAuth` over an
-  in-memory provider whose refresh tokens work once), with the daemon's own flow and a remote machine's (its port
-  taken, answered by `auth.respond`). The CLI's `sign-in` (the address pasted) and `sign-out` are in
-  `packages/cli/test/mcp-servers.test.ts`.
-- **Tried against real servers.** End to end against the MCP project's example server
-  (`https://example-server.modelcontextprotocol.io/mcp`, whose mock identity provider approves anyone): discovery,
-  DCR, PKCE, the listener catching the redirect, the code exchanged, tools listed and called over the token, and a
-  refresh. Linear, Sentry and Notion (`mcp.linear.app`, `mcp.sentry.dev`, `mcp.notion.com`) go as far as the
-  sign-in page: discovery, DCR, and an authorize URL with S256, `state`, `scope` and `resource`. Signing in there
-  takes an account.
-
-### Lane 4: UI, Ego and docs
-
-Owns everything the user sees and reads:
-
-- the extension's UI half: Settings → MCP servers (rows, states, Add and Edit dialog, the check on save, Show log,
-  Sign in and Set key through `SignInFlow`, From profiles, Allow), the transcript rows, the header chip, the thread
-  details list, the needs-sign-in notice
-- the well-known catalogue
-- Ego's `superego_mcp_servers` tool and its prompt lines
-- README (the extension's row, Profiles), PLAN (§3b and a progress entry), the skill topics
-
-Files:
-- `extensions/mcp-servers/src/{ui.tsx,styles.css,catalog.ts}`
-- `extensions/ego/src/{tools.ts,daemon.ts}`, `extensions/ego/test/*`
-- `README.md`, `docs/plan.md`
-- `packages/cli/skill/{profiles.md,bundled.md}`
-- `app/test/look.sh` shots of the section and a transcript with MCP rows
-
-Depends on Lane 1 (prefix rows, `SignInFlow`) and on Lane 2's `shared.ts`. It runs alongside Lane 3, with OAuth
-rows working once Lane 3 lands (they do).
-
-**Built.** As above, except:
-- `extensions/mcp-servers/src/settings.tsx` holds the section and its dialogs, `describe.ts` the words and the Add
-  dialog's form (plain functions, tested as such); `ui.tsx` the rest.
-- Three more core seams, all 1.7 (it hadn't shipped): the `thread.details` slot (the threads extension's details draw
-  it), a tool result's images in rows (`ToolCallProps.result.images`), and a call's own verb (`ToolRow.verb`), for
-  *Interrupted: may have run*. Tools of one prefix's row count as one kind in a run's line ("Called 3 MCP tools").
-  `Output` and `unwrap` are in `superego/unstable`.
-- An interrupted call is known by its text (the `afterTool` rewrite, or pi-durable's own), since a row doesn't see
-  diagnostics.
-- Ego's tool is `servers-tool.ts`. Besides having no secret field, it refuses a config that slips one in: an env var
-  named like one (it asks for `secretEnv` names instead), a value shaped like a key, a flag that takes one, or a URL
-  carrying credentials. An edit to a command waits for Allow again. Ego's `read` won't open `auth.json`,
-  `mcp-auth.json` or `mcp-servers.json`.
-- The header chip is a view (`mcp-servers.chip`, in `header`), so the user's layout can move it.
-- `app/test/look.sh <dir> mcp` shoots the section and a transcript with MCP rows.
-
-## Review fixes
-
-From the independent review of the client support (`~/.superego/mcp-review.md`):
-
-- **H1, M2, L6 (secrets and where they go):** a stored key is tied to the origin, header and scheme it was set for,
-  and forgotten when they change (by Ego's edit or by hand), so it's never sent to a new URL without the user setting
-  it again; a gone machine server's secrets are deleted. Ego's `superego_settings` shows MCP servers in brief, and its
-  `read` refuses `mcp-servers.json`, so env and header values reach neither Ego nor an outside agent through it. Ego
-  decides "an outside agent asked" by the message a tool call answers, not the newest one. A profile's server isn't
-  re-checked this way: its config changes only with `profile.ts`, which needs allowing again.
-
-**OAuth and sign-in hardening** (H3, L1, L2, L3, L7, L8):
-- **H3: a slow refresh holds up only its own server.** `SecretStore` locks per key, not per file. `modify(key, …)`
-  runs one at a time for that key (so a rotated refresh token is still used once), and only the file's write itself is
-  one at a time. That write re-reads the file and changes just the one key, and never has a network call inside it.
-  `read`/`keys` take no lock: the file is replaced whole, so a read sees it before or after a write. Every request to
-  an authorization server gets `TIMEOUT` (15s, `timed()` in oauth.ts): refresh, and each step of a sign-in (on top
-  of the flow's signal). A refresh that times out falls back to the old token while it's still valid. Otherwise it
-  fails with "its authorization server didn't answer a refresh within 15s". The MCP requests themselves in `fetchFor`
-  get no timeout of their own. A server may answer a POST with JSON only once a long tool call finishes, and a 15s
-  limit would cut those calls off. They're bounded by the runtime's call timeout instead. `OAuthAccess` remembers why
-  a resource's tokens were last forgotten, until a sign-in or sign-out. Calls that wanted the token at the same moment
-  as a refused refresh then say "refreshing its sign-in was refused", not "it isn't signed in".
-- **L1: the remote catchers check `state`.** The desktop app's catcher (sign-in-callback.ts) and the command line's
-  `catchRedirect(callback, signal, page)` read `state` from `auth_url`'s page. They turn away (400) a request to the
-  callback without it, and go on listening. A page without a `state` is caught as before.
-- **L2: only secrets are remembered for redacting:** every value of a `server:*` entry but its `@` fields (`@for`),
-  and `access_token`, `refresh_token` and `client_secret` wherever they are, whatever their length. URLs, `Bearer` and
-  client names no longer come out as `***`.
-- **L3: a flow left waiting is given up on.** `createAuthFlows({ timeout })` defaults to 10 minutes (`FLOW_TIMEOUT`),
-  the same as the app's catcher. The flow's signal aborts, its prompts close, and the daemon's listener lets go of its
-  `state`. It ends `failed` with "Timed out: …". It isn't cancelled when the client that started it disconnects:
-  `auth.flow`'s `to` has only `notify`, so auth-flows.ts can't tell. Doing that means giving `DaemonContext` a close
-  signal in the core (daemon.ts).
-- **L7:** `auth_url`'s instructions name the host you sign in at: "Sign in to linear in the browser, at
-  mcp.linear.app."
-- **L8:** `mcp-servers.json` is written 0600 (an older 0644 file becomes 0600 on its next change). A file that doesn't
-  parse is reported as "… isn't valid JSON (line L, column C)", never with the parser's quote of it.
-
-**Runtime hygiene (H2, M1, M3, M4, L4, L5).** In `servers.ts` and `connections.ts`, tested in `test/runtime.test.ts`:
-- **H2: a crash line is redacted.** Every string that becomes a server's `error`, `failed` or `refused`, or a call's
-  failure text, goes through `Runtime.#hide`: `redact(…, store.secrets())`. That covers any server's values and
-  OAuth tokens, not only the server's own `launch.secrets`.
-- **M1: a cached profile server waits for its profile.** One installed from the cache (`loadCached`) has
-  `profileLoaded: false` until `agentParts` hands its profile in, which happens only once the profile is allowed.
-  Until then it's gated: state `stopped`, nothing starts it (Restart, Set key, warm, check), and its calls fail with
-  "available after the next turn of a thread with the profile …". This includes a run resumed after a restart: its
-  calls fail, and the next turn brings the server back. `ServerInfo.profileAllowed` says this for a profile's row,
-  and Settings shows "not loaded yet" and disables Restart.
-- **L5: pruning.** `loadCached` deletes cache entries whose profile folder is gone, and the sweep forgets profile
-  servers whose folder goes while the daemon runs. `runtime.selected` forgets threads that haven't been working for
-  the idle time (10 minutes); their memo still holds the same thing.
-- **M3: a cut-off call may have run.** A call whose session was stopped, restarted, crashed or torn down while it was
-  out (`Connection.ended`, or the SDK's `ConnectionClosed`) is answered with `cutText`: "x.y was cut off before it
-  answered: <why>. It may or may not have taken effect on the server. Check … before calling it again." `stopAll`
-  and `#close` pass the why ("fx was restarted", "fx failed", "fx was switched off", …), and a crash gives its
-  exit and stderr.
-- **M4: a server still starting is stopped on teardown.** `Connection.open` takes a signal: the extension's, combined
-  with the slot's own `stop` controller. It goes to `spawnGroup`, so the process group stops even if `initialize`
-  never answers, and to the HTTP `connect`. Once open, the signal closes the connection. Teardown also closes
-  whatever `slot.starting` produces. `#close` calls off a start that's still going and waits for it to settle. A
-  group stopped by its signal isn't counted as a crash.
-- **L4: HTTP blips aren't crashes.** Only a command's exits count toward the three-in-a-minute limit. A URL that can't
-  be reached (no answer, 5xx, 408 or 429) is tried again after 1s and then 3s (`RuntimeOptions.retries`). If it still
-  fails, the error is the server's last error, and the next time something needs the server it tries again.
 
 ## Future
 

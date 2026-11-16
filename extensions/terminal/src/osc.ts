@@ -1,5 +1,5 @@
 // OSC 7501, the Program Status Protocol, read from what a terminal prints: how Claude Code, Codex, pi and any program
-// say they're working, done or blocked, in the same words Superego's threads use (PLAN §4, after Fut).
+// say they're working, done or blocked, in the same words Superego's threads use (docs/design.md, principle 5).
 //
 //   ESC ] 7501 ; state=<idle|working|done|blocked|error|clear> [:id=…] [:kind=…] [:app=…] [:title=<b64>] [:msg=<b64>] [:progress=…] (BEL | ESC \)
 //   ESC ] 7501 ; ? (BEL | ESC \)      a program asking whether the terminal listens: answered with REPLY

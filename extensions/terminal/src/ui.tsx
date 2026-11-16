@@ -2,7 +2,7 @@
 // terminal, UI half: the Terminal pane (from the pane menu, ⌃`, or the agent's pane_open "terminal"), drawn by
 // ghostty-web: Ghostty's terminal emulator compiled to WebAssembly, behind xterm.js's API, the same in the desktop app
 // and a browser. The shell is the machine's (the daemon half): this attaches to it on the pane's channel, replays what
-// it printed, and passes keys and sizes back. Native libghostty on the desktop is a later step (PLAN §9).
+// it printed, and passes keys and sizes back. Native libghostty on the desktop is a later step (docs/design.md, Next).
 import { useEffect, useRef, useState } from 'react'
 import { call, channel as openChannel, defineAction, defineUiExtension, has, StatusGlyph, useAppSetting, useTabNote, useValue, type BridgeChannel, type PaneProps } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'

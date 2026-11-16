@@ -1,4 +1,4 @@
-// The PTY host: one shell per terminal pane, run by the daemon so it outlives the window (PLAN §1, principle 2). Each
+// The PTY host: one shell per terminal pane, run by the daemon so it outlives the window (docs/design.md, principle 2). Each
 // keeps what it printed last (its scrollback), so a window that attaches again (a reload, another client, a browser)
 // sees it, and passes on what it prints to every window attached. A slow window slows the shell, as a real terminal's
 // screen does: past HIGH bytes unread by any, the PTY is paused until all are below LOW.

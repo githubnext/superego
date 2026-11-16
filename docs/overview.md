@@ -3,7 +3,7 @@
 One app for running agents: a desktop app, a daemon per machine that keeps agents running when the app is closed, and
 the same window in a browser or on a phone. What an agent is (its model, prompt, tools, extensions, panes) comes from
 **profiles**: files in `~/.superego/profiles/` or inside a project's own `.superego/profiles/`, so a repo can carry the harness it
-needs. See [plan.md](plan.md) and [structure.html](structure.html).
+needs. The design behind it: [design.md](design.md).
 
 ```sh
 pnpm install
@@ -100,6 +100,7 @@ project    a git repository (its worktrees too) or a folder, on a machine
 | `⌘⇧E` | Archive the thread shown |
 | `⌘⇧T` | The file tree beside the editor |
 | `⌘⇧D` | Show changes |
+| `` ⌃` `` | Open a terminal beside the thread |
 | `⌘W` | Close the pane with the focus (the focus moves left) |
 | `⌘⇧W` | Close the window (Superego keeps running) |
 | `⌘,` | Settings |
@@ -139,6 +140,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `extensions/skills` | skills from `~/.agents/skills`: what each is for in the prompt, `$name` completed in the composer and sent with the message, a chip under it, and a data view listing them (daemon + UI) |
 | `extensions/suggestions` | after each answer, a side call to the thread's model for what you might send next; offered over the composer, numbered; ←/→ pick, ⏎ sends, ⇥ takes it to change, ⌃1–9 send that one (daemon + UI) |
 | `extensions/tasks` | `task_start`/`task_finish` tools and a prompt asking the agent to report its work as tasks; the transcript folds work under each task's title, status and outcome (daemon + UI) |
+| `extensions/terminal` | a shell beside a thread (`` ⌃` ``, the pane menu, the agent's `pane_open`), run by the machine so it outlives the window; its bytes on a channel, drawn by ghostty-web; OSC 7501 status on the pane's tab, and a terminal blocked on something blocks its thread (daemon + UI) |
 | `extensions/mcp-servers` | MCP servers for the agents in threads: other people's tools (Linear, GitHub, a browser) as `mcp__<server>__<tool>`, a command a machine runs or a URL it reaches, signed in to once per machine; Settings → MCP servers (Add server with a list of well-known ones, Sign in, Set key, Allow, Show log), the calls as rows, `3 servers` in a thread's header and its servers in thread details, a notice when one needs signing in (daemon + UI) |
 
 An extension has a daemon half (`defineDaemonExtension`: agent tools and hooks, settings, actions, read methods, live
@@ -170,8 +172,8 @@ them. Every command takes `-m <machine>` and `--json`; `superego help` lists the
 `~/.local/bin`: the installed app writes a script that runs the CLI built into it, on its own Electron as Node; the dev
 app links the checkout's `app/bin/superego.ts`, as `pnpm link:cli` does. `superego --skill` prints a skill for
 agents on using and extending Superego (`superego --skill > ~/.agents/skills/superego/SKILL.md` installs it); it ends with
-an index of topics, each printed by `superego --skill <topic>`: `cli`, `profiles`, `tools`, `daemon`, `ui`, `bundled`,
-`debugging`. They live in `packages/cli/skill/`. A remote machine needs `superego` on its PATH for
+an index of topics, each printed by `superego --skill <topic>`: `guide`, `cli`, `profiles`, `tools`, `daemon`, `ui`,
+`bundled`, `debugging`. They live in `packages/cli/skill/`. A remote machine needs `superego` on its PATH for
 `ssh <host> superego connect --start`:
 
 ```sh
@@ -263,8 +265,8 @@ the file. A project's run only once its profile is allowed, like the rest of it.
 `mcpServers` merge by name, the project's winning; `without: ['mcp-servers']` drops them all.
 
 A profile's UI is TSX or TS, compiled when the daemon serves it; it imports `react` and `superego/ui` (the window's own
-hooks and components, the file editor among them). An example is the `obsidian` profile in `~/.superego/profiles`: a vault's
-notes as a graph and as notes edited in place, with search and backlink tools for the agent.
+hooks and components, the file editor among them). Examples to read: the skill's build queue
+(`packages/cli/skill/examples/build-queue-ui`), a profile with a tool, a daemon half, a view of its own beside the thread, and tests.
 
 The window loads a profile's UI as soon as it lists one of that profile's threads (in the sidebar or the navigator; not
 archived ones), once per profile however many threads share it, so its sidebar badges, slots, tool rows and pane kinds
