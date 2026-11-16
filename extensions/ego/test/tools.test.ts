@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { defineAction, obj, opt, Router, str, unknown, type MachineEntry, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
+import { createRouter, defineAction, obj, opt, str, type Router, unknown, type MachineEntry, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 import { egoTools, egoPrompt, type EgoMachines, type EgoThreads } from '../src/tools.ts'
 
 type Tool = { name: string; execute(params: unknown, api: unknown, context?: unknown): Promise<{ output: { text: string }[] }> }
@@ -34,7 +34,7 @@ describe("Ego's tools", () => {
   it('reads settings, actions, profiles, machines, threads and files, and changes settings and machines; nothing else', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'superego-ego-'))
     try {
-      const router = new Router()
+      const router = createRouter()
       router.register(defineAction({ id: 'echo.say', title: 'Say', runs: 'machine', expose: ['cli'], params: obj({ text: str() }), run: ({ text }) => ({ said: text }) }))
       const set: unknown[] = []
       router.register(defineAction({ id: 'settings.set', title: 'Set', runs: 'machine', expose: ['cli'], params: obj({ key: str(), value: unknown() }), run: (params) => { set.push(params); return null } }))
@@ -81,7 +81,7 @@ describe("Ego's tools", () => {
       },
       remove: async (id) => { list = list.filter((m) => m.id !== id) },
     }
-    const { tools = [] } = egoTools({ dir: '/data', ...on(new Router()), snapshot, machines, threads: threads() })
+    const { tools = [] } = egoTools({ dir: '/data', ...on(createRouter()), snapshot, machines, threads: threads() })
     await run(tools, 'superego_machines', { op: 'add', target: 'me@box', name: 'box' })
     await run(tools, 'superego_machines', { op: 'rename', machine: 'box', name: 'Build box' })
     await run(tools, 'superego_machines', { op: 'disable', machine: 'Build box' })
@@ -93,7 +93,7 @@ describe("Ego's tools", () => {
 
   it('hands work to a thread of its own, where the work belongs, and names it', async () => {
     const started: Parameters<EgoThreads['start']>[0][] = []
-    const { tools = [] } = egoTools({ dir: '/data', ...on(new Router()), snapshot, threads: threads(started) })
+    const { tools = [] } = egoTools({ dir: '/data', ...on(createRouter()), snapshot, threads: threads(started) })
     expect(await text(tools, 'thread_start', { prompt: 'Add a profile', cwd: 'profiles', title: 'Profile' })).toBe('Started [Profile](thread:3) (id 3), in /data/profiles.')
     expect(started).toEqual([{ prompt: 'Add a profile', title: 'Profile', cwd: '/data/profiles' }])
   })
@@ -104,7 +104,7 @@ describe("Ego's tools", () => {
       await writeFile(join(dir, 'mcp-auth.json'), '{"server:linear":"lin_api_x"}')
       await writeFile(join(dir, 'auth.json'), '{"anthropic":"sk-x"}')
       await writeFile(join(dir, 'mcp-servers.json'), '{"servers":{}}')
-      const { tools = [] } = egoTools({ dir, ...on(new Router()), snapshot, threads: threads() })
+      const { tools = [] } = egoTools({ dir, ...on(createRouter()), snapshot, threads: threads() })
       const read = (tools as unknown as Tool[]).find((t) => t.name === 'read')!
       const api = { conversationId: 1, cwd: dir, env: process.env }
       for (const path of ['mcp-auth.json', './auth.json', join(dir, 'sub', '..', 'mcp-auth.json'), 'mcp-servers.json']) {
@@ -123,7 +123,7 @@ describe("Ego's tools", () => {
       ],
       values: {},
     })
-    const { tools = [] } = egoTools({ dir: '/data', ...on(new Router()), snapshot: sections, threads: threads() })
+    const { tools = [] } = egoTools({ dir: '/data', ...on(createRouter()), snapshot: sections, threads: threads() })
     expect(await run(tools, 'superego_settings', {})).toEqual([
       { id: 'providers', title: 'Providers', data: { signedIn: ['anthropic'] }, settings: [] },
       { id: 'mcp-servers', title: 'MCP servers', settings: [] },
@@ -134,7 +134,7 @@ describe("Ego's tools", () => {
     const started: Parameters<EgoThreads['start']>[0][] = []
     const asked: number[] = []
     let why: string | undefined = 'Not for outside agents.'
-    const { tools = [] } = egoTools({ dir: '/data', ...on(new Router()), snapshot, threads: threads(started), refuseStart: async (conversation) => { asked.push(conversation); return why } })
+    const { tools = [] } = egoTools({ dir: '/data', ...on(createRouter()), snapshot, threads: threads(started), refuseStart: async (conversation) => { asked.push(conversation); return why } })
     await expect(text(tools, 'thread_start', { prompt: 'Add a profile', cwd: 'profiles' })).rejects.toThrow('Not for outside agents.')
     expect(started).toEqual([])
     why = undefined

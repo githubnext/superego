@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { ego } from '@superego/ego/daemon'
 import { callTool, callTools, say, testDaemon, type TestDaemon, type Turn } from '@superego/sdk/testing'
-import { defineAction, Router, type Json, type ThreadInfo } from '@superego/protocol'
+import { createRouter, defineAction, type Json, type ThreadInfo } from '@superego/protocol'
 import { CATALOG } from '../src/catalog.ts'
 import { mcpServersExtension } from '../src/daemon.ts'
 import { configFrom, egoPart, userStep } from '../src/ego.ts'
@@ -27,7 +27,7 @@ function machine(initial: Record<string, ServerConfig> = {}) {
     secrets: config.auth?.type === 'env' ? config.auth.names.map((n) => ({ name: n, set: false })) : config.auth?.type === 'api-key' ? [{ name: 'key', set: false }] : [],
   })
   const data = async (): Promise<SectionData> => ({ servers: [...servers].map(([name, config]) => info(name, config, config.allowed)), profiles: [] })
-  const router = new Router()
+  const router = createRouter()
   const action = (id: string, params: never, run: (p: never) => unknown) =>
     router.register(defineAction({ id, title: id, runs: 'machine', expose: ['ui', 'cli'], params, run: (p) => { ran.push({ id, params: p }); return run(p as never) as Json } }))
   action(ACTIONS.add, ADD_PARAMS as never, ({ name, server, allowed }: { name: string; server: ServerConfig; allowed?: false }) => {

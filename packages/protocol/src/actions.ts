@@ -60,63 +60,73 @@ export function paramsParser(id: string, schema: JsonSchema | undefined): (param
 
 /**
  * Holds actions and runs them: validates (and, from strings, coerces) parameters, runs, times and logs. `C` is what
- * actions get besides their parameters: the window's selection, the calling connection, and so on.
+ * actions get besides their parameters: the window's selection, the calling connection, and so on. Make one with
+ * `createRouter`.
  */
-export class Router<C = unknown> {
-  #actions = new Map<string, { def: ActionDef<any, unknown, C>; parse: (params: unknown) => unknown }>()
-  #log: ActionLogEntry[] = []
-  #listeners = new Set<(entry: ActionLogEntry) => void>()
+export type Router<C = unknown> = {
+  /** How many dispatches `log` keeps. */
   readonly logSize: number
-
-  constructor({ logSize = 500 }: { logSize?: number } = {}) { this.logSize = logSize }
-
-  register(def: ActionDef<any, unknown, C>): () => void {
-    if (this.#actions.has(def.id)) throw new Error(`Action ${def.id} is already defined`)
-    if (!/^[a-z][a-z0-9-]*(\.[a-z][a-zA-Z0-9-]*)+$/.test(def.id)) throw new Error(`Action id "${def.id}" must be dotted lowercase, like thread.start`)
-    this.#actions.set(def.id, { def, parse: paramsParser(def.id, def.params) })
-    return () => { if (this.#actions.get(def.id)?.def === def) this.#actions.delete(def.id) }
-  }
-
-  has(id: string) { return this.#actions.has(id) }
-  get(id: string): ActionInfo | undefined { return this.#actions.get(id) && info(this.#actions.get(id)!.def) }
-  list(exposure?: Exposure): ActionInfo[] {
-    return [...this.#actions.values()].map(({ def }) => info(def)).filter((a) => !exposure || a.expose.includes(exposure))
-  }
-
-  async dispatch(id: string, params: unknown, context: C, { source = 'ui', exposure, client }: { source?: string; exposure?: Exposure; client?: ActionLogEntry['client'] } = {}): Promise<unknown> {
-    return this.track(id, params, source, async () => {
-      const action = this.#actions.get(id)
-      if (!action) throw new RpcError('unknown_action', `No action ${id}`)
-      if (exposure && !action.def.expose.includes(exposure)) throw new RpcError('not_exposed', `${id} can't be run from ${exposure}`)
-      return action.def.run(action.parse(params), context)
-    }, client)
-  }
-
+  /** Hold `def`; the function returned lets go of it again. */
+  register(def: ActionDef<any, unknown, C>): () => void
+  has(id: string): boolean
+  get(id: string): ActionInfo | undefined
+  list(exposure?: Exposure): ActionInfo[]
+  dispatch(id: string, params: unknown, context: C, options?: { source?: string; exposure?: Exposure; client?: ActionLogEntry['client'] }): Promise<unknown>
   /** Time and log work done elsewhere for an action this router doesn't hold (a window forwarding to a daemon). */
-  async track<R>(id: string, params: unknown, source: string, run: () => Promise<R>, client?: ActionLogEntry['client']): Promise<R> {
-    const started = Date.now()
-    const record = (ok: boolean, error?: string) => {
-      const entry: ActionLogEntry = { at: started, id, source, ms: Date.now() - started, ok, ...(params !== undefined ? { params: params as Json } : {}), ...(error ? { error } : {}), ...(client ? { client } : {}) }
-      this.#log.push(entry)
-      if (this.#log.length > this.logSize) this.#log.splice(0, this.#log.length - this.logSize)
-      for (const listener of this.#listeners) listener(entry)
-    }
-    try {
-      const result = await run()
-      record(true)
-      return result
-    } catch (error) {
-      record(false, error instanceof Error ? error.message : String(error))
-      throw error
-    }
-  }
-
+  track<R>(id: string, params: unknown, source: string, run: () => Promise<R>, client?: ActionLogEntry['client']): Promise<R>
   /** The newest dispatches, oldest first. */
-  log(): ActionLogEntry[] { return [...this.#log] }
-  onDispatch(listener: (entry: ActionLogEntry) => void): () => void {
-    this.#listeners.add(listener)
-    return () => { this.#listeners.delete(listener) }
+  log(): ActionLogEntry[]
+  onDispatch(listener: (entry: ActionLogEntry) => void): () => void
+}
+
+/** A router holding no actions yet, keeping the last `logSize` dispatches (500). */
+export function createRouter<C = unknown>({ logSize = 500 }: { logSize?: number } = {}): Router<C> {
+  const actions = new Map<string, { def: ActionDef<any, unknown, C>; parse: (params: unknown) => unknown }>()
+  const log: ActionLogEntry[] = []
+  const listeners = new Set<(entry: ActionLogEntry) => void>()
+  const router: Router<C> = {
+    logSize,
+    register(def) {
+      if (actions.has(def.id)) throw new Error(`Action ${def.id} is already defined`)
+      if (!/^[a-z][a-z0-9-]*(\.[a-z][a-zA-Z0-9-]*)+$/.test(def.id)) throw new Error(`Action id "${def.id}" must be dotted lowercase, like thread.start`)
+      actions.set(def.id, { def, parse: paramsParser(def.id, def.params) })
+      return () => { if (actions.get(def.id)?.def === def) actions.delete(def.id) }
+    },
+    has: (id) => actions.has(id),
+    get: (id) => actions.get(id) && info(actions.get(id)!.def),
+    list: (exposure) => [...actions.values()].map(({ def }) => info(def)).filter((a) => !exposure || a.expose.includes(exposure)),
+    dispatch(id, params, context, { source = 'ui', exposure, client } = {}) {
+      return router.track(id, params, source, async () => {
+        const action = actions.get(id)
+        if (!action) throw new RpcError('unknown_action', `No action ${id}`)
+        if (exposure && !action.def.expose.includes(exposure)) throw new RpcError('not_exposed', `${id} can't be run from ${exposure}`)
+        return action.def.run(action.parse(params), context)
+      }, client)
+    },
+    async track(id, params, source, run, client) {
+      const started = Date.now()
+      const record = (ok: boolean, error?: string) => {
+        const entry: ActionLogEntry = { at: started, id, source, ms: Date.now() - started, ok, ...(params !== undefined ? { params: params as Json } : {}), ...(error ? { error } : {}), ...(client ? { client } : {}) }
+        log.push(entry)
+        if (log.length > logSize) log.splice(0, log.length - logSize)
+        for (const listener of listeners) listener(entry)
+      }
+      try {
+        const result = await run()
+        record(true)
+        return result
+      } catch (error) {
+        record(false, error instanceof Error ? error.message : String(error))
+        throw error
+      }
+    },
+    log: () => [...log],
+    onDispatch(listener) {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
   }
+  return router
 }
 
 const info = ({ run: _run, ...rest }: ActionDef<any, unknown, any>): ActionInfo => rest

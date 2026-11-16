@@ -4,7 +4,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { defineAction, defineApp, Router, type ThreadInfo } from '@superego/protocol'
+import { createRouter, defineAction, defineApp, type ThreadInfo } from '@superego/protocol'
 // The registry isn't part of the UI API (the window builds it), so it's taken from where it's made.
 import type { ToolRowCall } from '../../../packages/app/src/renderer/extension-api.ts'
 import { createRegistry, seenIn } from '../../../packages/app/src/renderer/registry.tsx'
@@ -149,7 +149,7 @@ describe('the Add and Edit form', () => {
   })
 
   it('takes every catalogue entry as the add action does, and round-trips it', async () => {
-    const router = new Router()
+    const router = createRouter()
     const added: unknown[] = []
     router.register(defineAction({ id: 'mcp-servers.add', title: 'Add', runs: 'machine', expose: ['ui'], params: ADD_PARAMS, run: (params) => { added.push(params); return null } }))
     for (const entry of CATALOG) {

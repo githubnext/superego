@@ -2,7 +2,7 @@
 // forwarded to where they run (see `dispatch`). Every dispatch from this window is logged, and the log is one action
 // away (Show action log).
 import { useEffect, useState } from 'react'
-import { lit, obj, opt, Router, str, union, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
+import { createRouter, lit, obj, opt, str, type Router, union, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
 import { Dialog } from '@superego/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
@@ -74,7 +74,7 @@ export function defineWindowAction<S extends JsonSchema | undefined = undefined,
 }
 
 export function createWindowRouter() {
-  const router = new Router<WindowContext>()
+  const router = createRouter<WindowContext>()
   /** When each window action applies, for those that say. */
   const conditions = new Map<string, (context: WindowContext) => boolean>()
   /** The shell keeps this current; actions read it when they run. */

@@ -11,7 +11,7 @@ import { join, resolve as resolvePath } from 'node:path'
 import { createRegistry, Harness, type Storage } from '@earendil-works/pi-durable'
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
-import { AUTH_REJECTED, Lifetime, ONBOARDED, Router, type AppConfig, type MachineInfo, type RpcPeer } from '@superego/protocol'
+import { AUTH_REJECTED, Lifetime, ONBOARDED, createRouter, type AppConfig, type MachineInfo, type RpcPeer } from '@superego/protocol'
 import { SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import { registerCoreActions } from './actions.ts'
@@ -109,7 +109,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   let queued = false
   const host: Host = {
     options, settings, agent, flows,
-    router: new Router<DaemonContext>(),
+    router: createRouter<DaemonContext>(),
     registry: createRegistry(),
     values: new Values(),
     mounted: new Map(),

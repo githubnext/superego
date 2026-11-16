@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { int, obj, opt, str } from '@earendil-works/pi-schema'
-import { defineAction, Router } from '../src/index.ts'
+import { createRouter, defineAction } from '../src/index.ts'
 
 describe('Router', () => {
-  const router = new Router<{ who: string }>({ logSize: 3 })
+  const router = createRouter<{ who: string }>({ logSize: 3 })
   const seen: unknown[] = []
   router.register(defineAction({
     id: 'thread.rename', title: 'Rename', runs: 'machine', expose: ['ui', 'cli'],

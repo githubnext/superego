@@ -20,7 +20,24 @@ type ChannelOpen = { ch: string; kind: string; params?: unknown; window: number 
 /** Accepts a channel the other side opened; throw to refuse it. Set `onData` before returning to read what comes. */
 export type ChannelAcceptor = (channel: Channel, params: any) => void | Promise<void>
 
-export class Channel {
+/** One byte stream on a peer: write to it and end it, read what the other side sends, or give up. */
+export interface Channel {
+  readonly id: string
+  readonly kind: string
+  /** Settles when the other side has ended its half (resolves) or either side aborted (rejects). */
+  readonly ended: Promise<void>
+  /** Queue `bytes`; resolves once all of it is handed to the transport, so a writer that awaits keeps pace. */
+  write(bytes: Uint8Array): Promise<void>
+  /** No more data from this side, after what is queued. */
+  end(): void
+  /** Give up: drop what is queued and tell the other side. */
+  abort(message?: string): void
+  /** Read what the other side sends. Each chunk is acknowledged once `handler` is done with it (its promise settles). */
+  onData(handler: (bytes: Uint8Array) => void | Promise<void>): void
+}
+
+/** A channel as its peer's `Channels` drives it: the credit, acks and ends behind `Channel`. */
+class PeerChannel implements Channel {
   readonly id: string
   readonly kind: string
   #channels: Channels
@@ -89,7 +106,6 @@ export class Channel {
     for (const bytes of this.#waiting.splice(0)) this.#deliver(bytes)
   }
 
-  /** @internal */
   receive(bytes: Uint8Array) {
     if (this.#aborted || this.#endReceived) return
     this.#received += bytes.length
@@ -108,19 +124,18 @@ export class Channel {
     })
   }
 
-  /** @internal The other side accepted, granting its window. */
+  /** The other side accepted, granting its window. */
   opened(window: number) {
     this.#chunk = Math.max(1, Math.min(CHUNK, window))
     this.grant(window)
   }
 
-  /** @internal */
   grant(bytes: number) {
     this.#credit += bytes
     this.#channels.peer.pump()
   }
 
-  /** @internal The other side ended its half; settles once every chunk before it was read. */
+  /** The other side ended its half; settles once every chunk before it was read. */
   endReceived() {
     if (this.#endReceived || this.#aborted) return
     this.#endReceived = true
@@ -131,7 +146,6 @@ export class Channel {
     })
   }
 
-  /** @internal */
   fail(error: Error) {
     if (this.#aborted) return
     this.#aborted = error
@@ -172,7 +186,7 @@ const all = new WeakMap<RpcPeer, Channels>()
 /** The channels on one peer. One per peer: get it with `Channels.of(peer)`. */
 export class Channels {
   readonly peer: RpcPeer
-  #open = new Map<string, Channel>()
+  #open = new Map<string, PeerChannel>()
   #acceptors = new Map<string, ChannelAcceptor>()
   #prefix = Math.random().toString(36).slice(2, 8)
   #next = 1
@@ -189,7 +203,7 @@ export class Channels {
       const accept = this.#acceptors.get(kind)
       if (!accept) throw new RpcError('unknown_channel', `No channel of kind ${kind} here`)
       if (typeof ch !== 'string' || this.#open.has(ch)) throw new RpcError('invalid', 'Bad channel id')
-      const channel = new Channel(this, ch, kind, Number(window) || 0, WINDOW)
+      const channel = new PeerChannel(this, ch, kind, Number(window) || 0, WINDOW)
       this.#open.set(ch, channel)
       try { await accept(channel, params ?? {}) } catch (error) { channel.fail(error as Error); throw error }
       return { window: WINDOW }
@@ -210,7 +224,7 @@ export class Channels {
   async open(kind: string, params?: unknown): Promise<Channel> {
     const ch = `${this.#prefix}${this.#next++}`
     // Known before the answer, so data sent right behind it finds the channel.
-    const channel = new Channel(this, ch, kind, 0, WINDOW)
+    const channel = new PeerChannel(this, ch, kind, 0, WINDOW)
     this.#open.set(ch, channel)
     try {
       const { window } = await this.peer.call<{ window: number }>('ch.open', { ch, kind, params, window: WINDOW } satisfies ChannelOpen)

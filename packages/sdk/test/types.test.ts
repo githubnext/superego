@@ -1,6 +1,7 @@
 // The author types' 'superego', 'superego/ui' and 'superego/testing', as an author (or their agent) reads them in
 // node_modules: one file each, nothing in it pointing into Superego's own packages, and the API documented.
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import ts from 'typescript'
 import { beforeAll, expect, it } from 'vitest'
@@ -64,4 +65,44 @@ it('opens with what the entry is for, then the main API', () => {
   const testing = documented('testing.d.ts')
   expect([...testing.keys()][0]).toBe('testDaemon')
   expect(testing.get('mountUi')).toContain('const ui = await mountUi(')
+})
+
+it("takes the entries' types for each other's: a profile's extension from 'superego' goes to testDaemon, a test window's registry to 'superego/unstable'", () => {
+  const profile = mkdtempSync(join(tmpdir(), 'superego-entries-'))
+  try {
+    symlinkSync(join(dir, '..'), join(profile, 'node_modules'))
+    writeFileSync(join(profile, 'a.test.ts'), `import { defineDaemonExtension } from 'superego'
+import { mountUi, testDaemon, testThread } from 'superego/testing'
+import { fileKind } from 'superego/unstable'
+
+const extension = defineDaemonExtension({ name: 'mine', setup(superego) { superego.channel('mine', (channel) => channel.end()) } })
+export const daemon = await testDaemon({ extensions: [extension] })
+const ui = await mountUi()
+export const kind = fileKind(ui.registry, { machine: 'local', thread: testThread() }, 'a.md')
+`)
+    const program = ts.createProgram([join(profile, 'a.test.ts')], {
+      module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, target: ts.ScriptTarget.ES2023, strict: true, noEmit: true,
+      types: [], lib: ['lib.es2023.d.ts', 'lib.dom.d.ts'], skipLibCheck: true,
+    })
+    const errors = ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
+    expect(errors).toEqual([])
+  } finally {
+    rmSync(profile, { recursive: true, force: true })
+  }
+})
+
+// A class with private members is nominal: two entries each declaring their own copy of one would take neither's for the
+// other's. Such a type is an interface (or a type) in what an author sees.
+it('declares no class with private members in more than one entry', () => {
+  const classes = new Map<string, string[]>()
+  for (const file of Object.values(ENTRIES)) {
+    const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true)
+    for (const statement of source.statements) {
+      if (!ts.isClassDeclaration(statement) || !statement.name) continue
+      const nominal = statement.members.some((m) => (m.name && ts.isPrivateIdentifier(m.name))
+        || ts.getModifiers(m)?.some((x) => x.kind === ts.SyntaxKind.PrivateKeyword || x.kind === ts.SyntaxKind.ProtectedKeyword))
+      if (nominal) classes.set(statement.name.text, [...classes.get(statement.name.text) ?? [], file])
+    }
+  }
+  expect([...classes].filter(([, files]) => files.length > 1)).toEqual([])
 })

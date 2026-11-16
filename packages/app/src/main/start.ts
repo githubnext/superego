@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { appEnv, defaultDataDir } from '@superego/daemon/client'
 import { installTypes } from '@superego/client/author-types'
-import { Router, type AppConfig } from '@superego/protocol'
+import { createRouter, type AppConfig } from '@superego/protocol'
 import { SettingsRegistry } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import { APP, registerAppSettings } from '../shared/app-settings.ts'
@@ -93,7 +93,7 @@ export function startApp(appConfig: AppConfig) {
     open: (open) => windows.show({ open }),
   })
 
-  const router = new Router<AppActionContext>()
+  const router = createRouter<AppActionContext>()
   machines.registerActions(router)
   registerAppActions(router, { app: appConfig, settings, cli, service, layoutFile, quit: () => app.quit() })
   const windows = createWindows({

@@ -1,7 +1,7 @@
 // A window's record in the main process: what its page leaves behind as it loads again or the window closes, and how a
 // call on the app's endpoint finds its answer.
 import { describe, expect, it, vi } from 'vitest'
-import { defineAction, obj, Router, RpcError, str } from '@superego/protocol'
+import { createRouter, defineAction, obj, RpcError, str } from '@superego/protocol'
 import { MemorySettingsStore, SettingsRegistry } from '@superego/settings'
 
 vi.mock('electron', () => ({}))
@@ -15,7 +15,7 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 10))
 function setUp() {
   const settings = new SettingsRegistry(new MemorySettingsStore())
   settings.register({ id: 'test', title: 'Test', settings: [{ key: 'test.on', title: 'On', default: false, type: { type: 'boolean' } }] })
-  const router = new Router<AppActionContext>()
+  const router = createRouter<AppActionContext>()
   const notifier = { notify: vi.fn(), refreshBadge: vi.fn() }
   const sent: { method: string; params: unknown }[] = []
   const browser = { webContents: { isDestroyed: () => false, send: (_channel: string, event: { method: string; params: unknown }) => sent.push(event) } }
