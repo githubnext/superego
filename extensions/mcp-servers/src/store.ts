@@ -85,7 +85,7 @@ export class SecretStore {
     this.#remember(all)
   }
 
-  /** The secrets in it: every value of a server's secrets, and tokens and client secrets wherever they are. */
+  /** The secrets in it: every value of a server's secrets (not its `@` fields), and tokens and client secrets wherever they are. */
   #remember(all: StoreEntries) {
     const add = (value: Json | undefined) => { if (typeof value === 'string' && value !== '') this.#values.add(value) }
     const walk = (value: Json | undefined): void => {
@@ -98,7 +98,10 @@ export class SecretStore {
       }
     }
     for (const [key, value] of Object.entries(all)) {
-      if (key.startsWith('server:') && value && typeof value === 'object' && !Array.isArray(value)) Object.values(value).forEach(add)
+      // A server's secrets, by name; a field starting `@` is bookkeeping, not a secret (`@for`: where they were set for).
+      if (key.startsWith('server:') && value && typeof value === 'object' && !Array.isArray(value)) {
+        for (const [name, secret] of Object.entries(value)) if (!name.startsWith('@')) add(secret)
+      }
       else walk(value)
     }
   }

@@ -812,9 +812,9 @@ From the independent review of the client support (`~/.superego/mcp-review.md`):
 - **L1: the remote catchers check `state`.** The desktop app's catcher (sign-in-callback.ts) and the command line's
   `catchRedirect(callback, signal, page)` read `state` from `auth_url`'s page. They turn away (400) a request to the
   callback without it, and go on listening. A page without a `state` is caught as before.
-- **L2: only secrets are remembered for redacting:** every value of a `server:*` entry, and `access_token`,
-  `refresh_token` and `client_secret` wherever they are, whatever their length. URLs, `Bearer` and client names no
-  longer come out as `***`.
+- **L2: only secrets are remembered for redacting:** every value of a `server:*` entry but its `@` fields (`@for`),
+  and `access_token`, `refresh_token` and `client_secret` wherever they are, whatever their length. URLs, `Bearer` and
+  client names no longer come out as `***`.
 - **L3: a flow left waiting is given up on.** `createAuthFlows({ timeout })` defaults to 10 minutes (`FLOW_TIMEOUT`),
   the same as the app's catcher. The flow's signal aborts, its prompts close, and the daemon's listener lets go of its
   `state`. It ends `failed` with "Timed out: …". It isn't cancelled when the client that started it disconnects:

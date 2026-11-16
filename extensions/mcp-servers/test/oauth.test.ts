@@ -216,8 +216,9 @@ it('remembers only secret values for redacting: tokens, client secrets, server s
   const port = await freePort()
   const client = { client_id: 'superego-app', client_secret: 'shh', redirect_uris: [redirectOf(port)] }
   const { as, store, entry } = await signedIn({ client }, { clientId: 'superego-app', clientSecret: 'shh' }, port)
-  await store.modify(serverKey('web'), () => ({ key: 'k1' }))
+  await store.modify(serverKey('web'), () => ({ key: 'k1', '@for': '["https://example.com","api-key"]' }))
   const secrets = store.secrets()
+  expect(secrets).not.toContain('["https://example.com","api-key"]')
   expect(secrets).toEqual(expect.arrayContaining([entry.tokens.access_token, entry.tokens.refresh_token!, 'shh', 'k1']))
   for (const plain of ['Bearer', 'bearer', as.url, `${as.base}/`, 'superego-app', 'Superego']) expect(secrets).not.toContain(plain)
 })
