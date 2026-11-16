@@ -43,7 +43,7 @@ describe("Ego's tools", () => {
       const machines: EgoMachines = { list: () => [box], add: async () => box, update: async () => box, remove: async () => {} }
       const { tools = [] } = egoTools({ dir, ...on(router), snapshot, machines, threads: threads() })
       const names = (tools as unknown as Tool[]).map((t) => t.name)
-      expect(names.sort()).toEqual(['ls', 'read', 'superego_actions', 'superego_machines', 'superego_mcp_servers', 'superego_profiles', 'superego_set_setting', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
+      expect(names.sort()).toEqual(['ls', 'read', 'superego_actions', 'superego_machines', 'superego_profiles', 'superego_set_setting', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
       // Setup (settings, machines) is what it changes itself; files, profiles, skills and code go to threads, so it has
       // no tool that writes or runs anything.
       for (const mutating of ['write', 'edit', 'bash', 'superego_run', 'thread_send']) expect(names).not.toContain(mutating)
@@ -98,6 +98,38 @@ describe("Ego's tools", () => {
     expect(started).toEqual([{ prompt: 'Add a profile', title: 'Profile', cwd: '/data/profiles' }])
   })
 
+  it("won't open the credential stores", async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'superego-ego-read-'))
+    try {
+      await writeFile(join(dir, 'mcp-auth.json'), '{"server:linear":"lin_api_x"}')
+      await writeFile(join(dir, 'auth.json'), '{"anthropic":"sk-x"}')
+      await writeFile(join(dir, 'mcp-servers.json'), '{"servers":{}}')
+      const { tools = [] } = egoTools({ dir, ...on(new Router()), snapshot, threads: threads() })
+      const read = (tools as unknown as Tool[]).find((t) => t.name === 'read')!
+      const api = { conversationId: 1, cwd: dir, env: process.env }
+      for (const path of ['mcp-auth.json', './auth.json', join(dir, 'sub', '..', 'mcp-auth.json'), 'mcp-servers.json']) {
+        await expect(Promise.resolve().then(() => read.execute({ path }, api, { cwd: dir }))).rejects.toThrow(/holds sign-ins and keys/)
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it("leaves out the data of a section drawn from a live value (MCP servers', configs and all)", async () => {
+    const sections = async (): Promise<SettingsSnapshot> => ({
+      sections: [
+        { id: 'providers', title: 'Providers', order: 1, settings: [], data: { signedIn: ['anthropic'] } },
+        { id: 'mcp-servers', title: 'MCP servers', order: 2, settings: [], ui: 'mcp-servers', value: 'mcp-servers.servers', data: { servers: [{ config: { headers: { Authorization: 'Bearer x' } } }] } },
+      ],
+      values: {},
+    })
+    const { tools = [] } = egoTools({ dir: '/data', ...on(new Router()), snapshot: sections, threads: threads() })
+    expect(await run(tools, 'superego_settings', {})).toEqual([
+      { id: 'providers', title: 'Providers', data: { signedIn: ['anthropic'] }, settings: [] },
+      { id: 'mcp-servers', title: 'MCP servers', settings: [] },
+    ])
+  })
+
   it('starts none when told why not, for the conversation asking, as the call is made', async () => {
     const started: Parameters<EgoThreads['start']>[0][] = []
     const asked: number[] = []
@@ -113,7 +145,7 @@ describe("Ego's tools", () => {
 })
 
 describe('egoPrompt', () => {
-  const prompt = egoPrompt({ name: 'Superego', id: 'superego', dataDir: '/data', agentsDir: '/agents', hostname: 'here' })
+  const prompt = egoPrompt({ name: 'Superego', id: 'superego', dataDir: '/data', agentsDir: '/agents', hostname: 'here', optional: ['coding-tools', 'ego', 'agent-ui'] })
 
   it('briefs builders with the extension commands, without Node', () => {
     expect(prompt).toContain('`superego extension\n  new <name> --user [--ui]`')
@@ -121,6 +153,11 @@ describe('egoPrompt', () => {
     expect(prompt).toContain('the superego skill, which every thread has')
     expect(prompt).toContain('No Node, npx or tsc')
     expect(prompt).not.toContain('--skill')
+  })
+
+  it("names this machine's optional extensions, as they are", () => {
+    expect(prompt).toContain('optional extensions it does without: coding-tools, ego, agent-ui\n')
+    expect(egoPrompt({ name: 'Superego', id: 'superego', dataDir: '/data', agentsDir: '/agents', hostname: 'here', optional: [] })).toContain('superego_settings lists them')
   })
 
   it('takes the obvious default rather than asking', () => {

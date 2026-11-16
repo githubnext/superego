@@ -3,8 +3,9 @@
 // mcp-servers`); their secrets in `mcp-auth.json`. A profile opts in by name and may define its own, both in its
 // `mcpServers` (this extension's key in profiles: `['linear', { docs: { … } }]`; its own run only once the profile is
 // allowed, as the profile isn't loaded before); a thread without a profile
-// gets those marked "Use in threads without a profile"; hidden threads (an extension's own: Ego's) get none. Each turn
-// works out its servers again (`agentParts`), so an edit applies from the next turn.
+// gets those marked "Use in threads without a profile"; hidden threads (an extension's own) get none. Each turn works out
+// its servers again (`agentParts`), so an edit applies from the next turn. Ego's thread gets superego_mcp_servers instead,
+// to set them up (ego.ts).
 import { watch } from 'node:fs'
 import { join } from 'node:path'
 import { defineExtension, hook, section, ToolTask, type Extension } from '@earendil-works/pi-durable'
@@ -14,6 +15,7 @@ import type { DaemonContext } from '@superego/daemon/sdk'
 import { RpcError, type Json } from '@superego/protocol'
 import { checkConfig, ConfigFile, optionalSecretNames, profileServerNames, profileServers, profileServersProblem, secretNames } from './config.ts'
 import { Callbacks, DEFAULT_CALLBACK_PORT, redirectOf } from './loopback.ts'
+import { EGO, egoPart } from './ego.ts'
 import { signIn } from './oauth.ts'
 import { interruptedText } from './results.ts'
 import { oauthResource, Runtime, type RuntimeOptions, type Server } from './servers.ts'
@@ -232,8 +234,22 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         return { chosen, left }
       }
 
+      // Ego sets servers up, for the user in the window: never for an outside agent (a message it's answering that came
+      // from one, or one not to be found), whatever outside agents may do otherwise.
+      const ego = egoPart({
+        app: superego.app, data: sectionData,
+        dispatch: (id, params) => superego.dispatch(id, params),
+        async refuse(conversation, callId) {
+          const origin = await superego.threads.answering(conversation, callId)
+          if (origin && origin.exposure !== 'outside') return undefined
+          return 'An outside agent asked for this. Outside agents never set up MCP servers: the user does, in Settings → MCP servers (or asks here in the window).'
+        },
+      })
+      superego.agent(ego, { always: false })
+
       superego.agentParts(async (thread) => {
-        // An extension's own thread (Ego's) has none: it isn't the user's agent.
+        if (thread.owner === EGO) return [ego]
+        // Another extension's own thread has none: it isn't the user's agent.
         if (thread.hidden || thread.owner) return []
         const { chosen, left } = await selection(thread)
         await runtime.firstListings(chosen, thread.id)

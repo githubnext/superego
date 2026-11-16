@@ -1,13 +1,18 @@
-// Ego's superego_mcp_servers: this machine's MCP servers, set up through the mcp-servers extension's actions. It lists
-// them and the well-known ones, adds one (from the catalogue by name, or a command or a URL), edits, removes, and
-// switches "Use in threads without a profile". It never handles a secret: nothing in its schema takes one, a value that
-// looks like one is refused, and the user is sent to Settings → MCP servers to sign in or set a key. A command it adds
-// or edits waits for the user's Allow (`allowed: false`). It refuses outside agents altogether.
-import { defineTool } from '@earendil-works/pi-durable'
+// What Ego, Superego's own agent, gets of this extension in its thread (and no other thread does): superego_mcp_servers,
+// to set up this machine's servers, and a word in its prompt on how. The tool lists the servers and the well-known ones,
+// adds one (from the catalogue by name, or a command or a URL), edits, removes, and switches "Use in threads without a
+// profile", all through this extension's actions. It never handles a secret: nothing in its schema takes one, a value
+// that looks like one is refused, and the user is sent to Settings → MCP servers to sign in or set a key. A command it
+// adds or edits waits for the user's Allow (`allowed: false`). It refuses outside agents altogether.
+import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { map, oneOf } from '@earendil-works/pi-schema'
-import { arr, bool, obj, opt, str, type Json, type SettingsSnapshot } from '@superego/protocol'
-import { CATALOG, fromCatalog } from '@superego/mcp-servers/catalog'
-import { ACTIONS, SECTION, type CheckResult, type SectionData, type ServerConfig, type ServerInfo } from '@superego/mcp-servers/shared'
+import { arr, bool, obj, opt, str, type AppConfig, type Json } from '@superego/protocol'
+import { CATALOG, fromCatalog } from './catalog.ts'
+import { configOf, formOf, quote } from './describe.ts'
+import { ACTIONS, type CheckResult, type SectionData, type ServerConfig, type ServerInfo } from './shared.ts'
+
+/** Ego's extension: its thread is the one it owns. */
+export const EGO = 'ego'
 
 /** Where the user does what Ego doesn't. */
 const where = (name: string) => `Settings → MCP servers → ${name}`
@@ -40,14 +45,15 @@ export const brief = (s: ServerInfo) => ({
   ...(userStep(s) ? { user: userStep(s) } : {}),
 })
 
-type Fields = {
+/** The tool's fields that make a config. */
+export type Fields = {
   title?: string | undefined; command?: string | undefined; args?: string[] | undefined; cwd?: string | undefined; env?: Record<string, string> | undefined
   secretEnv?: string[] | undefined; url?: string | undefined; auth?: 'none' | 'oauth' | 'api-key' | undefined
   lifetime?: 'machine' | 'thread' | undefined; tools?: 'auto' | 'all' | 'search' | undefined
 }
 
-/** A config from the tool's fields, over `base` (the server edited); refusing anything that looks like a secret. */
-export function configFrom(fields: Fields, base: ServerConfig = {}): ServerConfig {
+/** Refuse anything among the fields that looks like a secret, saying where it goes instead. */
+function refuseSecrets(fields: Fields) {
   for (const [name, value] of Object.entries(fields.env ?? {})) {
     if (SECRETISH.test(name)) throw new Error(`${name} looks like a secret. Give its name in secretEnv instead: the user sets its value in Settings, never in chat.`)
     if (/^(?:sk|pk|ghp|gho|github_pat|xox[bp]|sntrys|lin_api)[-_]/i.test(value)) throw new Error(`${name}'s value looks like a key. Keys are the user's to set, in Settings.`)
@@ -62,59 +68,66 @@ export function configFrom(fields: Fields, base: ServerConfig = {}): ServerConfi
       throw new Error("That URL carries a credential. Give it without, and set the server's sign-in to oauth or api-key: the user signs in or sets the key in Settings.")
     }
   }
+}
+
+/**
+ * A config from the tool's fields over `base` (the server edited, or a catalogue entry), made as the Add and Edit
+ * dialog makes one (`configOf`): the fields given replace what they say, the rest of `base` is kept.
+ */
+export function configFrom(name: string, fields: Fields, base: ServerConfig = {}): ServerConfig {
+  refuseSecrets(fields)
   if (fields.command !== undefined && fields.url !== undefined) throw new Error('A server is a command or a URL, not both.')
-  const kind = fields.command !== undefined ? 'command' : fields.url !== undefined ? 'url' : base.url ? 'url' : 'command'
-  const { command, args, cwd, env, url, headers, auth, allowed: _allowed, ...rest } = base
-  const config: ServerConfig = { ...rest }
-  if (fields.title !== undefined) { if (fields.title) config.title = fields.title; else delete config.title }
-  if (kind === 'command') {
-    const next = fields.command ?? command
-    if (!next) throw new Error('Give the command it runs, or a URL.')
-    config.command = next
-    const nextArgs = fields.args ?? (fields.command === undefined ? args : undefined)
-    if (nextArgs?.length) config.args = nextArgs
-    const nextCwd = fields.cwd ?? (fields.command === undefined ? cwd : undefined)
-    if (nextCwd) config.cwd = nextCwd
-    const nextEnv = fields.env ?? env
-    if (nextEnv && Object.keys(nextEnv).length) config.env = nextEnv
-    const names = fields.secretEnv ?? (auth?.type === 'env' ? auth.names : [])
-    if (names.length) config.auth = { type: 'env', names }
-  } else {
-    config.url = fields.url ?? url!
-    if (headers && fields.url === undefined) config.headers = headers
-    const how = fields.auth ?? (auth?.type === 'oauth' || auth?.type === 'api-key' ? auth.type : 'none')
-    if (how !== 'none') config.auth = auth?.type === how ? auth : { type: how }
+  const form = formOf(name, base)
+  if (fields.title !== undefined) form.title = fields.title
+  if (fields.command !== undefined || fields.args !== undefined) {
+    const command = fields.command ?? base.command
+    if (!command) throw new Error('Give the command it runs, or a URL.')
+    const args = fields.args ?? (fields.command === undefined ? base.args ?? [] : [])
+    form.kind = 'command'
+    form.line = [command, ...args].map(quote).join(' ')
   }
-  if (fields.lifetime) config.lifetime = fields.lifetime
-  if (fields.tools) config.tools = fields.tools
+  if (fields.url !== undefined) { form.kind = 'url'; form.url = fields.url }
+  if (fields.env) form.env = [...Object.entries(fields.env).map(([name, value]) => ({ name, value, secret: false })), ...form.env.filter((row) => row.secret)]
+  if (fields.secretEnv) form.env = [...form.env.filter((row) => !row.secret), ...fields.secretEnv.map((name) => ({ name, value: '', secret: true }))]
+  if (fields.auth) form.auth = fields.auth
+  if (fields.lifetime) form.lifetime = fields.lifetime
+  if (fields.tools) form.tools = fields.tools
+  const { config } = configOf(form, base)
+  if (fields.cwd !== undefined && config.command) config.cwd = fields.cwd
   return config
 }
 
-/** Settings → MCP servers as Ego reads it (`superego_settings`): each server in brief. */
-export function briefSection(data: SectionData & { problem?: string }) {
-  return { servers: data.servers.map(brief), profiles: data.profiles.map(brief), ...(data.problem ? { problem: data.problem } : {}) }
-}
+/** What Ego is told of MCP servers, beside its tool. */
+export const egoSection = (app: Pick<AppConfig, 'id' | 'name'>) => `MCP servers are other people's tools for the agents in threads (Linear, GitHub, Sentry, a browser): a command a
+machine runs or a URL it reaches, set up per machine in Settings → MCP servers. A thread uses those its profile names
+(\`mcpServers: ['linear']\`, with servers of its own as objects there), or without a profile those switched to "Use in
+threads without a profile". "Outside agents" (\`${app.id} mcp\`) are the other way round: agents outside ${app.name}
+using this machine.
 
-export function serversTool({ dispatch, snapshot, refuse }: {
+You set up this machine's MCP servers with superego_mcp_servers: a well-known one by name (op catalog lists them),
+else a command or a URL. Say what you'll change first, ask before removing one, and afterwards say where the user sees
+it. A command you add doesn't run until the user allows it (Settings → MCP servers shows the whole command line, with
+Allow): say so. Signing in is the user's: never ask for a key, token or password in chat, where it would stay in the
+transcript, and never put one in a server's config. Send them to Settings → MCP servers → <name> → Sign in (OAuth, in
+the browser) or Set key; if they paste one anyway, don't use it, and tell them to set it there (and to revoke it, if it
+matters). An outside agent never sets up MCP servers: superego_mcp_servers refuses it, since a server runs commands and
+reaches the user's accounts.`
+
+/** Ego's part: superego_mcp_servers, and its section. */
+export function egoPart({ app, data, dispatch, refuse }: {
+  app: Pick<AppConfig, 'id' | 'name'>
+  /** The machine's servers, as Settings has them. */
+  data(): Promise<SectionData>
+  /** Run one of this extension's actions. */
   dispatch(id: string, params: Record<string, Json>): Promise<unknown>
-  snapshot(): Promise<SettingsSnapshot>
-  /**
-   * Why it may not run now, for its call `callId` in conversation `conversation` (an outside agent asked); nothing when
-   * it may.
-   */
-  refuse?(conversation: number, callId: string): Promise<string | undefined>
+  /** Why it may not run now, for its call `callId` in conversation `conversation` (an outside agent asked); nothing when it may. */
+  refuse(conversation: number, callId: string): Promise<string | undefined>
 }) {
   const json = (value: unknown) => ({ output: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] })
-  /** The machine's servers, as Settings has them; none when the extension is off here. */
-  async function servers(): Promise<SectionData> {
-    const section = (await snapshot()).sections.find((s) => s.id === SECTION)
-    if (!section) throw new Error('This machine runs no MCP servers: the mcp-servers extension is off (Settings → Extensions).')
-    return section.data as SectionData
-  }
   const own = async (name: string | undefined) => {
-    const data = await servers()
-    const found = data.servers.find((s) => s.name === name)
-    if (!found) throw new Error(name ? `No server ${name} here: ${data.servers.map((s) => s.name).join(', ') || 'none yet'}${data.profiles.some((s) => s.name === name) ? ` (${name} is a profile's: it's set up in that profile.ts)` : ''}` : 'Which server? Give its name.')
+    const { servers, profiles } = await data()
+    const found = servers.find((s) => s.name === name)
+    if (!found) throw new Error(name ? `No server ${name} here: ${servers.map((s) => s.name).join(', ') || 'none yet'}${profiles.some((s) => s.name === name) ? ` (${name} is a profile's: it's set up in that profile.ts)` : ''}` : 'Which server? Give its name.')
     return found
   }
   /** What a save said: the server as it stands after its check, and what the user has to do. */
@@ -122,7 +135,7 @@ export function serversTool({ dispatch, snapshot, refuse }: {
     const server = (result as CheckResult).server
     return json({ ...brief(server), ...(server.state === 'running' || server.state === 'stopped' ? { checked: server.tools !== undefined ? `Connected: ${server.tools} tools` : 'Saved' } : {}) })
   }
-  return defineTool({
+  const tool = defineTool({
     name: 'superego_mcp_servers',
     description: "This machine's MCP servers: other people's tools (Linear, GitHub, a browser) for the agents in its threads, as in Settings → MCP servers. " +
       'op: list (its servers, and those of profiles); catalog (well-known servers to add by name); add (by catalog name, or a command or a URL); edit; remove; unprofiled (on: threads without a profile use it). ' +
@@ -144,27 +157,24 @@ export function serversTool({ dispatch, snapshot, refuse }: {
       on: opt(bool({ description: 'unprofiled: whether threads without a profile use it' })),
     }),
     async execute({ op, name, catalog, on, ...fields }, api) {
-      const refused = await refuse?.(Number(api.conversationId), api.callId)
+      const refused = await refuse(Number(api.conversationId), api.callId)
       if (refused) throw new Error(refused)
       switch (op) {
-        case 'list': { const data = await servers(); return json({ servers: data.servers.map(brief), profiles: data.profiles.map(brief) }) }
+        case 'list': { const { servers, profiles } = await data(); return json({ servers: servers.map(brief), profiles: profiles.map(brief) }) }
         case 'catalog': return json(CATALOG.map((e) => ({ name: e.name, title: e.title, description: e.description, runs: e.server.url ?? [e.server.command, ...e.server.args ?? []].join(' '), ...(e.setup ? { setup: e.setup } : {}) })))
         case 'add': {
-          await servers()
           const known = catalog !== undefined ? fromCatalog(catalog) : fields.command === undefined && fields.url === undefined && name ? fromCatalog(name) : undefined
           if (catalog !== undefined && !known) throw new Error(`No well-known server ${catalog}: ${CATALOG.map((e) => e.name).join(', ')}. Give a command or a URL instead.`)
-          const config = configFrom(fields, known?.server)
           const as = name ?? known?.name
           if (!as) throw new Error('Give it a name.')
+          const config = configFrom(as, fields, known?.server)
           // A command is code: it waits for the user's Allow.
-          const result = await dispatch(ACTIONS.add, { name: as, server: config as Json, ...(config.command ? { allowed: false } : {}) })
-          return after(result)
+          return after(await dispatch(ACTIONS.add, { name: as, server: config as Json, ...(config.command ? { allowed: false } : {}) }))
         }
         case 'edit': {
           const server = await own(name)
-          const config = configFrom(fields, server.config)
-          const result = await dispatch(ACTIONS.edit, { name: server.name, server: config as Json, ...(config.command ? { allowed: false } : {}) })
-          return after(result)
+          const config = configFrom(server.name, fields, server.config)
+          return after(await dispatch(ACTIONS.edit, { name: server.name, server: config as Json, ...(config.command ? { allowed: false } : {}) }))
         }
         case 'remove': {
           const server = await own(name)
@@ -180,4 +190,5 @@ export function serversTool({ dispatch, snapshot, refuse }: {
       }
     },
   })
+  return defineExtension({ name: 'mcp-servers-ego', tools: [tool], sections: [section('mcp-servers-ego', () => egoSection(app))] })
 }

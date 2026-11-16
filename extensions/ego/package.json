@@ -9,10 +9,8 @@
   },
   "dependencies": {
     "@earendil-works/pi-durable": "1.5.0",
-    "@earendil-works/pi-schema": "1.5.0",
     "@superego/app": "workspace:*",
     "@superego/daemon": "workspace:*",
-    "@superego/mcp-servers": "workspace:*",
     "@superego/protocol": "workspace:*",
     "@superego/thread-tools": "workspace:*",
     "@superego/ui": "workspace:*"
@@ -21,8 +19,7 @@
     "react": "^19"
   },
   "devDependencies": {
-    "@earendil-works/chord": "1.5.0",
-    "@earendil-works/pi-ai": "1.5.0",
+    "@superego/sdk": "workspace:*",
     "@types/react": "^19",
     "react": "^19"
   }

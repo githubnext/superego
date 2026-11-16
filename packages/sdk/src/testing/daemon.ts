@@ -24,6 +24,8 @@ export type TestDaemonOptions = {
   dataDir?: string
   /** How long a setup may take (15s in the app): shorter, to test one that hangs. */
   setupTimeout?: number
+  /** How long each extension's `agentParts` may take at a send (5s in the app): longer, for a slow one under test. */
+  agentPartsLimit?: number
 }
 
 /** A live value as a test follows it: what it is now, every value it took, and a wait for one. */
@@ -115,6 +117,7 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
   const daemon = await openDaemon({
     app, dataDir, defaultCwd: work, agentsDir: join(dataDir, 'agents'), extensions: options.extensions ?? [],
     ...(options.setupTimeout ? { setupTimeout: options.setupTimeout } : {}),
+    ...(options.agentPartsLimit ? { agentPartsLimit: options.agentPartsLimit } : {}),
   })
   const socket = join(dataDir, `d${opened}.sock`)
   const server = await listen(daemon, socket)
@@ -129,8 +132,14 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
       await new Promise((r) => setTimeout(r, 25))
     }
   }
-  const info = async (id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)
-    ?? (await peer.call<ThreadInfo[]>('thread.list', { archived: true })).find((t) => t.id === id)
+  // Any thread: archived, or hidden (an extension's own), too.
+  const info = async (id: string) => {
+    for (const list of [{}, { archived: true }, { hidden: true }, { hidden: true, archived: true }]) {
+      const found = (await peer.call<ThreadInfo[]>('thread.list', list)).find((t) => t.id === id)
+      if (found) return found
+    }
+    return undefined
+  }
   const idle = async (id: string) => {
     let now: ThreadInfo | undefined
     await until(async () => { now = await info(id); return Boolean(now && now.status.state !== 'working') }, `thread ${id} to finish its run`)

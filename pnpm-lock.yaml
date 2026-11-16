@@ -329,18 +329,12 @@ importers:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
         version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
-      '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
       '@superego/daemon':
         specifier: workspace:*
         version: link:../../packages/daemon
-      '@superego/mcp-servers':
-        specifier: workspace:*
-        version: link:../mcp-servers
       '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -351,12 +345,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
-      '@earendil-works/chord':
-        specifier: file:../../vendor/earendil-works-chord-1.5.0.tgz
-        version: file:vendor/earendil-works-chord-1.5.0.tgz(ws@8.22.0)
-      '@earendil-works/pi-ai':
-        specifier: file:../../vendor/earendil-works-pi-ai-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-ai-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+      '@superego/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
       '@types/react':
         specifier: ^19
         version: 19.3.0
@@ -488,6 +479,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
+      '@superego/ego':
+        specifier: workspace:*
+        version: link:../ego
+      '@superego/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
       '@types/react':
         specifier: ^19
         version: 19.3.0
