@@ -15,7 +15,7 @@
 //
 // Awaited at the top of the script: it loads the app's main before Electron's `ready` and runs the body after it.
 import { app, BrowserWindow, nativeTheme } from 'electron'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 
 /** A failure the harness reports: thrown by `until`, `check` and `fail`, and caught by `openApp`. */
 export class Failure extends Error {}
@@ -153,7 +153,12 @@ export async function openApp(options, body) {
     const page = win()?.webContents
     if (page) console.error('page:', (await page.executeJavaScript('document.body.innerText').catch(String)).slice(0, 2000))
     if (page && shots) await t.shot('fail').catch((error) => console.error('no screenshot of the failure:', error.message))
-    try { console.error('daemon.log:', readFileSync(`${process.env.SUPEREGO_HOME}/daemon.log`, 'utf8').slice(-2000)) } catch (error) { console.error('no daemon.log:', error.message) }
+    // The machines as the window has them, and every daemon's log in the home (another machine's, in a folder of it, too).
+    if (page) console.error('machines:', await page.executeJavaScript('window.superego.machines().then((list) => JSON.stringify(list.map(({ id, label, state, error }) => ({ id, label, state, error }))))').catch(String))
+    const home = process.env.SUPEREGO_HOME
+    const logs = home ? readdirSync(home, { recursive: true }).filter((path) => String(path).endsWith('daemon.log')) : []
+    if (!logs.length) console.error(`no daemon.log in ${home}`)
+    for (const log of logs) console.error(`${log}:`, readFileSync(`${home}/${log}`, 'utf8').slice(-2000))
     if (options.onFail) return options.onFail(message)
     app.exit(1)
   }
