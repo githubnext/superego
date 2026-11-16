@@ -17,6 +17,15 @@ export type Task = {
   request: string
   /** Make the user's project what the task needs, before the request. */
   setup?(world: World): void
+  /** The world has Node on its PATH (`npx`), as a user who runs Node-based servers has. */
+  node?: boolean
+  /**
+   * The user's part while the work goes on, beyond answering questions: called at each look while its agents aren't
+   * working (Ego's turn has ended; `quiet`: nothing has worked a while; `blocked`: a question waits, which the harness
+   * answers next). It does in the window what a user would (press Allow), and answers what the user then says to the
+   * agent, if anything: said only when no question waits.
+   */
+  user?(ctx: { world: World; threads: Thread[]; quiet: boolean; blocked: boolean; log(line: string): void }): Promise<string | undefined>
   accept(ctx: AcceptContext): Promise<Acceptance>
 }
 

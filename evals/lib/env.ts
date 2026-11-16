@@ -7,9 +7,9 @@
 //   <run>/home/.agents         SUPEREGO_AGENTS: empty; the skills extension offers the app's own `superego` skill (out/skill)
 //   <run>/home/code/myproject  the user's project: a small git repository, where a plain thread starts
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { Install } from './install.ts'
 import { openRpc, type Rpc } from './rpc.ts'
 
@@ -24,6 +24,8 @@ export type WorldOptions = {
   model: string
   /** A finished run's world, its daemon started again (to check it again). */
   reuse?: boolean
+  /** Node and npm on the PATH, as a user who runs `npx` servers has them (a copy outside the real home, which the sandbox hides). */
+  node?: boolean
 }
 
 export type World = {
@@ -40,7 +42,7 @@ export type World = {
 }
 
 /** A run's world, new; or with `reuse`, the one a finished run left, its daemon started again (to check it again). */
-export async function makeWorld(dir: string, install: Install, { model, reuse = false }: WorldOptions): Promise<World> {
+export async function makeWorld(dir: string, install: Install, { model, reuse = false, node = false }: WorldOptions): Promise<World> {
   const home = join(dir, 'home')
   const dataDir = join(home, '.superego')
   const agents = join(home, '.agents')
@@ -63,7 +65,7 @@ export async function makeWorld(dir: string, install: Install, { model, reuse = 
 
   const env: Record<string, string> = {
     HOME: home, SUPEREGO_HOME: dataDir, SUPEREGO_AGENTS: agents, TMPDIR: join(dir, 'tmp'),
-    PATH: [join(install.dir, 'bin'), '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'].join(':'),
+    PATH: [join(install.dir, 'bin'), ...(node ? [join(nodeCopy(join(install.dir, '..')), 'bin')] : []), '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'].join(':'),
     LANG: 'en_US.UTF-8', USER: process.env.USER ?? 'user', SHELL: '/bin/zsh', TERM: 'xterm-256color',
     GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', ...gitEnv,
   }
@@ -109,6 +111,20 @@ export async function makeWorld(dir: string, install: Install, { model, reuse = 
       } catch (error) { console.error(`eval: couldn't list what works in ${dir}:`, error) }
     },
   }
+}
+
+/**
+ * The harness's own Node (its whole install: node, npm, npx), copied once to `<root>/node-<version>`: the sandbox keeps
+ * a run from the real home, where a version manager keeps it.
+ */
+export function nodeCopy(root: string): string {
+  const to = join(root, `node-${process.version}`)
+  if (!existsSync(join(to, 'ready'))) {
+    rmSync(to, { recursive: true, force: true })
+    execFileSync('cp', ['-cR', dirname(dirname(process.execPath)), to])
+    writeFileSync(join(to, 'ready'), process.version)
+  }
+  return to
 }
 
 const gitEnv = { GIT_AUTHOR_NAME: 'Eval User', GIT_AUTHOR_EMAIL: 'eval@example.com', GIT_COMMITTER_NAME: 'Eval User', GIT_COMMITTER_EMAIL: 'eval@example.com' }

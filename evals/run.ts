@@ -22,6 +22,7 @@ import { profileDirs, sourcesOf, stopThread, type Acceptance, type Task } from '
 import { weather } from './tasks/weather.ts'
 import { lead } from './tasks/lead.ts'
 import { dbBadge } from './tasks/db-badge.ts'
+import { mcpEcho, mcpUnallowed } from './tasks/mcp-echo.ts'
 
 const { values: args } = parseArgs({
   options: {
@@ -33,13 +34,15 @@ const { values: args } = parseArgs({
   },
 })
 
-const TASKS: Record<string, Task> = { [weather.id]: weather, [lead.id]: lead, [kanban.id]: kanban, [dbBadge.id]: dbBadge }
+const TASKS: Record<string, Task> = { [weather.id]: weather, [lead.id]: lead, [kanban.id]: kanban, [dbBadge.id]: dbBadge, [mcpEcho.id]: mcpEcho, [mcpUnallowed.id]: mcpUnallowed }
+/** What a batch runs unless told: the extension-building tasks, the trend line. Setup tasks (m1) run when named. */
+const TREND = [weather.id, lead.id, kanban.id, dbBadge.id]
 const MODELS: Record<string, string> = { opus: 'anthropic/claude-opus-5-5', sonnet: 'anthropic/claude-sonnet-5-5', haiku: 'anthropic/claude-haiku-5-5', sol: 'openai/gpt-6.1-sol' }
 const NUDGE = 'Yes, go ahead. Use your judgement on the details.'
 
 type Planned = { task: Task; model: string; modelKey: string; route: 'ego' | 'thread'; index: number; runId: string }
 
-/** The batch's runs. Unless told otherwise, the trend line: Opus through Ego, every task, 5 runs each. */
+/** The batch's runs. Unless told otherwise, the trend line: Opus through Ego, the extension tasks, 5 runs each. */
 function plan(): Planned[] {
   const runs = Number(args.runs)
   const pick = <T,>(what: string, list: string, all: readonly T[], key: (t: T) => string) => {
@@ -48,7 +51,7 @@ function plan(): Planned[] {
     if (unknown.length) throw new Error(`No ${what} ${unknown.join(', ')}: ${all.map(key).join(', ')}`)
     return all.filter((t) => wanted.includes(key(t)))
   }
-  const tasks = pick('task', args.tasks ?? Object.keys(TASKS).join(','), Object.values(TASKS), (t) => t.id)
+  const tasks = pick('task', args.tasks ?? TREND.join(','), Object.values(TASKS), (t) => t.id)
   const combos = pick('model', args.models ?? 'opus', Object.keys(MODELS), (m) => m)
     .flatMap((m) => pick('route', args.routes ?? 'ego', ['ego', 'thread'] as const, (r) => r).map((r) => [m, r] as const))
   const out: Planned[] = []
@@ -122,7 +125,7 @@ function wroteAnything(home: string, since: number): boolean {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, entry.name)
       if (entry.name === 'node_modules' || entry.name === '.git') continue
-      if (dir === join(home, '.superego') && !['profiles'].includes(entry.name)) continue
+      if (dir === join(home, '.superego') && !['profiles', 'mcp-servers.json'].includes(entry.name)) continue
       if (entry.isDirectory()) { if (walk(path, depth + 1)) return true }
       else if (statSync(path).mtimeMs > since) return true
     }
@@ -151,7 +154,7 @@ async function runOne(p: Planned, inst: ReturnType<typeof install>) {
   let threads: Thread[] = []
   const transcripts: { thread: Thread; entries: any[] }[] = []
   try {
-    world = await makeWorld(worldDir, inst, { model: p.model })
+    world = await makeWorld(worldDir, inst, { model: p.model, node: Boolean(p.task.node) })
     p.task.setup?.(world)
     log(`world at ${worldDir}; asking by ${p.route} on ${p.model}`)
     const ask = async (text: string) => {
@@ -175,10 +178,24 @@ async function runOne(p: Planned, inst: ReturnType<typeof install>) {
         await sleep(3000)
         break
       }
-      // A question to the user (ask_user): they'd answer it; the harness says go ahead, a few times at most.
-      const asked = threads.some((t) => t.status.state === 'blocked') && answered < 3 ? await answerQuestions(world, threads) : 0
-      if (asked) { answered += asked; quiet = 0; log(`answered ${asked} question${asked > 1 ? 's' : ''}`); continue }
       quiet = working.length ? 0 : quiet + 1
+      const blocked = threads.some((t) => t.status.state === 'blocked')
+      // The user's own part (pressing Allow, say), once the agent that asked has stopped, before they answer what it
+      // asks; and what they say after, when it waits on nothing.
+      const ego = threads.find((t) => t.hidden)
+      if (p.task.user && (p.route === 'ego' ? ego && ego.status.state !== 'working' : quiet > 0)) {
+        const said = await p.task.user({ world, threads, quiet: quiet >= 3, blocked, log })
+        if (said && !blocked) {
+          log(`the user says: ${said}`)
+          if (p.route === 'ego') await ask(said)
+          else await world.rpc.call('thread.send', { thread: first, text: said })
+          quiet = 0
+          continue
+        }
+      }
+      // A question to the user (ask_user): they'd answer it; the harness says go ahead, a few times at most.
+      const asked = blocked && answered < 3 ? await answerQuestions(world, threads) : 0
+      if (asked) { answered += asked; quiet = 0; log(`answered ${asked} question${asked > 1 ? 's' : ''}`); continue }
       if (quiet < 3) continue
       // Quiet: done, unless the agent stopped to ask before building anything; then the user says go ahead, once.
       if (!nudged && !wroteAnything(world.home, askedAt)) {
@@ -240,7 +257,8 @@ async function runOne(p: Planned, inst: ReturnType<typeof install>) {
     acceptanceCost: acceptance.cost, analysisCost, totalCost: metrics.cost + acceptance.cost + analysisCost,
   }
   appendFileSync(recordsFile, JSON.stringify(record) + '\n')
-  appendHistory(record)
+  // A run the harness broke says nothing of the agents: not in the trend.
+  if (!stopReason.startsWith('harness-error')) appendHistory(record)
   ledger.live.delete(p.runId)
   ledger.done += record.totalCost
   log(`recorded: ${record.pass ? 'PASS' : 'FAIL'}, $${record.totalCost.toFixed(2)} (batch $${total().toFixed(2)} of $${budget})`)
@@ -256,7 +274,7 @@ async function recheck(ids: string[]) {
   for (const record of records.filter((r: any) => ids.includes(r.runId))) {
     const task = TASKS[record.task]!
     const out = join(batchDir, 'runs', record.runId)
-    const world = await makeWorld(join(args.root!, 'runs', `${args.batch}-${record.runId}`), inst, { model: record.model, reuse: true })
+    const world = await makeWorld(join(args.root!, 'runs', `${args.batch}-${record.runId}`), inst, { model: record.model, reuse: true, node: Boolean(task.node) })
     let acceptance: Acceptance
     try { acceptance = await task.accept({ world, install: inst, out }) } catch (error) {
       acceptance = { pass: false, checks: {}, notes: [`acceptance threw: ${(error as Error).stack}`], cost: 0 }
