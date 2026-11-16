@@ -10,7 +10,7 @@ export type {
   DaemonExtension, DaemonApi, AgentChoice, AgentPart, AgentPartsAnswer, AgentPartsThread, LiveValue, ScopedValue, ThreadState, ThreadHooks, ThreadStarting,
   ThreadDraft, OutgoingMessage, MessageBlock, SendTransform, StatusContribution, ArchiveNote, ArchiveNotes, AuthFlow, AuthFlowEvent, RunRecord,
 } from './extension.ts'
-export type { DaemonContext } from './daemon.ts'
+export type { DaemonContext } from './host.ts'
 export { defineProfile } from './profiles.ts'
 export type { ProfileSpec, ProfileRef, ProfileMcpServer } from './profiles.ts'
 export { defineExtension, defineTool, hook, section, wrapSection, wrapTool } from '@earendil-works/pi-durable'

@@ -1,13 +1,12 @@
 // Extensions in a thread's life: lifecycle hooks, state kept with each thread and the facts clients see of it, choosing
 // its agent, and the thread operations (create, submit, lastAnswer, archive, unarchive) they're given.
-import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
-import { defineApp, obj, PROTOCOL_VERSION, RpcError, str, type Json, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { defineApp, obj, PROTOCOL_VERSION, RpcError, str, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi, type DaemonExtension } from '../src/index.ts'
 import { until } from './until.ts'
 

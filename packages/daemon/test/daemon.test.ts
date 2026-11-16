@@ -1,13 +1,12 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { existsSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { defineApp, PROTOCOL_VERSION, versionOf, type ActionInfo, type ActionLogEntry, type AuthEvent, type Hello, type ModelCatalog, type Notifications, type ProviderAuthInfo, type RpcPeer, type ThreadInfo, type SettingsSnapshot } from '@superego/protocol'
-import { connectSocket, listen, openDaemon, type Daemon } from '../src/index.ts'
+import { connectSocket, listen, openDaemon } from '../src/index.ts'
 import { until } from './until.ts'
 
 // Only the scripted model, whatever keys the machine running the tests has.
@@ -37,6 +36,16 @@ describe('daemon', () => {
     await expect(peer.call('hello', { client: 'test', version: 999 })).rejects.toMatchObject({
       kind: 'version_mismatch', message: expect.stringContaining('generation 2, and this client speaks generation 999'), hint: expect.stringMatching(/^Update superego on /),
     })
+    await close()
+  })
+
+  it("refuses a read or watch called with params it doesn't take, as an action is refused", async () => {
+    const { peer, close } = await open()
+    await expect(peer.call('file.read', { path: 'a.txt' })).rejects.toMatchObject({ kind: 'invalid_params', message: expect.stringContaining('file.read') })
+    await expect(peer.call('value.watch', { scope: 'a' })).rejects.toMatchObject({ kind: 'invalid_params' })
+    await expect(peer.call('thread.history', { thread: '1', before: 'soon' })).rejects.toMatchObject({ kind: 'invalid_params' })
+    // More than it takes is let through: a newer client of this generation may say more.
+    expect(await peer.call('thread.list', { archived: false, since: 0 })).toEqual([])
     await close()
   })
 

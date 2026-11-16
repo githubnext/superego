@@ -13,7 +13,7 @@ import type { Conversation, EntryRecord, Extension } from '@earendil-works/pi-du
 import type { ActionDef, ActionInfo, AppConfig, Attachment, ChannelAcceptor, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, MachineEntry, NewThread, Pane, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
 import type { AuthFlow } from './auth-flows.ts'
-import type { DaemonContext } from './daemon.ts'
+import type { DaemonContext } from './host.ts'
 import type { ProfileRef, ProfileSpec } from './profiles.ts'
 import type { RunRecord } from './recap.ts'
 

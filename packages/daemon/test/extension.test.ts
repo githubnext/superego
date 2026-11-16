@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { AUTH_REJECTED, DATA_VIEWS, defineAction, defineApp, obj, PROTOCOL_VERSION, str, type ActionInfo, type DataViewInfo, type Hello, type Notifications, type RpcPeer, type ThreadInfo, type ViewContent } from '@superego/protocol'
+import { AUTH_REJECTED, DATA_VIEWS, defineAction, defineApp, obj, PROTOCOL_VERSION, str, type ActionInfo, type DataViewInfo, type Hello, type Notifications, type ThreadInfo, type ViewContent } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonExtension, type LiveValue, type ScopedValue } from '../src/index.ts'
 import { until } from './until.ts'
 
@@ -149,7 +149,7 @@ it('tells clients when what it offers changes: an extension switched off, or set
 })
 
 it("reserves the core's namespaces: every core method, action, setting and value is in one, and no extension takes one", async () => {
-  const { RESERVED } = await import('../src/daemon.ts')
+  const { RESERVED } = await import('../src/extension-host.ts')
   const { peer, hello, close } = await open([])
   for (const method of hello.methods) expect(RESERVED, method).toContain(method.split('.')[0])
   const { value } = await peer.call<{ value: { sections: { id: string; settings: { key: string }[] }[] } }>('settings.watch', {})
