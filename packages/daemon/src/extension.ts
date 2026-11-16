@@ -356,11 +356,17 @@ export type DaemonApi = {
   thread<S extends Json = Json>(hooks: ThreadHooks<S>): void
   /**
    * This extension's state with each thread, kept under its name (`starting` can give a new thread its first).
-   * `publish`: also a scoped live value of that name (`<name>.<something>`), each thread's state in its scope (null for none), for
-   * the UI to watch (`useValue(machine, key, { scope: thread.id })`): read from the thread when a scope is first
-   * watched, told every change made through this state, and let go of once nobody watches it. Asked for once.
+   * `publish`: also a scoped live value named `key` (`<name>.<something>`), each thread's state in its scope, for the UI
+   * to watch (`useValue(machine, key, { scope: thread.id })`): read from the thread when a scope is first watched, told
+   * every change made through this state, and let go of once nobody watches it. Asked for once. What a scope reads:
+   * - null: not read yet, or nobody publishes it there (this extension is off on that machine, or isn't there; ask
+   *   `has(machine, 'ext:<name>')` to tell);
+   * - `empty`: read, and the thread has no state of this extension's (none yet, or it was set to undefined), or isn't
+   *   a thread there;
+   * - else the thread's state.
+   * A read that fails is logged under the key, and the scope stays unread.
    */
-  state<T extends Json = Json>(options?: { publish?: string }): ThreadState<T>
+  state<T extends Json = Json>(options?: { publish?: { key: string; empty: T } }): ThreadState<T>
   /**
    * What clients are told about each thread, as `ThreadInfo.facts[<name>]`: small, and worked out from the thread's
    * state (this extension's) whenever its info is (`invalidate()` when something else it reads changed). Not for

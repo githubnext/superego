@@ -98,7 +98,7 @@ export default defineDaemonExtension({
     }))
 
     // ── Panes: kept with each thread, and published in its scope for its panes ───────────────────────────────────────
-    const panes = superego.state<ThreadPanes>({ publish: PANES })
+    const panes = superego.state<ThreadPanes>({ publish: { key: PANES, empty: {} } })
     const keep = async (thread: string, spec: PaneSpec) => {
       await panes.update(thread, (current) => {
         const all: ThreadPanes = { ...current, [spec.id]: spec }

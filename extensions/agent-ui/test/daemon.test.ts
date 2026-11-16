@@ -108,13 +108,12 @@ it('opens a ui pane with { id }, updates its UI by id, and keeps it across a res
   const thread = await daemon.thread('build it')
   const [info] = await daemon.call<ThreadInfo[]>('thread.list', {})
   expect(info!.panes).toEqual([{ id: expect.any(String), kind: 'ui', title: 'Build: green', params: { id: 'status' } }])
-  // In the thread's own scope, read from the thread as it's watched; another's has none.
+  // In the thread's own scope, read from the thread as it's watched (null until then); another's has none: empty.
   const panes = await daemon.watch<ThreadPanes | null>(PANES, { scope: thread.id })
   await panes.until((value) => value !== null)
   expect(panes.value!.status).toMatchObject({ id: 'status', title: 'Build: green', blocks: second })
   const another = await daemon.watch<ThreadPanes | null>(PANES, { scope: 'another' })
-  await new Promise((r) => setTimeout(r, 100))
-  expect(another.value).toBeNull()
+  expect(await another.until((value) => value !== null)).toEqual({})
 
   const results = await toolResults(thread.id)
   expect(results.map((r) => r.isError)).toEqual([false, false, true])

@@ -119,11 +119,11 @@ export class Values {
 
   /**
    * A scoped value backed by something kept elsewhere (an extension's state with each thread), published for `life`:
-   * a scope reads null until it's watched, then what `load` reads for it (null for nothing); `changed` tells its
-   * watchers what it is now, and a scope nobody watches is let go of, so only watched ones are held. Watched whole, it's
-   * the scopes held now.
+   * a scope reads null until it's watched and read, then what `load` reads for it (`empty` for nothing), so null means
+   * only "not read yet"; `changed` tells its watchers what it is now, and a scope nobody watches is let go of, so only
+   * watched ones are held. A read that fails is logged, and the scope stays unread. Watched whole, it's the scopes held now.
    */
-  publishBacked(name: string, load: (scope: string) => Promise<Json | undefined>, life: Lifetime): { changed(scope: string, value: Json | undefined): void } {
+  publishBacked(name: string, load: (scope: string) => Promise<Json | undefined>, empty: Json, life: Lifetime): { changed(scope: string, value: Json | undefined): void } {
     const entry = this.#own(name)
     const held = new Map<string, Json>()
     entry.scopes = { values: held, initial: null }
@@ -132,7 +132,7 @@ export class Values {
       void load(scope).then((value) => {
         // Changed while it was read (that's newer), or no longer watched, or gone: left be.
         if (held.has(scope) || !entry.watchers.has(scope) || entry.backing !== backing) return
-        held.set(scope, value ?? null)
+        held.set(scope, value ?? empty)
         tellScope(entry, scope)
       }, (error: unknown) => console.error(`Value ${name}: reading ${scope} failed:`, error))
     }
@@ -151,7 +151,7 @@ export class Values {
     return {
       changed: life.guard(`a change to ${name}`, (scope: string, value: Json | undefined) => {
         if (!entry.watchers.has(scope) && !held.has(scope)) return
-        held.set(scope, value ?? null)
+        held.set(scope, value ?? empty)
         tellScope(entry, scope)
       }),
     }

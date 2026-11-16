@@ -425,7 +425,7 @@ it("doesn't take a user message nobody sent for the input a call answers: walks 
 
 it("publishes an extension's state with each thread, if asked: read in as a thread's scope is watched, told every change, let go of after", async () => {
   let state!: ThreadState<{ n: number }>
-  const counter = defineDaemonExtension({ name: 'counter', setup(superego) { state = superego.state<{ n: number }>({ publish: 'counter.counts' }) } })
+  const counter = defineDaemonExtension({ name: 'counter', setup(superego) { state = superego.state<{ n: number }>({ publish: { key: 'counter.counts', empty: { n: 0 } } }) } })
   const { peer, close } = await open([counter])
   const thread = await peer.call<ThreadInfo>('thread.start', {})
   // Set while nobody watches: kept with the thread only.
@@ -440,17 +440,25 @@ it("publishes an extension's state with each thread, if asked: read in as a thre
   await state.update(thread.id, (now) => ({ n: (now?.n ?? 0) + 1 }))
   await until(async () => of(watched.sub).length === 2)
   expect(of(watched.sub).at(-1)).toEqual({ n: 2 })
-  // Whole: the scopes watched now. None kept: null.
+  // Whole: the scopes watched now. None kept: its empty.
   expect((await peer.call<{ value: unknown }>('value.watch', { key: 'counter.counts' })).value).toEqual({ [thread.id]: { n: 2 } })
   await state.set(thread.id, undefined)
   await until(async () => of(watched.sub).length === 3)
-  expect(of(watched.sub).at(-1)).toBeNull()
+  expect(of(watched.sub).at(-1)).toEqual({ n: 0 })
   // Unwatched, let go of; watched again, read in again.
   await peer.call('unwatch', { sub: watched.sub })
   await state.set(thread.id, { n: 5 })
   const again = await peer.call<{ sub: string; value: unknown }>('value.watch', { key: 'counter.counts', scope: thread.id })
   await until(async () => of(again.sub).length === 1)
   expect(of(again.sub)).toEqual([{ n: 5 }])
+  // Read, with nothing there: a thread without state, or no thread at all, reads as its empty, not as unread.
+  const bare = await peer.call<ThreadInfo>('thread.start', {})
+  for (const scope of [bare.id, '999']) {
+    const read = await peer.call<{ sub: string; value: unknown }>('value.watch', { key: 'counter.counts', scope })
+    expect(read.value).toBeNull()
+    await until(async () => of(read.sub).length === 1)
+    expect(of(read.sub)).toEqual([{ n: 0 }])
+  }
   await close()
 })
 
