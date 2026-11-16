@@ -51,7 +51,7 @@ function repository() {
 
 it('is required, and announced', async () => {
   const { hello, close } = await open()
-  expect(hello.features).toContain('ext:worktrees')
+  expect(hello.extensions.map((e) => e.name)).toContain('worktrees')
   await close()
 })
 

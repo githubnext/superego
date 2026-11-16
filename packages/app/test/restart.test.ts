@@ -20,14 +20,14 @@ function service(snapshot: ServiceSnapshot) {
 
 describe('ServiceRestart', () => {
   it('tells watchers only when something changed, however often it polls', async () => {
-    const { restart, changes } = service({ installedBuild: 'a', runningBuild: 'a', busy: false, canRestartWhenIdle: true })
+    const { restart, changes } = service({ installedBuild: 'a', runningBuild: 'a', busy: false, refused: false })
     for (let i = 0; i < 5; i++) await restart.poll()
     expect(changes).toHaveLength(1)
     expect(changes[0]).toMatchObject({ phase: 'current' })
   })
 
   it('restarts now when idle', async () => {
-    const { restart, restarts } = service({ installedBuild: 'b', runningBuild: 'a', busy: false, canRestartWhenIdle: true })
+    const { restart, restarts } = service({ installedBuild: 'b', runningBuild: 'a', busy: false, refused: false })
     await restart.poll()
     expect(restart.state.phase).toBe('required')
     await restart.act('restart')
@@ -36,7 +36,7 @@ describe('ServiceRestart', () => {
   })
 
   it('waits for idle while busy, then restarts on a later poll', async () => {
-    const { restart, restarts, snapshot } = service({ installedBuild: 'b', runningBuild: 'a', busy: true, canRestartWhenIdle: true })
+    const { restart, restarts, snapshot } = service({ installedBuild: 'b', runningBuild: 'a', busy: true, refused: false })
     await restart.act('restart')
     expect(restart.state.phase).toBe('waiting')
     expect(restarts).toEqual([])
@@ -47,7 +47,7 @@ describe('ServiceRestart', () => {
   })
 
   it('later defers, and review brings the notice back', async () => {
-    const { restart } = service({ installedBuild: 'b', runningBuild: 'a', busy: false, canRestartWhenIdle: true })
+    const { restart } = service({ installedBuild: 'b', runningBuild: 'a', busy: false, refused: false })
     await restart.poll()
     await restart.act('later')
     expect(restart.state).toMatchObject({ phase: 'required', deferred: true })

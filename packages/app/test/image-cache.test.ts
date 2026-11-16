@@ -1,15 +1,13 @@
 // The window's image files (image-cache.ts), against a fake `window.superego`: read once and kept while the file stays
-// the same version, read again and swapped (the old blob let go of) when it changes, and never asked about on a daemon
-// from before versions.
+// the same version, and read again and swapped (the old blob let go of) when it changes.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { SuperegoBridge } from '../src/shared.ts'
 import { fileImage, onImageChange, recheckImages } from '../src/renderer/image-cache.ts'
 
 type Call = { machine: string; method: string; params: any }
 let calls: Call[]
-/** The files on the fake machine: their version; none for an older daemon's reads. */
+/** The files on the fake machine: their version. */
 let files: Record<string, { mtimeMs: number; size: number }>
-let old: boolean
 let revoked: string[]
 let made: number
 
@@ -17,15 +15,13 @@ beforeEach(() => {
   vi.useFakeTimers()
   calls = []
   files = {}
-  old = false
   revoked = []
   made = 0
   const bridge: Partial<SuperegoBridge> = {
     async call(machine, method, params: any) {
       calls.push({ machine, method, params })
-      if (method === 'file.read') return { path: params.path, content: btoa('png'), ...(old ? {} : files[params.path]) }
+      if (method === 'file.read') return { path: params.path, content: btoa('png'), ...files[params.path] }
       if (method === 'file.stat') {
-        if (old) throw Object.assign(new Error('Unknown method file.stat'), { kind: 'unknown_method' })
         return { files: params.paths.map((path: string) => files[path] ?? null) }
       }
       throw new Error(`unexpected ${method}`)
@@ -86,17 +82,4 @@ it('checks many of a thread’s images in one call, only those shown, and not ag
   await recheckImages({ thread })
   expect(calls.filter((c) => c.method === 'file.stat').map((c) => c.params.paths)).toEqual([['a.png', 'b.png']])
   for (const off of offs) off()
-})
-
-it('never asks an older daemon, which says no version, and keeps its images as first read', async () => {
-  const thread = fresh()
-  old = true
-  const src = await fileImage('old', thread, 'shot.png')
-  const off = onImageChange('old', thread, 'shot.png', () => {})
-  await recheckImages({ force: true })
-  await vi.advanceTimersByTimeAsync(5000)
-  await recheckImages({ machine: 'old' })
-  expect(count('file.stat')).toBe(0)
-  expect(await fileImage('old', thread, 'shot.png')).toBe(src)
-  off()
 })

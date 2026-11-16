@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DATA_VIEWS, defineApp, PROTOCOL_VERSION, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { DATA_VIEWS, defineApp, PROTOCOL_VERSION, type Hello, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '../src/index.ts'
 import { hashProfile, loadProfile, Allowances, type ProfileRef } from '../src/profiles.ts'
 
@@ -483,8 +483,8 @@ export default defineDaemonExtension({
   expect((await sections()).filter((s) => s.id === 'vault').map((s) => s.title)).toEqual(['Notes'])
   await until(async () => changes.includes('Notes'))
   // Its name is announced to clients that say hello now.
-  const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
-  expect(hello.features).toContain('ext:vault')
+  const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
+  expect(hello.extensions.map((e) => e.name)).toContain('vault')
   await close()
 })
 
@@ -670,8 +670,8 @@ it("lets go of a profile whose folder is gone: its extensions and its name", asy
   await rm(profile, { recursive: true })
   await expect(peer.call('profile.ui', { scope: 'user', name: 'default', dir: profile })).rejects.toMatchObject({ kind: 'not_found' })
   await expect(peer.call('action.run', { id: 'vault.answer', params: {} })).rejects.toBeDefined()
-  const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
-  expect(hello.features).not.toContain('ext:vault')
+  const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
+  expect(hello.extensions.map((e) => e.name)).not.toContain('vault')
   await close()
 })
 

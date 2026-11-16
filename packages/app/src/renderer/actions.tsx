@@ -12,6 +12,7 @@ import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
 import { scrollHalfPage } from './scroll.ts'
 import { startRename } from './rename.ts'
 import { setLocalState, windowState } from './local-state.ts'
+import { clearProblem, reportProblem } from './machine-problems.ts'
 import { showOnboarding } from './Onboarding.tsx'
 import { maximizedPane, maximizedStore, NARROW, toggleMaximized } from './maximized.ts'
 import { RAIL_TABS, tabAction, type RailTab } from './rail-tabs.ts'
@@ -120,11 +121,15 @@ export function createWindowRouter() {
     setContext(next: Omit<WindowContext, 'dispatch'>) { context = { ...next, dispatch } },
     /** Fetch what `target` offers ('app', or a connected machine's id). */
     async load(target: string) {
+      const what = 'Fetching its actions'
       try {
         remote.set(target, await window.superego.call(target, 'action.list', {}) as ActionInfo[])
-        version++
-        for (const listener of listeners) listener()
-      } catch { /* an older daemon without actions: nothing to offer */ }
+      } catch (error) {
+        return reportProblem(target, what, error)
+      }
+      clearProblem(target, what)
+      version++
+      for (const listener of listeners) listener()
     },
     /** Every action this window can dispatch: its own, the app's, and `machine`'s. */
     all(machine?: string): ActionInfo[] {

@@ -49,7 +49,7 @@ describe('a daemon with a scripted model', () => {
     const queue = await daemon.watch<{ items: { title: string }[] }>('queue.items', { scope: thread.id })
     expect(queue.value.items).toEqual([{ title: 'lint' }])
     expect(await daemon.call('queue.label')).toBe('first')
-    expect(daemon.features).toContain('ext:queue')
+    expect(daemon.extensions.map((e) => e.name)).toContain('queue')
     // A helper edited alone: the profile loads again, its extension torn down and set up anew with the new code.
     const before = { setUps: g.__queueSetUps ?? 0, torn: g.__queueTornDown ?? 0 }
     await daemon.edit('label.ts', `export const label = 'second'\n`)
@@ -166,10 +166,10 @@ describe('a window for a UI half', () => {
     } finally { console.error = errors }
   })
 
-  it('says a machine is away, and copes with an older one that watches values whole', async () => {
+  it('says a machine is away', async () => {
     const thread = testThread({ id: 't1' })
-    const older = fakeMachine({ features: ['threads', 'actions', 'data-views'], extensions: [{ name: 'queue', version: '0.9.0' }], threads: [thread], values: { 'queue.items': { t1: ['old'], t2: ['x'] } } })
-    const ui = keep(await mountUi({ extensions: [queueUi], machines: [older] }))
+    const machine = fakeMachine({ extensions: [{ name: 'queue', version: '0.9.0' }], threads: [thread], values: { 'queue.items': { t1: ['old'], t2: ['x'] } } })
+    const ui = keep(await mountUi({ extensions: [queueUi], machines: [machine] }))
     const beside = await ui.render({ view: 'queue.list', place: 'beside', thread: 't1' })
     expect(beside.text()).toContain('old')
     expect(beside.text()).not.toContain('x')

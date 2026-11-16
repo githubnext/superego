@@ -3,7 +3,7 @@
 //
 // - the release: the code a machine runs, by its git commit (`MachineVersion`); the packages themselves are 0.0.0;
 // - the extension API (`EXTENSION_API`): what `defineDaemonExtension` and `defineUiExtension` give an extension, semver;
-// - the protocol (`PROTOCOL_VERSION`): the wire's generation, and within it the features each side announces.
+// - the protocol (`PROTOCOL_VERSION`): the wire's generation, and within it the features added since it began.
 import type { ExtensionAbout } from './app.ts'
 
 /**
@@ -16,9 +16,9 @@ import type { ExtensionAbout } from './app.ts'
 export const EXTENSION_API = '2.1.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
-export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api' | 'capabilities'>
+export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>
 
-/** The version an extension counts as when it says none: a daemon from before versions, or a profile's that didn't. */
+/** The version an extension counts as when it says none (a profile's may not). */
 export const UNVERSIONED = '0.0.0'
 
 type Triple = [number, number, number]
@@ -100,30 +100,27 @@ function newerSatisfies(host: string, range: string) {
 }
 
 /** An extension's manifest, from how it declares itself: only what it says. */
-export const manifestOf = ({ name, version, api, capabilities }: ExtensionAbout): ExtensionManifest => ({
-  name, ...(version ? { version } : {}), ...(api ? { api } : {}), ...(capabilities?.length ? { capabilities: [...capabilities] } : {}),
+export const manifestOf = ({ name, version, api }: ExtensionAbout): ExtensionManifest => ({
+  name, ...(version ? { version } : {}), ...(api ? { api } : {}),
 })
 
-/** What a machine offers, as a client keeps it from `hello` and `features.changed`. */
+/** What a machine offers, as a client keeps it from `hello` and `features.changed`: nothing before it has said. */
 export type Offer = { features?: string[]; extensions?: ExtensionManifest[] }
 
 /** The version a machine's `name` extension is at: `UNVERSIONED` when it says none, nothing when it isn't there (or is off). */
 export function extensionVersion(offer: Offer | undefined, name: string): string | undefined {
-  if (!offer?.features?.includes(`ext:${name}`)) return undefined
-  return offer.extensions?.find((e) => e.name === name)?.version ?? UNVERSIONED
+  const extension = offer?.extensions?.find((e) => e.name === name)
+  return extension && (extension.version ?? UNVERSIONED)
 }
 
 /**
- * Whether a machine offers `feature`: a protocol feature (`threads`), an extension set up and on there (`ext:git`), one
- * at a version in a range (`ext:git@^1.2`; an extension that says no version counts as 0.0.0, so `@^1` leaves out a
- * daemon from before versions and `@<2` doesn't), or one with a capability it declares (`ext:git#stat`).
+ * Whether a machine offers `feature`: a protocol feature (one in `FEATURES`), an extension set up and on there
+ * (`ext:git`), or one at a version in a range (`ext:git@^1.2`; an extension that says no version counts as 0.0.0).
  */
 export function offers(offer: Offer | undefined, feature: string): boolean {
-  const m = /^ext:([a-z][a-z0-9-]*)(?:@(.+?))?(?:#(.+))?$/.exec(feature)
-  if (!m || (m[2] === undefined && m[3] === undefined)) return offer?.features?.includes(feature) ?? false
-  const [, name, range, capability] = m
+  const m = /^ext:([a-z][a-z0-9-]*)(?:@(.+))?$/.exec(feature)
+  if (!m) return offer?.features?.includes(feature) ?? false
+  const [, name, range] = m
   const version = extensionVersion(offer, name!)
-  if (version === undefined) return false
-  if (range !== undefined && !satisfies(version, range)) return false
-  return capability === undefined || Boolean(offer?.extensions?.find((e) => e.name === name)?.capabilities?.includes(capability))
+  return version !== undefined && (range === undefined || satisfies(version, range))
 }

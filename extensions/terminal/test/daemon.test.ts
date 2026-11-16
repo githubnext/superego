@@ -66,7 +66,7 @@ async function terminalPane(peer: RpcPeer, params?: unknown) {
 it('starts a shell in the thread\'s folder as a window attaches, and passes typing and output both ways', async () => {
   const { connect, close } = await open()
   const { peer, hello } = await connect()
-  expect(hello.features).toContain('ext:terminal')
+  expect(hello.extensions.map((e) => e.name)).toContain('terminal')
   const { thread, pane } = await terminalPane(peer)
   const term = await attach(peer, thread, pane)
   await term.type('echo "hi-$((40+2))"; pwd; echo "$TERM $ELECTRON_RUN_AS_NODE."\n')

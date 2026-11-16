@@ -55,22 +55,22 @@ it("refuses a profile's extension that needs a newer extension API, when the pro
 })
 
 it('announces each extension at its version, in hello and as it changes', async () => {
-  const git = defineDaemonExtension({ name: 'git', version: '1.3.0', api: '^2', capabilities: ['stat'], setup() {} })
+  const git = defineDaemonExtension({ name: 'git', version: '1.3.0', api: '^2', setup() {} })
   const mine = defineDaemonExtension({ name: 'mine', setup() {} })
   const { peer, hello, close } = await open([git, mine])
   expect(hello.api).toBe(EXTENSION_API)
-  expect(hello.features).toEqual(expect.arrayContaining(['ext:git', 'ext:mine']))
+  // Extensions are in `extensions` only: `features` is the protocol's.
+  expect(hello.features).toEqual([])
   const of = (list: ExtensionManifest[] | undefined, name: string) => list?.find((e) => e.name === name)
-  expect(of(hello.extensions, 'git')).toEqual({ name: 'git', version: '1.3.0', api: '^2', capabilities: ['stat'] })
+  expect(of(hello.extensions, 'git')).toEqual({ name: 'git', version: '1.3.0', api: '^2' })
   // One that says no version is announced without one: clients count it 0.0.0.
   expect(of(hello.extensions, 'mine')).toEqual({ name: 'mine' })
   // The core's own are extensions too, at 1.0.0.
   expect(of(hello.extensions, 'coding-tools')).toMatchObject({ version: '1.0.0', api: '^2' })
-  const told: { features: string[]; extensions?: ExtensionManifest[] }[] = []
+  const told: { features: string[]; extensions: ExtensionManifest[] }[] = []
   peer.on('features.changed', (params: (typeof told)[number]) => { told.push(params) })
   await peer.call('settings.set', { key: 'extensions.git', value: false })
   await until(() => told.length === 1)
-  expect(told[0]!.features).not.toContain('ext:git')
   expect(of(told[0]!.extensions, 'git')).toBeUndefined()
   await peer.call('settings.set', { key: 'extensions.git', value: true })
   await until(() => told.length === 2)

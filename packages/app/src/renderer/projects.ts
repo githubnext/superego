@@ -30,20 +30,18 @@ export type Project = {
 
 export const projectKey = (machine: string, root: string) => `${machine}:${root}`
 
-const activity = (thread: ThreadInfo) => thread.activeAt ?? thread.createdAt
-
 /** Every machine's threads, as projects, in `sort`'s order: projects and the threads in each. */
 export function groupProjects(machines: MachineEntry[], threads: Record<string, ThreadInfo[] | undefined>, sort: Sort = 'recent'): Project[] {
   const byThread = (a: ThreadInfo, b: ThreadInfo) =>
     sort === 'created' ? b.createdAt - a.createdAt
-      : sort === 'status' ? statusRank(b.status) - statusRank(a.status) || activity(b) - activity(a)
-        : activity(b) - activity(a)
+      : sort === 'status' ? statusRank(b.status) - statusRank(a.status) || b.activeAt - a.activeAt
+        : b.activeAt - a.activeAt
   const projects = new Map<string, Project>()
   for (const machine of machines) {
     for (const thread of threads[machine.id] ?? []) {
-      const root = thread.project?.root ?? thread.cwd
+      const root = thread.project.root
       const key = projectKey(machine.id, root)
-      const project = projects.get(key) ?? { key, machine, root, name: thread.project?.name ?? root.split('/').at(-1) ?? root, threads: [], depth: {}, activeAt: 0, status: { state: 'idle' } }
+      const project = projects.get(key) ?? { key, machine, root, name: thread.project.name, threads: [], depth: {}, activeAt: 0, status: { state: 'idle' } }
       project.threads.push(thread)
       projects.set(key, project)
     }
@@ -51,7 +49,7 @@ export function groupProjects(machines: MachineEntry[], threads: Record<string, 
   const list = [...projects.values()]
   for (const project of list) {
     Object.assign(project, nest(project.threads.sort(byThread)))
-    project.activeAt = Math.max(...project.threads.map(activity))
+    project.activeAt = Math.max(...project.threads.map((t) => t.activeAt))
     project.status = rollup(project.threads.map((t) => t.status))
   }
   const newest = (s: Project) => Math.max(...s.threads.map((t) => t.createdAt))

@@ -11,8 +11,10 @@ export type SettingType =
   | { type: 'boolean' }
   | { type: 'string'; placeholder?: string; secret?: boolean }
   | { type: 'number'; min?: number; max?: number; step?: number }
-  /** One of `options`; `null` is allowed when `nullable`, shown as `nullLabel`. */
-  /** `slider`: drawn as steps along a slider, in the options' order (a scale, like sizes), rather than a menu. */
+  /**
+   * One of `options`; `null` is allowed when `nullable`, shown as `nullLabel`. `slider`: drawn as steps along a slider,
+   * in the options' order (a scale, like sizes), rather than a menu.
+   */
   | { type: 'choice'; options: SettingOption[]; nullable?: boolean; nullLabel?: string; slider?: boolean }
   /** A font family installed where the client runs, or `null` for the default. The client lists the fonts. */
   | { type: 'font'; monospace?: boolean; nullLabel?: string }

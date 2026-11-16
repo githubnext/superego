@@ -206,14 +206,14 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     expect(there).toMatchObject({ drift: { state: 'current' } })
     expect(await superego(['machines'])).not.toContain('runs an')
 
-    // One that says an older commit, and one too old to say any.
+    // One that says an older commit, and one that knows none (outside git).
     const older = fileURLToPath(new URL('./fixtures/older.mjs', import.meta.url))
     const behind = here.version.committedAt - 2 * 86_400_000
     await superego(['machines', 'add', '--via', `'${process.execPath}' '${older}' 5e9684c0ffee ${behind} sh '${stub}' connect --start`, '--name', 'Behind'])
     await superego(['machines', 'add', '--via', `'${process.execPath}' '${older}' none 0 sh '${stub}' connect --start`, '--name', 'Old'])
     const listed = await superego(['machines'])
     expect(listed).toMatch(/Behind .* runs an older Superego \(5e9684c, 2 days behind\)/)
-    expect(listed).toMatch(/Old .* runs an older Superego that doesn't say which/)
+    expect(listed).toMatch(/Old .* runs a Superego that doesn't know its commit/)
     await superego(['machines', 'rm', 'Behind'])
     await superego(['machines', 'rm', 'Old'])
 

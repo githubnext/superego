@@ -39,8 +39,7 @@ export function defineAction<S extends JsonSchema | undefined, R, C = any>(
   return { expose: ['ui'], ...def } as ActionDef<any, R, C>
 }
 
-/** One dispatch, as the log keeps it. */
-/** `client` names the connection that dispatched it, on a daemon: who, not only how (`source`). */
+/** One dispatch, as the log keeps it. `client` names the connection that dispatched it, on a daemon: who, not only how (`source`). */
 export type ActionLogEntry = { at: number; id: string; source: string; ms: number; ok: boolean; params?: Json; error?: string; client?: { id: string; kind: string; label: string } }
 
 /**
@@ -85,31 +84,19 @@ export class Router<C = unknown> {
   }
 
   async dispatch(id: string, params: unknown, context: C, { source = 'ui', exposure, client }: { source?: string; exposure?: Exposure; client?: ActionLogEntry['client'] } = {}): Promise<unknown> {
-    const started = Date.now()
-    const action = this.#actions.get(id)
-    const record = (ok: boolean, error?: string) => {
-      const entry: ActionLogEntry = { at: started, id, source, ms: Date.now() - started, ok, ...(params !== undefined ? { params: params as Json } : {}), ...(error ? { error } : {}), ...(client ? { client } : {}) }
-      this.#log.push(entry)
-      if (this.#log.length > this.logSize) this.#log.splice(0, this.#log.length - this.logSize)
-      for (const listener of this.#listeners) listener(entry)
-    }
-    try {
+    return this.track(id, params, source, async () => {
+      const action = this.#actions.get(id)
       if (!action) throw new RpcError('unknown_action', `No action ${id}`)
       if (exposure && !action.def.expose.includes(exposure)) throw new RpcError('not_exposed', `${id} can't be run from ${exposure}`)
-      const result = await action.def.run(action.parse(params), context)
-      record(true)
-      return result
-    } catch (error) {
-      record(false, error instanceof Error ? error.message : String(error))
-      throw error
-    }
+      return action.def.run(action.parse(params), context)
+    }, client)
   }
 
   /** Time and log work done elsewhere for an action this router doesn't hold (a window forwarding to a daemon). */
-  async track<R>(id: string, params: unknown, source: string, run: () => Promise<R>): Promise<R> {
+  async track<R>(id: string, params: unknown, source: string, run: () => Promise<R>, client?: ActionLogEntry['client']): Promise<R> {
     const started = Date.now()
     const record = (ok: boolean, error?: string) => {
-      const entry: ActionLogEntry = { at: started, id, source, ms: Date.now() - started, ok, ...(params !== undefined ? { params: params as Json } : {}), ...(error ? { error } : {}) }
+      const entry: ActionLogEntry = { at: started, id, source, ms: Date.now() - started, ok, ...(params !== undefined ? { params: params as Json } : {}), ...(error ? { error } : {}), ...(client ? { client } : {}) }
       this.#log.push(entry)
       if (this.#log.length > this.logSize) this.#log.splice(0, this.#log.length - this.logSize)
       for (const listener of this.#listeners) listener(entry)

@@ -15,7 +15,7 @@ export const CHUNK = 64 * 1024
 /** How much a receiver lets a sender have in flight, unacknowledged. */
 export const WINDOW = 512 * 1024
 
-export type ChannelOpen = { ch: string; kind: string; params?: unknown; window: number }
+type ChannelOpen = { ch: string; kind: string; params?: unknown; window: number }
 
 /** Accepts a channel the other side opened; throw to refuse it. Set `onData` before returning to read what comes. */
 export type ChannelAcceptor = (channel: Channel, params: any) => void | Promise<void>

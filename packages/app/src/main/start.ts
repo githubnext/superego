@@ -194,7 +194,7 @@ export function startApp(appConfig: AppConfig) {
   /** Reconnect a machine here, and the local daemon's own link there (it reaches the machines too), when it has one. */
   function restartLink(id: string) {
     remotes.restart(id)
-    if (local?.state === 'connected' && local.has('relay')) void local.call('machine.reconnect', { id }).catch(() => {})
+    if (local?.state === 'connected') void local.call('machine.reconnect', { id }).catch(() => {})
   }
 
   /**
@@ -673,19 +673,19 @@ export function startApp(appConfig: AppConfig) {
         // The daemon the app would start now is the code next to it on disk.
         installedBuild: readBuild(import.meta.dirname),
         ...(hello ? { runningBuild: hello.machine.build } : {}),
-        canRestartWhenIdle: Boolean(hello && link!.has('restart')),
+        refused: !hello,
         // One that refused can't say whether agents are working: they're taken to be, so stopping it asks first.
         busy: !hello || (threadsOf.get('local') ?? []).some((s) => s.status.state === 'working'),
       }
     },
     async restart(snapshot, interrupt) {
-      if (snapshot.canRestartWhenIdle) {
+      if (!snapshot.refused) {
         const pid = local?.hello?.machine.pid
         const result = await local!.call('daemon.restart', { build: snapshot.runningBuild, interrupt }) as { restarted: boolean }
         if (!result.restarted) return 'busy'
         return (await reconnected(pid)).machine.build
       }
-      // One that can't restart itself (too old, or of another generation): stop it, consented to, and link again,
+      // One of another generation can't be asked to restart itself: stop it, consented to, and link again,
       // which starts the one installed here.
       const pid = daemonPid()
       if (!pid) throw new Error('Could not find the daemon. See daemon.pid in the data dir.')
@@ -698,7 +698,7 @@ export function startApp(appConfig: AppConfig) {
       if (headless) return true
       const { response } = await dialog.showMessageBox({
         type: 'warning', buttons: ['Restart Now', 'Cancel'], defaultId: 1, cancelId: 1,
-        message: snapshot.canRestartWhenIdle ? 'Interrupt working agents?' : 'Restart the daemon?',
+        message: snapshot.refused ? 'Restart the daemon?' : 'Interrupt working agents?',
         detail: 'Agents stop mid-turn and pick up again after the restart. Threads and their history are kept.',
       })
       return response === 0

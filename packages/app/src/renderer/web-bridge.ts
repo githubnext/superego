@@ -2,7 +2,7 @@
 // page (its Web access setting), instead of Electron's preload. That daemon is "local", and every machine it reaches is
 // here too: calls for them go through it (`relay.call`) and their news comes back from it (`relay.event`). What the
 // desktop keeps in its main process (the app's own settings) is kept in this browser.
-import { Channels, FEATURES, offers, PROTOCOL_VERSION, RpcError, RpcPeer, versionOf, type DeclaredSection, type Hello, type Notifications } from '@superego/protocol'
+import { Channels, PROTOCOL_VERSION, RpcError, RpcPeer, versionOf, type DeclaredSection, type Hello, type Notifications } from '@superego/protocol'
 import { declaredSpec, serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { carriesFiles, uploadAttachments } from '@superego/client/uploads'
 import { bridgeChannel, browserNotification, LAYOUT_SETTING, PANE_LAYOUT_SETTING, type MachineEntry, type SuperegoBridge, type SuperegoEvent, type ThreadNotification } from '../shared.ts'
@@ -121,23 +121,19 @@ export function webBridge(): SuperegoBridge {
       ws.onopen = async () => {
         opened = true
         try {
-          const hello = await next.call<Hello>('hello', { client: 'web', version: PROTOCOL_VERSION, features: [...FEATURES] })
+          const hello = await next.call<Hello>('hello', { client: 'web', version: PROTOCOL_VERSION })
           // A link gone quiet (a phone that slept, a network that changed) closes, and this reconnects.
-          if (offers(hello, 'heartbeat')) {
-            beat = setInterval(() => {
-              if (Date.now() - next.lastReceived > SILENCE) ws.close()
-              else next.call('ping', {}).catch(() => {})
-            }, PING_EVERY)
-          }
+          beat = setInterval(() => {
+            if (Date.now() - next.lastReceived > SILENCE) ws.close()
+            else next.call('ping', {}).catch(() => {})
+          }, PING_EVERY)
           const self: MachineEntry = {
             id: 'local', label: hello.machine.hostname, state: 'connected', machine: { id: hello.machine.id, hostname: hello.machine.hostname },
-            features: hello.features, ...(hello.extensions ? { extensions: hello.extensions } : {}), version: versionOf(hello),
+            features: hello.features, extensions: hello.extensions, version: versionOf(hello),
           }
-          if (offers(hello, 'relay')) {
-            const { sub, value } = await next.call<{ sub: string; value: MachineEntry[] }>('machines.watch', {})
-            machinesSub = sub
-            setEntries(value.map((m) => m.id === 'local' ? self : m))
-          } else setEntries([self])
+          const { sub, value } = await next.call<{ sub: string; value: MachineEntry[] }>('machines.watch', {})
+          machinesSub = sub
+          setEntries(value.map((m) => m.id === 'local' ? self : m))
           peer = next
           retry = 500
           resolve(next)
@@ -229,12 +225,11 @@ export function webBridge(): SuperegoBridge {
     },
   }
 
-  /** A call on the daemon, its larger attachments sent ahead as uploads when it takes them (see @superego/client's uploads.ts). */
+  /** A call on the daemon, its larger attachments sent ahead as uploads (see @superego/client's uploads.ts). */
   const send = async (method: string, params: unknown) => {
     await starting
     const to = peer ?? await ready
-    const local = entries.find((m) => m.id === 'local')
-    if (local?.features?.includes('uploads') && carriesFiles(method, params)) return to.call(method, await uploadAttachments(to, method, params))
+    if (carriesFiles(method, params)) return to.call(method, await uploadAttachments(to, method, params))
     return to.call(method, params)
   }
 

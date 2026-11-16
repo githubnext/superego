@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
-import { defineApp, PROTOCOL_VERSION, type ThreadInfo } from '@superego/protocol'
+import { defineApp, PROTOCOL_VERSION, type Hello, type ThreadInfo } from '@superego/protocol'
 import webPanes from '../src/daemon.ts'
 
 const app = defineApp({ name: 'test', id: 'webpanestest' })
@@ -31,8 +31,8 @@ it('tells the agent of Preview and Artifact and opens them, unless the machine h
   const daemon = await openDaemon({ app, dataDir: data, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [webPanes] })
   const server = await listen(daemon, join(data, 's.sock'))
   const { peer, socket } = await connectSocket(join(data, 's.sock'))
-  const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
-  expect(hello.features).toContain('ext:web-panes')
+  const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
+  expect(hello.extensions.map((e) => e.name)).toContain('web-panes')
   const run = async () => {
     const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'show me' })
     await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === thread.id)!.status.state === 'done')

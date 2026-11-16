@@ -27,7 +27,7 @@ import {
 // The daemon itself only for `daemon run`: loading it costs every other command most of its start.
 import { appEnv, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
 import {
-  AUTH_REJECTED, compareVersions, driftPhrase, FEATURES, PROTOCOL_VERSION, RpcError, unread, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Notifications, type Params, type ProviderAuthInfo, type Result,
+  AUTH_REJECTED, compareVersions, driftPhrase, PROTOCOL_VERSION, RpcError, unread, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Notifications, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ProfileRef, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
@@ -135,7 +135,7 @@ function resolveMachine(name: string | undefined): Machine {
 async function connect(machine: Machine, as: { client: string; label: string } = { client: `${app.id}-cli`, label: hostname() }, { start = true }: { start?: boolean } = {}): Promise<{ transport: Transport; hello: Hello }> {
   const transport = machine.config ? await openMachine(machine.config, app, dataDir) : await openLocal(socket, start ? startDaemon : undefined)
   try {
-    const hello = await transport.peer.call<Hello>('hello', { ...as, version: PROTOCOL_VERSION, features: [...FEATURES] })
+    const hello = await transport.peer.call<Hello>('hello', { ...as, version: PROTOCOL_VERSION })
     if (machine.config) checkIdentity(hello, { target: routeOf(machine.config, app), ...(machine.config.daemonId ? { expected: machine.config.daemonId } : {}) }, [])
     return { transport, hello }
   } catch (error) {
@@ -184,8 +184,8 @@ async function startThread(args: { dir?: string; machine?: string; prompt?: stri
   })
   if (args.open) openInApp(machine.id, thread.id)
   print({ machine: machine.id, ...thread }, () => {
-    // Its worktree, as the worktrees extension says (`worktree` from an older daemon).
-    const tree = (thread.facts?.worktrees ?? (thread as { worktree?: unknown }).worktree) as { branch: string } | undefined
+    // Its worktree, as the worktrees extension says.
+    const tree = thread.facts?.worktrees as { branch: string } | undefined
     const where = tree ? `its worktree ${thread.cwd} (branch ${tree.branch})` : thread.cwd
     if (args.open) console.log(`Opened thread ${thread.id} in ${where}${machine.config ? ` on ${machine.label}` : ''}`)
     else console.log(thread.id)
@@ -217,7 +217,7 @@ async function unreadCommand(machineName: string | undefined, countOnly: boolean
     await on(machine, async (call, hello) => {
       const add = (id: string, label: string, list: ThreadInfo[]) => { for (const thread of list) if (unread(thread)) found.push({ machine: id, label, thread }) }
       add(machine.id, machine.label, await call('thread.list', {}))
-      if (machine.config || !hello.features.includes('relay')) return
+      if (machine.config) return
       const { value } = await call('machines.watch', {})
       await Promise.all(value.filter((m) => m.id !== 'local' && m.state === 'connected').map(async (m) => {
         const list = await call('relay.call', { machine: m.id, method: 'thread.list', params: {} }).catch(() => []) as ThreadInfo[]
@@ -261,8 +261,8 @@ async function listMachines() {
   ])))
 }
 
-/** Whether a daemon's `keepsRunning` says it will go away. Unknown (an older daemon, a launchd agent) is not a warning. */
-const stopsEarly = (keeps: Hello['machine']['keepsRunning']) => Boolean(keeps && (keeps.service === null || keeps.afterLogout === false))
+/** Whether a daemon's `keepsRunning` says it will go away. Unknown (a launchd agent) is not a warning. */
+const stopsEarly = (keeps: Hello['machine']['keepsRunning']) => keeps.service === null || keeps.afterLogout === false
 
 const withTimeout = <T>(promise: Promise<T>, ms: number) => Promise.race([
   promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`no answer in ${ms / 1000}s`)), ms).unref()),
@@ -464,14 +464,10 @@ async function daemonCommand(sub: string | undefined, now: boolean) {
       return print({ restarted: true, build: hello.machine.build }, () => console.log(`Started daemon ${hello.machine.pid}, build ${hello.machine.build}.`))
     }
     const before = await on(local, async (call, hello) => {
-      if (!hello.features.includes('restart')) {
-        process.kill(hello.machine.pid, 'SIGTERM')
-        return hello
-      }
       // This shell's environment goes along, as it would to a daemon this started: keys from `box run`, say. Only what is
       // set, so a restart adds and never takes away.
       const env = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => Boolean(e[1])))
-      const result = await call('daemon.restart', { build: hello.machine.build, interrupt: now, ...(hello.features.includes('restart-env') ? { env } : {}) })
+      const result = await call('daemon.restart', { build: hello.machine.build, interrupt: now, env })
       if (!result.restarted) {
         throw new RpcError('busy', 'Agents are working, so the daemon was not restarted.', { hint: `Wait for them, or: ${app.id} daemon restart --now (they resume after the restart).` })
       }

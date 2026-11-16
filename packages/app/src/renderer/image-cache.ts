@@ -2,9 +2,8 @@
 // show it, and kept as long as the file is the same version (its mtime and size, as the daemon says). It's checked again
 // with `file.stat` (no bytes, many paths at once) when it comes into view again, when the window comes back to the
 // front, and when the thread's run ends; never on a timer. A changed file is read again and swapped in once it's
-// decoded, so what shows it goes from the old picture to the new one without a gap; the old blob is let go of. A daemon
-// from before versions (no `mtimeMs` from file.read) is never asked: its images stay as first read, as they always did.
-import type { FileVersion } from '@superego/protocol'
+// decoded, so what shows it goes from the old picture to the new one without a gap; the old blob is let go of.
+import type { FileVersion, Result } from '@superego/protocol'
 import { imageType } from './markdown-html.ts'
 
 type Entry = {
@@ -15,7 +14,7 @@ type Entry = {
   /** The blob URL to show, once read. */
   src: Promise<string>
   url?: string
-  /** The file's version as read; absent from an older daemon, which is never asked again. */
+  /** The file's version as read, once it's read. */
   version?: FileVersion
   checkedAt: number
   checking?: Promise<void>
@@ -29,8 +28,6 @@ const RECHECK_AFTER = 2000
 const REVOKE_AFTER = 5000
 
 const entries = new Map<string, Entry>()
-/** Machines whose daemon turned out not to answer `file.stat` after all. */
-const unstattable = new Set<string>()
 
 const keyOf = (machine: string, thread: string, path: string) => `${machine}\u0000${thread}\u0000${path}`
 const now = () => Date.now()
@@ -41,11 +38,10 @@ const decode = (base64: string): Uint8Array<ArrayBuffer> => {
   return typed.fromBase64 ? typed.fromBase64(base64) : Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
 }
 
-type Read = { content: string; mtimeMs?: number; size?: number }
 async function read(entry: Pick<Entry, 'machine' | 'thread' | 'path' | 'type'>) {
-  const { content, mtimeMs, size } = await rpc<Read>(entry.machine, 'file.read', { thread: entry.thread, path: entry.path, base64: true })
+  const { content, mtimeMs, size } = await rpc<Result<'file.read'>>(entry.machine, 'file.read', { thread: entry.thread, path: entry.path, base64: true })
   const url = URL.createObjectURL(new Blob([decode(content)], { type: entry.type }))
-  return { url, version: typeof mtimeMs === 'number' && typeof size === 'number' ? { mtimeMs, size } : undefined }
+  return { url, version: { mtimeMs, size } }
 }
 
 /** The blob URL of a thread's image file on `machine`, read once and kept while the file stays the same. */
@@ -87,7 +83,7 @@ type Which = { machine?: string; thread?: string; path?: string; force?: boolean
  */
 export function recheckImages(which: Which = {}): Promise<void> {
   const due = [...entries.values()].filter((entry) => entry.version && entry.url && !entry.checking
-    && entry.listeners.size > 0 && !unstattable.has(entry.machine)
+    && entry.listeners.size > 0
     && (!which.machine || entry.machine === which.machine) && (!which.thread || entry.thread === which.thread)
     && (!which.path || entry.path === which.path) && (which.force || now() - entry.checkedAt >= RECHECK_AFTER))
   const groups = new Map<string, Entry[]>()
@@ -104,15 +100,15 @@ async function check(group: Entry[]) {
   const checking = new Promise<void>((resolve) => { done = resolve })
   for (const entry of group) { entry.checking = checking; entry.checkedAt = now() }
   try {
-    const { files } = await rpc<{ files: (FileVersion | null)[] }>(machine, 'file.stat', { thread: thread, paths: group.map((e) => e.path) })
+    const { files } = await rpc<Result<'file.stat'>>(machine, 'file.stat', { thread: thread, paths: group.map((e) => e.path) })
     await Promise.all(group.map((entry, index) => {
       const version = files[index]
       // Gone (or unreadable now): what was shown stays.
       if (!version || (version.mtimeMs === entry.version!.mtimeMs && version.size === entry.version!.size)) return
       return swap(entry)
     }))
-  } catch (error) {
-    if ((error as { kind?: string }).kind === 'unknown_method') unstattable.add(machine)
+  } catch {
+    // Not answered just now (the machine away): what was shown stays, and it's checked again next time.
   } finally {
     for (const entry of group) entry.checking = undefined
     done()

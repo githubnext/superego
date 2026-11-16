@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
-import { defineApp, PROTOCOL_VERSION, type Json, type Notifications, type ThreadInfo } from '@superego/protocol'
+import { defineApp, PROTOCOL_VERSION, type Hello, type Json, type Notifications, type ThreadInfo } from '@superego/protocol'
 import answerUi from '../src/daemon.ts'
 import { ANSWER, ASKING, type Asking } from '../src/shared.ts'
 
@@ -28,8 +28,8 @@ async function start(turns: string[]) {
   const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, extensions: [answerUi] })
   const server = await listen(daemon, join(dir, 's.sock'))
   const { peer, socket } = await connectSocket(join(dir, 's.sock'))
-  const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
-  expect(hello.features).toContain('ext:answer-ui')
+  const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
+  expect(hello.extensions.map((e) => e.name)).toContain('answer-ui')
   const done = async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done'
   const view = async (id: string) => (await peer.call<{ value: ConversationView }>('thread.watch', { thread: id })).value
   const close = async () => { socket.destroy(); server.close(); await daemon.close(); delete process.env.ANSWERUITEST_MODEL }

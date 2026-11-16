@@ -132,11 +132,10 @@ const clone = <T>(value: T): T => value === undefined ? value : JSON.parse(JSON.
 
 /** What an extension says of itself, and only that: the fields `ExtensionAbout` has, each of its type (a window's declaration is anyone's JSON). */
 function aboutOf(about: ExtensionAbout): ExtensionAbout {
-  const { name, title, description, required, version, api, capabilities } = about
+  const { name, title, description, required, version, api } = about
   return {
     name, ...(typeof title === 'string' && title ? { title } : {}), ...(typeof description === 'string' && description ? { description } : {}), ...(required === true ? { required } : {}),
     ...(typeof version === 'string' ? { version } : {}), ...(typeof api === 'string' ? { api } : {}),
-    ...(Array.isArray(capabilities) && capabilities.every((c) => typeof c === 'string') && capabilities.length ? { capabilities } : {}),
   }
 }
 
@@ -972,7 +971,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * is set up, and a second extension of that name (bundled or a profile's) is refused rather than mixed in.
    */
   const claimed = new Set<string>()
-  /** Extensions announced as `ext:<name>`: the extensions set up now, bundled and profiles' alike, each as it declares itself. */
+  /** Extensions announced in `hello.extensions`: the extensions set up now, bundled and profiles' alike, each as it declares itself. */
   const announced = new Map<string, ExtensionManifest>()
   /** The extensions set up now, with where each is from and what it registered: what the inspector reports. */
   const inspected = new Map<string, { extension: DaemonExtension; from: { source: 'core' | 'bundled' | 'profile'; file?: string }; profiles?: Set<string>; registered: Map<string, string[]> }>()
@@ -981,15 +980,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** The extensions announced and on: those switched off on this machine aren't offered. */
   const offered = () => [...announced.values()].filter(({ name }) => extensions.get(name)?.required || settings.get(`extensions.${name}`) !== false)
   /**
-   * What this daemon offers, as `hello` says and `features.changed` keeps current: the protocol's features, every
-   * extension set up now but those switched off on this machine, and each of those at its version.
+   * What this daemon offers, as `hello` says and `features.changed` keeps current: the protocol's features, and every
+   * extension set up now but those switched off on this machine, each at its version.
    */
-  const offer = () => {
-    const on = offered()
-    const named = on.map(({ name }) => `ext:${name}`)
-    return { features: [...FEATURES, ...named], extensions: on }
-  }
-  const features = () => offer().features
+  const offer = () => ({ features: [...FEATURES] as string[], extensions: offered() })
   let announcedOffer = ''
   let announcing = false
   /** Tell every client what this daemon offers, once it changed (after whatever changed it settles). */
@@ -1279,7 +1273,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     } finally {
       clearTimeout(timer)
     }
-    // Offered once it's set up: a client that sees `ext:<name>` finds its methods there, and one that fails never shows.
+    // Offered once it's set up: a client that sees it in `hello.extensions` finds its methods there, and one that fails never shows.
     failures.delete(from.file ?? extension.name)
     announced.set(extension.name, manifestOf(extension))
     announce()
@@ -1298,7 +1292,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   // The other machines, reached through links this daemon keeps (see relay.ts); this one first, as 'local'.
   const relay = createRelay(options.reach?.(machine), () => ({
-    id: 'local', label: machine.hostname, state: 'connected', machine: { id: machine.id, hostname: machine.hostname }, features: features(),
+    id: 'local', label: machine.hostname, state: 'connected', machine: { id: machine.id, hostname: machine.hostname }, ...offer(),
     keepsRunning: kept(),
   }))
   daemonLife.add(() => relay.close())
@@ -1632,7 +1626,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const { model, thinkingLevel, without, ...rest } = await agentOf(id, m.meta)
     // An extension's own thread runs as that extension makes it, or not at all: not while it's off here, or the thread
     // goes without it.
-    if (m.meta.owner && (!features().includes(`ext:${m.meta.owner}`) || without.has(m.meta.owner))) throw new RpcError('invalid', `This thread is the ${m.meta.owner} extension's, which is off here`)
+    if (m.meta.owner && (!offered().some((e) => e.name === m.meta.owner) || without.has(m.meta.owner))) throw new RpcError('invalid', `This thread is the ${m.meta.owner} extension's, which is off here`)
     if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
     await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null, ...rest }, context)
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })

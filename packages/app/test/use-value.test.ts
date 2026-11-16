@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// useValue with a scope: only that part of a live value, from a daemon that scopes it, or picked here from an older one.
+// useValue with a scope: only that part of a live value, as the daemon scopes it.
 import { act, createElement as h } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it } from 'vitest'
@@ -22,7 +22,7 @@ function bridge(answer: (params: { key: string; scope?: string }) => unknown) {
   return { asked, tell: (sub: string, value: unknown) => { for (const l of listeners) l({ machine: 'm', method: 'value.changed', params: { sub, key: 'builds.queue', value } }) } }
 }
 
-const machine = (features: string[]): MachineEntry => ({ id: 'm', label: 'm', state: 'connected', features } as unknown as MachineEntry)
+const machine: MachineEntry = { id: 'm', label: 'm', state: 'connected', features: [], extensions: [] }
 
 async function render(entry: MachineEntry, scope: string) {
   let seen: unknown
@@ -33,22 +33,12 @@ async function render(entry: MachineEntry, scope: string) {
   return { seen: () => seen, unmount: () => act(() => root.unmount()) }
 }
 
-it("watches only the thread's scope where the daemon scopes values", async () => {
+it("watches only the thread's scope", async () => {
   const { asked, tell } = bridge((p) => p.scope === 't1' ? ['mine'] : 'whole')
-  const view = await render(machine(['scoped-values']), 't1')
+  const view = await render(machine, 't1')
   expect(asked).toEqual([{ key: 'builds.queue', scope: 't1' }])
   expect(view.seen()).toEqual(['mine'])
   await act(async () => { tell('s1', ['mine', 'more']) })
   expect(view.seen()).toEqual(['mine', 'more'])
-  await view.unmount()
-})
-
-it('watches it whole from an older daemon, and picks the scope here', async () => {
-  const { asked, tell } = bridge(() => ({ t2: ['theirs'], t3: ['other'] }))
-  const view = await render(machine([]), 't2')
-  expect(asked).toEqual([{ key: 'builds.queue' }])
-  expect(view.seen()).toEqual(['theirs'])
-  await act(async () => { tell('s1', { t3: ['other'] }) })
-  expect(view.seen()).toBeNull()
   await view.unmount()
 })

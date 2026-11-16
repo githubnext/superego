@@ -40,7 +40,7 @@ export type TestDaemon = {
   dataDir: string
   /** The profile's folder there (the copy), if it was given one. */
   profileDir: string | undefined
-  /** What it said at `hello`, kept current: its features and its extensions' manifests. */
+  /** What it said at `hello`, kept current: its protocol features. */
   readonly features: string[]
   /** The extensions set up there, each at its version. */
   readonly extensions: ExtensionManifest[]
@@ -120,9 +120,7 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
   const server = await listen(daemon, socket)
   const { peer, socket: connection } = await connectSocket(socket)
   let hello = await peer.call<Hello>('hello', { client: 'superego/testing', version: PROTOCOL_VERSION })
-  peer.on('features.changed', (params: { features: string[]; extensions?: ExtensionManifest[] }) => {
-    hello = { ...hello, features: params.features, ...(params.extensions ? { extensions: params.extensions } : {}) }
-  })
+  peer.on('features.changed', ({ features, extensions }: Notifications['features.changed']) => { hello = { ...hello, features, extensions } })
 
   const until = async (check: () => boolean | Promise<boolean>, what = 'the condition', timeout = 15_000) => {
     const end = Date.now() + timeout
@@ -142,7 +140,7 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
   const test: TestDaemon = {
     dataDir, profileDir, peer,
     get features() { return hello.features },
-    get extensions() { return hello.extensions ?? [] },
+    get extensions() { return hello.extensions },
     call: (method, params = {}) => peer.call(method, params),
     dispatch: (id, params = {}) => peer.call('action.run', { id, params }),
     async thread(prompt, { cwd, profile, title } = {}) {

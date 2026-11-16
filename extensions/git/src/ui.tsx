@@ -20,7 +20,7 @@ export default defineUiExtension({
   },
 })
 
-/** The git daemon halves this one speaks: 1.x, or one from before versions (0.0.0), whose git.diff is 1.0's. */
+/** The git daemon halves this one speaks: 1.x. */
 const SPEAKS = 'ext:git@<2'
 
 /** The folder's changes by git, refreshed as the thread moves on. */

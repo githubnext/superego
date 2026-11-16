@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Hello } from '@superego/protocol'
 import { checkIdentity } from '../src/identity.ts'
 
-const hello = (id: string): Hello => ({ version: 1, features: [], methods: [], machine: { id, hostname: `host-${id}`, platform: 'linux', pid: 1, dataDir: '/', build: 'b' } })
+const hello = (id: string): Hello => ({ version: 2, features: [], methods: [], extensions: [], api: '2.1.0', client: 'c1', machine: { id, hostname: `host-${id}`, platform: 'linux', pid: 1, dataDir: '/', build: 'b', keepsRunning: { service: null, afterLogout: null } } })
 
 describe('checkIdentity', () => {
   it('accepts the first machine at a route, and the same one later', () => {

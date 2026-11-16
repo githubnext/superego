@@ -5,8 +5,8 @@
 // chunks, see channels.ts) waits in its source and is pulled only while the transport takes more, so a control message
 // never queues behind more than the one chunk already handed over.
 
-export type RpcErrorData = { kind: string; hint?: string }
-export type RpcErrorObject = { code: number; message: string; data?: RpcErrorData }
+type RpcErrorData = { kind: string; hint?: string }
+type RpcErrorObject = { code: number; message: string; data?: RpcErrorData }
 
 type Request = { jsonrpc: '2.0'; id: number; method: string; params?: unknown }
 type Response = { jsonrpc: '2.0'; id: number; result?: unknown; error?: RpcErrorObject }

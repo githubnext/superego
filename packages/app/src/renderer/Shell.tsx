@@ -273,7 +273,7 @@ function ThreadSheet({ machine, thread, onClose }: { machine: MachineEntry; thre
       <div className="app__scrim app__scrim--sheet" onClick={onClose} />
       <div className="thread-sheet" role="dialog" aria-label={thread.title}>
         <div className="thread-sheet__head">
-          <span className="thread-sheet__project">{machine.id !== 'local' && `${machine.label} · `}{thread.project?.name}</span>
+          <span className="thread-sheet__project">{machine.id !== 'local' && `${machine.label} · `}{thread.project.name}</span>
           <span className="thread-sheet__title"><StatusGlyph status={thread.status} />{thread.title}</span>
         </div>
         <div className="thread-sheet__tools">

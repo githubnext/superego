@@ -1,8 +1,8 @@
 // A link to one machine's daemon. It connects, says hello, relays notifications, and reconnects with backoff when the
 // transport drops. While down, calls fail fast and a client keeps showing what it last knew (stale, not gone). It pings
-// a daemon that offers `heartbeat`, so a dead link is noticed in seconds on any transport, not when ssh gives up.
+// the daemon, so a dead link is noticed in seconds on any transport, not when ssh gives up.
 // No Node imports: the app's main process uses it, and a daemon or a browser can.
-import { Channels, FEATURES, offers, PROTOCOL_VERSION, RpcError, versionOf, type Channel, type Hello, type Notifications, type RpcPeer } from '@superego/protocol'
+import { Channels, offers, PROTOCOL_VERSION, RpcError, versionOf, type Channel, type Hello, type Notifications, type RpcPeer } from '@superego/protocol'
 import type { ConnectionState, MachineEntry, MachineId } from './shared.ts'
 import { carriesFiles, uploadAttachments } from './uploads.ts'
 
@@ -52,8 +52,7 @@ export class Link {
     return {
       id: this.id, label: this.label, state: this.state,
       ...(this.error ? { error: this.error.message, errorKind: this.error.kind } : {}),
-      ...(this.hello ? { machine: { id: this.hello.machine.id, hostname: this.hello.machine.hostname }, features: this.hello.features, ...(this.hello.extensions ? { extensions: this.hello.extensions } : {}), version: versionOf(this.hello) } : {}),
-      ...(this.hello?.machine.keepsRunning ? { keepsRunning: this.hello.machine.keepsRunning } : {}),
+      ...(this.hello ? { machine: { id: this.hello.machine.id, hostname: this.hello.machine.hostname }, features: this.hello.features, extensions: this.hello.extensions, keepsRunning: this.hello.machine.keepsRunning, version: versionOf(this.hello) } : {}),
     }
   }
 
@@ -66,11 +65,11 @@ export class Link {
     void this.#loop()
   }
 
-  /** Call the daemon. Inline attachments go ahead as uploads on their own channels when it takes them. */
+  /** Call the daemon. Inline attachments go ahead as uploads on their own channels. */
   call(method: string, params: unknown): Promise<unknown> {
     if (!this.#transport || this.state !== 'connected') throw new RpcError('disconnected', `${this.label} is not connected`)
     const peer = this.#transport.peer
-    if (this.has('uploads') && carriesFiles(method, params)) return uploadAttachments(peer, method, params).then((sent) => peer.call(method, sent))
+    if (carriesFiles(method, params)) return uploadAttachments(peer, method, params).then((sent) => peer.call(method, sent))
     return peer.call(method, params)
   }
 
@@ -120,7 +119,7 @@ export class Link {
           // What it offers changed since hello (an extension set up, torn down, switched off): `has` follows.
           if (method === 'features.changed' && this.hello) {
             const { features, extensions } = params as Notifications['features.changed']
-            this.hello = { ...this.hello, features, ...(extensions ? { extensions } : {}) }
+            this.hello = { ...this.hello, features, extensions }
             this.#set(this.state)
           }
           this.#options.onEvent(method, params)
@@ -128,7 +127,7 @@ export class Link {
         // A transport that opened but never answers (a via command that hangs, a daemon wedged) would otherwise stay
         // connecting for good. Long enough for `connect --start` to start a daemon on the far side first.
         const hello = await within(transport.peer.call<Hello>('hello', {
-          client: this.#options.client ?? 'superego-app', version: PROTOCOL_VERSION, features: [...FEATURES],
+          client: this.#options.client ?? 'superego-app', version: PROTOCOL_VERSION,
           ...(this.#options.clientLabel ? { label: this.#options.clientLabel } : {}),
         }), this.#options.helloTimeout ?? 30_000, () => new RpcError('timeout', `${this.label} did not answer`))
         if (hello.version !== PROTOCOL_VERSION) {
@@ -139,7 +138,7 @@ export class Link {
         this.#delay = 500
         this.#set('connected')
         let silent = false
-        const stopBeat = offers(hello, 'heartbeat') ? this.#heartbeat(transport, () => { silent = true }) : () => {}
+        const stopBeat = this.#heartbeat(transport, () => { silent = true })
         await transport.closed
         stopBeat()
         this.#transport = undefined

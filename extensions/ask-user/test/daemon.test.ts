@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
-import { defineApp, PROTOCOL_VERSION, type Json, type Notifications, type ThreadInfo } from '@superego/protocol'
+import { defineApp, PROTOCOL_VERSION, type Hello, type Json, type Notifications, type ThreadInfo } from '@superego/protocol'
 import askUser from '../src/daemon.ts'
 import { ANSWER, ASKING, type Question } from '../src/shared.ts'
 
@@ -30,8 +30,8 @@ it('asks, blocks the thread, takes an answer from any client, and carries on', a
   const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, extensions: [askUser] })
   const server = await listen(daemon, join(dir, 's.sock'))
   const { peer, socket } = await connectSocket(join(dir, 's.sock'))
-  const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
-  expect(hello.features).toContain('ext:ask-user')
+  const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
+  expect(hello.extensions.map((e) => e.name)).toContain('ask-user')
 
   const thread = await peer.call<ThreadInfo>('thread.start', {})
   // The thread's own questions, in its scope; another's scope hears nothing.

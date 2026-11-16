@@ -3,7 +3,7 @@
 // shortens a question or an error the same way.
 
 /** How long a recap, a question or an error runs before it's cut (with an ellipsis). */
-export const RECAP_LENGTH = 100
+const RECAP_LENGTH = 100
 
 /** Markdown as the plain text it reads as: no code blocks, emphasis, heading or list marks, links as their text. */
 export function plainText(markdown: string): string {

@@ -7,8 +7,8 @@ export type ServiceState = {
   phase: ServicePhase
   installedBuild?: string
   runningBuild?: string
-  /** Whether the daemon can refuse a restart while busy; an older one can only be stopped. */
-  canRestartWhenIdle?: boolean
+  /** Whether the daemon refused this app for speaking another protocol generation: it can only be stopped. */
+  refused?: boolean
   busy: boolean
   /** "Later": the notice shrinks to a quiet reminder until reviewed. */
   deferred: boolean
@@ -16,7 +16,7 @@ export type ServiceState = {
 }
 export type ServiceAction = 'restart' | 'interrupt' | 'later' | 'review'
 /** `runningBuild`: unknown of a daemon that refuses this app's protocol generation, and so never this one's. */
-export type ServiceSnapshot = { installedBuild: string; runningBuild?: string; busy: boolean; canRestartWhenIdle: boolean }
+export type ServiceSnapshot = { installedBuild: string; runningBuild?: string; busy: boolean; refused: boolean }
 
 export type RestartIO = {
   inspect(): Promise<ServiceSnapshot>
@@ -82,8 +82,8 @@ export class ServiceRestart {
         this.#publish({ ...snapshot, phase: 'current', error: undefined, deferred: false })
         return
       }
-      // An older daemon can't refuse while busy: stopping it needs consent, as interrupting does.
-      const interrupt = action === 'interrupt' || !snapshot.canRestartWhenIdle
+      // One that refused this app can't refuse a restart while busy: stopping it needs consent, as interrupting does.
+      const interrupt = action === 'interrupt' || snapshot.refused
       if (interrupt && snapshot.busy) {
         if (!await this.#io.confirmInterruption(snapshot)) return
         snapshot = await this.#io.inspect()

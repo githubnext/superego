@@ -41,35 +41,28 @@ describe("an extension's declaration", () => {
 })
 
 describe('asking a machine about an extension', () => {
-  const now = { features: ['threads', 'ext:git', 'ext:mine'], extensions: [{ name: 'git', version: '1.3.0', capabilities: ['stat'] }, { name: 'mine' }] }
-  it('by presence, as before', () => {
-    expect(offers(now, 'threads')).toBe(true)
+  const now = { features: ['soon'], extensions: [{ name: 'git', version: '1.3.0' }, { name: 'mine' }] }
+  it('by presence', () => {
+    expect(offers(now, 'soon')).toBe(true)
+    expect(offers(now, 'later')).toBe(false)
     expect(offers(now, 'ext:git')).toBe(true)
     expect(offers(now, 'ext:files')).toBe(false)
     expect(offers(undefined, 'ext:git')).toBe(false)
   })
-  it('by version and capability', () => {
+  it('by version', () => {
     expect(offers(now, 'ext:git@^1.2')).toBe(true)
     expect(offers(now, 'ext:git@^1.4')).toBe(false)
     expect(offers(now, 'ext:git@^2')).toBe(false)
-    expect(offers(now, 'ext:git#stat')).toBe(true)
-    expect(offers(now, 'ext:git#blame')).toBe(false)
-    expect(offers(now, 'ext:git@^1#stat')).toBe(true)
     expect(extensionVersion(now, 'git')).toBe('1.3.0')
     // One that says no version counts as 0.0.0.
     expect(extensionVersion(now, 'mine')).toBe('0.0.0')
     expect(offers(now, 'ext:mine@^1')).toBe(false)
     expect(offers(now, 'ext:mine@<2')).toBe(true)
   })
-  it("by what's on, not what it once declared: one switched off isn't there at any version", () => {
-    const off = { features: ['threads'], extensions: [{ name: 'git', version: '1.3.0' }] }
+  it("by what's on: one switched off isn't there at any version", () => {
+    const off = { features: [], extensions: [] }
+    expect(offers(off, 'ext:git')).toBe(false)
     expect(offers(off, 'ext:git@^1')).toBe(false)
     expect(extensionVersion(off, 'git')).toBeUndefined()
-  })
-  it('from a daemon before versions: present, at 0.0.0', () => {
-    const old = { features: ['threads', 'ext:git'] }
-    expect(offers(old, 'ext:git')).toBe(true)
-    expect(offers(old, 'ext:git@^1')).toBe(false)
-    expect(offers(old, 'ext:git@<2')).toBe(true)
   })
 })

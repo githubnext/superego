@@ -6,7 +6,6 @@ import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
 import { completionsIn, divideWork, entryOwner, entryView, fileKind, folderKind, paneMenu, PlacedViews, sentWithIn, Slot, shownPanes, toolOwner, toolRow, toolView, unfoldedTool, urlKind, useLayout, useRegistry, type ToolRowCall, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useRejections, useShell } from './state.tsx'
-import { useActions } from './keys.ts'
 import { ViewContextMenu, withContextMenu } from './view-menu.tsx'
 import { ctrlDigit } from './shortcuts.ts'
 import { Images, imagesIn, Markdown } from './Markdown.tsx'
@@ -97,9 +96,9 @@ export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread
   const editing = useRenaming() === `${machine.id}/${thread.id}`
   return (
     <span className="titlebar__crumb">
-      <span className="titlebar__seg titlebar__project" title={`${thread.project?.name ?? folderName(thread.cwd)}\n${thread.cwd}`}>
+      <span className="titlebar__seg titlebar__project" title={`${thread.project.name}\n${thread.cwd}`}>
         {machine.id !== 'local' && <>{machine.label}<span className="titlebar__dot">·</span></>}
-        {thread.project?.name ?? folderName(thread.cwd)}
+        {thread.project.name}
       </span>
       <span className="titlebar__sep" aria-hidden>›</span>
       <span className="titlebar__seg titlebar__title">
@@ -337,7 +336,6 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
 }
 
 /** The project folder's own name; home reads as `~`. */
-const folderName = (path: string) => { const short = shortPath(path); return short === '~' ? short : short.split('/').filter(Boolean).at(-1) ?? short }
 
 /** A home-relative path: `/Users/me/dev/x` reads as `~/dev/x`. */
 export const shortPath = (path: string) => path.replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, '~')
@@ -406,12 +404,11 @@ function WaitingForSignIn() {
 /**
  * What you sent while the agent was busy, waiting its turn: a row each over the composer, shown as soon as it's sent,
  * saying when it goes in (a steer after the current step, a follow-up when the agent is done), and taken back with ×.
- * A follow-up can be sent now: it becomes a steer (`thread.steer`; not from a daemon without it). Placed, it becomes
+ * A follow-up can be sent now: it becomes a steer (`thread.steer`). Placed, it becomes
  * an entry in the transcript like any other.
  */
 function Queued({ machine, thread, inbox }: { machine: MachineEntry; thread: ThreadInfo; inbox: InboxState | undefined }) {
   const dispatch = useRegistry().router.dispatch
-  const steerable = useActions(machine.id).some((action) => action.id === 'thread.steer')
   const items = (inbox?.items ?? []).filter((item) => item.mode !== 'write')
   if (!items.length) return null
   const act = (id: 'thread.withdraw' | 'thread.steer', submission: string) => void dispatch(id, { thread: thread.id, submission }, { machine: machine.id, source: 'composer' })
@@ -428,7 +425,7 @@ function Queued({ machine, thread, inbox }: { machine: MachineEntry; thread: Thr
             <ListIcon size={13} aria-hidden />
             <span className="queued-row__text" title={text}>{words}</span>
             <span className="queued-row__when">{item.mode === 'steer' ? 'Steers after this step' : item === firstFollowUp ? 'Queued · next' : 'Queued'}</span>
-            {item.mode === 'followUp' && steerable && (
+            {item.mode === 'followUp' && (
               <IconButton label="Send now" className="queued-row__action queued-row__now" onClick={() => act('thread.steer', String(item.id))}>
                 <ArrowElbowRightIcon size={12} aria-hidden />
               </IconButton>
@@ -846,8 +843,6 @@ function Composer({ machine, thread, busy, inbox, onJump }: { machine: MachineEn
     return () => window.removeEventListener('keydown', onKey)
   }, [numbered])
   const abort = () => dispatch('thread.stop', { thread: thread.id }, { machine: machine.id, source: 'composer' })
-  // Its profile gone from under it: another picked for it (not from a daemon without thread.setProfile).
-  const switchable = useActions(machine.id).some((action) => action.id === 'thread.setProfile')
   /** A project's profile the thread runs, changed (or found where its own moved): allowed as it is now, then sent. */
   const allowAndSend = async (name: string) => {
     try {
@@ -915,7 +910,8 @@ function Composer({ machine, thread, busy, inbox, onJump }: { machine: MachineEn
     {error && (
       <div className="composer__error">
         {error.kind === 'no_model' ? <>No model is set up on {machine.label}. <Button onClick={onOpenSettings}>Open Settings</Button></>
-          : error.kind === 'profile_missing' && switchable ? <ProfileSwitch machine={machine.id} thread={thread} onSwitched={() => void send()} />
+          // Its profile gone from under it: another picked for it.
+          : error.kind === 'profile_missing' ? <ProfileSwitch machine={machine.id} thread={thread} onSwitched={() => void send()} />
           : error.kind === 'profile_not_allowed' && thread.profile ? <>{error.message} <Button onClick={() => void allowAndSend(thread.profile!.name)}>Allow and send</Button></>
           : error.message}
       </div>

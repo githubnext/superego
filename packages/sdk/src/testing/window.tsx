@@ -5,7 +5,7 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import {
-  defineApp, RELEASED, type ActionInfo, type AppConfig, type ExtensionManifest, type Json, type ProfileRef, type ThreadInfo,
+  defineApp, RELEASED, type ActionInfo, type AppConfig, type ExtensionManifest, type Json, type Notifications, type ProfileRef, type ThreadInfo,
 } from '@superego/protocol'
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '@superego/app/shared'
 import {
@@ -37,9 +37,9 @@ export type FakeMachineOptions = {
   id?: string
   /** Its name in the window: its id unless given. */
   label?: string
-  /** Its protocol features: the current ones unless given (`[]`: a daemon from before them all). */
+  /** Its protocol features (`FEATURES`): those its generation released unless given. */
   features?: string[]
-  /** The extensions set up there, each at its version (a daemon from before versions: none). */
+  /** The extensions set up there, each at its version (a name alone: at 1.0.0). */
   extensions?: (ExtensionManifest | string)[]
   /** Its threads. */
   threads?: ThreadInfo[]
@@ -63,8 +63,8 @@ export function testThread(thread: Partial<ThreadInfo> = {}): ThreadInfo {
 }
 let threads = 0
 
-/** The features a daemon of this build offers. */
-const CURRENT = [...RELEASED.features]
+/** The features a daemon of this generation offers. */
+const CURRENT: string[] = [...RELEASED.features]
 
 /**
  * A machine of your making: its threads, values and methods answer the window's calls; any other call fails as an
@@ -73,7 +73,7 @@ const CURRENT = [...RELEASED.features]
 export function fakeMachine(options: FakeMachineOptions = {}): TestMachine & { calls: { method: string; params: any }[]; setValue(key: string, value: Json, scope?: string): void } {
   const id = options.id ?? 'local'
   const extensions = (options.extensions ?? []).map((e): ExtensionManifest => typeof e === 'string' ? { name: e, version: '1.0.0' } : e)
-  const features = [...(options.features ?? CURRENT), ...extensions.map((e) => `ext:${e.name}`)]
+  const features = options.features ?? CURRENT
   const values = new Map(Object.entries(options.values ?? {}))
   const watches = new Map<string, { key: string; scope?: string; last: string }>()
   const listeners = new Set<(method: string, params: unknown) => void>()
@@ -96,10 +96,8 @@ export function fakeMachine(options: FakeMachineOptions = {}): TestMachine & { c
       if (method === 'value.watch') {
         const sub = `v${++subs}`
         const scope = params.scope as string | undefined
-        // An older daemon (no scoped-values) watches it whole, whatever it's asked.
-        const part = features.includes('scoped-values') ? scope : undefined
-        const value = partOf(params.key, part)
-        watches.set(sub, { key: params.key, ...(part !== undefined ? { scope: part } : {}), last: JSON.stringify(value) })
+        const value = partOf(params.key, scope)
+        watches.set(sub, { key: params.key, ...(scope !== undefined ? { scope } : {}), last: JSON.stringify(value) })
         return { sub, value }
       }
       if (method === 'unwatch') { watches.delete(params.sub); return null }
@@ -146,7 +144,10 @@ export function daemonMachine(daemon: TestDaemon, id = 'local', label = id): Tes
       if (!listeners.size) {
         for (const event of RELEASED.notifications) {
           offs.push(daemon.peer.on(event, (params: unknown) => {
-            if (event === 'features.changed') Object.assign(entry, { features: (params as { features: string[] }).features, extensions: (params as { extensions?: ExtensionManifest[] }).extensions ?? [] })
+            if (event === 'features.changed') {
+              const { features, extensions } = params as Notifications['features.changed']
+              Object.assign(entry, { features, extensions })
+            }
             for (const l of listeners) l(event, params)
           }))
         }

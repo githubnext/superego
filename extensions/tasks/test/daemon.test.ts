@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
-import { defineApp, PROTOCOL_VERSION, type Json, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
+import { defineApp, PROTOCOL_VERSION, type Hello, type Json, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 import tasks from '../src/daemon.ts'
 
 const app = defineApp({ name: 'test', id: 'taskstest' })
@@ -29,8 +29,8 @@ it('gives the agent the tools, and task_start a task_id that is its own call', a
   const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, extensions: [tasks] })
   const server = await listen(daemon, join(dir, 's.sock'))
   const { peer, socket } = await connectSocket(join(dir, 's.sock'))
-  const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
-  expect(hello.features).toContain('ext:tasks')
+  const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
+  expect(hello.extensions.map((e) => e.name)).toContain('tasks')
 
   const thread = await peer.call<ThreadInfo>('thread.start', {})
   await peer.call('thread.send', { thread: thread.id, text: 'look around' })

@@ -58,6 +58,4 @@ export type ExtensionAbout = {
   version?: string
   /** The extension API it needs of the host, a semver range (`^1`, `^1.2`): a host it doesn't satisfy refuses it. Unset: any. */
   api?: string
-  /** Finer than its version: things it can do that a client may ask about (`has(machine, 'ext:<name>#<capability>')`). */
-  capabilities?: string[]
 }

@@ -41,7 +41,7 @@ it("reads a thread's changes by git: the diff against HEAD and the files not tra
   await writeFile(join(repo, 'notes.md'), 'two\n')
   await writeFile(join(repo, 'new.md'), 'new\n')
   const { peer, hello, close } = await open()
-  expect(hello.features).toContain('ext:git')
+  expect(hello.extensions.map((e) => e.name)).toContain('git')
   const thread = await peer.call<ThreadInfo>('thread.start', { cwd: repo })
   const changes = await peer.call<Changes>(DIFF, { thread: thread.id })
   expect(changes.repo).toBe(true)

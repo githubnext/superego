@@ -13,8 +13,10 @@ class FakeSocket {
   constructor() { FakeSocket.last = this; queueMicrotask(() => this.onopen?.()) }
   send(line: string) {
     const request = JSON.parse(line) as { id: number; method: string }
-    if (request.method === 'hello') this.receive({ jsonrpc: '2.0', id: request.id, result: { version: PROTOCOL_VERSION, machine: { id: 'm1', hostname: 'box' }, features: ['threads', 'ext:git'], methods: [] } })
+    if (request.method === 'hello') this.receive({ jsonrpc: '2.0', id: request.id, result: { version: PROTOCOL_VERSION, machine: { id: 'm1', hostname: 'box' }, features: [], extensions: [{ name: 'git' }], methods: [] } })
+    if (request.method === 'machines.watch') this.receive({ jsonrpc: '2.0', id: request.id, result: { sub: 'w1', value: [{ id: 'local', label: 'box', state: 'connected' }] } })
   }
+  close() { this.onclose?.() }
   receive(message: unknown) { queueMicrotask(() => this.onmessage?.({ data: JSON.stringify(message) })) }
 }
 
@@ -29,11 +31,11 @@ it('follows what the daemon offers as it changes', async () => {
   bridge.onEvent((event: SuperegoEvent) => { if (event.method === '$machines') entries.push(...(event.params as MachineEntry[])) })
   const settle = async (check: () => boolean) => { for (let i = 0; i < 50 && !check(); i++) await new Promise((r) => setTimeout(r, 0)) }
   await settle(() => entries.at(-1)?.state === 'connected')
-  expect(entries.at(-1)?.features).toEqual(['threads', 'ext:git'])
-  FakeSocket.last.receive({ jsonrpc: '2.0', method: 'features.changed', params: { features: ['threads'] } })
-  await settle(() => entries.at(-1)?.features?.length === 1)
-  expect(entries.at(-1)).toMatchObject({ state: 'connected', features: ['threads'] })
-  expect((await bridge.machines())[0]?.features).toEqual(['threads'])
+  expect(entries.at(-1)?.extensions).toEqual([{ name: 'git' }])
+  FakeSocket.last.receive({ jsonrpc: '2.0', method: 'features.changed', params: { features: [], extensions: [] } })
+  await settle(() => entries.at(-1)?.extensions?.length === 0)
+  expect(entries.at(-1)).toMatchObject({ state: 'connected', features: [], extensions: [] })
+  expect((await bridge.machines())[0]?.extensions).toEqual([])
   vi.unstubAllGlobals()
 })
 

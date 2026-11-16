@@ -80,7 +80,7 @@ function Tree({ machine, thread, path, open }: EditorSlotProps) {
   const shown = treeShown.use()
   const list = useFiles(shown ? machine.id : undefined, thread)
   const root = useMemo(() => treeOf(list?.files ?? []), [list])
-  const project = thread.project?.root ?? thread.cwd
+  const project = thread.project.root
   const all = expanded.use()
   // The open file's folders start open.
   const ancestors = path.split('/').slice(0, -1).map((_, i, parts) => parts.slice(0, i + 1).join('/'))
@@ -184,7 +184,7 @@ function QuickOpenDialog({ machineId, threadId, onClose }: { machineId: string; 
     if (kind) void dispatch('pane.open', { thread: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'quick open' })
   }
   return (
-    <Picker label="Open a file" className="files-open" placeholder={thread ? `Open a file in ${thread.project?.name ?? 'this thread'}` : 'Open a file'}
+    <Picker label="Open a file" className="files-open" placeholder={thread ? `Open a file in ${thread.project.name}` : 'Open a file'}
       items={files} onPick={go} onClose={onClose} empty={list ? 'Nothing matches' : 'Reading…'}
       filter={(all, query) => !query.trim() ? all.slice(0, 50)
         : all.map((file) => ({ file, r: rank(file, query) })).filter((m) => m.r > 0).sort((a, b) => b.r - a.r || a.file.length - b.file.length).slice(0, 50).map((m) => m.file)}

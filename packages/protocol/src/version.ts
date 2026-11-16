@@ -1,13 +1,13 @@
-// Which Superego a machine runs, next to this computer's: older, newer, the same, or too old to say. Machines run
+// Which Superego a machine runs, next to this computer's: older, newer, the same, or not known. Machines run
 // Superego from their own checkout, updated by hand (or by Update), so one can fall behind without anyone noticing.
 import type { Hello } from './methods.ts'
 
-/** What a daemon says of its code in `hello`. An old daemon says only its build and protocol. */
-export type MachineVersion = { build?: string; commit?: string; committedAt?: number; protocol?: number }
+/** What a daemon says of its code in `hello`: its build and protocol, and its commit when it runs from git. */
+export type MachineVersion = { build: string; commit?: string; committedAt?: number; protocol: number }
 
 /**
  * A machine's Superego next to this computer's. `behind` and `ahead` by commit time; `differs` when the commits
- * differ but were made at the same moment; `unknown` when it doesn't say (a daemon from before it did: probably old).
+ * differ but were made at the same moment; `unknown` when it doesn't know its commit (it runs from outside git).
  */
 export type VersionDrift =
   | { state: 'current' }
@@ -45,7 +45,7 @@ export function roughly(ms: number): string {
 /** "an older Superego (5e9684c, 2 days behind)", or nothing when it's this computer's. */
 export function driftPhrase(drift: VersionDrift | undefined, name = 'Superego'): string | undefined {
   if (!drifted(drift)) return undefined
-  if (drift.state === 'unknown') return `an older ${name} that doesn't say which`
+  if (drift.state === 'unknown') return `a ${name} that doesn't know its commit`
   const commit = drift.commit.slice(0, 7)
   if (drift.state === 'differs') return `a different ${name} (${commit})`
   return drift.state === 'behind' ? `an older ${name} (${commit}, ${roughly(drift.by)} behind)` : `a newer ${name} (${commit}, ${roughly(drift.by)} ahead)`

@@ -94,7 +94,6 @@ it('lists the machines it reaches, passes calls on, and brings their news back t
   expect(a.machines()[0]).toMatchObject({ id: 'local', state: 'connected', machine: { id: hub.daemon.machine.id } })
   await until(() => a.machines().find((m) => m.id === hub.box)?.state === 'connected')
   expect(a.machines().find((m) => m.id === hub.box)).toMatchObject({ label: 'Box', machine: { id: box.daemon.machine.id }, remote: { ssh: false } })
-  expect(a.machines().find((m) => m.id === hub.box)!.features).toContain('relay')
   // The machine id it remembered for next time, written once it connected.
   await until(() => new MachineStore(join(dir, 'hub')).get(hub.box)?.daemonId === box.daemon.machine.id)
 

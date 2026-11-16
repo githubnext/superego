@@ -3,7 +3,7 @@
 // someone else added, and Add server. Then From profiles: the servers of profiles seen here, to sign in to, not to edit.
 // Everything goes through the extension's actions on that machine (`target`), so a remote one works the same.
 import { useEffect, useState, type ReactNode } from 'react'
-import { SignInFlow, useDispatch, useValue, type SettingsComponentProps } from '@superego/app/ui'
+import { SignInFlow, useDispatch, useMachines, useValue, type SettingsComponentProps } from '@superego/app/ui'
 import { Button, CaretRightIcon, Dialog, DotsThreeIcon, IconButton, Menu, SegmentedControl, Select, Switch, TextField } from '@superego/ui'
 import { CATALOG } from './catalog.ts'
 import { authMenu, checkText, commandLine, configOf, DOT, emptyForm, formOf, nameFrom, needs, secretLabel, secretPlaceholder, signInDetails, signInText, splitCommandLine, stateText, type ServerForm } from './describe.ts'
@@ -18,7 +18,7 @@ function useAct(machine: string): Act {
 }
 
 export function ServersSection({ target, section }: SettingsComponentProps) {
-  const live = useValue<SectionData>(target, true, SERVERS_VALUE)
+  const live = useValue<SectionData>(useMachines().find((m) => m.id === target), SERVERS_VALUE)
   const data = live ?? section.data as SectionData | undefined
   const act = useAct(target)
   const [editing, setEditing] = useState<ServerInfo | 'new'>()

@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { DATA_VIEWS, defineAction, defineApp, obj, PROTOCOL_VERSION, str, type ActionInfo, type DataViewInfo, type Hello, type RpcPeer, type ThreadInfo, type ViewContent } from '@superego/protocol'
+import { DATA_VIEWS, defineAction, defineApp, obj, PROTOCOL_VERSION, str, type ActionInfo, type DataViewInfo, type Hello, type Notifications, type RpcPeer, type ThreadInfo, type ViewContent } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonExtension, type LiveValue, type ScopedValue } from '../src/index.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
@@ -128,16 +128,16 @@ it("counts only what a transform returns, not what it changes in place, with att
 it('tells clients when what it offers changes: an extension switched off, or set up', async () => {
   const links = defineDaemonExtension({ name: 'links', title: 'Links' })
   const { peer, hello, close } = await open([links])
-  expect(hello.features).toContain('ext:links')
+  expect(hello.extensions.map((e) => e.name)).toContain('links')
   const told: string[][] = []
-  peer.on('features.changed', (params: { features: string[] }) => { told.push(params.features) })
+  peer.on('features.changed', (params: Notifications['features.changed']) => { told.push(params.extensions.map((e) => e.name)) })
   await peer.call('settings.set', { key: 'extensions.links', value: false })
   await until(async () => told.length === 1)
-  expect(told[0]).not.toContain('ext:links')
-  expect((await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })).features).not.toContain('ext:links')
+  expect(told[0]).not.toContain('links')
+  expect((await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })).extensions.map((e) => e.name)).not.toContain('links')
   await peer.call('settings.set', { key: 'extensions.links', value: true })
   await until(async () => told.length === 2)
-  expect(told[1]).toContain('ext:links')
+  expect(told[1]).toContain('links')
   await close()
 })
 
@@ -185,8 +185,7 @@ it('announces data views, fed by a value, whose buttons run its actions: a round
       expect(() => superego.view('orders.bad', { title: 'Bad', context: 'window', fits: ['pane'], value: 'orders.a' })).toThrow(/pane/)
     },
   })
-  const { peer, hello, close } = await open([orders])
-  expect(hello.features).toContain('data-views')
+  const { peer, close } = await open([orders])
   const views = await peer.call<{ value: DataViewInfo[] }>('value.watch', { key: DATA_VIEWS })
   expect(views.value.map((v) => [v.id, v.extension])).toEqual([['orders.recent', 'orders'], ['orders.notes', 'orders']])
   expect(views.value[0]).toMatchObject({ title: 'Recent orders', icon: 'list', fits: ['space', 'beside'], default: 'space', value: 'orders.recent' })
@@ -219,8 +218,7 @@ it('publishes a scoped value: a watcher of one scope hears only its changes; who
       expect(() => queue.set('', ['x'])).toThrow(/non-empty/)
     },
   })
-  const { peer, hello, close } = await open([builds])
-  expect(hello.features).toContain('scoped-values')
+  const { peer, close } = await open([builds])
   const heard: { sub: string; value: unknown }[] = []
   peer.on('value.changed', (p: { sub: string; value: unknown }) => { heard.push(p) })
   const a = await peer.call<{ sub: string; value: string[] }>('value.watch', { key: 'builds.queue', scope: 'a' })

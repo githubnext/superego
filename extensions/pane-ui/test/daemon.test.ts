@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
-import { defineApp, PROTOCOL_VERSION, type Json, type Notifications, type ThreadInfo } from '@superego/protocol'
+import { defineApp, PROTOCOL_VERSION, type Hello, type Json, type Notifications, type ThreadInfo } from '@superego/protocol'
 import paneUi from '../src/daemon.ts'
 import { LOAD, SPECS, type ThreadSpecs } from '../src/shared.ts'
 
@@ -23,8 +23,8 @@ async function open() {
   const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, extensions: [paneUi] })
   const server = await listen(daemon, join(dir, 's.sock'))
   const { peer, socket } = await connectSocket(join(dir, 's.sock'))
-  const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
-  expect(hello.features).toContain('ext:pane-ui')
+  const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
+  expect(hello.extensions.map((e) => e.name)).toContain('pane-ui')
   return { peer, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
 }
 

@@ -1,5 +1,5 @@
 // A profile's UI is let go of only when the profile can't run (gone, broken, no longer allowed), not on errors that
-// pass: the machine away, busy with another profile's run, a token not taken yet, an older daemon. Another machine's
+// pass: the machine away, busy with another profile's run, a token not taken yet. Another machine's
 // runs only once this computer allowed exactly the sources the window received.
 import { beforeEach, expect, it, vi } from 'vitest'
 import { RpcError } from '@superego/protocol'
@@ -56,7 +56,7 @@ it('keeps the UI through errors that pass, and lets go of it once the profile is
   // The same version again installs nothing.
   await ensureProfileUi(registry, 'm', p)
   expect(registry.installProfile).toHaveBeenCalledTimes(1)
-  for (const kind of ['busy', 'unauthorized', 'disconnected', 'restarting', 'unknown_method', 'internal', 'timeout']) {
+  for (const kind of ['busy', 'unauthorized', 'disconnected', 'restarting', 'internal', 'timeout']) {
     answer = () => { throw new RpcError(kind, kind) }
     await expect(ensureProfileUi(registry, 'm', p)).rejects.toThrow(kind)
   }

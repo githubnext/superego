@@ -11,20 +11,21 @@ import type { MachineVersion } from './version.ts'
 /**
  * The protocol's generation. It changes only for a break no feature flag can bridge; a daemon and client of different
  * generations refuse each other. Within one, the core's methods and features only grow (`RELEASED` in released.ts holds
- * what was released, and a test keeps it there), each new one announced in `FEATURES`. Not the extension API
+ * what was released, and a test keeps it there), each feature added since the generation began announced in `FEATURES`. Not the extension API
  * (`EXTENSION_API`) nor the release (`MachineVersion`): see the guide (packages/cli/skill/guide.md), "Versions and
  * compatibility".
  */
 export const PROTOCOL_VERSION = 2
 
-/**
- * What a daemon of this build offers, announced in `hello`. Clients check a feature before using it, so an older
- * daemon on another machine keeps working with a newer app (and the other way round) for whatever both know.
- */
 /** A line Superego writes in a thread's transcript itself, for the user, not the model: an entry of this kind, `{ text }`. */
 export const NOTE_ENTRY = 'superego.note'
 
-export const FEATURES = ['threads', 'settings', 'auth', 'restart', 'restart-env', 'actions', 'hidden-threads', 'data-views', 'scoped-values', 'heartbeat', 'channels', 'uploads', 'keeps-running', 'clients', 'relay'] as const
+/**
+ * What a daemon of this build offers beyond what its generation began with, announced in `hello`. Clients check a
+ * feature before using it, so an older daemon of the generation keeps working with a newer app (and the other way
+ * round) for whatever both know. Generation 2 has added none yet: everything it began with is there.
+ */
+export const FEATURES = [] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -40,7 +41,7 @@ export type ThreadInfo = {
   cwd: string
   /** When it was made, ms since the epoch. */
   createdAt: number
-  /** When anything last happened in it: a message, or work going on. Absent from older daemons. */
+  /** When anything last happened in it: a message, or work going on. */
   activeAt: number
   /** The model its next turn runs with. */
   model?: string
@@ -99,7 +100,7 @@ export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean;
 
 /** A file sent with a message: images go to the model as images; any file is saved on the thread's machine. */
 export type Attachment = { name: string; mimeType: string; /** Base64. */ data: string }
-/** An attachment as a message carries it: inline, or (with the `uploads` feature) by an upload on the same connection. */
+/** An attachment as a message carries it: inline, or by an upload on the same connection. */
 export type AttachmentRef = Attachment | { name: string; mimeType: string; upload: string }
 
 /** What a new thread starts with. Unset: this machine's defaults. */
@@ -137,23 +138,25 @@ export type KeepsRunning = { service: 'systemd' | 'launchd' | null; afterLogout:
 /** `id` is the machine's identity: stable across restarts and routes, so a client can tell it is the same machine. */
 export type MachineInfo = {
   id: string; hostname: string; platform: string; pid: number; dataDir: string
-  /** With the `keeps-running` feature. */
-  keepsRunning?: KeepsRunning
   /** The build of the code this daemon runs (see `readBuild`); clients compare it with what is on disk now. */
   build: string
-  /** The git commit of the checkout it runs from, and when it was made (ms); absent from older daemons and outside git. */
+  /** The git commit of the checkout it runs from, and when it was made (ms); absent outside git. */
   commit?: string
   committedAt?: number
 }
 
 export type Hello = {
-  version: number; features: string[]; machine: MachineInfo; methods: string[]
-  /** The extensions set up and on there (those in `features` as `ext:<name>`), each at its version. Absent from daemons before versions. */
-  extensions?: ExtensionManifest[]
-  /** The extension API it gives extensions (`EXTENSION_API`). Absent from daemons before versions. */
-  api?: string
-  /** The id this connection has in the daemon's client list (see `clients.watch`), with the `clients` feature. */
-  client?: string
+  version: number; methods: string[]
+  /** The protocol features it offers (`FEATURES`). */
+  features: string[]
+  /** Who answered, and whether its daemon will outlive a logout and a reboot. */
+  machine: MachineInfo & { keepsRunning: KeepsRunning }
+  /** The extensions set up and on there, each at its version. */
+  extensions: ExtensionManifest[]
+  /** The extension API it gives extensions (`EXTENSION_API`). */
+  api: string
+  /** The id this connection has in the daemon's client list (see `clients.watch`). */
+  client: string
 }
 
 /**
@@ -193,8 +196,8 @@ export type MachineEntry = {
 
 export type Methods = {
   /** `label` names this client in others' client lists: the app and CLI send their computer's hostname. */
-  hello: { params: { client: string; version: number; features?: string[]; label?: string }; result: Hello }
-  /** Nothing, answered at once: a client pinging every few seconds notices a dead link in seconds (`heartbeat`). */
+  hello: { params: { client: string; version: number; label?: string }; result: Hello }
+  /** Nothing, answered at once: a client pinging every few seconds notices a dead link in seconds. */
   ping: { params: {}; result: null }
   /** Open a channel (a byte stream). The daemon accepts `upload` {name, mimeType, size}; its id names the upload. */
   'ch.open': { params: { ch: string; kind: string; params?: unknown; window: number }; result: { window: number } }
@@ -202,10 +205,9 @@ export type Methods = {
   'thread.list': { params: { archived?: boolean; hidden?: boolean }; result: ThreadInfo[] }
   'thread.start': { params: NewThread; result: ThreadInfo }
   'agent.models': { params: {}; result: ModelCatalog }
-  /** A file in a thread's folder (not outside it), as text. */
-  /** `mtimeMs` and `size`: its version, as `file.stat` says it (absent from older daemons). */
-  'file.read': { params: { thread: ThreadId; path: string; base64?: boolean }; result: { path: string; content: string; mtimeMs?: number; size?: number } }
-  /** Which version of each file there is, without reading them (null: none, or not the thread's). Absent from older daemons. */
+  /** A file in a thread's folder (not outside it), as text, with its version as `file.stat` says it. */
+  'file.read': { params: { thread: ThreadId; path: string; base64?: boolean }; result: { path: string; content: string } & FileVersion }
+  /** Which version of each file there is, without reading them (null: none, or not the thread's). */
   'file.stat': { params: { thread: ThreadId; paths: string[] }; result: { files: (FileVersion | null)[] } }
   /** A file in a thread's folder, then `file.changed` whenever it changes on disk (by anyone), until unwatched. */
   'file.watch': { params: { thread: ThreadId; path: string }; result: { sub: string; content: string | null } }
@@ -257,7 +259,7 @@ export type Methods = {
 
   /**
    * Snapshot of an extension's live value, then `value.changed` with each new one. Watched by name: null until an
-   * extension publishes it, then its value. `scope` (feature `scoped-values`): only that part of it, told only when
+   * extension publishes it, then its value. `scope`: only that part of it, told only when
    * that part changes: a scoped value's (`superego.scopedValue`) value in that scope (a thread's, by its id); a plain
    * value's entry of that key, if it's an object (else null). Unscoped, a scoped value is every scope's, by scope.
    */
@@ -293,7 +295,7 @@ export type Methods = {
   'client.perform': { params: { client: string; action: string; params?: Json }; result: null }
 
   /**
-   * The machines this daemon reaches (`relay`): itself as `local`, then those in `machines.json` on its computer, with
+   * The machines this daemon reaches: itself as `local`, then those in `machines.json` on its computer, with
    * their links' states; then `machines.changed` with the whole list.
    */
   'machines.watch': { params: {}; result: { sub: string; value: MachineEntry[] } }
@@ -346,7 +348,7 @@ export type Notifications = {
   /** A watched file, as it is on disk now (`content: null`: gone). */
   'file.changed': { sub: string; content: string | null }
   /** What the daemon offers now, as `hello` said it: sent to every client whenever it changes (an extension set up, torn down, switched off). */
-  'features.changed': { features: string[]; extensions?: ExtensionManifest[] }
+  'features.changed': { features: string[]; extensions: ExtensionManifest[] }
   /** Channels: byte streams a client and the daemon open. */
   'ch.data': { ch: string; data: string }
   'ch.ack': { ch: string; bytes: number }
@@ -359,9 +361,6 @@ export type Notifications = {
   /** A notification from a machine reached through this daemon, for a connection that has called it. */
   'relay.event': { machine: string; method: string; params: unknown }
 }
-
-/** The methods every settings endpoint (a daemon, or the app itself) answers. */
-export type SettingsMethods = Pick<Methods, 'settings.watch' | 'settings.set' | 'unwatch'>
 
 export type MethodName = keyof Methods
 export type Params<M extends MethodName> = Methods[M]['params']
@@ -379,5 +378,5 @@ export type Client = {
  * machine's daemon (see the app's perform.ts).
  */
 export const PERFORMABLE: ReadonlySet<string> = new Set([
-  'thread.select', 'thread.next', 'thread.previous', 'thread.unread', 'project.next', 'project.previous', 'pane.next', 'pane.previous',
+  'thread.select', 'thread.next', 'thread.previous', 'unread.next', 'project.next', 'project.previous', 'pane.next', 'pane.previous',
 ])

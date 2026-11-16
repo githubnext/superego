@@ -56,7 +56,7 @@ describe('link', () => {
       const peer = new RpcPeer((line) => socket.destroyed || socket.write(line))
       socket.on('data', lineSplitter((line) => { if (answering || !line.includes('"ping"')) peer.receive(line) }))
       socket.on('error', () => {})
-      peer.handle('hello', (): Hello => ({ version: PROTOCOL_VERSION, features: ['heartbeat'], methods: ['hello', 'ping'], machine: { id: 'x', hostname: 'fake', platform: 'test', pid: 1, dataDir: dir, build: 'b' } }))
+      peer.handle('hello', (): Hello => ({ version: PROTOCOL_VERSION, features: [], methods: ['hello', 'ping'], extensions: [], api: '2.1.0', client: 'c1', machine: { id: 'x', hostname: 'fake', platform: 'test', pid: 1, dataDir: dir, build: 'b', keepsRunning: { service: null, afterLogout: null } } }))
       peer.handle('ping', () => null)
     })
     await new Promise<void>((resolve) => server.listen(path, resolve))
@@ -76,7 +76,6 @@ describe('link', () => {
     let acks = 0
     const { link: l } = link(async () => { const transport = await openLocal(socket); transport.peer.on('ch.ack', () => acks++); return transport })
     await until(() => l.state === 'connected')
-    expect(l.has('uploads')).toBe(true)
     const thread = await l.call('thread.start', { title: 'files' }) as ThreadInfo
     const big = base64(12 * 1024 * 1024)
     const sending = l.call('action.run', { id: 'thread.send', params: { thread: thread.id, text: 'see', attachments: [

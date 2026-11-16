@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
-import { defineApp, PROTOCOL_VERSION, type Json, type ThreadInfo } from '@superego/protocol'
+import { defineApp, PROTOCOL_VERSION, type Hello, type Json, type ThreadInfo } from '@superego/protocol'
 import images, { MAX_BYTES } from '../src/daemon.ts'
 import type { ShowDetails } from '../src/shared.ts'
 import { png } from './fixtures.ts'
@@ -29,8 +29,8 @@ async function run(calls: string[]) {
   const daemon = await openDaemon({ app, dataDir: join(dir, 'home'), defaultCwd: join(dir, 'project'), extensions: [images] })
   const server = await listen(daemon, join(dir, 's.sock'))
   const { peer, socket } = await connectSocket(join(dir, 's.sock'))
-  const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
-  expect(hello.features).toContain('ext:images')
+  const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
+  expect(hello.extensions.map((e) => e.name)).toContain('images')
   const thread = await peer.call<ThreadInfo>('thread.start', {})
   await peer.call('thread.send', { thread: thread.id, text: 'show me' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')

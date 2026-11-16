@@ -7,7 +7,7 @@ import { Button, Dialog, FontPicker, Select, StatusGlyph, Switch, TextField } fr
 import { remoteCommand } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 
-import { machine as client, has, loadFonts, useSettings, useValue } from './client.ts'
+import { machine as client, loadFonts, useSettings, useValue } from './client.ts'
 import { fonts } from './fonts.ts'
 import { takeProviderFocus } from './provider-focus.ts'
 import { waitingPhrase } from '../shared.ts'
@@ -16,7 +16,8 @@ import { Keymap } from './Keymap.tsx'
 import { driftNote, MachineDrift } from './machine-drift.tsx'
 import { settingsView, useApp, useRegistry } from './extension.tsx'
 import { Contained } from './contained.tsx'
-import { useSettingsDialog } from './state.tsx'
+import { useMachines, useSettingsDialog } from './state.tsx'
+import { useMachineProblems } from './machine-problems.ts'
 import { useAllowedUi, useDeclinedUi } from './profile-ui.ts'
 import { RevokedUiNotice, sizeOf } from './profile-ui-notice.tsx'
 import { SignInFlow } from './sign-in-flow.tsx'
@@ -28,15 +29,13 @@ const ALL = '$all'
 
 /** Settings: wide, a pane beside the rail (Escape goes back); on a phone, a dialog. */
 export function SettingsView({ machines, onClose, pane = false }: { machines: MachineEntry[]; onClose(): void; pane?: boolean }) {
-  const appConfig = useApp()
   const [kept, setTarget] = useLocalState('settings.target', APP)
   // The section kept from last time, unless its machine has gone since.
   const target = kept === APP || kept === MACHINES || kept === ALL || machines.some((m) => m.id === kept) ? kept : APP
   const machine = machines.find((m) => m.id === target)
   const connected = target === APP || machine?.state === 'connected'
-  const supported = target === APP || has(machine, 'settings')
-  const snapshot = useSettings(target, target !== MACHINES && target !== ALL && connected && supported)
-  const editable = machines.filter((m) => m.state === 'connected' && has(m, 'settings'))
+  const snapshot = useSettings(target, target !== MACHINES && target !== ALL && connected)
+  const editable = machines.filter((m) => m.state === 'connected')
   useEffect(() => {
     if (!pane) return
     // Escape that something in it took (a picker closing, a field) stays there.
@@ -61,7 +60,6 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
           {target === MACHINES ? <Machines machines={machines} onOpen={setTarget} />
             : target === ALL ? <AllMachines machines={editable} />
             : !connected ? <p className="settings__note">{machine?.label} is {machine?.state}. Its settings live on it, so they show once it is back.</p>
-            : !supported ? <p className="settings__note">{appConfig.name} on {machine?.label} is too old to change its settings from here. Update it there.</p>
             : !snapshot ? <p className="settings__note">Loading…</p>
             : snapshot.sections.filter((section) => section.ui || section.settings.some((s) => !s.hidden)).map((section) => <Section key={section.id} target={target} section={section} values={snapshot.values} />)}
         </div>
@@ -244,7 +242,7 @@ export function Providers({ target, section }: { target: string; section: Sectio
   const [keyFor, setKeyFor] = useState<string | undefined>(() => providers.find((p) => p.id === focused && p.apiKey && !p.oauth)?.id)
   const focusedRow = useRef<HTMLDivElement>(null)
   useEffect(() => { focusedRow.current?.scrollIntoView({ block: 'center' }) }, [])
-  const rejected = useValue<ProviderRejection[] | null>(target, true, AUTH_REJECTED)
+  const rejected = useValue<ProviderRejection[]>(useMachines().find((m) => m.id === target), AUTH_REJECTED)
   const start = (provider: string, type: 'api_key' | 'oauth', key?: string) =>
     setSigning((current) => ({ provider, type, ...(key ? { key } : {}), n: (current?.n ?? 0) + 1 }))
 
@@ -295,6 +293,11 @@ function describe(provider: ProviderAuthInfo) {
 }
 
 /** The machines this app connects to: this computer, and any reached over ssh. */
+/** What failed between this window and a connected machine (see machine-problems.ts), on its row. */
+function MachineProblems({ machine }: { machine: string }) {
+  return useMachineProblems(machine).map((p) => <div key={p.what} className="settings__note machine-row__warning">{p.what} failed: {p.message}</div>)
+}
+
 function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: string): void }) {
   const appConfig = useApp()
   const DEFAULT_REMOTE_COMMAND = remoteCommand(appConfig)
@@ -335,6 +338,7 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
               {m.remote ? <code>{m.remote.route}</code> : 'This computer'}
               {m.machine && m.machine.hostname !== m.label ? ` · ${m.machine.hostname}` : ''} · {m.state === 'needs-login' ? 'needs login' : m.state === 'host-key' ? 'host key' : m.state}{m.error && m.state !== 'connected' ? ` — ${m.error}` : ''}
             </div>
+            {m.state === 'connected' && <MachineProblems machine={m.id} />}
             {driftNote(m, appConfig.name) && <div className="settings__note machine-row__drift"><MachineDrift machine={m} side="bottom" /> {driftNote(m, appConfig.name)!.text}</div>}
             {m.update && m.update.state !== 'done' && m.update.log && <pre className="machine-row__log">{m.update.log.trimEnd().split('\n').slice(-12).join('\n')}</pre>}
             {/* Its profiles' UI this computer lets run in its window, each for the sources allowed (see profile-ui.ts). */}

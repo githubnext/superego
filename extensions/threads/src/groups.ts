@@ -1,9 +1,6 @@
 // How the sidebar reads times, without React. Its order is the app's (projects.ts in @superego/app).
 import type { ThreadInfo } from '@superego/protocol'
 
-/** When a thread last did something; a daemon from before last-activity was reported gives its creation. */
-export const activity = (thread: ThreadInfo) => thread.activeAt ?? thread.createdAt
-
 /** How long ago, briefly: now, 5m, 2h, then the weekday, then the date. */
 export function ago(at: number, now = Date.now()): string {
   if (!Number.isFinite(at)) return ''

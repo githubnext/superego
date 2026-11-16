@@ -6,6 +6,7 @@ import { AUTH_REJECTED, DATA_VIEWS, type Json, type ProviderRejection, type Thre
 import type { MachineEntry } from '../shared.ts'
 import { has, machine as client, useHiddenThreads, useMachineList, useThreads as useThreadsWatch, useValue } from './client.ts'
 import { checkDataViews, warnDropped } from './data-view-check.ts'
+import { clearProblem, reportProblem } from './machine-problems.ts'
 import { useRegistry } from './extension.tsx'
 import { useImageRechecks } from './images.tsx'
 import { useListedProfileUis } from './profile-ui.ts'
@@ -151,7 +152,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   // Each project remembers the thread last shown in it: going back to the project goes back to that thread.
   const [lastThread, setLastThread] = useLocalState<Record<string, string>>('projects.last', {})
   const shown = selection && threads[selection.machine]?.find((t) => t.id === selection.thread)
-  const shownKey = shown && projectKey(selection!.machine, shown.project?.root ?? shown.cwd)
+  const shownKey = shown && projectKey(selection!.machine, shown.project.root)
   useEffect(() => {
     if (shownKey && lastThread[shownKey] !== shown!.id) setLastThread((last) => ({ ...last, [shownKey]: shown!.id }))
   }, [shownKey, shown?.id])
@@ -223,33 +224,37 @@ function MachineThreads({ machine, onThreads, onHidden, onRejections }: {
   machine: MachineEntry; onThreads(machine: string, list: ThreadInfo[] | undefined): void; onHidden(machine: string, list: ThreadInfo[] | undefined): void
   onRejections(machine: string, list: ProviderRejection[] | undefined): void
 }) {
-  const threads = useThreadsWatch(machine.id, machine.state === 'connected' && has(machine, 'threads'))
-  const hidden = useHiddenThreads(machine.id, machine.state === 'connected' && has(machine, 'hidden-threads'))
+  const connected = machine.state === 'connected'
+  // What it offers, to follow as it changes: its features and extensions, each at its version.
+  const offered = JSON.stringify([machine.features, machine.extensions])
+  const threads = useThreadsWatch(machine.id, connected)
+  const hidden = useHiddenThreads(machine.id, connected)
   useEffect(() => { if (hidden) onHidden(machine.id, hidden) }, [hidden])
-  // Null from a daemon that doesn't say (one older than the value): as good as none rejected.
-  const rejected = useValue<ProviderRejection[] | null>(machine.id, machine.state === 'connected' && has(machine, 'threads'), AUTH_REJECTED)
+  const rejected = useValue<ProviderRejection[]>(machine, AUTH_REJECTED)
   useEffect(() => { onRejections(machine.id, rejected ?? undefined) }, [rejected])
   // What the machine offers, for the palette and for routing thread actions.
   const registry = useRegistry()
   const { router, extensions } = registry
   // Its data views, but those of extensions switched off there; gone with it.
   // Checked here, not taken on the machine's word: only what can be a view of one of its extensions (data-view-check.ts).
-  const views = useValue<unknown>(machine.id, machine.state === 'connected' && has(machine, 'data-views'), DATA_VIEWS)
+  const views = useValue<unknown>(machine, DATA_VIEWS)
   const on = useMemo(() => {
     const { views: on, dropped } = checkDataViews(views, (extension) => has(machine, `ext:${extension}`))
     warnDropped(machine.id, 'view.list', dropped)
     return on
-  }, [views, machine.features?.join()])
+  }, [views, offered])
   useEffect(() => { registry.setDataViews(machine.id, on) }, [JSON.stringify(on)])
   useEffect(() => () => registry.setDataViews(machine.id, []), [])
   // Again when what it offers changes: a profile's extensions bring actions of their own.
-  useEffect(() => { if (machine.state === 'connected' && has(machine, 'actions')) void router.load(machine.id) }, [machine.state, machine.machine?.id, machine.features?.join()])
+  useEffect(() => { if (connected) void router.load(machine.id) }, [machine.state, machine.machine?.id, offered])
   useEffect(() => { if (threads) onThreads(machine.id, threads) }, [threads])
   // Its listed threads' profiles' UI, loaded before any of them is shown: their marks in the sidebar, say.
-  useListedProfileUis(machine.id, machine.state === 'connected', threads)
+  useListedProfileUis(machine.id, connected, threads)
   // The window's extensions, told to the machine: one whose work is all here is known there too (Settings, `without`).
   useEffect(() => {
-    if (machine.state === 'connected') void client(machine.id).call('extension.declare', { extensions }).catch(() => { /* an older daemon */ })
+    if (!connected) return
+    const what = "Telling it this window's extensions"
+    void client(machine.id).call('extension.declare', { extensions }).then(() => clearProblem(machine.id, what), (error) => reportProblem(machine.id, what, error))
   }, [machine.state, machine.machine?.id])
   return null
 }

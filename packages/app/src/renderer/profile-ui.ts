@@ -184,7 +184,7 @@ async function settle() {
 
 /**
  * Errors that say the profile can't run here (gone, broken, no longer allowed): the window lets go of its UI. Any other
- * (the machine away or restarting, busy with another profile's run, a timeout, an older daemon) may pass, and keeps it.
+ * (the machine away or restarting, busy with another profile's run, a timeout) may pass, and keeps it.
  */
 const GONE = new Set(['not_found', 'invalid', 'profile_not_allowed'])
 

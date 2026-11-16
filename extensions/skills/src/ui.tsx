@@ -15,8 +15,7 @@ import './styles.css'
 let listed: { key: string; skills: Promise<SkillInfo[]> } | undefined
 const skillsFor = ({ machine, thread }: ComposerWhere, start: number) => {
   const key = `${machine.id}\u0000${thread.id}\u0000${start}`
-  // A machine without a daemon half this speaks (an older Superego has none; 1.x, or one from before versions, lists
-  // as 1.0 does) has nothing to list.
+  // A machine without a daemon half this speaks (1.x) has nothing to list.
   if (listed?.key !== key) listed = { key, skills: has(machine, 'ext:skills@<2') ? call<SkillInfo[]>(machine.id, LIST).catch(() => []) : Promise.resolve([]) }
   return listed.skills
 }

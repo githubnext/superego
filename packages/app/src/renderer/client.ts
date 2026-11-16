@@ -21,11 +21,10 @@ export function machine(id: MachineId): Client {
 }
 
 /**
- * Whether a machine's daemon offers `feature`: a protocol feature, `ext:<name>` for an extension set up there now and
- * not switched off (a profile's from when the profile loads), `ext:<name>@<range>` for one at a version in a range
- * (`ext:git@^1.2`; one that says no version, as from a daemon before versions, counts as 0.0.0), or
- * `ext:<name>#<capability>` for one that declares a capability. Kept current as the daemon says (`features.changed`);
- * false until it has connected once.
+ * Whether a machine's daemon offers `feature`: a protocol feature added since its generation began (`FEATURES`),
+ * `ext:<name>` for an extension set up there now and not switched off (a profile's from when the profile loads), or
+ * `ext:<name>@<range>` for one at a version in a range (`ext:git@^1.2`; one that says no version counts as 0.0.0).
+ * Kept current as the daemon says (`features.changed`); false until it has connected once.
  */
 export const has = (machine: MachineEntry | undefined, feature: Feature | `ext:${string}`) => offers(machine, feature)
 
@@ -204,27 +203,16 @@ export const useHiddenThreads = (machineId: MachineId, connected: boolean) =>
 
 /**
  * A live value an extension's daemon half publishes (`superego.value`, `superego.scopedValue`), on a machine while it's
- * connected: undefined until heard, null until the extension that publishes it is set up there (a profile's, before the
+ * connected (none: nothing to watch): undefined until heard, null until the extension that publishes it is set up there (a profile's, before the
  * profile loads). `scope`: only its part in that scope (a thread's, by its id), heard only as that part changes: a
- * scoped value's value there, a plain value's entry of that key. From a daemon without `scoped-values` (an older
- * Superego), the value is watched whole and the part picked here.
+ * scoped value's value there, a plain value's entry of that key.
  *
  *   const queue = useValue<Build[]>(machine, 'builds.queue', { scope: thread.id })
- *   const all = useValue<Status>(machine.id, machine.state === 'connected', 'builds.status')   // by id, unscoped
  */
-export function useValue<T>(machine: MachineEntry, key: string, options?: { scope?: string }): T | null | undefined
-export function useValue<T>(machineId: MachineId, connected: boolean, key: string): T | undefined
-export function useValue<T>(first: MachineEntry | MachineId, second: boolean | string, third?: string | { scope?: string }): T | null | undefined {
-  const entry = typeof first === 'string' ? undefined : first
-  const machineId = entry ? entry.id : first as MachineId
-  const connected = entry ? entry.state === 'connected' : second as boolean
-  const key = entry ? second as string : third as string
-  const scope = entry ? (third as { scope?: string } | undefined)?.scope : undefined
-  const scoped = scope !== undefined && offers(entry, 'scoped-values')
-  const live = useWatch<Json>(machineId, connected, 'value.watch', scoped ? { key, scope } : { key },
-    (value, _method, params: Notifications['value.changed']) => params.key === key ? params.value : value, ['value.changed'])
-  if (scope === undefined || scoped || live === undefined) return live as T | undefined
-  return (live && typeof live === 'object' && !Array.isArray(live) && Object.hasOwn(live, scope) ? live[scope] : null) as T | null
+export function useValue<T>(machine: MachineEntry | undefined, key: string, { scope }: { scope?: string } = {}): T | null | undefined {
+  const params = machine && (scope !== undefined ? { key, scope } : { key })
+  return useWatch<Json>(machine?.id ?? '', machine?.state === 'connected', 'value.watch', params,
+    (value, _method, params: Notifications['value.changed']) => params.key === key ? params.value : value, ['value.changed']) as T | null | undefined
 }
 
 /** Call any method on a machine, including an extension's own (`<extension>.<method>`). */

@@ -426,8 +426,7 @@ What a window and a daemon of different releases do with each other:
   the daemon to answering all of it. Anything newer is announced in `FEATURES` and checked with `has` before it's
   used; a window checks an extension's daemon half the same way (`has(machine, 'ext:git@<2')`), and offers nothing,
   or says so, where it's missing. An extension a major ahead of what the window's UI half speaks is left alone by it.
-- **Renaming something released** waits for the next generation. Until then, a moved name can be kept answering as an
-  alias in `ALIASES` (`packages/protocol/src/compat.ts`), each with a milestone it goes by; generation 2 has none.
+- **Renaming something released** waits for the next generation.
 - **Stored data** isn't migrated: what an older release stored under an old name or in an old place isn't read.
 
 ## Links

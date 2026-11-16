@@ -16,7 +16,7 @@ import {
 import { rollup, statusLabel, STATUS_WORDS, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, ChatsIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
-import { activity, ago } from './groups.ts'
+import { ago } from './groups.ts'
 import { registerLinks, registerRows } from './rows.tsx'
 import { about } from './shared.ts'
 
@@ -93,7 +93,7 @@ function Threads() {
               return (
                 <ListItem key={thread.id} selected={isOn(project, thread)} leading={<StatusGlyph status={thread.status} />}
                   {...(level ? { className: 'threads-child', style: { '--depth': level } as CSSProperties } : {})}
-                  trailing={waitingForSignIn(thread.status) ? <span className="threads__why threads__why--quiet">Waiting</span> : thread.status.state === 'blocked' ? <span className="threads__why">{STATUS_WORDS.blocked}</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">{STATUS_WORDS.error}</span> : ago(activity(thread))} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
+                  trailing={waitingForSignIn(thread.status) ? <span className="threads__why threads__why--quiet">Waiting</span> : thread.status.state === 'blocked' ? <span className="threads__why">{STATUS_WORDS.blocked}</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">{STATUS_WORDS.error}</span> : ago(thread.activeAt)} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
                   <span className="threads__title">{thread.title}</span>
                   <Slot name="thread.badge" props={{ machine: project.machine, thread }} />
                 </ListItem>
@@ -135,7 +135,7 @@ function Archived({ machines, live }: { machines: MachineEntry[]; live: Project[
     let alive = true
     void Promise.all(connected.map((machine) => call<ThreadInfo[]>(machine.id, 'thread.list', { archived: true })
       .then((list) => list.map((thread) => ({ machine, thread })), () => [])))
-      .then((lists) => { if (alive) setThreads(lists.flat().sort((a, b) => activity(b.thread) - activity(a.thread))) })
+      .then((lists) => { if (alive) setThreads(lists.flat().sort((a, b) => b.thread.activeAt - a.thread.activeAt)) })
     return () => { alive = false }
   }, [open, inUse, asked])
   return (
@@ -150,11 +150,11 @@ function Archived({ machines, live }: { machines: MachineEntry[]; live: Project[
         : (
           <List>
             {(threads ?? []).map(({ machine, thread }) => (
-              <ListItem key={`${machine.id}/${thread.id}`} trailing={ago(activity(thread))}
+              <ListItem key={`${machine.id}/${thread.id}`} trailing={ago(thread.activeAt)}
                 selected={selection?.machine === machine.id && selection.thread === thread.id}
                 onClick={() => select({ machine: machine.id, thread: thread.id })}>
                 {thread.title}
-                <em className="threads-archived__where">{thread.project?.name ?? thread.cwd.split('/').filter(Boolean).at(-1)}{machine.id !== 'local' ? ` · ${machine.label}` : ''}</em>
+                <em className="threads-archived__where">{thread.project.name}{machine.id !== 'local' ? ` · ${machine.label}` : ''}</em>
               </ListItem>
             ))}
           </List>
@@ -228,7 +228,7 @@ function ThreadsRail({ open, sidebarHidden, show }: SpaceRailProps) {
             <div key={project.key} className="threads-rail__group">
               {index > 0 && <div className="threads-rail__sep" />}
               {project.threads.map((thread) => (
-                <Tooltip key={thread.id} side="right" content={<>{thread.title}<small className="threads-rail__tipnote">{waitingForSignIn(thread.status) || thread.status.state === 'blocked' ? statusLabel(thread.status) : ago(activity(thread))}</small></>}>
+                <Tooltip key={thread.id} side="right" content={<>{thread.title}<small className="threads-rail__tipnote">{waitingForSignIn(thread.status) || thread.status.state === 'blocked' ? statusLabel(thread.status) : ago(thread.activeAt)}</small></>}>
                   <button className={`threads-rail__dot ${isOn(project, thread) ? 'is-on' : ''} ${project.machine.state !== 'connected' ? 'is-stale' : ''}`}
                     aria-label={`${thread.title}, ${statusLabel(thread.status)}`} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
                     <StatusGlyph status={thread.status} />
@@ -298,7 +298,7 @@ function DetailsPane({ machine, thread }: { machine: MachineEntry; thread: Threa
         <dt>Folder</dt><dd>{thread.cwd.replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, '~')}</dd>
         {thread.model && <><dt>Model</dt><dd>{thread.model}</dd></>}
         <dt>Started</dt><dd>{time(thread.createdAt)}</dd>
-        <dt>Active</dt><dd>{ago(activity(thread))}</dd>
+        <dt>Active</dt><dd>{ago(thread.activeAt)}</dd>
         {thread.cost !== undefined && <><dt>Cost</dt><dd>${thread.cost.toFixed(2)}</dd></>}
       </dl>
       {tools.size > 0 && (

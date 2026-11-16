@@ -35,7 +35,7 @@ beforeEach(async () => {
   const connected = await connectSocket(join(dir, 'superego.sock'))
   peer = connected.peer
   const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
-  const entry: MachineEntry = { id: 'local', label: 'This computer', state: 'connected', machine: hello.machine, features: hello.features, extensions: hello.extensions ?? [] }
+  const entry: MachineEntry = { id: 'local', label: 'This computer', state: 'connected', machine: hello.machine, features: hello.features, extensions: hello.extensions }
   const listeners = new Set<(event: SuperegoEvent) => void>()
   for (const method of RELEASED.notifications) peer.on(method, (params: unknown) => { for (const l of listeners) l({ machine: 'local', method, params }) })
   window.superego = {

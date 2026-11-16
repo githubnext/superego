@@ -27,7 +27,7 @@ export function startFrom(registry: Registry, machine: string, thread: ThreadInf
     if (value !== undefined) options[field.name] = value
   }
   return {
-    machine, cwd: thread.project?.root ?? thread.cwd,
+    machine, cwd: thread.project.root,
     ...(thread.profile ? { profile: thread.profile.name } : {}),
     ...(thread.chosen?.model ? { model: thread.chosen.model } : {}), ...(thread.chosen?.thinking ? { thinking: thread.chosen.thinking } : {}),
     ...(Object.keys(options).length ? { options } : {}),
@@ -35,7 +35,7 @@ export function startFrom(registry: Registry, machine: string, thread: ThreadInf
 }
 
 export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadStart; onClose(): void }) {
-  const machines = useMachines().filter((m) => m.state === 'connected' && has(m, 'threads'))
+  const machines = useMachines().filter((m) => m.state === 'connected')
   const threads = useAllThreads()
   const { select, selection, thread: shown } = useSelection()
   const registry = useRegistry()
@@ -104,7 +104,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
   /** This machine's projects (where its threads worked), most recent first. */
   const recent = useMemo(() => {
     const list = (threads[machine?.id ?? ''] ?? []).slice().sort((a, b) => (b.activeAt ?? b.createdAt) - (a.activeAt ?? a.createdAt))
-    return [...new Set(list.map((t) => t.project?.root ?? t.cwd))].slice(0, 6)
+    return [...new Set(list.map((t) => t.project.root))].slice(0, 6)
   }, [threads, machine?.id])
 
   const chosen = catalog?.models.find((m) => m.value === (model ?? catalog.default.model))
@@ -123,7 +123,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
         ...(model ? { model } : {}), ...(thinking && levels.length ? { thinking } : {}), ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
         ...(Object.keys(fieldOptions).length ? { options: fieldOptions } : {}),
       }, { machine: machine.id, source: 'new thread' }) as ThreadInfo
-      localStorage.setItem(LAST, JSON.stringify({ machine: machine.id, cwd: { ...last.cwd, [machine.id]: created.project?.root ?? created.cwd } } satisfies Last))
+      localStorage.setItem(LAST, JSON.stringify({ machine: machine.id, cwd: { ...last.cwd, [machine.id]: created.project.root } } satisfies Last))
       onClose()
       select({ machine: machine.id, thread: created.id })
     } catch (e) {

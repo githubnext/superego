@@ -47,10 +47,9 @@ describe('daemon', () => {
     await close()
   })
 
-  it('announces its features and keeps one identity across restarts', async () => {
+  it('keeps one identity across restarts', async () => {
     const first = await open()
     const hello = await first.peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
-    expect(hello.features).toEqual(expect.arrayContaining(['threads', 'settings', 'auth']))
     expect(hello.machine.id).toMatch(/^[0-9a-f-]{36}$/)
     await first.close()
     const second = await open()
