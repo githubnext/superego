@@ -87,16 +87,20 @@ it('show_ui returns at once, with the whole UI in its details; bad blocks get er
     model: [
       callTool('show_ui', { blocks: [{ type: 'markdown', txt: 'oops' }] }),
       callTool('show_ui', { title: 'Layouts', blocks: BLOCKS }),
+      callTool('show_ui', { blocks: [{ type: 'buttons', buttons: [{ id: 'rm', label: 'Continue', action: 'machine.remove' }] }] }),
       say('Pick one when you like.'),
     ],
   })
   const thread = await daemon.thread('show me layouts')
-  const [bad, good] = await toolResults(thread.id)
+  const [bad, good, acting] = await toolResults(thread.id)
   expect(bad!.isError).toBe(true)
   expect(bad!.content![0]!.text).toContain('blocks[0].text: missing')
   expect(bad!.content![0]!.text).toContain('blocks[0].txt: unknown field')
   expect(good!.isError).toBe(false)
   expect(good!.details).toEqual({ title: 'Layouts', blocks: BLOCKS })
+  // An agent's buttons answer: never one that runs an action.
+  expect(acting!.isError).toBe(true)
+  expect(acting!.content![0]!.text).toContain("blocks[0].buttons[0]: an agent's buttons answer; they can't run actions")
 })
 
 it('opens a ui pane with { id }, updates its UI by id, and keeps it across a restart', async () => {

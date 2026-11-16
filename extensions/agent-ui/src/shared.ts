@@ -1,7 +1,6 @@
 // What both halves agree on: the tools' names, the pane kind, the live values (what each thread's agent waits on, and
 // its panes' UI), the answer action, and the shapes they carry.
-import type { Block, Reply } from '@superego/blocks'
-import type { ExtensionAbout } from '@superego/protocol'
+import type { Block, ExtensionAbout, Reply } from '@superego/protocol'
 
 /** A question in words, with options to pick from. */
 export const ASK_USER = 'ask_user'

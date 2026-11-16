@@ -1,7 +1,6 @@
 // agent-ui, UI half: what the agent waits on, above the composer (waiting.tsx); its UI in the transcript
 // (transcript.tsx); and the `ui` pane, drawing the blocks it keeps for it (see daemon.ts), redrawn as it updates them.
-import { defineUiExtension, has, PaneMessage, useValue, type PaneProps } from '@superego/app/ui'
-import { Blocks } from '@superego/blocks/ui'
+import { Blocks, defineUiExtension, has, PaneMessage, useValue, type PaneProps } from '@superego/app/ui'
 import { useReplyToThread } from './reply.ts'
 import { about, ASK, ASK_USER, KIND, OPEN, PANES, SHOW, UPDATE, type ThreadPanes } from './shared.ts'
 import { Asked, AskedUi, Opened, Shown } from './transcript.tsx'
@@ -35,7 +34,7 @@ function UiPane({ machine, thread, pane }: PaneProps) {
   return (
     <div className="agent-ui-pane">
       {/* Redrawn whole when the agent updates it: its inputs start again from what it says. */}
-      <Blocks key={spec.at} machine={machine} thread={thread} blocks={spec.blocks} onReply={(r) => reply(spec.blocks, r)} />
+      <Blocks key={spec.at} machine={machine} thread={thread} blocks={spec.blocks} host={{ by: 'agent', reply: (r) => reply(spec.blocks, r) }} />
     </div>
   )
 }

@@ -11,7 +11,6 @@
     { "path": "packages/ui" },
     { "path": "packages/app" },
     { "path": "packages/sdk" },
-    { "path": "packages/blocks" },
     { "path": "extensions/threads" },
     { "path": "extensions/thread-tools" },
     { "path": "extensions/thread-reports" },

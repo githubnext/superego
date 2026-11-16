@@ -137,3 +137,5 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
 // own workings (their 'superego/unstable'). Bundled extensions take both from here.
 export * from './sdk-ui.ts'
 export * from './sdk-unstable.ts'
+// Blocks, for the bundled extensions that draw them (agent-ui): not in `superego/ui` or `superego/unstable` (yet).
+export { Blocks, type BlocksHost, type BlocksProps } from './blocks/blocks.tsx'

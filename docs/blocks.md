@@ -1,6 +1,7 @@
 # Blocks: one JSON UI for agents and extensions
 
-**Status:** design, not implemented. Merges data views' content (`ViewContent`) into blocks.
+**Status:** Lane 1 (blocks into the core) is done; Lanes 2 and 3 are to come. Merges data views' content (`ViewContent`) into
+blocks.
 
 Superego has two JSON schemas for "UI as data, drawn by the window's own components":
 
@@ -314,7 +315,7 @@ The daemon audit also wants a major, for `capabilities` and `#cap`. Open questio
 
 The work splits into three lanes, run one after another. Each lane passes `pnpm test` and `pnpm smoke` on its own.
 
-### Lane 1: blocks into the core
+### Lane 1: blocks into the core (done)
 
 **Behaviour:** no change for agents, apart from gaining `list`. This lane does all of §1, plus §2's checker and host.
 
@@ -340,6 +341,29 @@ The work splits into three lanes, run one after another. Each lane passes `pnpm 
 3. **agent-ui on the new homes.** Files: `extensions/agent-ui/src/{daemon,reply,shared,transcript,ui,waiting}.tsx?`,
    `package.json` and `test/*`. It passes `host={{ by: 'agent', reply }}`.
 4. **Delete `packages/blocks`.** Drop its reference in the root `tsconfig.json`, then `pnpm install` for the lockfile.
+
+**Notes for Lane 2, from Lane 1:**
+- **Names as built.** `blockErrors(blocks, use)` and `checkBlocks(blocks, use)` take a `BlocksUse`, with no default.
+  The limits are `BLOCK_LIMITS`, so they don't clash with data views' `LIMITS`. `walk` is now `walkBlocks`. New
+  helpers: `buttonsOf` (every button, row buttons with their row), `keptValues` (inputs across new blocks).
+- **Limits past §4's table.** A `kv` holds at most 100 pairs, after data views' `facts`. A textarea's `default` and an
+  `html` page may be 100,000 characters, as Markdown may. `image.src` is capped at 2,000,000 characters.
+- **The extension host is ready.** `<Blocks machine thread? blocks host={{ by: 'extension', extension, run }} />` from
+  `@superego/app/ui`, where `run(action, params)` gets the button's `params` with every input's value over them, by
+  id. `run` should be `runViewAction` (prefix check, router, `exposure: 'ui'`) and then the method's refetch. The
+  host gives no submit button, no answering choice and no "pressed" mark. Its `html` frames get `replies: false` and
+  have no `superego.reply`/`send`. A failed `run` shows its error under the blocks and goes to the console.
+- **Inputs with no button** aren't refused in an extension's view. They draw, but nothing sends them. Refuse them in
+  `blockErrors` if that turns out to bite.
+- **Empty is the caller's.** Blocks need at least one block, so `DataViewBody` must show "Nothing here yet." for `[]`
+  or null before it draws `<Blocks>`.
+- **A row with a `thread`** shows that thread's live status (`ThreadRef`'s glyph), not the row's `status`, as data views
+  did.
+- **Tests.** `packages/app/test/blocks.test.ts` already covers the extension host (a row's action with inputs merged,
+  inputs kept across new blocks, refusal in place, a failed run). `data-views.test.ts`'s content tests can go rather
+  than move.
+- **Classes.** The list's classes are `.blocks-list*`. The `.data-view__*` content classes in `app.css` are still
+  there for Lane 2 to delete.
 
 ### Lane 2: data views draw blocks
 
@@ -380,26 +404,17 @@ look as they are. `evals/lib/pane-check.mjs` reads data views as pane kinds, whi
 
 ---
 
-## Open questions for the user
+## Decisions
 
-1. **Should agents see `list`?** It costs about 150 characters (+9% of the blocks guide, in every request with
-   agent-ui on). In exchange, agents that manage threads get status rows and thread links.
-   *Recommendation: yes.* It's the one addition with real agent value, and keeping it out would split the schema in
-   two for a line.
-2. **Inputs in extension views, feeding the action's params?** This falls out of one schema: a data view could be a
-   small form (a filter, a "rename" field) with no UI code. The cost is the merge rule, inputs into `params` by id,
-   with clashes refused, plus keeping typed values across redraws.
-   *Recommendation: yes, in Lane 2.* The alternative refuses inputs in extension views, which is an arbitrary hole in
-   the "one schema" claim.
-3. **Should the 3.0.0 bump be shared with the daemon audit's removals** (`capabilities`, `#cap`, the 0.0.0
-   comments)?
-   *Recommendation: yes, one 3.0, landing with Lane 2.* Two majors back to back mean editing every `about` twice. If
-   the capabilities work isn't ready, bump for this alone rather than wait. Either way, the user's three profiles need
-   `^3`: say whether a lane may edit `~/.superego/profiles`, or you'll do it.
-4. **Should extension views get `html` (display only)?** It's a chart or diagram in a view, with no UI half and no
-   consent, under the same sandbox agents' `html` already has.
-   *Recommendation: yes.* It's no more than a remote agent can already put in your window. The alternative is to refuse
-   it until an extension asks for it.
-5. **Should `<Blocks>` be in the stable `superego/ui`** for profiles' UI halves?
-   *Recommendation: not now.* A UI half has React already, and the renderer's props would become API at 3.0. Keep it
-   internal (agent-ui imports it from the app), and export it when a profile wants it.
+The user answered the open questions:
+
+1. **Agents get `list`.** It's in the agent's guide as one line, about 150 characters (done in Lane 1).
+2. **Extension views can have inputs.** Their values go into the action's params by input id, and a params key that's
+   also an input id is refused. The checker and the host do this already (Lane 1). Lane 2 uses it.
+3. **Lanes may edit the user's profiles** in `~/.superego/profiles` for the 3.0 bump (Lane 2). Back them up to
+   `~/.superego/backups/` first: they aren't in git. Whether the daemon audit's removals share the 3.0 wasn't
+   answered. Per §6, bump for this alone if that work isn't ready.
+4. **Extension views get `html`,** display only, in the sandboxed frame. The frame is told it can't reply (done in
+   Lane 1).
+5. **`<Blocks>` stays out of the stable `superego/ui`** for now. It's exported from `@superego/app/ui` only, for the
+   bundled extensions, and from neither `sdk-ui.ts` nor `sdk-unstable.ts`.

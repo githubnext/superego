@@ -10,9 +10,8 @@
 import { randomUUID } from 'node:crypto'
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { arr, obj, opt, str, union, unknown } from '@earendil-works/pi-schema'
-import { BLOCKS_GUIDE, blocksParameter, checkBlocks, type Reply, type Value } from '@superego/blocks'
 import { defineAction, defineDaemonExtension } from '@superego/daemon'
-import { RpcError } from '@superego/protocol'
+import { BLOCKS_GUIDE, blocksParameter, checkBlocks, RpcError, type BlocksUse, type Reply, type Value } from '@superego/protocol'
 import {
   about, ANSWER, ASK, ASK_USER, GUIDE_SECTION, KIND, OPEN, PANES, SHOW, UPDATE, WAITING,
   type AskDetails, type Option, type PaneSpec, type QuestionDetails, type Spec, type ThreadPanes, type Waiting,
@@ -20,6 +19,9 @@ import {
 
 /** The panes' UI a thread keeps: the newest this many, so its state (and the value sent to its windows) stays small. */
 const KEPT = 20
+
+/** The blocks agents draw: their buttons answer, and never run an action. */
+const AGENT: BlocksUse = { by: 'agent' }
 
 const BLOCKS = `Blocks are described in your instructions under ${GUIDE_SECTION}.`
 
@@ -46,7 +48,7 @@ const optionOf = (option: string | Option): Option =>
   typeof option === 'string' ? { label: option } : { label: option.label, ...(option.description ? { description: option.description } : {}) }
 
 const specOf = ({ title, blocks, submit }: { title?: string | undefined; blocks: unknown; submit?: string | undefined }): Spec =>
-  ({ ...(title ? { title } : {}), blocks: checkBlocks(blocks), ...(submit ? { submit } : {}) })
+  ({ ...(title ? { title } : {}), blocks: checkBlocks(blocks, AGENT), ...(submit ? { submit } : {}) })
 
 export default defineDaemonExtension({
   ...about,
@@ -172,7 +174,7 @@ export default defineDaemonExtension({
           }),
           replay: 'safe',
           async execute(args, api) {
-            const blocks = checkBlocks(args.blocks)
+            const blocks = checkBlocks(args.blocks, AGENT)
             const thread = threadOf(api.conversationId)
             const id = args.id ?? randomUUID().slice(0, 6)
             await keep(thread, { id, title: args.title, blocks, at: api.now() })
@@ -189,7 +191,7 @@ export default defineDaemonExtension({
           parameters: obj({ id: str({ minLength: 1 }), title: opt(str({ minLength: 1 })), blocks: blocksParameter() }),
           replay: 'safe',
           async execute(args, api) {
-            const blocks = checkBlocks(args.blocks)
+            const blocks = checkBlocks(args.blocks, AGENT)
             const thread = threadOf(api.conversationId)
             const current = (await panes.get(thread))?.[args.id]
             if (!current) throw new Error(`No UI pane "${args.id}" in this conversation. Open it with ${OPEN} first.`)

@@ -312,9 +312,6 @@ importers:
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
-      '@superego/blocks':
-        specifier: workspace:*
-        version: link:../../packages/blocks
       '@superego/daemon':
         specifier: workspace:*
         version: link:../../packages/daemon
@@ -879,28 +876,6 @@ importers:
       '@types/react-dom':
         specifier: ^19
         version: 19.3.0(@types/react@19.3.0)
-
-  packages/blocks:
-    dependencies:
-      '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
-      '@superego/app':
-        specifier: workspace:*
-        version: link:../app
-      '@superego/protocol':
-        specifier: workspace:*
-        version: link:../protocol
-      '@superego/ui':
-        specifier: workspace:*
-        version: link:../ui
-    devDependencies:
-      '@types/react':
-        specifier: ^19
-        version: 19.3.0
-      react:
-        specifier: ^19
-        version: 19.3.1
 
   packages/cli:
     dependencies:

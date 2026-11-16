@@ -26,6 +26,17 @@
 .blocks-kv dt { color: var(--superego-muted); }
 .blocks-kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 
+.blocks-list { list-style: none; margin: 0; padding: 0; font-size: var(--superego-text-ui); }
+.blocks-list__item { padding: 5px 6px; border-radius: var(--superego-radius); }
+.blocks-list__item + .blocks-list__item { margin-top: 1px; }
+.blocks-list__line { display: flex; align-items: center; gap: var(--superego-space-2); min-height: 22px; }
+.blocks-list__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.blocks-list__detail { flex: none; color: var(--superego-faint); font-size: var(--superego-text-xs); font-variant-numeric: tabular-nums; }
+.blocks-list__subtitle { margin: 1px 0 0 18px; color: var(--superego-muted); font-size: var(--superego-text-sm); overflow-wrap: anywhere; }
+.blocks-list__item:not(:has(.superego-status, .thread-ref)) .blocks-list__subtitle { margin-left: 0; }
+.blocks-list .superego-button.blocks-list__button { height: 22px; min-height: 22px; padding: 0 8px; font-size: var(--superego-text-xs); flex: none; }
+.blocks-list .superego-button.is-danger { color: var(--superego-status-error); }
+
 .blocks-image { margin: 0; display: flex; flex-direction: column; gap: 4px; }
 .blocks-image img { max-width: 100%; border-radius: var(--superego-radius); align-self: flex-start; }
 .blocks-image figcaption { font-size: var(--superego-text-sm); color: var(--superego-muted); }

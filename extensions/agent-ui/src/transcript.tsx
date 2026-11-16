@@ -1,8 +1,7 @@
 // The agent's UI in the transcript. ask_user: the question, then the answer it got. show_ui: its blocks, live for good
 // (what's pressed is the user's next message). ask_ui: a line while it waits above the composer, then its blocks locked
 // on the answer given. open_ui and update_ui: a line that opens the pane again.
-import { Markdown, useDispatch, type ToolCallProps } from '@superego/app/ui'
-import { Blocks } from '@superego/blocks/ui'
+import { Blocks, Markdown, useDispatch, type ToolCallProps } from '@superego/app/ui'
 import { partsOf } from './question.ts'
 import { useReplyToThread } from './reply.ts'
 import { about, KIND, UPDATE, type AskDetails, type QuestionDetails, type Spec } from './shared.ts'
@@ -44,7 +43,7 @@ export function Shown(props: ToolCallProps) {
   return (
     <section className="agent-ui-blocks">
       {spec.title && <h3 className="agent-ui-blocks__title">{spec.title}</h3>}
-      <Blocks key={props.call.id} machine={machine} thread={thread} blocks={spec.blocks} {...(result ? { onReply: (r) => reply(spec.blocks, r) } : {})} />
+      <Blocks key={props.call.id} machine={machine} thread={thread} blocks={spec.blocks} host={result ? { by: 'agent', reply: (r) => reply(spec.blocks, r) } : { by: 'agent' }} />
     </section>
   )
 }
@@ -57,7 +56,7 @@ export function AskedUi(props: ToolCallProps) {
     return (
       <section className="agent-ui-blocks is-answered">
         {spec.title && <h3 className="agent-ui-blocks__title">{spec.title}</h3>}
-        <Blocks machine={machine} thread={thread} blocks={spec.blocks} answer={details.answer} {...(spec.submit ? { submitLabel: spec.submit } : {})} />
+        <Blocks machine={machine} thread={thread} blocks={spec.blocks} host={{ by: 'agent' }} answer={details.answer} {...(spec.submit ? { submitLabel: spec.submit } : {})} />
       </section>
     )
   }

@@ -113,14 +113,13 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | | |
 |---|---|
 | `app` | the Superego app: Electron main, window, daemon entry, the `superego` command, icons |
-| `packages/protocol` | the contract: methods, JSON-RPC peer, actions, status |
+| `packages/protocol` | the contract: methods, JSON-RPC peer, actions, status; blocks, the JSON UI agents and data views draw (the strict schema, checked by the daemon half that takes them and again in the window that draws them, and the words an answer sends) |
 | `packages/settings` | settings registry, used by daemons (per machine) and the app |
 | `packages/daemon` | the daemon: pi-durable harness, threads, files, profiles, models and sign-in; the daemon half of the extension API |
 | `packages/client` | reaching daemons: local socket, ssh, any stdio command; the machine list |
 | `packages/cli` | the command line |
 | `packages/ui` | component kit and design tokens |
-| `packages/blocks` | UI an agent writes as JSON blocks: the strict schema (checked by the daemon half that takes them and again in the window that draws them), the words an answer sends, and the renderer (an `html` block runs in a sandboxed frame, replying only as the user acts) |
-| `packages/app` | main process, window, preload, build and packaging; panes, the editor, the navigator; notifications and the app icon's unread count (the desktop's main process decides for every window, with none open too; a browser's page by the same rule, once you allow it, offered over the composer while a thread works); the UI half of the extension API |
+| `packages/app` | main process, window, preload, build and packaging; panes, the editor, the navigator; notifications and the app icon's unread count (the desktop's main process decides for every window, with none open too; a browser's page by the same rule, once you allow it, offered over the composer while a thread works); the blocks renderer (an `html` block runs in a sandboxed frame, replying only as the user acts, and only an agent's); the UI half of the extension API |
 | `packages/sdk` | what an extension's author imports: `superego`, `superego/ui`, `superego/testing` (a test daemon, a test window), `superego/unstable` |
 | `extensions/threads` | the sidebar: projects and their threads; the thread tools' rows and `thread:` links (UI; required) |
 | `extensions/thread-tools` | the agent's `thread_*` tools (daemon; optional) |

@@ -1,8 +1,7 @@
 // How what the user does with the agent's UI gets back to it: to blocks that don't wait (show_ui in the transcript, a
 // `ui` pane), as their next message in the thread; to what the agent waits on (ask_user, ask_ui), as its answer.
 import { useDispatch, type MachineEntry } from '@superego/app/ui'
-import { describeReply, type Block, type Reply } from '@superego/blocks'
-import type { ThreadInfo } from '@superego/protocol'
+import { describeReply, type Block, type Reply, type ThreadInfo } from '@superego/protocol'
 import { about, ANSWER } from './shared.ts'
 
 /** Send a reply to `blocks` to the thread as the user's next message (`→ Option B`). */

@@ -1,8 +1,7 @@
 // What the agent waits on, above the composer: the oldest of its questions (ask_user) and forms (ask_ui), one at a
 // time; answering it brings up the next. The card claims the composer, so what's typed there answers it in words.
 import { useState } from 'react'
-import { keyLabel, Markdown, useComposer, useComposerClaim, useValue, type MachineEntry } from '@superego/app/ui'
-import { Blocks } from '@superego/blocks/ui'
+import { Blocks, keyLabel, Markdown, useComposer, useComposerClaim, useValue, type MachineEntry } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import { answerOf, keyMove, partsOf } from './question.ts'
 import { useAnswer } from './reply.ts'
@@ -80,7 +79,7 @@ function FormCard({ machine, thread, id, spec }: { machine: MachineEntry; thread
     <>
       {spec.title && <div className="agent-ui-form__title">{spec.title}</div>}
       <div className="agent-ui-form">
-        <Blocks machine={machine} thread={thread} blocks={spec.blocks} onReply={answer} {...(spec.submit ? { submitLabel: spec.submit } : {})} />
+        <Blocks machine={machine} thread={thread} blocks={spec.blocks} host={{ by: 'agent', reply: answer }} {...(spec.submit ? { submitLabel: spec.submit } : {})} />
       </div>
     </>
   )

@@ -4,8 +4,9 @@
 <script>
 // The host of an html block: a page of the window's own, loaded in a sandboxed frame (scripts only, an opaque origin).
 // It's a page of its own because the window's policy forbids inline scripts, and a frame made from a string (srcdoc,
-// a blob or data: URL) inherits that policy; this page has none. The window sends it the agent's HTML and the theme;
-// it writes them in as the frame's document and gives its scripts `superego`, which talks back over postMessage.
+// a blob or data: URL) inherits that policy; this page has none. The window sends it the block's HTML and the theme;
+// it writes them in as the frame's document and gives its scripts `superego`, which talks back over postMessage. An
+// agent's page may reply and send; an extension's view's is display only, so it gets neither (`replies: false`).
 (() => {
   const post = (message) => parent.postMessage({ superego: true, ...message }, '*')
   const height = () => Math.ceil(document.documentElement.getBoundingClientRect().height)
@@ -31,6 +32,7 @@
       if (style) style.textContent = theme(data.css)
     }
     if (data.kind === 'render') {
+      if (data.replies === false) { delete window.superego.reply; delete window.superego.send }
       // The theme first, so the agent's own styles win and its scripts can read the variables.
       const html = String(data.html).replace(/^\s*<!doctype[^>]*>/i, '')
       document.open()
