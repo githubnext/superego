@@ -2,6 +2,10 @@
 
 Many agents work on this repo at once, each in a git worktree of its own, all on one machine.
 
+## Early days
+
+The app is in its infancy and under heavy development. This means, we barely have users but ourselves. It is therefore important and timely that we always opt for the proper fixes and implementations. Rather going one step back and getting it right at the cost of compatibility than patching on patches.
+
 ## House rules
 
 - Work in your own worktree. Never reset, stash or overwrite anything in the main checkout.
