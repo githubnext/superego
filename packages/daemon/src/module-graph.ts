@@ -143,6 +143,12 @@ async function readingJsx<T>(read: () => T): Promise<T> {
  */
 export const graphOf = (entries: string[]) => readingJsx(() => graphNow(entries))
 
+/**
+ * What the local files `entries` run import by name: packages and the like (`react`, `superego/ui`, `#imports`), each
+ * once, as written. Throws where a module's imports can't be told (importsOf).
+ */
+export const packagesOf = (entries: string[]) => readingJsx(() => [...new Set(graphNow(entries).flatMap((file) => importsIn(file).filter((specifier) => !/^(\.{0,2}\/|file:)/.test(specifier))))])
+
 /** A module's version: a hash of it and every local file it imports, by path and contents. */
 export const versionOf = (file: string) => readingJsx(() => versionNow(file))
 

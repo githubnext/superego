@@ -2,6 +2,7 @@
 import { dirname, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { inspect } from 'node:util'
+import { ready } from './hooks.ts'
 import { collect, expect, setFile, setRunning, type Running, type Suite, type Test } from './vitest.ts'
 
 /** How long a test or a hook may take unless it says, as `superego extension test` has always given them. */
@@ -82,6 +83,7 @@ export async function runFile(file: string, root: string, tally: Tally, progress
     setFile(file)
     let suite: Suite | undefined
     try {
+      await ready(file)
       suite = await collect(() => import(pathToFileURL(file).href))
     } catch (error) {
       errors++
