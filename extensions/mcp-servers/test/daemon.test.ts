@@ -219,7 +219,7 @@ it('starts a server again after it crashes, and three crashes in a minute fail i
   expect(log.text).toContain('failed 3 times within a minute')
 }, 60_000)
 
-it('offers a changed tool list from the next request of the same run, and keeps it in the cache', async () => {
+it('offers a changed tool list from the next request of the same run, listed once for a burst of changes, and keeps it in the cache', async () => {
   const d = await open([callTool('mcp__fx__change'), callTool('mcp__fx__added'), callTool('mcp__fx__change'), say('Done.')])
   await act(d, 'add', { name: 'fx', server: fixture({ unprofiled: true }) })
   const thread = await d.thread('go')
@@ -230,6 +230,9 @@ it('offers a changed tool list from the next request of the same run, and keeps 
   expect(gone).toMatch(/^error: [\s\S]*Tool mcp__fx__change is not available/)
   const cache = JSON.parse(await readFile(join(dir, 'mcp', 'cache', 'fx.json'), 'utf8')) as { tools: { name: string }[] }
   expect(cache.tools.map((t) => t.name)).toEqual(['echo', 'hang', 'crash', 'progress', 'picture', 'added'])
+  // Eight changes in a row (`change`'s burst) listed at most twice: one going, one queued that the rest join.
+  const log = await act<LogResult>(d, 'log', { server: 'fx', lines: 200 })
+  expect(log.text.match(/listed \d+ tools/g)!.length).toBeLessThanOrEqual(1 + 2)
 })
 
 it('never runs a call again that was in flight across a restart, and tells the model it may have run', async () => {

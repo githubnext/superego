@@ -3,7 +3,8 @@
 // - echo: says back its text, and the env variable FIXTURE_SECRET when asked
 // - hang: never answers, until the call is cancelled (and says so in the calls file)
 // - crash: writes to stderr (FIXTURE_LAST_WORDS, when it's set) and exits with code 3
-// - change: adds a tool `added` and takes itself away, so its list changes
+// - change: adds a tool `added` and takes itself away, so its list changes (in a burst of changes, as one registering
+//   tools in groups sends)
 // - progress: reports progress twice, then answers
 // - picture: an image, a text resource and a blob
 // Each call (and each start) is appended to FIXTURE_CALLS, when it's set, so a test sees what ran.
@@ -41,6 +42,8 @@ export function fixtureServer(note: (line: string) => void = () => {}) {
       return { content: [{ type: 'text', text: 'added ran' }] }
     })
     change.remove()
+    // As a server registering its tools in groups does: several changes in a row, one notification each.
+    for (let i = 0; i < 3; i++) server.registerTool('passing', { description: 'Here and gone.', inputSchema: {} }, async () => ({ content: [] })).remove()
     return { content: [{ type: 'text', text: 'changed' }] }
   })
   server.registerTool('progress', { description: 'Reports progress.', inputSchema: {} }, async (_args, extra) => {

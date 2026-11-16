@@ -85,6 +85,8 @@ export type Server = {
   crashes: number[]
   /** A listing its `list_changed` asked for, until it's done: a call that saw the change waits for it. */
   listed?: Promise<void>
+  /** A listing queued behind the one going and not started yet, on this slot's connection: a change now joins it. */
+  relistOn?: Slot
 }
 
 export type RuntimeOptions = {
@@ -579,11 +581,17 @@ export class Runtime {
 
   /**
    * Its tools changed: listed again (after a listing already going), the cache and its part updated. A call that's going
-   * when it changed waits for the listing before it answers, so the next request offers the new tools.
+   * when it changed waits for the listing before it answers, so the next request offers the new tools. A burst of
+   * changes (one per tool group, as a server starts) is one listing: a change while one is queued and not yet started
+   * joins it, since it lists what's there when it starts.
    */
   #relist(server: Server, slot: Slot) {
+    const queued = server.relistOn !== undefined
+    server.relistOn = slot
+    if (queued) return
     const listed = (server.listed ?? Promise.resolve()).then(() => {
-      const connection = slot.connection
+      const connection = server.relistOn?.connection
+      delete server.relistOn
       if (connection && !connection.closed) return this.#list(server, connection)
     }).catch((error) => server.log.write(`listing tools failed: ${errorText(error)}`))
     server.listed = listed
