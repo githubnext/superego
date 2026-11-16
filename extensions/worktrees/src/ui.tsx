@@ -22,7 +22,7 @@ export default defineUiExtension({
 function Branch({ thread }: SlotProps['header.chips']) {
   const tree = treeOf(thread)
   if (!tree) return null
-  return <span className="titlebar__chip thread__branch" title={`${tree.branch}\n${tree.path}`}>{tree.branch}</span>
+  return <span className="header__chip thread__branch" title={`${tree.branch}\n${tree.path}`}>{tree.branch}</span>
 }
 
 /** On its row in the sidebar: that it has a branch of its own, named on hover; nothing once archiving removed it. */

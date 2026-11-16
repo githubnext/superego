@@ -1,4 +1,4 @@
-// Data views: views a machine's daemon extensions declare as data (`superego.view` there), drawn here with the core's
+// Data views: views a machine's daemon halves declare as data (`superego.view` there), drawn here with the core's
 // own components. Their content (`ViewContent`: a note, facts, a list, a table, Markdown, buttons) comes from a live
 // value or a method of the extension's; a button runs one of the extension's own actions, there, as the window may.
 // Nothing of the extension's runs in the window, so a remote machine's, or a project profile's, needs no consent to run

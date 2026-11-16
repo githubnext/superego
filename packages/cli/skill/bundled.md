@@ -93,7 +93,7 @@ Bundled extensions get more than a profile's:
 - **Window actions** with keys: `superego.action(defineAction({ id: 'orders.open', title, keys: 'mod+shift+o', when, run(params, context) { … } }))`;
   ids start with the extension's name. `when(context)` says when keys and the palette offer it (`(c) => Boolean(c.selection)`);
   `context` has the selection, projects, `appSetting(key)` and `dispatch`.
-- **Window state** for actions and components to share: `const open = superego.store('orders.open', false)` in setup,
+- **A store** for actions and components to share: `const open = superego.store('orders.open', false)` in setup,
   `open.set(true)` in an action, `open.use()` in a component; `{ persist: true }` keeps it across reloads. No module
   globals that rendering sets.
 - **App settings** (per user, in Settings → General): `superego.appSettings({ id, title, settings: [{ key: 'orders.x', … }] })`,

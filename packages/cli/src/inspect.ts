@@ -1,4 +1,4 @@
-// `superego extensions`: what each extension on a machine is and does, as `extensions.inspect` says, for an author
+// `superego extensions`: what each extension on a machine is and does, as `extension.inspect` says, for an author
 // finding out why theirs doesn't show: where it's from, how it stands (and why not), what it registered, who watches
 // its values, each profile's load, and with `--thread`, what that thread goes without and why.
 import type { ExtensionReport, ExtensionsReport } from '@superego/protocol'

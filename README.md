@@ -141,7 +141,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 
 An extension has a daemon half (`defineDaemonExtension`: agent tools and hooks, settings, actions, read methods, live
 values, pane kinds described to the agent, thread status) and a UI half (`defineUiExtension`: slots, pane kinds, tool
-and entry renderers, work dividers, settings sections, window actions with `when`, window state). Everything a half
+and entry renderers, work dividers, settings sections, window actions with `when`, stores). Everything a half
 registers is its own and goes with it. Each extension declares once what it is, both halves alike: **required** (part
 of what Superego is: the sidebar, worktrees) or **optional** (everything else, the thread tools `thread-tools` and Ego
 included, and the core's own agent parts `coding-tools`, `panes`, `agents-md`): an optional one can be turned off per machine in Settings → Extensions
@@ -242,7 +242,7 @@ import { defineProfile } from 'superego'
 export default defineProfile({
   description: 'Answers customer mail',
   prompt: 'You answer customer email for Acme. Be brief.',
-  extensions: ['./orders.ts'],     // agent extensions, or daemon extensions (actions, live values), from 'superego'
+  extensions: ['./orders.ts'],     // agent parts, or daemon halves (actions, live values), from 'superego'
   ui: ['./ui/order.tsx'],          // defineUiExtension({ name, setup(superego) { superego.pane('order', …) } }) from 'superego/ui'
   panes: { order: 'an order, with its lines and status. Params: { id }' },  // told to the agent, for pane_open
   mcp: ['linear', 'sentry'],       // the machine's MCP servers its threads use (Settings → MCP servers), by name
@@ -276,7 +276,7 @@ threads work without it, and a notice over the composer offers Allow, with its f
 for those sources, a quiet "UI not allowed" in the thread's header that asks again when clicked. Settings → Machines lists
 what's allowed, with Revoke (which asks again too), and what's put off, with Allow; `superego profile allow-ui <name> -m <machine>` allows from a shell. Allowed, it runs
 with the window's full authority, over every machine. Revoking takes out what it registered, but not what its code
-already did or left going: the window offers a reload to clear that. A data-only view (a daemon extension's
+already did or left going: the window offers a reload to clear that. A data-only view (a daemon half's
 `superego.view`) runs no code in the window, so it needs no allowing, and the window checks what it sends; its buttons
 still run that machine's actions. This computer's own
 profiles keep their daemon's rules. A browser or phone talks only to the daemon that served it (it is `local` there; other machines through it), and

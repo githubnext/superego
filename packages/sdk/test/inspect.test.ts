@@ -1,4 +1,4 @@
-// extensions.inspect, as `superego extensions` shows it: where each extension is from, how it stands and why, what it
+// extension.inspect, as `superego extensions` shows it: where each extension is from, how it stands and why, what it
 // registered, who watches its values, each profile's load, and what a thread goes without and why.
 import { afterEach, expect, it } from 'vitest'
 import { defineDaemonExtension } from '../src/index.ts'
@@ -26,7 +26,7 @@ it('reports what each extension is, has registered and has watched; and what a t
   daemon = await testDaemon({ extensions: [extra], profile: profile(QUEUE), model: [say('hi')] })
   const thread = await daemon.thread('hello')
   const watch = await daemon.watch('queue.items', { scope: thread.id })
-  const report = await daemon.call<ExtensionsReport>('extensions.inspect', { thread: thread.id })
+  const report = await daemon.call<ExtensionsReport>('extension.inspect', { thread: thread.id })
   const queue = report.extensions.find((e) => e.name === 'queue')!
   expect(queue).toMatchObject({ version: '1.0.0', api: '^2', source: 'profile', state: 'set up', profiles: ['user:default'] })
   expect(queue.file).toMatch(/queue\.ts$/)
@@ -45,17 +45,17 @@ it('reports what each extension is, has registered and has watched; and what a t
 it("says why one isn't set up: refused for the API it needs, or failed, with the profile it broke", async () => {
   daemon = await testDaemon({ profile: profile(QUEUE.replace("api: '^2'", "api: '^9'")) })
   await expect(daemon.reload()).rejects.toThrow(/needs extension API \^9/)
-  let report = await daemon.call<ExtensionsReport>('extensions.inspect')
+  let report = await daemon.call<ExtensionsReport>('extension.inspect')
   expect(report.extensions.find((e) => e.name === 'queue')).toMatchObject({ state: 'refused', error: expect.stringMatching(/needs extension API \^9, and this Superego has 2\.\d+\.\d+/) })
   expect(report.profiles).toEqual([expect.objectContaining({ name: 'default', state: 'failed', error: expect.stringMatching(/\^9/) })])
   // Fixed, and loaded: it's set up, and no longer reported as refused.
   await daemon.edit('queue.ts', QUEUE.replace("superego.method('queue.read', () => null)", "throw new Error('broke on purpose')"))
   await expect(daemon.reload()).rejects.toThrow(/broke on purpose/)
-  report = await daemon.call<ExtensionsReport>('extensions.inspect')
+  report = await daemon.call<ExtensionsReport>('extension.inspect')
   expect(report.extensions.filter((e) => e.name === 'queue').map((e) => e.state)).toEqual(['failed'])
   await daemon.edit('queue.ts', QUEUE)
   await daemon.reload()
-  report = await daemon.call<ExtensionsReport>('extensions.inspect')
+  report = await daemon.call<ExtensionsReport>('extension.inspect')
   expect(report.extensions.filter((e) => e.name === 'queue').map((e) => e.state)).toEqual(['set up'])
   expect(report.profiles[0]).toMatchObject({ state: 'loaded' })
 })

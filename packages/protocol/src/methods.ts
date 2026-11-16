@@ -211,7 +211,7 @@ export type Methods = {
    * folder itself), with the `line` it names. `path` is null when there's nothing, `outside` when it's past the folder.
    */
   'file.find': { params: { thread: ThreadId; name: string }; result: { path: string | null; folder?: boolean; line?: number; outside?: boolean } }
-  /** A profile's UI extensions: their entry modules, and a hash that changes when any of its files do. */
+  /** A profile's UI halves: their entry modules, and a hash that changes when any of its files do. */
   'profile.ui': { params: ProfileRef; result: { hash: string; entries: string[] } }
   /** One module of a profile's UI, as JavaScript (types stripped); its own imports are left for the window to load. */
   'profile.module': { params: ProfileRef & { path: string }; result: { path: string; code: string } }
@@ -266,13 +266,13 @@ export type Methods = {
   /** This machine's newest dispatches. */
   'action.log': { params: {}; result: ActionLogEntry[] }
   /** The window's extensions, as each declares itself: those without a daemon half become known to the machine too. */
-  'extensions.declare': { params: { extensions: ExtensionAbout[] }; result: null }
+  'extension.declare': { params: { extensions: ExtensionAbout[] }; result: null }
   /**
    * What each extension here is and does, for an author finding out why theirs doesn't show (`superego extensions`):
    * where it's from, how it stands, what it registered, who watches its values; its profiles' loads; and, given a
    * thread, which extensions that thread goes without, and why.
    */
-  'extensions.inspect': { params: { thread?: string }; result: ExtensionsReport }
+  'extension.inspect': { params: { thread?: string }; result: ExtensionsReport }
   /**
    * Restart onto newer code: the daemon exits and the client starts the new one. Refused (`restarted: false`) while a
    * thread is working, unless `interrupt`; interrupted runs resume after the restart. `build` must be the running
@@ -303,7 +303,7 @@ export type Methods = {
   'machine.reconnect': { params: { id: string }; result: null }
 }
 
-/** An extension as `extensions.inspect` reports it. */
+/** An extension as `extension.inspect` reports it. */
 export type ExtensionReport = {
   name: string
   version?: string
@@ -323,7 +323,7 @@ export type ExtensionReport = {
   watches: { value: string; whole: number; scopes: number }[]
 }
 
-/** What `extensions.inspect` says. */
+/** What `extension.inspect` says. */
 export type ExtensionsReport = {
   api: string
   extensions: ExtensionReport[]

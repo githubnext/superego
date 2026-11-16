@@ -533,7 +533,7 @@ export default defineProfile({
   // model: 'anthropic/claude-sonnet-4-5',
   // thinking: 'medium',
   // prompt: 'You work on this project. …',
-  // extensions: ['./extensions/example.ts'],   // agent extensions: tools, prompt sections, hooks
+  // extensions: ['./extensions/example.ts'],   // agent parts: tools, prompt sections, hooks
   // without: ['ask-user'],                       // built-ins this profile does without
   // extends: 'user:default',                     // start from your own profile of that name
 })
@@ -661,7 +661,7 @@ async function extensionCommand(sub: string | undefined, rest: string[], values:
   if (!sub || sub === 'ls' || sub === 'list' || sub === 'inspect') {
     const machine = resolveMachine(values.machine)
     const { report, servers } = await on(machine, async (call) => {
-      const report = await call('extensions.inspect', values.thread ? { thread: values.thread } : {})
+      const report = await call('extension.inspect', values.thread ? { thread: values.thread } : {})
       const thread = values.thread ? (await call('thread.list', {})).find((t) => t.id === values.thread) : undefined
       return { report, servers: thread?.facts?.['mcp-servers'] as ThreadServers | undefined }
     })

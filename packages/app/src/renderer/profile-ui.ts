@@ -4,7 +4,7 @@
 //   'react', 'react/jsx-runtime', 'superego/ui', 'superego/unstable'
 //                                         → this window's own copies, so a profile's components share its React
 //   './other.ts'                          → that module of the profile, loaded the same way
-// Their default exports are UI extensions, installed for that profile's threads only (see Registry.installProfile).
+// Their default exports are UI halves, installed for that profile's threads only (see Registry.installProfile).
 //
 // The window runs with the user's full access to every machine, so a machine other than this computer gets no say in
 // what runs in it: a remote profile's UI runs only once it is allowed on this computer, for that machine, that profile
@@ -41,7 +41,7 @@ function sharedModules() {
 
 export type LoadUi = (profile: ProfileRef, sources: ProfileUiSources) => Promise<UiExtension[]>
 
-/** Load a profile's UI extensions from the sources fetched: each module from a blob URL, its imports pointed at the others'. */
+/** Load a profile's UI halves from the sources fetched: each module from a blob URL, its imports pointed at the others'. */
 const loadProfileUi: LoadUi = async (profile, sources) => {
   const names = await sharedModules()
   const urls = new Map<string, string>()

@@ -4,7 +4,7 @@
 
 | What failed | Where it says so |
 |---|---|
-| a profile or its daemon extensions didn't load | the command or message that started a turn: `superego start -P <name>`, `superego send <thread> …`, the app's composer. Also `~/.superego/daemon.log` |
+| a profile or its daemon halves didn't load | the command or message that started a turn: `superego start -P <name>`, `superego send <thread> …`, the app's composer. Also `~/.superego/daemon.log` |
 | a tool threw | the transcript, as the tool call's error result (the model sees it too) |
 | an action threw | its caller: `superego do …` prints it; `superego actions log` keeps the latest, with errors |
 | a profile's UI didn't load or a component threw | the window's developer tools console (View → Toggle Developer Tools, ⌥⌘I) |
@@ -22,7 +22,7 @@ With `SUPEREGO_MODEL=faux` in the daemon's environment, turns echo instead of ca
   in `~/.superego/profiles`. Check with `superego profile` in that folder.
 - **"must export default …"**: `profile.ts` exports `defineProfile({ … })`; each `extensions` module exports an
   extension with a `name`; each `ui` module exports `defineUiExtension({ name, setup })`.
-- **"must name things \"orders.<name>\""**: a daemon extension's actions and values start with its own name.
+- **"must name things \"orders.<name>\""**: a daemon half's actions and values start with its own name.
 - **"Action … is already defined"**: two extensions (or two profiles) define the same id; ids are per machine.
 - **A UI module "imports X"**: a profile's UI can import only `react`, `react/jsx-runtime`, `superego/ui` and its own
   files.

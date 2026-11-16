@@ -249,7 +249,7 @@ function MachineThreads({ machine, onThreads, onHidden, onRejections }: {
   useListedProfileUis(machine.id, machine.state === 'connected', threads)
   // The window's extensions, told to the machine: one whose work is all here is known there too (Settings, `without`).
   useEffect(() => {
-    if (machine.state === 'connected') void client(machine.id).call('extensions.declare', { extensions }).catch(() => { /* an older daemon */ })
+    if (machine.state === 'connected') void client(machine.id).call('extension.declare', { extensions }).catch(() => { /* an older daemon */ })
   }, [machine.state, machine.machine?.id])
   return null
 }

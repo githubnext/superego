@@ -249,7 +249,7 @@ it("compiles a profile's UI written in TSX to calls into the window's React", as
   await close()
 })
 
-it("sets up a profile's daemon extensions (actions, values, tools of their own) and tears them down when it changes", async () => {
+it("sets up a profile's daemon halves (actions, values, tools of their own) and tears them down when it changes", async () => {
   const profile = join(home, 'profiles', 'default')
   const extension = (answer: string) => `import { defineDaemonExtension, defineAction, defineExtension, defineTool, obj, str } from 'superego'
 export default defineDaemonExtension({
@@ -281,7 +281,7 @@ export default defineDaemonExtension({
 
 it("undoes a profile's actions when a later part of it fails, so it loads once fixed", async () => {
   const profile = join(home, 'profiles', 'default')
-  // Its action registers, then its agent extension fails to install (a section key pi refuses).
+  // Its action registers, then its agent part fails to install (a section key pi refuses).
   const extension = (key: string) => `import { defineDaemonExtension, defineAction, defineExtension, obj, section } from 'superego'
 export default defineDaemonExtension({
   name: 'vault',
@@ -447,7 +447,7 @@ export default defineDaemonExtension({
   await close()
 })
 
-it("owns everything a profile's daemon extension registers: settings, values and its name, undone on reload", async () => {
+it("owns everything a profile's daemon half registers: settings, values and its name, undone on reload", async () => {
   const profile = join(home, 'profiles', 'default')
   const extension = (title: string) => `import { defineDaemonExtension } from 'superego'
 export default defineDaemonExtension({
@@ -514,7 +514,7 @@ it("tells clients what a profile's threads go without, and its agent goes withou
   await close()
 })
 
-/** A daemon extension `vault` whose action answers `answer`, and an agent part `notes` of its own. */
+/** A daemon half `vault` whose action answers `answer`, and an agent part `notes` of its own. */
 const vault = (answer: string) => `import { defineDaemonExtension, defineAction, defineExtension, obj, section } from 'superego'
 export default defineDaemonExtension({
   name: 'vault',
@@ -525,7 +525,7 @@ export default defineDaemonExtension({
 })
 `
 
-it("shares a daemon extension between profiles that have it: one extending another, or two naming the same file", async () => {
+it("shares a daemon half between profiles that have it: one extending another, or two naming the same file", async () => {
   write(join(home, 'profiles', 'default'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': vault('one') })
   write(join(home, 'profiles', 'work'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extends: 'user:default', prompt: 'Work.' })\n` })
   write(join(home, 'profiles', 'play'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['../default/vault.ts'] })\n` })
@@ -602,7 +602,7 @@ it("doesn't let a profile's extension take the name of one a window declared", a
     'links.ts': `import { defineDaemonExtension } from 'superego'\nexport default defineDaemonExtension({ name: 'links', setup() {} })\n`,
   })
   const { peer, close } = await open()
-  await peer.call('extensions.declare', { extensions: [{ name: 'links', title: 'Links' }] })
+  await peer.call('extension.declare', { extensions: [{ name: 'links', title: 'Links' }] })
   await expect(peer.call('thread.start', { cwd: project })).rejects.toThrow(/links is already set up/)
   await close()
 })
@@ -753,7 +753,7 @@ describe('a thread whose profile moved or vanished', () => {
   })
 })
 
-it("tears down every part of a profile's daemon extension on reload: actions, methods, status, pane kinds, agent parts", async () => {
+it("tears down every part of a profile's daemon half on reload: actions, methods, status, pane kinds, agent parts", async () => {
   const profile = join(home, 'profiles', 'default')
   const full = `import { defineDaemonExtension, defineAction, defineExtension, obj, section, str } from 'superego'
 let blocked = ''

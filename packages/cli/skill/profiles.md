@@ -49,10 +49,10 @@ Every field is optional.
 - **`prompt`** is the agent's instructions, after the prompt sections of its extensions. With `extends`, the two
   prompts are joined.
 - **`extensions`** are paths from the profile's folder. A module's default export is either
-  - an **agent extension**, `defineExtension({ name, tools, sections })`: tools and prompt sections
+  - an **agent part**, `defineExtension({ name, tools, sections })`: tools and prompt sections
     (`superego --skill tools`), or
-  - a **daemon extension**, `defineDaemonExtension({ name, setup(superego) { … } })`: actions the UI and command
-    line run, live values, a thread's blocked status, and agent extensions of its own (`superego --skill daemon`).
+  - a **daemon half**, `defineDaemonExtension({ name, setup(superego) { … } })`: actions the UI and command
+    line run, live values, a thread's blocked status, and agent parts of its own (`superego --skill daemon`).
 - **`ui`** are modules for the window (`superego --skill ui`). They draw only in this profile's threads.
 - **`panes`** describes each pane kind the UI registers, so the agent knows it can open one and with which params.
 - **`without`** takes the names of optional extensions, the ones Settings → Extensions lists: the core's
@@ -100,9 +100,9 @@ checks types with the same tsconfig before it runs the tests.
 ```ts
 import {
   defineProfile,                                     // profile.ts
-  defineExtension, defineTool, section,              // agent extensions
+  defineExtension, defineTool, section,              // agent parts
   wrapTool, wrapSection, hook,                       // decorating other extensions' tools and sections
-  defineDaemonExtension, defineAction, RpcError, spawnGroup,   // daemon extensions (`runs: 'machine'` is implied)
+  defineDaemonExtension, defineAction, RpcError, spawnGroup,   // daemon halves (`runs: 'machine'` is implied)
   obj, str, num, int, bool, arr, opt, lit, union, nullable, unknown,   // JSON Schema for parameters
 } from 'superego'
 ```
@@ -136,7 +136,7 @@ superego profile revoke-ui default -m box    # Settings → Machines lists them 
   thread.setProfile --thread <thread> --profile <name>` (refused while it's working).
 - The daemon loads a profile when a thread with it takes a turn, and again when its files changed: edit, then send the
   thread another message (a thread mid-run keeps what it started the run with). `superego extension reload` loads it
-  now, and says why if it doesn't load. Daemon extensions are torn down (their cleanup runs) and set up again.
+  now, and says why if it doesn't load. Daemon halves are torn down (their cleanup runs) and set up again.
 - The window loads a profile's UI as soon as it lists one of its threads (sidebar or navigator), and again when a
   shown thread of it moves on after a change ([ui.md](ui.md#when-the-ui-loads)).
 - `model`, `thinking` and `worktree` apply where a thread hasn't chosen its own.

@@ -10,7 +10,7 @@ export const RELEASED = {
   /** Methods and actions, as `hello.methods` lists them. */
   methods: [
     'action.list', 'action.log', 'action.run', 'agent.models', 'auth.cancel', 'auth.signIn', 'auth.signOut',
-    'auth.respond', 'auth.retry', 'daemon.restart', 'extensions.declare', 'extensions.inspect', 'file.find', 'file.read', 'file.stat',
+    'auth.respond', 'auth.retry', 'daemon.restart', 'extension.declare', 'extension.inspect', 'file.find', 'file.read', 'file.stat',
     'file.watch', 'file.write', 'hello', 'pane.close', 'pane.focus', 'pane.open', 'pane.update', 'profile.allow',
     'profile.list', 'profile.module', 'profile.reload', 'profile.ui', 'settings.set', 'settings.watch', 'thread.stop',
     'thread.archive', 'thread.start', 'thread.history', 'thread.list', 'thread.rename', 'thread.seen', 'thread.setProfile',

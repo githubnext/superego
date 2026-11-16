@@ -19,7 +19,7 @@ import type { RunRecord } from './recap.ts'
 
 export type { AuthFlow, RunRecord }
 
-/** A tool call that ended, as `toolCalls` hears it: its thread, what the agent asked, and how it went. 1.8. */
+/** A tool call that ended, as `toolCalls` hears it: its thread, what the agent asked, and how it went. */
 export type ToolCallRecord = {
   thread: string
   call: { id: string; name: string; args: Json }
@@ -31,7 +31,7 @@ export type { AuthFlowEvent } from './auth-flows.ts'
 /**
  * A daemon half: what the extension is (`ExtensionAbout`: its name, title, description, and whether it's required),
  * and its setup. An extension whose work is all in the window has none: the window declares it to the machine
- * (`extensions.declare`), which then lists it in Settings and lets a profile do without it.
+ * (`extension.declare`), which then lists it in Settings and lets a profile do without it.
  */
 export type DaemonExtension = ExtensionAbout & {
   /**
@@ -174,7 +174,7 @@ export type ThreadHooks<S extends Json = Json> = {
   unarchiveAbandoned?(thread: ThreadInfo): void | Promise<void>
   /** Brought back, taking messages again. */
   unarchived?(thread: ThreadInfo): void | Promise<void>
-  /** A pane beside it closed: closed by someone, or gone as the thread was cleared. What the pane held can go. 1.5. */
+  /** A pane beside it closed: closed by someone, or gone as the thread was cleared. What the pane held can go. */
   paneClosed?(thread: ThreadInfo, pane: Pane): void | Promise<void>
 }
 /** What a `starting` hook gives a new thread: the folder it works in instead, and this extension's state with it. */
@@ -209,7 +209,7 @@ export type AgentChoice = {
 
 /**
  * An agent part an extension gave (`agent(part)`), to change or take away before teardown. Called, it's taken away, as
- * `remove()` does: a setup that returns it (`setup: (s) => s.agent(part)`) returns its cleanup. 1.7.
+ * `remove()` does: a setup that returns it (`setup: (s) => s.agent(part)`) returns its cleanup.
  */
 export type AgentPart = (() => void) & {
   /**
@@ -222,7 +222,7 @@ export type AgentPart = (() => void) & {
   remove(): void
 }
 
-/** A thread as an `agentParts` sees it, at each send. 1.7. */
+/** A thread as an `agentParts` sees it, at each send. */
 export type AgentPartsThread = {
   id: string
   /** An extension's own thread, in no list (`threads.start({ hidden })`): Ego's, say. */
@@ -254,7 +254,7 @@ export type DaemonApi = {
   /**
    * Give the agents tools, system prompt sections, hooks or tasks. `always: false`: to no thread but those an
    * `agentFor` or `agentParts` of this extension gives it to. Its handle replaces it (as its tools change, say) or takes
-   * it away (1.7).
+   * it away.
    */
   agent(extension: Extension, options?: { always?: boolean }): AgentPart
   /**
@@ -262,10 +262,10 @@ export type DaemonApi = {
    * this extension gave with `agent(part, { always: false })` (others are left out, with a warning). They come after the
    * parts an `agentFor` chose, and before its profile's. Every extension's is asked at once; each may take up to 5s (a
    * server it has to start, say), and one that takes longer, or throws, adds nothing to that turn. Not for threads that
-   * go without this extension; a profile's only for its own threads. 1.7.
+   * go without this extension; a profile's only for its own threads.
    */
   agentParts(add: (thread: AgentPartsThread) => AgentPartsAnswer | Promise<AgentPartsAnswer>): void
-  /** Sign-in flows of this extension's own, carried as a provider's are. 1.7. */
+  /** Sign-in flows of this extension's own, carried as a provider's are. */
   auth: {
     /**
      * Run a sign-in flow for the client an action runs for (`to`: its context): the client hears it as `auth.event`
@@ -327,7 +327,7 @@ export type DaemonApi = {
    * receiver grants, behind every control message): a terminal's output and keystrokes, say. `accept` gets each one and
    * the params it was opened with, and throws (an `RpcError`) to refuse it; read with `channel.onData` (set before it
    * returns), write with `channel.write`. A channel ends with its connection. The window opens one with `channel` from
-   * 'superego/unstable'. 1.5.
+   * 'superego/unstable'.
    */
   channel(kind: string, accept: ChannelAcceptor): void
   /**
@@ -356,13 +356,13 @@ export type DaemonApi = {
    * Say in a line what a thread's run did, once it ends: its `done` status carries it (`msg`), and a notification says
    * it. Given the run's tool calls and its answer (see `RunRecord`); answer nothing to leave it to others. The first to
    * answer wins, in the order extensions were set up, as plain text cut to about 100 characters; with none, the answer's
-   * first sentence. Not for threads that go without this extension. Quick, without side effects. 1.6.
+   * first sentence. Not for threads that go without this extension. Quick, without side effects.
    */
   recap(describe: (run: RunRecord) => string | undefined): void
   /**
    * Hear each tool call a thread's agent makes, once it ends (errors too: a refused or interrupted call). Read-only:
    * the run doesn't wait for it, and it can't change the result. A throw (or a rejection) is logged. Not for threads
-   * that go without this extension; a profile's only for its own threads. 1.8.
+   * that go without this extension; a profile's only for its own threads.
    */
   toolCalls(watch: (record: ToolCallRecord) => void | Promise<void>): void
   /**
@@ -421,7 +421,7 @@ export type DaemonApi = {
   }
   /**
    * The other machines this daemon reaches (its `machines.json`), and a call to one of them: its methods
-   * and actions as a client calls them (`thread.list`, `thread.start`, …). None when the daemon reaches no others. 1.4.
+   * and actions as a client calls them (`thread.list`, `thread.start`, …). None when the daemon reaches no others.
    */
   machines: {
     /** The machines it reaches, by id. */

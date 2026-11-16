@@ -127,7 +127,7 @@ export function startApp(appConfig: AppConfig) {
         pending.delete(contents.id)
         return what ?? {}
       },
-      /** A window's UI extensions declare their settings; the app keeps them in its own settings file. */
+      /** A window's UI halves declare their settings; the app keeps them in its own settings file. */
     'settings.register': async ({ section }: { section: DeclaredSection }) => {
       if (!section?.id || !Array.isArray(section.settings)) throw new RpcError('invalid', 'A section needs an id and settings')
       appSettings.upsert(declaredSpec(section))

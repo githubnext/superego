@@ -7,7 +7,7 @@
 //     description: 'Answers customer mail',
 //     model: 'anthropic/claude-sonnet-4-5',
 //     prompt: 'You answer customer email for Acme. Be brief.',
-//     extensions: ['./extensions/orders.ts'],    // agent extensions: tools, prompt sections, hooks
+//     extensions: ['./extensions/orders.ts'],    // agent parts: tools, prompt sections, hooks
 //     without: ['ask-user'],                      // built-ins this profile does without
 //     mcp: ['linear'],                            // the machine's MCP servers its threads use, by name
 //   })
@@ -36,13 +36,13 @@ export type ProfileSpec = {
   /** Instructions for the agent, after the extensions' prompt sections. */
   prompt?: string
   /**
-   * Extensions, as paths from the profile's folder. A module's default export is an agent extension (defineExtension:
-   * tools, prompt sections, hooks) or a daemon extension (defineDaemonExtension: actions, live values, agent extensions
+   * Extensions, as paths from the profile's folder. A module's default export is an agent part (defineExtension:
+   * tools, prompt sections, hooks) or a daemon half (defineDaemonExtension: actions, live values, agent parts
    * of its own), set up when the profile loads and torn down when its files change.
    */
   extensions?: string[]
   /**
-   * UI extensions, as paths from the profile's folder: modules whose default export is defineUiExtension({ … }), drawn
+   * UI halves, as paths from the profile's folder: modules whose default export is defineUiExtension({ … }), drawn
    * for this profile's threads. They import from 'superego/ui' (hooks, components, `h` for elements) and 'react'.
    */
   ui?: string[]
@@ -147,9 +147,9 @@ export type ProfileDaemonExtension = { extension: DaemonExtension; key: string; 
 
 export type LoadedProfile = ProfileRef & {
   spec: ProfileSpec
-  /** Its agent extensions, installed under names of their own: `<scope>:<name>/<extension>`. */
+  /** Its agent parts, installed under names of their own: `<scope>:<name>/<extension>`. */
   extensions: Extension[]
-  /** Its daemon extensions, for the daemon to set up (or share with another profile that has them set up already). */
+  /** Its daemon halves, for the daemon to set up (or share with another profile that has them set up already). */
   daemon: ProfileDaemonExtension[]
   /** What its files hash to: a change means reloading it, and (for a project's) allowing it again. */
   hash: string

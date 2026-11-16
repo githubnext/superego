@@ -1,6 +1,6 @@
 // @superego/blocks: UI an agent writes as JSON. A list of blocks (text, tables, inputs, buttons, a sandboxed page of its
 // own), checked strictly so a model gets errors it can fix, and what the user's answer to them says. The renderer is
-// `@superego/blocks/ui`; this half has no React, so a daemon extension can check blocks and word answers too.
+// `@superego/blocks/ui`; this half has no React, so a daemon half can check blocks and word answers too.
 import { arr, bool, compile, int, lit, num, obj, oneOf, opt, str, union, type Schema } from '@earendil-works/pi-schema'
 
 export type Tone = 'info' | 'warn' | 'success'

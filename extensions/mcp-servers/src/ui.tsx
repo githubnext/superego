@@ -139,7 +139,7 @@ export function Chip({ thread }: ViewProps<'thread'>) {
   const label = count === 1 ? '1 server' : `${count} servers`
   return (
     <Popover tooltip="MCP servers" trigger={
-      <button type="button" className={`titlebar__chip mcp-chip ${troubled(servers) ? 'is-troubled' : ''}`} aria-label={`MCP servers: ${count}`}>
+      <button type="button" className={`header__chip mcp-chip ${troubled(servers) ? 'is-troubled' : ''}`} aria-label={`MCP servers: ${count}`}>
         <PlugIcon size={12} aria-hidden /> {label}
       </button>
     }>

@@ -155,9 +155,9 @@ export function ThreadTools({ machine, thread, panes = true }: { machine: Machin
   return (
     <span className="thread__tools">
       <span className="thread__chips">
-        {thread.parent && <span className="titlebar__chip thread__parent">from <ThreadRef machine={machine.id} id={thread.parent} /></span>}
+        {thread.parent && <span className="header__chip thread__parent">from <ThreadRef machine={machine.id} id={thread.parent} /></span>}
         <Slot name="header.chips" props={{ machine, thread }} />
-        {thread.profile && <span className="titlebar__chip thread__profile" title={thread.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{thread.profile.name}</span>}
+        {thread.profile && <span className="header__chip thread__profile" title={thread.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{thread.profile.name}</span>}
       </span>
       <PlacedViews place="header" machine={machine} thread={thread} frame={withContextMenu('header', { machine: machine.id, thread })} />
       {thread.cost !== undefined && thread.cost > 0 && <span className="thread__cost" title="Spent on this thread">${thread.cost.toFixed(2)}</span>}

@@ -1,4 +1,4 @@
-// Data-only views: UI a daemon extension declares as data, which the window draws with its own components. No code of
+// Data-only views: UI a daemon half declares as data, which the window draws with its own components. No code of
 // the extension's runs in the window, so a view from a remote machine or a project's profile needs no consent to run
 // code there: it can show facts, a list, a table and Markdown, and offer buttons that run the machine's own actions,
 // with that machine's authority. The window checks what it is sent as it lands (packages/app data-view-check.ts).
@@ -17,7 +17,7 @@ export const DATA_ICONS = ['list', 'table', 'folder', 'file', 'bell', 'check', '
 export type DataIcon = (typeof DATA_ICONS)[number]
 
 /**
- * A data view, as a daemon extension declares it (`superego.view`). Its content is a `ViewContent`, read from a live
+ * A data view, as a daemon half declares it (`superego.view`). Its content is a `ViewContent`, read from a live
  * value of the extension's or a method of its:
  * - a `window` view (a space): the value is the content; the method is called with `{}`
  * - a `thread` view (a space shows the selected thread): the value is a scoped value, each thread's content in its

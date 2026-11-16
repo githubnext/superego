@@ -292,14 +292,14 @@ state (`set up`, `off`, or `failed`, `refused` or `timed out` with the error), w
 their keys, values, views and what they read, hooks), and who watches its values, whole or in how many scopes. Then
 each profile's load (a project's not allowed says so), and with `--thread`, each extension that thread goes without:
 switched off here, its profile's `without`, another extension's `agentFor`, or a profile's of another profile. `--json`
-for all of it as data (`extensions.inspect`). What a UI half draws is the window's: one that throws says so in its
+for all of it as data (`extension.inspect`). What a UI half draws is the window's: one that throws says so in its
 place, and the window's console has why.
 
 ## Cheat sheet
 
 | Daemon half (`superego.` in `setup`) | For |
 |---|---|
-| `agent(defineExtension({ tools, sections, hooks }))` → `replace(next)`, `remove()` | the agent's tools, prompt sections and hooks. Its handle puts another part of the same name in its place (threads that have it get it from their next request to the model, mid-run too) or takes it away; called, it's `remove()`, so `setup: (s) => s.agent(part)` returns its cleanup. The handle: 1.7 |
+| `agent(defineExtension({ tools, sections, hooks }))` → `replace(next)`, `remove()` | the agent's tools, prompt sections and hooks. Its handle puts another part of the same name in its place (threads that have it get it from their next request to the model, mid-run too) or takes it away; called, it's `remove()`, so `setup: (s) => s.agent(part)` returns its cleanup. |
 | `action(defineAction({ id: 'x.y', params, run }))` | an intent: logged, in ⌘K; `expose: ['ui', 'cli']` for `superego do`; `keys` binds it in the window while one of the machine's threads is shown (`thread: true`: its `thread` filled in) |
 | `method('x.y', run, { params })` | a read for the UI; params checked first |
 | `value('x.y', initial)` → `get`, `set`, `update` | live state the UI watches; in memory |
@@ -314,14 +314,14 @@ place, and the window's console has why.
 | `thread({ starting, abandoned, started, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchiveAbandoned, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
 | `state()` → `get(id)`, `set(id, next)`, `update(id, edit)` | state of its own kept with each thread, across restarts; `starting` gives a new one its first |
 | `facts(({ id, state }) => …)` | what clients are told of a thread, as `thread.facts.<name>`: worked out from its state |
-| `recap(({ thread, answer, calls }) => …)` | say in a line what a run did, once it ends: the thread's `done` status carries it (`msg`), and its notification says it. The first to answer wins; with none, the answer's first sentence. 1.6 |
-| `toolCalls(({ thread, call, result }) => …)` | hear each tool call a thread's agent makes, once it ends; read-only ([Watching tool calls](daemon.md#watching-tool-calls)). 1.8 |
+| `recap(({ thread, answer, calls }) => …)` | say in a line what a run did, once it ends: the thread's `done` status carries it (`msg`), and its notification says it. The first to answer wins; with none, the answer's first sentence. |
+| `toolCalls(({ thread, call, result }) => …)` | hear each tool call a thread's agent makes, once it ends; read-only ([Watching tool calls](daemon.md#watching-tool-calls)). |
 | `agentFor(({ id, state, profile }) => ({ instructions, model, extensions, without }))` | choose a thread's agent; the first to answer wins. `agent(part, { always: false })` gives a part only through this, or `agentParts` |
-| `agentParts(({ id, hidden, owner, profile }) => [part])` | add to whatever agent a thread has: asked at every send, with its profile as loaded now (`profile.spec`); answers with parts given with `agent(part, { always: false })`. They add up: every extension's, after the chooser's and before the profile's. May be async, up to 5s; later, or a throw, adds nothing to that turn. 1.7 |
-| `auth.flow(context, async (flow) => …)` → `{ flow }` | a sign-in flow of its own, for the client an action runs for (its context), carried as a provider's is: `flow.emit({ type: 'auth_url', url, callback })`, `await flow.prompt({ type: 'manual_code', message })`, `flow.signal`. It ends `done` when the function resolves, `failed` when it throws. The window draws it with `SignInFlow` (`superego/ui`). 1.7 |
+| `agentParts(({ id, hidden, owner, profile }) => [part])` | add to whatever agent a thread has: asked at every send, with its profile as loaded now (`profile.spec`); answers with parts given with `agent(part, { always: false })`. They add up: every extension's, after the chooser's and before the profile's. May be async, up to 5s; later, or a throw, adds nothing to that turn. |
+| `auth.flow(context, async (flow) => …)` → `{ flow }` | a sign-in flow of its own, for the client an action runs for (its context), carried as a provider's is: `flow.emit({ type: 'auth_url', url, callback })`, `await flow.prompt({ type: 'manual_code', message })`, `flow.signal`. It ends `done` when the function resolves, `failed` when it throws. The window draws it with `SignInFlow` (`superego/ui`). |
 | `threads.list({ archived, hidden })`, `get(id)`, `of(conversationId)`, `conversation(id)`, `attachments(id)` | reach threads, and the folder a thread keeps files in |
 | `threads.start({ …, parent, hidden, options })`, `send(id, text)`, `lastAnswer(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)`, `clear(id)` | start and run threads as the thread tools do; `hidden`: in no list, an agent of its own with no profile, that takes no messages while the extension is off (find it by its `owner` in `list({ hidden: true })`, not by its facts, which are gone while the extension is off); `entries`: the newest since it was last cleared, as pi-durable's entry records (not a stable shape); `clear`: start it over |
-| `machines.list()`, `machines.call(machine, method, params)` | the other machines this daemon reaches (its `machines.json`) and a call to one, as a client calls it (`thread.list`, `thread.start`); none when it reaches no others. 1.4 |
+| `machines.list()`, `machines.call(machine, method, params)` | the other machines this daemon reaches (its `machines.json`) and a call to one, as a client calls it (`thread.list`, `thread.start`); none when it reaches no others. |
 | `agentsDir`, `dataDir` | the folder agents share (`~/.agents`): skills, `AGENTS.md`; this machine's data folder (`~/.superego`) |
 | `harness` | pi-durable itself; unstable |
 
@@ -336,7 +336,7 @@ place, and the window's console has why.
 | `pane(kind, { title, component, icon, file, menu, opens, fallback, folders, urls, width })` | a kind of pane beside the thread; `opens`, `folders`, `urls`: files, folders or web pages a thread names open in it; `fallback`: any file nothing else opens |
 | `tool(name, { icon, verbs, subject, stat, meta, body, phrase, file, weight }, { fold })` | how calls to a tool look, described: `verbs: ['Read', 'Reading', 'Read failed']`, `subject(call)` after the verb, `body(call)` what it opens to, `phrase(count)` in a run's line ("read 2 files"); the rest default. The core's coding tools and `threads`' thread tools are rows too |
 | `tool(name, Component, { fold })` | how calls to a tool look, drawn whole; `fold: false` shows them outside the run's fold (images) |
-| `tool('mcp__*', …)` | a name ending in `*` is a prefix: every tool whose name starts so, where it has no row of its own; the longest prefix wins. 1.7 |
+| `tool('mcp__*', …)` | a name ending in `*` is a prefix: every tool whose name starts so, where it has no row of its own; the longest prefix wins. |
 | `SignInFlow` (`superego/ui`) | a sign-in flow drawn as Settings → Providers draws one: `<SignInFlow machine title start={() => dispatch('x.signIn', …)} onClose />`, for an action that answers with `auth.flow`'s `{ flow }`. On the desktop, a flow on another computer whose `auth_url` has a loopback `callback` is caught here and answered for you. 1.7 |
 | `entry(kind, Component)` | transcript entries of a kind it writes |
 | `link({ match, open, render, target, scheme })` | claim links: `match` a scheme (`'ticket:'`), a pattern, or `(href, kind, where) => boolean` that sees inline code too (`kind: 'code'`); `open(href, { machine, thread, beside, openFile, openUrl })` follows one (a click, ⌘-click `beside`, ⌃O); `render` draws it; `scheme` names the scheme a pattern or test claims (`'thread'`), so HTML files keep its links. Claiming files, `[[wikilinks]]` or web pages overrides the core's: [Links](#links) |
@@ -344,7 +344,7 @@ place, and the window's console has why.
 | `composer.sentWith({ read(blocks), component })` | draw what its `beforeSend` put in sent messages under them (a chip): `read` returns `{ items, blocks }`, and those blocks leave the text |
 | `work(divide)` | split a run of work into titled parts (tasks); bundled only |
 | `action(defineAction({ id, keys, when, run }))` | a window action with keys, in ⌘K while `when(context)` holds; a profile's only while one of its threads is shown |
-| `store('open', initial, { persist })` → `get`, `set`, `use()` | window state its actions and components share, kept as `<name>.open` (`'<name>.open'` is the same one) |
+| `store('open', initial, { persist })` → `get`, `set`, `use()` | a store its actions and components share, kept as `<name>.open` (`'<name>.open'` is the same one) |
 | `appSettings({ id, settings })` | per-user settings; `useAppSetting(key)`, `context.appSetting(key)`; bundled only |
 | `settings(ui, Component)` | draw under a settings section that names `ui` |
 | `dispatch(id, params, { machine })` | run any action outside React |
@@ -367,7 +367,7 @@ Three versions, each for its own question:
 | Version | What it versions | Where it's said | Who checks it |
 |---|---|---|---|
 | **The release** | the code a machine runs: its git commit (the packages are `0.0.0`) | `hello.machine.commit`, Settings → Machines ("an older Superego") | the user, who updates |
-| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`2.0.0`; 2.0 renamed sessions to projects and dropped generation 1's compatibility names; in 1.x, 1.1 added `signal`, a UI `setup`'s cleanup and `unarchiveAbandoned`; 1.2 `scopedValue` and `useValue`'s `scope`, `useMethod`, a profile's window actions, and `'superego/unstable'` apart; 1.3 `spawnGroup`; 1.4 `machines`; 1.5 channels and `paneClosed`; 1.6 `recap`; 1.7 `agentParts`, `agent()`'s handle, `auth.flow`, tool rows by prefix and `SignInFlow`; 1.8 `toolCalls`) | `hello.api` | the host, setting an extension up |
+| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`2.0.0`; a minor version adds, a major one renames or removes) | `hello.api` | the host, setting an extension up |
 | **The protocol** | the wire: a generation, `PROTOCOL_VERSION` (`2`), and in it the features each side announces | `hello.version`, `hello.features` | both ends, at `hello` |
 
 And each extension's own **version**, semver, which its other half, profiles and scripts rely on.
@@ -411,7 +411,7 @@ version(machine, 'git')          // '1.3.0'; '0.0.0' when it says none; undefine
 Ranges are the usual ones: `^1.2`, `~1.2`, `>=1.2 <3`, `1.2` (1.2.x), `*`, joined with `||`. A UI half checks the
 daemon half by the majors it speaks (`git` and `skills` ask for `@<2`); a shape that changed in a minor, by `@^1.<minor>`.
 
-Windows declare their extensions to each machine (`extensions.declare`), so one with no daemon half is listed there.
+Windows declare their extensions to each machine (`extension.declare`), so one with no daemon half is listed there.
 When two windows declare one differently, the newest version's word is taken, whatever order they connect in (at the
 same version, the two are settled by what they say, the same way each time); an older window's never takes it back.
 

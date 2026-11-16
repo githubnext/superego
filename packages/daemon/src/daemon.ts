@@ -993,7 +993,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
 
   /**
-   * Set up a daemon extension: a bundled one (for the daemon's life), or a profile's (`agent` then adds to the
+   * Set up a daemon half: a bundled one (for the daemon's life), or a profile's (`agent` then adds to the
    * selection of the profiles that have it, `profiles`: their folders). Everything it registers is its own, and the
    * returned teardown undoes all of it: its agent parts, actions, values, status, settings, hooks and its name.
    * `agentExtension` installs an agent part, and gives it to every thread it's for when `always`: the installed part
@@ -1355,7 +1355,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** Profiles that failed to load, and why: until they load. */
   const profileErrors = new Map<string, { ref: ProfileRef; error: string }>()
   /**
-   * A profile's daemon extension, set up once however many profiles have it (by its file at one version, `key`: see
+   * A profile's daemon half, set up once however many profiles have it (by its file at one version, `key`: see
    * ProfileDaemonExtension), and torn down when the last of them lets it go. `profiles`: their folders, whose threads
    * its pane kinds are for; `parts`: the agent parts it gave, which each of them selects.
    */
@@ -1375,7 +1375,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       registry.uninstall(part)
     }
   }
-  /** Profile `dir`'s use of a daemon extension: the one set up already for another profile, else set up now. */
+  /** Profile `dir`'s use of a daemon half: the one set up already for another profile, else set up now. */
   async function share(item: ProfileDaemonExtension, dir: string) {
     let entry = shared.get(item.key)
     if (!entry) {
@@ -1411,7 +1411,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       },
     }
   }
-  /** A profile's agent parts: its own agent extensions, and those its daemon extensions give. */
+  /** A profile's agent parts: its own, and those its daemon halves give. */
   const partsOf = (profile: LoadedProfile) => [...profile.extensions, ...(holds.get(profile.dir)?.uses.flatMap((use) => use.parts) ?? [])]
   /** Whether a profile is still as it was loaded: its files, and those of the one it extends, unchanged. */
   const current = (profile: LoadedProfile) =>
@@ -1495,7 +1495,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return loaded
   }
 
-  /** What each extension here is and does, and (given a thread) which don't take part in it and why: `extensions.inspect`. */
+  /** What each extension here is and does, and (given a thread) which don't take part in it and why: `extension.inspect`. */
   async function inspect(threadId?: string): Promise<ExtensionsReport> {
     const off = switchedOff()
     const watchesOf = (name: string) => [...values].filter(([key, entry]) => key.startsWith(`${name}.`) && (entry.listeners.size || entry.watchers.size))
@@ -2325,8 +2325,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         /** The newest dispatches on this machine, oldest first. */
         'action.log': async () => router.log(),
         /** The window's extensions, as each declares itself: those without a daemon half become known here (see declare). */
-        'extensions.declare': async ({ extensions: abouts }: Methods['extensions.declare']['params']) => { declare(Array.isArray(abouts) ? abouts : []); return null },
-        'extensions.inspect': ({ thread }: Methods['extensions.inspect']['params'] = {}) => inspect(thread),
+        'extension.declare': async ({ extensions: abouts }: Methods['extension.declare']['params']) => { declare(Array.isArray(abouts) ? abouts : []); return null },
+        'extension.inspect': ({ thread }: Methods['extension.inspect']['params'] = {}) => inspect(thread),
         ...connection.handlers,
       }
       /** A live value (or its part in `scope`), then `tell` with each new one, until unwatched. */

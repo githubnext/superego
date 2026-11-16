@@ -1,7 +1,7 @@
-# Agent extensions: tools and prompt sections
+# Agent parts: tools and prompt sections
 
-An agent extension gives a profile's agents tools and pieces of system prompt. Superego's agents run on pi-durable,
-and these are its extensions: `defineExtension`, `defineTool` and `section`, imported from `'superego'`.
+An agent part gives a profile's agents tools and pieces of system prompt. Superego's agents run on pi-durable,
+and agent parts are its extensions: `defineExtension`, `defineTool` and `section`, imported from `'superego'`.
 
 <!-- check: module; declare const findOrder: ReturnType<typeof defineTool> -->
 ```ts
@@ -89,7 +89,7 @@ A profile's tool with the name of a built-in one (`read`, `bash`, …) replaces 
 built-ins out entirely, use the profile's `without` (`coding-tools`, `ask-user`, `panes`, `thread-tools`, …).
 
 `wrapTool`, `wrapSection` and `hook` are pi-durable's lower-level decorators (wrapping a tool or a section by name);
-prefer tools and sections. To hear every tool call a thread makes, a daemon extension has `superego.toolCalls`:
+prefer tools and sections. To hear every tool call a thread makes, a daemon half has `superego.toolCalls`:
 [Watching tool calls](daemon.md#watching-tool-calls).
 
 ## Testing a tool

@@ -1,4 +1,4 @@
-# UI extensions
+# The UI half
 
 New to this? Start with [the guide](guide.md) (`superego --skill guide`): the big picture, a first extension end to end, and a cheat sheet.
 
@@ -50,7 +50,7 @@ export default defineUiExtension({
 ```
 
 Then, in `profile.ts`: `ui: ['./ui/order.tsx'], panes: { order: 'an order, with its lines. Params: { id }' }` (or, from
-a daemon extension, `superego.pane('order', '…')`). The agent opens it with `pane_open({ kind: 'order', params: { id: '1234' } })`; so can you, with
+a daemon half, `superego.pane('order', '…')`). The agent opens it with `pane_open({ kind: 'order', params: { id: '1234' } })`; so can you, with
 `superego do pane.open --params '{"id":"<thread>","kind":"order","params":{"id":"1234"}}'`.
 
 ## What a module can import
@@ -68,9 +68,9 @@ there is no type checking.
 | | |
 |---|---|
 | `superego.pane(kind, { title, component, icon?, file?, menu?, opens?, fallback?, folders?, urls?, width? })` | a kind of pane. `title`: a string, or `(pane) => string`. `component` gets `{ machine, thread, pane }`; `pane.params` is what it was opened with. `icon`: its glyph on the pane's tab (a Phosphor icon from `superego/ui`). `file: true`: its title is a file name, and the tab shows it as one. `menu: true` offers it in the thread's pane menu (it needs no params). `opens: (path) => boolean` makes files named in the thread open in it (`/\.csv$/.test(path)`), ahead of the editor (`fallback: true`: any file no kind `opens`); `folders: true`, folders (`params.path`, `''` for the thread's own); `urls: true`, web pages a thread links to, when opened beside (`params.url`). `width`: share of the row, 0.5 by default |
-| `superego.tool(name, row, { fold? })` | how calls to a tool look in the transcript, described: `{ icon?, verbs?, verb?, subject?, stat?, meta?, body?, phrase?, file?, weight? }`. `verbs`: done, working, failed (`['Read', 'Reading', 'Read failed']`); `verb(call)`, a call's own instead, where one needs another (1.7). The functions get the call (below) and its `state` (`idle`, `working`, `done`, `error`): `subject` is what it acted on, after the verb (text in mono, or a node such as `<ThreadRef machine id />`); `stat` its lines `{ added, removed }`; `meta` a little more at the row's end; `body` what it opens to. `phrase(count)` says what `count` calls did in a run's line (`read 2 files`); `file(args)` names the one file a lone call was about there; `weight` decides which kind leads that line. Anything left out (or returning `undefined`) is the default: its name, its `command`/`path`/`pattern`, its output; `null` from `subject` or `body` is nothing. `fold: false` shows them under their run of work, open, instead of folded into it: for what the agent shows you (as `images` does) |
-| `superego.tool(name, component, { fold? })` | draw calls to a tool whole, yourself. Gets `{ machine, thread, call: { id, name, arguments }, result?: { text, isError, details, images? }, live?: { status, output, details } }`; `images` (1.7) are those the model was shown, `{ data, mimeType }` in base64 |
-| `superego.tool('prefix*', row \| component)` | a name ending in `*` matches every tool whose name starts so (`mcp__*`), where the tool has no row of its own; the longest prefix wins. Tools of one prefix's row with a `phrase` count as one kind in a run's line. 1.7 |
+| `superego.tool(name, row, { fold? })` | how calls to a tool look in the transcript, described: `{ icon?, verbs?, verb?, subject?, stat?, meta?, body?, phrase?, file?, weight? }`. `verbs`: done, working, failed (`['Read', 'Reading', 'Read failed']`); `verb(call)`, a call's own instead, where one needs another. The functions get the call (below) and its `state` (`idle`, `working`, `done`, `error`): `subject` is what it acted on, after the verb (text in mono, or a node such as `<ThreadRef machine id />`); `stat` its lines `{ added, removed }`; `meta` a little more at the row's end; `body` what it opens to. `phrase(count)` says what `count` calls did in a run's line (`read 2 files`); `file(args)` names the one file a lone call was about there; `weight` decides which kind leads that line. Anything left out (or returning `undefined`) is the default: its name, its `command`/`path`/`pattern`, its output; `null` from `subject` or `body` is nothing. `fold: false` shows them under their run of work, open, instead of folded into it: for what the agent shows you (as `images` does) |
+| `superego.tool(name, component, { fold? })` | draw calls to a tool whole, yourself. Gets `{ machine, thread, call: { id, name, arguments }, result?: { text, isError, details, images? }, live?: { status, output, details } }`; `images` are those the model was shown, `{ data, mimeType }` in base64 |
+| `superego.tool('prefix*', row \| component)` | a name ending in `*` matches every tool whose name starts so (`mcp__*`), where the tool has no row of its own; the longest prefix wins. Tools of one prefix's row with a `phrase` count as one kind in a run's line. |
 | `superego.link({ match, open, render?, target? })` | claim links in Markdown: a scheme (`match: 'ticket:'`), a pattern (`/^https:\/\/linear\.app\//`), or a test `(href, kind, where) => boolean` that also sees inline code (`kind: 'code'`, its text as `href`). `open(href, { machine, thread, beside, kind, openFile, openUrl })` follows one, on a click (⌘: `beside`) or from ⌃O's list; return a string to say why it couldn't. `render` gets `{ href, children, code, title, where, open(beside) }` (default: a link that follows it). `target(href)`: where it goes, in ⌃O's list. `scheme`: the scheme a pattern or test claims (`'ticket'`), so HTML files keep its links, as they do a `'ticket:'` match's. `[[Note#Heading|alias]]` comes as `wikilink:Note#Heading` (each part URI-encoded; `parseWikilink(href)` gives `{ target, heading?, block? }`), its alias as its text, so a profile can open it its own way. Asked in turn: the thread's profile's, then the app's extensions' (the threads extension's `thread:`), then the core's defaults (files, `wikilink:`, web pages). The same handlers follow links in messages, in ⌃O's list, and in a file's rendered text and live preview |
 | `superego.view(id, { title, icon?, context, fits, default?, component, order? })` | a view, `<name>.<view>`, that the layout puts in a place: for a profile, `beside` (a column beside the thread), `pane` (the thread's pane menu; it's a pane kind of its id too) or `header` (right of the title). `context: 'thread'`: `component` gets `{ place, machine, thread }`. `default`: where it goes (a place, several, or none: offered only); the user moves, reorders or hides it (`~/.superego/layout.json`, which is `app.layout`; or a right-click on it), so don't assume one place |
 | `superego.slot(slot, component, { order? })` | put a component in a slot whose place behaviour decides (below) |
@@ -91,10 +91,10 @@ Slots a profile can fill, each given `{ machine, thread }` (and for the editor o
 
 | Slot | |
 |---|---|
-| `header.chips` | among the chips that say where a thread works (a branch): draw a `<span className="titlebar__chip">` |
+| `header.chips` | among the chips that say where a thread works (a branch): draw a `<span className="header__chip">` |
 | `thread.badge` | after a thread's title in the sidebar: a small mark of something about it. Draw a `<span className="thread-badge" title="…">` around a 12px icon, or nothing ([below](#a-mark-in-the-sidebar)) |
 | `composer.above` | above the message box: something waiting on the user |
-| `details.section` | in thread details (⌘I), after what the core says: an `<h5>` and what you know of the thread. 1.7 |
+| `details.section` | in thread details (⌘I), after what the core says: an `<h5>` and what you know of the thread. |
 | `editor.side`, `editor.bar` | beside a file in the editor, and in its bar |
 | `overlay` | over everything: a dialog of your own, drawn while you want it |
 
@@ -129,11 +129,11 @@ Inside a pane: `<PaneHeader>` puts small things (a count, Refresh) in the pane's
 
 Talking to the daemon:
 
-- `call(machine.id, 'orders.find', params)`: a read, a daemon extension's method (or any protocol method). A promise of
+- `call(machine.id, 'orders.find', params)`: a read, a daemon half's method (or any protocol method). A promise of
   its result.
-- `useDispatch()` → `dispatch(id, params, { machine: machine.id })`: run an action (a daemon extension's, or a
+- `useDispatch()` → `dispatch(id, params, { machine: machine.id })`: run an action (a daemon half's, or a
   built-in like `pane.open`, `thread.send`): something that changes things. Returns a promise of its result.
-- `useValue<T>(machine.id, machine.state === 'connected', 'orders.recent')`: a daemon extension's live value, kept
+- `useValue<T>(machine.id, machine.state === 'connected', 'orders.recent')`: a daemon half's live value, kept
   current. Undefined until it arrives, null while nothing publishes it yet (the profile hasn't loaded). However many
   components watch the same value, the window holds one subscription.
 - `useThreads`, `useAllThreads`, `useProjects`, `useSelection`, `useMachines`: what the window knows ("Reading threads", below).
@@ -157,7 +157,7 @@ row={(item) => ({ key, title, glyph?, detail?, keys? })} onPick={(item, { beside
 current: `<ThreadRef machine={id} id={thread} />`), `SignInFlow` (a sign-in flow drawn as Settings → Providers draws one,
 for an action of the daemon half that answers with `superego.auth.flow`'s `{ flow }`: `<SignInFlow machine={id}
 title="Signing in to Linear" start={() => dispatch('x.signIn', { … }, { machine: id })} onClose={…} />`; it starts as it
-mounts, opens the page in the browser, asks what the flow asks, and has Cancel; 1.7), and the Phosphor icons the app
+mounts, opens the page in the browser, asks what the flow asks, and has Cancel), and the Phosphor icons the app
 uses (`ArchiveIcon`, …).
 
 Others: `useComposer()` (the message box), `useComposerClaim({ placeholder, submit })` (take the message box over while

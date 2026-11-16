@@ -74,8 +74,8 @@ This is the overview. Each topic is a file beside this one (`guide.md`, `ui.md`,
 | `cli` | starting and scripting threads, machines, settings, actions, the daemon |
 | `profiles` | writing `profile.ts`: model, prompt, extensions, panes, allowing, `extends`, when changes apply |
 | `tools` | giving an agent tools and prompt sections (`defineExtension`, `defineTool`, `section`) |
-| `daemon` | daemon extensions: actions, live values, a thread's blocked status, reaching threads |
-| `ui` | UI extensions: panes, slots, tool renderers, reading threads, hooks and components from `superego/ui` |
+| `daemon` | an extension's daemon half: actions, live values, a thread's blocked status, reaching threads |
+| `ui` | an extension's UI half: panes, slots, tool renderers, reading threads, hooks and components from `superego/ui` |
 | `bundled` | working on Superego itself: a bundled extension in `extensions/`, tests, typecheck |
 | `debugging` | something doesn't load, run or show up |
 

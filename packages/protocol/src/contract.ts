@@ -7,14 +7,8 @@
 import type { ExtensionAbout } from './app.ts'
 
 /**
- * The extension API this build gives extensions, both halves alike. 1.1: `superego.signal` in both halves, a UI
- * `setup`'s cleanup, and the `unarchiveAbandoned` hook. 1.2: `scopedValue` and `useValue`'s `scope`, `useMethod`,
- * window actions from a profile's UI, and the stable surface apart from `superego/unstable`. 1.3: `spawnGroup`. 1.5:
- * channels (`superego.channel` in a daemon half, `channel` in the window) and the `paneClosed` hook. 1.6: `recap`.
- * 1.7: `agentParts`, `agent()`'s handle (`replace`, `remove`), `auth.flow`, tool rows by prefix (`tool('x__*')`) and a
- * call's own verb (`ToolRow.verb`), the `details.section` slot, and a tool result's images (`ToolCallProps.result.images`).
- * 1.8: `toolCalls`, to hear each tool call a thread's agent makes. 2.0: sessions are projects (`Project`, `useProjects`,
- * `ThreadInfo.project`, `project.next`), and the compatibility names of protocol generation 1 are gone.
+ * The extension API this build gives extensions, both halves alike. 2.0 starts the count over: all of 1.x, renamed
+ * (projects, `ThreadInfo.facts`, `starting`/`started`, `beforeSend`, …), without protocol generation 1's old names.
  * Minor: something added (an extension that uses it asks for `^2.<minor>`); major: something an extension could rely
  * on changed or went. An extension whose `api` range this doesn't satisfy is refused when it's set up.
  */

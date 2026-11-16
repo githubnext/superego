@@ -458,7 +458,7 @@ committed.
 - A server that needs sign-in, in a thread that has it, puts a notice over the composer with *Sign in*, as
   `AuthNotice` does for providers.
 
-`superego extensions --thread <id>` (the `extensions.inspect` report) lists the servers too, each with where it's
+`superego extensions --thread <id>` (the `extension.inspect` report) lists the servers too, each with where it's
 from and its state. The extension adds them to the report's `thread` section, using the same reasons.
 
 ### Ego

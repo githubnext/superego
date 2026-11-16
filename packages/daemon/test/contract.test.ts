@@ -110,7 +110,7 @@ it('settles windows that declare one extension differently the same whatever ord
     // Each from a window of its own.
     for (const at of order) {
       const { peer, socket } = await connect()
-      await peer.call('extensions.declare', { extensions: [declarations[at]!] })
+      await peer.call('extension.declare', { extensions: [declarations[at]!] })
       socket.destroy()
     }
     const { peer, socket } = await connect()
@@ -124,13 +124,13 @@ it('settles windows that declare one extension differently the same whatever ord
 
 it("never lets an older window's declaration take back what a newer one said", async () => {
   const { peer, close } = await open()
-  await peer.call('extensions.declare', { extensions: [{ name: 'links', version: '2.0.0', title: 'Links', required: true }] })
-  await peer.call('extensions.declare', { extensions: [{ name: 'links', version: '1.4.0', title: 'Links' }] })
-  await peer.call('extensions.declare', { extensions: [{ name: 'links', title: 'Links' }] })
+  await peer.call('extension.declare', { extensions: [{ name: 'links', version: '2.0.0', title: 'Links', required: true }] })
+  await peer.call('extension.declare', { extensions: [{ name: 'links', version: '1.4.0', title: 'Links' }] })
+  await peer.call('extension.declare', { extensions: [{ name: 'links', title: 'Links' }] })
   // Required: no switch.
   expect(await switchOf(peer, 'links')).toBeUndefined()
   // A version that isn't one is ignored.
-  await peer.call('extensions.declare', { extensions: [{ name: 'links', version: '9', title: 'Bad' }] })
+  await peer.call('extension.declare', { extensions: [{ name: 'links', version: '9', title: 'Bad' }] })
   expect(await switchOf(peer, 'links')).toBeUndefined()
   await close()
 })

@@ -151,14 +151,14 @@ it("reserves the core's namespaces: every core method and action is in one, and 
 
 it("knows the extensions a window declares that have no daemon half: a switch for each optional one, and threads go without one off", async () => {
   const { peer, close } = await open([])
-  await peer.call('extensions.declare', { extensions: [{ name: 'links', title: 'Links' }, { name: 'threads', required: true }, { name: 'coding-tools', title: 'Mine' }] })
+  await peer.call('extension.declare', { extensions: [{ name: 'links', title: 'Links' }, { name: 'threads', required: true }, { name: 'coding-tools', title: 'Mine' }] })
   const { value } = await peer.call<{ value: { sections: { id: string; settings: { key: string; title: string }[] }[] } }>('settings.watch', {})
   const switches = value.sections.find((s) => s.id === 'extensions')!.settings
   expect(switches.map((s) => s.key)).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.links'])
   // One the daemon sets up keeps its own declaration.
   expect(switches[0]!.title).toBe('Coding tools')
   // A newer window's word on one it declared is taken (see contract.test.ts).
-  await peer.call('extensions.declare', { extensions: [{ name: 'links', version: '1.0.0', title: 'Web links' }] })
+  await peer.call('extension.declare', { extensions: [{ name: 'links', version: '1.0.0', title: 'Web links' }] })
   const again = await peer.call<{ value: { sections: { id: string; settings: { key: string; title: string }[] }[] } }>('settings.watch', {})
   expect(again.value.sections.find((s) => s.id === 'extensions')!.settings.find((s) => s.key === 'extensions.links')!.title).toBe('Web links')
   await peer.call<ThreadInfo>('thread.start', {})

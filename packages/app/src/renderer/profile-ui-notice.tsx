@@ -90,7 +90,7 @@ function ProfileUiMarker({ machine, thread }: { machine: MachineEntry; thread: T
   const pending = usePendingUi(machine.id, thread.profile)
   if (!pending?.declined || thread.archived) return null
   return (
-    <button type="button" className="titlebar__chip profile-ui-marker" title={`${machine.label}’s profile ${pending.profile.name} has UI code, not allowed to run here`}
+    <button type="button" className="header__chip profile-ui-marker" title={`${machine.label}’s profile ${pending.profile.name} has UI code, not allowed to run here`}
       onClick={() => reopenUi(pending, true)}>
       UI not allowed
     </button>

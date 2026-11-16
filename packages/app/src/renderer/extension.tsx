@@ -30,7 +30,7 @@ import { Lifetime } from '@superego/protocol'
  * question card sits on the composer it asks for).
  */
 export type BehaviourSlot =
-  /** Among the chips that say where a thread works, after the title's: a branch, say. Draw a `titlebar__chip`. */
+  /** Among the chips that say where a thread works, after the title's: a branch, say. Draw a `header__chip`. */
   | 'header.chips'
   /**
    * After a thread's title in the sidebar's list: a small mark of something about it (its own branch, say). Draw a
@@ -39,7 +39,7 @@ export type BehaviourSlot =
   | 'thread.badge'
   /** Above the composer: things waiting on the user, suggestions. */
   | 'composer.above'
-  /** In a thread's details (⌘I), after what the core says of it: what an extension knows of the thread. Draw a `<h5>` and a `<dl>`, or nothing. 1.7. */
+  /** In a thread's details (⌘I), after what the core says of it: what an extension knows of the thread. Draw a `<h5>` and a `<dl>`, or nothing. */
   | 'details.section'
   /** Beside a file being edited: a file tree, an outline. `open` shows another file there (`beside`: in a pane of its own). */
   | 'editor.side'
@@ -145,7 +145,7 @@ export type NewThreadField = {
 
 /**
  * A tool call in the transcript. `result` is there once it finished (its text, and the images the model was shown, as
- * base64: 1.7); `live` while it runs.
+ * base64); `live` while it runs.
  */
 export type ToolCallProps = {
   machine: MachineEntry
@@ -171,7 +171,7 @@ export type ToolRow = {
   icon?: ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>
   /** Done, working, failed: "Read", "Reading", "Read failed". Unset: the tool's name, and "<name> failed". */
   verbs?: [done: string, working: string, failed: string]
-  /** This call's verb instead of `verbs`' (one cut off by a restart, say); `undefined`, `verbs`'. 1.7. */
+  /** This call's verb instead of `verbs`' (one cut off by a restart, say); `undefined`, `verbs`'. */
   verb?: (call: ToolRowCall) => ReactNode
   /** What it acted on, after the verb. Text shows in the mono face (a path, a command); a node as itself (a thread). Default: its `command`, `path` or `pattern`, else its arguments. */
   subject?: (call: ToolRowCall) => ReactNode
@@ -331,7 +331,7 @@ export type UiApi = {
    * verbs, subject, body), or drawn whole by a component of its own. `fold: false` keeps them out of the fold a run of
    * work closes into: they show under it, open, as what the agent showed you (images, say). A name ending in `*` is a
    * prefix (`mcp__*`: every tool whose name starts so); a tool's own name wins over a prefix, and a longer prefix over a
-   * shorter. Prefixes: 1.7.
+   * shorter.
    */
   tool(name: string, view: ComponentType<ToolCallProps> | ToolRow, options?: { fold?: boolean }): void
   /** Draw transcript entries of `kind`, ones this extension's daemon half writes. */
@@ -429,7 +429,7 @@ export type Registry = {
    * (`dataViews`) is one too, drawn by the core, with the machines that have it (`machines`).
    */
   views: Owned<View & { id: string; machines?: string[] }>[]
-  /** The data views each machine declares (its daemon extensions' `superego.view`), by machine. */
+  /** The data views each machine declares (its daemon halves' `superego.view`), by machine. */
   dataViews: Record<string, DataViewInfo[]>
   /** Take the data views `machine` declares now (none: it's gone, or switched them off). */
   setDataViews(machine: string, views: DataViewInfo[]): void
@@ -455,7 +455,7 @@ export type Registry = {
    */
   emit<E extends WindowEvent>(event: E, payload: WindowEvents[E]): void
   /**
-   * Set up a profile's UI extensions on `machine`, after tearing down what that profile set up before. One that fails
+   * Set up a profile's UI halves on `machine`, after tearing down what that profile set up before. One that fails
    * to start is logged and left out, the rest set up; the failures are returned.
    */
   installProfile(machine: string, profile: ProfileRef, extensions: UiExtension[]): { extension: string; error: unknown }[]

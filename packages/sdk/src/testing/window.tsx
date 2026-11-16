@@ -92,7 +92,7 @@ export function fakeMachine(options: FakeMachineOptions = {}): TestMachine & { c
       features, extensions,
     } satisfies MachineEntry,
     async call(method: string, params: any = {}) {
-      if (!['value.watch', 'unwatch', 'threads.watch', 'settings.watch', 'extensions.declare', 'action.list'].includes(method)) calls.push({ method, params })
+      if (!['value.watch', 'unwatch', 'threads.watch', 'settings.watch', 'extension.declare', 'action.list'].includes(method)) calls.push({ method, params })
       if (method === 'value.watch') {
         const sub = `v${++subs}`
         const scope = params.scope as string | undefined
@@ -106,7 +106,7 @@ export function fakeMachine(options: FakeMachineOptions = {}): TestMachine & { c
       if (method === 'threads.watch') return { sub: `t${++subs}`, value: params.hidden ? [] : options.threads ?? [] }
       if (method === 'thread.list') return params.archived ? [] : options.threads ?? []
       if (method === 'settings.watch') return { sub: `s${++subs}`, value: { sections: [], values: {} } }
-      if (method === 'extensions.declare') return null
+      if (method === 'extension.declare') return null
       if (method === 'action.list') return options.actions ?? []
       const run = options.methods?.[method] ?? (method === 'action.run' ? options.methods?.[params.id] : undefined)
       if (!run) throw Object.assign(new Error(`Unknown method ${method === 'action.run' ? params.id : method}`), { kind: 'not_found' })
@@ -283,7 +283,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       const m = machines.find((x) => x.id === machine)
       if (!m) throw new Error(`No machine ${machine} in this test window`)
       if (m.entry.state !== 'connected') throw Object.assign(new Error(`${m.entry.label} is not connected`), { kind: 'disconnected' })
-      if (!['value.watch', 'unwatch', 'threads.watch', 'settings.watch', 'extensions.declare', 'action.list'].includes(method)) calls.push({ machine, method, params })
+      if (!['value.watch', 'unwatch', 'threads.watch', 'settings.watch', 'extension.declare', 'action.list'].includes(method)) calls.push({ machine, method, params })
       return m.call(method, params)
     },
     machines: async () => entries(),

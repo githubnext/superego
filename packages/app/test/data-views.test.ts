@@ -1,4 +1,4 @@
-// Data views: what a machine's daemon extensions declare as data becomes views the layout places, a thread's only from
+// Data views: what a machine's daemon halves declare as data becomes views the layout places, a thread's only from
 // its machine (a profile's only in its threads), and the core draws their content.
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
