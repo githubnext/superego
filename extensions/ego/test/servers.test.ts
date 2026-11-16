@@ -145,7 +145,7 @@ describe('whether a call answers an outside agent', () => {
 describe("Ego's read tool", () => {
   let dir: string
   beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-ego-read-')) })
-  afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+  afterEach(async () => { await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }) })
 
   it("won't open the credential stores", async () => {
     await writeFile(join(dir, 'mcp-auth.json'), '{"server:linear":"lin_api_x"}')
@@ -166,7 +166,7 @@ describe('superego_mcp_servers in Ego, against a daemon', () => {
   const app = defineApp({ name: 'test', id: 'servertest' })
   let dir: string
   beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-ego-servers-')) })
-  afterEach(async () => { await rm(dir, { recursive: true, force: true }); delete process.env.SERVERTEST_MODEL })
+  afterEach(async () => { await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }); delete process.env.SERVERTEST_MODEL })
   const until = async (check: () => boolean | Promise<boolean>) => {
     for (let i = 0; i < 400; i++) { if (await check()) return; await new Promise((r) => setTimeout(r, 25)) }
     throw new Error('timed out')
