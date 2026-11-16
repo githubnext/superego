@@ -3,12 +3,11 @@
 How well agents extend Superego with only the help it ships: the `superego` skill, the docs and the SDK.
 
 ```sh
-pnpm eval                          # the regular plan: Opus through Ego, every task, 5 runs each; $60 budget
+pnpm eval                          # the trend line: Opus through Ego, every task, 5 runs each; $60 budget
 pnpm eval --batch b2 --tasks l1-weather --runs 1 --budget 5
-pnpm eval --plan spike --batch rerun --budget 30   # the first batch's setup, to compare with it
+pnpm eval --batch dry --tasks l1-weather --models haiku --runs 1 --analysis claude-haiku-5-5 --run-cap 1 --budget 4   # does the harness work? (about $1)
 pnpm eval --batch b2 --recheck <run,run>   # check finished runs again, after fixing a task's acceptance
 pnpm eval --batch b2 --rollup-only         # redo the rolled-up "where it got lost" list and summary
-pnpm eval --batch b2 --history             # add a batch's runs to history.csv (one run before the CSV was kept)
 ```
 
 ## Tasks
@@ -28,8 +27,7 @@ pass (L3's live updates, L4's mark on a schema edit or before a thread was opene
 Each run gets a fresh home in `/tmp/sge/runs/<batch>-<run>` with its own daemon on an installed build (`app/out`,
 copied with Electron to `/tmp/sge/install-<commit>`), sandboxed out of the real home. The SDK's types are installed in
 `~/.superego/types` as the app installs them when it starts, and the app's optional extensions are on as a user has
-them, except `suggestions` (its side calls count toward no thread's cost). The `spike` plan keeps the first batch's
-setup instead: only `coding-tools`, `panes`, `agents-md`, `skills` and `ego`, and no types until a command makes them.
+them, except `suggestions` (its side calls count toward no thread's cost).
 
 The request goes to Ego (`ego.ask`) or to a plain thread in `~/code/myproject`. The harness waits until nothing is
 working (20 minutes and $6 at most), answers a question the agent asks (`ask_user`: "go ahead"; `ask_ui`: the form as
@@ -42,7 +40,7 @@ app headless on the run's daemon (`lib/window.mjs`) and ask it what extensions r
 Results go to `evals/results/<batch>/` (gitignored): `runs.jsonl` (a record per run), `summary.md`, `rollup.json`,
 and per run its log, transcript, the profile it wrote, acceptance screenshots and the analysis. Every recorded run also
 adds a line to `evals/history.csv` (committed: date, commit, model, route, task, pass, agent cost, turns, minutes,
-batch, plan, run), the trend across batches.
+batch, plan, run), the trend across batches. (`plan` is `spike` for the first batches' setup and `regular` since.)
 
 A batch keeps a running total of what it spent (agents, acceptance probes, analysis) and stops starting runs once one
 more might not fit in what's left of `--budget`, keeping $3 back for the analysis. Running it again skips the runs it

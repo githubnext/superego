@@ -4,7 +4,7 @@
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { profileDirs, type Acceptance, type Task } from './shared.ts'
+import { profileDirs, projectProfiles, type Acceptance, type Task } from './shared.ts'
 
 /** Threads in the project before the check, as a user would have: their titles must show on the board. */
 const SEEDED = ['Fix the login bug', 'Write the release notes', 'Plan the Q3 roadmap']
@@ -17,15 +17,14 @@ export const kanban: Task = {
     const notes: string[] = []
     const dirs = profileDirs(world)
     notes.push(`profiles: ${dirs.map((d) => d.replace(world.home, '~')).join(', ') || 'none'}`)
-    const listed = await world.rpc.call<{ name: string; dir: string; allowed: boolean }[]>('action.run', { id: 'profile.list', params: { cwd: world.project }, exposure: 'cli' }).catch(() => [])
-    notes.push(`profile.list in the project: ${listed.map((p) => `${p.name}${p.allowed ? '' : ' (not allowed)'}`).join(', ') || 'none'}`)
+    const listed = await projectProfiles(world, notes)
     // Every profile a thread in the project can start with, the default first: the window says which pane kinds each has.
     const probes = listed.filter((p) => p.allowed !== false).map((p) => ({ profile: p.name === 'default' ? undefined : p.name }))
       .sort((a, b) => Number(Boolean(a.profile)) - Number(Boolean(b.profile))).slice(0, 3)
     const unlisted = dirs.filter((d) => !listed.some((p) => p.dir === d))
     if (unlisted.length) notes.push(`profiles a project thread can't use: ${unlisted.map((d) => d.replace(world.home, '~')).join(', ')}`)
 
-    const checks: Record<string, boolean> = { pane_kind_found: false, pane_opens: false, renders_threads: false, columns_by_status: false, live_updates: false, in_default_profile: false }
+    const checks = { pane_kind_found: false, pane_opens: false, renders_threads: false, columns_by_status: false, live_updates: false, in_default_profile: false }
     if (!probes.length) return { pass: false, checks, notes, cost: 0 }
 
     for (const title of SEEDED) await world.rpc.call('thread.start', { cwd: world.project, title })

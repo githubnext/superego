@@ -36,14 +36,14 @@ export const dbBadge: Task = {
   },
   async accept({ world, install, out }) {
     const notes: string[] = []
-    const checks: Record<string, boolean> = { probes_ran: false, facts_differ: false, query_marked: false, readme_unmarked: false, marked_before_open: false, schema_marked: false }
+    const checks = { probes_ran: false, facts_differ: false, query_marked: false, readme_unmarked: false, marked_before_open: false, schema_marked: false }
     let cost = 0
     notes.push(`profiles: ${profileDirs(world).map((d) => d.replace(world.home, '~')).join(', ') || 'none'}`)
 
     const threads: Record<string, Thread> = {}
-    for (const p of PROBES) threads[p.key] = await world.rpc.call<Thread>('thread.start', { cwd: world.project, title: p.title, model: PROBE_MODEL, prompt: p.prompt })
+    for (const p of PROBES) threads[p.key] = await world.rpc.call('thread.start', { cwd: world.project, title: p.title, model: PROBE_MODEL, prompt: p.prompt })
     for (const p of PROBES) { await settle(world, threads[p.key]!.id); cost += await costOf(world, threads[p.key]!.id) }
-    const listed = await world.rpc.call<(Thread & { facts?: Record<string, unknown> })[]>('thread.list', {})
+    const listed = await world.rpc.call('thread.list', {})
     const info = (key: string) => listed.find((t) => t.id === threads[key]!.id)
     checks.probes_ran = PROBES.every((p) => info(p.key)?.status.state === 'done' || info(p.key)?.status.state === 'idle')
     // Facts: what extensions tell clients of each probe (the bundled ones' too: compared, so only a difference counts).
@@ -76,7 +76,7 @@ export const dbBadge: Task = {
     checks.marked_before_open = Boolean(row(result.before, 0)?.badge)
     checks.schema_marked = Boolean(row(result.after, 2)?.badge)
     return {
-      pass: checks.probes_ran! && checks.query_marked! && checks.readme_unmarked!, checks, notes, cost,
+      pass: checks.probes_ran && checks.query_marked && checks.readme_unmarked, checks, notes, cost,
       ...(result.screenshot ? { artifacts: { screenshot: result.screenshot } } : {}),
     } satisfies Acceptance
   },

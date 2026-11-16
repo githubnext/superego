@@ -6,11 +6,10 @@
 // trend across batches. A batch spends no more than its budget, all told (agents, acceptance probes, analysis), and
 // picks up where it left off when run again.
 //
-//   pnpm eval [--batch b] [--budget 60] [--plan regular|spike] [--tasks l1-weather,l3-kanban] [--models opus,sol]
-//             [--routes ego,thread] [--runs 5] [--parallel 3] [--minutes 20] [--run-cap 6]
-//   pnpm eval --batch spike --recheck <run,run>    check finished runs again (after fixing a task's acceptance)
-//   pnpm eval --batch spike --rollup-only          redo the rolled-up list and the summary (--summary-only: the summary)
-//   pnpm eval --batch spike --history              add a batch's runs to history.csv (one from before it was kept)
+//   pnpm eval [--batch b] [--budget 60] [--tasks l1-weather,l3-kanban] [--models opus,sol] [--routes ego,thread]
+//             [--runs 5] [--parallel 3] [--minutes 20] [--run-cap 6] [--analysis claude-sonnet-5-5]
+//   pnpm eval --batch b --recheck <run,run>    check finished runs again (after fixing a task's acceptance)
+//   pnpm eval --batch b --rollup-only          redo the rolled-up list and the summary (--summary-only: the summary)
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
@@ -19,48 +18,39 @@ import { makeWorld, sleep, type World } from './lib/env.ts'
 import { install, REPO } from './lib/install.ts'
 import { addMetrics, allThreads, condensed, entriesOf, metricsOf, noMetrics, spent, toolCalls, type Thread } from './lib/transcript.ts'
 import { kanban } from './tasks/kanban.ts'
-import { profileDirs, sourcesOf, type Acceptance, type Task } from './tasks/shared.ts'
+import { profileDirs, sourcesOf, stopThread, type Acceptance, type Task } from './tasks/shared.ts'
 import { weather } from './tasks/weather.ts'
 import { lead } from './tasks/lead.ts'
 import { dbBadge } from './tasks/db-badge.ts'
 
 const { values: args } = parseArgs({
   options: {
-    batch: { type: 'string', default: new Date().toISOString().slice(0, 10) }, budget: { type: 'string', default: '60' }, plan: { type: 'string', default: 'regular' },
-    tasks: { type: 'string' }, models: { type: 'string' }, routes: { type: 'string' }, runs: { type: 'string' },
+    batch: { type: 'string', default: new Date().toISOString().slice(0, 10) }, budget: { type: 'string', default: '60' },
+    tasks: { type: 'string' }, models: { type: 'string' }, routes: { type: 'string' }, runs: { type: 'string', default: '5' },
     parallel: { type: 'string', default: '3' }, minutes: { type: 'string', default: '20' }, 'run-cap': { type: 'string', default: '6' },
-    'rollup-only': { type: 'boolean' }, 'history': { type: 'boolean' }, 'summary-only': { type: 'boolean' }, recheck: { type: 'string' }, root: { type: 'string', default: '/tmp/sge' }, rebuild: { type: 'boolean' },
+    analysis: { type: 'string', default: 'claude-sonnet-5-5' },
+    'rollup-only': { type: 'boolean' }, 'summary-only': { type: 'boolean' }, recheck: { type: 'string' }, root: { type: 'string', default: '/tmp/sge' }, rebuild: { type: 'boolean' },
   },
 })
 
 const TASKS: Record<string, Task> = { [weather.id]: weather, [lead.id]: lead, [kanban.id]: kanban, [dbBadge.id]: dbBadge }
-const MODELS: Record<string, string> = { opus: 'anthropic/claude-opus-5-5', sol: 'openai/gpt-6.1-sol', haiku: 'anthropic/claude-haiku-4-5' }
+const MODELS: Record<string, string> = { opus: 'anthropic/claude-opus-5-5', sonnet: 'anthropic/claude-sonnet-5-5', haiku: 'anthropic/claude-haiku-5-5', sol: 'openai/gpt-6.1-sol' }
 const NUDGE = 'Yes, go ahead. Use your judgement on the details.'
 
 type Planned = { task: Task; model: string; modelKey: string; route: 'ego' | 'thread'; index: number; runId: string }
 
-/**
- * What a plan runs, and on what setup.
- * - `regular` (the trend line): Opus through Ego, every task, 5 runs each; the app's extensions as a user has them, the
- *   SDK's types installed, per-run analysis on a cheaper model.
- * - `spike`: the first batch's setup, to compare with it: L1 and L3, Opus by both routes and Sol through Ego, 3 runs
- *   each; only a few optional extensions on, no types installed up front, analysis on Opus.
- */
-const PLANS = {
-  regular: { tasks: ['l1-weather', 'l2-lead', 'l3-kanban', 'l4-db-badge'], combos: [['opus', 'ego']], runs: 5, extensions: 'defaults', types: true, analysis: 'claude-sonnet-5-5' },
-  spike: { tasks: ['l1-weather', 'l3-kanban'], combos: [['opus', 'ego'], ['opus', 'thread'], ['sol', 'ego']], runs: 3, extensions: 'spike', types: false, analysis: 'claude-opus-5-5' },
-} as const satisfies Record<string, { tasks: string[]; combos: [string, 'ego' | 'thread'][]; runs: number; extensions: 'spike' | 'defaults'; types: boolean; analysis: string }>
-const thePlan = PLANS[args.plan as keyof typeof PLANS]
-if (!thePlan) throw new Error(`No plan ${args.plan}: ${Object.keys(PLANS).join(', ')}`)
-
-/** The plan's runs, by model (the first is the trend line; a cut budget cuts the last), task by task within an index. */
+/** The batch's runs. Unless told otherwise, the trend line: Opus through Ego, every task, 5 runs each. */
 function plan(): Planned[] {
-  const runs = Number(args.runs ?? thePlan.runs)
-  const pick = <T,>(list: string | undefined, all: T[], key: (t: T) => string) => list ? all.filter((t) => list.split(',').includes(key(t))) : all
-  const tasks = pick(args.tasks, thePlan.tasks.map((id) => TASKS[id]!), (t) => t.id)
-  const combos: [string, 'ego' | 'thread'][] = !args.models && !args.routes
-    ? thePlan.combos.map(([m, r]) => [m, r] as [string, 'ego' | 'thread'])
-    : pick(args.models, Object.keys(MODELS), (m) => m).flatMap((m) => pick(args.routes, ['ego', 'thread'] as const, (r) => r).map((r) => [m, r] as [string, 'ego' | 'thread']))
+  const runs = Number(args.runs)
+  const pick = <T,>(what: string, list: string, all: readonly T[], key: (t: T) => string) => {
+    const wanted = list.split(',')
+    const unknown = wanted.filter((k) => !all.some((t) => key(t) === k))
+    if (unknown.length) throw new Error(`No ${what} ${unknown.join(', ')}: ${all.map(key).join(', ')}`)
+    return all.filter((t) => wanted.includes(key(t)))
+  }
+  const tasks = pick('task', args.tasks ?? Object.keys(TASKS).join(','), Object.values(TASKS), (t) => t.id)
+  const combos = pick('model', args.models ?? 'opus', Object.keys(MODELS), (m) => m)
+    .flatMap((m) => pick('route', args.routes ?? 'ego', ['ego', 'thread'] as const, (r) => r).map((r) => [m, r] as const))
   const out: Planned[] = []
   // Model by model (the first is the trend line; a cut budget cuts the last), and within one by index, so a cut leaves
   // each route and task with some runs.
@@ -88,7 +78,8 @@ const HISTORY = join(REPO, 'evals', 'history.csv')
 const HISTORY_COLUMNS = ['date', 'commit', 'model', 'route', 'task', 'pass', 'cost', 'turns', 'minutes', 'batch', 'plan', 'run']
 function appendHistory(r: any) {
   if (!existsSync(HISTORY)) writeFileSync(HISTORY, `${HISTORY_COLUMNS.join(',')}\n`)
-  const row = [r.startedAt.slice(0, 10), r.commit, r.model, r.route, r.task, r.pass ? 1 : 0, r.cost.toFixed(2), r.turns, (r.wallSeconds / 60).toFixed(1), r.batch, r.plan ?? 'spike', r.runId]
+  // `plan` is from when there were two (the spike's, and this one, `regular`): kept so the rows before line up.
+  const row = [r.startedAt.slice(0, 10), r.commit, r.model, r.route, r.task, r.pass ? 1 : 0, r.cost.toFixed(2), r.turns, (r.wallSeconds / 60).toFixed(1), r.batch, 'regular', r.runId]
   appendFileSync(HISTORY, `${row.join(',')}\n`)
 }
 
@@ -104,8 +95,9 @@ async function answerQuestions(world: World, threads: Thread[]): Promise<number>
       const params = call.name === 'ask_user' ? { id: call.id, text: NUDGE }
         : call.name === 'ask_ui' ? { id: call.id, values: defaultsOf(call.args?.blocks ?? []), button: 'submit' }
         : undefined
-      const answer = params && { id: 'agent-ui.answer', params }
-      if (answer) await world.rpc.call('action.run', { ...answer, exposure: 'cli' }).then(() => answered++, () => {})
+      if (!params) continue
+      // A question can stop waiting before it's answered (the agent stopped, or the run's limit did): said, and passed by.
+      await world.rpc.action('agent-ui.answer', params).then(() => answered++, (error) => console.error(`eval: answering ${call.name} ${call.id} in ${thread.id}:`, error))
     }
   }
   return answered
@@ -159,12 +151,12 @@ async function runOne(p: Planned, inst: ReturnType<typeof install>) {
   let threads: Thread[] = []
   const transcripts: { thread: Thread; entries: any[] }[] = []
   try {
-    world = await makeWorld(worldDir, inst, { model: p.model, extensions: thePlan.extensions, types: thePlan.types })
+    world = await makeWorld(worldDir, inst, { model: p.model })
     p.task.setup?.(world)
     log(`world at ${worldDir}; asking by ${p.route} on ${p.model}`)
     const ask = async (text: string) => {
-      if (p.route === 'ego') return (await world!.rpc.call<Thread>('action.run', { id: 'ego.ask', params: { prompt: text }, exposure: 'cli' })).id
-      return (await world!.rpc.call<Thread>('thread.start', { cwd: world!.project, prompt: text })).id
+      if (p.route === 'ego') return (await world!.rpc.action<Thread>('ego.ask', { prompt: text })).id
+      return (await world!.rpc.call('thread.start', { cwd: world!.project, prompt: text })).id
     }
     const askedAt = Date.now()
     const first = await ask(p.task.request)
@@ -179,7 +171,7 @@ async function runOne(p: Planned, inst: ReturnType<typeof install>) {
       if (over) {
         stopReason = over
         log(`stopping: ${over} ($${cost.toFixed(2)}, ${Math.round((Date.now() - startedAt) / 1000)}s)`)
-        for (const t of working) await world.rpc.call('thread.stop', { thread: t.id }).catch(() => {})
+        for (const t of working) await stopThread(world, t.id)
         await sleep(3000)
         break
       }
@@ -233,12 +225,12 @@ async function runOne(p: Planned, inst: ReturnType<typeof install>) {
 
   ledger.live.set(p.runId, metrics.cost + acceptance.cost)
   const clipped = text.length > 400_000 ? `${text.slice(0, 250_000)}\n…[cut]…\n${text.slice(-150_000)}` : text
-  const { analysis, cost: analysisCost, error: analysisError } = await analyzeRun({ request: p.task.request, route: p.route, transcript: clipped, pass: acceptance.pass, checks: acceptance.checks, notes: acceptance.notes, model: thePlan.analysis })
+  const { analysis, cost: analysisCost, error: analysisError } = await analyzeRun({ request: p.task.request, route: p.route, transcript: clipped, pass: acceptance.pass, checks: acceptance.checks, notes: acceptance.notes, model: args.analysis! })
   if (analysis) writeFileSync(join(out, 'analysis.json'), JSON.stringify(analysis, null, 2))
 
   const record = {
     batch: args.batch, runId: p.runId, commit: inst.commit, model: p.model, route: p.route, task: p.task.id, level: p.task.level, index: p.index,
-    plan: args.plan, startedAt: new Date(startedAt).toISOString(), wallSeconds, stopReason, nudged, answered,
+    startedAt: new Date(startedAt).toISOString(), wallSeconds, stopReason, nudged, answered,
     pass: acceptance.pass, checks: acceptance.checks, acceptanceNotes: acceptance.notes, artifacts: acceptance.artifacts ?? {},
     threads: theWork.map(({ thread }) => ({ id: thread.id, title: thread.title, hidden: Boolean(thread.hidden), cwd: thread.cwd.replace(/^\/private/, '').replace(worldDir, '<run>'), status: thread.status.state, profile: thread.profile?.name })),
     thinking: theWork.flatMap(({ entries }) => entries).flatMap((e) => e.model ?? []).find((m: any) => m.role === 'assistant' && m.thinkingLevel)?.thinkingLevel,
@@ -264,14 +256,14 @@ async function recheck(ids: string[]) {
   for (const record of records.filter((r: any) => ids.includes(r.runId))) {
     const task = TASKS[record.task]!
     const out = join(batchDir, 'runs', record.runId)
-    const world = await makeWorld(join(args.root!, 'runs', `${args.batch}-${record.runId}`), inst, { model: record.model, reuse: true, extensions: thePlan.extensions, types: thePlan.types })
+    const world = await makeWorld(join(args.root!, 'runs', `${args.batch}-${record.runId}`), inst, { model: record.model, reuse: true })
     let acceptance: Acceptance
     try { acceptance = await task.accept({ world, install: inst, out }) } catch (error) {
       acceptance = { pass: false, checks: {}, notes: [`acceptance threw: ${(error as Error).stack}`], cost: 0 }
     } finally { await world.stop() }
     const text = readFileSync(join(out, 'transcript.md'), 'utf8')
     const clipped = text.length > 400_000 ? `${text.slice(0, 250_000)}\n…[cut]…\n${text.slice(-150_000)}` : text
-    const { analysis, cost: analysisCost, error: analysisError } = await analyzeRun({ request: task.request, route: record.route, transcript: clipped, pass: acceptance.pass, checks: acceptance.checks, notes: acceptance.notes, model: thePlan.analysis })
+    const { analysis, cost: analysisCost, error: analysisError } = await analyzeRun({ request: task.request, route: record.route, transcript: clipped, pass: acceptance.pass, checks: acceptance.checks, notes: acceptance.notes, model: args.analysis! })
     if (analysis) writeFileSync(join(out, 'analysis.json'), JSON.stringify(analysis, null, 2))
     Object.assign(record, {
       pass: acceptance.pass, checks: acceptance.checks, acceptanceNotes: acceptance.notes, artifacts: acceptance.artifacts ?? {}, analysis, analysisError,
@@ -292,7 +284,6 @@ async function recheck(ids: string[]) {
 
 async function main() {
   if (args.recheck) return recheck(args.recheck.split(','))
-  if (args.history) { for (const record of readRecords()) appendHistory(record); return }
   if (!args['rollup-only'] && !args['summary-only']) {
     const inst = install(args.root!, { rebuild: Boolean(args.rebuild) })
     const done = new Set(readRecords().map((r: any) => r.runId))

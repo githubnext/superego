@@ -1,0 +1,6 @@
+{
+  "name": "@superego/evals",
+  "private": true,
+  "type": "module",
+  "dependencies": { "@superego/client": "workspace:*", "@superego/protocol": "workspace:*" }
+}

@@ -1,47 +1,31 @@
-// A minimal client of a daemon's unix socket: line-delimited JSON-RPC, as the app and the CLI speak it.
-import { connect, type Socket } from 'node:net'
+// The harness's connection to a run's daemon: its unix socket, as the CLI opens it (@superego/client), and the
+// protocol's typed calls. Hello says the protocol's generation, so a daemon of another one refuses loudly.
+import { openLocal } from '@superego/client'
+import { PROTOCOL_VERSION, type Hello, type MethodName, type Params, type Result } from '@superego/protocol'
 
 export type Rpc = {
-  call<T = any>(method: string, params?: unknown, timeoutMs?: number): Promise<T>
+  call<M extends MethodName>(method: M, params: Params<M>, timeoutMs?: number): Promise<Result<M>>
+  /** An action by id, as the command line runs it (`exposure: 'cli'`). Its result is the action's own: the caller types it. */
+  action<T>(id: string, params?: unknown): Promise<T>
   close(): void
 }
 
 export async function openRpc(socket: string): Promise<Rpc> {
-  const conn: Socket = await new Promise((resolve, reject) => {
-    const s = connect(socket, () => resolve(s))
-    s.once('error', reject)
-  })
-  let next = 1
-  const pending = new Map<number, { resolve(v: unknown): void; reject(e: Error): void }>()
-  let buffer = ''
-  conn.setEncoding('utf8')
-  conn.on('data', (chunk: string) => {
-    buffer += chunk
-    let at: number
-    while ((at = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, at)
-      buffer = buffer.slice(at + 1)
-      let message: any
-      try { message = JSON.parse(line) } catch { continue }
-      if (message.id === undefined || !pending.has(message.id)) continue // notifications, requests to us
-      const waiter = pending.get(message.id)!
-      pending.delete(message.id)
-      if (message.error) waiter.reject(Object.assign(new Error(message.error.message), { data: message.error.data }))
-      else waiter.resolve(message.result)
-    }
-  })
-  conn.on('close', () => { for (const w of pending.values()) w.reject(new Error('daemon connection closed')); pending.clear() })
-  const rpc: Rpc = {
-    call(method, params = {}, timeoutMs = 60_000) {
-      const id = next++
-      return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => { pending.delete(id); reject(new Error(`${method} timed out`)) }, timeoutMs)
-        pending.set(id, { resolve: (v) => { clearTimeout(timer); resolve(v as any) }, reject: (e) => { clearTimeout(timer); reject(e) } })
-        conn.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
-      })
-    },
-    close: () => conn.destroy(),
+  const transport = await openLocal(socket)
+  const call = <M extends MethodName>(method: M, params: Params<M>, timeoutMs = 60_000): Promise<Result<M>> => {
+    let timer: NodeJS.Timeout | undefined
+    const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`${method} timed out after ${timeoutMs}ms`)), timeoutMs) })
+    return Promise.race([transport.peer.call<Result<M>>(method, params), timeout]).finally(() => clearTimeout(timer))
   }
-  await rpc.call('hello', { client: 'superego-eval', version: 2, label: 'eval' }).catch(() => {})
-  return rpc
+  try {
+    await transport.peer.call<Hello>('hello', { client: 'superego-eval', version: PROTOCOL_VERSION, label: 'eval' })
+  } catch (error) {
+    transport.close()
+    throw error
+  }
+  return {
+    call,
+    action: async <T>(id: string, params: unknown = {}) => await call('action.run', { id, params, exposure: 'cli' }) as T,
+    close: () => transport.close(),
+  }
 }

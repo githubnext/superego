@@ -30,6 +30,7 @@
     { "path": "extensions/terminal" },
     { "path": "extensions/mcp-servers" },
     { "path": "app" },
-    { "path": "scripts" }
+    { "path": "scripts" },
+    { "path": "evals" }
   ]
 }

@@ -31,5 +31,5 @@
     "@superego/web-panes": "workspace:*",
     "@superego/worktrees": "workspace:*"
   },
-  "devDependencies": { "electron": "45.2.1", "electron-vite": "6.0.0", "@types/node": "^24" }
+  "devDependencies": { "electron": "45.1.0", "electron-vite": "6.0.0", "@types/node": "^24" }
 }

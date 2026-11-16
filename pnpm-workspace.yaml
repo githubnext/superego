@@ -2,6 +2,7 @@ packages:
   - packages/*
   - app
   - extensions/*
+  - evals
 allowBuilds:
   electron: true
   esbuild: true
@@ -37,7 +38,6 @@ overrides:
   '@smithy/node-http-handler': 4.14.0
   '@smithy/core': 3.38.0
   '@vitejs/plugin-react': 6.1.2
-  'electron': 45.1.0
   'electron-to-chromium': 1.5.467
   'hast-util-to-jsx-runtime': 2.3.6
   'node-releases': 2.0.61

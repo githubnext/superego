@@ -1,13 +1,14 @@
 // Threads' transcripts from a run's daemon (pi-durable's entries), what they cost, and a condensed text of them for
 // the "where it got lost" pass.
+import type { ThreadInfo } from '@superego/protocol'
 import type { Rpc } from './rpc.ts'
 
-export type Thread = { id: string; title: string; cwd: string; status: { state: string }; cost?: number; owner?: string; hidden?: boolean; parent?: string; profile?: { name: string; dir?: string } }
+export type Thread = ThreadInfo
 
 /** Every thread on the machine: listed, archived, and hidden ones (Ego's). */
 export async function allThreads(rpc: Rpc): Promise<Thread[]> {
   const [listed, archived, hidden] = await Promise.all([
-    rpc.call<Thread[]>('thread.list', {}), rpc.call<Thread[]>('thread.list', { archived: true }), rpc.call<Thread[]>('thread.list', { hidden: true }),
+    rpc.call('thread.list', {}), rpc.call('thread.list', { archived: true }), rpc.call('thread.list', { hidden: true }),
   ])
   return [...listed, ...archived, ...hidden.map((t) => ({ ...t, hidden: true }))]
 }
@@ -18,7 +19,7 @@ export async function entriesOf(rpc: Rpc, id: string): Promise<any[]> {
   const all: any[] = []
   let before = Number.MAX_SAFE_INTEGER
   for (let page = 0; page < 200; page++) {
-    const { entries, more } = await rpc.call<{ entries: any[]; more: boolean }>('thread.history', { thread: id, before, limit: 200 })
+    const { entries, more } = await rpc.call('thread.history', { thread: id, before, limit: 200 }) as { entries: any[]; more: boolean }
     all.unshift(...entries)
     if (!more || !entries.length) break
     before = entries[0].id

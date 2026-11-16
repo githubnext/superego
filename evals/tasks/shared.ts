@@ -1,10 +1,10 @@
 // What a task is, and what acceptance checks share.
 import { readdirSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import type { ProfileInfo } from '@superego/protocol'
 import type { Install } from '../lib/install.ts'
-import type { World } from '../lib/env.ts'
+import { sleep, type World } from '../lib/env.ts'
 import { entriesOf, metricsOf, type Thread } from '../lib/transcript.ts'
-import { sleep } from '../lib/env.ts'
 
 export type Checks = Record<string, boolean>
 export type Acceptance = { pass: boolean; checks: Checks; notes: string[]; cost: number; artifacts?: Record<string, string> }
@@ -42,6 +42,7 @@ export function profileDirs(world: World): string[] {
         continue
       }
       if (name.startsWith('.') || name === 'node_modules') continue
+      // A link to nowhere (an agent's dangling symlink) is no profile folder.
       try { if (statSync(path).isDirectory()) walk(path, depth + 1) } catch {}
     }
   }
@@ -68,12 +69,29 @@ export function sourcesOf(dir: string): string[] {
 export async function settle(world: World, id: string, ms = 180_000): Promise<Thread | undefined> {
   const end = Date.now() + ms
   while (Date.now() < end) {
-    const thread = (await world.rpc.call<Thread[]>('thread.list', {})).find((t) => t.id === id)
+    const thread = (await world.rpc.call('thread.list', {})).find((t) => t.id === id)
     if (!thread || thread.status.state !== 'working') return thread
     await sleep(2000)
   }
-  await world.rpc.call('thread.stop', { thread: id }).catch(() => {})
+  await stopThread(world, id)
   return undefined
+}
+
+/** Stop a thread, saying so on the console if that fails (it can have stopped by itself meanwhile). */
+export async function stopThread(world: World, id: string) {
+  await world.rpc.call('thread.stop', { thread: id }).catch((error) => console.error(`eval: stopping ${id}:`, error))
+}
+
+/** The profiles a thread in the project can start with (`profile.list`), noted; none, and why, if that fails. */
+export async function projectProfiles(world: World, notes: string[]): Promise<ProfileInfo[]> {
+  try {
+    const listed = await world.rpc.action<ProfileInfo[]>('profile.list', { cwd: world.project })
+    notes.push(`profile.list in the project: ${listed.map((p) => `${p.name}${p.allowed ? '' : ' (not allowed)'}`).join(', ') || 'none'}`)
+    return listed
+  } catch (error) {
+    notes.push(`profile.list in the project failed: ${(error as Error).message}`)
+    return []
+  }
 }
 
 /** A probe thread's cost, from its transcript. */
@@ -90,7 +108,7 @@ export async function quiet(world: World, root: string, { ms, cost }: { ms: numb
   let still = 0
   const family = async () => {
     // Archived too: a lead may put its workers away once it's reviewed them.
-    const all = [...await world.rpc.call<Thread[]>('thread.list', {}), ...await world.rpc.call<Thread[]>('thread.list', { archived: true })]
+    const all = [...await world.rpc.call('thread.list', {}), ...await world.rpc.call('thread.list', { archived: true })]
     const ids = new Set([root])
     for (let grew = true; grew;) { grew = false; for (const t of all) if (t.parent && ids.has(t.parent) && !ids.has(t.id)) { ids.add(t.id); grew = true } }
     return all.filter((t) => ids.has(t.id))
@@ -100,7 +118,7 @@ export async function quiet(world: World, root: string, { ms, cost }: { ms: numb
     const threads = await family()
     const over = Date.now() > end ? 'time limit' : threads.reduce((s, t) => s + (t.cost ?? 0), 0) > cost ? 'cost limit' : undefined
     if (over) {
-      for (const t of threads) if (t.status.state === 'working') await world.rpc.call('thread.stop', { thread: t.id }).catch(() => {})
+      for (const t of threads) if (t.status.state === 'working') await stopThread(world, t.id)
       await sleep(2000)
       return { threads: await family(), stop: over }
     }

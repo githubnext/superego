@@ -8,12 +8,13 @@ import { join } from 'node:path'
 import type { World } from '../lib/env.ts'
 import type { Install } from '../lib/install.ts'
 import { entriesOf, toolCalls, type Thread } from '../lib/transcript.ts'
-import { costOf, PROBE_MODEL, profileDirs, settle, type Acceptance, type Task } from './shared.ts'
+import { costOf, PROBE_MODEL, profileDirs, projectProfiles, settle, type Acceptance, type Task } from './shared.ts'
 
 const PROBE = 'Use your tool that fetches the current weather to get the weather in Copenhagen: call it exactly once. ' +
   "Don't use bash, curl or any other way. If you have no such tool, say NO_WEATHER_TOOL and stop. Then reply with only the tool's raw result."
 
-const BUILTIN = new Set(['read', 'write', 'edit', 'bash', 'ls', 'grep', 'find', 'pane_open', 'show_images', 'ask_user', 'task_start', 'task_finish'])
+/** The tools a thread has without the profile's: the coding tools, and the app's extensions'. */
+const BUILTIN = /^(read|write|edit|bash|ls|grep|find|pane_open|show_images|ask_user|(show|ask|open|update)_ui|task_(start|finish)|thread_\w+|superego_\w+|mcp__\w+)$/
 
 /** A tool's answer that reads as a message: no stack trace, no JavaScript error leaking out. */
 const graceful = (text: string) => text.trim().length > 0 && !/\n\s+at .+:\d+:\d+/.test(text) && !/is not a function|Cannot read propert|undefined is not/i.test(text)
@@ -27,12 +28,11 @@ export const weather: Task = {
   request: 'Give my agents a tool that fetches the current weather for a city.',
   async accept({ world, install, out }) {
     const notes: string[] = []
-    const checks: Record<string, boolean> = { profile_loads: false, tool_registered: false, tool_runs: false, offline_graceful: false }
+    const checks: { profile_loads: boolean; tool_registered: boolean; tool_runs: boolean; offline_graceful: boolean; registered_in_other_profile?: boolean } = { profile_loads: false, tool_registered: false, tool_runs: false, offline_graceful: false }
     let cost = 0
     const dirs = profileDirs(world)
     notes.push(`profiles: ${dirs.map((d) => d.replace(world.home, '~')).join(', ') || 'none'}`)
-    const listed = await world.rpc.call<{ name: string; dir: string; allowed: boolean }[]>('action.run', { id: 'profile.list', params: { cwd: world.project }, exposure: 'cli' }).catch(() => [])
-    notes.push(`profile.list in the project: ${listed.map((p) => `${p.name}${p.allowed ? '' : ' (not allowed)'}`).join(', ') || 'none'}`)
+    const listed = await projectProfiles(world, notes)
 
     // A new thread in the project, as the user would start one: its default profile.
     const probe = async (profile?: string) => {
@@ -49,7 +49,7 @@ export const weather: Task = {
       const errors = entries.flatMap((e) => (e.model ?? []).filter((m: any) => m.role === 'assistant' && m.stopReason === 'error').map((m: any) => m.errorMessage))
       if (errors.length) notes.push(`probe ${profile ?? 'default'}: model errors: ${errors.join(' | ').slice(0, 500)}`)
       const calls = toolCalls(entries)
-      const call = calls.find((c) => /weather|forecast/i.test(c.name)) ?? calls.find((c) => !BUILTIN.has(c.name))
+      const call = calls.find((c) => /weather|forecast/i.test(c.name)) ?? calls.find((c) => !BUILTIN.test(c.name))
       notes.push(`probe ${profile ?? 'default'}: calls ${calls.map((c) => c.name).join(', ') || 'none'}${call ? `; ${call.name} → ${call.isError ? 'ERROR ' : ''}${(call.result ?? '').slice(0, 300).replace(/\s+/g, ' ')}` : ''}`)
       const runs = Boolean(call?.result !== undefined && (call.isError ? graceful(call.result!) : /\d/.test(call.result!)))
       return { loads: !errors.some((e) => /profile|load|allow/i.test(e ?? '')), registered: Boolean(call), runs, call, profile: settled?.profile ?? thread.profile }
@@ -67,7 +67,7 @@ export const weather: Task = {
       notes.push(`offline: ${offline.note}`)
       checks.offline_graceful = offline.graceful
     }
-    return { pass: checks.profile_loads! && checks.tool_registered! && checks.tool_runs! && checks.offline_graceful!, checks, notes, cost } satisfies Acceptance
+    return { pass: checks.profile_loads && checks.tool_registered && checks.tool_runs && checks.offline_graceful, checks, notes, cost } satisfies Acceptance
   },
 }
 

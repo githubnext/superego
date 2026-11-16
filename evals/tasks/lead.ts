@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { entriesOf, toolCalls, type Thread } from '../lib/transcript.ts'
-import { costOf, LEAD_MODEL, profileDirs, quiet, sourcesOf, type Acceptance, type Task } from './shared.ts'
+import { costOf, LEAD_MODEL, profileDirs, projectProfiles, quiet, sourcesOf, type Acceptance, type Task } from './shared.ts'
 
 /**
  * The lead's job: three pieces that go well apart, and the user saying they want it handed out, as someone who just
@@ -38,12 +38,11 @@ export const lead: Task = {
   request: 'Add lead agents that hand work out and review it.',
   async accept({ world }) {
     const notes: string[] = []
-    const checks: Record<string, boolean> = { profile_found: false, briefed: false, delegated: false, reviewed: false, job_done: false, named_profile: false }
+    const checks = { profile_found: false, briefed: false, delegated: false, reviewed: false, job_done: false, named_profile: false }
     let cost = 0
     const dirs = profileDirs(world)
     notes.push(`profiles: ${dirs.map((d) => d.replace(world.home, '~')).join(', ') || 'none'}`)
-    const listed = await world.rpc.call<{ name: string; dir: string; allowed: boolean }[]>('action.run', { id: 'profile.list', params: { cwd: world.project }, exposure: 'cli' }).catch(() => [])
-    notes.push(`profile.list in the project: ${listed.map((p) => `${p.name}${p.allowed ? '' : ' (not allowed)'}`).join(', ') || 'none'}`)
+    const listed = await projectProfiles(world, notes)
     // The lead: a profile named for it, else one the run made that isn't the default, else the default (changed).
     const named = listed.filter((p) => /lead|review|manag|orchestr|delegat|coordinat/i.test(p.name))
     const pick = named[0] ?? listed.find((p) => p.name !== 'default') ?? listed.find((p) => p.name === 'default')
@@ -102,6 +101,6 @@ export const lead: Task = {
     })
     checks.job_done = done.every((d) => d.ok)
     notes.push(`job: ${done.map((d) => `${d.name}.sh ${d.where}${d.said ? ` printed "${d.said.slice(0, 40)}"` : ''}${d.ok ? '' : ' ✗'}`).join('; ')}`)
-    return { pass: checks.briefed! && checks.delegated! && checks.reviewed! && checks.job_done!, checks, notes, cost } satisfies Acceptance
+    return { pass: checks.briefed && checks.delegated && checks.reviewed && checks.job_done, checks, notes, cost } satisfies Acceptance
   },
 }
