@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DATA_VIEWS, defineApp, PROTOCOL_VERSION, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '../src/index.ts'
-import { loadProfile, Allowances, type ProfileRef } from '../src/profiles.ts'
+import { hashProfile, loadProfile, Allowances, type ProfileRef } from '../src/profiles.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
 
@@ -274,6 +274,10 @@ export default defineDaemonExtension({
   expect(await peer.call('action.run', { id: 'vault.answer', params: { id: thread.id } })).toEqual({ answer: 'one', cwd: project })
   expect((await peer.call<{ value: number }>('value.watch', { key: 'vault.count' })).value).toBe(1)
   expect((await agentOf(peer, thread.id)).extensions).toContain('user:default/notes')
+  // Unchanged, it isn't set up again for the next turn: its value stays.
+  await peer.call('thread.send', { thread: thread.id, text: 'once more' })
+  await done(peer, thread.id)
+  expect((await peer.call<{ value: number }>('value.watch', { key: 'vault.count' })).value).toBe(1)
   // Changed: the old action goes, the new one answers.
   write(profile, { 'vault.ts': extension('two') })
   await peer.call('thread.send', { thread: thread.id, text: 'again' })
@@ -987,6 +991,21 @@ it("vouches, in allowing a project's profile, for every file its code can run: h
   await allowances.allow(ref)
   write(project, { 'tools/other.ts': `export const other = 1\n` })
   await expect(loadProfile(ref, join(home, 'profiles'), allowances)).resolves.toMatchObject({ name: 'support' })
+})
+
+it('hashes a profile the same while it is unchanged, with a UI or without, and differently once edited', async () => {
+  for (const [name, files] of [
+    ['plain', { 'profile.ts': profileTs(['./vault.ts']), 'vault.ts': `import { a } from './.helper.ts'\nexport default { name: 'vault', a }\n`, '.helper.ts': `export const a: string = 'a'\n` }],
+    ['ui', { 'profile.ts': profileTs([]), 'ui/badge.tsx': `import { a } from '../.helper.ts'\nexport default () => <b>{a}</b>\n`, '.helper.ts': `export const a: string = 'a'\n` }],
+  ] as const) {
+    const profile = join(project, '.superego', 'profiles', name)
+    write(profile, files)
+    const hash = await hashProfile(profile)
+    expect(hash, name).toMatch(/^[0-9a-f]{16}$/)
+    expect(await hashProfile(profile), name).toBe(hash)
+    write(profile, { '.helper.ts': `export const a: string = 'b'\n` })
+    expect(await hashProfile(profile), name).not.toBe(hash)
+  }
 })
 
 it('refuses a module that imports a path worked out as it runs: what it loads can be neither versioned nor vouched for', async () => {
