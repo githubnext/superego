@@ -247,7 +247,8 @@ it('queues builds and shows the thread its own', async () => {
 - **`testDaemon({ profile, extensions, model })`**: `profile` is a folder (copied) or files by path; `extensions` are
   set up as the app's own. `model` is the model's turns in order: `say(text)`, `callTool(name, args)`,
   `callTools(…)`. It has `thread(prompt)`, `send`, `idle`, `transcript`, `call`, `dispatch`, `watch(key, { scope })`,
-  `features`; `edit(path, content)` then `reload()` to load a change (a helper edited alone loads too);
+  `extensions` (the manifests of those set up and on there, kept current: where yours shows) and `features` (protocol
+  features only); `edit(path, content)` then `reload()` to load a change (a helper edited alone loads too);
   `restart({ model })` on the same folder; `close()`.
 - **`isRunning(pid)`**: whether a process is still there, to check that what an extension started stopped with it.
   The queue examples' tests cancel a build whose command starts a `sleep` of its own, and check it's gone once the
@@ -389,7 +390,9 @@ export const about = { name: 'orders', version: '1.2.0', api: '^2', title: 'Orde
   (the thread says so); a profile UI's is left out, the rest of the profile set up. Unset: any.
 
 The host's `EXTENSION_API` goes up a minor when the API grows, and a major when something an extension could rely on
-changes or goes, which also moves every bundled extension's `api`.
+changes or goes, which also moves every bundled extension's `api`. Two went from 2.1 without one, unused by any
+extension: the daemon half's `harness`, and `capabilities` (with `has(…, 'ext:<name>#<capability>')`): ask for a
+`version` instead.
 
 ### Checking them
 

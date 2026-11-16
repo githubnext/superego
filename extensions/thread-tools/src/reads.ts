@@ -1,5 +1,6 @@
 // What parents have read of their children: the thread tools' thread_read notes it, and thread-reports doesn't relay an
-// answer the parent has read already (by waiting on it, say). One log per daemon (by its data folder), shared by the two.
+// answer the parent has read already (by waiting on it, say). One log per daemon (by its data folder), shared by the two
+// for as long as either is set up.
 import type { ThreadInfo } from '@superego/protocol'
 
 export type ReadLog = {
@@ -20,13 +21,19 @@ export function readLog(): ReadLog {
   }
 }
 
-const logs = new Map<string, ReadLog>()
+const logs = new Map<string, { log: ReadLog; holders: number }>()
 /**
- * The log of the daemon whose data folder this is (`superego.dataDir`): one daemon runs on a data folder, so its two
- * extensions of this package find the same log. Nothing else should share it.
+ * The log of the daemon whose data folder this is (`superego.dataDir`), held until `signal` (`superego.signal`): one
+ * daemon runs on a data folder, so its two extensions of this package find the same log, and it's forgotten once
+ * neither holds it, so a daemon opened there again starts with none. Nothing else should share it.
  */
-export const readsOf = (dataDir: string) => {
-  let log = logs.get(dataDir)
-  if (!log) logs.set(dataDir, log = readLog())
-  return log
+export function readsOf(dataDir: string, signal: AbortSignal): ReadLog {
+  let held = logs.get(dataDir)
+  if (!held) logs.set(dataDir, held = { log: readLog(), holders: 0 })
+  const entry = held
+  entry.holders++
+  signal.addEventListener('abort', () => {
+    if (--entry.holders === 0 && logs.get(dataDir) === entry) logs.delete(dataDir)
+  }, { once: true })
+  return entry.log
 }

@@ -109,9 +109,9 @@ Bundled extensions get more than a profile's:
   them with `superego.channel(kind, accept)` (`<name>.<kind>`; `accept(channel, params)` throws an `RpcError` to
   refuse, reads with `channel.onData`, writes with `channel.write`), and the window opens one with `channel(machine.id,
   kind, params)` from `superego/unstable`. A channel ends with its connection. `extensions/terminal` does it.
-- A feature flag: the daemon announces `ext:<name>` for each extension set up and switched on there, and tells clients
-  again whenever that changes, so `has(machine, 'ext:orders')` says whether a machine has it now (a profile's once the
-  profile loads). Watching a value needs no check: it's null until the extension publishes it. Check it before calling the
+- Whether a machine has it: the daemon announces each extension set up and switched on there in `hello.extensions`
+  (its manifest), and tells clients again whenever that changes, so `has(machine, 'ext:orders')` says whether a
+  machine has it now (a profile's once the profile loads). Watching a value needs no check: it's null until the extension publishes it. Check it before calling the
   daemon half's methods: a machine running an older Superego may not have them, or a newer one a major ahead
   (`has(machine, 'ext:orders@<2')`; `about` says the extension's `version` and the extension `api` it needs). See
   "Versions and compatibility" in the guide (`guide.md`).

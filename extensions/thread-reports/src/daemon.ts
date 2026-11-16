@@ -136,7 +136,7 @@ export function reporter(host: ReportsHost, { quietMs, maxMs }: Batching = BATCH
 export const threadReports = (batching: Batching = BATCHING) => defineDaemonExtension({
   ...reportsAbout,
   setup(s) {
-    const reads = readsOf(s.dataDir)
+    const reads = readsOf(s.dataDir, s.signal)
     const info = (id: string) => s.threads.get(id).catch(() => undefined)
     // The threads in a run, as the hooks tell it; one resumed after a restart (no turnStart) shows working.
     const running = new Set<string>()

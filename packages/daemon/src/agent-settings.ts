@@ -111,6 +111,8 @@ const REJECTED = '401 {"type":"error","error":{"type":"authentication_error","me
 
 /** Tests: the scripted model's rejections of a key starting "reject-held", each held back until it's called. */
 export const heldRejections: (() => void)[] = []
+/** Tests: each change to auth.json the daemon heard (the providers it changed for), once it has acted on it. */
+export const heardCredentials: string[][] = []
 
 /**
  * A scripted model that echoes the last user message: tests and demos, with `<ID>_MODEL=faux`. A key stored for it
@@ -288,6 +290,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
     // Not one rejected since the change: the turn that was rejected ran with what's there now (written just before it,
     // and heard of after), so retrying it would only be rejected again, and start another rejection.
     for (const provider of changed) if (rejections.get(provider)?.credential !== (now.get(provider) ?? '')) credentialsChanged(provider)
+    heardCredentials.push(changed)
   }
   /** A provider's credentials as stored now (a hash), read at once: what a turn rejected just now ran with. */
   const storedNow = (provider: string) => {

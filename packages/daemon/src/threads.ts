@@ -107,7 +107,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   }
 
   /** What clients see of a thread; `without` worked out once for its facts and what it goes without. */
-  const info = (id: string, m: Mounted, without = extensions.withoutOf(id, m.meta, profiles.loaded(m.meta))): ThreadInfo => ({
+  const info = (id: string, m: Mounted, without = extensions.withoutFor(id, m.meta)): ThreadInfo => ({
     id, title: m.meta.title || 'New thread', cwd: m.meta.cwd, createdAt: m.meta.createdAt,
     activeAt: Math.max(m.activeAt ?? 0, m.meta.createdAt),
     ...(m.model ? { model: m.model } : {}), ...(m.cost ? { cost: m.cost } : {}),
@@ -127,7 +127,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     try {
       const { items } = await m.conversation.entries({ order: 'descending' }, 50, undefined, context)
       const run = lastRun(items.filter((entry) => Number(entry.id) >= (m.meta.cleared ?? 0)))
-      const without = extensions.withoutOf(id, m.meta, profiles.loaded(m.meta))
+      const without = extensions.withoutFor(id, m.meta)
       return recapOf({ thread: id, ...run }, extensions.recapsFor(without, m.meta))
     } catch (error) {
       console.error(`Thread ${id}: its recap failed:`, error)
@@ -229,7 +229,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
 
   /** The extensions' hooks for a thread, in order: those it doesn't go without, a profile's for its own threads only. */
   const hooksOf = (id: string, m: Mounted) => {
-    const without = extensions.withoutOf(id, m.meta, profiles.loaded(m.meta))
+    const without = extensions.withoutFor(id, m.meta)
     return extensions.hooksFor(without, m.meta)
   }
   /** A refusal from an extension's hook, as clients see it: its own `RpcError`, else `refused`, saying whose. */
@@ -347,7 +347,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   const needing = new Set<string>()
   function heedStatus() {
     for (const [id, m] of mounted) {
-      const blocked = !m.meta.archived && Boolean(extensions.blockedOf(id, extensions.withoutOf(id, m.meta, profiles.loaded(m.meta)), m.meta).blocked)
+      const blocked = !m.meta.archived && Boolean(extensions.blockedOf(id, extensions.withoutFor(id, m.meta), m.meta).blocked)
       if (blocked === needing.has(id)) continue
       if (blocked) { needing.add(id); tellLater('blocked', id) } else needing.delete(id)
     }
@@ -398,7 +398,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
    * as it came.
    */
   async function transformed(id: string, m: Mounted, message: Pick<OutgoingMessage, 'text' | 'attachments' | 'by' | 'exposure'>, content: string | MessageBlock[]) {
-    const without = extensions.withoutOf(id, m.meta, profiles.loaded(m.meta))
+    const without = extensions.withoutFor(id, m.meta)
     const applying = extensions.transformsFor(without, m.meta)
     if (!applying.length) return content
     const thread = info(id, m)

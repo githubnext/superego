@@ -114,11 +114,22 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
     'thread.history': ({ thread: id, before, limit }: Methods['thread.history']['params']) => threads.history(id, before, limit),
     async 'thread.watch'({ thread: id }: Methods['thread.watch']['params']) {
       const watching = sub()
-      const { value, stop } = await threads.watchTranscript(id, (ops) => notify('watch.ops', { sub: watching, ops }), (reason) => {
-        if (subs.delete(watching)) notify('watch.end', { sub: watching, reason })
-      })
-      subs.set(watching, stop)
-      return { sub: watching, value }
+      // Held before the watch starts, so one that ends at once (its thread cleared meanwhile) still says so. Its end
+      // is told on the next turn, never before the answer that tells the client its sub.
+      let stop: (() => void) | undefined
+      subs.set(watching, () => stop?.())
+      try {
+        const watch = await threads.watchTranscript(id, (ops) => notify('watch.ops', { sub: watching, ops }), (reason) => {
+          if (subs.delete(watching)) setImmediate(() => notify('watch.end', { sub: watching, reason }))
+        })
+        stop = watch.stop
+        // Stopped meanwhile (the connection closed): nobody will stop it later.
+        if (!subs.has(watching)) watch.stop()
+        return { sub: watching, value: watch.value }
+      } catch (error) {
+        subs.delete(watching)
+        throw error
+      }
     },
     async 'threads.watch'({ hidden = false }: Methods['threads.watch']['params']) {
       const id = sub()

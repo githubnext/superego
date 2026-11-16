@@ -84,7 +84,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   const switchable = () => [...records.values()].filter((r) => r.ready && r.source !== 'profile').map((r) => r.about)
 
   /**
-   * The agent parts every thread has unless it goes without the extension that gave them (see `withoutOf`): the core's
+   * The agent parts every thread has unless it goes without the extension that gave them (see `withoutFor`): the core's
    * own and the bundled extensions', each with its extension (one may give several).
    */
   const builtins: { part: Extension; owner: string }[] = []
@@ -162,7 +162,8 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     }
     return { choice, without }
   }
-  const withoutOf = (id?: string, meta?: ThreadMeta, profile?: LoadedProfile) => choiceAndWithout(id, meta, profile).without
+  /** What a thread goes without, with the profile it has loaded now (none: the built-ins' answer for no thread). */
+  const withoutFor = (id?: string, meta?: ThreadMeta) => choiceAndWithout(id, meta, meta && later.profiles().loaded(meta)).without
 
   /**
    * The pane kinds a thread's agent is told of: the core's and those of extensions it has, and its profile's. A kind
@@ -171,7 +172,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   function panesOf(id: string) {
     const meta = host.mounted.get(id)?.meta
     const profile = meta && later.profiles().loaded(meta)
-    const without = withoutOf(id, meta, profile)
+    const without = withoutFor(id, meta)
     const kinds = new Map<string, string>()
     for (const { value, profiles } of paneKinds.filter((p) => appliesTo(p, without, meta))) if (!profiles) kinds.set(value.kind, value.about)
     for (const { value, profiles } of paneKinds.filter((p) => appliesTo(p, without, meta))) if (profiles) kinds.set(value.kind, value.about)
@@ -284,7 +285,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         const id = String(api.conversationId)
         const m = host.mounted.get(id)
         if (!m || !toolWatchers.length) return undefined
-        const without = withoutOf(id, m.meta, later.profiles().loaded(m.meta))
+        const without = withoutFor(id, m.meta)
         // What the model is told: the output's text, then what went wrong (an error's message comes as a diagnostic).
         const text = [
           ...(result.output ?? []).flatMap((block) => block.type === 'text' ? [block.text] : []),
@@ -586,7 +587,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   }
   // Turning one off changes what threads go without, and what this machine offers: clients are told both.
   let switches = ''
-  settings.onChange(() => {
+  const unlisten = settings.onChange(() => {
     const now = JSON.stringify(switchable().map(({ name }) => settings.get(`extensions.${name}`)))
     if (now === switches) return
     switches = now
@@ -677,7 +678,9 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
 
   return {
     setUp, setUpBuiltin, registerSwitches, declare, inspect, known, offer, offered: (name: string) => offered().some((e) => e.name === name),
-    publishViews, agentOf, partsFor, switchedOff, withoutOf, panesOf, factsOf, blockedOf, appliesTo,
+    publishViews, agentOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, blockedOf, appliesTo,
+    /** The daemon closing: switches turned meanwhile change nothing. */
+    close: () => unlisten(),
     /** The hooks that are for a thread, in order. */
     hooksFor: (without: Set<string>, meta: ThreadMeta) => threadHooks.filter((h) => appliesTo(h, without, meta)),
     /** Whether any extension has a `hook` at all. */

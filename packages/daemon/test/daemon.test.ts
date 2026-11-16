@@ -1,12 +1,14 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { defineApp, PROTOCOL_VERSION, versionOf, type ActionInfo, type ActionLogEntry, type AuthEvent, type Hello, type ModelCatalog, type Notifications, type ProviderAuthInfo, type RpcPeer, type ThreadInfo, type SettingsSnapshot } from '@superego/protocol'
-import { connectSocket, listen, openDaemon } from '../src/index.ts'
+import { MemorySettingsStore } from '@superego/settings'
+import { connectSocket, defineDaemonExtension, listen, openDaemon } from '../src/index.ts'
 import { until } from './until.ts'
 
 // Only the scripted model, whatever keys the machine running the tests has.
@@ -181,6 +183,43 @@ describe('new threads', () => {
     await until(async () => (await threads(peer))[0]!.status.state === 'done')
     expect((await threads(peer))[0]).toMatchObject({ model: 'faux-1', chosen: { model: 'faux/faux-1' } })
     await close()
+  })
+})
+
+describe('close', () => {
+  it("doesn't announce its extensions going as it closes", async () => {
+    process.env.SUPEREGO_MODEL = 'faux'
+    const notes = defineDaemonExtension({ name: 'notes', title: 'Notes' })
+    const daemon = await openDaemon({ app: SUPEREGO, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [notes] })
+    const server = await listen(daemon, join(dir, 'superego.sock'))
+    const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
+    expect((await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })).extensions.map((e) => e.name)).toContain('notes')
+    const told: unknown[] = []
+    peer.on('features.changed', (params) => { told.push(params) })
+    await daemon.close()
+    // Anything announced as it closed has reached the socket by now.
+    await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION }).catch(() => {})
+    expect(told).toEqual([])
+    socket.destroy(); server.close()
+  })
+
+  it('starts nothing for a setting changed after it closed', async () => {
+    process.env.SUPEREGO_MODEL = 'faux'
+    const root = join(dir, 'root')
+    await mkdir(root, { recursive: true })
+    await writeFile(join(root, 'index.html'), '<h1>app</h1>')
+    const port = 20000 + Math.floor(Math.random() * 20000)
+    const daemon = await openDaemon({
+      app: SUPEREGO, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), webRoot: root,
+      settingsStore: new MemorySettingsStore({ 'web.port': port }),
+    })
+    await daemon.close()
+    await daemon.settings.set('web.access', 'local')
+    // Heard on the next turn, and served at once if it were: the port is free for the taking.
+    await new Promise((resolve) => setImmediate(resolve))
+    const probe = createServer()
+    await new Promise<void>((resolve, reject) => probe.once('error', reject).listen(port, '127.0.0.1', resolve))
+    await new Promise((resolve) => probe.close(resolve))
   })
 })
 

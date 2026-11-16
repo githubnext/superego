@@ -145,7 +145,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     identity: { attribution: options.app.url ? { name: options.app.name, url: options.app.url } : null },
     env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? defaultCwd }),
     // A thread without a profile selects the built-ins only: profiles' extensions are installed too, but are theirs.
-    settings: () => ({ extensions: extensions.partsFor(extensions.withoutOf()) }),
+    settings: () => ({ extensions: extensions.partsFor(extensions.withoutFor()) }),
   }, context)
   const threads = createThreads(host, { harness, extensions, profiles })
   const files = threadFiles({ dataDir: options.dataDir, cwdOf: async (id) => (await threads.get(id)).meta.cwd })
@@ -210,7 +210,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     setRejected(now)
   }
   publishRejected()
-  host.onChanged(publishRejected)
+  daemonLife.add(host.onChanged(publishRejected))
   daemonLife.add(agent.rejections.onChange(host.changed))
   daemonLife.add(agent.onCredentials((provider) => void threads.retrySignIn(provider)))
   // The profiles of the threads in use, loaded in the background: their facts and what they go without show without
@@ -233,6 +233,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     async close() {
       host.state.closing = true
       await loadingProfiles
+      // Deaf to settings first: a change from here on starts nothing.
+      extensions.close()
       await webAccess.close()
       // Profiles' extensions first, then the bundled ones: each step tried whatever the others did.
       profiles.unloadAll()

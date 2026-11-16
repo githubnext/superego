@@ -3,7 +3,7 @@ import { createConnection, createServer, type Server, type Socket } from 'node:n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { Channels, lineSplitter, RpcPeer, WINDOW } from '../src/index.ts'
+import { CHUNK, Channels, lineSplitter, RpcPeer, WINDOW } from '../src/index.ts'
 
 // Two peers over a real unix socket, each wired as the daemon's transports are: writes report a full buffer, drains resume.
 let dir: string
@@ -55,16 +55,30 @@ describe('channels', () => {
 
   it('sends no more than its credit to a reader that does not read', async () => {
     const { a, b } = await pair()
+    // What reaches the reader's side, read or not.
+    let arrived = 0
+    let full!: () => void
+    const filled = new Promise<void>((resolve) => { full = resolve })
+    const receive = b.receive.bind(b)
+    b.receive = (line) => {
+      const { method, params } = JSON.parse(line) as { method?: string; params?: { data: string } }
+      if (method === 'ch.data') arrived += Buffer.from(params!.data, 'base64').length
+      if (arrived >= WINDOW) full()
+      receive(line)
+    }
+    b.handle('ping', () => 'pong')
     let got = 0
     let release!: () => void
     const held = new Promise<void>((resolve) => { release = resolve })
     Channels.of(b).accept('slow', (channel) => { channel.onData(async (chunk) => { got += chunk.length; await held }) })
     const channel = await Channels.of(a).open('slow')
     const done = channel.write(bytes(4 * WINDOW))
-    await new Promise((resolve) => setTimeout(resolve, 300))
+    await filled
+    // Whatever the sender wrote before this call has arrived once it's answered: the window, and not a byte more.
+    expect(await a.call('ping')).toBe('pong')
+    expect(arrived).toBe(WINDOW)
     // The first chunk is taken and held; nothing is acknowledged, so the sender stops at the window.
-    expect(got).toBeGreaterThan(0)
-    expect(got).toBeLessThanOrEqual(WINDOW)
+    expect(got).toBe(CHUNK)
     release()
     await done
   })
@@ -72,16 +86,18 @@ describe('channels', () => {
   it('answers a call while a large upload is in flight', async () => {
     const { a, b } = await pair()
     let got = 0
+    let flowing!: () => void
+    const inFlight = new Promise<void>((resolve) => { flowing = resolve })
     // A reader slower than the link: a megabyte each 50 ms.
     Channels.of(b).accept('upload', (channel) => {
-      channel.onData(async (chunk) => { got += chunk.length; await new Promise((resolve) => setTimeout(resolve, chunk.length / (1024 * 1024) * 50)) })
+      channel.onData(async (chunk) => { got += chunk.length; flowing(); await new Promise((resolve) => setTimeout(resolve, chunk.length / (1024 * 1024) * 50)) })
       void channel.ended.then(() => channel.end())
     })
     b.handle('ping', () => 'pong')
     const channel = await Channels.of(a).open('upload')
     const size = 32 * 1024 * 1024
     const upload = channel.write(bytes(size)).then(() => { channel.end(); return channel.ended })
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await inFlight
     const started = Date.now()
     expect(await a.call('ping')).toBe('pong')
     expect(Date.now() - started).toBeLessThan(250)

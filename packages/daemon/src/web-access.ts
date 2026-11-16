@@ -2,7 +2,7 @@
 // to the devices paired with it (web-devices.ts), as the `web` settings say; and the `web.*` actions that pair them.
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { obj, RpcError, str, type Router } from '@superego/protocol'
+import { Lifetime, obj, RpcError, str, type Router } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
 import type { Clients } from './clients.ts'
 import type { Daemon, DaemonContext, DaemonOptions } from './daemon.ts'
@@ -25,6 +25,8 @@ export async function openWebAccess({ options, settings, router, clients, relay,
   cwdOf(thread: string): Promise<string>
 }) {
   const webDevices = await WebDevices.open(options.dataDir)
+  /** What it listens to, let go of as it closes: no change after that serves again. */
+  const life = new Lifetime('Web access')
   let web: WebServer | undefined
   let webKey = ''
   let webError: string | undefined
@@ -92,12 +94,12 @@ export async function openWebAccess({ options, settings, router, clients, relay,
       error: webError ?? null,
     }),
   })
-  webDevices.onChange(() => settings.invalidate())
+  life.add(webDevices.onChange(() => settings.invalidate()))
   // Pairing switched on for the owner's login: their devices through Tailscale get in no more, as of now.
   let pairingOwner = pairOwner()
-  settings.onChange(() => {
+  life.add(settings.onChange(() => {
     if (pairOwner() !== pairingOwner && (pairingOwner = pairOwner())) web?.disconnect((id) => id.startsWith('tailscale:'))
-  })
+  }))
   const webOn = () => { if (!web) throw new RpcError('web_off', 'Web access is off: turn it on in Settings → Web access.') }
   router.register(defineAction({
     id: 'web.pair', title: 'Pair a device for web access', expose: ['ui', 'cli'], params: obj({}),
@@ -128,11 +130,12 @@ export async function openWebAccess({ options, settings, router, clients, relay,
       return device
     },
   }))
-  settings.onChange(() => void applyWeb())
+  life.add(settings.onChange(() => void applyWeb()))
   await applyWeb()
   return {
-    /** Stop serving, once the change being made is. */
+    /** Stop listening to the settings, and serving once the change being made is. */
     async close() {
+      life.dispose()
       await webQueue
       await web?.close()
       await webDevices.saved()

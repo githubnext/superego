@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView, LiveState } from '@earendil-works/pi-durable'
 import { AUTH_REJECTED, defineApp, PROTOCOL_VERSION, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo } from '@superego/protocol'
-import { heldRejections } from '../src/agent-settings.ts'
+import { heardCredentials, heldRejections } from '../src/agent-settings.ts'
 import { connectSocket, listen, openDaemon } from '../src/index.ts'
 import { until } from './until.ts'
 
@@ -93,6 +93,7 @@ it('waits again when the new key is rejected too, without retrying on its own', 
   const firstTask = watched.now()!.runFailure!.taskId
 
   // Another bad key: retried once, rejected again, and waiting again, rejected since then.
+  const heard = heardCredentials.length
   await storeKey('reject-2')
   await until(() => watched.now()?.runFailure?.taskId !== firstTask && !watched.now()?.run)
   await until(() => waiting(peer, ids))
@@ -100,10 +101,10 @@ it('waits again when the new key is rejected too, without retrying on its own', 
   // Rejected by the provider, or, when the other thread's retry was rejected first, refused without asking it.
   expect(watched.now()!.runFailure!.detail).toMatch(/invalid x-api-key|^Waiting for sign-in: /)
 
-  // And it stays so: no retrying until the credentials change again, or someone asks.
+  // And it stays so: the change was heard once, and only a change heard (or someone asking) retries.
   const settled = watched.now()!.runFailure!.taskId
-  await new Promise((resolve) => setTimeout(resolve, 500))
-  expect(watched.now()!.runFailure!.taskId).toBe(settled)
+  expect(heardCredentials.slice(heard)).toEqual([['faux']])
+  expect((await statusOf(peer, ids[0]!))).toMatchObject({ state: 'blocked', kind: 'auth' })
   expect(watched.now()!.run).toBeUndefined()
 
   // Asked: retried, and (the key still bad) waiting again.
@@ -137,16 +138,20 @@ it('takes a bad key written just before the turns it stops as the one rejected: 
   const { peer, close } = await open()
   const value = await rejected(peer)
   // The turns run, and are rejected, before the daemon hears auth.json change.
+  const heard = heardCredentials.length
   await storeKey('reject-new')
   const ids = [(await peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt: 'one' })).id, (await peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt: 'two' })).id]
   await until(() => waiting(peer, ids))
   await until(() => value.now()[0]?.threads.length === 2)
   const { since } = value.now()[0]!
-  await new Promise((resolve) => setTimeout(resolve, 600))
-  expect(value.now()).toHaveLength(1)
-  expect(value.now()[0]).toMatchObject({ since, threads: expect.arrayContaining(ids) })
-  expect(value.now()[0]!.retrying).toBeUndefined()
+  // Heard, and not taken for new credentials: the value as it is once the daemon has acted on it.
+  await until(() => heardCredentials.length > heard)
   await value.stop()
+  const after = await rejected(peer)
+  expect(after.now()).toHaveLength(1)
+  expect(after.now()[0]).toMatchObject({ since, threads: expect.arrayContaining(ids) })
+  expect(after.now()[0]!.retrying).toBeUndefined()
+  await after.stop()
   await close()
 })
 
@@ -156,8 +161,9 @@ it('retries a turn rejected for a key replaced while it ran, with the new one', 
   const id = (await peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt: 'one' })).id
   // Asked with the old key; a new one is stored, and heard of, before the old one's rejection comes back.
   await until(() => heldRejections.length === 1)
+  const heard = heardCredentials.length
   await storeKey('good')
-  await new Promise((resolve) => setTimeout(resolve, 300))
+  await until(() => heardCredentials.length > heard)
   heldRejections.splice(0).forEach((reject) => reject())
   await until(async () => (await statusOf(peer, id)).state === 'done')
   await close()
