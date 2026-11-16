@@ -11,6 +11,6 @@ it('takes navigation from its own machine', () => {
 
 it('ignores a machine it only reaches, and anything that is not navigation', () => {
   expect(ask('box', 'thread.select', { machine: 'local', thread: 't1' })).toBeUndefined()
-  for (const action of ['thread.new', 'app.newWindow', 'app.reloadPackages', 'panes.close', 'app.meta', 'thread.startRename', 'app.settings']) expect(ask('local', action)).toBeUndefined()
+  for (const action of ['thread.new', 'app.newWindow', 'app.reloadPackages', 'pane.closeFocused', 'app.meta', 'thread.startRename', 'app.settings']) expect(ask('local', action)).toBeUndefined()
   expect(performed({ machine: 'local', method: 'threads.changed', params: {} })).toBeUndefined()
 })

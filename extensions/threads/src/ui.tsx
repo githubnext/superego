@@ -13,7 +13,7 @@ import {
   call, defineAction, defineUiExtension, MachineDrift, showProject, Slot, SORT, unread, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut,
   type MachineEntry, type Project, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
-import { rollup, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
+import { rollup, statusLabel, STATUS_WORDS, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, ChatsIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
 import { activity, ago } from './groups.ts'
@@ -42,9 +42,7 @@ export default defineUiExtension({
     const action = (id: string, title: string, run: (c: WindowContext) => void, keys?: string) =>
       superego.action(defineAction({ id, title, ...(keys ? { keys } : {}), run: (_params, c) => run(c) }))
     action(DETAILS, 'Toggle thread details', (c) => void c.dispatch('layout.place', { view: DETAILS, place: 'beside' }, { source: 'threads' }), 'mod+i')
-    action('threads.sort.created', 'Sort threads: newest first', (c) => void set(c, SORT, 'created'))
-    action('threads.sort.status', 'Sort threads: needs you first', (c) => void set(c, SORT, 'status'))
-    action('threads.sort.recent', 'Sort threads: recently active', (c) => void set(c, SORT, 'recent'))
+    for (const { value, label } of SORTS) action(`threads.sort.${value}`, `Sort threads: ${label.toLowerCase()}`, (c) => void set(c, SORT, value))
     // ⌘⌥↓ and ⌘⌥↑ too: the same step as thread.next and thread.previous, down the rows the sidebar shows.
     action('threads.next', 'Next thread', (c) => void c.dispatch('thread.next', {}, { source: 'threads' }), 'mod+alt+arrowdown')
     action('threads.previous', 'Previous thread', (c) => void c.dispatch('thread.previous', {}, { source: 'threads' }), 'mod+alt+arrowup')
@@ -94,7 +92,7 @@ function Threads() {
               return (
                 <ListItem key={thread.id} selected={isOn(project, thread)} leading={<StatusGlyph status={thread.status} />}
                   {...(level ? { className: 'threads-child', style: { '--depth': level } as CSSProperties } : {})}
-                  trailing={waitingForSignIn(thread.status) ? <span className="threads__why threads__why--quiet">waiting</span> : thread.status.state === 'blocked' ? <span className="threads__why">needs you</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">failed</span> : ago(activity(thread))} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
+                  trailing={waitingForSignIn(thread.status) ? <span className="threads__why threads__why--quiet">Waiting</span> : thread.status.state === 'blocked' ? <span className="threads__why">{STATUS_WORDS.blocked}</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">{STATUS_WORDS.error}</span> : ago(activity(thread))} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
                   <span className="threads__title">{thread.title}</span>
                   <Slot name="thread.badge" props={{ machine: project.machine, thread }} />
                 </ListItem>
@@ -162,7 +160,7 @@ function NewThreadButton({ label, machine, cwd }: { label: string; machine?: Mac
   )
 }
 
-const SORTS: { value: Sort; label: string }[] = [{ value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' }]
+const SORTS: { value: Sort; label: string }[] = [{ value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: `${STATUS_WORDS.blocked} first` }]
 
 /** The ··· menu: sort, details, hiding the sidebar. */
 function Options() {
@@ -217,9 +215,9 @@ function ThreadsRail({ open, sidebarHidden, show }: SpaceRailProps) {
             <div key={project.key} className="threads-rail__group">
               {index > 0 && <div className="threads-rail__sep" />}
               {project.threads.map((thread) => (
-                <Tooltip key={thread.id} side="right" content={<>{thread.title}<small className="threads-rail__tipnote">{waitingForSignIn(thread.status) ? 'waiting for sign-in' : thread.status.state === 'blocked' ? 'needs you' : ago(activity(thread))}</small></>}>
+                <Tooltip key={thread.id} side="right" content={<>{thread.title}<small className="threads-rail__tipnote">{waitingForSignIn(thread.status) || thread.status.state === 'blocked' ? statusLabel(thread.status) : ago(activity(thread))}</small></>}>
                   <button className={`threads-rail__dot ${isOn(project, thread) ? 'is-on' : ''} ${project.machine.state !== 'connected' ? 'is-stale' : ''}`}
-                    aria-label={`${thread.title}, ${thread.status.state}`} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
+                    aria-label={`${thread.title}, ${statusLabel(thread.status)}`} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
                     <StatusGlyph status={thread.status} />
                   </button>
                 </Tooltip>

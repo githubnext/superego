@@ -1,7 +1,7 @@
 // The contract between the main process and the renderer, exposed as `window.superego` by the preload.
 import type { ConnectionState, MachineConfig, MachineEntry as Base, MachineId } from '@superego/client/shared'
 import type { SettingSpec } from '@superego/settings'
-import { firstLine, lastParagraph, shorten, unread, type Channel, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
+import { firstLine, lastParagraph, shorten, STATUS_WORDS, unread, type Channel, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
 
 export type { ConnectionState, MachineConfig, MachineId }
 
@@ -29,7 +29,7 @@ export type CommandLineInfo = {
 
 
 /** What happened to a thread, as its notification says first: the desktop's subtitle, the start of a browser's body. */
-export type NoticeStatus = 'Finished' | 'Needs you' | 'Failed'
+export type NoticeStatus = (typeof STATUS_WORDS)['done' | 'blocked' | 'error']
 
 /**
  * What a notification says of a thread that wants a look now (it finished, failed or needs you); nothing for any other
@@ -41,7 +41,7 @@ export type ThreadNotice = { machine: MachineId; thread: string; title: string; 
 export function threadNotice(machine: MachineId, thread: ThreadInfo): ThreadNotice | undefined {
   if (!unread(thread)) return undefined
   const { state, msg } = thread.status
-  const status = state === 'done' ? 'Finished' : state === 'error' ? 'Failed' : 'Needs you'
+  const status = STATUS_WORDS[state === 'done' || state === 'error' ? state : 'blocked']
   // Done, the daemon's recap; blocked, the question (its last paragraph, after any context); error, its first line.
   const text = msg ? state === 'done' ? shorten(msg) : state === 'error' ? firstLine(msg) : lastParagraph(msg) : undefined
   return { machine, thread: thread.id, title: thread.title, status, ...(text ? { text } : {}) }

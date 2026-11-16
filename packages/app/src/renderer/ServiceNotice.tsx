@@ -1,4 +1,4 @@
-// "Restart required": the background process runs older code than is installed. Outside the transcript and never a
+// "Restart required": the daemon runs older code than is installed. Outside the transcript and never a
 // modal: restart now, when idle, or later (which leaves a quiet reminder). Wide, in the rail (`rail`).
 import { useEffect, useState } from 'react'
 import { ArrowClockwiseIcon, Button } from '@superego/ui'
@@ -24,8 +24,8 @@ export function ServiceNotice({ rail = false }: { rail?: boolean }) {
   const waiting = state.phase === 'waiting'
   const label = restarting ? 'Restarting…' : waiting ? 'Restart when idle' : state.phase === 'error' ? 'Restart failed' : 'Restart required'
   const detail = state.error ?? (waiting
-    ? 'The background process restarts once no agent is working.'
-    : 'The background process runs older code than is installed. Restart it to use the new version; threads and their history are kept.')
+    ? 'The daemon restarts once no agent is working.'
+    : 'The daemon runs older code than is installed. Restarting keeps threads and their history.')
 
   if (state.deferred && !rail) {
     return <div className="service-notice is-deferred"><Button title={detail} onClick={() => act('review')}>Restart required…</Button></div>

@@ -156,7 +156,7 @@ row={(item) => ({ key, title, glyph?, detail?, keys? })} onPick={(item, { beside
 ↑↓ move, ⏎ picks, ⌘⏎ beside, `digits`: ⌃1–⌃9 pick the first nine), `ThreadRef` (a thread named as itself, kept
 current: `<ThreadRef machine={id} id={thread} />`), `SignInFlow` (a sign-in flow drawn as Settings → Providers draws one,
 for an action of the daemon half that answers with `superego.auth.flow`'s `{ flow }`: `<SignInFlow machine={id}
-title="Signing in to Linear" start={() => dispatch('x.login', { … }, { machine: id })} onClose={…} />`; it starts as it
+title="Signing in to Linear" start={() => dispatch('x.signIn', { … }, { machine: id })} onClose={…} />`; it starts as it
 mounts, opens the page in the browser, asks what the flow asks, and has Cancel; 1.7), and the Phosphor icons the app
 uses (`ArchiveIcon`, …).
 
@@ -197,7 +197,8 @@ anything last happened in it: a dependency for `useMethod`'s `refresh`), `projec
 
 So `done` and `error` turn `idle` once the user opens the thread: they mean "unseen", not "finished" or "failed for
 good". `StatusGlyph` draws a status as the sidebar does (`<StatusGlyph status={t.status} />`), and `statusLabel(status)`
-says it in words. To act on a change outside React, `superego.on('thread.status', …)` (the setup API, above).
+says it in words, as tooltips and notifications do ("Finished: <recap>", "Needs you: a question"). To act on a change
+outside React, `superego.on('thread.status', …)` (the setup API, above).
 
 A board of one machine's threads, a column per state:
 

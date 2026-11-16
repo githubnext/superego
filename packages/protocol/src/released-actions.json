@@ -11,7 +11,7 @@
     ],
     "additionalProperties": false
   },
-  "auth.login": {
+  "auth.signIn": {
     "type": "object",
     "properties": {
       "provider": {
@@ -37,7 +37,7 @@
     ],
     "additionalProperties": false
   },
-  "auth.logout": {
+  "auth.signOut": {
     "type": "object",
     "properties": {
       "provider": {
@@ -115,7 +115,7 @@
     ],
     "additionalProperties": false
   },
-  "machines.reconnect": {
+  "machine.reconnect": {
     "type": "object",
     "properties": {
       "id": {

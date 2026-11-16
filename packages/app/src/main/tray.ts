@@ -78,8 +78,8 @@ export class MenuBar {
     const listed = [...wanting, ...working].slice(0, 12)
     const service = this.#model.service()
     const restart: MenuItemConstructorOptions[] = service.phase === 'current' ? [] : [{
-      label: service.phase === 'restarting' ? 'Restarting background process…' : service.phase === 'waiting' ? 'Restart waits until agents are idle'
-        : service.busy ? 'Restart background process when idle' : 'Restart background process (update ready)',
+      label: service.phase === 'restarting' ? 'Restarting the daemon…' : service.phase === 'waiting' ? 'Restart waits until agents are idle'
+        : service.busy ? 'Restart the daemon when idle' : 'Restart the daemon (update ready)',
       enabled: service.phase === 'required' || service.phase === 'error',
       click: () => this.#model.restart(),
     }, { type: 'separator' }]

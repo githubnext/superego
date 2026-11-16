@@ -413,7 +413,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         },
       }))
       superego.action(defineAction({
-        id: ACTIONS.logout, title: 'Sign out of an MCP server', expose: ['ui', 'cli'],
+        id: ACTIONS.signOut, title: 'Sign out of an MCP server', expose: ['ui', 'cli'],
         description: "Forget a server's stored secrets on this machine, and its OAuth sign-in (every server that signs in to the same URL is signed out with it).",
         params: SERVER_PARAMS,
         async run({ server: id }) {
@@ -426,7 +426,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         },
       }))
       superego.action(defineAction({
-        id: ACTIONS.login, title: 'Sign in to an MCP server', expose: ['ui', 'cli'],
+        id: ACTIONS.signIn, title: 'Sign in to an MCP server', expose: ['ui', 'cli'],
         description: 'Sign in to a URL server with OAuth, in the browser. Answers { flow } at once; the flow (auth.event) says how it goes, and is done once the server is signed in and connected.',
         params: SERVER_PARAMS,
         run({ server: id }, context: DaemonContext) {

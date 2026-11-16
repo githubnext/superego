@@ -1,4 +1,4 @@
-// The command palette (⌘K): commands only, filtered as you type; going somewhere is the navigator's (⌘L). Arrow keys
+// Commands (⌘K): actions only, filtered as you type; going somewhere is the navigator's (⌘L). Arrow keys
 // move, Enter runs, Escape closes. Every action that runs without more input is in it, with its shortcut; and each view
 // in each place it fits that the window shows and it isn't in, to show it there (a view removed, one only offered).
 import { useMemo } from 'react'

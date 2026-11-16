@@ -101,7 +101,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [maximized])
-  const maximize = (pane: Pane) => void dispatch('panes.maximize', { pane: pane.id }, { source: 'panes' })
+  const maximize = (pane: Pane) => void dispatch('pane.maximize', { pane: pane.id }, { source: 'panes' })
   // One at the back the focus is going to (see focus.ts) comes to the front first, so it can take it; one under a
   // maximized pane, the layout restored.
   useEffect(() => {
@@ -261,7 +261,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
           )}
           <PaneMenu machine={machine} thread={thread} add />
           <SegmentedControl label="Pane layout" className="strip__layout" options={LAYOUTS} value={stacked ? 'stack' : 'scroll'}
-            onChange={(next) => void dispatch('panes.layout', { layout: next }, { source: 'strip' })} />
+            onChange={(next) => void dispatch('pane.layout', { layout: next }, { source: 'strip' })} />
         </>
       )}
     </div>
@@ -326,8 +326,8 @@ function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, o
   view?: { view: string; machine: string; thread: ThreadInfo }; children: ReactNode
 }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
-  const keys = useShortcut('panes.maximize')
-  const closeKeys = useShortcut('panes.close')
+  const keys = useShortcut('pane.maximize')
+  const closeKeys = useShortcut('pane.closeFocused')
   const label = maximized ? 'Restore' : 'Maximize'
   // At the back of a stack, or under a maximized pane, it's kept (its page, its place in a file), out of sight and out
   // of reach.

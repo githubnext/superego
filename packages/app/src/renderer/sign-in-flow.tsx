@@ -14,7 +14,7 @@ export type SignInFlowProps = {
   /** What it's signing in to, as its heading: "Signing in to Linear". */
   title: ReactNode
   /**
-   * Start it: dispatch the action that does (`auth.login`, or an extension's, answering with `auth.flow`'s `{ flow }`).
+   * Start it: dispatch the action that does (`auth.signIn`, or an extension's, answering with `auth.flow`'s `{ flow }`).
    * Called once, as the component mounts; a throw ends it, failed, with its message.
    */
   start(): Promise<{ flow: string }>

@@ -56,7 +56,7 @@ export const RESERVED = new Set([
   'action', 'agent', 'app', 'auth', 'core', 'daemon', 'extensions', 'file', 'hello', 'model', 'pane', 'profile', 'profiles',
   'providers', 'settings', 'thread', 'threads', 'unwatch', 'value', 'view', 'watch', 'web',
   // A connection's own (heartbeat, channels), who is connected, and the machines this one reaches.
-  'ping', 'ch', 'clients', 'client', 'machines', 'relay',
+  'ping', 'ch', 'clients', 'client', 'machine', 'machines', 'relay',
 ])
 
 /** A path as told to the user: under their home folder, from `~`. */
@@ -1290,7 +1290,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }))
   daemonLife.add(() => relay.close())
   router.register(defineAction({
-    id: 'machines.reconnect', title: 'Reconnect a machine', runs: 'machine', expose: ['ui', 'cli'],
+    id: 'machine.reconnect', title: 'Reconnect a machine', runs: 'machine', expose: ['ui', 'cli'],
     description: 'Drop the link to a machine this one reaches and connect again, as after logging in there.',
     params: obj({ id: str() }),
     run({ id }) { relay.reconnect(id); return null },
@@ -2107,7 +2107,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     async run({ key, value }) { await settings.set(key, value as Json); return null },
   }))
   router.register(defineAction({
-    id: 'auth.login', title: 'Sign in to a provider', runs: 'machine', expose: ['ui', 'cli'],
+    id: 'auth.signIn', title: 'Sign in to a provider', runs: 'machine', expose: ['ui', 'cli'],
     params: obj({ provider: str(), type: union([lit('api_key'), lit('oauth')]), key: opt(str()) }),
     run({ provider, type, key }, ctx: DaemonContext) {
       const flow: string = agent.login(provider, type, key, (event) => ctx.notify('auth.event', { flow, event }))
@@ -2130,12 +2130,12 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     run({ flow }) { flows.cancel(flow); return null },
   }))
   router.register(defineAction({
-    id: 'auth.logout', title: 'Sign out of a provider', runs: 'machine', expose: ['ui', 'cli'],
+    id: 'auth.signOut', title: 'Sign out of a provider', runs: 'machine', expose: ['ui', 'cli'],
     params: obj({ provider: str() }),
     async run({ provider }) { await agent.logout(provider); return null },
   }))
   router.register(defineAction({
-    id: 'daemon.restart', title: 'Restart the background process', runs: 'machine', expose: ['ui', 'cli'],
+    id: 'daemon.restart', title: 'Restart the daemon', runs: 'machine', expose: ['ui', 'cli'],
     params: obj({ build: str(), interrupt: opt(bool()), env: opt(unknown()) }),
     run({ build, interrupt, env }) {
       if (build !== machine.build) throw new RpcError('changed', 'The running daemon changed. Check again.')

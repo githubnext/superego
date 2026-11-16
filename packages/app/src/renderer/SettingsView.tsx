@@ -28,6 +28,7 @@ const ALL = '$all'
 
 /** Settings: wide, a pane beside the rail (Escape goes back); on a phone, a dialog. */
 export function SettingsView({ machines, onClose, pane = false }: { machines: MachineEntry[]; onClose(): void; pane?: boolean }) {
+  const appConfig = useApp()
   const [kept, setTarget] = useLocalState('settings.target', APP)
   // The section kept from last time, unless its machine has gone since.
   const target = kept === APP || kept === MACHINES || kept === ALL || machines.some((m) => m.id === kept) ? kept : APP
@@ -60,7 +61,7 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
           {target === MACHINES ? <Machines machines={machines} onOpen={setTarget} />
             : target === ALL ? <AllMachines machines={editable} />
             : !connected ? <p className="settings__note">{machine?.label} is {machine?.state}. Its settings live on it, so they show once it is back.</p>
-            : !supported ? <p className="settings__note">The superego on {machine?.label} is too old to change its settings from here. Update it there.</p>
+            : !supported ? <p className="settings__note">{appConfig.name} on {machine?.label} is too old to change its settings from here. Update it there.</p>
             : !snapshot ? <p className="settings__note">Loading…</p>
             : snapshot.sections.filter((section) => section.ui || section.settings.some((s) => !s.hidden)).map((section) => <Section key={section.id} target={target} section={section} values={snapshot.values} />)}
         </div>
@@ -267,7 +268,7 @@ export function Providers({ target, section }: { target: string; section: Sectio
               <>
                 {provider.oauth && <Button onClick={() => start(provider.id, 'oauth')}>{provider.oauth}</Button>}
                 {provider.apiKey && <Button onClick={() => setKeyFor(provider.id)}>API key…</Button>}
-                {provider.stored && <Button onClick={() => void dispatch('auth.logout', { provider: provider.id }, { machine: target, source: 'settings' })}>Sign out</Button>}
+                {provider.stored && <Button onClick={() => void dispatch('auth.signOut', { provider: provider.id }, { machine: target, source: 'settings' })}>Sign out</Button>}
                 {rejection && !rejection.retrying && <Button onClick={() => void dispatch('auth.retry', { provider: provider.id }, { machine: target, source: 'settings' })}>Retry now</Button>}
               </>
             )}
@@ -279,7 +280,7 @@ export function Providers({ target, section }: { target: string; section: Sectio
         <SignInFlow
           key={signing.n} machine={target}
           title={`Signing in to ${providers.find((p) => p.id === signing.provider)?.name ?? signing.provider}`}
-          start={() => dispatch('auth.login', { provider: signing.provider, type: signing.type, ...(signing.key ? { key: signing.key } : {}) }, { machine: target, source: 'settings' }) as Promise<{ flow: string }>}
+          start={() => dispatch('auth.signIn', { provider: signing.provider, type: signing.type, ...(signing.key ? { key: signing.key } : {}) }, { machine: target, source: 'settings' }) as Promise<{ flow: string }>}
           onClose={() => setSigning(undefined)}
         />
       )}
@@ -328,10 +329,10 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
             <div>
               <StatusGlyph status={{ state: m.state === 'connected' ? 'idle' : m.state === 'connecting' ? 'working' : m.state === 'disabled' ? 'idle' : 'error' }} />{' '}
               {m.remote && !web ? <input className="machine-row__label" defaultValue={m.label} aria-label="Name"
-                onBlur={(e) => { if (e.target.value.trim() && e.target.value !== m.label) void act('machines.update', { id: m.id, label: e.target.value.trim() }) }} /> : m.label}
+                onBlur={(e) => { if (e.target.value.trim() && e.target.value !== m.label) void act('machine.edit', { id: m.id, label: e.target.value.trim() }) }} /> : m.label}
             </div>
             <div className="settings__note">
-              {m.remote ? <code>{m.remote.route}</code> : 'Local daemon'}
+              {m.remote ? <code>{m.remote.route}</code> : 'This computer'}
               {m.machine && m.machine.hostname !== m.label ? ` · ${m.machine.hostname}` : ''} · {m.state === 'needs-login' ? 'needs login' : m.state === 'host-key' ? 'host key' : m.state}{m.error && m.state !== 'connected' ? ` — ${m.error}` : ''}
             </div>
             {driftNote(m, appConfig.name) && <div className="settings__note machine-row__drift"><MachineDrift machine={m} side="bottom" /> {driftNote(m, appConfig.name)!.text}</div>}
@@ -341,7 +342,7 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
               <div key={a.profile.dir} className="settings__note machine-row__ui" title={a.profile.dir}>
                 <span>Profile <b>{a.profile.name}</b>’s UI runs here, with this window’s full access · {a.files.length === 1 ? '1 file' : `${a.files.length} files`}, {sizeOf(a.files.reduce((sum, f) => sum + f.size, 0))}</span>
                 <Button title="Takes out its views and actions. Reload the window after, to stop anything its code left running"
-                  onClick={() => void act('profiles.revokeUi', { machine: m.id, dir: a.profile.dir }).catch(() => {})}>Revoke</Button>
+                  onClick={() => void act('profile.revokeUi', { machine: m.id, dir: a.profile.dir }).catch(() => {})}>Revoke</Button>
               </div>
             ))}
             {/* Revoked after it ran here: a reload clears what its code may have left going. */}
@@ -350,7 +351,7 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
             {declinedUi.filter((d) => d.machine === m.id).map((d) => (
               <div key={d.profile.dir} className="settings__note machine-row__ui" title={d.profile.dir}>
                 <span>Profile <b>{d.profile.name}</b>’s UI isn’t allowed · {d.files.length === 1 ? '1 file' : `${d.files.length} files`}, {sizeOf(d.files.reduce((sum, f) => sum + f.size, 0))}</span>
-                <Button onClick={() => void act('profiles.allowUi', { machine: m.id, profile: d.profile, hash: d.hash, files: d.files }).catch(() => {})}>Allow</Button>
+                <Button onClick={() => void act('profile.allowUi', { machine: m.id, profile: d.profile, hash: d.hash, files: d.files }).catch(() => {})}>Allow</Button>
               </div>
             ))}
             {m.remote && m.state === 'connected' && m.keepsRunning && (m.keepsRunning.service === null || m.keepsRunning.afterLogout === false) && (
@@ -361,19 +362,19 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
           </div>
           <div className="provider__actions">
             {m.state === 'connected' && <Button onClick={() => onOpen(m.id)}>Settings</Button>}
-            {web && m.remote && m.state !== 'disabled' && <Button onClick={() => void act('machines.reconnect', { id: m.id })}>Reconnect</Button>}
+            {web && m.remote && m.state !== 'disabled' && <Button onClick={() => void act('machine.reconnect', { id: m.id })}>Reconnect</Button>}
             {web ? null : <>
-            {m.state === 'needs-login' && <Button onClick={() => void act('machines.login', { id: m.id })} title="Opens a terminal where ssh can ask for your password or code">Log in</Button>}
-            {m.state === 'host-key' && <Button onClick={() => void act('machines.reconnect', { id: m.id })}>Retry</Button>}
+            {m.state === 'needs-login' && <Button onClick={() => void act('machine.login', { id: m.id })} title="Opens a terminal where ssh can ask for your password or code">Log in</Button>}
+            {m.state === 'host-key' && <Button onClick={() => void act('machine.reconnect', { id: m.id })}>Retry</Button>}
             {m.remote && m.state !== 'disabled' && (
               <Button variant={m.drift && m.drift.state !== 'current' && m.drift.state !== 'ahead' ? 'primary' : 'default'} disabled={m.update?.state === 'running'}
                 title={`Run scripts/install-machine.sh on ${m.label}: pull, install, and restart ${appConfig.name} there`}
                 onClick={() => void act('machine.update', { machine: m.id }).catch(() => {})}>{m.update?.state === 'running' ? 'Updating…' : 'Update'}</Button>
             )}
-            {m.errorKind === 'wrong_machine' && <Button onClick={() => void act('machines.trust', { id: m.id })} title="Use whichever machine answers there now, e.g. after a reinstall">Trust this machine</Button>}
-            {(m.errorKind === 'version_mismatch' || m.errorKind === 'duplicate_machine') && <Button onClick={() => void act('machines.reconnect', { id: m.id })}>Retry</Button>}
-            {m.remote && <Switch label={`Connect to ${m.label}`} checked={m.remote.enabled} onChange={(enabled) => void act('machines.update', { id: m.id, enabled })} />}
-            {m.remote && <Button onClick={() => void act('machines.remove', { id: m.id })}>Remove</Button>}
+            {m.errorKind === 'wrong_machine' && <Button onClick={() => void act('machine.trust', { id: m.id })} title="Use whichever machine answers there now, e.g. after a reinstall">Trust this machine</Button>}
+            {(m.errorKind === 'version_mismatch' || m.errorKind === 'duplicate_machine') && <Button onClick={() => void act('machine.reconnect', { id: m.id })}>Retry</Button>}
+            {m.remote && <Switch label={`Connect to ${m.label}`} checked={m.remote.enabled} onChange={(enabled) => void act('machine.edit', { id: m.id, enabled })} />}
+            {m.remote && <Button onClick={() => void act('machine.remove', { id: m.id })}>Remove</Button>}
             </>}
           </div>
         </div>
@@ -383,7 +384,7 @@ function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpen(id: s
           e.preventDefault()
           const form = new FormData(e.currentTarget)
           const fields = via ? { label: form.get('label'), via: form.get('via') } : { label: form.get('label'), target: form.get('target'), command: form.get('command') }
-          void act('machines.add', fields).then(() => setAdding(false), () => {})
+          void act('machine.add', fields).then(() => setAdding(false), () => {})
         }}>
           <Select aria-label="Connect with" value={via ? 'via' : 'ssh'} onChange={(value) => setVia(value === 'via')}
             options={[{ value: 'ssh', label: 'Connect with ssh' }, { value: 'via', label: 'Connect with a command (docker exec, fly ssh, …)' }]} />

@@ -147,7 +147,7 @@ describe('daemon', () => {
 
     const events: AuthEvent[] = []
     peer.on('auth.event', ({ event }: Notifications['auth.event']) => events.push(event))
-    await peer.call('auth.login', { provider: 'anthropic', type: 'api_key', key: 'sk-ant-test' })
+    await peer.call('auth.signIn', { provider: 'anthropic', type: 'api_key', key: 'sk-ant-test' })
     await until(() => events.some((e) => e.type === 'done' || e.type === 'failed'))
     expect(events.at(-1)).toEqual({ type: 'done' })
     await until(() => providers(snapshot).find((p) => p.id === 'anthropic')?.stored === true)
@@ -155,7 +155,7 @@ describe('daemon', () => {
     const model = snapshot.sections[0]!.settings.find((s) => s.key === 'agent.model')!
     expect(model.type === 'choice' && model.nullLabel).toContain('claude')
 
-    await peer.call('auth.logout', { provider: 'anthropic' })
+    await peer.call('auth.signOut', { provider: 'anthropic' })
     await until(() => providers(snapshot).find((p) => p.id === 'anthropic')?.stored === false)
     await close()
   })

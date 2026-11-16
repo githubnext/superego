@@ -221,12 +221,12 @@ The extension API is short of four things, and Lane 1 adds them:
    function that removes the part, so a one-line `setup: (s) => s.agent(part)` still returns a valid cleanup.
 3. **`superego.auth.flow(context, run)`**: a sign-in flow of an extension's own, carried by the existing `auth.event`,
    `auth.respond` and `auth.cancel`. `context` is the action's (`DaemonContext`): the events go to the client that
-   ran it. It answers `{ flow }` at once, which the action returns, as `auth.login` does. `run(flow)` gets
+   ran it. It answers `{ flow }` at once, which the action returns, as `auth.signIn` does. `run(flow)` gets
    `{ id, signal, emit(event), prompt(prompt, { signal }) }`. The flow ends `done` when `run` resolves and `failed`
    when it throws (`Cancelled` after `auth.cancel`). It's also cancelled when the extension is torn down. An answered
    prompt now says `prompt_closed` to every client. The window shows MCP sign-ins with the same component it uses for
    providers, `SignInFlow` (`packages/app/src/renderer/sign-in-flow.tsx`). It's out of `SettingsView.tsx` and exported
-   from `superego/ui`: `<SignInFlow machine title start={() => dispatch('mcp-servers.login', …)} onClose />`. The flow
+   from `superego/ui`: `<SignInFlow machine title start={() => dispatch('mcp-servers.signIn', …)} onClose />`. The flow
    machinery is out of `agent-settings.ts` and in `auth-flows.ts`, and providers use it too.
 4. **Tool rows by prefix** in the UI half: `superego.tool('mcp__*', row)`. A `*` may only end the name. A tool's own
    row wins over a prefix, and a longer prefix wins over a shorter one.
@@ -412,7 +412,7 @@ committed.
     its own daemon listens too. The daemon's own listener closes that prompt when it catches the redirect first,
     through `prompt`'s `signal`.
   - **A browser or phone,** or a port that's taken: the user pastes the redirect URL, as with providers today.
-  - **The command line** (`superego mcp-servers login <name>`, `-m` for another machine) prints the URL and listens
+  - **The command line** (`superego mcp-servers sign-in <name>`, `-m` for another machine) prints the URL and listens
     the same way.
   - Later, the same `callback` can fix OpenAI sign-in on remote machines too. That's not part of this work.
 
@@ -452,7 +452,7 @@ committed.
 
 **On the thread:**
 
-- A **chip in the header** shows the thread's servers (`3 MCP`). It opens a list of each server with its state, and
+- A **chip in the header** shows the thread's servers (`3 servers`). It opens a list of each server with its state, and
   says why any were left out: no such server here, disabled, waiting for Allow, needs sign-in.
 - The same list is in thread details (⌘I).
 - A server that needs sign-in, in a thread that has it, puts a notice over the composer with *Sign in*, as
@@ -517,7 +517,7 @@ Ego helps set up a server ("connect Linear"), within its settings-only powers:
   - **`auth.event` and `auth.respond` for extensions' flows** keep their shape. A flow is a flow.
   - **The `agentParts` hook, `agent()`'s handle, `auth.flow`, the prefix rows and `SignInFlow`** are extension API.
     They went in as `EXTENSION_API` 1.7.0, and an extension asks for them with `api: '^1.7'`.
-- **Actions** (`mcp-servers.add`, `edit`, `remove`, `allow`, `login`, `logout`, `set-secret`, `restart`) are new, so
+- **Actions** (`mcp-servers.add`, `edit`, `remove`, `allow`, `signIn`, `signOut`, `set-secret`, `restart`) are new, so
   `released-actions.json` only grows.
 - **A profile with `mcp` on an older daemon** loads without it, because the core ignores keys it doesn't know. Its
   threads run without servers, and `superego extensions --thread` is where to look.
@@ -624,8 +624,8 @@ Depends on Lane 1.
   so the section's `data` is right when Settings is read, and the live value `mcp-servers.servers` (the same
   `SectionData`) is kept current as servers start, stop and fail. Draw from the value.
 - **Actions:** `add`, `edit` (whole config; `rename`), `remove`, `set` (`unprofiled` or `enabled` alone), `allow`,
-  `set-secret` (`{ server, values }`, `null` forgets one), `logout` (forgets the server's stored secrets),
-  `restart`, `log`; and lane 3's `login`. Add, edit, allow, set-secret and restart start the
+  `set-secret` (`{ server, values }`, `null` forgets one), `signOut` (forgets the server's stored secrets),
+  `restart`, `log`; and lane 3's `signIn`. Add, edit, allow, set-secret and restart start the
   server to check it (up to 30s) and answer `{ server: ServerInfo }`. All are `['ui', 'cli']`; none `mcp`.
 - **Who added a command isn't guessed.** An action can't tell Ego from the window (`context.source` is a name either
   way), so `add` and `edit` take `allowed: false`, and Ego's tool must pass it for a command. An edit without it keeps
@@ -662,7 +662,7 @@ Lane 3 should know:
   sessions. Call that once a sign-in or sign-out changes the store.
 - `SecretStore.modify(key, edit)` runs under the store's lock, for refresh. Every stored string is hidden in logs
   (`SecretStore.secrets()`), tokens included.
-- `logout` forgets `server:<id>`; add the server's `oauth:<resource>` tokens.
+- `signOut` forgets `server:<id>`; add the server's `oauth:<resource>` tokens.
 
 Lane 4 should know:
 - Settings: draw `SectionData` from the live value `mcp-servers.servers` (`servers`: the machine's in the file's
@@ -681,9 +681,9 @@ Owns sign-in to remote servers:
 - an `OAuthClientProvider` over the store
 - discovery, registration (a configured `clientId`, then DCR), PKCE, `resource`
 - refresh under the store's lock, and `needs-sign-in` on `invalid_grant`
-- `mcp-servers.login` and `logout` through `superego.auth.flow`, with the daemon's loopback listener and the fixed
+- `mcp-servers.signIn` and `signOut` through `superego.auth.flow`, with the daemon's loopback listener and the fixed
   redirect URI (`AppConfig`)
-- `superego mcp-servers login`
+- `superego mcp-servers sign-in`
 
 Files:
 - `extensions/mcp-servers/src/oauth.ts`
@@ -718,7 +718,7 @@ Depends on Lanes 1 and 2.
   (with `callback`), then a `manual_code` prompt, closed through its `signal` when the listener catches the redirect.
   A pasted address (or its query) with the wrong `state` asks again and says why. An `error=` from the authorization
   server fails the flow with it.
-- **`mcp-servers.login {server}`** answers `{ flow }`. The flow is done once the tokens are kept, every server
+- **`mcp-servers.signIn {server}`** answers `{ flow }`. The flow is done once the tokens are kept, every server
   signing in to the same resource has been restarted on them (`secretsChanged`), and the server was checked. If the
   server still refuses, the flow fails with why.
 - **Not signed in** is `needs-sign-in` without trying the server: `missing` is `['sign-in']` for an OAuth server with
@@ -727,20 +727,20 @@ Depends on Lanes 1 and 2.
   runtime sets `refused` with the reason, so a call answers "fx needs you to sign in again (Settings → MCP servers):
   refreshing its sign-in was refused (…)". When the authorization server can't be reached, a token with time left is
   still used.
-- **`logout`** forgets `server:<id>` and the `oauth:<resource>` tokens, and restarts every server sharing them. It
+- **`signOut`** forgets `server:<id>` and the `oauth:<resource>` tokens, and restarts every server sharing them. It
   keeps the registration. `remove` forgets the tokens too, unless another server signs in to the same resource.
 - **Settings:** `ServerInfo.oauth` (`SignInInfo`): `signedIn`, `since`, `expires`, `refreshes`, `scope`. Never a token.
   "Signed in as …" isn't there: tokens don't carry who, and nothing more is fetched to find out.
   The row says "Signed in 3 days ago" ("Signed in, expires in 40 min" when the token won't renew and runs out within a
   day), with when, renewal and scope in its tooltip. Its menu has Sign in… when not signed in, Sign out when it is, and
   Client secret… (the field marked Optional) for a client registered by hand.
-- **The command line:** `superego mcp-servers login <name> [-m machine]` prints the page and asks for the address on
+- **The command line:** `superego mcp-servers sign-in <name> [-m machine]` prints the page and asks for the address on
   stdin. It answers the prompt itself when the redirect is caught: by the machine's daemon, or for `-m` by its own
   listener on this computer (`catchRedirect`, from `@superego/mcp-servers/loopback`), as the desktop app does.
-  `superego mcp-servers logout <name>` signs out.
+  `superego mcp-servers sign-out <name>` signs out.
 - Tests: `test/oauth.test.ts` against `test/auth-server.ts` (the SDK's `mcpAuthRouter` and `requireBearerAuth` over an
   in-memory provider whose refresh tokens work once), with the daemon's own flow and a remote machine's (its port
-  taken, answered by `auth.respond`). The CLI's `login` (the address pasted) and `logout` are in
+  taken, answered by `auth.respond`). The CLI's `sign-in` (the address pasted) and `sign-out` are in
   `packages/cli/test/mcp-servers.test.ts`.
 - **Tried against real servers.** End to end against the MCP project's example server
   (`https://example-server.modelcontextprotocol.io/mcp`, whose mock identity provider approves anyone): discovery,

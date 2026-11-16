@@ -110,7 +110,7 @@ export function ServerRow({ server, own, run, onEdit, onLog, onHelp, children }:
               <Menu.Item onClick={onLog}>Show log</Menu.Item>
               {menu.help && <Menu.Item onClick={() => onHelp()}>{menu.help}</Menu.Item>}
               {menu.clientSecret && <Menu.Item onClick={() => onHelp(true)}>Client secret…</Menu.Item>}
-              {menu.signOut && <Menu.Item onClick={() => run(ACTIONS.logout, { server: server.id })}>Sign out</Menu.Item>}
+              {menu.signOut && <Menu.Item onClick={() => run(ACTIONS.signOut, { server: server.id })}>Sign out</Menu.Item>}
               {own && <><Menu.Separator /><Menu.Item onClick={() => run(ACTIONS.remove, { name })}>Remove</Menu.Item></>}
             </Menu.Popup>
           </Menu.Root>
@@ -133,14 +133,14 @@ export function ServerRow({ server, own, run, onEdit, onLog, onHelp, children }:
 }
 
 /**
- * Signing in to a server: its OAuth flow (`mcp-servers.login`), or its secrets' fields (a key, secret env values, or an
+ * Signing in to a server: its OAuth flow (`mcp-servers.signIn`), or its secrets' fields (a key, secret env values, or an
  * OAuth client's secret: `secrets`).
  */
 export function SignIn({ machine, server, secrets, onClose }: { machine: string; server: ServerInfo; secrets?: boolean; onClose(): void }) {
   const act = useAct(machine)
   const name = server.config.title ?? server.name
   if (server.config.auth?.type === 'oauth' && !secrets) {
-    return <SignInFlow machine={machine} title={`Signing in to ${name}`} start={() => act(ACTIONS.login, { server: server.id }) as Promise<{ flow: string }>} onClose={onClose} />
+    return <SignInFlow machine={machine} title={`Signing in to ${name}`} start={() => act(ACTIONS.signIn, { server: server.id }) as Promise<{ flow: string }>} onClose={onClose} />
   }
   return <Secrets machine={machine} server={server} onClose={onClose} />
 }

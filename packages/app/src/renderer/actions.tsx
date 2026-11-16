@@ -162,7 +162,7 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
   defineWindowAction({ id: 'pane.previous', title: 'Previous pane', keys: 'ctrl+shift+tab', run: (_p, c) => stepPane(c, -1) }),
   // The panes side by side, scrolling past the window's edge, or stacked in one column: `layout`, else the other one.
   defineWindowAction({
-    id: 'panes.layout', title: 'Toggle stacked panes', keys: 'mod+shift+\\',
+    id: 'pane.layout', title: 'Toggle stacked panes', keys: 'mod+shift+\\',
     params: obj({ layout: opt(union([lit('scroll'), lit('stack')])) }),
     run: ({ layout }, c) => c.dispatch('app.settings.set', {
       key: PANE_LAYOUT, value: layout ?? (c.appSetting<PaneLayout>(PANE_LAYOUT) === 'stack' ? 'scroll' : 'stack'),
@@ -193,14 +193,14 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
       setLocalState('settings.target', '$machines', 'app')
       c.openSettings()
       if (!id) return
-      await c.dispatch('machines.install', { id }, { machine: 'app', source: 'machine.update' })
+      await window.superego.call('app', 'machine.update', { machine: id })
     },
   }),
   defineWindowAction({ id: 'app.log', title: 'Show action log', run: (_p, c) => c.showLog() }),
   // Panes of the selected thread.
   defineWindowAction({
     // The pane with the focus; the focus moves left, to the pane before it or the thread. The thread itself stays.
-    id: 'panes.close', title: 'Close pane', keys: 'mod+w',
+    id: 'pane.closeFocused', title: 'Close pane', keys: 'mod+w',
     run: async (_p, c) => {
       const thread = c.selection && c.threadOf(c.selection)
       const panes = thread?.panes ?? []
@@ -212,7 +212,7 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
   }),
   // A pane over the whole of the thread's area for a while (see maximized.ts), and back: `pane`, else the focused one.
   defineWindowAction({
-    id: 'panes.maximize', title: 'Maximize or restore pane', keys: 'mod+shift+enter',
+    id: 'pane.maximize', title: 'Maximize or restore pane', keys: 'mod+shift+enter',
     params: obj({ pane: opt(str()) }),
     when: (c) => {
       const at = maximizable(c)

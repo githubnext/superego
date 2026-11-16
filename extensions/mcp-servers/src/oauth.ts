@@ -1,6 +1,6 @@
 // OAuth for URL servers (the MCP authorization spec), over the SDK's client auth and the store (mcp-auth.json):
 //
-// - Signing in (`signIn`, run by `mcp-servers.login` as a `superego.auth.flow`): the server is asked once without a
+// - Signing in (`signIn`, run by `mcp-servers.signIn` as a `superego.auth.flow`): the server is asked once without a
 //   token, so its `WWW-Authenticate` names its protected resource metadata (RFC 9728) and scope; the SDK's `auth()`
 //   finds its authorization server (RFC 8414 or OpenID discovery), registers Superego with it (a configured `clientId`,
 //   else dynamic client registration, RFC 7591, once per authorization server and redirect URI, kept as

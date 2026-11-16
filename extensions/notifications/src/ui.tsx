@@ -26,8 +26,8 @@ export default defineUiExtension({
     superego.appSettings({
       id: 'notifications', title: 'Notifications', order: 60,
       settings: [{
-        key: NOTIFY, title: 'Notify when a thread needs a look', default: true, type: 'boolean',
-        description: 'A notification when a thread finishes, fails or needs you while the window is in the background.',
+        key: NOTIFY, title: 'Notify when a thread finishes, fails or needs you', default: true, type: 'boolean',
+        description: 'While the window is in the background.',
       }, { key: BADGE, title: 'Show unread count on the app icon', default: true, type: 'boolean' }],
     })
     if (window.superego.web) {

@@ -116,6 +116,8 @@ export function startApp(appConfig: AppConfig) {
         refreshBadge()
         return null
       },
+      /** The window's `machine.update` action, done here: the update's output shows on the machine's row in Settings. */
+      'machine.update': async ({ machine }: { machine: string }) => updateMachine(machine),
       async 'app.desktop'() { return { menuBar: menuBar.shown, dockHidden: mac && dockHidden() } },
       /** The page is listening for app events: answer with a thread it was asked to show before it was. */
       async 'app.ready'() {
@@ -186,7 +188,7 @@ export function startApp(appConfig: AppConfig) {
   /** Reconnect a machine here, and the local daemon's own link there (it reaches the machines too), when it has one. */
   function restartLink(id: string) {
     remotes.restart(id)
-    if (local?.state === 'connected' && local.has('relay')) void local.call('machines.reconnect', { id }).catch(() => {})
+    if (local?.state === 'connected' && local.has('relay')) void local.call('machine.reconnect', { id }).catch(() => {})
   }
 
   /**
@@ -461,22 +463,22 @@ export function startApp(appConfig: AppConfig) {
     async run({ key, value }) { await appSettings.set(key, value as Json); return null },
   }))
   appRouter.register(defineAction({
-    id: 'machines.add', title: 'Add a machine', runs: 'app', expose: ['ui', 'cli'],
+    id: 'machine.add', title: 'Add a machine', runs: 'app', expose: ['ui', 'cli'],
     params: obj({ label: opt(str()), target: opt(str()), command: opt(str()), via: opt(str()) }),
     run: (params) => machineStore.add(params),
   }))
   appRouter.register(defineAction({
-    id: 'machines.update', title: 'Change a machine', runs: 'app', expose: ['ui', 'cli'],
+    id: 'machine.edit', title: 'Change a machine', runs: 'app', expose: ['ui', 'cli'],
     params: obj({ id: str(), label: opt(str()), target: opt(str()), command: opt(str()), via: opt(str()), enabled: opt(bool()) }),
     async run({ id, ...patch }) { await machineStore.update(id, patch as Partial<MachineConfig>); return null },
   }))
   appRouter.register(defineAction({
-    id: 'machines.remove', title: 'Remove a machine', runs: 'app', expose: ['ui', 'cli'],
+    id: 'machine.remove', title: 'Remove a machine', runs: 'app', expose: ['ui', 'cli'],
     params: obj({ id: str() }),
     async run({ id }) { await machineStore.remove(id); await uiAllowed.revoke(id); return null },
   }))
   appRouter.register(defineAction({
-    id: 'profiles.allowUi', title: "Let a machine's profile UI run in this window", runs: 'app', expose: ['ui'],
+    id: 'profile.allowUi', title: "Let a machine's profile UI run in this window", runs: 'app', expose: ['ui'],
     params: obj({
       machine: str(), profile: obj({ scope: union([lit('user'), lit('project')]), name: str(), dir: str() }), hash: str(),
       files: arr(obj({ path: str(), size: int() })),
@@ -489,7 +491,7 @@ export function startApp(appConfig: AppConfig) {
     },
   }))
   appRouter.register(defineAction({
-    id: 'profiles.declineUi', title: "Not now: don't ask about a machine's profile UI again until it changes", runs: 'app', expose: ['ui'],
+    id: 'profile.declineUi', title: "Not now: don't ask about a machine's profile UI again until it changes", runs: 'app', expose: ['ui'],
     params: obj({
       machine: str(), profile: obj({ scope: union([lit('user'), lit('project')]), name: str(), dir: str() }), hash: str(),
       files: arr(obj({ path: str(), size: int() })),
@@ -501,27 +503,22 @@ export function startApp(appConfig: AppConfig) {
     },
   }))
   appRouter.register(defineAction({
-    id: 'profiles.revokeUi', title: "Revoke a machine's profile UI in this app's windows", runs: 'app', expose: ['ui'],
+    id: 'profile.revokeUi', title: "Revoke a machine's profile UI in this app's windows", runs: 'app', expose: ['ui'],
     params: obj({ machine: str(), dir: str() }),
     async run({ machine, dir }) { await uiAllowed.revoke(machine, dir); return null },
   }))
   appRouter.register(defineAction({
-    id: 'machines.trust', title: 'Trust the machine answering now', runs: 'app', expose: ['ui', 'cli'],
+    id: 'machine.trust', title: 'Trust the machine answering now', runs: 'app', expose: ['ui', 'cli'],
     params: obj({ id: str() }),
     async run({ id }) { await machineStore.forgetIdentity(id); restartLink(id); return null },
   }))
   appRouter.register(defineAction({
-    id: 'machines.reconnect', title: 'Reconnect a machine', runs: 'app', expose: ['ui', 'cli'],
+    id: 'machine.reconnect', title: 'Reconnect a machine', runs: 'app', expose: ['ui', 'cli'],
     params: obj({ id: str() }),
     run({ id }) { if (id === 'local') restartLocal(); else restartLink(id); return null },
   }))
   appRouter.register(defineAction({
-    id: 'machines.install', title: `Update ${appConfig.name} on a machine`, runs: 'app', expose: ['ui'],
-    params: obj({ id: str() }),
-    run: ({ id }) => updateMachine(id),
-  }))
-  appRouter.register(defineAction({
-    id: 'machines.login', title: 'Log in to a machine', runs: 'app', expose: ['ui', 'cli'],
+    id: 'machine.login', title: 'Log in to a machine', runs: 'app', expose: ['ui', 'cli'],
     params: obj({ id: str() }),
     /** Opens a terminal where ssh may ask for what it needs, and reconnects once it has left a login behind. Headless: no terminal. */
     run({ id }) {
@@ -543,7 +540,7 @@ export function startApp(appConfig: AppConfig) {
     run() { cli.uninstall(); appSettings.invalidate(); return null },
   }))
   appRouter.register(defineAction({
-    id: 'service.act', title: 'Restart the background process', runs: 'app', expose: ['ui'],
+    id: 'service.act', title: 'Restart the daemon', runs: 'app', expose: ['ui'],
     params: obj({ action: union([lit('restart'), lit('interrupt'), lit('later'), lit('review')]) }),
     async run({ action }) { await service.act(action as ServiceAction); return service.state },
   }))
@@ -628,7 +625,7 @@ export function startApp(appConfig: AppConfig) {
     for (;;) {
       const link = local
       if (link?.state === 'connected' && link.hello && link.hello.machine.pid !== pid) return link.hello
-      if (Date.now() > deadline) throw new Error('The background process did not come back. See daemon.log in the data dir.')
+      if (Date.now() > deadline) throw new Error('The daemon did not come back. See daemon.log in the data dir.')
       await new Promise((resolve) => setTimeout(resolve, 200))
     }
   }
@@ -647,7 +644,7 @@ export function startApp(appConfig: AppConfig) {
     const deadline = Date.now() + 10_000
     for (;;) {
       try { process.kill(pid, 0) } catch { return }
-      if (Date.now() > deadline) throw new Error('The background process did not stop. See daemon.log in the data dir.')
+      if (Date.now() > deadline) throw new Error('The daemon did not stop. See daemon.log in the data dir.')
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
   }
@@ -656,7 +653,7 @@ export function startApp(appConfig: AppConfig) {
     async inspect() {
       const link = local
       const hello = link?.state === 'connected' ? link.hello : undefined
-      if (!hello && !refused()) throw new Error('The background process is not connected.')
+      if (!hello && !refused()) throw new Error('The daemon is not connected.')
       return {
         // The daemon the app would start now is the code next to it on disk.
         installedBuild: readBuild(import.meta.dirname),
@@ -676,7 +673,7 @@ export function startApp(appConfig: AppConfig) {
       // One that can't restart itself (too old, or of another generation): stop it, consented to, and link again,
       // which starts the one installed here.
       const pid = daemonPid()
-      if (!pid) throw new Error('Could not find the background process. See daemon.pid in the data dir.')
+      if (!pid) throw new Error('Could not find the daemon. See daemon.pid in the data dir.')
       try { process.kill(pid, 'SIGTERM') } catch {}
       await exited(pid)
       restartLocal()
@@ -686,7 +683,7 @@ export function startApp(appConfig: AppConfig) {
       if (headless) return true
       const { response } = await dialog.showMessageBox({
         type: 'warning', buttons: ['Restart Now', 'Cancel'], defaultId: 1, cancelId: 1,
-        message: snapshot.canRestartWhenIdle ? 'Interrupt working agents?' : 'Restart the background process?',
+        message: snapshot.canRestartWhenIdle ? 'Interrupt working agents?' : 'Restart the daemon?',
         detail: 'Agents stop mid-turn and pick up again after the restart. Threads and their history are kept.',
       })
       return response === 0
@@ -706,7 +703,7 @@ export function startApp(appConfig: AppConfig) {
       const { response } = await dialog.showMessageBox({
         type: 'warning', buttons: ['Stop Agents and Quit', 'Cancel'], defaultId: 0, cancelId: 1,
         message: `${working.length === 1 ? 'An agent is' : `${working.length} agents are`} still working`,
-        detail: 'Stopping the background process ends their work. Quitting superego alone leaves them running.',
+        detail: `Stopping the daemon ends their work. Quitting ${appConfig.name} alone leaves them running.`,
       })
       if (response !== 0) return
     }

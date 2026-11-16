@@ -132,7 +132,7 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         },
       }))
       superego.action(defineAction({
-        id: CLEAR, title: `Clear ${name}'s conversation`, runs: 'machine', expose: ['ui', 'cli'],
+        id: CLEAR, title: `Clear ${name}'s thread`, runs: 'machine', expose: ['ui', 'cli'],
         params: obj({}),
         async run() {
           const at = await thread()

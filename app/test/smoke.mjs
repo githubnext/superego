@@ -970,13 +970,13 @@ if (phase === 'first') {
   await until(`!document.querySelector('.keymap__clash') && ${keysOf('app.sidebar')}?.textContent.includes('/')`, 'reset to the actions’ own')
   // Machines: add one over ssh that can't connect; it shows its error, then goes away again.
   await run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent === 'Machines').click()`)
-  await run(`window.superego.call('app', 'machines.add', { label: 'Nowhere', target: 'superego-smoke.invalid' })`)
+  await run(`window.superego.call('app', 'machine.add', { label: 'Nowhere', target: 'superego-smoke.invalid' })`)
   await until(`[...document.querySelectorAll('.machine-row')].some((row) => row.textContent.includes('superego-smoke.invalid') && /disconnected/.test(row.textContent))`, 'ssh machine listed with its error')
-  await run(`(async () => { const list = await window.superego.machines(); await window.superego.call('app', 'machines.remove', { id: list.find((m) => m.label === 'Nowhere').id }) })()`)
+  await run(`(async () => { const list = await window.superego.machines(); await window.superego.call('app', 'machine.remove', { id: list.find((m) => m.label === 'Nowhere').id }) })()`)
   await until(`![...document.querySelectorAll('.machine-row')].some((row) => row.textContent.includes('superego-smoke.invalid'))`, 'machine removed')
   // A second machine: another daemon, reached through a command that pipes stdio to it (as docker exec would).
   const second = `SUPEREGO_HOME='${process.env.SUPEREGO_HOME}/second' SUPEREGO_MODEL=faux node '${new URL('../bin/superego.ts', import.meta.url).pathname}' connect --start`
-  await run(`window.superego.call('app', 'machines.add', { label: 'Second', via: ${JSON.stringify(second)} })`)
+  await run(`window.superego.call('app', 'machine.add', { label: 'Second', via: ${JSON.stringify(second)} })`)
   await until(`[...document.querySelectorAll('.machine-row')].some((row) => row.querySelector('input')?.value === 'Second' && / · connected/.test(row.textContent))`, 'second machine connected', 30_000)
   await shot('machines')
   // All machines: a disagreement shows as Mixed, and one change reaches both.

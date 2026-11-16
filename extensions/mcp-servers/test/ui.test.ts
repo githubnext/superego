@@ -209,7 +209,7 @@ describe('what it draws', () => {
 
   it("shows a thread's servers in its header and details, and why any were left out", () => {
     const chip = html(createElement(Chip, { place: 'header', machine, thread: where.thread }))
-    expect(chip).toContain('2 MCP')
+    expect(chip).toContain('2 servers')
     expect(chip).toContain('is-troubled')
     expect(html(createElement(Chip, { place: 'header', machine, thread: thread() }))).toBe('')
     const details = seenIn(registry.slots['details.section'], where).map(({ component }) => html(createElement(component, { machine, thread: where.thread }))).join('')

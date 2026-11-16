@@ -81,8 +81,8 @@ function sayRejected(rejections: ProviderRejection[], machine: Machine) {
     const since = new Date(r.since).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
     const waiting = r.threads.length === 0 ? 'New turns wait' : `${r.threads.length} thread${r.threads.length === 1 ? ' is' : 's are'} waiting`
     console.log(`\n${r.summary}${machine.config ? ` on ${machine.label}` : ''} (since ${since}). ${waiting} for sign-in, and go on once it's done.`)
-    console.log(`  Sign in again: ${app.id} auth key ${r.provider}${on}, or in the app's Settings → Providers`)
-    console.log(`  Retry now:     ${app.id} auth retry ${r.provider}${on}`)
+    console.log(`  Sign in again: ${app.id} providers key ${r.provider}${on}, or in the app's Settings → Providers`)
+    console.log(`  Retry now:     ${app.id} providers retry ${r.provider}${on}`)
   }
 }
 
@@ -395,7 +395,7 @@ async function readSecret(prompt: string): Promise<string> {
   })
 }
 
-async function authCommand(sub: string | undefined, rest: string[], machineName?: string) {
+async function providersCommand(sub: string | undefined, rest: string[], machineName?: string) {
   const machine = resolveMachine(machineName)
   if (!sub || sub === 'ls' || sub === 'list') {
     const { snapshot, rejected } = await on(machine, async (call) => ({ snapshot: await call('settings.watch', {}).then((r) => r.value), rejected: await rejectedOn(call) }))
@@ -411,12 +411,12 @@ async function authCommand(sub: string | undefined, rest: string[], machineName?
     return print({ retried }, () => console.log(retried ? `Retrying ${retried} thread${retried === 1 ? '' : 's'} on ${machine.label}.` : `Nothing waits for sign-in on ${machine.label}.`))
   }
   const provider = rest[0]
-  if (!provider) throw new RpcError('usage', `${app.id} auth ${sub} <provider>`)
-  if (sub === 'logout') {
-    await on(machine, (call) => call('auth.logout', { provider }))
+  if (!provider) throw new RpcError('usage', `${app.id} providers ${sub} <provider>`)
+  if (sub === 'sign-out') {
+    await on(machine, (call) => call('auth.signOut', { provider }))
     return print({ ok: true }, () => console.log(`Signed out of ${provider} on ${machine.label}.`))
   }
-  if (sub !== 'key') throw new RpcError('usage', `Unknown: ${app.id} auth ${sub}. Sign in with a browser from the app's Settings.`)
+  if (sub !== 'key') throw new RpcError('usage', `Unknown: ${app.id} providers ${sub}. Sign in with a browser from the app's Settings.`)
   const key = await readSecret(`API key for ${provider}: `)
   if (!key) throw new RpcError('usage', 'No key given')
   // Sign in on that machine and wait for it to say how it went.
@@ -425,7 +425,7 @@ async function authCommand(sub: string | undefined, rest: string[], machineName?
     const outcome = new Promise<AuthEvent>((done) => transport.peer.on('auth.event', ({ event }: { event: AuthEvent }) => {
       if (event.type === 'done' || event.type === 'failed') done(event)
     }))
-    await transport.peer.call('auth.login', { provider, type: 'api_key', key })
+    await transport.peer.call('auth.signIn', { provider, type: 'api_key', key })
     const event = await withTimeout(outcome, 30_000)
     if (event.type === 'failed') throw new RpcError('auth_failed', event.message)
   } finally {
@@ -856,7 +856,7 @@ async function readCommand(id: string | undefined, values: { machine?: string; w
 async function mcpCommand(name: string | undefined) {
   const machine = resolveMachine(name)
   const { serveMcp } = await import('./mcp.ts')
-  await serveMcp({ app, label: machine.config ? machine.label : 'this computer', connect: (label) => connect(machine, { client: `${app.id}-mcp`, label }) })
+  await serveMcp({ app, label: machine.config ? machine.label : 'this computer', connect: (label) => connect(machine, { client: `${app.id}-outside`, label }) })
   process.exit(0)
 }
 
@@ -917,28 +917,28 @@ async function mcpServersCommand(sub: string | undefined, rest: string[], values
     const checked = await run<McpCheck>(MCP_ACTIONS.setSecret, { server: id, values: { [which]: value } })
     return print(checked.server, () => { table([line(checked.server)]); if (checked.server.error) console.log(checked.server.error) })
   }
-  if (sub === 'login') {
+  if (sub === 'sign-in') {
     const id = await idOf(name)
     const { transport } = await connect(machine)
-    try { await mcpLogin(transport, machine, id, name) } finally { transport.close() }
+    try { await mcpSignIn(transport, machine, id, name) } finally { transport.close() }
     const snapshot = await on(machine, (call) => call('settings.watch', {}).then((r) => r.value))
     const data = snapshot.sections.find((s) => s.id === MCP_SECTION)?.data as McpServers | undefined
     const server = [...data?.servers ?? [], ...data?.profiles ?? []].find((s) => s.id === id)
     return print(server ?? { id }, () => { console.log(`Signed in to ${name} on ${machine.label}.`); if (server) table([line(server)]) })
   }
-  if (sub === 'logout') {
-    const { server } = await run<McpCheck>(MCP_ACTIONS.logout, { server: await idOf(name) })
+  if (sub === 'sign-out') {
+    const { server } = await run<McpCheck>(MCP_ACTIONS.signOut, { server: await idOf(name) })
     return print(server, () => console.log(`Signed out of ${name} on ${machine.label}.`))
   }
   throw new RpcError('usage', `Unknown: ${app.id} mcp-servers ${sub}`)
 }
 
 /**
- * Sign in to a server with OAuth from here (`mcp-servers.login`): the page to open is printed, and the address the
+ * Sign in to a server with OAuth from here (`mcp-servers.signIn`): the page to open is printed, and the address the
  * browser ends up on is caught by the machine's daemon (this computer's), by this command (another machine's: it
  * listens where the browser is sent, as the desktop app does), or pasted.
  */
-async function mcpLogin(transport: Transport, machine: Machine, server: string, name: string) {
+async function mcpSignIn(transport: Transport, machine: Machine, server: string, name: string) {
   let flow: string | undefined
   const early: Notifications['auth.event'][] = []
   let hear = (_event: AuthEvent) => {}
@@ -978,7 +978,7 @@ async function mcpLogin(transport: Transport, machine: Machine, server: string, 
     }
   })
   try {
-    ({ flow } = await transport.peer.call('action.run', { id: MCP_ACTIONS.login, params: { server }, exposure: 'cli' }) as { flow: string })
+    ({ flow } = await transport.peer.call('action.run', { id: MCP_ACTIONS.signIn, params: { server }, exposure: 'cli' }) as { flow: string })
     for (const params of early.splice(0)) if (params.flow === flow) hear(params.event)
     const end = await ended
     if (end.type === 'failed') throw new RpcError('auth_failed', end.message)
@@ -1054,7 +1054,7 @@ async function main() {
     }
     case 'machines': return machinesCommand(rest[0], rest.slice(1), values)
     case 'settings': return settingsCommand(rest[0], rest.slice(1), values)
-    case 'auth': return authCommand(rest[0], rest.slice(1), values.machine)
+    case 'providers': return providersCommand(rest[0], rest.slice(1), values.machine)
     case 'daemon': return daemonCommand(rest[0], Boolean(values.now))
     case 'connect': return values.update ? updateHere(Boolean(values.now)) : bridge(Boolean(values.start))
     case 'actions': return actionsCommand(rest[0], values)

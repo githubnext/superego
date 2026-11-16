@@ -123,7 +123,7 @@ it('lists the machines it reaches, passes calls on, and brings their news back t
   await until(() => hub.calls.some((c) => c.method === 'unwatch' && (c.params as { sub: string }).sub === watch.sub))
 
   // Reconnecting a machine drops its link and makes another.
-  await b.peer.call('machines.reconnect', { id: hub.box })
+  await b.peer.call('machine.reconnect', { id: hub.box })
   await until(() => b.machines().find((m) => m.id === hub.box)?.state === 'connected')
   expect(await call<ThreadInfo[]>(b.peer, hub.box, 'thread.list', {})).toMatchObject([{ id: thread.id }])
 })

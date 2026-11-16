@@ -143,10 +143,10 @@ superego settings                     # every setting and its value
 superego settings set <key> <value>   # value is JSON, or plain text; --all: every enabled machine
 superego settings reset <key>
 superego layout                       # the window's layout.json: the views there are, the places each fits, and where they are
-superego auth                         # providers and how each is signed in
-superego auth key <provider>          # store an API key (prompted, or from stdin)
-superego auth logout <provider>
-superego auth retry [provider]        # retry the threads waiting for sign-in now
+superego providers                    # providers and how each is signed in
+superego providers key <provider>     # sign in with an API key (prompted, or from stdin)
+superego providers sign-out <provider>
+superego providers retry [provider]   # retry the threads waiting for sign-in now
 ```
 
 Each machine has its own settings (models, providers, which extensions are on). OAuth sign-in happens in the app's

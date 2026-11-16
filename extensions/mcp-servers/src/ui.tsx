@@ -131,14 +131,15 @@ export function ServerList({ servers }: { servers: ThreadServers }) {
 /** Whether any of a thread's servers wants a look: one failed or needing sign-in, or one left out. */
 const troubled = (servers: ThreadServers) => Boolean(servers.left?.length) || servers.servers.some((s) => s.state === 'failed' || s.state === 'needs-sign-in')
 
-/** In the header: "3 MCP", opening to its servers. */
+/** In the header: "3 servers" beside the plug, opening to its servers. */
 export function Chip({ thread }: ViewProps<'thread'>) {
   const servers = serversOf(thread)
   if (!servers) return null
-  const label = `${servers.servers.length} MCP`
+  const count = servers.servers.length
+  const label = count === 1 ? '1 server' : `${count} servers`
   return (
     <Popover tooltip="MCP servers" trigger={
-      <button type="button" className={`titlebar__chip mcp-chip ${troubled(servers) ? 'is-troubled' : ''}`} aria-label={`MCP servers: ${servers.servers.length}`}>
+      <button type="button" className={`titlebar__chip mcp-chip ${troubled(servers) ? 'is-troubled' : ''}`} aria-label={`MCP servers: ${count}`}>
         <PlugIcon size={12} aria-hidden /> {label}
       </button>
     }>

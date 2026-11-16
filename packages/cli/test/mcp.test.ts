@@ -105,7 +105,7 @@ it('serves the actions exposed to outside agents as tools, and logs their runs a
   const { peer, socket } = await connectSocket(socketPath({ id: 'superego', name: 'Superego' }, home))
   try {
     const log = await peer.call<{ id: string; source: string; ok: boolean; client?: { kind: string; label: string } }[]>('action.log', {})
-    expect(log.find((e) => e.id === 'thread.rename' && e.ok)).toMatchObject({ source: 'outside', client: { kind: 'superego-mcp', label: 'mcp-test (outside agent)' } })
+    expect(log.find((e) => e.id === 'thread.rename' && e.ok)).toMatchObject({ source: 'outside', client: { kind: 'superego-outside', label: 'mcp-test (outside agent)' } })
     expect(log.some((e) => e.id === 'thread.start' && e.source === 'outside')).toBe(true)
   } finally {
     socket.destroy()

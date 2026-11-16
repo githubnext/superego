@@ -155,7 +155,7 @@ export type Hello = {
 
 /**
  * A connection to a daemon, as its client list shows it. `kind` is what the client said it is in `hello` (`superego-app`,
- * `web`, `superego-cli`); `label` names it for people: the computer it runs on, a browser's device name, a Tailscale login.
+ * `web`, `superego-cli`, `superego-outside`); `label` names it for people: the computer it runs on, a browser's device name, a Tailscale login.
  */
 export type ClientInfo = {
   id: string; kind: string; label: string; connectedAt: number; activeAt: number
@@ -247,10 +247,10 @@ export type Methods = {
   'settings.watch': { params: {}; result: { sub: string; value: SettingsSnapshot } }
   'settings.set': { params: { key: string; value: Json }; result: null }
   /** Start a sign-in. It reports through `auth.event`; prompts are answered with `auth.respond`. */
-  'auth.login': { params: { provider: string; type: 'api_key' | 'oauth'; key?: string }; result: { flow: string } }
+  'auth.signIn': { params: { provider: string; type: 'api_key' | 'oauth'; key?: string }; result: { flow: string } }
   'auth.respond': { params: { flow: string; prompt: string; value: string }; result: null }
   'auth.cancel': { params: { flow: string }; result: null }
-  'auth.logout': { params: { provider: string }; result: null }
+  'auth.signOut': { params: { provider: string }; result: null }
 
   /**
    * Snapshot of an extension's live value, then `value.changed` with each new one. Watched by name: null until an
@@ -300,7 +300,7 @@ export type Methods = {
    */
   'relay.call': { params: { machine: string; method: string; params?: unknown }; result: unknown }
   /** Drop a link and connect again, as after a login or a reinstall there. */
-  'machines.reconnect': { params: { id: string }; result: null }
+  'machine.reconnect': { params: { id: string }; result: null }
 }
 
 /** An extension as `extensions.inspect` reports it. */

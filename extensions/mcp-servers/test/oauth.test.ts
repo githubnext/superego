@@ -2,7 +2,7 @@
 // server's 401, dynamic registration (once), PKCE and state and resource; the redirect caught by the daemon's listener,
 // or pasted when its port is taken (a remote machine's flow, as the desktop app answers it); refresh before a token
 // runs out, a rotating refresh token used once however many calls want it at once, `invalid_grant` → needs-sign-in;
-// a client registered by hand; and through a real daemon: `mcp-servers.login` as a flow, tools over the token, a call
+// a client registered by hand; and through a real daemon: `mcp-servers.signIn` as a flow, tools over the token, a call
 // failing cleanly once the sign-in is refused, and logout.
 import { writeFileSync } from 'node:fs'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
@@ -281,7 +281,7 @@ async function results(peer: RpcPeer, id: string) {
     .map((m) => `${m!.isError ? 'error: ' : ''}${m!.content?.map((c) => c.text ?? `[${c.type}]`).join('\n')}`)
 }
 
-it('signs in through mcp-servers.login, uses the token for its tools, and signs out', async () => {
+it('signs in through mcp-servers.signIn, uses the token for its tools, and signs out', async () => {
   const as = await authServer()
   const port = await freePort()
   const { peer, events } = await open(port, [calling('mcp__fx__echo', { text: 'hi' }), answer('Done.')])
@@ -289,9 +289,9 @@ it('signs in through mcp-servers.login, uses the token for its tools, and signs 
   // Not signed in: not tried, and Settings says so.
   expect(server).toMatchObject({ state: 'needs-sign-in', error: expect.stringMatching(/fx needs you to sign in/), oauth: { signedIn: false } })
   expect(as.seen.bearer).toEqual([])
-  await expect(act(peer, 'login', { server: 'nope' })).rejects.toThrow(/No MCP server nope/)
+  await expect(act(peer, 'signIn', { server: 'nope' })).rejects.toThrow(/No MCP server nope/)
 
-  const { flow } = await act<{ flow: string }>(peer, 'login', { server: 'fx' })
+  const { flow } = await act<{ flow: string }>(peer, 'signIn', { server: 'fx' })
   await until(() => Boolean(events.get(flow)?.some((e) => e.type === 'prompt')), 'the prompt')
   const url = events.get(flow)!.find((e) => e.type === 'auth_url') as Extract<AuthEvent, { type: 'auth_url' }>
   expect(url.callback).toBe(`http://127.0.0.1:${port}/mcp/callback`)
@@ -319,7 +319,7 @@ it('signs in through mcp-servers.login, uses the token for its tools, and signs 
   expect(text).not.toContain(kept.tokens.access_token)
 
   // Signed out: the tokens are forgotten; the registration is kept for next time.
-  const { server: out } = await act(peer, 'logout', { server: 'fx' })
+  const { server: out } = await act(peer, 'signOut', { server: 'fx' })
   expect(out).toMatchObject({ state: 'needs-sign-in', oauth: { signedIn: false } })
   const after = JSON.parse(await readFile(join(dir, 'mcp-auth.json'), 'utf8'))
   expect(Object.keys(after)).toEqual([expect.stringMatching(/^client:/)])
@@ -332,7 +332,7 @@ it("doesn't hold up other servers or Settings while one server's token endpoint 
   const port = await freePort()
   const { peer, events } = await open(port)
   await act(peer, 'add', { name: 'fx', server: { url: as.url, auth: { type: 'oauth' }, unprofiled: true } })
-  const { flow } = await act<{ flow: string }>(peer, 'login', { server: 'fx' })
+  const { flow } = await act<{ flow: string }>(peer, 'signIn', { server: 'fx' })
   await until(() => Boolean(events.get(flow)?.some((e) => e.type === 'auth_url')), 'the page')
   const page = events.get(flow)!.find((e) => e.type === 'auth_url') as Extract<AuthEvent, { type: 'auth_url' }>
   // Where the user signs in is said, by its host.
@@ -364,7 +364,7 @@ it("answers a remote machine's flow by its manual_code prompt, and puts a refuse
   await occupy(port)
   const { peer, events } = await open(port, [calling('mcp__fx__echo', { text: 'hi' }), answer('Done.')])
   await act(peer, 'add', { name: 'fx', server: { url: as.url, auth: { type: 'oauth' }, unprofiled: true } })
-  const { flow } = await act<{ flow: string }>(peer, 'login', { server: 'fx' })
+  const { flow } = await act<{ flow: string }>(peer, 'signIn', { server: 'fx' })
   await until(() => Boolean(events.get(flow)?.some((e) => e.type === 'prompt')), 'the prompt')
   const said = events.get(flow)!
   const url = said.find((e) => e.type === 'auth_url') as Extract<AuthEvent, { type: 'auth_url' }>

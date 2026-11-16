@@ -31,12 +31,12 @@ function ProfileUiNotice({ machine, thread }: { machine: MachineEntry; thread: T
   // A browser runs no other machine's profile UI: it has no say of this computer's to ask for (see web-bridge.ts).
   if (!pending || pending.declined || thread.archived || window.superego.web) return null
   const total = pending.files.reduce((sum, file) => sum + file.size, 0)
-  const say = (id: 'profiles.allowUi' | 'profiles.declineUi') => {
+  const say = (id: 'profile.allowUi' | 'profile.declineUi') => {
     setError(undefined)
     const { machine, profile, hash, files } = pending
     return dispatch(id, { machine, profile, hash, files }, { machine: 'app', source: 'profile-ui' }).catch((e: Error) => { setError(e.message); throw e })
   }
-  const notNow = () => void say('profiles.declineUi').then(() => declineUi(pending), () => {})
+  const notNow = () => void say('profile.declineUi').then(() => declineUi(pending), () => {})
   const show = (path: string) => void dispatch('pane.open', {
     thread: thread.id, kind: 'profile-source', params: { dir: pending.profile.dir, name: pending.profile.name, path },
   }, { machine: machine.id, source: 'profile-ui' })
@@ -51,7 +51,7 @@ function ProfileUiNotice({ machine, thread }: { machine: MachineEntry; thread: T
         </ul>
       )}
       <div className="profile-ui-notice__actions">
-        <Button variant="primary" onClick={() => void say('profiles.allowUi').catch(() => {})}>Allow</Button>
+        <Button variant="primary" onClick={() => void say('profile.allowUi').catch(() => {})}>Allow</Button>
         <Button onClick={notNow}>Not now</Button>
         <Button variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
           {pending.files.length === 1 ? '1 file' : `${pending.files.length} files`}, {sizeOf(total)}

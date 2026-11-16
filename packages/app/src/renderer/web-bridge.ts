@@ -187,7 +187,7 @@ export function webBridge(): SuperegoBridge {
   const served = serveSettings(settings, (params) => emit({ machine: 'app', method: 'settings.changed', params }), subs)
   const appActions = [
     { id: 'app.settings.set', title: 'Change an app setting', runs: 'app', expose: ['ui'] },
-    { id: 'machines.reconnect', title: 'Reconnect a machine', runs: 'app', expose: ['ui'] },
+    { id: 'machine.reconnect', title: 'Reconnect a machine', runs: 'app', expose: ['ui'] },
   ]
   const app: Record<string, (params: never) => unknown> = {
     'settings.watch': served['settings.watch'] as never,
@@ -222,8 +222,8 @@ export function webBridge(): SuperegoBridge {
     'profileUi.allowed': async () => [],
     'profileUi.declined': async () => [],
     /** This page's own connection, or the serving daemon's link to another machine. Adding, removing, logging in and updating are the desktop app's. */
-    'machines.reconnect': async ({ id }: { id: string }) => {
-      if (id !== 'local') return (peer ?? await ready).call('machines.reconnect', { id })
+    'machine.reconnect': async ({ id }: { id: string }) => {
+      if (id !== 'local') return (peer ?? await ready).call('machine.reconnect', { id })
       socket?.close()
       return null
     },

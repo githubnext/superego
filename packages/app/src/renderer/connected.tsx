@@ -4,7 +4,7 @@ import type { ClientInfo, Notifications, SectionInfo } from '@superego/protocol'
 import { machine as client } from './client.ts'
 import { ago } from './web-access.tsx'
 
-const KINDS: Record<string, string> = { 'superego-app': 'the app', web: 'a browser', 'superego-cli': 'the command line', 'superego-daemon': 'another machine' }
+const KINDS: Record<string, string> = { 'superego-app': 'the app', web: 'a browser', 'superego-cli': 'the command line', 'superego-daemon': 'another machine', 'superego-outside': 'an outside agent' }
 
 export function ConnectedClients({ target }: { target: string; section: SectionInfo }) {
   const [list, setList] = useState<ClientInfo[]>()

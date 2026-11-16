@@ -206,14 +206,14 @@ export const ACTIONS = {
   allow: 'mcp-servers.allow',
   setSecret: 'mcp-servers.set-secret',
   /** Forget its stored secrets, and its OAuth tokens. */
-  logout: 'mcp-servers.logout',
+  signOut: 'mcp-servers.signOut',
   restart: 'mcp-servers.restart',
   log: 'mcp-servers.log',
   /**
    * Sign in with OAuth (`{ server }`), in the browser: answers `{ flow }` at once, which says how it goes (`auth.event`;
    * draw it with `SignInFlow`). Done once it's signed in and connected.
    */
-  login: 'mcp-servers.login',
+  signIn: 'mcp-servers.signIn',
 } as const
 
 export const ADD_PARAMS = obj({

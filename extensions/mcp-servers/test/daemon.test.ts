@@ -304,9 +304,9 @@ it('gives a thread the servers its profile names, unprofiled ones to threads wit
   expect(await partsOf(peer, hidden.id)).not.toContain('mcp-servers')
 
   // Outside agents can't reach any of it.
-  expect(api.actions('mcp').filter((a: ActionInfo) => a.id.startsWith('mcp-servers.'))).toEqual([])
+  expect(api.actions('outside').filter((a: ActionInfo) => a.id.startsWith('mcp-servers.'))).toEqual([])
   expect(api.actions('cli').filter((a: ActionInfo) => a.id.startsWith('mcp-servers.')).map((a) => a.id).sort()).toEqual([
-    'mcp-servers.add', 'mcp-servers.allow', 'mcp-servers.edit', 'mcp-servers.log', 'mcp-servers.login', 'mcp-servers.logout', 'mcp-servers.remove', 'mcp-servers.restart', 'mcp-servers.set', 'mcp-servers.set-secret',
+    'mcp-servers.add', 'mcp-servers.allow', 'mcp-servers.edit', 'mcp-servers.log', 'mcp-servers.remove', 'mcp-servers.restart', 'mcp-servers.set', 'mcp-servers.set-secret', 'mcp-servers.signIn', 'mcp-servers.signOut',
   ])
   await close()
 })
@@ -369,7 +369,7 @@ it("gives a command its secret env values from the store, hides them in its log,
   await until(async () => (await section(peer)).servers[0]?.state === 'stopped', 'the idle server to stop')
   expect((await section(peer)).servers[0]?.tools).toBe(6)
   // Forgotten, it needs sign-in again.
-  expect((await act(peer, 'logout', { server: 'fx' })).server.state).toBe('needs-sign-in')
+  expect((await act(peer, 'signOut', { server: 'fx' })).server.state).toBe('needs-sign-in')
   await close()
 })
 

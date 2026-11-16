@@ -100,7 +100,7 @@ export class ServiceRestart {
     const running = await this.#io.restart(snapshot, interrupt)
     if (running === 'busy') { this.#waiting = true; this.#publish({ phase: 'waiting', busy: true }); return }
     const verified = await this.#io.inspect()
-    if (verified.runningBuild !== running) throw new Error('Could not verify the restarted background process. Try again.')
+    if (verified.runningBuild !== running) throw new Error('Could not verify the restarted daemon. Try again.')
     this.#waiting = false
     this.#publish({ ...verified, phase: verified.installedBuild === running ? 'current' : 'required', error: undefined })
   }

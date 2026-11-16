@@ -96,10 +96,10 @@ describe('superego', () => {
     expect((await superegoJson(['settings'])).values['agent.model']).toBe(null)
     await expect(superego(['settings', 'set', 'agent.model', 'nope/nope'])).rejects.toThrow(/unknown choice/)
 
-    await superego(['auth', 'key', 'anthropic'], 'sk-ant-test\n')
-    expect((await superegoJson(['auth'])).find((p: any) => p.id === 'anthropic')).toMatchObject({ stored: true, auth: { type: 'api_key' } })
-    await superego(['auth', 'logout', 'anthropic'])
-    expect((await superegoJson(['auth'])).find((p: any) => p.id === 'anthropic').stored).toBe(false)
+    await superego(['providers', 'key', 'anthropic'], 'sk-ant-test\n')
+    expect((await superegoJson(['providers'])).find((p: any) => p.id === 'anthropic')).toMatchObject({ stored: true, auth: { type: 'api_key' } })
+    await superego(['providers', 'sign-out', 'anthropic'])
+    expect((await superegoJson(['providers'])).find((p: any) => p.id === 'anthropic').stored).toBe(false)
   })
 
   it('lists actions and runs any of them with do', async () => {
@@ -236,11 +236,11 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     const after = await superegoJson(['daemon', 'status'])
     expect(after.pid).not.toBe(before.pid)
     expect((await superegoJson(['threads'])).some((s: any) => s.title === 'hi from the cli')).toBe(true)
-    expect((await superegoJson(['auth'])).find((p: any) => p.id === 'anthropic')).toMatchObject({ auth: { source: 'ANTHROPIC_API_KEY' } })
+    expect((await superegoJson(['providers'])).find((p: any) => p.id === 'anthropic')).toMatchObject({ auth: { source: 'ANTHROPIC_API_KEY' } })
 
     // Restarted from a shell with another key (`box run superego daemon restart` on a daemon the app started): both.
     await superego(['daemon', 'restart'], undefined, undefined, { OPENAI_API_KEY: 'sk-env' })
-    const auth = await superegoJson(['auth'])
+    const auth = await superegoJson(['providers'])
     expect(auth.find((p: any) => p.id === 'anthropic')).toMatchObject({ auth: { source: 'ANTHROPIC_API_KEY' } })
     expect(auth.find((p: any) => p.id === 'openai')).toMatchObject({ auth: { source: 'OPENAI_API_KEY' } })
   }, starting(3))
@@ -253,8 +253,8 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     const listed = await superego(['threads'])
     expect(listed).toMatch(new RegExp(`${created.id}\\s+~ waiting for sign-in`))
     expect(listed).toContain('faux rejected the API key')
-    expect(listed).toContain('superego auth key faux')
-    expect(await superego(['auth', 'retry', 'faux'])).toContain('Retrying 1 thread')
+    expect(listed).toContain('superego providers key faux')
+    expect(await superego(['providers', 'retry', 'faux'])).toContain('Retrying 1 thread')
     // Signed in again: it goes on by itself.
     writeFileSync(join(home, 'auth.json'), JSON.stringify({}))
     await until(async () => (await superegoJson(['threads'])).find((t: any) => t.id === created.id)?.status.state === 'done')

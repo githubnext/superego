@@ -20,6 +20,19 @@ const PRIORITY: Record<StatusState, number> = { blocked: 4, error: 3, done: 2, w
  */
 export const waitingForSignIn = (status: Status) => status.state === 'blocked' && status.kind === 'auth'
 
+/** Each state as the UI says it: in status tooltips, the sidebar's sort and notifications. */
+export const STATUS_WORDS = { idle: 'Idle', working: 'Working', done: 'Finished', blocked: 'Needs you', error: 'Failed' } as const satisfies Record<StatusState, string>
+
+/** What a blocked thread waits on, in words. */
+const WAITS_ON: Record<BlockedKind, string> = { permission: 'a permission', question: 'a question', auth: 'sign-in' }
+
+/** A thread's status in a few words: "Working", "Needs you: a question", "Finished: <recap>", "Waiting for sign-in". */
+export function statusLabel(status: Status): string {
+  if (waitingForSignIn(status)) return `Waiting for sign-in${status.msg ? `: ${status.msg}` : ''}`
+  if (status.state === 'blocked') return status.kind ? `${STATUS_WORDS.blocked}: ${WAITS_ON[status.kind]}` : STATUS_WORDS.blocked
+  return status.msg ? `${STATUS_WORDS[status.state]}: ${status.msg}` : STATUS_WORDS[status.state]
+}
+
 /**
  * Whether a thread wants the user and they haven't looked: it finished, failed or asks something. Not one waiting for
  * sign-in (one notice for the machine says so), nor a child working for its parent (the parent hears how it ends;
