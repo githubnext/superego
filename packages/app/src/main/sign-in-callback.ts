@@ -4,6 +4,8 @@
 // there, so the flow also asks for the redirect URL to be pasted (a `manual_code` prompt). The app listens at that
 // address on this computer while the flow is open, and answers that prompt with the URL the browser was sent to. The
 // machine checks the URL (its `state`) and finishes signing in. A port that's taken here is left alone: pasting works.
+// A request without the `state` the flow's page was given (another page, another process here) is turned away, and the
+// app goes on listening for the real one.
 import { createServer, type Server } from 'node:http'
 import type { AuthEvent } from '@superego/protocol'
 
@@ -14,6 +16,8 @@ type Catching = {
   machine: string
   flow: string
   callback: URL
+  /** The `state` the flow's page was given, which the browser comes back with; unset when it has none. */
+  state?: string
   server: Server
   timer: ReturnType<typeof setTimeout>
   /** The `manual_code` prompt waiting for the URL. */
@@ -26,6 +30,14 @@ type Catching = {
 const PAGE = `<!doctype html><meta charset="utf-8"><title>Signed in</title>
 <body style="font: 15px system-ui, sans-serif; margin: 4rem auto; max-width: 28rem; text-align: center">
 <p>You can close this tab and go back to the app.</p></body>`
+const ELSEWHERE = `<!doctype html><meta charset="utf-8"><title>Not this sign-in</title>
+<body style="font: 15px system-ui, sans-serif; margin: 4rem auto; max-width: 28rem; text-align: center">
+<p>This isn't the sign-in the app is waiting for.</p></body>`
+
+/** The `state` a sign-in page is given, which the browser comes back with. */
+export function stateOf(page: string): string | undefined {
+  try { return new URL(page).searchParams.get('state') ?? undefined } catch { return undefined }
+}
 
 /** A loopback address the app may listen on: plain http, on this computer, at a port that needs no privilege. */
 function loopback(text: string): URL | undefined {
@@ -56,20 +68,21 @@ export function createSignInCatcher(respond: Respond, { timeout = 10 * 60_000 } 
     catching.prompt = undefined
     respond(catching.machine, { flow: catching.flow, prompt, value: catching.caught }).catch(() => {})
   }
-  function listen(machine: string, flow: string, callback: URL) {
+  function listen(machine: string, flow: string, callback: URL, state: string | undefined) {
     const port = Number(callback.port)
     const before = open.get(port)
     if (before) stop(before)
     const server = createServer((request, response) => {
       const url = new URL(request.url ?? '/', callback)
       if (url.pathname !== callback.pathname) return void response.writeHead(404).end()
+      if (state !== undefined && url.searchParams.get('state') !== state) return void response.writeHead(400, { 'content-type': 'text/html; charset=utf-8' }).end(ELSEWHERE)
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(PAGE)
       catching.caught = url.href
       // Caught: the port goes back, and the flow gets it once it asks.
       server.close()
       answer(catching)
     })
-    const catching: Catching = { machine, flow, callback, server, timer: setTimeout(() => stop(catching), timeout) }
+    const catching: Catching = { machine, flow, callback, ...(state !== undefined ? { state } : {}), server, timer: setTimeout(() => stop(catching), timeout) }
     catching.timer.unref?.()
     open.set(port, catching)
     // Taken here (another app, this computer's own daemon): pasting it is how.
@@ -83,7 +96,7 @@ export function createSignInCatcher(respond: Respond, { timeout = 10 * 60_000 } 
       const catching = forFlow(machine, flow)
       if (event.type === 'auth_url' && event.callback) {
         const callback = loopback(event.callback)
-        if (callback && !catching) listen(machine, flow, callback)
+        if (callback && !catching) listen(machine, flow, callback, stateOf(event.url))
         return
       }
       if (!catching) return

@@ -941,7 +941,7 @@ async function mcpLogin(transport: Transport, machine: Machine, server: string, 
       if (event.type === 'auth_url') {
         console.error(`Open this page to sign in to ${name}:\n\n  ${event.url}\n`)
         if (machine.config && event.callback) {
-          void catchRedirect(event.callback, stop.signal).then((url) => {
+          void catchRedirect(event.callback, stop.signal, event.url).then((url) => {
             caught = url
             if (waiting) respond(waiting.id, url)
           }, () => {})

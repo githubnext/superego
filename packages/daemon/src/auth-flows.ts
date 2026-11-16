@@ -1,6 +1,8 @@
 // Sign-in flows: a provider's (agent-settings.ts) and an extension's own (`superego.auth.flow`), carried the same way.
 // A flow tells the client that started it what's happening (`auth.event`: a page to open, a code to enter, progress),
-// asks it things (`prompt`, answered with `auth.respond`), and ends `done` or `failed`; `auth.cancel` stops it.
+// asks it things (`prompt`, answered with `auth.respond`), and ends `done` or `failed`; `auth.cancel` stops it. One
+// left waiting (its client gone, the browser closed) is given up on after `timeout`, its prompts and its listening with
+// it.
 import { randomUUID } from 'node:crypto'
 import { RpcError, type AuthEvent, type AuthPrompt } from '@superego/protocol'
 
@@ -37,7 +39,10 @@ export type AuthFlows = {
   close(): void
 }
 
-export function createAuthFlows(): AuthFlows {
+/** How long a flow may take, by default: as long as the app's sign-in catcher listens (sign-in-callback.ts). */
+export const FLOW_TIMEOUT = 10 * 60_000
+
+export function createAuthFlows({ timeout = FLOW_TIMEOUT } = {}): AuthFlows {
   const flows = new Map<string, Running>()
   return {
     start(emit, run, signal) {
@@ -46,6 +51,9 @@ export function createAuthFlows(): AuthFlows {
       flows.set(id, flow)
       const cancel = () => flow.abort.abort()
       signal?.addEventListener('abort', cancel, { once: true })
+      let timedOut = false
+      const timer = setTimeout(() => { timedOut = true; cancel() }, timeout)
+      timer.unref?.()
       const prompt = (prompt: AuthPrompt, options?: { signal?: AbortSignal }) => new Promise<string>((resolve, reject) => {
         const promptId = randomUUID()
         const close = () => {
@@ -67,8 +75,11 @@ export function createAuthFlows(): AuthFlows {
       void Promise.resolve().then(() => run(api)).then(() => {
         emit({ type: 'done' })
       }, (error: unknown) => {
-        emit({ type: 'failed', message: flow.abort.signal.aborted ? 'Cancelled' : error instanceof Error ? error.message : String(error) })
+        const message = timedOut ? `Timed out: signing in wasn't finished within ${Math.round(timeout / 60_000)} minutes`
+          : flow.abort.signal.aborted ? 'Cancelled' : error instanceof Error ? error.message : String(error)
+        emit({ type: 'failed', message })
       }).finally(() => {
+        clearTimeout(timer)
         flows.delete(id)
         signal?.removeEventListener('abort', cancel)
         for (const pending of flow.prompts.values()) pending.close()

@@ -81,3 +81,22 @@ it("leaves alone what isn't a loopback http address, and a port that's taken", a
   await new Promise((r) => setTimeout(r, 50))
   expect(answers).toEqual([])
 })
+
+it("turns away a request without the page's state, and goes on listening for the real one", async () => {
+  const { catching, answers } = catcher()
+  const port = await freePort()
+  const callback = `http://127.0.0.1:${port}/mcp/callback`
+  catching.heard('box', 'f1', { type: 'auth_url', url: 'https://auth.example/authorize?client_id=c&state=the-state', callback })
+  catching.heard('box', 'f1', { type: 'prompt', id: 'p1', prompt: { type: 'manual_code', message: 'Paste' } })
+  await until(() => listening(port))
+  for (const query of ['?code=evil&state=other', '?code=evil']) {
+    const wrong = await fetch(`${callback}${query}`)
+    expect(wrong.status).toBe(400)
+    expect(await wrong.text()).toMatch(/isn't the sign-in/)
+  }
+  expect(answers).toEqual([])
+  expect(await listening(port)).toBe(true)
+  await fetch(`${callback}?code=abc&state=the-state`)
+  await until(() => answers.length === 1)
+  expect(answers[0]).toMatchObject({ prompt: 'p1', value: `${callback}?code=abc&state=the-state` })
+})

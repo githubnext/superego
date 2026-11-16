@@ -12,7 +12,7 @@ export const DEFAULT_CALLBACK_PORT = 1456
 /** The redirect URI for an app's port. */
 export const redirectOf = (port: number) => `http://127.0.0.1:${port}${CALLBACK_PATH}`
 
-const page = (text: string) => `<!doctype html><meta charset="utf-8"><title>${text.split('.')[0]}</title>
+const html = (text: string) => `<!doctype html><meta charset="utf-8"><title>${text.split('.')[0]}</title>
 <body style="font: 15px system-ui, sans-serif; margin: 4rem auto; max-width: 28rem; text-align: center">
 <p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p></body>`
 
@@ -67,11 +67,11 @@ export class Callbacks {
       if (url.pathname !== CALLBACK_PATH) return void response.writeHead(404).end()
       const done = this.#waiting.get(url.searchParams.get('state') ?? '')
       if (!done) {
-        response.writeHead(400, HTML).end(page('This sign-in is no longer going on. Start it again from the app.'))
+        response.writeHead(400, HTML).end(html('This sign-in is no longer going on. Start it again from the app.'))
         return
       }
       const { status, text } = answer(url)
-      response.writeHead(status, HTML).end(page(text))
+      response.writeHead(status, HTML).end(html(text))
       done(url)
     })
     server.on('error', (error: NodeJS.ErrnoException) => {
@@ -93,14 +93,20 @@ export class Callbacks {
 /**
  * Catch one redirect at `callback` on this computer, for a flow running on another (the command line's `-m`): resolves
  * with the whole address the browser was sent to; never settles when the port is taken; rejects when `signal` aborts.
+ * `page`: the sign-in page; a request without the `state` it was given is turned away, and the listening goes on.
  */
-export function catchRedirect(callback: string, signal: AbortSignal): Promise<string> {
+export function catchRedirect(callback: string, signal: AbortSignal, page?: string): Promise<string> {
+  let state: string | undefined
+  try { state = page ? new URL(page).searchParams.get('state') ?? undefined : undefined } catch { state = undefined }
   return new Promise<string>((resolve, reject) => {
     const where = new URL(callback)
     const server = createServer((request, response) => {
       const url = new URL(request.url ?? '/', where)
       if (url.pathname !== where.pathname) return void response.writeHead(404).end()
-      response.writeHead(200, HTML).end(page(answer(url).text))
+      if (state !== undefined && url.searchParams.get('state') !== state) {
+        return void response.writeHead(400, HTML).end(html('This isn\'t the sign-in the command line is waiting for.'))
+      }
+      response.writeHead(200, HTML).end(html(answer(url).text))
       close()
       resolve(url.href)
     })

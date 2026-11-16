@@ -9,8 +9,9 @@
 //   (loopback.ts), caught by the daemon or pasted (`manual_code`), the `state` checked; the code is exchanged, and the
 //   tokens kept as `oauth:<resource>` with what refreshing them takes.
 // - Using them (`OAuthAccess`, a `fetch` for the server's transport): every request to the server's origin carries its
-//   access token. One with under a minute left is refreshed first, inside the store's lock (`modify`), so two threads
-//   never present the same refresh token (they rotate). A `401` refreshes once and tries again. A refresh refused
+//   access token. One with under a minute left is refreshed first, inside its key's lock in the store (`modify`), so two
+//   threads never present the same refresh token (they rotate); no other server, nor Settings, waits on it. Every call
+//   to an authorization server is given `TIMEOUT` to answer (a refresh, each step of a sign-in). A `401` refreshes once and tries again. A refresh refused
 //   (`invalid_grant`, or the client's gone), or a `401` a refresh doesn't fix, is an `UnauthorizedError`: the runtime
 //   puts the server in `needs-sign-in`, and the refused tokens are forgotten.
 import { randomBytes } from 'node:crypto'
@@ -27,6 +28,16 @@ import type { SecretStore } from './store.ts'
 
 /** A token with less than this left is refreshed before it's used. */
 const MARGIN = 60_000
+/** How long an authorization server gets to answer a request: a refresh, a step of signing in. */
+export const TIMEOUT = 15_000
+
+/** `fetchFn`, each request given up after `ms` (and when its own signal, or `also`, aborts). */
+export function timed(fetchFn: FetchLike, ms: number, also?: AbortSignal): FetchLike {
+  return (url, init) => {
+    const signals = [AbortSignal.timeout(ms), ...init?.signal ? [init.signal] : [], ...also ? [also] : []]
+    return fetchFn(url, { ...init, signal: AbortSignal.any(signals) })
+  }
+}
 
 /** What `oauth:<resource>` keeps: the tokens, and what refreshing them takes. */
 export type SignedIn = {
@@ -63,19 +74,26 @@ const errorText = (error: unknown) => error instanceof Error ? error.message || 
 export class OAuthAccess {
   #store: SecretStore
   #fetch: FetchLike
-  constructor(store: SecretStore, fetchFn: FetchLike = (url, init) => fetch(url, init)) {
+  #timeout: number
+  /** Why a resource's tokens were last forgotten, for calls that wanted them at the same time: by resource. */
+  #forgotten = new Map<string, string>()
+  constructor(store: SecretStore, fetchFn: FetchLike = (url, init) => fetch(url, init), { timeout = TIMEOUT } = {}) {
     this.#store = store
     this.#fetch = fetchFn
+    this.#timeout = timeout
   }
 
   /** What's kept for a resource, if it's signed in. */
   signedIn(resource: string) { return this.#store.read<Json>(tokenKey(resource)) as Promise<SignedIn | undefined> }
 
   /** Forget a resource's tokens: signed out. */
-  forget(resource: string) { return this.#store.delete(tokenKey(resource)) }
+  forget(resource: string) {
+    this.#forgotten.delete(resource)
+    return this.#store.delete(tokenKey(resource))
+  }
 
   /**
-   * An access token for `resource`, refreshed first (under the store's lock) when it has under a minute left, or when
+   * An access token for `resource`, refreshed first (under its key's lock) when it has under a minute left, or when
    * it's `refused`: the one the server just turned away. Throws `UnauthorizedError` when it isn't signed in, or the
    * refresh was refused (the tokens are forgotten then).
    */
@@ -84,8 +102,10 @@ export class OAuthAccess {
     const stale = (entry: SignedIn) => refused !== undefined
       ? entry.tokens.access_token === refused
       : entry.expiresAt !== undefined && entry.tokens.refresh_token !== undefined && entry.expiresAt - Date.now() < MARGIN
+    const gone = () => new UnauthorizedError(this.#forgotten.get(resource) ?? 'it isn\'t signed in')
     const now = await this.signedIn(resource)
-    if (!now) throw new UnauthorizedError('it isn\'t signed in')
+    if (!now) throw gone()
+    this.#forgotten.delete(resource)
     if (!stale(now)) return now.tokens.access_token
     let why: string | undefined
     const next = await this.#store.modify<Json>(key, async (stored) => {
@@ -101,15 +121,19 @@ export class OAuthAccess {
       } catch (error) {
         if (turnedDown(error)) {
           why = `refreshing its sign-in was refused (${errorText(error)})`
+          this.#forgotten.set(resource, why)
           return undefined
         }
         // Couldn't reach the authorization server: the token it has is good a little longer.
         if (refused === undefined && (current.expiresAt === undefined || current.expiresAt > Date.now())) return stored
+        if (error instanceof DOMException && error.name === 'TimeoutError') {
+          throw new Error(`its authorization server didn't answer a refresh within ${Math.round(this.#timeout / 1000)}s`)
+        }
         throw error
       }
     }) as SignedIn | undefined
     if (why) throw new UnauthorizedError(why)
-    if (!next) throw new UnauthorizedError('it isn\'t signed in')
+    if (!next) throw gone()
     return next.tokens.access_token
   }
 
@@ -119,7 +143,7 @@ export class OAuthAccess {
       clientInformation: current.client,
       refreshToken: current.tokens.refresh_token!,
       ...(current.resource ? { resource: current.resource } : {}),
-      fetchFn: this.#fetch,
+      fetchFn: timed(this.#fetch, this.#timeout),
     })
     return stamped({ ...current, tokens: { ...tokens, ...(current.tokens.issuer ? { issuer: current.tokens.issuer } : {}) } })
   }
@@ -267,7 +291,7 @@ async function probe(url: string, fetchFn: FetchLike): Promise<{ resourceMetadat
  */
 export async function signIn(options: SignInOptions, flow: AuthFlow): Promise<SignedIn> {
   const { name, url, redirect, store } = options
-  const fetchFn: FetchLike = options.fetch ?? ((input, init) => fetch(input, { ...init, signal: flow.signal }))
+  const fetchFn = timed(options.fetch ?? ((input, init) => fetch(input, init)), TIMEOUT, flow.signal)
   flow.emit({ type: 'progress', message: `Finding out how ${name} signs in…` })
   const asked = await probe(url, fetchFn).catch((error: unknown) => { throw new Error(`Couldn't reach ${name}: ${errorText(error)}`) })
   const scope = options.scopes?.length ? options.scopes.join(' ') : asked.scope
@@ -294,7 +318,7 @@ export async function signIn(options: SignInOptions, flow: AuthFlow): Promise<Si
     caught.abort()
     return readRedirect(back.href, state)
   })
-  flow.emit({ type: 'auth_url', url: page.href, callback: redirect, instructions: `Sign in to ${name} in the browser.` })
+  flow.emit({ type: 'auth_url', url: page.href, callback: redirect, instructions: `Sign in to ${name} in the browser, at ${page.host}.` })
   const pasted = (async () => {
     let message = `Once you've signed in, the browser goes to ${redirect}. If that page doesn't load, paste its whole address here.`
     for (;;) {

@@ -14,11 +14,12 @@ import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
 import { connectSocket, listen, openDaemon, type AuthFlow } from '@superego/daemon'
 import { defineApp, PROTOCOL_VERSION, type AuthEvent, type AuthPrompt, type Notifications, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { mcpServersExtension } from '../src/daemon.ts'
-import { Callbacks, redirectOf } from '../src/loopback.ts'
+import { Callbacks, catchRedirect, redirectOf } from '../src/loopback.ts'
 import { clientKey, OAuthAccess, readRedirect, resourceOf, signIn, tokenKey, type SignedIn, type SignInOptions } from '../src/oauth.ts'
 import type { CheckResult, SectionData, ServerInfo } from '../src/shared.ts'
-import { SecretStore } from '../src/store.ts'
+import { SecretStore, serverKey } from '../src/store.ts'
 import { serveOAuth } from './auth-server.ts'
+import { serveHttp } from './fixture.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
 let dir: string
@@ -187,6 +188,40 @@ it('uses a rotating refresh token once, however many calls want a fresh token at
   expect(await other.text()).toBe('none')
 })
 
+it('a stalled token endpoint holds up only its own refresh, and is given up on', async () => {
+  const { as, store, entry } = await signedIn({ expiresIn: 30 })
+  const resource = resourceOf(as.url)
+  const access = new OAuthAccess(store, undefined, { timeout: 500 })
+  as.stall = true
+  const refreshing = access.token(resource)
+  let settled = false
+  void refreshing.finally(() => { settled = true }).catch(() => {})
+  await until(() => as.stalledCount === 1, 'the refresh to stall')
+  // Meanwhile, nothing else waits for it: reads (its own key's too), and changes to other keys.
+  await store.modify(serverKey('other'), () => ({ key: 'other-key' }))
+  expect(await store.read(serverKey('other'))).toEqual({ key: 'other-key' })
+  expect((await access.signedIn(resource))?.tokens.access_token).toBe(entry.tokens.access_token)
+  expect(settled).toBe(false)
+  // Given up on: the token it has is good for a little longer, so it's used.
+  expect(await refreshing).toBe(entry.tokens.access_token)
+  // One the server turned away can't be: the call fails, saying why.
+  await expect(access.token(resource, entry.tokens.access_token)).rejects.toThrow(/didn't answer a refresh within 1s/)
+  // Both entries kept whole: writes to different keys didn't lose each other.
+  const kept = JSON.parse(await readFile(join(dir, 'mcp-auth.json'), 'utf8'))
+  expect(kept[serverKey('other')]).toEqual({ key: 'other-key' })
+  expect(kept[tokenKey(resource)].tokens.refresh_token).toBe(entry.tokens.refresh_token)
+})
+
+it('remembers only secret values for redacting: tokens, client secrets, server secrets, short ones too', async () => {
+  const port = await freePort()
+  const client = { client_id: 'superego-app', client_secret: 'shh', redirect_uris: [redirectOf(port)] }
+  const { as, store, entry } = await signedIn({ client }, { clientId: 'superego-app', clientSecret: 'shh' }, port)
+  await store.modify(serverKey('web'), () => ({ key: 'k1' }))
+  const secrets = store.secrets()
+  expect(secrets).toEqual(expect.arrayContaining([entry.tokens.access_token, entry.tokens.refresh_token!, 'shh', 'k1']))
+  for (const plain of ['Bearer', 'bearer', as.url, `${as.base}/`, 'superego-app', 'Superego']) expect(secrets).not.toContain(plain)
+})
+
 it('forgets a sign-in whose refresh is refused (invalid_grant), and says so', async () => {
   const { as, store, access } = await signedIn({ expiresIn: 30 })
   const resource = resourceOf(as.url)
@@ -195,6 +230,9 @@ it('forgets a sign-in whose refresh is refused (invalid_grant), and says so', as
   await expect(refused).rejects.toBeInstanceOf(UnauthorizedError)
   await expect(refused).rejects.toThrow(/refreshing its sign-in was refused/)
   expect(await store.read(tokenKey(resource))).toBeUndefined()
+  // Calls that wanted it at the same time, or after, are told why too; once signed out, just that it isn't signed in.
+  await expect(access.token(resource)).rejects.toThrow(/refreshing its sign-in was refused/)
+  await access.forget(resource)
   await expect(access.token(resource)).rejects.toThrow(/isn't signed in/)
 })
 
@@ -286,6 +324,38 @@ it('signs in through mcp-servers.login, uses the token for its tools, and signs 
   expect(Object.keys(after)).toEqual([expect.stringMatching(/^client:/)])
 })
 
+it("doesn't hold up other servers or Settings while one server's token endpoint stalls", async () => {
+  const as = await authServer()
+  const web = await serveHttp()
+  closing.push(() => web.close())
+  const port = await freePort()
+  const { peer, events } = await open(port)
+  await act(peer, 'add', { name: 'fx', server: { url: as.url, auth: { type: 'oauth' }, unprofiled: true } })
+  const { flow } = await act<{ flow: string }>(peer, 'login', { server: 'fx' })
+  await until(() => Boolean(events.get(flow)?.some((e) => e.type === 'auth_url')), 'the page')
+  const page = events.get(flow)!.find((e) => e.type === 'auth_url') as Extract<AuthEvent, { type: 'auth_url' }>
+  // Where the user signs in is said, by its host.
+  expect(page.instructions).toContain(new URL(as.base).host)
+  await fetch(await as.approve(page.url))
+  await until(() => Boolean(events.get(flow)?.some((e) => e.type === 'done')), 'signed in')
+
+  // fx's token is turned away, and getting another stalls: its restart waits on the authorization server…
+  as.expireAccess()
+  as.stall = true
+  const restarting = act(peer, 'restart', { server: 'fx' })
+  let settled = false
+  void restarting.finally(() => { settled = true }).catch(() => {})
+  await until(() => as.stalledCount === 1, 'the refresh to stall')
+  // …while another server is added, keyed and connected, and Settings reads.
+  await act(peer, 'add', { name: 'web', server: { url: web.url, auth: { type: 'api-key' }, unprofiled: true } })
+  const set = await act(peer, 'set-secret', { server: 'web', values: { key: 'good-key' } })
+  expect(set.server).toMatchObject({ tools: 6 })
+  expect((await section(peer)).servers.map((s) => s.name).sort()).toEqual(['fx', 'web'])
+  expect(settled).toBe(false)
+  as.stall = false
+  await restarting
+})
+
 it("answers a remote machine's flow by its manual_code prompt, and puts a refused sign-in into needs-sign-in", async () => {
   const as = await authServer({ expiresIn: 30 })
   const port = await freePort()
@@ -312,4 +382,20 @@ it("answers a remote machine's flow by its manual_code prompt, and puts a refuse
   expect(result).toMatch(/^error: fx needs you to sign in again \(Settings → MCP servers\): refreshing its sign-in was refused/)
   await until(async () => (await info(peer, 'fx')).state === 'needs-sign-in', 'needs-sign-in')
   expect((await info(peer, 'fx')).oauth).toEqual({ signedIn: false })
+})
+
+it("catches the command line's redirect only with the page's state", async () => {
+  const port = await freePort()
+  const stop = new AbortController()
+  closing.push(() => stop.abort())
+  const caught = catchRedirect(redirectOf(port), stop.signal, 'https://auth.example/authorize?state=the-state')
+  let got: string | undefined
+  void caught.then((url) => { got = url }, () => {})
+  await until(() => fetch(`http://127.0.0.1:${port}/`).then(() => true, () => false), 'the listener')
+  const wrong = await fetch(`${redirectOf(port)}?code=evil&state=other`)
+  expect(wrong.status).toBe(400)
+  await new Promise((r) => setTimeout(r, 20))
+  expect(got).toBeUndefined()
+  await fetch(`${redirectOf(port)}?code=abc&state=the-state`)
+  expect(await caught).toBe(`${redirectOf(port)}?code=abc&state=the-state`)
 })

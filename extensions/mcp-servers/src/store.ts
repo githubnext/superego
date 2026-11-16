@@ -1,6 +1,7 @@
-// The secrets of MCP servers, in `<dataDir>/mcp-auth.json`: only the user can read it (0600), changes are one at a
-// time, and each replaces the file atomically, as the provider credentials' `auth.json` (agent-settings.ts). A sibling
-// of that file, not in it: pi-ai reads every entry there as a provider. Nothing here ever reaches a client.
+// The secrets of MCP servers, in `<dataDir>/mcp-auth.json`: only the user can read it (0600), changes to a key are one
+// at a time (locked per key, never the whole file), and each replaces the file atomically, as the provider credentials'
+// `auth.json` (agent-settings.ts). A sibling of that file, not in it: pi-ai reads every entry there as a provider.
+// Nothing here ever reaches a client.
 //
 //   server:<id>               the values of a server's secrets: `key` (API key), or each of `auth.names` (env)
 //   oauth:<resource>          OAuth tokens, by the server's canonical URL (lane 3)
@@ -10,29 +11,44 @@ import type { Json } from '@superego/protocol'
 
 export type StoreEntries = Record<string, Json>
 
+/** The fields of an entry that are secret, wherever they are in it; and every value of a `server:` entry. */
+const SECRET_FIELDS = new Set(['access_token', 'refresh_token', 'client_secret'])
+
 export class SecretStore {
   readonly path: string
-  #queue: Promise<unknown> = Promise.resolve()
-  /** Every value stored, for redacting logs: kept as the file was last read or written here. */
+  /** Each key's changes, one at a time: the tail of its queue. */
+  #locks = new Map<string, Promise<unknown>>()
+  /** Writing the file, one at a time (never with anything slow inside). */
+  #writes: Promise<unknown> = Promise.resolve()
+  /** Every secret value stored, for redacting logs: kept as the file was last read or written here. */
   #values = new Set<string>()
   constructor(path: string) { this.path = path }
 
-  read<T extends Json>(key: string): Promise<T | undefined> { return this.#serial(async () => (await this.#load())[key] as T | undefined) }
-  keys(): Promise<string[]> { return this.#serial(async () => Object.keys(await this.#load())) }
+  /**
+   * An entry as the file has it now. Never waits on a change: the file is replaced whole, so a read sees it before or
+   * after one, and a key whose change is slow (a token being refreshed) holds up nothing but that key's changes.
+   */
+  async read<T extends Json>(key: string): Promise<T | undefined> { return (await this.#load())[key] as T | undefined }
+  async keys(): Promise<string[]> { return Object.keys(await this.#load()) }
 
   /**
-   * Change one entry, under the store's lock: `edit` gets it as it is, and returns it as it should be (`undefined`
-   * removes it). Two changes never interleave, so a refresh token is never used twice.
+   * Change one entry, under that key's lock: `edit` gets it as it is, and returns it as it should be (`undefined`
+   * removes it). Two changes to a key never interleave, so a refresh token is never used twice; changes to other keys
+   * go on meanwhile, and only the file's write itself is one at a time.
    */
   modify<T extends Json>(key: string, edit: (current: T | undefined) => T | undefined | Promise<T | undefined>): Promise<T | undefined> {
-    return this.#serial(async () => {
-      const all = await this.#load()
-      const next = await edit(all[key] as T | undefined)
-      if (next === undefined) delete all[key]
-      else all[key] = next
-      await this.#save(all)
+    const run = (this.#locks.get(key) ?? Promise.resolve()).then(async () => {
+      const next = await edit((await this.#load())[key] as T | undefined)
+      await this.#write((all) => {
+        if (next === undefined) delete all[key]
+        else all[key] = next
+      })
       return next
     })
+    const tail = run.catch(() => {})
+    this.#locks.set(key, tail)
+    void tail.then(() => { if (this.#locks.get(key) === tail) this.#locks.delete(key) })
+    return run
   }
 
   delete(key: string) { return this.modify(key, () => undefined) }
@@ -40,9 +56,14 @@ export class SecretStore {
   /** The secret values known, longest first, for `redact`. */
   secrets(): string[] { return [...this.#values].sort((a, b) => b.length - a.length) }
 
-  #serial<T>(task: () => Promise<T>): Promise<T> {
-    const run = this.#queue.then(task)
-    this.#queue = run.catch(() => {})
+  /** The file read again and changed, as one write after any before it. */
+  #write(change: (all: StoreEntries) => void): Promise<void> {
+    const run = this.#writes.then(async () => {
+      const all = await this.#load()
+      change(all)
+      await this.#save(all)
+    })
+    this.#writes = run.catch(() => {})
     return run
   }
 
@@ -64,13 +85,22 @@ export class SecretStore {
     this.#remember(all)
   }
 
-  /** Every string in it of a length worth hiding: keys, tokens, secret values. */
+  /** The secrets in it: every value of a server's secrets, and tokens and client secrets wherever they are. */
   #remember(all: StoreEntries) {
+    const add = (value: Json | undefined) => { if (typeof value === 'string' && value !== '') this.#values.add(value) }
     const walk = (value: Json | undefined): void => {
-      if (typeof value === 'string') { if (value.length >= 6) this.#values.add(value) } else if (Array.isArray(value)) value.forEach(walk)
-      else if (value && typeof value === 'object') Object.values(value).forEach(walk)
+      if (Array.isArray(value)) value.forEach(walk)
+      else if (value && typeof value === 'object') {
+        for (const [field, inner] of Object.entries(value)) {
+          if (SECRET_FIELDS.has(field)) add(inner)
+          else walk(inner)
+        }
+      }
     }
-    walk(all)
+    for (const [key, value] of Object.entries(all)) {
+      if (key.startsWith('server:') && value && typeof value === 'object' && !Array.isArray(value)) Object.values(value).forEach(add)
+      else walk(value)
+    }
   }
 }
 

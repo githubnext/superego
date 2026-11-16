@@ -99,6 +99,9 @@ export async function serveOAuth(options: AuthServerOptions = {}) {
   const base = `http://127.0.0.1:${port}`
   const url = `${base}/mcp`
   const off = { rateLimit: false as const }
+  // A stalled token endpoint: its requests wait, unanswered, until it's let go.
+  let stalled: (() => void)[] | undefined
+  app.use('/token', (_req: any, _res: any, next: any) => { if (stalled) stalled.push(next); else next() })
   app.use(mcpAuthRouter({
     provider, issuerUrl: new URL(base), resourceServerUrl: new URL(url), scopesSupported: ['tools'],
     authorizationOptions: off, clientRegistrationOptions: off, tokenOptions: off, revocationOptions: off,
@@ -132,6 +135,14 @@ export async function serveOAuth(options: AuthServerOptions = {}) {
     revokeAll() { access.clear(); refresh.clear() },
     /** How long tokens issued from now on last. */
     set expiresIn(seconds: number) { expiresIn = seconds },
+    /** The token endpoint stops answering (`true`), or answers again, everything it held let through (`false`). */
+    set stall(on: boolean) {
+      const held = stalled
+      stalled = on ? held ?? [] : undefined
+      if (!on) for (const next of held ?? []) next()
+    },
+    /** Token requests waiting on the stall. */
+    get stalledCount() { return stalled?.length ?? 0 },
     close: () => new Promise<void>((resolve) => { http.closeAllConnections(); http.close(() => resolve()) }),
   }
 }

@@ -696,7 +696,7 @@ Depends on Lanes 1 and 2.
 **Built.** As above, except:
 - **Tokens reach the server through a `fetch`, not the SDK's `authProvider`.** `Launch.oauth` became `Launch.fetch`:
   `OAuthAccess.fetchFor(resource)` (oauth.ts) puts the access token on every request to the resource's origin, and only
-  there. It refreshes a token with under a minute left first, under the store's lock: it reads without the lock, and
+  there. It refreshes a token with under a minute left first, under its key's lock: it reads without the lock, and
   takes it only to refresh, checking again inside, so a call that waited finds the token another call refreshed. A
   `401` refreshes once (only if the stored token is still the one refused) and tries again. The SDK's own `401`
   handling would refresh outside the lock, and would start a browser sign-in from inside a tool call; neither is
@@ -795,6 +795,34 @@ From the independent review of the client support (`~/.superego/mcp-review.md`):
   `read` refuses `mcp-servers.json`, so env and header values reach neither Ego nor an outside agent through it. Ego
   decides "an outside agent asked" by the message a tool call answers, not the newest one. A profile's server isn't
   re-checked this way: its config changes only with `profile.ts`, which needs allowing again.
+
+**OAuth and sign-in hardening** (H3, L1, L2, L3, L7, L8):
+- **H3: a slow refresh holds up only its own server.** `SecretStore` locks per key, not per file. `modify(key, …)`
+  runs one at a time for that key (so a rotated refresh token is still used once), and only the file's write itself is
+  one at a time. That write re-reads the file and changes just the one key, and never has a network call inside it.
+  `read`/`keys` take no lock: the file is replaced whole, so a read sees it before or after a write. Every request to
+  an authorization server gets `TIMEOUT` (15s, `timed()` in oauth.ts): refresh, and each step of a sign-in (on top
+  of the flow's signal). A refresh that times out falls back to the old token while it's still valid. Otherwise it
+  fails with "its authorization server didn't answer a refresh within 15s". The MCP requests themselves in `fetchFor`
+  get no timeout of their own. A server may answer a POST with JSON only once a long tool call finishes, and a 15s
+  limit would cut those calls off. They're bounded by the runtime's call timeout instead. `OAuthAccess` remembers why
+  a resource's tokens were last forgotten, until a sign-in or sign-out. Calls that wanted the token at the same moment
+  as a refused refresh then say "refreshing its sign-in was refused", not "it isn't signed in".
+- **L1: the remote catchers check `state`.** The desktop app's catcher (sign-in-callback.ts) and the command line's
+  `catchRedirect(callback, signal, page)` read `state` from `auth_url`'s page. They turn away (400) a request to the
+  callback without it, and go on listening. A page without a `state` is caught as before.
+- **L2: only secrets are remembered for redacting:** every value of a `server:*` entry, and `access_token`,
+  `refresh_token` and `client_secret` wherever they are, whatever their length. URLs, `Bearer` and client names no
+  longer come out as `***`.
+- **L3: a flow left waiting is given up on.** `createAuthFlows({ timeout })` defaults to 10 minutes (`FLOW_TIMEOUT`),
+  the same as the app's catcher. The flow's signal aborts, its prompts close, and the daemon's listener lets go of its
+  `state`. It ends `failed` with "Timed out: …". It isn't cancelled when the client that started it disconnects:
+  `auth.flow`'s `to` has only `notify`, so auth-flows.ts can't tell. Doing that means giving `DaemonContext` a close
+  signal in the core (daemon.ts).
+- **L7:** `auth_url`'s instructions name the host you sign in at: "Sign in to linear in the browser, at
+  mcp.linear.app."
+- **L8:** `mcp-servers.json` is written 0600 (an older 0644 file becomes 0600 on its next change). A file that doesn't
+  parse is reported as "… isn't valid JSON (line L, column C)", never with the parser's quote of it.
 
 ## Future
 

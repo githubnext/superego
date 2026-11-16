@@ -17,7 +17,11 @@ export class ConfigFile {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { servers: {} }
       throw error
     }
-    const file = JSON.parse(text) as ServersFile
+    let file: ServersFile
+    try { file = JSON.parse(text) as ServersFile } catch (error) {
+      // Not the parser's message: it quotes the file, and what's said here reaches Settings and Ego.
+      throw new RpcError('invalid', `${this.path} isn't valid JSON${whereIn(text, error)}`)
+    }
     if (!file || typeof file !== 'object' || !file.servers || typeof file.servers !== 'object' || Array.isArray(file.servers)) {
       throw new RpcError('invalid', `${this.path} must be { "servers": { … } }`)
     }
@@ -30,13 +34,24 @@ export class ConfigFile {
       const file = await this.read()
       const result = await edit(file)
       const temp = `${this.path}.${process.pid}.tmp`
-      await writeFile(temp, `${JSON.stringify(file, null, 2)}\n`)
+      await writeFile(temp, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
       await rename(temp, this.path)
       return result
     })
     this.#queue = run.catch(() => {})
     return run
   }
+}
+
+/** Where in `text` a JSON parse error is, as " (line L, column C)", when the error says its position. */
+function whereIn(text: string, error: unknown): string {
+  const message = error instanceof Error ? error.message : ''
+  const lineColumn = /line (\d+) column (\d+)/.exec(message)
+  if (lineColumn) return ` (line ${lineColumn[1]}, column ${lineColumn[2]})`
+  const position = /at position (\d+)/.exec(message)
+  if (!position) return ''
+  const before = text.slice(0, Number(position[1])).split('\n')
+  return ` (line ${before.length}, column ${before.at(-1)!.length + 1})`
 }
 
 const loopback = (host: string) => host === 'localhost' || host === '[::1]' || host === '::1' || /^127\./.test(host)
