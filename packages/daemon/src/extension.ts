@@ -31,8 +31,9 @@ export type { AuthFlowEvent } from './auth-flows.ts'
 
 /**
  * A daemon half: what the extension is (`ExtensionAbout`: its name, title, description, whether it's required, and the
- * panes its UI half draws), and its setup. An extension whose work is all in the window has none: the window declares it to the machine
- * (`extension.declare`), which then lists it in Settings and lets a profile do without it.
+ * panes its UI half draws), and its setup. An extension whose work is all in the window has no setup: its `about` alone is
+ * one, for a daemon that bundles it to know it from the start (its pane kinds, its switch in Settings, a profile doing
+ * without it). A window also declares its extensions to each machine (`extension.declare`), for one that doesn't.
  */
 export type DaemonExtension = ExtensionAbout & {
   /**

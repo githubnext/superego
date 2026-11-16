@@ -4,13 +4,16 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { serveDaemon } from '@superego/daemon'
 import { machineHub } from '@superego/client'
-// Every bundled extension's daemon half, in the order the window lists their UI halves (one with none, like links, the
-// window declares to the daemon). Whether each is required or optional is its own declaration (`about`), not decided here.
+// Every bundled extension, by its daemon half, in the order the window lists their UI halves. One whose work is all in
+// the window is here by its `about` alone, so this machine knows it from the start, window or not: its pane kinds told
+// to agents (web-panes' preview and artifact), its switch in Settings, a profile doing without it. Whether each is
+// required or optional is its own declaration (`about`), not decided here.
 import agentUi from '@superego/agent-ui/daemon'
 import ego from '@superego/ego/daemon'
 import files from '@superego/files/daemon'
 import git from '@superego/git/daemon'
 import images from '@superego/images/daemon'
+import { about as links } from '@superego/links/shared'
 import mcpServers from '@superego/mcp-servers/daemon'
 import { skillsExtension } from '@superego/skills/daemon'
 import { SKILL_DIR } from '@superego/cli/skill'
@@ -19,6 +22,9 @@ import tasks from '@superego/tasks/daemon'
 import terminal from '@superego/terminal/daemon'
 import threadReports from '@superego/thread-reports/daemon'
 import threadTools from '@superego/thread-tools/daemon'
+import { about as threads } from '@superego/threads/shared'
+import { about as unread } from '@superego/unread/shared'
+import { about as webPanes } from '@superego/web-panes/shared'
 import worktrees from '@superego/worktrees/daemon'
 import app from '../superego.config.ts'
 
@@ -31,7 +37,9 @@ const skills = skillsExtension({ own: [SKILL_DIR] })
 // The daemon links to the machines this computer reaches (the same list the app and `superego machines` keep), to serve
 // them to browsers and agents (see the daemon's relay.ts).
 serveDaemon({
-  app, defaultCwd: homedir(), extensions: [worktrees, agentUi, ego, files, git, images, mcpServers, skills, suggestions, tasks, terminal, threadTools, threadReports], ...(webRoot ? { webRoot } : {}),
+  app, defaultCwd: homedir(), extensions: [
+    threads, worktrees, agentUi, ego, files, git, images, links, mcpServers, skills, suggestions, tasks, terminal, threadTools, threadReports, unread, webPanes,
+  ], ...(webRoot ? { webRoot } : {}),
   reach: (dataDir, self) => machineHub({ app, dataDir, self }),
 }).catch((error) => {
   console.error(error)

@@ -67,15 +67,18 @@ Optional is the default, and almost always right: a machine can turn it off (Set
 that goes without it gets none of its agent parts or pane kinds, and the window draws none of its UI for that thread
 (`ThreadInfo.without`): its panes already open are kept with the thread but not shown, its actions not offered. `required: true` is for what the app is (the sidebar): never listed, never left out. Nothing
 else decides this. An extension whose work is all in the window needs no daemon half (`links` and `web-panes` have none):
-the window declares its `about` to every machine it connects to, so each lists it in Settings, tells the agent of its
-`panes`, and lets profiles do without it.
+the daemon lists its `about` alone (from its `shared.ts`, which has no UI code), so every machine knows it from the
+start, window or not: lists it in Settings, tells the agent of its `panes`, and lets profiles do without it. A window
+also declares its extensions to each machine it connects to (`extension.declare`), for a daemon that doesn't bundle
+them.
 Where a window part and a machine part should differ, make them two extensions, a folder and an `about` each:
 `threads` is the required sidebar (UI only), and `thread-tools`, the agent's thread tools, is optional (daemon only).
 
 Then wire it in:
 
 1. `app/package.json`: `"@superego/orders": "workspace:*"`, then `pnpm install`.
-2. `app/src/daemon.ts`: add the daemon half to `extensions: [...]`.
+2. `app/src/daemon.ts`: add the daemon half to `extensions: [...]`; one with none, its `about` (export `./shared` from
+   its `package.json`).
 3. `app/src/renderer/main.tsx`: add the UI half to `mountApp(app, { extensions: [...] })`.
 4. Root `tsconfig.json`: add `{ "path": "extensions/orders" }` to `references`, or `pnpm typecheck` skips it.
 5. `docs/overview.md`'s Layout table: a line for it.

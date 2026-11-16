@@ -1,5 +1,5 @@
-// web-panes against a real daemon: declared by the window, Preview and Artifact are told to the agent while the machine
-// has it on, and opened for it; neither once it's off.
+// web-panes against a real daemon: listed by its `about` alone, as the app's daemon bundles it, Preview and Artifact are
+// told to the agent with no window ever connected while the machine has it on, and opened for it; neither once it's off.
 import { expect, it } from 'vitest'
 import type { ThreadInfo } from '@superego/protocol'
 import { callTool, say, testDaemon } from '@superego/sdk/testing'
@@ -7,10 +7,9 @@ import { about } from '../src/shared.ts'
 
 type Result = { role?: string; isError?: boolean }
 
-it('tells the agent of Preview and Artifact and opens them, unless the machine has web-panes off', async () => {
+it('tells the agent of Preview and Artifact and opens them, window or not, unless the machine has web-panes off', async () => {
   const open = callTool('pane_open', { kind: 'preview', params: { url: 'http://localhost:3000' } })
-  const daemon = await testDaemon({ model: [open, say('There.'), open, say('There.')] })
-  await daemon.call('extension.declare', { extensions: [about] })
+  const daemon = await testDaemon({ extensions: [about], model: [open, say('There.'), open, say('There.')] })
   const run = async () => {
     const thread = await daemon.thread('show me')
     const told = await daemon.transcript(thread.id)

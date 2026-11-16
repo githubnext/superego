@@ -1,5 +1,5 @@
-// What web-panes is, and its two kinds of pane. All its work is in the window, so it has a UI half only: the window
-// declares it to each machine, which tells the agent of its panes (`panes`). An artifact's files are served by the core
+// What web-panes is, and its two kinds of pane. All its work is in the window, so it has a UI half only: the app's
+// daemon lists this `about` among its extensions, which tells the agent of its panes (`panes`) from the start. An artifact's files are served by the core
 // (the app's artifact origin, or Web access's /artifact/).
 import type { ExtensionAbout } from '@superego/protocol'
 

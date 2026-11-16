@@ -75,6 +75,13 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
 
   /** Every extension known here, by name, in the order each came. */
   const records = new Map<string, ExtensionRecord>()
+  /**
+   * Whether a pane kind is described already: once among the app's extensions (`profiles` unset), and once among a
+   * profile's. `but`: the extension asking, whose own description doesn't count.
+   */
+  const described = (kind: string, profiles: Set<string> | undefined, but?: string) =>
+    [...records.values()].some((r) => r.profiles === profiles && r.about.name !== but && r.about.panes?.[kind] !== undefined)
+    || viewPanes.some((p) => p.value.kind === kind && p.profiles === profiles)
   /** Those that failed to set up, by their file (a profile's) or name, until one sets up in their place. */
   const failures = new Map<string, ExtensionReport>()
   /** The extensions that can be gone without here, by name: the core's, the bundled ones and the windows', once set up. */
@@ -394,10 +401,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     const problem = contractProblem(extension)
     if (problem) throw refuse(problem)
     // What it registers, for the inspector: kept while it's set up.
-    // A pane kind is described once among the app's extensions, and once among a profile's.
-    const described = (kind: string) => [...records.values()].some((r) => r.profiles === profiles && r.about.panes?.[kind] !== undefined)
-      || viewPanes.some((p) => p.value.kind === kind && p.profiles === profiles)
-    const taken = Object.keys(extension.panes ?? {}).find(described)
+    const taken = Object.keys(extension.panes ?? {}).find((kind) => described(kind, profiles))
     if (taken) throw refuse(`Pane kind ${taken} is already described`)
     const registered = new Map<string, string[]>()
     const note = (kind: string, what: string) => { registered.set(kind, [...registered.get(kind) ?? [], what]) }
@@ -420,7 +424,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     }
     /** A data view's pane kind, told to the agent as this extension's. */
     function describePane(kind: string, about: string) {
-      if (described(kind)) throw new Error(`Pane kind ${kind} is already described`)
+      if (described(kind, profiles)) throw new Error(`Pane kind ${kind} is already described`)
       own(viewPanes, { kind, about }, `the pane kind ${kind}`)
       note('pane kinds', kind)
     }
@@ -683,7 +687,8 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   /**
    * Extensions a window has whose work is all there (no daemon half): known here as the window declares them, so an
    * optional one has its switch in Settings and a profile can do without it, as with any other. Until a window
-   * connects (after a restart), threads aren't told they go without one. Its name is claimed, so no profile's
+   * connects (after a restart), threads aren't told they go without one: a daemon that bundles one lists its `about`
+   * instead, known from the start, and a window's word for it then changes nothing. Its name is claimed, so no profile's
    * extension takes it. When windows disagree on one, the newest version's word is taken (a new title, now required),
    * whatever order they say it in; never last-come.
    */
@@ -696,6 +701,14 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       if (record && record.source !== 'window') continue
       const next = aboutOf(about)
       if (next.version !== undefined && !parseVersion(next.version)) continue
+      // A pane kind another extension describes stays its: left out of this one, as a daemon half's would be refused.
+      const taken = Object.keys(next.panes ?? {}).filter((kind) => described(kind, undefined, name))
+      if (taken.length) {
+        console.warn(`A window declared ${name} with pane kinds already described (${taken.join(', ')}): left out`)
+        const panes = Object.entries(next.panes!).filter(([kind]) => !taken.includes(kind))
+        if (panes.length) next.panes = Object.fromEntries(panes)
+        else delete next.panes
+      }
       const was = record?.about
       if (JSON.stringify(was) === JSON.stringify(next)) continue
       // The newest version's word; two words at one version (windows built apart), settled by their text, so the

@@ -89,6 +89,20 @@ it('refuses an extension describing a pane kind another already does', async () 
   await expect(open([one, two])).rejects.toThrow('Pane kind board is already described')
 })
 
+it("leaves out of a window's declaration the pane kinds another extension describes", async () => {
+  const notes = defineDaemonExtension({ name: 'notes', panes: { graph: 'the notes as a graph' } })
+  const { peer, close } = await open([notes])
+  await peer.call('extension.declare', { extensions: [{ name: 'grabby', panes: { editor: 'mine', graph: 'mine too', board: 'a board' } }] })
+  const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'hi' })
+  await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
+  const prompt = JSON.stringify((await peer.call<{ value: unknown }>('thread.watch', { thread: thread.id })).value)
+  expect(prompt).toContain('\\"editor\\": { path }: a file')
+  expect(prompt).toContain('\\"graph\\": the notes as a graph')
+  expect(prompt).toContain('\\"board\\": a board')
+  expect(prompt).not.toContain('mine')
+  await close()
+})
+
 it('lists optional extensions in Settings, and tells clients what each thread goes without', async () => {
   const sidebar = defineDaemonExtension({ name: 'sidebar', title: 'Sidebar', required: true })
   const links = defineDaemonExtension({ name: 'links', title: 'Links' })

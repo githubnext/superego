@@ -421,7 +421,8 @@ that machine runs the extension at the UI half's own major (below 1.0, its own m
 (switched off there, or a UI-only extension) doesn't stop it. So a UI half asks `has` only for a minor it relies on
 (`@^1.<minor>`), or where it draws without a thread.
 
-Windows declare their extensions to each machine (`extension.declare`), so one with no daemon half is listed there.
+Windows declare their extensions to each machine (`extension.declare`), so one with no daemon half is listed there even
+where the daemon doesn't bundle it (the app's daemon lists each bundled one's `about`, so it knows them from the start).
 When two windows declare one differently, the newest version's word is taken, whatever order they connect in (at the
 same version, the two are settled by what they say, the same way each time); an older window's never takes it back.
 
@@ -775,7 +776,7 @@ source, at `extensions/<name>/src`, so only a checkout has them.
 | `agent-ui` | tools that wait on you (one queue, a `scopedValue` per thread, `status` while it asks, an action to answer, one `composer.above` card claiming the composer), tools that draw blocks (`tool` views, some `{ fold: false }`), a pane kind drawn from its `state` with each thread, published per thread (`state({ publish })`), and a prompt section the tools' descriptions point to |
 | `images` | a tool with `{ fold: false }`, files kept with `threads.attachments` |
 | `git` | Changes: a `method` (a read), a `pane` the agent is told of, built on the kit's `Diff`, an `action` with keys |
-| `web-panes` | two pane kinds and nothing else, described in `about.panes` (so no daemon half); `urls: true` makes web links open in one |
+| `web-panes` | two pane kinds and nothing else, described in `about.panes` (so no daemon half: the daemon lists its `about`); `urls: true` makes web links open in one |
 | `skills` | a prompt section, a `beforeSend` transform, a `method`; `composer.complete` and `composer.sentWith` |
 | `files` | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | `links` | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |

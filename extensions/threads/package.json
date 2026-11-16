@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { "./ui": "./src/ui.tsx" },
+  "exports": { "./shared": "./src/shared.ts", "./ui": "./src/ui.tsx" },
   "dependencies": {
     "@superego/app": "workspace:*",
     "@superego/protocol": "workspace:*",
