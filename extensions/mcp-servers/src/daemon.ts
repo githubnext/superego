@@ -17,11 +17,11 @@ import { checkConfig, ConfigFile, optionalSecretNames, profileServerNames, profi
 import { Callbacks, DEFAULT_CALLBACK_PORT, redirectOf } from './loopback.ts'
 import { EGO, egoPart } from './ego.ts'
 import { signIn } from './oauth.ts'
-import { interruptedText } from './results.ts'
+import { mayHaveRun } from './results.ts'
 import { oauthResource, Runtime, type RuntimeOptions, type Server } from './servers.ts'
 import {
-  about, ACTIONS, ADD_PARAMS, CLIENT_SECRET, DEFAULTS, EDIT_PARAMS, INTERRUPTED, LOG_PARAMS, NAME_PARAMS, PROFILE_KEY, SECTION, SERVER_PARAMS, SERVERS_VALUE, SET_PARAMS, SET_SECRET_PARAMS, TOOL_PREFIX,
-  type CheckResult, type LeftOutReason, type LogResult, type ProfileServers, type SectionData, type ServerConfig, type ServerInfo, type ThreadServers,
+  about, ACTIONS, ADD_PARAMS, CLIENT_SECRET, DEFAULTS, EDIT_PARAMS, INTERRUPTED, LOG_PARAMS, NAME_PARAMS, PROFILE_KEY, SECTION, SERVER_PARAMS, SERVERS_VALUE, SET_PARAMS, SET_SECRET_PARAMS, splitToolName, TOOL_PREFIX,
+  type CallDetails, type CheckResult, type LeftOutReason, type LogResult, type ProfileServers, type SectionData, type ServerConfig, type ServerInfo, type ThreadServers,
 } from './shared.ts'
 import { SecretStore, serverKey, type ServerSecrets } from './store.ts'
 
@@ -155,7 +155,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
 
       /** The servers a thread's turn has now, by its memo (this daemon's, else the one kept with the thread). */
       const serversOf = async (thread: string): Promise<Server[]> => {
-        const ids = runtime.selected.get(thread) ?? (await memos.get(thread).catch(() => undefined))?.servers ?? []
+        const ids = runtime.threads.get(thread)?.servers ?? (await memos.get(thread).catch(() => undefined))?.servers ?? []
         return ids.map((id) => runtime.servers.get(id)).filter((s): s is Server => s !== undefined)
       }
 
@@ -183,29 +183,21 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         ].join('\n')
       }
 
-      /** The tool behind a name, among the servers here: its server and its own name. */
-      const toolOf = (name: string) => {
-        for (const server of runtime.servers.values()) {
-          const tool = server.offered.find((t) => t.name === name)
-          if (tool) return { server, tool: tool.tool }
-        }
-        const [, server, tool] = /^mcp__([a-z][a-z0-9-]*)__(.+)$/.exec(name) ?? []
-        return server ? { server: runtime.machine(server), name: server, tool: tool! } : undefined
-      }
-
       const shared = defineExtension({
         name: SHARED,
         sections: [section('mcp-servers', (input) => prompt(superego.threads.of(input.conversationId)))],
         hooks: [hook(ToolTask, {
           // A call that was running when the daemon stopped is never sent again: the model is told it may have run.
           afterTool(call, result) {
-            if (!call.name.startsWith(TOOL_PREFIX) || !result.diagnostics?.some((d) => d.code === INTERRUPTED)) return undefined
-            const found = toolOf(call.name)
-            const server = found?.server
-            const name = server?.name ?? (found && 'name' in found ? found.name : undefined) ?? call.name
+            const named = splitToolName(call.name)
+            if (!named || !result.diagnostics?.some((d) => d.code === INTERRUPTED)) return undefined
+            // The tool behind the name, among the servers here, else as the name says.
+            const offered = [...runtime.servers.values()].flatMap((server) => server.offered.map((tool) => ({ server, tool }))).find((o) => o.tool.name === call.name)
+            const server = offered?.server ?? runtime.machine(named.server)
+            const details: CallDetails = { server: server?.name ?? named.server, tool: offered?.tool.tool ?? named.tool, interrupted: true }
             const own = (server?.config.lifetime ?? DEFAULTS.lifetime) === 'thread'
-            const message = interruptedText(name, found?.tool ?? call.name, own)
-            return { ...result, isError: true, diagnostics: [{ severity: 'error', code: INTERRUPTED, message }] }
+            const message = mayHaveRun(details.server, details.tool, 'was running when Superego stopped.', own)
+            return { ...result, isError: true, details, diagnostics: [{ severity: 'error', code: INTERRUPTED, message }] }
           },
         })],
       })
@@ -254,7 +246,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         const { chosen, left } = await selection(thread)
         await runtime.firstListings(chosen, thread.id)
         const memo: Memo = { servers: chosen.map((s) => s.id), ...(left.length ? { left } : {}) }
-        runtime.selected.set(thread.id, memo.servers)
+        runtime.use(thread.id, { servers: memo.servers })
         void memos.get(thread.id).then((before) => {
           if (JSON.stringify(before ?? null) !== JSON.stringify(memo.servers.length || left.length ? memo : null)) {
             return memos.set(thread.id, memo.servers.length || left.length ? memo : undefined)
@@ -269,19 +261,20 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
       superego.thread({
         // Its servers start now, so its first call needn't wait for them.
         async turnStart(thread) {
-          runtime.working.add(thread.id)
-          for (const server of await serversOf(thread.id)) runtime.warm(server, thread.id)
+          const servers = await serversOf(thread.id)
+          runtime.use(thread.id, { servers: servers.map((s) => s.id), working: true })
+          for (const server of servers) runtime.warm(server, thread.id)
         },
-        turnEnd(thread) { runtime.working.delete(thread.id) },
+        turnEnd(thread) { if (runtime.threads.has(thread.id)) runtime.use(thread.id, { working: false }) },
         archived(thread) {
-          runtime.working.delete(thread.id)
+          runtime.threads.delete(thread.id)
           runtime.stopThread(thread.id)
-          runtime.selected.delete(thread.id)
         },
       })
 
       superego.facts<Memo>(({ id, state }) => {
-        const memo = runtime.selected.has(id) ? { ...state, servers: runtime.selected.get(id)! } : state
+        const use = runtime.threads.get(id)
+        const memo = use ? { ...state, servers: use.servers } : state
         if (!memo || (!memo.servers.length && !memo.left?.length)) return undefined
         const servers = memo.servers.map((sid) => runtime.servers.get(sid)).filter((s): s is Server => s !== undefined).map((s) => {
           const why = runtime.whyNot(s)

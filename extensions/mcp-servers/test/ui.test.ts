@@ -11,8 +11,8 @@ import { DescribedCall, describeRun, registerToolRows } from '../../../packages/
 import mcpServers, { Chip, NoticeFor } from '../src/ui.tsx'
 import { ServerRow } from '../src/settings.tsx'
 import { CATALOG, fromCatalog } from '../src/catalog.ts'
-import { ago, authMenu, checkText, commandLine, configOf, emptyForm, formOf, interrupted, nameFrom, secretLabel, secretPlaceholder, signInDetails, signInText, splitCommandLine, stateText, toolOf } from '../src/describe.ts'
-import { ADD_PARAMS, type ServerInfo, type ThreadServers } from '../src/shared.ts'
+import { ago, authMenu, checkText, commandLine, configOf, emptyForm, formOf, nameFrom, secretLabel, secretPlaceholder, signInDetails, signInText, splitCommandLine, stateText } from '../src/describe.ts'
+import { ADD_PARAMS, splitToolName, type ServerInfo, type ThreadServers } from '../src/shared.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
 const machine = { id: 'local', label: 'This Mac', state: 'connected' } as never
@@ -106,12 +106,11 @@ describe('words', () => {
     expect(authMenu({ config: { command: 'x' }, secrets: [] })).toEqual({ clientSecret: false, signOut: false })
   })
 
-  it('reads a call by its name, and an interrupted one by its result', () => {
-    expect(toolOf('mcp__linear__create_issue')).toEqual({ server: 'linear', tool: 'create_issue' })
-    expect(toolOf('mcp__a-b__x__y')).toEqual({ server: 'a-b', tool: 'x__y' })
-    expect(interrupted('Superego restarted while linear.create_issue was running. It may or may not have taken effect on the server.')).toBe(true)
-    expect(interrupted('Tool mcp__x__y was interrupted by a restart and may have partially run')).toBe(true)
-    expect(interrupted('Not found')).toBe(false)
+  it('reads a call by its name', () => {
+    expect(splitToolName('mcp__linear__create_issue')).toEqual({ server: 'linear', tool: 'create_issue' })
+    expect(splitToolName('mcp__a-b__x__y')).toEqual({ server: 'a-b', tool: 'x__y' })
+    expect(splitToolName('read')).toBeUndefined()
+    expect(splitToolName('mcp__linear')).toBeUndefined()
   })
 })
 
@@ -190,9 +189,11 @@ describe('what it draws', () => {
     expect(failed).toContain('>Failed<')
     expect(failed).toContain('github · get_me')
     expect(failed).toContain('github needs you to sign in again')
-    const cut = row(call('mcp__linear__create_issue', {}, { state: 'error', result: { text: 'Superego restarted while linear.create_issue was running. Check.', isError: true } }))
+    const cut = row(call('mcp__linear__create_issue', {}, { state: 'error', result: { text: 'linear.create_issue was running when Superego stopped.', isError: true, details: { server: 'linear', tool: 'create_issue', interrupted: true } } }))
     expect(cut).toContain('Interrupted: may have run')
     expect(cut).not.toContain('>Failed<')
+    // Only by its details, whatever its text says.
+    expect(row(call('mcp__linear__create_issue', {}, { state: 'error', result: { text: 'linear.create_issue was running when Superego stopped.', isError: true } }))).toContain('>Failed<')
     // A run of them, in a line.
     const block = (name: string) => ({ type: 'toolCall' as const, id: name, name, arguments: {} })
     expect(describeRun([block('mcp__linear__a'), block('mcp__linear__b'), block('read')], (name) => toolRow(registry, name, where))).toEqual(['Called 2 MCP tools and read a file'])

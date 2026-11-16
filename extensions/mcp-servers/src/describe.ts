@@ -1,6 +1,7 @@
-// What the UI half says of servers and calls, in words: a server's state and command line, a name for a new one, and
-// whose tool a call is. Plain functions, apart from React, so they're tested as such.
-import { CLIENT_SECRET, SERVER_NAME, TOOL_PREFIX, type SecretInfo, type ServerConfig, type ServerInfo, type ServerState, type SignInInfo } from './shared.ts'
+// What the UI half says of servers and calls, in words: a server's state and command line, a name for a new one, what
+// a call is about; and the Add and Edit dialog's form, which Ego's tool makes configs with too (ego.ts). Plain
+// functions, apart from React, so they're tested as such.
+import { CLIENT_SECRET, SERVER_NAME, type SecretInfo, type ServerConfig, type ServerInfo, type ServerState, type SignInInfo } from './shared.ts'
 
 /** An argument as a shell would need it: bare when it can be, else in single quotes. */
 export const quote = (arg: string) => /^[\w@%+=:,./-]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`
@@ -154,13 +155,6 @@ export function authMenu(server: Pick<ServerInfo, 'config' | 'secrets' | 'oauth'
   return { ...(signedIn ? {} : { help: 'Sign in…' as const }), clientSecret: server.secrets.some((s) => s.name === CLIENT_SECRET), signOut: signedIn || anySet }
 }
 
-/** A call's server and tool, from its name (`mcp__linear__create_issue`), until its result says them exactly. */
-export function toolOf(name: string): { server: string; tool: string } {
-  const rest = name.startsWith(TOOL_PREFIX) ? name.slice(TOOL_PREFIX.length) : name
-  const at = rest.indexOf('__')
-  return at < 0 ? { server: rest, tool: '' } : { server: rest.slice(0, at), tool: rest.slice(at + 2) }
-}
-
 /** Arguments that say what a call is about, when it has one: its title, name or query, before the rest. */
 const ABOUT = ['title', 'name', 'query', 'q', 'search', 'subject', 'url', 'path', 'id']
 
@@ -171,9 +165,6 @@ export function firstShortString(args: Record<string, unknown>): string | undefi
   for (const value of Object.values(args)) if (short(value)) return value.trim()
   return undefined
 }
-
-/** Whether a result is that of a call cut off by a restart: it may or may not have run (see the daemon's afterTool). */
-export const interrupted = (text: string) => /Superego restarted while .* was running|was interrupted (?:by a restart )?and may have partially run/.test(text)
 
 // ── The Add and Edit dialog's form ───────────────────────────────────────────────────────────────────────────────────
 

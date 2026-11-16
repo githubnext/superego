@@ -216,6 +216,17 @@ export type ThreadServers = {
 export const TOOL_PREFIX = 'mcp__'
 
 /**
+ * An MCP tool's name read back (`mcp__linear__create_issue`): its server, and its tool as the name has it (`toolName`
+ * may have changed it to fit; a call's `details` say it exactly). None for a name that isn't one.
+ */
+export function splitToolName(name: string): { server: string; tool: string } | undefined {
+  if (!name.startsWith(TOOL_PREFIX)) return undefined
+  const rest = name.slice(TOOL_PREFIX.length)
+  const at = rest.indexOf('__')
+  return at > 0 ? { server: rest.slice(0, at), tool: rest.slice(at + 2) } : undefined
+}
+
+/**
  * What an MCP tool call's result carries for the window (`details`): the server and the tool by their own names, its
  * title, and its annotations as the server gave them (hints, not to be trusted).
  */
@@ -227,16 +238,19 @@ export type CallDetails = {
   annotations?: { [key: string]: Json }
   /** Files the result's blobs were saved to, and the full text when it was cut. */
   files?: string[]
+  /** It was running when Superego stopped, and isn't run again: it may or may not have taken effect. */
+  interrupted?: true
 }
 
 /**
  * The diagnostic code of a call that was in flight when the daemon stopped: never run again, and the model is told it
- * may or may not have taken effect. The window draws it as "Interrupted: may have run".
+ * may or may not have taken effect. Its `details` say so (`interrupted`), and the window draws it as "Interrupted: may
+ * have run".
  */
 export const INTERRUPTED = 'interrupted'
 
 // ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────────────
-// None is exposed to outside agents (`mcp`): only the window and the command line.
+// None is exposed to outside agents (`outside`): only the window and the command line.
 
 export const ACTIONS = {
   add: 'mcp-servers.add',

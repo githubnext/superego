@@ -16,9 +16,9 @@ import {
 import type { ThreadInfo } from '@superego/protocol'
 import { Button, CaretRightIcon, IconButton, MagnifyingGlassIcon, PlugIcon, Popover, XIcon } from '@superego/ui'
 import './styles.css'
-import { DOT, firstShortString, interrupted, needs, stateText, toolOf } from './describe.ts'
+import { DOT, firstShortString, needs, stateText } from './describe.ts'
 import { ServersSection, SignInDialog } from './settings.tsx'
-import { about, LEFT_OUT, SECTION, SERVERS_VALUE, TOOL_PREFIX, type CallDetails, type SectionData, type ServerInfo, type ThreadServers } from './shared.ts'
+import { about, LEFT_OUT, SECTION, SERVERS_VALUE, splitToolName, TOOL_PREFIX, type CallDetails, type SectionData, type ServerInfo, type ThreadServers } from './shared.ts'
 
 export default defineUiExtension({
   ...about,
@@ -26,7 +26,7 @@ export default defineUiExtension({
     superego.settings(SECTION, ServersSection)
     superego.tool(`${TOOL_PREFIX}*`, {
       icon: PlugIcon, verbs: ['Called', 'Calling', 'Failed'], weight: 2,
-      verb: (c) => c.state === 'error' && c.result && interrupted(c.result.text) ? <span className="mcp-call__interrupted">Interrupted: may have run</span> : undefined,
+      verb: (c) => c.state === 'error' && (c.result?.details as CallDetails | undefined)?.interrupted ? <span className="mcp-call__interrupted">Interrupted: may have run</span> : undefined,
       subject: (c) => <CallSubject call={c} />,
       body: (c) => <CallBody call={c} />,
       phrase: (k) => k === 1 ? 'called an MCP tool' : `called ${k} MCP tools`,
@@ -52,7 +52,7 @@ export const serversOf = (thread: ThreadInfo) => thread.facts?.[about.name] as T
 /** A call's server and tool by their own names and titles: from its result when it has one, else from its name. */
 export function callNames(c: Pick<ToolRowCall, 'call' | 'result' | 'live' | 'thread'>) {
   const details = (c.result?.details ?? c.live?.details) as CallDetails | undefined
-  const named = toolOf(c.call.name)
+  const named = splitToolName(c.call.name) ?? { server: c.call.name, tool: '' }
   const server = details?.server ?? named.server
   const known = serversOf(c.thread)?.servers.find((s) => s.name === server)
   return { server: details?.serverTitle ?? known?.title ?? server, tool: details?.title ?? details?.tool ?? named.tool }

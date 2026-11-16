@@ -24,6 +24,8 @@ export type TestDaemonOptions = {
   dataDir?: string
   /** How long a setup may take (15s in the app): shorter, to test one that hangs. */
   setupTimeout?: number
+  /** The port sign-in pages send the browser back to (the app's `callbackPort`): a free one, to test a sign-in. */
+  callbackPort?: number
   /** How long each extension's `agentParts` may take at a send (5s in the app): longer, for a slow one under test. */
   agentPartsLimit?: number
 }
@@ -107,7 +109,10 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
     }
   }
   // An app of its own: its environment (the model) is this daemon's alone; restarted, the same (its database is named for it).
-  const app = defineApp({ name: 'Superego test', id: (options as { appId?: string }).appId ?? `superego-test-${process.pid}-${++opened}` })
+  const app = defineApp({
+    name: 'Superego test', id: (options as { appId?: string }).appId ?? `superego-test-${process.pid}-${++opened}`,
+    ...(options.callbackPort ? { callbackPort: options.callbackPort } : {}),
+  })
   const turns = join(dataDir, `turns-${++opened}.jsonl`)
   await writeFile(turns, (options.model ?? []).map((turn) => JSON.stringify(turn)).join('\n') + '\n')
   process.env[envName(app, 'MODEL')] = `replay:${turns}`

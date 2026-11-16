@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { configProblem, runsOf } from '../src/config.ts'
-import { contentOf, interruptedText, MAX_BYTES } from '../src/results.ts'
+import { contentOf, MAX_BYTES, mayHaveRun } from '../src/results.ts'
 import { normalizeSchema, offerTools, toolName } from '../src/tools.ts'
 
 let dir: string
@@ -58,9 +58,9 @@ it('turns results into text and images, says what it leaves out, and cuts long t
   expect(await readFile(saved[0]!, 'utf8')).toBe(big)
 })
 
-it('tells the model an interrupted call may have run', () => {
-  expect(interruptedText('linear', 'create_issue', false)).toBe('Superego restarted while linear.create_issue was running. It may or may not have taken effect on the server. Check (for example, list or read what it would have changed) before calling it again.')
-  expect(interruptedText('browser', 'open', true)).toMatch(/browser ran for this thread only, so its session .* is gone too\.$/)
+it('tells the model a call cut off or interrupted may have run', () => {
+  expect(mayHaveRun('linear', 'create_issue', 'was running when Superego stopped.', false)).toBe('linear.create_issue was running when Superego stopped.\nIt may or may not have taken effect on the server. Check (for example, list or read what it would have changed) before calling it again.')
+  expect(mayHaveRun('browser', 'open', 'was cut off before it answered: browser was restarted', true)).toMatch(/browser ran for this thread only, so its session .* is gone too\.$/)
 })
 
 it('checks configs: a name, a command or a URL, https off this computer, auth that fits', () => {

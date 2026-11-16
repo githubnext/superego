@@ -4,15 +4,15 @@
 // runs out, a rotating refresh token used once however many calls want it at once, `invalid_grant` → needs-sign-in;
 // a client registered by hand; and through a real daemon: `mcp-servers.signIn` as a flow, tools over the token, a call
 // failing cleanly once the sign-in is refused, and logout.
-import { writeFileSync } from 'node:fs'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
-import { connectSocket, listen, openDaemon, type AuthFlow } from '@superego/daemon'
-import { defineApp, PROTOCOL_VERSION, type AuthEvent, type AuthPrompt, type Notifications, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import type { AuthFlow } from '@superego/daemon'
+import { callTool, say, testDaemon, type Turn } from '@superego/sdk/testing'
+import type { AuthEvent, AuthPrompt, Notifications, RpcPeer, ThreadInfo } from '@superego/protocol'
 import { mcpServersExtension } from '../src/daemon.ts'
 import { Callbacks, catchRedirect, redirectOf } from '../src/loopback.ts'
 import { clientKey, OAuthAccess, readRedirect, resourceOf, signIn, tokenKey, type SignedIn, type SignInOptions } from '../src/oauth.ts'
@@ -21,14 +21,12 @@ import { SecretStore, serverKey } from '../src/store.ts'
 import { serveOAuth } from './auth-server.ts'
 import { serveHttp } from './fixture.ts'
 
-for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
 let dir: string
 const closing: (() => unknown)[] = []
 beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-oauth-')) })
 afterEach(async () => {
   for (const close of closing.splice(0).reverse()) await close()
   await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
-  delete process.env.SUPEREGO_REPLAY_SPEED
 })
 
 const until = async (check: () => boolean | Promise<boolean>, what = 'it') => {
@@ -248,23 +246,12 @@ it('signs in with a client registered by hand, and its secret', async () => {
 
 // ── Through a daemon ────────────────────────────────────────────────────────────────────────────────────────────────
 
-async function open(port: number, turns: string[] = []) {
-  const recording = join(dir, `turns-${Math.random().toString(36).slice(2)}.jsonl`)
-  writeFileSync(recording, turns.join(''))
-  process.env.SUPEREGO_MODEL = `replay:${recording}`
-  process.env.SUPEREGO_REPLAY_SPEED = '0'
-  const daemon = await openDaemon({
-    app: defineApp({ name: 'Superego', id: 'superego', callbackPort: port }), dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'),
-    extensions: [mcpServersExtension({ checkWait: 15_000 })],
-  })
-  const server = await listen(daemon, join(dir, 'superego.sock'))
-  const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
-  await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
+async function open(port: number, model: Turn[] = []) {
+  const d = await testDaemon({ dataDir: dir, model, callbackPort: port, extensions: [mcpServersExtension({ checkWait: 15_000 })] })
+  closing.push(() => d.close())
   const events = new Map<string, AuthEvent[]>()
-  peer.on('auth.event', ({ flow, event }: Notifications['auth.event']) => { events.set(flow, [...events.get(flow) ?? [], event]) })
-  const close = async () => { socket.destroy(); server.close(); await daemon.close() }
-  closing.push(close)
-  return { peer, events }
+  d.peer.on('auth.event', ({ flow, event }: Notifications['auth.event']) => { events.set(flow, [...events.get(flow) ?? [], event]) })
+  return { peer: d.peer, events }
 }
 const act = <T = CheckResult>(peer: RpcPeer, id: string, params: object) => peer.call<T>('action.run', { id: `mcp-servers.${id}`, params })
 /** What Settings → MCP servers draws: the live value it names, once a change just made is told (10ms after it settles). */
@@ -275,9 +262,6 @@ const section = async (peer: RpcPeer) => {
   return value
 }
 const info = async (peer: RpcPeer, name: string) => (await section(peer)).servers.find((s) => s.name === name) as ServerInfo
-const turn = (content: unknown[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } }) + '\n'
-const calling = (name: string, args: object = {}) => turn([{ type: 'toolCall', id: `c${Math.random()}`, name, arguments: args }], 'toolUse')
-const answer = (text: string) => turn([{ type: 'text', text }], 'stop')
 async function results(peer: RpcPeer, id: string) {
   const { value } = await peer.call<{ value: { entries: { model?: { role?: string; content?: { type: string; text?: string }[]; isError?: boolean }[] }[] } }>('thread.watch', { thread: id })
   return value.entries.map((e) => e.model?.[0]).filter((m) => m?.role === 'toolResult')
@@ -287,7 +271,7 @@ async function results(peer: RpcPeer, id: string) {
 it('signs in through mcp-servers.signIn, uses the token for its tools, and signs out', async () => {
   const as = await authServer()
   const port = await freePort()
-  const { peer, events } = await open(port, [calling('mcp__fx__echo', { text: 'hi' }), answer('Done.')])
+  const { peer, events } = await open(port, [callTool('mcp__fx__echo', { text: 'hi' }), say('Done.')])
   const { server } = await act(peer, 'add', { name: 'fx', server: { url: as.url, auth: { type: 'oauth' }, unprofiled: true } })
   // Not signed in: not tried, and Settings says so.
   expect(server).toMatchObject({ state: 'needs-sign-in', error: expect.stringMatching(/fx needs you to sign in/), oauth: { signedIn: false } })
@@ -365,7 +349,7 @@ it("answers a remote machine's flow by its manual_code prompt, and puts a refuse
   const port = await freePort()
   // The daemon's port is taken here: as on a remote machine, the desktop app (or the user) answers the prompt.
   await occupy(port)
-  const { peer, events } = await open(port, [calling('mcp__fx__echo', { text: 'hi' }), answer('Done.')])
+  const { peer, events } = await open(port, [callTool('mcp__fx__echo', { text: 'hi' }), say('Done.')])
   await act(peer, 'add', { name: 'fx', server: { url: as.url, auth: { type: 'oauth' }, unprofiled: true } })
   const { flow } = await act<{ flow: string }>(peer, 'signIn', { server: 'fx' })
   await until(() => Boolean(events.get(flow)?.some((e) => e.type === 'prompt')), 'the prompt')

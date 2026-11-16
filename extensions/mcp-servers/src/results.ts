@@ -1,6 +1,6 @@
 // What an MCP tool's result becomes for the model: text and images as they are, other content said in a line, blobs
-// saved in the thread's files, the text cut at 50 KB (the whole of it saved beside the thread), and what an interrupted
-// call's result says instead of pi-durable's.
+// saved in the thread's files, the text cut at 50 KB (the whole of it saved beside the thread); and what the model is
+// told of a call that may or may not have run.
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
@@ -73,9 +73,12 @@ async function capped(content: Content[], save: (name: string, data: string) => 
   ]
 }
 
-/** What the model is told of a call that was running when Superego stopped: it may have run, so check before again. */
-export function interruptedText(server: string, tool: string, ownSession: boolean): string {
-  return `Superego restarted while ${server}.${tool} was running. It may or may not have taken effect on the server. `
+/**
+ * What the model is told of a call that may or may not have run, `how` it went: cut off before it answered (its session
+ * stopped, restarted or crashed), or running when Superego stopped (never sent again). So it checks before calling again.
+ */
+export function mayHaveRun(server: string, tool: string, how: string, ownSession: boolean): string {
+  return `${server}.${tool} ${how}\nIt may or may not have taken effect on the server. `
     + `Check (for example, list or read what it would have changed) before calling it again.`
     + (ownSession ? ` ${server} ran for this thread only, so its session (anything it kept, such as an open page) is gone too.` : '')
 }

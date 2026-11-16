@@ -9,14 +9,14 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { connectSocket, listen, openDaemon, type DaemonApi } from '@superego/daemon'
-import { defineApp, PROTOCOL_VERSION, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import type { DaemonApi } from '@superego/daemon'
+import type { ThreadInfo } from '@superego/protocol'
+import { callTool, say, testDaemon, type TestDaemon, type Turn } from '@superego/sdk/testing'
 import { mcpServersExtension } from '../src/daemon.ts'
 import { Runtime, type Server } from '../src/servers.ts'
 import { SERVERS_VALUE, type CheckResult, type SectionData, type ServerConfig } from '../src/shared.ts'
 import { SecretStore } from '../src/store.ts'
 
-for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
 const FIXTURE = join(import.meta.dirname, 'fixture.ts')
 let dir: string
 let calls: string
@@ -24,7 +24,7 @@ beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'superego-mcp-runtime-'))
   calls = join(dir, 'calls')
 })
-afterEach(async () => { await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }); delete process.env.SUPEREGO_REPLAY_SPEED })
+afterEach(async () => { await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }) })
 
 const until = async (check: () => boolean | Promise<boolean>, what = 'it', ms = 15_000) => {
   for (const end = Date.now() + ms; Date.now() < end;) { if (await check()) return; await new Promise((r) => setTimeout(r, 25)) }
@@ -126,34 +126,18 @@ it("tries a URL that can't be reached again, and never fails it for that", async
 
 // ── Against a daemon: a profile's server across restarts ─────────────────────────────────────────────────────────
 
-const SUPEREGO = defineApp({ name: 'superego', id: 'superego' })
-const turn = (content: unknown[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } }) + '\n'
-let callId = 0
-const calling = (name: string, args: object = {}) => turn([{ type: 'toolCall', id: `c${++callId}`, name, arguments: args }], 'toolUse')
-const answer = (text: string) => turn([{ type: 'text', text }], 'stop')
-
-async function open(turns: string[] = []) {
-  const recording = join(dir, `turns-${Math.random().toString(36).slice(2)}.jsonl`)
-  writeFileSync(recording, turns.join(''))
-  process.env.SUPEREGO_MODEL = `replay:${recording}`
-  process.env.SUPEREGO_REPLAY_SPEED = '0'
-  mkdirSync(join(dir, 'work'), { recursive: true })
-  const daemon = await openDaemon({
-    app: SUPEREGO, dataDir: dir, defaultCwd: join(dir, 'work'), agentsDir: join(dir, 'agents'), agentPartsLimit: 65_000,
-    extensions: [mcpServersExtension({ checkWait: 15_000, firstListing: 60_000 })],
-  })
-  const server = await listen(daemon, join(dir, 'superego.sock'))
-  const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
-  await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
-  return { peer, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
-}
-const find = async (peer: RpcPeer, id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)
-const done = (peer: RpcPeer, id: string) => until(async () => (await find(peer, id))?.status.state === 'done', 'the thread to be done', 30_000)
+/** A daemon with mcp-servers, in `dir`, answering as `model` says. */
+const open = (model: Turn[] = []) => testDaemon({
+  dataDir: dir, model, agentPartsLimit: 65_000,
+  extensions: [mcpServersExtension({ checkWait: 15_000, firstListing: 60_000 })],
+})
+const done = (d: TestDaemon, id: string) =>
+  d.until(async () => (await d.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)?.status.state === 'done', 'the thread to be done', 30_000)
 /** What Settings → MCP servers draws: the live value it names, once a change just made is told (10ms after it settles). */
-const section = async (peer: RpcPeer) => {
+const section = async (d: TestDaemon) => {
   await new Promise((resolve) => setTimeout(resolve, 50))
-  const { sub, value } = await peer.call<{ sub: string; value: SectionData }>('value.watch', { key: SERVERS_VALUE })
-  await peer.call('unwatch', { sub })
+  const { sub, value } = await d.call<{ sub: string; value: SectionData }>('value.watch', { key: SERVERS_VALUE })
+  await d.call('unwatch', { sub })
   return value
 }
 const profileTs = (spec: object) => `import { defineProfile } from 'superego'\nexport default defineProfile(${JSON.stringify(spec)})\n`
@@ -167,38 +151,38 @@ const starts = () => callsMade().filter((l) => l.startsWith('start')).length
 it("doesn't run a cached profile's server after a restart until its profile loads again, and forgets it with its folder", async () => {
   const project = join(dir, 'acme')
   writeProfile(project, { mcpServers: [{ docs: fixture() }] })
-  const first = await open([calling('mcp__docs__echo', { text: 'one' }), answer('Done.')])
-  await first.peer.call('profile.allow', { cwd: project })
-  const thread = await first.peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'go' })
-  await done(first.peer, thread.id)
-  expect((await section(first.peer)).profiles).toMatchObject([{ name: 'docs', profileAllowed: true }])
+  const first = await open([callTool('mcp__docs__echo', { text: 'one' }), say('Done.')])
+  await first.call('profile.allow', { cwd: project })
+  const thread = await first.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'go' })
+  await done(first, thread.id)
+  expect((await section(first)).profiles).toMatchObject([{ name: 'docs', profileAllowed: true }])
   await first.close()
 
   // Changed while the daemon was down: it needs allowing again.
   writeProfile(project, { mcpServers: [{ docs: fixture({ args: [FIXTURE, '--changed'] }) }] })
-  const second = await open([calling('mcp__docs__echo', { text: 'two' }), answer('Done.')])
-  const [docs] = (await section(second.peer)).profiles
+  const second = await first.restart({ model: [callTool('mcp__docs__echo', { text: 'two' }), say('Done.')] })
+  const [docs] = (await section(second)).profiles
   expect(docs).toMatchObject({ name: 'docs', state: 'stopped', profileAllowed: false })
   const before = starts()
   // Neither Restart nor a key set from Settings starts it; nor does the thread, which can't run.
-  const restarted = await second.peer.call<CheckResult>('action.run', { id: 'mcp-servers.restart', params: { server: docs!.id } })
+  const restarted = await second.dispatch<CheckResult>('mcp-servers.restart', { server: docs!.id })
   expect(restarted.server).toMatchObject({ state: 'stopped', profileAllowed: false })
-  await expect(second.peer.call('thread.send', { thread: thread.id, text: 'again' })).rejects.toThrow(/allow it first/)
+  await expect(second.call('thread.send', { thread: thread.id, text: 'again' })).rejects.toThrow(/allow it first/)
+  // Nothing to wait for: a start would come after, if at all.
   await new Promise((r) => setTimeout(r, 300))
   expect(starts()).toBe(before)
 
   // Allowed, its next turn loads it, and it runs as the profile says now.
-  await second.peer.call('profile.allow', { cwd: project })
-  await second.peer.call('thread.send', { thread: thread.id, text: 'again' })
-  await done(second.peer, thread.id)
+  await second.call('profile.allow', { cwd: project })
+  await second.call('thread.send', { thread: thread.id, text: 'again' })
+  await done(second, thread.id)
   expect(starts()).toBeGreaterThan(before)
-  expect((await section(second.peer)).profiles).toMatchObject([{ name: 'docs', profileAllowed: true }])
-  await second.close()
+  expect((await section(second)).profiles).toMatchObject([{ name: 'docs', profileAllowed: true }])
 
   // Its project gone, it's forgotten: no row, no cache.
   await rm(project, { recursive: true, force: true })
-  const third = await open()
-  expect((await section(third.peer)).profiles).toEqual([])
+  const third = await second.restart()
+  expect((await section(third)).profiles).toEqual([])
   expect(readdirSync(join(dir, 'mcp', 'cache')).filter((f) => f.startsWith('docs@'))).toEqual([])
   await third.close()
 }, 90_000)

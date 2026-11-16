@@ -21,7 +21,7 @@ import { RpcError } from '@superego/protocol'
 import { configProblem, optionalSecretNames, profileConfig, runKey, runsOf, secretNames } from './config.ts'
 import { Connection, ServerLog, sessionGone, type Exit, type Listing } from './connections.ts'
 import { OAuthAccess, resourceOf } from './oauth.ts'
-import { contentOf } from './results.ts'
+import { contentOf, mayHaveRun } from './results.ts'
 import { DEFAULTS, type CallDetails, type ServerConfig, type ServerInfo, type ServerSource, type ServerState } from './shared.ts'
 import { redact, serverKey, type SecretStore, type ServerSecrets } from './store.ts'
 import { offerTools, type OfferedTool } from './tools.ts'
@@ -83,11 +83,8 @@ export type Server = {
   failed?: string
   error?: string
   crashes: number[]
-  relisting?: ReturnType<typeof setTimeout>
   /** A listing its `list_changed` asked for, until it's done: a call that saw the change waits for it. */
   listed?: Promise<void>
-  /** Settles `listed`, until its listing starts. */
-  settleListed?: () => void
 }
 
 export type RuntimeOptions = {
@@ -112,19 +109,11 @@ const pause = (ms: number, signal: AbortSignal) => new Promise<void>((resolve) =
   signal.addEventListener('abort', () => { clearTimeout(timer); resolve() }, { once: true })
 })
 
-/** A call cut off before it answered (its session stopped, restarted or crashed): it may have run, as `interruptedText` says. */
-export function cutText(server: string, tool: string, why: string, ownSession: boolean): string {
-  return `${server}.${tool} was cut off before it answered: ${why}\nIt may or may not have taken effect on the server. `
-    + `Check (for example, list or read what it would have changed) before calling it again.`
-    + (ownSession ? ` ${server} ran for this thread only, so its session (anything it kept, such as an open page) is gone too.` : '')
-}
-
-/** `Runtime.selected`, with when each thread's was last set: one not working is forgotten after a while (its memo stays). */
-class Selected extends Map<string, string[]> {
-  readonly at = new Map<string, number>()
-  override set(thread: string, servers: string[]) { this.at.set(thread, Date.now()); return super.set(thread, servers) }
-  override delete(thread: string) { this.at.delete(thread); return super.delete(thread) }
-}
+/**
+ * A thread as the runtime knows it: the servers its last turn had (by id; its memo keeps them across restarts), when that
+ * was last said, and whether a run of it is going. One not working is forgotten after a while (its memo stays).
+ */
+export type ThreadUse = { servers: string[]; at: number; working: boolean }
 /** An OAuth server's resource (its canonical URL): where its tokens are kept. */
 export const oauthResource = (config: ServerConfig) => config.auth?.type === 'oauth' && config.url ? safeResource(config.url) : undefined
 const safeResource = (url: string) => { try { return resourceOf(url) } catch { return undefined } }
@@ -138,10 +127,8 @@ export const projectOf = (ref: ProfileRef) => dirname(dirname(dirname(ref.dir)))
 
 export class Runtime {
   readonly servers = new Map<string, Server>()
-  /** The servers each thread's last turn had, by thread. */
-  readonly selected: Map<string, string[]> = new Selected()
-  /** Threads with a run going. */
-  readonly working = new Set<string>()
+  /** The threads seen lately, by id. */
+  readonly threads = new Map<string, ThreadUse>()
   #api: DaemonApi
   #store: SecretStore
   /** OAuth servers' tokens, as their sessions use them. */
@@ -169,7 +156,6 @@ export class Runtime {
       clearInterval(sweep)
       // Every session stops, and one still starting is called off (its process stopped with it) or closed once it's up.
       for (const server of this.servers.values()) {
-        clearTimeout(server.relisting)
         for (const slot of server.slots.values()) {
           slot.stop?.abort()
           void slot.connection?.close('the MCP servers extension was reloaded')
@@ -274,7 +260,6 @@ export class Runtime {
     this.servers.delete(server.id)
     server.part.remove()
     this.stopAll(server, `${server.name} was removed`)
-    clearTimeout(server.relisting)
     await rm(join(this.#cacheDir, `${server.file}.json`), { force: true })
     this.#changed()
   }
@@ -457,7 +442,7 @@ export class Runtime {
       const cutBy = connection as Connection | undefined
       if (cutBy?.ended || (error instanceof McpError && error.code === ErrorCode.ConnectionClosed)) {
         const own = (server.config.lifetime ?? DEFAULTS.lifetime) === 'thread'
-        return fail(cutText(server.name, tool.tool, cutBy?.stoppedBecause ?? errorText(error), own))
+        return fail(mayHaveRun(server.name, tool.tool, `was cut off before it answered: ${cutBy?.stoppedBecause ?? errorText(error)}`, own))
       }
       return fail(`${server.name}.${tool.tool} failed: ${errorText(error)}`)
     } finally {
@@ -511,7 +496,7 @@ export class Runtime {
       const launch = {
         name: server.name, config: server.config, cwd: root ?? server.cwd, secrets: await this.secretsOf(server), log: server.log,
         ...(root ? { root } : {}), ...(resource ? { fetch: this.oauth.fetchFor(resource) } : {}),
-        onToolsChanged: () => this.#relistSoon(server, slot),
+        onToolsChanged: () => this.#relist(server, slot),
         onClose: (exit: Exit | undefined) => { if (mine) this.#crashed(server, slot, mine, exit) },
       }
       // A URL that doesn't answer (a network blip, its sign-in's server down) is tried again a little later.
@@ -570,27 +555,16 @@ export class Runtime {
   }
 
   /**
-   * Its tools changed: listed again shortly (a burst of changes is one listing), the cache and its part updated. A call
-   * that was going when it changed waits for the listing before it answers, so the next request offers the new tools.
+   * Its tools changed: listed again (after a listing already going), the cache and its part updated. A call that's going
+   * when it changed waits for the listing before it answers, so the next request offers the new tools.
    */
-  #relistSoon(server: Server, slot: Slot) {
-    clearTimeout(server.relisting)
-    // One listing for a burst of changes; a call waits for it, and for one already going.
-    if (!server.settleListed) {
-      const next = new Promise<void>((resolve) => { server.settleListed = resolve })
-      server.listed = Promise.all([server.listed, next]).then(() => {})
-    }
-    const settle = server.settleListed!
-    const listed = server.listed!
-    server.relisting = setTimeout(() => {
-      delete server.settleListed
+  #relist(server: Server, slot: Slot) {
+    const listed = (server.listed ?? Promise.resolve()).then(() => {
       const connection = slot.connection
-      const listing = connection && !connection.closed ? this.#list(server, connection) : Promise.resolve()
-      void listing.catch((error) => server.log.write(`listing tools failed: ${errorText(error)}`)).finally(() => {
-        settle()
-        if (server.listed === listed) delete server.listed
-      })
-    }, 20)
+      if (connection && !connection.closed) return this.#list(server, connection)
+    }).catch((error) => server.log.write(`listing tools failed: ${errorText(error)}`))
+    server.listed = listed
+    void listed.finally(() => { if (server.listed === listed) delete server.listed })
   }
 
   /**
@@ -663,9 +637,17 @@ export class Runtime {
     }
   }
 
+  /** A thread's turn said what servers it has (`servers`), or its run started or ended (`working`). */
+  use(thread: string, patch: Partial<Pick<ThreadUse, 'servers' | 'working'>>) {
+    this.threads.set(thread, { servers: [], working: false, ...this.threads.get(thread), ...patch, at: Date.now() })
+  }
+
+  /** The servers a working thread has. */
+  #busy() { return new Set([...this.threads.values()].filter((use) => use.working).flatMap((use) => use.servers)) }
+
   /** Stop what's been idle too long: a shared session no working thread has, a thread's own after its last call. */
   sweep(now = Date.now()) {
-    const busy = new Set([...this.working].flatMap((thread) => this.selected.get(thread) ?? []))
+    const busy = this.#busy()
     for (const server of this.servers.values()) {
       for (const slot of server.slots.values()) {
         if (!slot.connection || slot.connection.inflight || slot.starting || now - slot.lastUsed < this.#idle) continue
@@ -689,10 +671,7 @@ export class Runtime {
         void this.remove(server)
       }
     }
-    const at = (this.selected as Selected).at
-    for (const thread of [...this.selected.keys()]) {
-      if (!this.working.has(thread) && now - (at.get(thread) ?? 0) >= this.#idle) this.selected.delete(thread)
-    }
+    for (const [thread, use] of [...this.threads]) if (!use.working && now - use.at >= this.#idle) this.threads.delete(thread)
   }
 
   /** Start a server's session for a thread now, without waiting (its turn started): the first call needn't wait. */
@@ -716,7 +695,7 @@ export class Runtime {
     let timer: ReturnType<typeof setTimeout> | undefined
     await Promise.race([done.catch(() => {}), new Promise((resolve) => { timer = setTimeout(resolve, wait) })])
     clearTimeout(timer)
-    const busy = [...this.working].some((thread) => this.selected.get(thread)?.includes(server.id))
+    const busy = this.#busy().has(server.id)
     void done.then(() => { if (own || !busy) this.#retire(server, slot) }, () => {})
   }
 

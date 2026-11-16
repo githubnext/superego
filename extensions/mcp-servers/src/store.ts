@@ -4,8 +4,8 @@
 // Nothing here ever reaches a client.
 //
 //   server:<id>               the values of a server's secrets: `key` (API key), or each of `auth.names` (env)
-//   oauth:<resource>          OAuth tokens, by the server's canonical URL (lane 3)
-//   client:<issuer> <redirect>  a client registration and its discovery state (lane 3)
+//   oauth:<resource>          OAuth tokens, by the server's canonical URL
+//   client:<issuer> <redirect>  a client registration and its discovery state
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import type { Json } from '@superego/protocol'
 
