@@ -6,26 +6,20 @@ import { appendFileSync, readFileSync } from 'node:fs'
 import type { AssistantMessage } from '@earendil-works/pi-ai'
 import { fauxAssistantMessage, fauxProvider, type FauxResponseStep } from '@earendil-works/pi-ai'
 import type { Provider } from '@earendil-works/pi-ai/models'
+import { wrapStreams } from './provider-streams.ts'
 
 type Recorded = { at: number; provider: string; model: string; message: AssistantMessage }
 
 /** `provider`, appending each answer it finishes to `path`. Failed and aborted answers are left out. */
 export function withRecording<T extends Provider>(provider: T, path: string): T {
-  const record = (model: { id: string }, stream: { result(): Promise<AssistantMessage> }) => {
+  return wrapStreams(provider, (call, model, ...rest) => {
+    const stream = call(model, ...rest)
     void stream.result().then((message) => {
       if (message.stopReason === 'error' || message.stopReason === 'aborted') return
       const line: Recorded = { at: Date.now(), provider: provider.id, model: model.id, message }
       appendFileSync(path, JSON.stringify(line) + '\n', { mode: 0o600 })
     }, () => {})
     return stream
-  }
-  return new Proxy(provider, {
-    get(target, key, receiver) {
-      if (key === 'stream' || key === 'streamSimple') {
-        return (model: { id: string }, ...rest: unknown[]) => record(model, (target[key] as Function).call(target, model, ...rest))
-      }
-      return Reflect.get(target, key, receiver)
-    },
   })
 }
 

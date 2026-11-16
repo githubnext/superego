@@ -17,6 +17,7 @@ import { appEnv } from './paths.ts'
 import { replayProvider, withRecording } from './replay.ts'
 import { authFailure, Rejections, rejectionSummary, WAITING } from './provider-auth.ts'
 import { watchFiles } from './watch-files.ts'
+import { wrapStreams } from './provider-streams.ts'
 import { writeAtomic } from './write-atomic.ts'
 import type { AuthFlowEvent, AuthFlows } from './auth-flows.ts'
 
@@ -82,22 +83,13 @@ function withCause(error: unknown) {
 
 /** `provider`, asking every request for OpenAI's priority tier while `fast()` says so. */
 function withServiceTier<T extends Provider>(provider: T, fast: () => boolean): T {
-  type Options = { onPayload?: (payload: unknown, model: never) => unknown } | undefined
-  const apply = (options: Options): Options => !fast() ? options : {
+  return wrapStreams(provider, (call, model, context, options) => call(model, context, !fast() ? options : {
     ...options,
-    async onPayload(payload: unknown, model: never) {
+    async onPayload(payload, model) {
       const body = (await options?.onPayload?.(payload, model)) ?? payload
       return { ...(body as object), service_tier: 'priority' }
     },
-  }
-  return new Proxy(provider, {
-    get(target, key, receiver) {
-      if (key === 'stream' || key === 'streamSimple') {
-        return (model: never, context: never, options?: Options) => (target[key] as Function).call(target, model, context, apply(options))
-      }
-      return Reflect.get(target, key, receiver)
-    },
-  })
+  }))
 }
 
 /**
@@ -111,14 +103,7 @@ function gated<T extends Provider>(provider: T, blocks: () => string | undefined
     queueMicrotask(() => { stream.push({ type: 'error', reason: 'error', error: message }); stream.end(message) })
     return stream
   }
-  return new Proxy(provider, {
-    get(target, key, receiver) {
-      if (key === 'stream' || key === 'streamSimple') {
-        return (model: { id: string; api: string }, ...rest: unknown[]) => blocks() !== undefined ? refuse(model) : (target[key] as Function).call(target, model, ...rest)
-      }
-      return Reflect.get(target, key, receiver)
-    },
-  })
+  return wrapStreams(provider, (call, model, ...rest) => blocks() !== undefined ? refuse(model) : call(model, ...rest))
 }
 
 /** What the scripted model answers to a stored key that starts with "reject": Anthropic's, for a key it doesn't know. */
