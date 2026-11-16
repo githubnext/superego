@@ -8,7 +8,7 @@
 export { defineDaemonExtension, defineAction } from './extension.ts'
 export type {
   DaemonExtension, DaemonApi, AgentChoice, AgentPart, AgentPartsAnswer, AgentPartsThread, LiveValue, ScopedValue, ThreadState, ThreadHooks, ThreadStarting,
-  ThreadDraft, OutgoingMessage, MessageBlock, SendTransform, StatusContribution, ArchiveNote, ArchiveNotes, AuthFlow, AuthFlowEvent, RunRecord,
+  ThreadDraft, OutgoingMessage, MessageBlock, SendTransform, StatusContribution, ArchiveNote, ArchiveNotes, AuthFlow, AuthFlowEvent, RunRecord, ToolCallRecord,
 } from './extension.ts'
 export type { DaemonContext } from './host.ts'
 export { defineProfile } from './profiles.ts'

@@ -42,6 +42,15 @@ it('serves an extension method as a plain read: called by name, checked, not an 
   await close()
 })
 
+it('tells an extension when a setting changes (settings.onChange)', async () => {
+  let heard = 0
+  const listener = defineDaemonExtension({ name: 'listener', setup(superego) { superego.settings.onChange(() => { heard++ }) } })
+  const { peer, close } = await open([listener])
+  await peer.call('settings.set', { key: 'agent.model', value: 'faux/faux-1' })
+  await until(async () => heard > 0)
+  await close()
+})
+
 it('blocks a thread only by the status of an extension it has: not one switched off', async () => {
   const asker = defineDaemonExtension({ name: 'asker', setup(superego) { superego.status(() => ({ kind: 'question', msg: 'Which?' })) } })
   const { peer, close } = await open([asker])

@@ -309,12 +309,13 @@ place, and the window's console has why.
 | `view('x.y', { title, icon, context, fits, default, value \| method })` | a view drawn from data (below): no UI code, so a remote machine's or a project profile's runs no code in the window; its buttons still have that machine's authority |
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
 | `beforeSend(({ thread, text, attachments, content, by, exposure }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it. `by`: the extension that sent it (`threads.send`, `threads.start`'s prompt), absent for the user's; `exposure`: `outside` when an outside agent sent it, `cli` the command line |
-| `settings.register({ id: 'x', settings })`, `settings.get`, `settings.snapshot` | machine settings of its own (`x.…`); read any |
+| `settings.register({ id: 'x', settings })`, `settings.get`, `settings.snapshot`, `settings.onChange` | machine settings of its own (`x.…`); read any |
 | `dispatch(id, params)`, `actions(exposure)` | run any action on the machine as this extension (`settings.set`); list them |
-| `thread({ starting, abandoned, started, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
+| `thread({ starting, abandoned, started, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchiveAbandoned, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
 | `state()` → `get(id)`, `set(id, next)`, `update(id, edit)` | state of its own kept with each thread, across restarts; `starting` gives a new one its first |
 | `facts(({ id, state }) => …)` | what clients are told of a thread, as `thread.facts.<name>`: worked out from its state |
 | `recap(({ thread, answer, calls }) => …)` | say in a line what a run did, once it ends: the thread's `done` status carries it (`msg`), and its notification says it. The first to answer wins; with none, the answer's first sentence. |
+| `toolCalls(({ thread, call, result }) => …)` | hear each tool call a thread's agent makes, once it ends; read-only ([Watching tool calls](daemon.md#watching-tool-calls)). |
 | `agentFor(({ id, state, profile }) => ({ instructions, model, extensions, without }))` | choose a thread's agent; the first to answer wins. `agent(part, { always: false })` gives a part only through this, or `agentParts` |
 | `agentParts(({ id, hidden, owner, profile }) => [part])` | add to whatever agent a thread has: asked at every send, with its profile as loaded now (`profile.spec`); answers with parts given with `agent(part, { always: false })`. They add up: every extension's, after the chooser's and before the profile's. May be async, up to 5s; later, or a throw, adds nothing to that turn. |
 | `auth.flow(context, async (flow) => …)` → `{ flow }` | a sign-in flow of its own, for the client an action runs for (its context), carried as a provider's is: `flow.emit({ type: 'auth_url', url, callback })`, `await flow.prompt({ type: 'manual_code', message })`, `flow.signal`. It ends `done` when the function resolves, `failed` when it throws. The window draws it with `SignInFlow` (`superego/ui`). |
@@ -703,6 +704,8 @@ superego.thread<{ path: string; branch: string }>({   // the state its starting 
   happens, and the hooks after don't run. `starting` may also move where the thread works and give it state, each
   hook seeing the draft as the one before left it. When a later hook refuses (or making the thread fails), those
   whose `starting` already ran are told `abandoned(draft, state)`, in reverse, to undo it: a worktree goes again.
+  Likewise, when a later `unarchiving` refuses (or bringing the thread back fails), those whose `unarchiving` already
+  ran are told `unarchiveAbandoned(thread)`, in reverse, to undo what they put back; the thread stays archived.
   `draft.options` is what the thread was asked for by extension: its profile's `options`, then `thread.start`'s.
 - The others are told, and awaited in turn. A throw there is logged, and the thread carries on. `archived` runs
   before clients see the thread archived, so it's where cleanup goes. Hooks aren't a transaction: archiving goes on

@@ -1,14 +1,14 @@
 // The extension host: every daemon half set up here (the core's, the bundled ones, profiles'), and the extensions
 // windows declare, in one registry; what each registered about threads, and for which; and the API a daemon half's
 // setup is given (`DaemonApi`), everything it registers going through its lifetime, undone together at teardown.
-import type { Extension } from '@earendil-works/pi-durable'
+import { defineExtension, type Extension, hook, ToolTask } from '@earendil-works/pi-durable'
 import {
   type ChannelAcceptor, Channels, compareVersion, contractProblem, dataViewProblem, EXTENSION_API, FEATURES, Lifetime, manifestOf, paramsParser,
   parseVersion, RpcError, UNVERSIONED, DATA_VIEWS, type DataViewInfo, type ExtensionAbout, type ExtensionReport, type ExtensionsReport, type Json,
   type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { registerExtensionSettings } from './extension-settings.ts'
-import type { AgentChoice, AgentPartsThread, DaemonApi, DaemonExtension, LiveValue, ScopedValue, SendTransform, StatusContribution, ThreadHooks } from './extension.ts'
+import type { AgentChoice, AgentPartsThread, DaemonApi, DaemonExtension, LiveValue, ScopedValue, SendTransform, StatusContribution, ThreadHooks, ToolCallRecord } from './extension.ts'
 import { clone, stateOf, type Host, type ThreadMeta } from './host.ts'
 import type { ProfileHost } from './profile-host.ts'
 import type { LoadedProfile, ProfileRef } from './profiles.ts'
@@ -94,6 +94,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   const threadHooks: Owned<ThreadHooks>[] = []
   const factSources: Owned<(thread: { id: string; state: Json | undefined }) => Json | undefined>[] = []
   const recaps: Owned<(run: RunRecord) => string | undefined>[] = []
+  const toolWatchers: Owned<(record: ToolCallRecord) => void | Promise<void>>[] = []
   const choosers: Owned<(thread: { id?: string; state: Json | undefined; profile?: ProfileRef }) => AgentChoice | undefined>[] = []
   /**
    * An extension's `agentParts`: what it adds to each thread's agent at submit, from parts it gives with `always:
@@ -266,11 +267,43 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     const chosen = (choice?.extensions ?? []).map((part) => chosenParts.get(choice!.by)?.get(part.name) ?? console.warn(`agentFor of ${choice!.by} chose ${part.name}, which it doesn't give with agent(part, { always: false })`)).filter((part) => part !== undefined)
     const added = id === undefined ? [] : await partsAdded(id, meta, without, profile)
     // Each part once: one a chooser and an adder both give, where the chooser put it.
-    const extensions = [...new Set([...partsFor(without), ...chosen, ...added, ...(profile ? profiles.partsOf(profile) : [])])]
+    const extensions = [...new Set([...partsFor(without), ...chosen, ...added, ...(profile ? profiles.partsOf(profile) : []), toolCallsPart])]
     // Always said, never left as it was: instructions a chooser gave go when it no longer answers.
     const instructions = choice?.instructions ?? (profile?.spec.prompt || null)
     return { model, thinkingLevel, extensions, instructions, without }
   }
+
+  /**
+   * Every thread's agent has this: it tells extensions' `toolCalls` of each call that ended, without waiting for them
+   * or letting them change the result. Not an extension of its own, so nothing goes without it.
+   */
+  const toolCallsPart = defineExtension({
+    name: 'tool-calls',
+    hooks: [hook(ToolTask, {
+      afterTool(call, result, api) {
+        const id = String(api.conversationId)
+        const m = host.mounted.get(id)
+        if (!m || !toolWatchers.length) return undefined
+        const without = withoutOf(id, m.meta, later.profiles().loaded(m.meta))
+        // What the model is told: the output's text, then what went wrong (an error's message comes as a diagnostic).
+        const text = [
+          ...(result.output ?? []).flatMap((block) => block.type === 'text' ? [block.text] : []),
+          ...(result.diagnostics ?? []).map((d) => d.message),
+        ].join('\n')
+        const record: ToolCallRecord = {
+          thread: id,
+          call: { id: call.id, name: call.name, args: call.arguments as Json },
+          result: { isError: Boolean(result.isError), ...(text ? { text } : {}) },
+        }
+        for (const watcher of toolWatchers) {
+          if (!appliesTo(watcher, without, m.meta)) continue
+          void Promise.resolve().then(() => watcher.value(record)).catch((error: unknown) => console.error(`Extension ${watcher.owner}: toolCalls failed:`, error))
+        }
+        return undefined
+      },
+    })],
+  })
+  registry.install(toolCallsPart)
 
   // The core's own: extensions' data views (`superego.view`), as the window draws them (DataViewInfo[]).
   const setViews = values.core(DATA_VIEWS, [])
@@ -411,6 +444,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         },
         get: (key) => settings.get(key),
         snapshot: () => settings.snapshot(),
+        onChange: (listener) => { life.live('a settings listener'); undo(settings.onChange(listener), 'a settings listener') },
       },
       action: (action) => { life.live(`the action ${action.id}`); undo(router.register({ ...action, id: named(extension.name, action.id) }), 'an action'); note('actions', action.keys ? `${action.id} (${action.keys})` : action.id) },
       dispatch: (id, params) => router.dispatch(id, params ?? {}, { source: extension.name, notify: () => {} }, { source: extension.name }),
@@ -490,6 +524,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         changed()
       },
       recap(describe) { own(recaps, describe, 'a recap'); note('recap', 'a recap') },
+      toolCalls(watch) { own(toolWatchers, watch, 'a toolCalls watcher'); note('toolCalls', 'a toolCalls watcher') },
       agentFor(choose) { own(choosers, choose as (typeof choosers)[number]['value'], 'an agentFor'); note('agentFor', 'an agentFor'); changed() },
       threads: threads.apiFor(extension.name),
       machines: {

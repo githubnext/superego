@@ -19,6 +19,13 @@ import type { RunRecord } from './recap.ts'
 
 export type { AuthFlow, RunRecord }
 
+/** A tool call that ended, as `toolCalls` hears it: its thread, what the agent asked, and how it went. */
+export type ToolCallRecord = {
+  thread: string
+  call: { id: string; name: string; args: Json }
+  /** `text`: what the model was told, an error's message included. */
+  result: { isError: boolean; text?: string }
+}
 export type { AuthFlowEvent } from './auth-flows.ts'
 
 /**
@@ -160,6 +167,11 @@ export type ThreadHooks<S extends Json = Json> = {
   archived?(thread: ThreadInfo): ArchiveNote | void | Promise<ArchiveNote | void>
   /** About to be brought back: may refuse, or put back what `archived` took away (a worktree). */
   unarchiving?(thread: ThreadInfo): void | Promise<void>
+  /**
+   * The unarchiving its `unarchiving` took part in isn't happening after all: a later hook refused, or bringing it back
+   * failed. Undo what `unarchiving` put back. Told in reverse order; the thread stays archived.
+   */
+  unarchiveAbandoned?(thread: ThreadInfo): void | Promise<void>
   /** Brought back, taking messages again. */
   unarchived?(thread: ThreadInfo): void | Promise<void>
   /** A pane beside it closed: closed by someone, or gone as the thread was cleared. What the pane held can go. */
@@ -270,6 +282,8 @@ export type DaemonApi = {
     get<T extends Json>(key: string): T
     /** Every section with its settings and values, as clients see them. */
     snapshot(): Promise<SettingsSnapshot>
+    /** Something in the settings changed. */
+    onChange(listener: () => void): void
   }
   /**
    * An action of this extension, named `<name>.<action>`: an intent clients dispatch by id, logged, offered in the
@@ -343,6 +357,12 @@ export type DaemonApi = {
    * first sentence. Not for threads that go without this extension. Quick, without side effects.
    */
   recap(describe: (run: RunRecord) => string | undefined): void
+  /**
+   * Hear each tool call a thread's agent makes, once it ends (errors too: a refused or interrupted call). Read-only:
+   * the run doesn't wait for it, and it can't change the result. A throw (or a rejection) is logged. Not for threads
+   * that go without this extension; a profile's only for its own threads.
+   */
+  toolCalls(watch: (record: ToolCallRecord) => void | Promise<void>): void
   /**
    * Choose a thread's agent, from this extension's state with it (no `id` yet while it's made; the state its `starting`
    * gave). Its instructions hold only while it answers. The first chooser to answer wins, in the order extensions were

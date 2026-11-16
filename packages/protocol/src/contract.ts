@@ -9,8 +9,8 @@ import type { ExtensionAbout } from './app.ts'
 /**
  * The extension API this build gives extensions, both halves alike. 2.0 starts the count over: all of 1.x, renamed
  * (projects, `ThreadInfo.facts`, `starting`/`started`, `beforeSend`, …), without protocol generation 1's old names.
- * 2.1: a rail view's `action` (its tab, which ⌘1–⌘9 go to) and `useRailShortcut`. The daemon half's `toolCalls`,
- * `harness`, `settings.onChange` and `unarchiveAbandoned` went without a major: no extension used them.
+ * 2.1: a rail view's `action` (its tab, which ⌘1–⌘9 go to) and `useRailShortcut`. The daemon half's unstable
+ * `harness` went without a major: pi-durable's own, never part of the stable API.
  * Minor: something added (an extension that uses it asks for `^2.<minor>`); major: something an extension could rely
  * on changed or went. An extension whose `api` range this doesn't satisfy is refused when it's set up.
  */
