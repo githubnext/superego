@@ -46,16 +46,16 @@ export type ProfileSpec = {
    */
   ui?: string[]
   /**
-   * Pane kinds this profile's UI adds, and what each shows: told to the agent, so it can open them (open_pane). The UI
+   * Pane kinds this profile's UI adds, and what each shows: told to the agent, so it can open them (pane_open). The UI
    * registers them with superego.pane(kind, …).
    */
   panes?: Record<string, string>
   /**
-   * What its threads ask extensions for, by name, unless a thread is started otherwise: as `thread.create`'s `options`,
+   * What its threads ask extensions for, by name, unless a thread is started otherwise: as `thread.start`'s `options`,
    * read by their `creating` hooks (`{ worktrees: true }`: a git worktree of its own).
    */
   options?: Record<string, Json>
-  /** Shorthand for `options.worktrees`, as `thread.create`'s `worktree` is. */
+  /** Shorthand for `options.worktrees`, as `thread.start`'s `worktree` is. */
   worktree?: boolean
   /** Built-in extensions this profile does without: 'coding-tools', 'ask-user', … */
   without?: string[]

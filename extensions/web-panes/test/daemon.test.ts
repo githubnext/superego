@@ -21,7 +21,7 @@ const turn = (content: unknown[], stopReason: string) => JSON.stringify({ at: 0,
 type Result = { role?: string; isError?: boolean; content?: { text?: string }[] }
 
 it('tells the agent of Preview and Artifact and opens them, unless the machine has web-panes off', async () => {
-  const open = (id: string) => turn([{ type: 'toolCall', id, name: 'open_pane', arguments: { kind: 'preview', params: { url: 'http://localhost:3000' } } }], 'toolUse')
+  const open = (id: string) => turn([{ type: 'toolCall', id, name: 'pane_open', arguments: { kind: 'preview', params: { url: 'http://localhost:3000' } } }], 'toolUse')
   const stop = turn([{ type: 'text', text: 'There.' }], 'stop')
   await writeFile(join(dir, 'turns.jsonl'), [open('on'), stop, open('off'), stop].join('\n') + '\n')
   process.env.WEBPANESTEST_MODEL = `replay:${join(dir, 'turns.jsonl')}`
@@ -34,9 +34,9 @@ it('tells the agent of Preview and Artifact and opens them, unless the machine h
   const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
   expect(hello.features).toContain('ext:web-panes')
   const run = async () => {
-    const thread = await peer.call<ThreadInfo>('thread.create', { prompt: 'show me' })
+    const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'show me' })
     await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === thread.id)!.status.state === 'done')
-    const { value } = await peer.call<{ value: { entries: { model?: unknown[] }[] } }>('thread.watch', { id: thread.id })
+    const { value } = await peer.call<{ value: { entries: { model?: unknown[] }[] } }>('thread.watch', { thread: thread.id })
     const result = value.entries.map((e) => e.model?.[0] as Result | undefined).find((m) => m?.role === 'toolResult')!
     const panes = (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === thread.id)!.panes ?? []
     return { told: JSON.stringify(value), result, panes }

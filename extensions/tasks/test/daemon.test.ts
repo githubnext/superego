@@ -32,12 +32,12 @@ it('gives the agent the tools, and task_start a task_id that is its own call', a
   const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
   expect(hello.features).toContain('ext:tasks')
 
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
-  await peer.call('thread.submit', { id: thread.id, text: 'look around' })
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
+  await peer.call('thread.send', { thread: thread.id, text: 'look around' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
   // Its done status says what the run did: the last task's outcome.
   expect((await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status).toEqual({ state: 'done', msg: 'Saw it all' })
-  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
+  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: thread.id })
   const results = value.entries.map((entry) => entry.model?.[0] as { role?: string; isError?: boolean; content?: { text?: string }[] } | undefined)
     .filter((message) => message?.role === 'toolResult')
   expect(results.map((message) => message!.isError)).toEqual([false, false])
@@ -67,12 +67,12 @@ it('is listed in Settings → Extensions, and switched off there the agent goes 
   expect(settings.sections.find((s) => s.id === 'profiles')?.data).toEqual([])
 
   await peer.call('settings.set', { key: 'extensions.tasks', value: false })
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
-  await peer.call('thread.submit', { id: thread.id, text: 'look around' })
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
+  await peer.call('thread.send', { thread: thread.id, text: 'look around' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
   // Without tasks, the answer's first sentence says what the run did.
   expect((await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status).toEqual({ state: 'done', msg: 'Done.' })
-  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
+  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: thread.id })
   const result = value.entries.map((entry) => entry.model?.[0] as { role?: string; isError?: boolean } | undefined).find((m) => m?.role === 'toolResult')
   expect(result?.isError).toBe(true)
 

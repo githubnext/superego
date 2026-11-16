@@ -29,10 +29,10 @@ void (async () => {
   await until(`window.superego.machines().then((list) => list.find((m) => m.id === 'local')?.state === 'connected')`, 'local machine')
   win().setContentSize(1300, 820)
   const project = process.env.SUPEREGO_SHOWCASE_PROJECT
-  const { id } = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(project)} })`)
-  await run(`window.superego.call('local', 'thread.submit', { id: '${id}', text: ${JSON.stringify(threads[0].prompt)} })`)
+  const { id } = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(project)} })`)
+  await run(`window.superego.call('local', 'thread.send', { thread: '${id}', text: ${JSON.stringify(threads[0].prompt)} })`)
   await until(`window.superego.call('local', 'thread.list', {}).then((l) => ['done', 'error'].includes(l.find((t) => t.id === '${id}')?.status.state))`, 'an answer')
-  await run(`window.superego.call('local', 'thread.seen', { id: '${id}' })`)
+  await run(`window.superego.call('local', 'thread.seen', { thread: '${id}' })`)
   await run(`document.querySelector('.app__sidebar .superego-list-item')?.click()`)
   await until(`document.querySelectorAll('.transcript .msg').length >= 2`, 'thread shown')
   // A hidden window's page never has focus, so focus moves wouldn't hold; emulate it (nothing reaches the screen).
@@ -50,7 +50,7 @@ void (async () => {
   }
   const paneIds = () => run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').panes.map((p) => p.id))`)
   const open = async (kind, params, ready) => {
-    await run(`window.superego.call('local', 'pane.open', { id: '${id}', kind: '${kind}', params: ${JSON.stringify(params)} })`)
+    await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: '${kind}', params: ${JSON.stringify(params)} })`)
     await until(ready, kind)
     await sleep(400)
   }
@@ -63,13 +63,13 @@ void (async () => {
   const [diff, editor, folder] = await paneIds()
   if (!folder) fail('three panes')
   // Scrolled: the editor focused, the row past the window's edge.
-  await run(`window.superego.call('local', 'pane.focus', { id: '${id}', pane: '${editor}' })`)
+  await run(`window.superego.call('local', 'pane.focus', { thread: '${id}', pane: '${editor}' })`)
   await sleep(600)
   const scrolled = await run(`(() => { const p = document.querySelector('.panes'); return p.scrollWidth > p.clientWidth })()`)
   if (!scrolled) fail('scrolled: the row should run past the window')
   await both('scroll')
   // The last pane focused, its handle in view clear of the window's edge; dragged out, it grows and the row scrolls on.
-  await run(`window.superego.call('local', 'pane.focus', { id: '${id}', pane: '${folder}' })`)
+  await run(`window.superego.call('local', 'pane.focus', { thread: '${id}', pane: '${folder}' })`)
   await sleep(600)
   const handle = `[...document.querySelectorAll('.panes > .panes__gap')].at(-1)`
   const clear = await run(`(() => { const p = document.querySelector('.panes').getBoundingClientRect(), h = ${handle}.getBoundingClientRect(); return Math.round(p.right - h.right) })()`)
@@ -84,7 +84,7 @@ void (async () => {
   await until(`document.querySelector('[data-column="${folder}"]').offsetWidth >= ${before} + 140`, 'the last pane dragged wider')
   await run(`${handle}.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`)
   await until(`document.querySelector('[data-column="${folder}"]').offsetWidth === ${before}`, 'the last pane put back')
-  await run(`window.superego.call('local', 'pane.focus', { id: '${id}', pane: '${editor}' })`)
+  await run(`window.superego.call('local', 'pane.focus', { thread: '${id}', pane: '${editor}' })`)
   await sleep(600)
 
   // Maximized from its tab's button: over the whole of the thread's area, the rest kept under it as they were (the
@@ -142,8 +142,8 @@ void (async () => {
   await until(`!document.querySelector('.panes.has-maximized')`, 'a double click restored it')
   await key({ key: 'Enter', code: 'Enter', metaKey: true, shiftKey: true })
   await until(`document.querySelector('.panes > .is-maximized')?.dataset.column === '${diff}'`, 'maximized again')
-  // Opened from outside the window (the agent's open_pane, another client's): in front, the focus left where it was.
-  await run(`window.superego.call('local', 'pane.open', { id: '${id}', kind: 'editor', params: { path: 'src/dates.mjs' } })`)
+  // Opened from outside the window (the agent's pane_open, another client's): in front, the focus left where it was.
+  await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'editor', params: { path: 'src/dates.mjs' } })`)
   await until(`document.querySelectorAll('.panes > [data-column]').length === 5`, 'a fourth pane')
   await sleep(400)
   const fourth = (await paneIds()).at(-1)

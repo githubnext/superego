@@ -250,7 +250,7 @@ function ThreadSheet({ machine, thread, onClose }: { machine: MachineEntry; thre
   }, [])
   const open = (kind: string) => {
     onClose()
-    void registry.router.dispatch('pane.open', { id: thread.id, kind }, { machine: machine.id, source: 'sheet' }).catch((error) => console.error(error))
+    void registry.router.dispatch('pane.open', { thread: thread.id, kind }, { machine: machine.id, source: 'sheet' }).catch((error) => console.error(error))
   }
   return (
     <>

@@ -107,7 +107,7 @@ function FromMethod({ info, method, machine, thread }: { info: DataViewInfo; met
   const connected = machine.state === 'connected'
   const threads = useAllThreads()[machine.id]
   const moved = info.context === 'thread' ? `${thread?.id}:${thread?.activeAt}:${thread?.status.state}` : (threads ?? []).map((t) => `${t.id}:${t.activeAt}:${t.status.state}`).join()
-  const { data, error, refetch } = useMethod<Json>(machine.id, method, info.context === 'thread' ? { id: thread?.id } : {}, { enabled: connected, refresh: moved })
+  const { data, error, refetch } = useMethod<Json>(machine.id, method, info.context === 'thread' ? { thread: thread?.id } : {}, { enabled: connected, refresh: moved })
   // Answered, it's read: null (or nothing) is none.
   return <DataContent content={data === undefined ? undefined : data ?? null} error={error?.message} extension={info.extension} machine={machine} ran={refetch} />
 }

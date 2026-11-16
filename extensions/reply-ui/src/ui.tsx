@@ -33,7 +33,7 @@ function Shown(props: ToolCallProps) {
   const spec = specOf(props)
   if (result?.isError || !spec) return <div className="reply-ui-note">{result?.isError ? result.text.split('\n')[0] : 'drawing…'}</div>
   // Done drawing, it stays live: pressing something later is the user's next message.
-  const reply = (r: Reply) => dispatch('thread.submit', { id: thread.id, text: describeReply(spec.blocks, r) }, { machine: machine.id, source: 'reply-ui' })
+  const reply = (r: Reply) => dispatch('thread.send', { thread: thread.id, text: describeReply(spec.blocks, r) }, { machine: machine.id, source: 'reply-ui' })
   return (
     <section className="reply-ui">
       {spec.title && <h3 className="reply-ui__title">{spec.title}</h3>}

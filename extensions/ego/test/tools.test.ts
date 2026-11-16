@@ -48,7 +48,7 @@ describe("Ego's tools", () => {
       expect(await text(tools, 'superego_set_setting', { key: 'web.access', value: 'local' })).toBe('Set web.access to "local".')
       expect(set).toEqual([{ key: 'web.access', value: 'local' }])
       // Not what outside agents may do: one of them could be asking.
-      await expect(run(tools, 'superego_set_setting', { key: 'mcp.startThreads', value: true })).rejects.toThrow(/Only the user/)
+      await expect(run(tools, 'superego_set_setting', { key: 'outside.startThreads', value: true })).rejects.toThrow(/Only the user/)
       expect(set).toHaveLength(1)
       // What it reads.
       expect((await run(tools, 'superego_actions', {}) as { id: string }[]).map((a) => a.id)).toEqual(['echo.say', 'settings.set', 'profile.list'])

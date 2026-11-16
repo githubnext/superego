@@ -86,14 +86,14 @@ function placeOf(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'hostname'
   const list = () => call<ThreadInfo[]>('thread.list', {})
   return {
     away: found.label,
-    start: (params) => call<ThreadInfo>('thread.create', params),
+    start: (params) => call<ThreadInfo>('thread.start', params),
     list,
     info: async (id) => (await list()).find((t) => t.id === id),
     async answer(id) {
-      const { entries } = await call<{ entries: { model?: unknown[] }[] }>('thread.history', { id, before: Number.MAX_SAFE_INTEGER, limit: 50 })
+      const { entries } = await call<{ entries: { model?: unknown[] }[] }>('thread.history', { thread: id, before: Number.MAX_SAFE_INTEGER, limit: 50 })
       return lastAnswer(entries)
     },
-    send: async (id, message) => { await call('thread.submit', { id, text: message, whenBusy: 'followUp' }) },
+    send: async (id, message) => { await call('thread.send', { thread: id, text: message, whenBusy: 'followUp' }) },
     name: (thread) => `"${thread.title}" (thread ${thread.id} on ${found.label})`,
   }
 }
@@ -104,8 +104,8 @@ export function readTool(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'r
     name: 'thread_read',
     description: 'Read another thread: where it stands, its parent and children, and its last answer. wait: true waits until it is ' +
       'no longer working first.',
-    parameters: obj({ id: str(), wait: opt(bool()), machine: MACHINE }),
-    async execute({ id, wait, machine }, api, context) {
+    parameters: obj({ thread: str(), wait: opt(bool()), machine: MACHINE }),
+    async execute({ thread: id, wait, machine }, api, context) {
       const place = placeOf(host, machine)
       if (wait && !place.away && id === String(api.conversationId)) throw new Error('A thread can\'t wait on itself')
       let thread = await place.info(id)
@@ -157,7 +157,7 @@ export function threadTools(host: ThreadsHost) {
           if (place.start) {
             const child = await place.start(args)
             return {
-              ...text(`Started ${place.name(child)}. It isn't nested under this thread (threads on other machines aren't); thread_read with machine "${place.away}" and id ${child.id} reads it.`),
+              ...text(`Started ${place.name(child)}. It isn't nested under this thread (threads on other machines aren't); thread_read with machine "${place.away}" and thread ${child.id} reads it.`),
               details: { id: child.id, title: child.title, machine: place.away ?? null } as Json,
             }
           }
@@ -169,8 +169,8 @@ export function threadTools(host: ThreadsHost) {
       defineTool({
         name: 'thread_send',
         description: 'Send another thread a message, from this one: it goes in when that thread is next free.',
-        parameters: obj({ id: str(), text: str({ minLength: 1 }), machine: MACHINE }),
-        async execute({ id, text: message, machine }, api) {
+        parameters: obj({ thread: str(), text: str({ minLength: 1 }), machine: MACHINE }),
+        async execute({ thread: id, text: message, machine }, api) {
           const from = await here(api.conversationId)
           const place = placeOf(host, machine)
           const to = await place.info(id)
@@ -206,10 +206,10 @@ export function threadTools(host: ThreadsHost) {
       }),
       defineTool({
         name: 'thread_archive',
-        description: 'Archive a thread: out of the thread list, taking no messages until it\'s unarchived. Without an id, this ' +
+        description: 'Archive a thread: out of the thread list, taking no messages until it\'s unarchived. Without a thread, this ' +
           'thread, once this turn ends. Says what archiving did (extensions clean up after it: a worktree removed, say).',
-        parameters: obj({ id: opt(str({ description: 'The thread to archive; this one if left out.' })) }),
-        async execute({ id }, api) {
+        parameters: obj({ thread: opt(str({ description: "The thread to archive; this one if left out." })) }),
+        async execute({ thread: id }, api) {
           const self = await here(api.conversationId)
           const thread = id === undefined || id === self.id ? self : await host.info(id)
           if (!thread) throw new Error(`No thread ${id}`)

@@ -1,5 +1,5 @@
 // Panes: views beside a thread. A thread keeps which are open and which has focus (pane.open, pane.focus, pane.close),
-// so they follow it to every client; the agent opens them too (open_pane). Wide, they're laid out one of two ways (the
+// so they follow it to every client; the agent opens them too (pane_open). Wide, they're laid out one of two ways (the
 // app setting `app.panes.layout`, switched from the strip):
 // - Scroll: the thread and its panes are a row of columns with room between, scrolled as Dinky's (and niri's)
 //   scrolling layout is. Each column has its own width, a share of the row: the thread's half to start, a pane's its
@@ -125,7 +125,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
 
   const settled = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  const focus = (pane?: string) => { if (pane !== focused) void dispatch('pane.focus', { id: thread.id, ...(pane ? { pane } : {}) }, { machine: machine.id, source: 'panes' }) }
+  const focus = (pane?: string) => { if (pane !== focused) void dispatch('pane.focus', { thread: thread.id, ...(pane ? { pane } : {}) }, { machine: machine.id, source: 'panes' }) }
   // A click on a column's own parts that leaves the focus outside it, or on its title (which a click focuses): the
   // focus goes to what's used there, the editor's text or the page, as the keyboard takes it there. Shown as a click's
   // would be, unless the click came from the keyboard (⏎ on the title).
@@ -135,7 +135,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     const at = document.activeElement
     if (!event.currentTarget.contains(at) || at?.matches('.panes__label')) focusRegion(event.currentTarget, { visible: event.detail === 0 })
   }
-  const close = (pane: Pane) => void dispatch('pane.close', { id: thread.id, pane: pane.id }, { machine: machine.id, source: 'panes' })
+  const close = (pane: Pane) => void dispatch('pane.close', { thread: thread.id, pane: pane.id }, { machine: machine.id, source: 'panes' })
   const where = { machine: machine.id, thread }
   const title = (pane: Pane) => paneTitle(registry, pane, where)
 
@@ -396,8 +396,8 @@ function EditorPane({ machine, thread, pane }: PaneProps) {
   const open = (file: string, { beside }: { beside: boolean }) => {
     const kind = fileKind(registry, { machine: machine.id, thread }, file)
     if (!kind) return
-    if (beside || kind !== pane.kind) void dispatch('pane.open', { id: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'editor' })
-    else void dispatch('pane.update', { id: thread.id, pane: pane.id, params: { path: file } }, { machine: machine.id, source: 'editor' })
+    if (beside || kind !== pane.kind) void dispatch('pane.open', { thread: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'editor' })
+    else void dispatch('pane.update', { thread: thread.id, pane: pane.id, params: { path: file } }, { machine: machine.id, source: 'editor' })
   }
   return <FileEditor key={path} machine={machine} thread={thread} path={path} {...(line ? { line } : {})} onOpenFile={open} />
 }

@@ -23,7 +23,7 @@ export function registerLayoutText(core: UiApi) {
       if (window.superego.web) return editing.set(true)
       const file = dataOf(watched<SettingsSnapshot>('app', 'settings.watch', {}))?.file
       if (file && c.selection?.machine === 'local') {
-        await c.dispatch('pane.open', { id: c.selection.thread, kind: 'editor', params: { path: file } }, { machine: 'local', source: 'layout' })
+        await c.dispatch('pane.open', { thread: c.selection.thread, kind: 'editor', params: { path: file } }, { machine: 'local', source: 'layout' })
       } else await c.dispatch('app.layout.open', {}, { machine: 'app', source: 'layout' })
     },
   }))

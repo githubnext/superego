@@ -72,8 +72,8 @@ void (async () => {
     }
   }
   const state = (id) => `window.superego.call('local', 'thread.list', {}).then((list) => list.find((s) => s.id === '${id}')?.status.state)`
-  const create = (title) => run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(project)}, title: ${JSON.stringify(title)} }).then((t) => t.id)`)
-  const submit = (id, text, whenBusy) => run(`window.superego.call('local', 'thread.submit', { id: '${id}', text: ${JSON.stringify(text)}${whenBusy ? `, whenBusy: '${whenBusy}'` : ''} })`)
+  const create = (title) => run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(project)}, title: ${JSON.stringify(title)} }).then((t) => t.id)`)
+  const submit = (id, text, whenBusy) => run(`window.superego.call('local', 'thread.send', { thread: '${id}', text: ${JSON.stringify(text)}${whenBusy ? `, whenBusy: '${whenBusy}'` : ''} })`)
   const open = (title) => until(`(() => { const li = [...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes(${JSON.stringify(title)})); li?.click(); return Boolean(li) && document.querySelector('.thread__title')?.textContent === ${JSON.stringify(title)} })()`, `${title} shown`)
   const type = (text) => run(`(() => {
     const ta = document.querySelector('.composer textarea')
@@ -133,9 +133,9 @@ void (async () => {
   await phone('question-narrow')
 
   // Archived: read only, with the way back.
-  await run(`window.superego.call('local', 'thread.archive', { id: '${idle}' })`)
-  await run(`window.superego.call('local', 'thread.abort', { id: '${working}' })`)
-  await run(`window.superego.call('local', 'thread.abort', { id: '${asking}' })`)
+  await run(`window.superego.call('local', 'thread.archive', { thread: '${idle}' })`)
+  await run(`window.superego.call('local', 'thread.stop', { thread: '${working}' })`)
+  await run(`window.superego.call('local', 'thread.stop', { thread: '${asking}' })`)
   await run(`document.querySelector('.threads-archived button, .threads-archived summary')?.click()`)
   await until(`(() => { const li = [...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('Dates land a day early')); li?.click(); return Boolean(li) && Boolean(document.querySelector('.titlebar__archived')) })()`, 'archived thread shown')
   await both('archived')

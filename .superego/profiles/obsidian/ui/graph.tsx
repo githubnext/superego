@@ -148,7 +148,7 @@ function GraphPane({ machine, thread, pane }: PaneProps) {
           const moved = drag.current?.moved
           drag.current = undefined
           const node = !moved && at(e)
-          if (node) void dispatch('pane.open', { id: thread.id, kind: 'note', title: node.title, params: { path: node.id } }, { machine: machine.id })
+          if (node) void dispatch('pane.open', { thread: thread.id, kind: 'note', title: node.title, params: { path: node.id } }, { machine: machine.id })
         }}
         onPointerLeave={() => { view.current.hover = undefined }}
         onWheel={(e) => { view.current.scale = Math.min(6, Math.max(0.2, view.current.scale * (e.deltaY < 0 ? 1.1 : 0.9))) }}

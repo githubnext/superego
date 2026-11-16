@@ -30,7 +30,7 @@ function UiPane({ machine, thread, pane }: PaneProps) {
   if (!specs) return <div className="pane-empty">Loading…</div>
   const spec = id && typeof specs === 'object' ? specs[id] : undefined
   if (!spec) return <div className="pane-empty">This pane’s UI is gone.</div>
-  const reply = (r: Reply) => dispatch('thread.submit', { id: thread.id, text: describeReply(spec.blocks, r) }, { machine: machine.id, source: 'pane-ui' })
+  const reply = (r: Reply) => dispatch('thread.send', { thread: thread.id, text: describeReply(spec.blocks, r) }, { machine: machine.id, source: 'pane-ui' })
   return (
     <div className="pane-ui">
       <div className="pane-ui__body">
@@ -47,7 +47,7 @@ function Opened({ machine, thread, call, result }: ToolCallProps) {
   const title = details?.title ?? String(call.arguments.title ?? call.arguments.id ?? 'UI')
   if (result?.isError) return <div className="pane-ui-note">▤ {title}: {result.text.split('\n')[0]}</div>
   const id = details?.id
-  const open = () => void dispatch('pane.open', { id: thread.id, kind: KIND, title, params: { id } }, { machine: machine.id, source: 'pane-ui' })
+  const open = () => void dispatch('pane.open', { thread: thread.id, kind: KIND, title, params: { id } }, { machine: machine.id, source: 'pane-ui' })
   return (
     <div className="pane-ui-note">
       ▤ {call.name === UPDATE ? 'updated' : 'opened'}{' '}

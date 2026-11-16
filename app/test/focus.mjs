@@ -33,10 +33,10 @@ void (async () => {
   win().setContentSize(1300, 820)
   const project = process.env.SUPEREGO_SHOWCASE_PROJECT
   writeFileSync(join(project, 'artifact.html'), long.replaceAll('#f6f8fa', '#fff8e6'))
-  const { id } = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(project)} })`)
-  await run(`window.superego.call('local', 'thread.submit', { id: '${id}', text: ${JSON.stringify(threads[0].prompt)} })`)
+  const { id } = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(project)} })`)
+  await run(`window.superego.call('local', 'thread.send', { thread: '${id}', text: ${JSON.stringify(threads[0].prompt)} })`)
   await until(`window.superego.call('local', 'thread.list', {}).then((l) => ['done', 'error'].includes(l.find((t) => t.id === '${id}')?.status.state))`, 'an answer')
-  await run(`window.superego.call('local', 'thread.seen', { id: '${id}' })`)
+  await run(`window.superego.call('local', 'thread.seen', { thread: '${id}' })`)
   await run(`document.querySelector('.app__sidebar .superego-list-item')?.click()`)
   await until(`document.querySelectorAll('.transcript .msg').length >= 2`, 'thread shown')
   // A hidden window's page never has focus, so :focus styles never apply; emulate it (nothing reaches the screen).
@@ -58,8 +58,8 @@ void (async () => {
   const scrollThread = () => run(`(() => { const el = document.querySelector('.thread__scroll'); el.scrollTop = (el.scrollHeight - el.clientHeight) / 2 })()`)
   let pane
   const open = async (kind, params, ready) => {
-    if (pane) await run(`window.superego.call('local', 'pane.close', { id: '${id}', pane: '${pane}' })`)
-    await run(`window.superego.call('local', 'pane.open', { id: '${id}', kind: '${kind}', params: ${JSON.stringify(params)} })`)
+    if (pane) await run(`window.superego.call('local', 'pane.close', { thread: '${id}', pane: '${pane}' })`)
+    await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: '${kind}', params: ${JSON.stringify(params)} })`)
     await until(ready, kind)
     pane = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').panes.at(-1).id)`)
     await sleep(600)

@@ -106,15 +106,15 @@ if (phase === 'generation') {
 await until(`Boolean(document.querySelector('.threads.is-ready'))`, 'local machine connected')
 
 if (phase === 'first') {
-  const id = await run(`window.superego.call('local', 'thread.create', { title: '' }).then((s) => s.id)`)
-  await run(`window.superego.call('local', 'thread.submit', { id: '${id}', text: 'hello from smoke' })`)
+  const id = await run(`window.superego.call('local', 'thread.start', { title: '' }).then((s) => s.id)`)
+  await run(`window.superego.call('local', 'thread.send', { thread: '${id}', text: 'hello from smoke' })`)
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread in sidebar')
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: hello from smoke')`, 'answer rendered')
   await until(`document.querySelector('.thread__profile')?.textContent === 'default'`, "the user's default profile, shown in the header")
   await until(`document.querySelector('.smoke-badge')?.textContent === 'profile ui: hello from smoke'`, "the profile's own UI, loaded at runtime")
   // A thread of another profile, never shown: its profile's UI marks its row in the sidebar all the same.
-  await run(`window.superego.call('local', 'thread.create', { title: 'marked thread', profile: 'marked' })`)
+  await run(`window.superego.call('local', 'thread.start', { title: 'marked thread', profile: 'marked' })`)
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.querySelector('.smoke-mark')?.textContent === 'marked: marked thread')`, "a listed thread's profile UI, loaded without opening it")
   await until(`[...document.querySelectorAll('.extension-failed')].some((e) => e.textContent.includes('badge failed to draw') && e.textContent.includes('smoke crash'))`, 'a view that throws, contained in its place')
   await run(`globalThis.__smokeFixed = true; [...document.querySelectorAll('.extension-failed')].find((e) => e.textContent.includes('badge failed')).querySelector('button').click()`)
@@ -130,7 +130,7 @@ if (phase === 'first') {
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: typed message')`, 'typed answer rendered')
   // Your messages read as Markdown too, each newline kept: a thread link, code, a highlighted block; a lone * stays.
   const said = `From [this thread](thread:${id}):\nrun \`pnpm test\` * twice\n\n\`\`\`ts\nconst a = 1\n\`\`\``
-  await run(`window.superego.call('local', 'thread.submit', { id: '${id}', text: ${JSON.stringify(said)} })`)
+  await run(`window.superego.call('local', 'thread.send', { thread: '${id}', text: ${JSON.stringify(said)} })`)
   await until(`(() => { const m = [...document.querySelectorAll('.msg--user')].at(-1); return Boolean(m?.querySelector('a.thread-ref') && m.querySelector('p br')) && m.querySelector('p code')?.textContent === 'pnpm test' && m.textContent.includes(' * twice') && Boolean(m.querySelector('pre code.is-highlighted span')) })()`, 'a user message as Markdown')
   await shot('user-markdown')
   // Naming a skill: $ offers this machine's skills as you type; ⇥ takes one, and the message carries it.
@@ -155,7 +155,7 @@ if (phase === 'first') {
   })
   await new Promise((resolve) => site.listen(0, '127.0.0.1', resolve))
   const page = `http://127.0.0.1:${site.address().port}/page`
-  await run(`window.superego.call('local', 'thread.submit', { id: '${id}', text: 'see ${page}' })`)
+  await run(`window.superego.call('local', 'thread.send', { thread: '${id}', text: 'see ${page}' })`)
   await until(`Boolean(document.querySelector('.md a[href="${page}"] + .md__pane-link'))`, 'pane button beside a web link')
   await run(`document.querySelector('.md a[href="${page}"] + .md__pane-link').click()`)
   await until(`Boolean(document.querySelector('.frame-pane iframe[src="${page}"]'))`, 'link opened in a preview pane')
@@ -179,21 +179,21 @@ if (phase === 'first') {
   // ask-user: a replayed agent asks; the question shows above the composer and the thread as needing you; an answer
   // from the card reaches it, and it carries on.
   await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: 'replay/replay' })`)
-  const asking = await run(`window.superego.call('local', 'thread.create', {}).then((s) => window.superego.call('local', 'thread.submit', { id: s.id, text: 'pick a colour' }).then(() => s.id))`)
+  const asking = await run(`window.superego.call('local', 'thread.start', {}).then((s) => window.superego.call('local', 'thread.send', { thread: s.id, text: 'pick a colour' }).then(() => s.id))`)
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('pick a colour'))`, 'new thread listed')
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('pick a colour'))?.click()`)
   await until(`document.querySelector('.ask-user')?.textContent.includes('Which colour?')`, 'question card above the composer')
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('pick a colour') && li.querySelector('.superego-status--blocked'))`, 'thread marked as needing you')
   // Sent while it's busy, a follow-up shows at once as waiting over the composer, and goes in when the agent is done;
   // one taken back with its × never does.
-  await run(`window.superego.call('local', 'thread.submit', { id: '${asking}', text: 'then paint it', whenBusy: 'followUp' })`)
+  await run(`window.superego.call('local', 'thread.send', { thread: '${asking}', text: 'then paint it', whenBusy: 'followUp' })`)
   await until(`document.querySelector('.queued-row')?.textContent.includes('then paint it') && document.querySelector('.queued-row').textContent.includes('Queued')`, 'follow-up shown as queued')
-  await run(`window.superego.call('local', 'thread.submit', { id: '${asking}', text: 'never mind this', whenBusy: 'followUp' })`)
+  await run(`window.superego.call('local', 'thread.send', { thread: '${asking}', text: 'never mind this', whenBusy: 'followUp' })`)
   await until(`document.querySelectorAll('.queued-row').length === 2`, 'second follow-up queued')
   await run(`[...document.querySelectorAll('.queued-row')].find((row) => row.textContent.includes('never mind this')).querySelector('.queued-row__remove').click()`)
   await until(`document.querySelectorAll('.queued-row').length === 1`, 'follow-up taken back')
   // One sent now steers: it goes in after the step (the question answered), ahead of the follow-up.
-  await run(`window.superego.call('local', 'thread.submit', { id: '${asking}', text: 'make it bold', whenBusy: 'followUp' })`)
+  await run(`window.superego.call('local', 'thread.send', { thread: '${asking}', text: 'make it bold', whenBusy: 'followUp' })`)
   await until(`Boolean([...document.querySelectorAll('.queued-row')].find((row) => row.textContent.includes('make it bold'))?.querySelector('.queued-row__now'))`, 'follow-up offered to send now')
   await run(`[...document.querySelectorAll('.queued-row')].find((row) => row.textContent.includes('make it bold')).querySelector('.queued-row__now').click()`)
   await until(`(() => { const row = [...document.querySelectorAll('.queued-row')].find((r) => r.textContent.includes('make it bold')); return row?.textContent.includes('Steers after this step') && !row.querySelector('.queued-row__now') })()`, 'sent now: steers')
@@ -218,7 +218,7 @@ if (phase === 'first') {
   picture('wide', 1280, 720, 40)
   picture('a', 640, 480, 200); picture('b', 640, 480, 120); picture('gone', 480, 640, 10)
   for (const n of [1, 2, 3, 4, 5, 6]) picture(String(n), 900 - n * 40, 600, n * 37)
-  const showing = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(shots)} }).then((s) => window.superego.call('local', 'thread.submit', { id: s.id, text: 'show me the screens' }).then(() => s.id))`)
+  const showing = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(shots)} }).then((s) => window.superego.call('local', 'thread.send', { thread: s.id, text: 'show me the screens' }).then(() => s.id))`)
   await until(`window.superego.call('local', 'thread.list', {}).then((list) => list.find((t) => t.id === '${showing}')?.status.state === 'done')`, 'images shown by the agent')
   // One shown file gone from the machine before anyone looks: that one is broken, the rest still show.
   const shownDir = `${process.env.SUPEREGO_HOME}/attachments/${showing}/shown`
@@ -293,7 +293,7 @@ if (phase === 'first') {
   await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: 'faux/faux-1' })`)
   void asking
   // Unread results elsewhere: a dot on Threads in the rail, and the thread's own in the list, to go to.
-  await run(`window.superego.call('local', 'thread.create', { title: 'unread elsewhere', prompt: 'finish elsewhere' })`)
+  await run(`window.superego.call('local', 'thread.start', { title: 'unread elsewhere', prompt: 'finish elsewhere' })`)
   await until(`Boolean(document.querySelector('.threads-rail__button .threads-rail__badge--done'))`, 'unread dot on Threads')
   await run(`[...document.querySelectorAll('.superego-list-item')].find((i) => i.textContent.includes('unread elsewhere')).click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'unread elsewhere'`, 'went to the unread thread')
@@ -409,7 +409,7 @@ if (phase === 'first') {
   await until(`document.querySelector('.layout-note:not(.is-problem)')?.textContent.includes('not here now, kept for when they\\'re back: threads.detail') && !document.querySelector('.rail-notice--layout')`, 'a view not here applied, and noted')
   writeFileSync(layoutFile, '{}')
   await until(`${layoutNow()}.then((l) => l === '{}') && !document.querySelector('.app__beside') && !document.querySelector('.rail-notice--layout')`, 'the layout reset from the file')
-  await run(`window.superego.call('local', 'thread.list', {}).then((list) => Promise.all(list.flatMap((t) => (t.panes ?? []).filter((p) => p.params?.path === ${JSON.stringify(layoutFile)}).map((p) => window.superego.call('local', 'pane.close', { id: t.id, pane: p.id })))))`)
+  await run(`window.superego.call('local', 'thread.list', {}).then((list) => Promise.all(list.flatMap((t) => (t.panes ?? []).filter((p) => p.params?.path === ${JSON.stringify(layoutFile)}).map((p) => window.superego.call('local', 'pane.close', { thread: t.id, pane: p.id })))))`)
   await until(`!document.querySelector('.layout-note')`, 'layout.json closed')
   await run(`window.superego.call('app', 'app.settings.set', { key: 'app.sort', value: 'created' })`)
   // ⌘K is commands only; ⌘L finds a thread by name and opens it.
@@ -479,7 +479,7 @@ if (phase === 'first') {
   const goneDir = `${process.env.SUPEREGO_HOME}/profiles/gone`
   makeDir(goneDir, { recursive: true })
   writeFileSync(`${goneDir}/profile.ts`, "import { defineProfile } from 'superego'\nexport default defineProfile({})\n")
-  await run(`window.superego.call('local', 'thread.create', { title: 'orphaned', profile: 'gone' })`)
+  await run(`window.superego.call('local', 'thread.start', { title: 'orphaned', profile: 'gone' })`)
   rmSync(goneDir, { recursive: true })
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('orphaned'))`, 'orphaned thread listed')
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('orphaned')).click()`)
@@ -500,29 +500,29 @@ if (phase === 'first') {
   git('mkdir', ['-p', repo]); git('git', ['init', '-q', repo])
   writeFileSync(`${repo}/notes.md`, 'one\n')
   git('git', ['-C', repo, 'add', '.']); git('git', ['-C', repo, '-c', 'user.email=s@s', '-c', 'user.name=s', 'commit', '-q', '-m', 'start'])
-  const paned = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(repo)}, title: 'panes' }).then((s) => s.id)`)
-  await run(`window.superego.call('local', 'file.write', { id: '${paned}', path: 'notes.md', content: 'two\\n' })`)
-  await run(`window.superego.call('local', 'file.write', { id: '${paned}', path: 'page.html', content: '<body><script>document.body.dataset.ok = \\'yes\\'</script>An artifact</body>' })`)
+  const paned = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(repo)}, title: 'panes' }).then((s) => s.id)`)
+  await run(`window.superego.call('local', 'file.write', { thread: '${paned}', path: 'notes.md', content: 'two\\n' })`)
+  await run(`window.superego.call('local', 'file.write', { thread: '${paned}', path: 'page.html', content: '<body><script>document.body.dataset.ok = \\'yes\\'</script>An artifact</body>' })`)
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('panes')).click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'panes'`, 'pane thread open')
   await key('d', ['meta', 'shift'])
   await until(`[...document.querySelectorAll('.diff-row--add')].some((r) => r.textContent.endsWith('+two'))`, 'changes pane shows the edit')
-  await run(`window.superego.call('local', 'pane.open', { id: '${paned}', kind: 'editor', params: { path: 'notes.md' } })`)
+  await run(`window.superego.call('local', 'pane.open', { thread: '${paned}', kind: 'editor', params: { path: 'notes.md' } })`)
   await until(`document.querySelector('.cm-content')?.textContent.includes('two')`, 'editor pane shows the file')
   // Rendered: read as a message reads, following the file as it changes; the editor kept behind it, for Live again.
   await run(`[...document.querySelectorAll('.file-editor__mode button')].find((b) => b.textContent === 'Rendered').click()`)
   await until(`document.querySelector('.file-editor__rendered .md')?.textContent.includes('two') && document.querySelector('.file-editor__host').hidden`, 'rendered shows the file')
-  await run(`window.superego.call('local', 'file.write', { id: '${paned}', path: 'notes.md', content: '# Notes\\n\\ntwo, and **three**, see [[page.html]]\\n' })`)
+  await run(`window.superego.call('local', 'file.write', { thread: '${paned}', path: 'notes.md', content: '# Notes\\n\\ntwo, and **three**, see [[page.html]]\\n' })`)
   await until(`document.querySelector('.file-editor__rendered h1')?.textContent === 'Notes' && document.querySelector('.file-editor__rendered strong')?.textContent === 'three' && document.querySelector('.file-editor__rendered a.md__file')?.textContent === 'page.html'`, 'rendered follows the file')
   if (await run(`Boolean(document.querySelector('.file-editor__rendered .cm-content, .file-editor__rendered [contenteditable]'))`)) { await fail('rendered is editable'); throw new Error('failed') }
   // Its links open files beside the thread, as a message's do.
   git('mkdir', ['-p', `${repo}/docs`]); writeFileSync(`${repo}/docs/plan.md`, 'the plan\n')
-  await run(`window.superego.call('local', 'file.write', { id: '${paned}', path: 'notes.md', content: '# Notes\\n\\ntwo, and **three**, see [[page.html]] and [the plan](docs/plan.md)\\n' })`)
+  await run(`window.superego.call('local', 'file.write', { thread: '${paned}', path: 'notes.md', content: '# Notes\\n\\ntwo, and **three**, see [[page.html]] and [the plan](docs/plan.md)\\n' })`)
   await until(`[...document.querySelectorAll('.file-editor__rendered a.md__file')].some((a) => a.textContent === 'the plan')`, 'a link to a file')
   await run(`[...document.querySelectorAll('.file-editor__rendered a.md__file')].find((a) => a.textContent === 'the plan').click()`)
   await until(`[...document.querySelectorAll('.panes__tab')].some((t) => t.textContent.startsWith('plan.md'))`, 'the link opened the file beside')
   const plan = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${paned}').panes.find((p) => p.params?.path === 'docs/plan.md').id)`)
-  await run(`window.superego.call('local', 'pane.close', { id: '${paned}', pane: '${plan}' })`)
+  await run(`window.superego.call('local', 'pane.close', { thread: '${paned}', pane: '${plan}' })`)
   await until(`![...document.querySelectorAll('.panes__tab')].some((t) => t.textContent.startsWith('plan.md'))`, 'and closed')
   // Its HTML (sanitized) and images, read from beside it: a <picture> shows the source for the app's theme.
   const svg = (width) => `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="10"><rect width="${width}" height="10" fill="teal"/></svg>`
@@ -530,7 +530,7 @@ if (phase === 'first') {
   writeFileSync(`${repo}/docs/img/light.svg`, svg(40)); writeFileSync(`${repo}/docs/img/dark.svg`, svg(30)); writeFileSync(`${repo}/docs/img/plain.svg`, svg(20))
   writeFileSync(`${repo}/docs/guide.md`, '# Guide\n\ntwo, and **three**\n\n<picture><source media="(prefers-color-scheme: dark)" srcset="img/dark.svg"><img src="img/light.svg" alt="diagram" onerror="document.body.dataset.pwned = 1"></picture>\n\n![plain](img/plain.svg)\n\n<script>document.body.dataset.pwned = 1</script>\n')
   const editorPaneId = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${paned}').panes.find((p) => p.kind === 'editor').id)`)
-  await run(`window.superego.call('local', 'pane.update', { id: '${paned}', pane: '${editorPaneId}', params: { path: 'docs/guide.md' } })`)
+  await run(`window.superego.call('local', 'pane.update', { thread: '${paned}', pane: '${editorPaneId}', params: { path: 'docs/guide.md' } })`)
   const imageWidths = `[...document.querySelectorAll('.file-editor__rendered img')].map((i) => i.src.startsWith('blob:') && i.complete ? i.naturalWidth : 0).join(',')`
   nativeTheme.themeSource = 'light'
   await until(`${imageWidths} === '40,20'`, 'rendered images, the light source')
@@ -538,11 +538,11 @@ if (phase === 'first') {
   await until(`${imageWidths} === '30,20'`, 'rendered images, the dark source')
   nativeTheme.themeSource = 'system'
   if (await run(`Boolean(document.body.dataset.pwned || document.querySelector('.file-editor__rendered script, .file-editor__rendered [onerror]'))`)) { await fail('rendered HTML kept a script or handler'); throw new Error('failed') }
-  await run(`window.superego.call('local', 'pane.update', { id: '${paned}', pane: '${editorPaneId}', params: { path: 'notes.md' } })`)
+  await run(`window.superego.call('local', 'pane.update', { thread: '${paned}', pane: '${editorPaneId}', params: { path: 'notes.md' } })`)
   await until(`document.querySelector('.file-editor__rendered h1')?.textContent === 'Notes'`, 'back to the notes')
   await run(`[...document.querySelectorAll('.file-editor__mode button')].find((b) => b.textContent === 'Live').click()`)
   await until(`!document.querySelector('.file-editor__rendered') && !document.querySelector('.file-editor__host').hidden && document.querySelector('.cm-content')?.textContent.includes('three')`, 'live again, with the change')
-  await run(`window.superego.call('local', 'pane.open', { id: '${paned}', kind: 'artifact', params: { path: 'page.html' } })`)
+  await run(`window.superego.call('local', 'pane.open', { thread: '${paned}', kind: 'artifact', params: { path: 'page.html' } })`)
   const artifactRan = async () => {
     for (let i = 0; i < 100; i++) {
       const frame = BrowserWindow.getAllWindows()[0].webContents.mainFrame.framesInSubtree.find((f) => f.url.startsWith('superego-artifact:'))
@@ -612,9 +612,9 @@ if (phase === 'first') {
   await until(`(() => { const base = getComputedStyle(document.querySelector('.cm-content')).color; return [...document.querySelectorAll('.cm-content .cm-line span')].some((s) => s.textContent === 'body' && getComputedStyle(s).color !== base) })()`, 'html in the editor is highlighted')
   await shot('files')
   // The editor keeps its place: when focus comes back to it from the keyboard, and when its thread is shown again.
-  await run(`window.superego.call('local', 'file.write', { id: '${paned}', path: 'long.md', content: Array.from({ length: 300 }, (_, i) => 'line ' + i).join('\\n') })`)
+  await run(`window.superego.call('local', 'file.write', { thread: '${paned}', path: 'long.md', content: Array.from({ length: 300 }, (_, i) => 'line ' + i).join('\\n') })`)
   const editorPane = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${paned}').panes[0].id)`)
-  await run(`window.superego.call('local', 'pane.update', { id: '${paned}', pane: '${editorPane}', params: { path: 'long.md' } })`)
+  await run(`window.superego.call('local', 'pane.update', { thread: '${paned}', pane: '${editorPane}', params: { path: 'long.md' } })`)
   await until(`document.querySelector('.file-editor__scroll')?.scrollHeight > 3000`, 'a long file open')
   await run(`document.querySelector('.file-editor__scroll').scrollTop = 1500`)
   await new Promise((r) => setTimeout(r, 200))
@@ -673,7 +673,7 @@ if (phase === 'first') {
   await until(`Boolean(document.querySelector('.app__sidebar'))`, 'sidebar shown')
   // ⌃Tab: from where keyboard focus is (the prompt, in the thread), to each pane beside it, and around; ⌘W closes the
   // one it's in.
-  await run(`window.superego.call('local', 'pane.open', { id: '${paned}', kind: 'diff' })`)
+  await run(`window.superego.call('local', 'pane.open', { thread: '${paned}', kind: 'diff' })`)
   await until(`Boolean(document.querySelector('.panes__tab'))`, 'a pane beside')
   await run(`document.querySelector('.composer textarea').focus()`)
   await key('Tab', ['control'])
@@ -691,7 +691,7 @@ if (phase === 'first') {
   // With the window in the background, a thread finishing is a notification (headless, collected here, not shown).
   globalThis.superegoNotices = []
   await run(`window.dispatchEvent(new Event('blur'))`)
-  const other = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'elsewhere', prompt: 'hi' }).then((t) => t.id)`)
+  const other = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(elsewhere)}, title: 'elsewhere', prompt: 'hi' }).then((t) => t.id)`)
   await until(`[...document.querySelectorAll('.threads-project__name')].some((n) => n.textContent.startsWith('elsewhere'))`, 'a project per folder')
   // ⌘. : the next thread with something unread, here the new one once it has answered.
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('elsewhere') && li.querySelector('.superego-status--done'))`, 'other thread done, in the window')
@@ -742,7 +742,7 @@ if (phase === 'first') {
   if (!(await newWindow.webContents.executeJavaScript(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`).catch(() => false))) { await fail('the new window does not show the thread'); throw new Error('failed') }
   newWindow.destroy()
   // Archived: closed at the sidebar's end; opened, one list across projects.
-  await run(`window.superego.call('local', 'thread.archive', { id: '${other}' })`)
+  await run(`window.superego.call('local', 'thread.archive', { thread: '${other}' })`)
   await until(`![...document.querySelectorAll('.threads-project .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('elsewhere'))`, 'archived out of its project')
   await until(`document.querySelector('.threads-archived__head')?.getAttribute('aria-expanded') === 'false'`, 'archived closed')
   await run(`document.querySelector('.threads-archived__head').click()`)
@@ -757,7 +757,7 @@ if (phase === 'first') {
   await run(`document.querySelector('.threads-archived__head').click()`)
   // A thread another started sits right under it, though newer; ⌘⇧] and ⌘⇧[ go down and up the rows as shown, the
   // sidebar open or not.
-  const offshoot = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'offshoot', parent: '${other}' }).then((t) => t.id)`)
+  const offshoot = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(elsewhere)}, title: 'offshoot', parent: '${other}' }).then((t) => t.id)`)
   await until(`(() => { const rows = [...document.querySelectorAll('.threads-project .superego-list-item')], body = (li) => li?.querySelector('.superego-list-item__body')?.textContent ?? '', at = rows.findIndex((li) => body(li).startsWith('elsewhere')); return at >= 0 && body(rows[at + 1]).startsWith('offshoot') && rows[at + 1].classList.contains('threads-child') })()`, 'the offshoot under its parent')
   await key(']', ['meta', 'shift'])
   await until(`document.querySelector('.thread__title')?.textContent === 'offshoot'`, 'cmd+shift+] down to the offshoot')
@@ -767,7 +767,7 @@ if (phase === 'first') {
   await until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'cmd+shift+[ up to its parent, the sidebar hidden')
   await key('/')
   await until(`Boolean(document.querySelector('.app__sidebar'))`, 'sidebar back after stepping')
-  await run(`window.superego.call('local', 'thread.archive', { id: '${offshoot}' })`)
+  await run(`window.superego.call('local', 'thread.archive', { thread: '${offshoot}' })`)
   await until(`![...document.querySelectorAll('.threads-project .superego-list-item')].some((li) => li.querySelector('.superego-list-item__body')?.textContent.startsWith('offshoot'))`, 'offshoot put away')
   // Superego's own agent: from the rail, one thread in Superego's data folder, the same one each time, in no list. Its
   // tab is in front while it shows, alone: no sidebar. The Threads tab goes back to the listed thread it left.
@@ -783,10 +783,10 @@ if (phase === 'first') {
   if (await run(`window.superego.call('local', 'ego.ask', {}).then((t) => t.id)`) !== ego) { await fail('a second Ego'); throw new Error('failed') }
   if (await run(`window.superego.call('local', 'thread.list', {}).then((all) => all.some((t) => t.ext?.ego))`)) { await fail('Ego listed'); throw new Error('failed') }
   // Cleared from its title bar: the same thread, empty again.
-  await run(`window.superego.call('local', 'thread.submit', { id: '${ego}', text: 'what is a profile?' })`)
+  await run(`window.superego.call('local', 'thread.send', { thread: '${ego}', text: 'what is a profile?' })`)
   await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('what is a profile?'))`, 'asked Ego')
   // An outside agent's message shows as one; the user's doesn't.
-  await run(`window.superego.call('local', 'action.run', { id: 'ego.ask', params: { prompt: 'and from an agent?' }, exposure: 'mcp' })`)
+  await run(`window.superego.call('local', 'action.run', { id: 'ego.ask', params: { prompt: 'and from an agent?' }, exposure: 'outside' })`)
   await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('and from an agent?') && m.querySelector('.ego__outside') && !m.textContent.includes('<outside-agent>'))`, "an outside agent's message to Ego, marked")
   if (await run(`[...document.querySelectorAll('.msg--user')].find((m) => m.textContent.includes('what is a profile?')).querySelector('.ego__outside') !== null`)) { await fail("the user's message marked as an outside agent's"); throw new Error('failed') }
   await until(`(document.querySelector('.transcript')?.textContent.split('echo:').length ?? 0) > 2`, 'Ego answered both')
@@ -830,7 +830,7 @@ if (phase === 'first') {
     return ringed.length === 1 && (ringed[0].querySelector('.panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}
   })()`, `only ${label} ringed`)
   const front = (label) => until(`(document.querySelector('.panes__tab.is-active .panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}`, `${label} brought forward`)
-  await run(`window.superego.call('local', 'pane.open', { id: '${shown}', kind: 'preview', params: { url: 'http://127.0.0.1:${another.address().port}/' } })`)
+  await run(`window.superego.call('local', 'pane.open', { thread: '${shown}', kind: 'preview', params: { url: 'http://127.0.0.1:${another.address().port}/' } })`)
   await until(`Boolean(document.querySelector('.frame-pane iframe'))`, 'a page beside the thread')
   await run(`document.querySelector('.composer textarea').focus()`)
   await ringed('thread')
@@ -851,7 +851,7 @@ if (phase === 'first') {
   await until(`document.activeElement?.matches('.frame-pane iframe')`, 'a click into the page')
   await ringed('Preview')
   await front('Preview')
-  await run(`window.superego.call('local', 'pane.close', { id: '${shown}', pane: document.querySelector('[data-column]:not([data-column="thread"])').dataset.column })`)
+  await run(`window.superego.call('local', 'pane.close', { thread: '${shown}', pane: document.querySelector('[data-column]:not([data-column="thread"])').dataset.column })`)
   another.close()
   // ⌘⇧D: Changes (git's), beside the thread, its tab in the strip.
   await key('D', ['meta', 'shift'])
@@ -865,7 +865,7 @@ if (phase === 'first') {
   // A click on its title, as on the rest of its own parts, takes the focus into it.
   await click('.panes__label')
   await until(`document.activeElement?.matches('[data-column]:not([data-column="thread"])')`, 'a click on the title, into the pane')
-  await run(`window.superego.call('local', 'pane.close', { id: '${shown}', pane: document.activeElement.dataset.column })`)
+  await run(`window.superego.call('local', 'pane.close', { thread: '${shown}', pane: document.activeElement.dataset.column })`)
   await until(`!document.querySelector('.panes__tab')`, 'changes closed')
   // ⌃`: a terminal beside the thread (terminal's), its shell on the machine, with the focus; typed into and read back.
   await key('`', ['control'])
@@ -875,7 +875,7 @@ if (phase === 'first') {
   await run(`(() => { const screen = document.querySelector('.terminal-pane__screen')
     for (const ch of 'echo "smoke-$((2*21))"\\n') screen.dispatchEvent(new KeyboardEvent('keydown', { key: ch === '\\n' ? 'Enter' : ch, code: ch === '\\n' ? 'Enter' : '', bubbles: true, cancelable: true })) })()`)
   await until(`document.querySelector('.terminal-pane__screen').text().includes('smoke-42')`, 'the shell\'s answer in the terminal')
-  await run(`window.superego.call('local', 'pane.close', { id: '${shown}', pane: document.querySelector('[data-column]:not([data-column="thread"])').dataset.column })`)
+  await run(`window.superego.call('local', 'pane.close', { thread: '${shown}', pane: document.querySelector('[data-column]:not([data-column="thread"])').dataset.column })`)
   await until(`!document.querySelector('.panes__tab')`, 'terminal closed')
   // Attachments: a file picked with Attach (under the box) waits in the box, then goes with the message and shows under it.
   await run(`(() => {
@@ -893,12 +893,12 @@ if (phase === 'first') {
   await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('read this') && m.querySelector('.msg__files .attachment__name')?.textContent === 'plan.md') && !document.querySelector('.composer__files')`, 'file sent with the message')
   await shot('projects')
   // Scrolling back: a thread longer than its watch holds pages in its earlier messages as the top comes near.
-  const long = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'long' }).then((t) => t.id)`)
+  const long = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(elsewhere)}, title: 'long' }).then((t) => t.id)`)
   for (let i = 0; i < 30; i++) {
-    await run(`window.superego.call('local', 'thread.submit', { id: '${long}', text: 'message ${i}' })`)
+    await run(`window.superego.call('local', 'thread.send', { thread: '${long}', text: 'message ${i}' })`)
     await until(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${long}').status.state === 'done')`, `long thread turn ${i}`)
   }
-  await run(`window.superego.call('local', 'thread.seen', { id: '${long}' }).then(() => null)`)
+  await run(`window.superego.call('local', 'thread.seen', { thread: '${long}' }).then(() => null)`)
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('long')).click()`)
   // At its end once the view has kept it there (the frame after its entries are drawn): scrolled before that, the
   // scroll below moves nothing and the view, rightly, still counts itself at its end.
@@ -915,8 +915,8 @@ if (phase === 'first') {
   await until(`(() => { const el = document.querySelector('[data-column="thread"] .thread__scroll'); return el.scrollHeight - el.scrollTop - el.clientHeight < 40 && !document.querySelector('.dock__jump') })()`, 'jumped to the bottom')
   // Suggestions: numbered over the composer once the agent has answered (the echo model echoes them back from the
   // message). ⌃n sends the one with that number, from the thread as from the prompt; a number past them does nothing.
-  const suggesting = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(elsewhere)}, title: 'suggesting' }).then((t) => t.id)`)
-  await run(`window.superego.call('local', 'thread.submit', { id: '${suggesting}', text: 'next? ["Run the tests", "Commit this"]' })`)
+  const suggesting = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(elsewhere)}, title: 'suggesting' }).then((t) => t.id)`)
+  await run(`window.superego.call('local', 'thread.send', { thread: '${suggesting}', text: 'next? ["Run the tests", "Commit this"]' })`)
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('suggesting'))`, 'suggesting thread in the sidebar')
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('suggesting')).click()`)
   await until(`[...document.querySelectorAll('.suggestions__item')].map((b) => b.textContent).join('|') === '${process.platform === 'darwin' ? '⌃1Run the tests|⌃2Commit this' : 'Ctrl+1Run the tests|Ctrl+2Commit this'}'`, 'suggestions with their keys')
@@ -1086,7 +1086,7 @@ if (phase === 'first') {
   await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await inBrowser(`!document.querySelector('.app__sidebar')`, 'drawer closes on picking a thread')
   // A thread finishing while another is shown: Unread, beside Settings in the drawer, has it, and goes there.
-  await browser.webContents.executeJavaScript(`window.superego.call('local', 'thread.create', { title: 'unread on the phone', prompt: 'finish while away' })`)
+  await browser.webContents.executeJavaScript(`window.superego.call('local', 'thread.start', { title: 'unread on the phone', prompt: 'finish while away' })`)
   await browser.webContents.executeJavaScript(`document.querySelector('.app__mobilebar button').click()`)
   await inBrowser(`Boolean(document.querySelector('.app__footer .unread-button'))`, 'Unread beside Settings on a phone')
   await inBrowser(`Boolean(document.querySelector('.app__footer .ego__button'))`, 'Ego beside Settings on a phone')
@@ -1155,8 +1155,8 @@ if (phase === 'first') {
   await browser.webContents.executeJavaScript(`document.querySelector('.lightbox__bar button[aria-label="Close"]').click()`)
   await inBrowser(`!document.querySelector('.lightbox')`, 'lightbox closed on a phone')
   // An artifact over the web, by the device's cookie: the page, and a file it links to (from its sandbox's own origin).
-  await main.webContents.executeJavaScript(`window.superego.call('local', 'file.write', { id: '${paned}', path: 'pic.html', content: '<img src="dot.svg" onload="parent.postMessage(\\'loaded\\', \\'*\\')" onerror="parent.postMessage(\\'failed\\', \\'*\\')">' })`)
-  await main.webContents.executeJavaScript(`window.superego.call('local', 'file.write', { id: '${paned}', path: 'dot.svg', content: '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>' })`)
+  await main.webContents.executeJavaScript(`window.superego.call('local', 'file.write', { thread: '${paned}', path: 'pic.html', content: '<img src="dot.svg" onload="parent.postMessage(\\'loaded\\', \\'*\\')" onerror="parent.postMessage(\\'failed\\', \\'*\\')">' })`)
+  await main.webContents.executeJavaScript(`window.superego.call('local', 'file.write', { thread: '${paned}', path: 'dot.svg', content: '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>' })`)
   const artifact = await browser.webContents.executeJavaScript(`new Promise((resolve) => {
     addEventListener('message', (event) => resolve(event.data), { once: true })
     const frame = document.createElement('iframe')
@@ -1197,8 +1197,8 @@ if (phase === 'first') {
   await run(`window.superego.call('local', 'settings.set', { key: 'web.access', value: 'off' })`)
   // The second machine's profile UI: the thread works without it, and the window asks; it runs once allowed here, stops
   // when its sources change, and is taken out when revoked, with a reload offered.
-  const onSecond = await run(`window.superego.call('${secondId}', 'thread.create', { title: '' }).then((t) => t.id)`)
-  await run(`window.superego.call('${secondId}', 'thread.submit', { id: '${onSecond}', text: 'over on second' })`)
+  const onSecond = await run(`window.superego.call('${secondId}', 'thread.start', { title: '' }).then((t) => t.id)`)
+  await run(`window.superego.call('${secondId}', 'thread.send', { thread: '${onSecond}', text: 'over on second' })`)
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('over on second'))`, 'the remote thread in the sidebar', 30_000)
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('over on second')).click()`)
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: over on second')`, 'the remote thread works')
@@ -1214,7 +1214,7 @@ if (phase === 'first') {
   await until(`document.querySelector('.remote-badge')?.textContent === 'remote ui' && !document.querySelector('.profile-ui-notice')`, 'the remote profile UI runs once allowed')
   // Changed there: it stops, and the window asks again.
   writeFileSync(`${process.env.SUPEREGO_HOME}/second/profiles/default/ui/label.ts`, "export const label: string = 'changed ui'\n")
-  await run(`window.superego.call('${secondId}', 'thread.submit', { id: '${onSecond}', text: 'after the change' })`)
+  await run(`window.superego.call('${secondId}', 'thread.send', { thread: '${onSecond}', text: 'after the change' })`)
   await until(`!document.querySelector('.remote-badge') && Boolean(document.querySelector('.profile-ui-notice'))`, 'a changed profile UI stops until allowed again')
   // Not now: remembered on this computer for these sources, and the header says so quietly; a click asks again.
   await run(`[...document.querySelectorAll('.profile-ui-notice button')].find((b) => b.textContent === 'Not now').click()`)
@@ -1282,7 +1282,7 @@ if (phase === 'first') {
   writeFileSync(secondAuth, JSON.stringify({ faux: { type: 'api_key', key: 'reject-me' } }))
   globalThis.superegoNotices = []
   await run(`window.dispatchEvent(new Event('blur'))`)
-  for (const prompt of ['keyed one', 'keyed two']) await run(`window.superego.call('${secondId}', 'thread.create', { title: '${prompt}', prompt: '${prompt}' })`)
+  for (const prompt of ['keyed one', 'keyed two']) await run(`window.superego.call('${secondId}', 'thread.start', { title: '${prompt}', prompt: '${prompt}' })`)
   await until(`document.querySelectorAll('.app__rail .rail-notice--auth').length === 1 && document.querySelector('.rail-notice--auth').getAttribute('aria-label') === 'faux rejected the API key on Second'`, 'one notice for the rejected key, naming the machine')
   await until(`[...document.querySelectorAll('.superego-list-item')].filter((li) => /keyed (one|two)/.test(li.textContent) && li.querySelector('.superego-status--signin')).length === 2`, 'the threads waiting quietly')
   await new Promise((r) => setTimeout(r, 500))

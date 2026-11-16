@@ -55,7 +55,7 @@ void (async () => {
   await until(`window.superego.machines().then((list) => list.find((m) => m.id === 'local')?.state === 'connected')`, 'local machine')
   win().setContentSize(1200, 760)
   const project = process.env.SUPEREGO_SHOWCASE_PROJECT
-  const { id } = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(project)}, title: 'Ledger' })`)
+  const { id } = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(project)}, title: 'Ledger' })`)
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('Ledger'))`, 'the thread listed')
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('Ledger')).click()`)
   await until(`document.querySelector('.thread__title')?.textContent === 'Ledger'`, 'the thread shown')
@@ -108,7 +108,7 @@ void (async () => {
   await run(`window.superego.call('local', 'settings.set', { key: 'web.access', value: 'off' })`)
 
   // Closing the pane stops its shell; the thread is left as it was.
-  await run(`window.superego.call('local', 'thread.list', {}).then((list) => list.find((t) => t.id === '${id}').panes.find((p) => p.kind === 'terminal')).then((pane) => window.superego.call('local', 'pane.close', { id: '${id}', pane: pane.id }))`)
+  await run(`window.superego.call('local', 'thread.list', {}).then((list) => list.find((t) => t.id === '${id}').panes.find((p) => p.kind === 'terminal')).then((pane) => window.superego.call('local', 'pane.close', { thread: '${id}', pane: pane.id }))`)
   await until(`!document.querySelector('.terminal-pane')`, 'the pane closed')
   console.log('terminal: ok')
   writeFileSync(`${process.env.SUPEREGO_HOME}/passed`, '')

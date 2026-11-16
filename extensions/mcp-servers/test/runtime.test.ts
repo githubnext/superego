@@ -166,7 +166,7 @@ it("doesn't run a cached profile's server after a restart until its profile load
   writeProfile(project, { mcpServers: { docs: fixture() } })
   const first = await open([calling('mcp__docs__echo', { text: 'one' }), answer('Done.')])
   await first.peer.call('profile.allow', { cwd: project })
-  const thread = await first.peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'go' })
+  const thread = await first.peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'go' })
   await done(first.peer, thread.id)
   expect((await section(first.peer)).profiles).toMatchObject([{ name: 'docs', profileAllowed: true }])
   await first.close()
@@ -180,13 +180,13 @@ it("doesn't run a cached profile's server after a restart until its profile load
   // Neither Restart nor a key set from Settings starts it; nor does the thread, which can't run.
   const restarted = await second.peer.call<CheckResult>('action.run', { id: 'mcp-servers.restart', params: { server: docs!.id } })
   expect(restarted.server).toMatchObject({ state: 'stopped', profileAllowed: false })
-  await expect(second.peer.call('thread.submit', { id: thread.id, text: 'again' })).rejects.toThrow(/allow it first/)
+  await expect(second.peer.call('thread.send', { thread: thread.id, text: 'again' })).rejects.toThrow(/allow it first/)
   await new Promise((r) => setTimeout(r, 300))
   expect(starts()).toBe(before)
 
   // Allowed, its next turn loads it, and it runs as the profile says now.
   await second.peer.call('profile.allow', { cwd: project })
-  await second.peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await second.peer.call('thread.send', { thread: thread.id, text: 'again' })
   await done(second.peer, thread.id)
   expect(starts()).toBeGreaterThan(before)
   expect((await section(second.peer)).profiles).toMatchObject([{ name: 'docs', profileAllowed: true }])

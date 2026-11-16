@@ -7,12 +7,12 @@ import type { Json } from './settings.ts'
 
 /** Where an action runs: in a window, in the app's main process, or on a machine's daemon. */
 export type Runs = 'window' | 'app' | 'machine'
-/** Who may dispatch it: the app's UI, the command line, (later) MCP. */
-export type Exposure = 'ui' | 'cli' | 'mcp'
+/** Who may dispatch it: the app's UI, the command line, outside agents (`superego mcp`). */
+export type Exposure = 'ui' | 'cli' | 'outside'
 
 /** An action as data: what clients list, bind and show. */
 export type ActionInfo = {
-  /** Stable, dotted: `thread.create`, `threads.rail`. Extensions' start with their name. */
+  /** Stable, dotted: `thread.start`, `threads.rail`. Extensions' start with their name. */
   id: string
   /** What it's called in the palette and menus. */
   title: string
@@ -25,7 +25,7 @@ export type ActionInfo = {
   expose: Exposure[]
   /** Its default shortcut, like `mod+shift+n`. */
   keys?: string
-  /** It acts on a thread: `machine` and `id` come from the selected one when not given. */
+  /** It acts on a thread: `machine` and `thread` come from the selected one when not given. */
   thread?: boolean
 }
 
@@ -73,7 +73,7 @@ export class Router<C = unknown> {
 
   register(def: ActionDef<any, unknown, C>): () => void {
     if (this.#actions.has(def.id)) throw new Error(`Action ${def.id} is already defined`)
-    if (!/^[a-z][a-z0-9-]*(\.[a-z][a-zA-Z0-9-]*)+$/.test(def.id)) throw new Error(`Action id "${def.id}" must be dotted lowercase, like thread.create`)
+    if (!/^[a-z][a-z0-9-]*(\.[a-z][a-zA-Z0-9-]*)+$/.test(def.id)) throw new Error(`Action id "${def.id}" must be dotted lowercase, like thread.start`)
     this.#actions.set(def.id, { def, parse: paramsParser(def.id, def.params) })
     return () => { if (this.#actions.get(def.id)?.def === def) this.#actions.delete(def.id) }
   }

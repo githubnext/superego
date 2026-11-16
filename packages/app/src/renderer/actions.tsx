@@ -88,7 +88,7 @@ export function createWindowRouter() {
     const target = machine ?? (typeof params.machine === 'string' ? params.machine : undefined) ?? context?.selection?.machine ?? 'local'
     const action = remote.get(target)?.find((a) => a.id === id)
     const { machine: _machine, ...rest } = params
-    const filled = action?.thread && rest.id === undefined && context?.selection?.machine === target ? { ...rest, id: context.selection.thread } : rest
+    const filled = action?.thread && rest.thread === undefined && context?.selection?.machine === target ? { ...rest, thread: context.selection.thread } : rest
     // Through action.run: it finds actions registered after this window connected (a profile's, as it loads).
     const ran = router.track(id, filled, `${source} → ${target}`, () => window.superego.call(target, 'action.run', { id, params: filled }))
     // A pane opened from this window was asked for here: the focus goes into it. (The agent's open beside, unfocused.)
@@ -206,7 +206,7 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
       const panes = thread?.panes ?? []
       const index = panes.findIndex((p) => p.id === focusedColumn(thread))
       if (!c.selection || index < 0) return
-      await c.dispatch('pane.close', { id: c.selection.thread, pane: panes[index]!.id }, { machine: c.selection.machine, source: 'panes' })
+      await c.dispatch('pane.close', { thread: c.selection.thread, pane: panes[index]!.id }, { machine: c.selection.machine, source: 'panes' })
       focusColumn(panes[index - 1]?.id)
     },
   }),
@@ -298,14 +298,14 @@ async function stepPane(c: WindowContext, by: number) {
   const columns = [undefined, ...thread.panes.map((p) => p.id)]
   const at = Math.max(0, columns.indexOf(focusedColumn(thread)))
   const next = columns[(at + by + columns.length) % columns.length]
-  await c.dispatch('pane.focus', { id: thread.id, ...(next ? { pane: next } : {}) }, { machine: c.selection.machine, source: 'keys' })
+  await c.dispatch('pane.focus', { thread: thread.id, ...(next ? { pane: next } : {}) }, { machine: c.selection.machine, source: 'keys' })
   focusColumn(next)
 }
 
 /** Whether an action can run with no parameters (after the selection fills in a thread's): keys and the palette. */
 export function runsBare(action: ActionInfo): boolean {
   const required = ((action.params as { required?: string[] } | undefined)?.required ?? [])
-    .filter((name) => !(action.thread && (name === 'id' || name === 'machine')))
+    .filter((name) => !(action.thread && (name === 'thread' || name === 'machine')))
   return required.length === 0
 }
 

@@ -42,7 +42,7 @@ try {
   await mkdir(join(home, 'profiles/default'), { recursive: true })
   await writeFile(join(home, 'profiles/default/profile.ts'), `import { defineProfile } from 'superego'; export default defineProfile({prompt:'NATIVE_PROFILE_IMPORTED'})`)
   let peer = await start()
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: home, title: 'Native socket smoke', prompt: 'socket hello' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: home, title: 'Native socket smoke', prompt: 'socket hello' })
   const done = async (id: string) => {
     for (let i=0;i<200;i++) {
       const t = (await peer.call<ThreadInfo[]>('thread.list', {})).find(t => t.id === id)
@@ -53,7 +53,7 @@ try {
     throw Error('thread timeout')
   }
   await done(thread.id)
-  assert.match(JSON.stringify(await peer.call('thread.watch', {id:thread.id})), /NATIVE_PROFILE_IMPORTED/)
+  assert.match(JSON.stringify(await peer.call('thread.watch', {thread:thread.id})), /NATIVE_PROFILE_IMPORTED/)
   await stop()
   peer = await start()
   assert((await peer.call<ThreadInfo[]>('thread.list', {})).some(t => t.id === thread.id), 'SQLite persisted')
@@ -66,7 +66,7 @@ try {
   await stop()
   env.SUPEREGO_MODEL = `replay:${replay}`
   peer = await start()
-  const tool = await peer.call<ThreadInfo>('thread.create', { cwd:home, prompt:'run tool' })
+  const tool = await peer.call<ThreadInfo>('thread.start', { cwd:home, prompt:'run tool' })
   await done(tool.id)
   assert.equal(await readFile(join(home,'native-child.txt'),'utf8'), 'native-child')
   console.log('PASS: profile SDK, socket faux chat, SQLite restart, real bash child')
@@ -78,7 +78,7 @@ try {
   connection = await connectSocket(join(home, 'superego.sock'))
   peer = connection.peer
   await peer.call('hello', { client:'native-smoke', version:PROTOCOL_VERSION })
-  assert.match(JSON.stringify(await peer.call('thread.watch', {id:thread.id})), /echo: Native WebKit message/)
+  assert.match(JSON.stringify(await peer.call('thread.watch', {thread:thread.id})), /echo: Native WebKit message/)
   console.log(`PASS: profile SDK, socket chat, WebKit UI chat + stream, SQLite restart, real bash child. Artifacts: ${home}`)
 } finally {
   await stop()

@@ -117,7 +117,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
     setError(undefined)
     try {
       if (allow && picked) await dispatch('profile.allow', { ...(cwd.trim() ? { cwd: cwd.trim() } : {}), name: picked.name }, { machine: machine.id, source: 'new thread' })
-      const created = await dispatch('thread.create', {
+      const created = await dispatch('thread.start', {
         ...(profile ? { profile } : {}),
         ...(cwd.trim() ? { cwd: cwd.trim() } : {}), ...(title.trim() ? { title: title.trim() } : {}),
         ...(model ? { model } : {}), ...(thinking && levels.length ? { thinking } : {}), ...(prompt.trim() ? { prompt: prompt.trim() } : {}),

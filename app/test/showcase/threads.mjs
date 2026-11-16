@@ -399,14 +399,14 @@ Before this goes near production:
   ]),
   turn([text('The importer stops at the first bad row.')]),
   turn([text('The importer stops at the first bad row.')]),
-  turn([call('thread_send', { id: CHILD, text: 'Thanks, that\'s what I needed.' })]),
+  turn([call('thread_send', { thread: CHILD, text: 'Thanks, that\'s what I needed.' })]),
   turn([text('Passed on.')]),
   turn([text('Passed on.')]),
   turn([
     call('thread_list', {}),
-    call('thread_read', { id: '99' }),
+    call('thread_read', { thread: '99' }),
   ]),
-  turn([call('thread_read', { id: CHILD, wait: true })]),
-  turn([call('thread_archive', { id: CHILD })]),
+  turn([call('thread_read', { thread: CHILD, wait: true })]),
+  turn([call('thread_archive', { thread: CHILD })]),
   turn([text(`Archived [Importer check](thread:${CHILD}). It found that the importer stops at the first bad row, so one bad line loses the whole file.`)]),
 ]

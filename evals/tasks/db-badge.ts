@@ -41,7 +41,7 @@ export const dbBadge: Task = {
     notes.push(`profiles: ${profileDirs(world).map((d) => d.replace(world.home, '~')).join(', ') || 'none'}`)
 
     const threads: Record<string, Thread> = {}
-    for (const p of PROBES) threads[p.key] = await world.rpc.call<Thread>('thread.create', { cwd: world.project, title: p.title, model: PROBE_MODEL, prompt: p.prompt })
+    for (const p of PROBES) threads[p.key] = await world.rpc.call<Thread>('thread.start', { cwd: world.project, title: p.title, model: PROBE_MODEL, prompt: p.prompt })
     for (const p of PROBES) { await settle(world, threads[p.key]!.id); cost += await costOf(world, threads[p.key]!.id) }
     const listed = await world.rpc.call<(Thread & { ext?: Record<string, unknown> })[]>('thread.list', {})
     const info = (key: string) => listed.find((t) => t.id === threads[key]!.id)

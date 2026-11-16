@@ -1,9 +1,9 @@
-// Where a call carries attachments: `thread.submit` and `thread.create`, directly, run by `action.run`, or passed on
+// Where a call carries attachments: `thread.send` and `thread.start`, directly, run by `action.run`, or passed on
 // to another machine by `relay.call`. Both ends need to know, the client to upload them first and the daemon to put
 // the uploads back in.
 import type { AttachmentRef } from './methods.ts'
 
-const CARRIERS = new Set(['thread.submit', 'thread.create'])
+const CARRIERS = new Set(['thread.send', 'thread.start'])
 
 /** A call's attachments, from its own params or the params of the action it runs. */
 export function attachmentsIn(method: string, params: unknown): AttachmentRef[] | undefined {

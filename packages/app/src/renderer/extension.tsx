@@ -132,7 +132,7 @@ export type PaneKind = {
 
 /**
  * A field of the New thread dialog: what it asks, on the machine and in the folder picked. Its value goes to
- * `thread.create` as `options[<extension>]`, for the extension's `creating` hook; undefined sends nothing.
+ * `thread.start` as `options[<extension>]`, for the extension's `creating` hook; undefined sends nothing.
  */
 export type NewThreadFieldProps = { machine: MachineEntry; cwd: string; value: Json | undefined; onChange(value: Json | undefined): void }
 
@@ -350,11 +350,11 @@ export type UiApi = {
   settings(ui: string, component: ComponentType<SettingsComponentProps>): void
   /**
    * A field in the New thread dialog, shown while the machine picked has this extension: what it's set to goes to
-   * `thread.create` as `options[<extension>]`, which its daemon half's `creating` hook reads. One per extension.
+   * `thread.start` as `options[<extension>]`, which its daemon half's `creating` hook reads. One per extension.
    */
   newThreadField(field: NewThreadField): void
   /**
-   * A kind of pane: a view opened beside a thread (`pane.open`, or the agent's open_pane tool) with params of its own.
+   * A kind of pane: a view opened beside a thread (`pane.open`, or the agent's pane_open tool) with params of its own.
    * A profile's pane kinds exist in that profile's threads only.
    */
   pane(kind: string, pane: PaneKind): void

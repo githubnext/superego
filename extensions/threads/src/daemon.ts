@@ -11,8 +11,8 @@ export default defineDaemonExtension({
   setup: (s) => s.agent(threadTools({
     info: (id) => s.threads.get(id).catch(() => undefined),
     list: () => s.threads.list(),
-    start: (parent, params) => s.threads.create({ ...params, parent }),
-    send: (id, text) => s.threads.submit(id, text),
+    start: (parent, params) => s.threads.start({ ...params, parent }),
+    send: (id, text) => s.threads.send(id, text),
     answer: (id) => s.threads.lastAnswer(id),
     archive: (id) => s.threads.archive(id),
     archiveWhenDone: async (id) => { await s.threads.archive(id, { whenIdle: true }) },

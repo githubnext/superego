@@ -147,20 +147,20 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
     dispatch: (id, params = {}) => peer.call('action.run', { id, params }),
     async thread(prompt, { cwd, profile, title } = {}) {
       const which = profile ?? (profileDir ? name : undefined)
-      const thread = await peer.call<ThreadInfo>('thread.create', { ...(cwd ? { cwd } : {}), ...(which ? { profile: which } : {}), ...(title ? { title } : {}) })
+      const thread = await peer.call<ThreadInfo>('thread.start', { ...(cwd ? { cwd } : {}), ...(which ? { profile: which } : {}), ...(title ? { title } : {}) })
       if (prompt === undefined) return thread
       return test.send(thread.id, prompt)
     },
     async send(id, text) {
       const before = (await info(id))?.activeAt ?? 0
-      await peer.call('thread.submit', { id, text })
+      await peer.call('thread.send', { thread: id, text })
       // Its run started (or already ended) before waiting it out.
       await until(async () => { const now = await info(id); return Boolean(now && (now.status.state === 'working' || (now.activeAt ?? 0) > before)) }, `thread ${id} to take the message`)
       return idle(id)
     },
     idle,
     async transcript(id) {
-      const { sub, value } = await peer.call<{ sub: string; value: { entries: unknown[] } }>('thread.watch', { id })
+      const { sub, value } = await peer.call<{ sub: string; value: { entries: unknown[] } }>('thread.watch', { thread: id })
       await peer.call('unwatch', { sub })
       return JSON.stringify(value.entries)
     },

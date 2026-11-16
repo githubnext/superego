@@ -77,9 +77,9 @@ describe('link', () => {
     const { link: l } = link(async () => { const transport = await openLocal(socket); transport.peer.on('ch.ack', () => acks++); return transport })
     await until(() => l.state === 'connected')
     expect(l.has('uploads')).toBe(true)
-    const thread = await l.call('thread.create', { title: 'files' }) as ThreadInfo
+    const thread = await l.call('thread.start', { title: 'files' }) as ThreadInfo
     const big = base64(12 * 1024 * 1024)
-    const sending = l.call('action.run', { id: 'thread.submit', params: { id: thread.id, text: 'see', attachments: [
+    const sending = l.call('action.run', { id: 'thread.send', params: { thread: thread.id, text: 'see', attachments: [
       { name: 'big.txt', mimeType: 'text/plain', data: big.toString('base64') },
       { name: 'small.txt', mimeType: 'text/plain', data: Buffer.from('tiny').toString('base64') },
     ] } })
@@ -99,11 +99,11 @@ describe('uploads', () => {
     const { peer, socket: conn } = await connectSocket(socket)
     cleanups.push(() => conn.destroy())
     await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
-    const thread = await peer.call<ThreadInfo>('thread.create', { title: 'up' })
+    const thread = await peer.call<ThreadInfo>('thread.start', { title: 'up' })
     const id = await upload(peer, { name: 'notes.md', mimeType: 'text/markdown', bytes: Buffer.from('# Notes') })
-    await peer.call('thread.submit', { id: thread.id, text: '', attachments: [{ name: 'notes.md', mimeType: 'text/markdown', upload: id }] })
+    await peer.call('thread.send', { thread: thread.id, text: '', attachments: [{ name: 'notes.md', mimeType: 'text/markdown', upload: id }] })
     expect(await readFile(join(dir, 'attachments', thread.id, 'notes.md'), 'utf8')).toBe('# Notes')
-    await expect(peer.call('thread.submit', { id: thread.id, text: 'again', attachments: [{ name: 'notes.md', mimeType: 'text/markdown', upload: id }] }))
+    await expect(peer.call('thread.send', { thread: thread.id, text: 'again', attachments: [{ name: 'notes.md', mimeType: 'text/markdown', upload: id }] }))
       .rejects.toMatchObject({ kind: 'not_found' })
   })
 

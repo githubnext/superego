@@ -44,7 +44,7 @@ it('lets Ego hand work to a thread of its own: top-level in its project, listed,
   expect(started).toMatchObject({ title: 'Web', cwd: project, project: { root: project } })
   expect(started!.parent).toBeUndefined()
   await until(async () => (await egoOf(peer))!.status.state === 'done')
-  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: ego.id })
+  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: ego.id })
   expect(JSON.stringify(value.entries)).toContain(`Started [Web](thread:${started!.id})`)
 
   socket.destroy(); server.close(); await daemon.close()
@@ -94,35 +94,35 @@ it("starts no thread for an outside agent through Ego, unless the machine lets o
   const answered = async (count: number) => until(async () => {
     const ego = await egoOf(peer)
     if (ego?.status.state !== 'done') return false
-    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: ego.id })
+    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: ego.id })
     return value.entries.filter((e) => (e.model?.[0] as { role?: string } | undefined)?.role === 'toolResult').length === count
   })
-  const results = async (id: string) => (await peer.call<{ value: ConversationView }>('thread.watch', { id })).value.entries
+  const results = async (id: string) => (await peer.call<{ value: ConversationView }>('thread.watch', { thread: id })).value.entries
     .filter((e) => (e.model?.[0] as { role?: string } | undefined)?.role === 'toolResult').map((e) => e.model![0] as { isError: boolean; content: { text: string }[] })
 
-  const ego = await peer.call<ThreadInfo>('action.run', { id: 'ego.ask', params: { prompt: 'start a thread for me' }, exposure: 'mcp' })
+  const ego = await peer.call<ThreadInfo>('action.run', { id: 'ego.ask', params: { prompt: 'start a thread for me' }, exposure: 'outside' })
   await answered(1)
   expect(await titles()).toEqual([])
   const [refused] = await results(ego.id)
   expect(refused).toMatchObject({ isError: true })
   expect(refused!.content[0]!.text).toMatch(/outside agents can't start threads on this machine[\s\S]*Settings → Outside agents → Can start threads/)
   // Ego was told who was asking.
-  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: ego.id })
+  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: ego.id })
   expect(JSON.stringify(value.entries.find((e) => (e.model?.[0] as { role?: string } | undefined)?.role === 'user'))).toContain('<outside-agent>')
 
-  await peer.call('thread.submit', { id: ego.id, text: 'start one for me, the user' })
+  await peer.call('thread.send', { thread: ego.id, text: 'start one for me, the user' })
   await answered(2)
   expect(await titles()).toEqual(['For the user'])
   // Done before the next, so each takes the turn meant for it.
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
 
-  await peer.call('action.run', { id: 'thread.submit', params: { id: ego.id, text: 'start another' }, exposure: 'mcp' })
+  await peer.call('action.run', { id: 'thread.send', params: { thread: ego.id, text: 'start another' }, exposure: 'outside' })
   await answered(3)
   expect(await titles()).toEqual(['For the user'])
   expect((await results(ego.id))[2]).toMatchObject({ isError: true })
 
-  await peer.call('settings.set', { key: 'mcp.startThreads', value: true })
-  await peer.call('action.run', { id: 'ego.ask', params: { prompt: 'and now?' }, exposure: 'mcp' })
+  await peer.call('settings.set', { key: 'outside.startThreads', value: true })
+  await peer.call('action.run', { id: 'ego.ask', params: { prompt: 'and now?' }, exposure: 'outside' })
   await answered(4)
   expect(await titles()).toEqual(['Allowed', 'For the user'])
 

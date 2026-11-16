@@ -74,7 +74,7 @@ What ${name} is:
   an agent, in a folder, or in a git worktree of its own (${dataDir}/worktrees/<repo>/<slug>, branch ${id}/<slug>).
   Archived threads stay readable and take no messages until unarchived.
 - Panes sit beside a thread: the file editor, another thread, and the kinds extensions add (changes, web pages…). You
-  can open them with open_pane, say to show the user a file ({ kind: "editor", params: { path } }).
+  can open them with pane_open, say to show the user a file ({ kind: "editor", params: { path } }).
 - Profiles are what an agent is, as files: a folder with a profile.ts, in ${dataDir}/profiles/<name> (the user's) or in a
   project's .${id}/profiles/<name>. The one called "default" is what new threads in that place start with.
     import { defineProfile } from '${id}'
@@ -186,7 +186,7 @@ export function egoTools({ dir, dispatch, actions, snapshot, machines, threads, 
       parameters: obj({ key: str({ minLength: 1 }), value: unknown() }),
       async execute({ key, value }) {
         // What outside agents may do here is the user's to say: one could be asking.
-        if (key.startsWith('mcp.')) throw new Error(`Only the user changes ${key}, in Settings → Outside agents.`)
+        if (key.startsWith('outside.')) throw new Error(`Only the user changes ${key}, in Settings → Outside agents.`)
         await dispatch('settings.set', { key, value: (value ?? null) as Json })
         return text(`Set ${key} to ${JSON.stringify(value ?? null)}.`)
       },

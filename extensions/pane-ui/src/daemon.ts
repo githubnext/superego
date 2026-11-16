@@ -65,7 +65,7 @@ export default defineDaemonExtension({
             const thread = threadOf(api.conversationId)
             const id = args.id ?? randomUUID().slice(0, 6)
             await keep(thread, { id, title: args.title, blocks, at: api.now() })
-            await superego.dispatch('pane.open', { id: thread, kind: KIND, title: args.title, params: { id } })
+            await superego.dispatch('pane.open', { thread: thread, kind: KIND, title: args.title, params: { id } })
             return {
               output: [{ type: 'text', text: `Opened the pane "${args.title}" (id: ${id}). What the user presses there arrives as their next message.` }],
               details: { id, title: args.title, blocks },
@@ -88,7 +88,7 @@ export default defineDaemonExtension({
             if (args.title && args.title !== current.title) {
               const { panes = [] } = await superego.threads.get(thread)
               for (const pane of panes.filter((p) => p.kind === KIND && (p.params as { id?: string } | undefined)?.id === args.id)) {
-                await superego.dispatch('pane.update', { id: thread, pane: pane.id, title })
+                await superego.dispatch('pane.update', { thread: thread, pane: pane.id, title })
               }
             }
             return { output: [{ type: 'text', text: `Updated the pane "${title}".` }], details: { id: args.id, title, blocks } }

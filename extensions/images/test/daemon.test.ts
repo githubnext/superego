@@ -31,10 +31,10 @@ async function run(calls: string[]) {
   const { peer, socket } = await connectSocket(join(dir, 's.sock'))
   const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
   expect(hello.features).toContain('ext:images')
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
-  await peer.call('thread.submit', { id: thread.id, text: 'show me' })
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
+  await peer.call('thread.send', { thread: thread.id, text: 'show me' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
-  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
+  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: thread.id })
   const results = new Map(value.entries.map((e) => e.model?.[0] as Result | undefined)
     .filter((m): m is Result => m?.role === 'toolResult').map((m) => [m.toolCallId!, m]))
   const close = async () => { socket.destroy(); server.close(); await daemon.close() }
@@ -59,11 +59,11 @@ it('shows files and web images, kept among the thread’s files for every client
   // A copy among the thread's files, read back over the protocol as any client would, byte for byte.
   const kept = one.details!.images[0]!.path!
   expect(kept.startsWith(join(dir, 'home/attachments', thread.id, 'shown'))).toBe(true)
-  const { content } = await peer.call<{ content: string }>('file.read', { id: thread.id, path: kept, base64: true })
+  const { content } = await peer.call<{ content: string }>('file.read', { thread: thread.id, path: kept, base64: true })
   expect(Buffer.from(content, 'base64').equals(await readFile(join(dir, 'project/shots/home.png')))).toBe(true)
   // Changing the original doesn't change what was shown.
   await writeFile(join(dir, 'project/shots/home.png'), png(2, 2))
-  expect((await peer.call<{ content: string }>('file.read', { id: thread.id, path: kept, base64: true })).content).toBe(content)
+  expect((await peer.call<{ content: string }>('file.read', { thread: thread.id, path: kept, base64: true })).content).toBe(content)
 
   const few = results.get('few')!
   expect(few.content?.[0]?.text).toBe('Showed 2 images.')
@@ -75,8 +75,8 @@ it('shows files and web images, kept among the thread’s files for every client
 
   // file.read still takes a relative path in the thread's folder, and nothing of another thread's files.
   await writeFile(join(dir, 'project/notes.md'), 'notes')
-  expect((await peer.call<{ content: string }>('file.read', { id: thread.id, path: 'notes.md' })).content).toBe('notes')
-  await expect(peer.call('file.read', { id: thread.id, path: join(dir, 'home/attachments/other/x.png') })).rejects.toMatchObject({ kind: 'invalid' })
+  expect((await peer.call<{ content: string }>('file.read', { thread: thread.id, path: 'notes.md' })).content).toBe('notes')
+  await expect(peer.call('file.read', { thread: thread.id, path: join(dir, 'home/attachments/other/x.png') })).rejects.toMatchObject({ kind: 'invalid' })
   await close()
 })
 

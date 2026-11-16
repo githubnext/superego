@@ -23,7 +23,7 @@ let expanded: Store<Record<string, string[]>>
 
 /** A thread's files, again whenever it moves on. */
 function useFiles(machine: string | undefined, thread: ThreadInfo | undefined) {
-  return useMethod<FileList>(machine ?? '', LIST, { id: thread?.id }, { enabled: Boolean(machine && thread), refresh: thread?.activeAt }).data
+  return useMethod<FileList>(machine ?? '', LIST, { thread: thread?.id }, { enabled: Boolean(machine && thread), refresh: thread?.activeAt }).data
 }
 
 export default defineUiExtension({
@@ -146,7 +146,7 @@ function FolderPane({ machine, thread, pane }: PaneProps) {
   const toggle = (child: string) => setOpen((was) => { const next = new Set(was); if (!next.delete(child)) next.add(child); return next })
   const show = (file: string) => {
     const kind = fileKind(registry, { machine: machine.id, thread }, file)
-    if (kind) void dispatch('pane.open', { id: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'folder' })
+    if (kind) void dispatch('pane.open', { thread: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'folder' })
   }
   return (
     <div className="files-folder" aria-label={path || 'Files'}>
@@ -181,7 +181,7 @@ function QuickOpenDialog({ machineId, threadId, onClose }: { machineId: string; 
     if (!thread || !machine) return
     onClose()
     const kind = fileKind(registry, { machine: machine.id, thread }, file)
-    if (kind) void dispatch('pane.open', { id: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'quick open' })
+    if (kind) void dispatch('pane.open', { thread: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'quick open' })
   }
   return (
     <Picker label="Open a file" className="files-open" placeholder={thread ? `Open a file in ${thread.project?.name ?? 'this thread'}` : 'Open a file'}

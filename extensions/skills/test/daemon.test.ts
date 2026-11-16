@@ -38,10 +38,10 @@ async function open(extension = skills) {
 
 /** Send a thread `text` and wait for the answer: what the agent was given, and the message as it went in. */
 async function send(peer: RpcPeer, text: string) {
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
-  await peer.call('thread.submit', { id: thread.id, text })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
+  await peer.call('thread.send', { thread: thread.id, text })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === thread.id)!.status.state === 'done')
-  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
+  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: thread.id })
   const user = value.entries.find((e) => e.kind === 'pi.user')!.model![0] as { content: string | { type: string; text?: string }[] }
   return { all: JSON.stringify(value), content: user.content }
 }

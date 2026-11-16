@@ -33,14 +33,14 @@ it('asks, blocks the thread, takes an answer from any client, and carries on', a
   const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
   expect(hello.features).toContain('ext:ask-user')
 
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
   // The thread's own questions, in its scope; another's scope hears nothing.
   const own = await peer.call<{ sub: string; value: Question[] }>('value.watch', { key: ASKING, scope: thread.id })
   const other = await peer.call<{ sub: string; value: Question[] }>('value.watch', { key: ASKING, scope: 'another' })
   let mine = own.value
   const others: unknown[] = []
   peer.on('value.changed', ({ sub, value }: Notifications['value.changed']) => { if (sub === own.sub) mine = value as Question[]; if (sub === other.sub) others.push(value) })
-  await peer.call('thread.submit', { id: thread.id, text: 'pick a colour' })
+  await peer.call('thread.send', { thread: thread.id, text: 'pick a colour' })
   await until(() => mine.length === 1)
   expect(mine[0]).toMatchObject({ thread: thread.id, question: 'Which colour?', options: [{ label: 'red' }, { label: 'blue', description: 'like the sky' }] })
   const blocked = (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!
@@ -51,7 +51,7 @@ it('asks, blocks the thread, takes an answer from any client, and carries on', a
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
   await until(() => mine.length === 0)
   expect(others).toEqual([])
-  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
+  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: thread.id })
   const text = JSON.stringify(value.entries)
   expect(text).toContain('The user answered: blue')
   expect(text).toContain('Blue it is.')

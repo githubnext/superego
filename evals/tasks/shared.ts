@@ -72,7 +72,7 @@ export async function settle(world: World, id: string, ms = 180_000): Promise<Th
     if (!thread || thread.status.state !== 'working') return thread
     await sleep(2000)
   }
-  await world.rpc.call('thread.abort', { id }).catch(() => {})
+  await world.rpc.call('thread.stop', { thread: id }).catch(() => {})
   return undefined
 }
 
@@ -100,7 +100,7 @@ export async function quiet(world: World, root: string, { ms, cost }: { ms: numb
     const threads = await family()
     const over = Date.now() > end ? 'time limit' : threads.reduce((s, t) => s + (t.cost ?? 0), 0) > cost ? 'cost limit' : undefined
     if (over) {
-      for (const t of threads) if (t.status.state === 'working') await world.rpc.call('thread.abort', { id: t.id }).catch(() => {})
+      for (const t of threads) if (t.status.state === 'working') await world.rpc.call('thread.stop', { thread: t.id }).catch(() => {})
       await sleep(2000)
       return { threads: await family(), stop: over }
     }

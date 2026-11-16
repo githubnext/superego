@@ -38,7 +38,7 @@ function ProfileUiNotice({ machine, thread }: { machine: MachineEntry; thread: T
   }
   const notNow = () => void say('profiles.declineUi').then(() => declineUi(pending), () => {})
   const show = (path: string) => void dispatch('pane.open', {
-    id: thread.id, kind: 'profile-source', params: { dir: pending.profile.dir, name: pending.profile.name, path },
+    thread: thread.id, kind: 'profile-source', params: { dir: pending.profile.dir, name: pending.profile.name, path },
   }, { machine: machine.id, source: 'profile-ui' })
   return (
     <div className="profile-ui-notice" role="status">

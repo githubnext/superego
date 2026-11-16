@@ -42,10 +42,10 @@ void (async () => {
 
   // A thread without a profile: it has the servers used in threads without one (the tracker, as "linear").
   const project = process.env.SUPEREGO_SHOWCASE_PROJECT
-  const { id } = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(project)}, title: 'File the CSV bug' })`)
-  await run(`window.superego.call('local', 'thread.submit', { id: '${id}', text: 'File the quoted-comma CSV bug in Linear, and show me how the team is doing.' })`)
+  const { id } = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(project)}, title: 'File the CSV bug' })`)
+  await run(`window.superego.call('local', 'thread.send', { thread: '${id}', text: 'File the quoted-comma CSV bug in Linear, and show me how the team is doing.' })`)
   await until(`window.superego.call('local', 'thread.list', {}).then((list) => ['done', 'error'].includes(list.find((t) => t.id === '${id}')?.status.state))`, 'the answer', 60_000)
-  await run(`window.superego.call('local', 'thread.seen', { id: '${id}' })`)
+  await run(`window.superego.call('local', 'thread.seen', { thread: '${id}' })`)
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('File the CSV bug'))?.click()`)
   await until(`document.querySelectorAll('.transcript .msg').length >= 2`, 'thread shown')
   // Its run of work open, and the call that filed the issue and the chart open in it.

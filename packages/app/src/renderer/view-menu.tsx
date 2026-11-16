@@ -43,8 +43,8 @@ function usePlacing({ view, place, machine, thread, pane }: ViewMenuProps) {
     await dispatch('layout.place', { view, ...params, ...(narrow ? { narrow } : {}), ...placingIn(where) }, { source: 'layout' })
     if (!machine || !thread) return
     // Moved out of a pane it's open in: that pane goes. Moved into the pane menu: it opens, so the move shows.
-    if (pane && params.on !== true) await dispatch('pane.close', { id: thread.id, pane }, { machine, source: 'layout' })
-    if (params.place === 'pane' && params.on !== false && found.context === 'thread') await dispatch('pane.open', { id: thread.id, kind: view }, { machine, source: 'layout' })
+    if (pane && params.on !== true) await dispatch('pane.close', { thread: thread.id, pane }, { machine, source: 'layout' })
+    if (params.place === 'pane' && params.on !== false && found.context === 'thread') await dispatch('pane.open', { thread: thread.id, kind: view }, { machine, source: 'layout' })
   }
   return { found, shared, targets, change }
 }

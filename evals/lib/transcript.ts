@@ -18,7 +18,7 @@ export async function entriesOf(rpc: Rpc, id: string): Promise<any[]> {
   const all: any[] = []
   let before = Number.MAX_SAFE_INTEGER
   for (let page = 0; page < 200; page++) {
-    const { entries, more } = await rpc.call<{ entries: any[]; more: boolean }>('thread.history', { id, before, limit: 200 })
+    const { entries, more } = await rpc.call<{ entries: any[]; more: boolean }>('thread.history', { thread: id, before, limit: 200 })
     all.unshift(...entries)
     if (!more || !entries.length) break
     before = entries[0].id

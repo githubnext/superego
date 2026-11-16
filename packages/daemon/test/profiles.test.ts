@@ -33,7 +33,7 @@ const write = (root: string, files: Record<string, string>) => {
 
 /** The extensions and instructions a thread's agent has, once a turn configured it. */
 async function agentOf(peer: RpcPeer, id: string) {
-  const { value } = await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { id })
+  const { value } = await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { thread: id })
   const agent = value.docs['pi.agent'] as { extensions?: string[]; instructions?: string } | undefined
   return { extensions: agent?.extensions ?? [], instructions: agent?.instructions }
 }
@@ -54,7 +54,7 @@ afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 it('runs plain superego where there are no profiles', async () => {
   const { peer, close } = await open()
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project })
   expect(thread.profile).toBeUndefined()
   expect(await peer.call<ProfileInfo[]>('profile.list', { cwd: project })).toEqual([])
   await close()
@@ -65,7 +65,7 @@ it("takes the user's default profile: its prompt and model", async () => {
     'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ description: 'Mine', prompt: 'Answer in haiku.' })\n`,
   })
   const { peer, close } = await open()
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hello' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'hello' })
   expect(thread.profile).toMatchObject({ name: 'default', scope: 'user' })
   await done(peer, thread.id)
   const agent = await agentOf(peer, thread.id)
@@ -91,10 +91,10 @@ export default defineExtension({
   const { peer, close } = await open()
   const listed = await peer.call<ProfileInfo[]>('profile.list', { cwd: join(project, 'src') })
   expect(listed).toMatchObject([{ name: 'support', scope: 'project', allowed: false }])
-  await expect(peer.call('thread.create', { cwd: project, profile: 'support' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await expect(peer.call('thread.start', { cwd: project, profile: 'support' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
 
   await peer.call('profile.allow', { cwd: project, name: 'support' })
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: join(project, 'src'), profile: 'support', prompt: 'where is 42?' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: join(project, 'src'), profile: 'support', prompt: 'where is 42?' })
   expect(thread.profile).toMatchObject({ name: 'support', scope: 'project' })
   await done(peer, thread.id)
   const agent = await agentOf(peer, thread.id)
@@ -105,7 +105,7 @@ export default defineExtension({
 
   // An edit is new code: the next turn waits for it to be allowed.
   write(profile, { 'orders.ts': `export default { name: 'orders' }\n` })
-  await expect(peer.call('thread.submit', { id: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await expect(peer.call('thread.send', { thread: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
   await close()
 })
 
@@ -128,7 +128,7 @@ describe("the user's own profiles, in the default data dir under ~", () => {
     const { peer, close } = await open(dataDir)
     expect(await peer.call<ProfileInfo[]>('profile.list', { cwd: join(fakeHome, 'notes') })).toMatchObject([{ name: 'chief', scope: 'user', allowed: true }])
     expect(await peer.call<ProfileInfo[]>('profile.list', { cwd: fakeHome })).toMatchObject([{ name: 'chief', scope: 'user', allowed: true }])
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: join(fakeHome, 'notes'), profile: 'chief', prompt: 'hi' })
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: join(fakeHome, 'notes'), profile: 'chief', prompt: 'hi' })
     expect(thread.profile).toMatchObject({ name: 'chief', scope: 'user' })
     await done(peer, thread.id)
     expect((await agentOf(peer, thread.id)).instructions).toBe('Run my day.')
@@ -187,7 +187,7 @@ it("lets a project's profile replace the user's, or extend it", async () => {
   const { peer, close } = await open()
   expect((await peer.call<ProfileInfo[]>('profile.list', { cwd: project })).map((p) => `${p.scope}:${p.name}`)).toEqual(['project:default'])
   await peer.call('profile.allow', { cwd: project })
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'hi' })
   expect(thread.profile).toMatchObject({ name: 'default', scope: 'project' })
   await done(peer, thread.id)
   expect((await agentOf(peer, thread.id)).instructions).toBe('Be kind.\n\nKnow the Acme codebase.')
@@ -257,14 +257,14 @@ export default defineDaemonExtension({
 `
   write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': extension('one') })
   const { peer, close } = await open()
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'hi' })
   await done(peer, thread.id)
   expect(await peer.call('action.run', { id: 'vault.answer', params: { id: thread.id } })).toEqual({ answer: 'one', cwd: project })
   expect((await peer.call<{ value: number }>('value.watch', { key: 'vault.count' })).value).toBe(1)
   expect((await agentOf(peer, thread.id)).extensions).toContain('user:default/notes')
   // Changed: the old action goes, the new one answers.
   write(profile, { 'vault.ts': extension('two') })
-  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await peer.call('thread.send', { thread: thread.id, text: 'again' })
   expect(await peer.call('action.run', { id: 'vault.answer', params: { id: thread.id } })).toMatchObject({ answer: 'two' })
   await close()
 })
@@ -283,9 +283,9 @@ export default defineDaemonExtension({
 `
   write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': extension('Not A Key') })
   const { peer, close } = await open()
-  await expect(peer.call('thread.create', { cwd: project })).rejects.toThrow(/Section key/)
+  await expect(peer.call('thread.start', { cwd: project })).rejects.toThrow(/Section key/)
   write(profile, { 'vault.ts': extension('notes') })
-  await peer.call<ThreadInfo>('thread.create', { cwd: project })
+  await peer.call<ThreadInfo>('thread.start', { cwd: project })
   expect(await peer.call('action.run', { id: 'vault.ping', params: {} })).toBe('pong')
   await close()
 })
@@ -320,7 +320,7 @@ async function openSlow() {
 
 /** The tool results in a thread's transcript. */
 async function toolResults(peer: RpcPeer, id: string) {
-  const { value } = await peer.call<{ value: { entries: { model?: { role?: string; content?: { text?: string }[]; isError?: boolean }[] }[] } }>('thread.watch', { id })
+  const { value } = await peer.call<{ value: { entries: { model?: { role?: string; content?: { text?: string }[]; isError?: boolean }[] }[] } }>('thread.watch', { thread: id })
   return value.entries.map((e) => e.model?.[0]).filter((m) => m?.role === 'toolResult')
 }
 
@@ -336,7 +336,7 @@ export default defineExtension({ name: 'slow', tools: [${slowTool(started, gate)
 `,
   })
   const first = await openSlow()
-  const thread = await first.peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'go' })
+  const thread = await first.peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'go' })
   await until(async () => existsSync(started))
   await first.close()
   writeFileSync(gate, '')
@@ -358,7 +358,7 @@ export default defineExtension({ name: 'slow', tools: [${slowTool(started, gate)
 `,
   })
   const first = await openSlow()
-  const thread = await first.peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'go' })
+  const thread = await first.peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'go' })
   await until(async () => existsSync(started))
   await first.close()
   write(profile, { 'slow.ts': `throw new Error('broken')\n` })
@@ -380,30 +380,30 @@ export default defineExtension({ name: 'slow', tools: [${slowTool(started, gate)
 `,
   })
   const { peer, close } = await openSlow()
-  const { id } = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'go' })
+  const { id } = await peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'go' })
   await until(async () => existsSync(started))
-  const submit = async (text: string) => (await peer.call<{ submission: string }>('thread.submit', { id, text, whenBusy: 'followUp' })).submission
+  const submit = async (text: string) => (await peer.call<{ submission: string }>('thread.send', { thread: id, text, whenBusy: 'followUp' })).submission
   const now = await submit('now please')
   const later = await submit('later please')
   const gone = await submit('never mind')
-  expect(await peer.call('thread.steer', { id, submission: now })).toEqual({ status: 'steers' })
+  expect(await peer.call('thread.steer', { thread: id, submission: now })).toEqual({ status: 'steers' })
   // Taken back first: nothing to send.
-  await peer.call('thread.withdraw', { id, submission: gone })
-  expect(await peer.call('thread.steer', { id, submission: gone })).toEqual({ status: 'settled' })
-  await expect(peer.call('thread.steer', { id, submission: '999999' })).rejects.toMatchObject({ kind: 'not_found' })
-  const inbox = async () => ((await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { id })).value.docs['pi.inbox'] as { items: { id: number; mode: string }[] }).items
+  await peer.call('thread.withdraw', { thread: id, submission: gone })
+  expect(await peer.call('thread.steer', { thread: id, submission: gone })).toEqual({ status: 'settled' })
+  await expect(peer.call('thread.steer', { thread: id, submission: '999999' })).rejects.toMatchObject({ kind: 'not_found' })
+  const inbox = async () => ((await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { thread: id })).value.docs['pi.inbox'] as { items: { id: number; mode: string }[] }).items
   expect((await inbox()).map(({ id, mode }) => ({ id: String(id), mode }))).toEqual([{ id: now, mode: 'steer' }, { id: later, mode: 'followUp' }])
 
   writeFileSync(gate, '')
   await done(peer, id)
-  const { value } = await peer.call<{ value: { entries: unknown[] } }>('thread.watch', { id })
+  const { value } = await peer.call<{ value: { entries: unknown[] } }>('thread.watch', { thread: id })
   const at = (text: string) => value.entries.findIndex((e) => JSON.stringify(e).includes(text))
   // In after the step, before the turn's answer; the follow-up after it, as before.
   const step = at('slow done')
   expect([at('now please'), at('All done.'), at('later please'), at('Replay finished')]).toEqual([step + 1, step + 2, step + 3, step + 4])
   expect(at('never mind')).toBe(-1)
   // Gone in already, it stays as it went.
-  expect((await peer.call<{ status: string }>('thread.steer', { id, submission: now })).status).not.toBe('steers')
+  expect((await peer.call<{ status: string }>('thread.steer', { thread: id, submission: now })).status).not.toBe('steers')
   await close()
 })
 
@@ -423,7 +423,7 @@ export default defineDaemonExtension({
 `
   write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./slow.ts'] })\n`, 'slow.ts': slow('one') })
   const { peer, close } = await openSlow()
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'go' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'go' })
   await until(async () => existsSync(started))
   write(profile, { 'slow.ts': slow('two') })
   const ref = { scope: 'user', name: 'default', dir: profile }
@@ -455,14 +455,14 @@ export default defineDaemonExtension({
   expect(watched.value).toBeNull()
   const changes: unknown[] = []
   peer.on('value.changed', (params: { sub: string; value: unknown }) => { if (params.sub === watched.sub) changes.push(params.value) })
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'hi' })
   await done(peer, thread.id)
   await until(async () => changes.includes('Vault'))
   const sections = async () => (await peer.call<{ value: { sections: { id: string; title: string }[] } }>('settings.watch', {})).value.sections
   expect((await sections()).find((s) => s.id === 'vault')?.title).toBe('Vault')
   // Changed: its section is replaced, not registered twice.
   write(profile, { 'vault.ts': extension('Notes') })
-  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await peer.call('thread.send', { thread: thread.id, text: 'again' })
   await done(peer, thread.id)
   expect((await sections()).filter((s) => s.id === 'vault').map((s) => s.title)).toEqual(['Notes'])
   await until(async () => changes.includes('Notes'))
@@ -480,12 +480,12 @@ it("refuses a profile's extension that takes a name already in use, or settings 
     'b.ts': `import { defineDaemonExtension } from 'superego'\nexport default defineDaemonExtension({ name: 'twin', setup() {} })\n`,
   })
   const { peer, close } = await open()
-  await expect(peer.call('thread.create', { cwd: project })).rejects.toThrow(/already set up/)
+  await expect(peer.call('thread.start', { cwd: project })).rejects.toThrow(/already set up/)
   write(profile, {
     'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./a.ts'] })\n`,
     'a.ts': `import { defineDaemonExtension } from 'superego'\nexport default defineDaemonExtension({ name: 'twin', setup(superego) { superego.settings.register({ id: 'agent', title: 'Mine', settings: [] }) } })\n`,
   })
-  await expect(peer.call('thread.create', { cwd: project })).rejects.toThrow(/must name its settings/)
+  await expect(peer.call('thread.start', { cwd: project })).rejects.toThrow(/must name its settings/)
   await close()
 })
 
@@ -494,7 +494,7 @@ it("tells clients what a profile's threads go without, and its agent goes withou
     'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ without: ['panes', 'agents-md'] })\n`,
   })
   const { peer, close } = await open()
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'hi' })
   await done(peer, thread.id)
   expect((await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === thread.id)?.without).toEqual(['agents-md', 'panes'])
   const agent = await agentOf(peer, thread.id)
@@ -520,9 +520,9 @@ it("shares a daemon extension between profiles that have it: one extending anoth
   write(join(home, 'profiles', 'work'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extends: 'user:default', prompt: 'Work.' })\n` })
   write(join(home, 'profiles', 'play'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['../default/vault.ts'] })\n` })
   const { peer, close } = await open()
-  const first = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
-  const second = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'work', prompt: 'hi' })
-  const third = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'play', prompt: 'hi' })
+  const first = await peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'hi' })
+  const second = await peer.call<ThreadInfo>('thread.start', { cwd: project, profile: 'work', prompt: 'hi' })
+  const third = await peer.call<ThreadInfo>('thread.start', { cwd: project, profile: 'play', prompt: 'hi' })
   for (const thread of [first, second, third]) await done(peer, thread.id)
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
   // Each has its agent parts.
@@ -531,11 +531,11 @@ it("shares a daemon extension between profiles that have it: one extending anoth
   expect((await agentOf(peer, third.id)).extensions).toContain('user:default/notes')
   // Changed: every profile that has it loads the new version, and they share that.
   write(join(home, 'profiles', 'default'), { 'vault.ts': vault('two') })
-  await peer.call('thread.submit', { id: second.id, text: 'again' })
+  await peer.call('thread.send', { thread: second.id, text: 'again' })
   await done(peer, second.id)
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('two')
-  await peer.call('thread.submit', { id: first.id, text: 'again' })
-  await peer.call('thread.submit', { id: third.id, text: 'again' })
+  await peer.call('thread.send', { thread: first.id, text: 'again' })
+  await peer.call('thread.send', { thread: third.id, text: 'again' })
   for (const thread of [first, third]) await done(peer, thread.id)
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('two')
   expect((await agentOf(peer, second.id)).extensions).toContain('user:default/notes')
@@ -549,7 +549,7 @@ it("names a shared file's agent parts the same whichever profile loads it first"
     const { peer, close } = await open()
     const names: string[] = []
     for (const profile of order) {
-      const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile, prompt: 'hi' })
+      const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, profile, prompt: 'hi' })
       await done(peer, thread.id)
       names.push(...(await agentOf(peer, thread.id)).extensions.filter((name) => name.endsWith('/notes')))
     }
@@ -574,9 +574,9 @@ export default defineDaemonExtension({ name: 'stamp', setup(superego) { superego
   write(join(home, 'profiles', 'plain'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({})\n` })
   const { peer, close } = await open()
   const sent = async (profile: string) => {
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile, prompt: 'hi' })
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, profile, prompt: 'hi' })
     await done(peer, thread.id)
-    const { value } = await peer.call<{ value: { entries: { kind: string; model?: { content: unknown }[] }[] } }>('thread.watch', { id: thread.id })
+    const { value } = await peer.call<{ value: { entries: { kind: string; model?: { content: unknown }[] }[] } }>('thread.watch', { thread: thread.id })
     return value.entries.find((e) => e.kind === 'pi.user')!.model![0]!.content
   }
   const stamped = [{ type: 'text', text: 'hi' }, { type: 'text', text: 'stamped' }]
@@ -593,7 +593,7 @@ it("doesn't let a profile's extension take the name of one a window declared", a
   })
   const { peer, close } = await open()
   await peer.call('extensions.declare', { extensions: [{ name: 'links', title: 'Links' }] })
-  await expect(peer.call('thread.create', { cwd: project })).rejects.toThrow(/links is already set up/)
+  await expect(peer.call('thread.start', { cwd: project })).rejects.toThrow(/links is already set up/)
   await close()
 })
 
@@ -601,11 +601,11 @@ it('loads a profile again when a file it lists from outside its folder changes',
   write(dir, { 'shared/vault.ts': vault('one') })
   write(join(home, 'profiles', 'default'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['../../../shared/vault.ts'] })\n` })
   const { peer, close } = await open()
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'hi' })
   await done(peer, thread.id)
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
   write(dir, { 'shared/vault.ts': vault('two') })
-  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await peer.call('thread.send', { thread: thread.id, text: 'again' })
   await done(peer, thread.id)
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('two')
   await close()
@@ -616,14 +616,14 @@ it("vouches, in allowing a project's profile, for the files it lists from outsid
   write(join(project, '.superego', 'profiles', 'support'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['../../../tools/vault.ts'] })\n` })
   const { peer, close } = await open()
   await peer.call('profile.allow', { cwd: project, name: 'support' })
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'support', prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, profile: 'support', prompt: 'hi' })
   await done(peer, thread.id)
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
   // Changed since: not run until allowed again.
   write(project, { 'tools/vault.ts': vault('two') })
-  await expect(peer.call('thread.submit', { id: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await expect(peer.call('thread.send', { thread: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
   await peer.call('profile.allow', { cwd: project, name: 'support' })
-  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await peer.call('thread.send', { thread: thread.id, text: 'again' })
   await done(peer, thread.id)
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('two')
   await close()
@@ -633,7 +633,7 @@ it('loads a profile one version at a time, the newest last', async () => {
   const profile = join(home, 'profiles', 'default')
   write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': vault('one') })
   const { peer, close } = await open()
-  await peer.call<ThreadInfo>('thread.create', { cwd: project })
+  await peer.call<ThreadInfo>('thread.start', { cwd: project })
   const ref = { scope: 'user', name: 'default', dir: profile }
   // Saved twice in a row, each save seen by a call while the last still loads.
   write(profile, { 'vault.ts': vault('two') })
@@ -649,7 +649,7 @@ it("lets go of a profile whose folder is gone: its extensions and its name", asy
   const profile = join(home, 'profiles', 'default')
   write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': vault('one') })
   const { peer, close } = await open()
-  await peer.call<ThreadInfo>('thread.create', { cwd: project })
+  await peer.call<ThreadInfo>('thread.start', { cwd: project })
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
   await rm(profile, { recursive: true })
   await expect(peer.call('profile.ui', { scope: 'user', name: 'default', dir: profile })).rejects.toMatchObject({ kind: 'not_found' })
@@ -661,7 +661,7 @@ it("lets go of a profile whose folder is gone: its extensions and its name", asy
 
 /** The lines Superego wrote in a thread's transcript itself (`superego.note`). */
 async function notes(peer: RpcPeer, id: string) {
-  const { value } = await peer.call<{ value: { entries: { kind: string; data?: { text?: string } }[] } }>('thread.watch', { id })
+  const { value } = await peer.call<{ value: { entries: { kind: string; data?: { text?: string } }[] } }>('thread.watch', { thread: id })
   return value.entries.filter((e) => e.kind === 'superego.note').map((e) => e.data?.text ?? '')
 }
 const threadOf = async (peer: RpcPeer, id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)!
@@ -676,12 +676,12 @@ describe('a thread whose profile moved or vanished', () => {
   it("runs the user's profile of that name once the project's moved there, and says so", async () => {
     const { peer, close } = await open()
     await peer.call('profile.allow', { cwd: project, name: 'chief' })
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'chief', prompt: 'hi' })
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, profile: 'chief', prompt: 'hi' })
     await done(peer, thread.id)
     mkdirSync(join(home, 'profiles'), { recursive: true })
     renameSync(chief(), yours())
 
-    await peer.call('thread.submit', { id: thread.id, text: 'again' })
+    await peer.call('thread.send', { thread: thread.id, text: 'again' })
     await done(peer, thread.id)
     expect((await threadOf(peer, thread.id)).profile).toEqual({ scope: 'user', name: 'chief', dir: yours() })
     expect((await agentOf(peer, thread.id)).instructions).toBe('Run my day.')
@@ -692,7 +692,7 @@ describe('a thread whose profile moved or vanished', () => {
   it('finds it where it moved as the daemon starts, too', async () => {
     const first = await open()
     await first.peer.call('profile.allow', { cwd: project, name: 'chief' })
-    const thread = await first.peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'chief' })
+    const thread = await first.peer.call<ThreadInfo>('thread.start', { cwd: project, profile: 'chief' })
     await first.close()
     mkdirSync(join(home, 'profiles'), { recursive: true })
     renameSync(chief(), yours())
@@ -707,14 +707,14 @@ describe('a thread whose profile moved or vanished', () => {
     mkdirSync(join(home, 'profiles'), { recursive: true })
     renameSync(chief(), yours())
     const { peer, close } = await open()
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'chief' })
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, profile: 'chief' })
     expect(thread.profile).toMatchObject({ scope: 'user' })
     renameSync(yours(), chief())
 
-    await expect(peer.call('thread.submit', { id: thread.id, text: 'hi' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+    await expect(peer.call('thread.send', { thread: thread.id, text: 'hi' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
     expect((await threadOf(peer, thread.id)).profile).toEqual({ scope: 'project', name: 'chief', dir: chief() })
     await peer.call('profile.allow', { cwd: project, name: 'chief' })
-    await peer.call('thread.submit', { id: thread.id, text: 'hi' })
+    await peer.call('thread.send', { thread: thread.id, text: 'hi' })
     await done(peer, thread.id)
     expect((await agentOf(peer, thread.id)).instructions).toBe('Run my day.')
     await close()
@@ -724,18 +724,18 @@ describe('a thread whose profile moved or vanished', () => {
     write(join(home, 'profiles', 'default'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ prompt: 'Be kind.' })\n` })
     const { peer, close } = await open()
     await peer.call('profile.allow', { cwd: project, name: 'chief' })
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'chief' })
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, profile: 'chief' })
     await rm(chief(), { recursive: true })
 
-    await expect(peer.call('thread.submit', { id: thread.id, text: 'hi' })).rejects.toMatchObject({ kind: 'profile_missing' })
+    await expect(peer.call('thread.send', { thread: thread.id, text: 'hi' })).rejects.toMatchObject({ kind: 'profile_missing' })
     // A project's profile that isn't allowed isn't taken.
     write(join(project, '.superego', 'profiles', 'support'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({})\n` })
-    await expect(peer.call('thread.setProfile', { id: thread.id, profile: 'support' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
-    await expect(peer.call('thread.setProfile', { id: thread.id, profile: 'nope' })).rejects.toMatchObject({ kind: 'not_found' })
+    await expect(peer.call('thread.setProfile', { thread: thread.id, profile: 'support' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+    await expect(peer.call('thread.setProfile', { thread: thread.id, profile: 'nope' })).rejects.toMatchObject({ kind: 'not_found' })
 
-    expect(await peer.call('thread.setProfile', { id: thread.id })).toMatchObject({ scope: 'user', name: 'default' })
+    expect(await peer.call('thread.setProfile', { thread: thread.id })).toMatchObject({ scope: 'user', name: 'default' })
     expect((await threadOf(peer, thread.id)).profile).toMatchObject({ name: 'default' })
-    await peer.call('thread.submit', { id: thread.id, text: 'hi' })
+    await peer.call('thread.send', { thread: thread.id, text: 'hi' })
     await done(peer, thread.id)
     expect((await agentOf(peer, thread.id)).instructions).toBe('Be kind.')
     expect(await notes(peer, thread.id)).toEqual([expect.stringContaining('runs the default profile now')])
@@ -760,9 +760,9 @@ export default defineDaemonExtension({
 `
   write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': full })
   const { peer, close } = await open()
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'hi' })
   await done(peer, thread.id)
-  expect(JSON.stringify((await peer.call<{ value: unknown }>('thread.watch', { id: thread.id })).value)).toContain('vault-pane')
+  expect(JSON.stringify((await peer.call<{ value: unknown }>('thread.watch', { thread: thread.id })).value)).toContain('vault-pane')
   expect((await agentOf(peer, thread.id)).extensions).toContain('user:default/notes')
   expect(await peer.call('vault.read', {})).toBe('read')
   await peer.call('action.run', { id: 'vault.block', params: { id: thread.id } })
@@ -773,9 +773,9 @@ export default defineDaemonExtension({
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state !== 'blocked')
   expect((await peer.call<{ id: string }[]>('action.list', {})).map((a) => a.id)).not.toContain('vault.block')
   await expect(peer.call('vault.read', {})).rejects.toMatchObject({ kind: 'unknown_method' })
-  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await peer.call('thread.send', { thread: thread.id, text: 'again' })
   await done(peer, thread.id)
-  const { value } = await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { id: thread.id })
+  const { value } = await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { thread: thread.id })
   expect(JSON.stringify(value.docs['pi.agent'])).not.toContain('vault-pane')
   expect((await agentOf(peer, thread.id)).extensions).not.toContain('user:default/notes')
   await close()
@@ -788,7 +788,7 @@ export default defineDaemonExtension({ name: 'vault', setup(superego) { ${publis
 `
   write(profile, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./vault.ts'] })\n`, 'vault.ts': extension(true) })
   const { peer, close } = await open()
-  await peer.call<ThreadInfo>('thread.create', { cwd: project })
+  await peer.call<ThreadInfo>('thread.start', { cwd: project })
   const watched = await peer.call<{ sub: string; value: unknown }>('value.watch', { key: 'vault.status' })
   expect(watched.value).toBe('open')
   const changes: unknown[] = []
@@ -817,12 +817,12 @@ export default defineDaemonExtension({
   expect(watched.value).toEqual([])
   let views = watched.value
   peer.on('value.changed', (p: { sub: string; value: DataViewInfo[] }) => { if (p.sub === watched.sub) views = p.value })
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'hi' })
   await done(peer, thread.id)
   await until(async () => views.length === 1)
   expect(views[0]).toMatchObject({ id: 'board.cards', title: 'Board', fits: ['beside', 'pane'], profiles: [profile] })
   write(profile, { 'board.ts': extension('Cards') })
-  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await peer.call('thread.send', { thread: thread.id, text: 'again' })
   await done(peer, thread.id)
   await until(async () => views.length === 1 && views[0]!.title === 'Cards')
   await close()
@@ -910,11 +910,11 @@ it('versions an extension by every local file it imports, and vouches for those 
   })
   const { peer, close } = await open()
   await peer.call('profile.allow', { cwd: project, name: 'support' })
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, profile: 'support', prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, profile: 'support', prompt: 'hi' })
   await done(peer, thread.id)
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
   write(project, { 'tools/helper.ts': `export const answer = 'two'\n` })
-  await expect(peer.call('thread.submit', { id: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
+  await expect(peer.call('thread.send', { thread: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'untrusted_profile' })
   await close()
 })
 
@@ -1006,7 +1006,7 @@ export default defineDaemonExtension({ name: 'notes', setup() { return () => { g
   left.__notesCleaned = 0
   const { peer, close } = await open()
   // A status that throws counts as none: the threads list as ever.
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'hi' })
   await done(peer, thread.id)
   const watched = await peer.call<{ sub: string; value: unknown }>('value.watch', { key: 'vault.status' })
   let status = watched.value

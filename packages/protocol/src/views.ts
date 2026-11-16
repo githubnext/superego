@@ -22,7 +22,7 @@ export type DataIcon = (typeof DATA_ICONS)[number]
  * - a `window` view (a space): the value is the content; the method is called with `{}`
  * - a `thread` view (a space shows the selected thread): the value is a scoped value, each thread's content in its
  *   scope (or a plain value holding each thread's by its id; the window watches only that thread's); the method is
- *   called with `{ id }`
+ *   called with `{ thread }`
  * A method is read again as the thread moves on (a window view: as any thread on the machine does), and after one of
  * the view's buttons ran.
  */
@@ -41,7 +41,7 @@ export type DataView = {
   /** Its content's source: a live value of this extension's (`<name>.<key>`), or a method of its. One of the two. */
   value?: string
   method?: string
-  /** A `thread` view that fits `pane`: what it shows, for the agent's open_pane (unset: the agent isn't told of it). */
+  /** A `thread` view that fits `pane`: what it shows, for the agent's pane_open (unset: the agent isn't told of it). */
   about?: string
 }
 

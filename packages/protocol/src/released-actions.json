@@ -97,7 +97,7 @@
   "file.write": {
     "type": "object",
     "properties": {
-      "id": {
+      "thread": {
         "type": "string"
       },
       "path": {
@@ -109,7 +109,7 @@
       }
     },
     "required": [
-      "id",
+      "thread",
       "path",
       "content"
     ],
@@ -130,7 +130,7 @@
   "pane.close": {
     "type": "object",
     "properties": {
-      "id": {
+      "thread": {
         "type": "string"
       },
       "pane": {
@@ -138,7 +138,7 @@
       }
     },
     "required": [
-      "id",
+      "thread",
       "pane"
     ],
     "additionalProperties": false
@@ -146,7 +146,7 @@
   "pane.focus": {
     "type": "object",
     "properties": {
-      "id": {
+      "thread": {
         "type": "string"
       },
       "pane": {
@@ -154,14 +154,14 @@
       }
     },
     "required": [
-      "id"
+      "thread"
     ],
     "additionalProperties": false
   },
   "pane.open": {
     "type": "object",
     "properties": {
-      "id": {
+      "thread": {
         "type": "string"
       },
       "kind": {
@@ -174,7 +174,7 @@
       "params": {}
     },
     "required": [
-      "id",
+      "thread",
       "kind"
     ],
     "additionalProperties": false
@@ -182,7 +182,7 @@
   "pane.update": {
     "type": "object",
     "properties": {
-      "id": {
+      "thread": {
         "type": "string"
       },
       "pane": {
@@ -194,7 +194,7 @@
       "params": {}
     },
     "required": [
-      "id",
+      "thread",
       "pane"
     ],
     "additionalProperties": false
@@ -246,31 +246,116 @@
     ],
     "additionalProperties": false
   },
-  "thread.abort": {
-    "type": "object",
-    "properties": {
-      "id": {
-        "type": "string"
-      }
-    },
-    "required": [
-      "id"
-    ],
-    "additionalProperties": false
-  },
   "thread.archive": {
     "type": "object",
     "properties": {
-      "id": {
+      "thread": {
         "type": "string"
       }
     },
     "required": [
-      "id"
+      "thread"
     ],
     "additionalProperties": false
   },
-  "thread.create": {
+  "thread.rename": {
+    "type": "object",
+    "properties": {
+      "thread": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "thread",
+      "title"
+    ],
+    "additionalProperties": false
+  },
+  "thread.seen": {
+    "type": "object",
+    "properties": {
+      "thread": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "thread"
+    ],
+    "additionalProperties": false
+  },
+  "thread.send": {
+    "type": "object",
+    "properties": {
+      "thread": {
+        "type": "string"
+      },
+      "text": {
+        "type": "string"
+      },
+      "attachments": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "mimeType": {
+              "type": "string"
+            },
+            "data": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "mimeType",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "requestId": {
+        "type": "string"
+      },
+      "whenBusy": {
+        "anyOf": [
+          {
+            "const": "steer"
+          },
+          {
+            "const": "followUp"
+          }
+        ]
+      }
+    },
+    "required": [
+      "thread",
+      "text"
+    ],
+    "additionalProperties": false
+  },
+  "thread.setProfile": {
+    "type": "object",
+    "properties": {
+      "thread": {
+        "type": "string"
+      },
+      "profile": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "thread"
+    ],
+    "additionalProperties": false
+  },
+  "thread.start": {
     "type": "object",
     "properties": {
       "cwd": {
@@ -328,54 +413,10 @@
     },
     "additionalProperties": false
   },
-  "thread.rename": {
-    "type": "object",
-    "properties": {
-      "id": {
-        "type": "string"
-      },
-      "title": {
-        "type": "string",
-        "minLength": 1
-      }
-    },
-    "required": [
-      "id",
-      "title"
-    ],
-    "additionalProperties": false
-  },
-  "thread.seen": {
-    "type": "object",
-    "properties": {
-      "id": {
-        "type": "string"
-      }
-    },
-    "required": [
-      "id"
-    ],
-    "additionalProperties": false
-  },
-  "thread.setProfile": {
-    "type": "object",
-    "properties": {
-      "id": {
-        "type": "string"
-      },
-      "profile": {
-        "type": "string"
-      }
-    },
-    "required": [
-      "id"
-    ],
-    "additionalProperties": false
-  },
   "thread.steer": {
     "type": "object",
     "properties": {
-      "id": {
+      "thread": {
         "type": "string"
       },
       "submission": {
@@ -383,80 +424,39 @@
       }
     },
     "required": [
-      "id",
+      "thread",
       "submission"
     ],
     "additionalProperties": false
   },
-  "thread.submit": {
+  "thread.stop": {
     "type": "object",
     "properties": {
-      "id": {
+      "thread": {
         "type": "string"
-      },
-      "text": {
-        "type": "string"
-      },
-      "attachments": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string",
-              "minLength": 1
-            },
-            "mimeType": {
-              "type": "string"
-            },
-            "data": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "name",
-            "mimeType",
-            "data"
-          ],
-          "additionalProperties": false
-        }
-      },
-      "requestId": {
-        "type": "string"
-      },
-      "whenBusy": {
-        "anyOf": [
-          {
-            "const": "steer"
-          },
-          {
-            "const": "followUp"
-          }
-        ]
       }
     },
     "required": [
-      "id",
-      "text"
+      "thread"
     ],
     "additionalProperties": false
   },
   "thread.unarchive": {
     "type": "object",
     "properties": {
-      "id": {
+      "thread": {
         "type": "string"
       }
     },
     "required": [
-      "id"
+      "thread"
     ],
     "additionalProperties": false
   },
   "thread.withdraw": {
     "type": "object",
     "properties": {
-      "id": {
+      "thread": {
         "type": "string"
       },
       "submission": {
@@ -464,7 +464,7 @@
       }
     },
     "required": [
-      "id",
+      "thread",
       "submission"
     ],
     "additionalProperties": false

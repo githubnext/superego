@@ -13,7 +13,7 @@ import { costOf, PROBE_MODEL, profileDirs, settle, type Acceptance, type Task } 
 const PROBE = 'Use your tool that fetches the current weather to get the weather in Copenhagen: call it exactly once. ' +
   "Don't use bash, curl or any other way. If you have no such tool, say NO_WEATHER_TOOL and stop. Then reply with only the tool's raw result."
 
-const BUILTIN = new Set(['read', 'write', 'edit', 'bash', 'ls', 'grep', 'find', 'open_pane', 'show_images', 'ask_user', 'task_start', 'task_finish'])
+const BUILTIN = new Set(['read', 'write', 'edit', 'bash', 'ls', 'grep', 'find', 'pane_open', 'show_images', 'ask_user', 'task_start', 'task_finish'])
 
 /** A tool's answer that reads as a message: no stack trace, no JavaScript error leaking out. */
 const graceful = (text: string) => text.trim().length > 0 && !/\n\s+at .+:\d+:\d+/.test(text) && !/is not a function|Cannot read propert|undefined is not/i.test(text)
@@ -38,9 +38,9 @@ export const weather: Task = {
     const probe = async (profile?: string) => {
       let thread: Thread
       try {
-        thread = await world.rpc.call('thread.create', { cwd: world.project, title: `Weather probe${profile ? ` (${profile})` : ''}`, model: PROBE_MODEL, prompt: PROBE, ...(profile ? { profile } : {}) })
+        thread = await world.rpc.call('thread.start', { cwd: world.project, title: `Weather probe${profile ? ` (${profile})` : ''}`, model: PROBE_MODEL, prompt: PROBE, ...(profile ? { profile } : {}) })
       } catch (error) {
-        notes.push(`probe ${profile ?? 'default'}: thread.create failed: ${(error as Error).message}`)
+        notes.push(`probe ${profile ?? 'default'}: thread.start failed: ${(error as Error).message}`)
         return { loads: false, registered: false, runs: false }
       }
       const settled = await settle(world, thread.id)
@@ -91,7 +91,7 @@ it('calls the tool with no network', async () => {
   try {
     const started = Date.now()
     const thread = await daemon.thread('What is the weather?')
-    const history = await daemon.call('thread.history', { id: thread.id, before: Number.MAX_SAFE_INTEGER, limit: 200 })
+    const history = await daemon.call('thread.history', { thread: thread.id, before: Number.MAX_SAFE_INTEGER, limit: 200 })
     writeFileSync(${JSON.stringify(result)}, JSON.stringify({ ms: Date.now() - started, entries: history.entries }))
   } finally {
     await daemon.close()

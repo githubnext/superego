@@ -286,7 +286,7 @@ export function useMethod<R = unknown>(
 }
 
 export const useThreadView = (machineId: MachineId, connected: boolean, id: string | undefined) =>
-  useWatch<ConversationView>(machineId, connected, 'thread.watch', id === undefined ? undefined : { id },
+  useWatch<ConversationView>(machineId, connected, 'thread.watch', id === undefined ? undefined : { thread: id },
     (value, method, params: Notifications['watch.ops']) => method === 'watch.ops' ? applyImmutable(value, params.ops as Op[]) : value,
     ['watch.ops'])
 

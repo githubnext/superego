@@ -778,7 +778,7 @@ export function startApp(appConfig: AppConfig) {
       if (!link || !thread || !rest.length) return new Response('Not found', { status: 404 })
       try {
         const path = rest.join('/')
-        const { content } = await link.call('file.read', { id: thread, path, base64: true }) as { content: string }
+        const { content } = await link.call('file.read', { thread: thread, path, base64: true }) as { content: string }
         return new Response(Buffer.from(content, 'base64'), { headers: {
           'content-type': ARTIFACT_TYPES[path.split('.').at(-1)?.toLowerCase() ?? ''] ?? 'application/octet-stream',
           'content-security-policy': ARTIFACT_POLICY,

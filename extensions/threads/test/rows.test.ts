@@ -39,7 +39,7 @@ it('claims thread: links in a thread, and opens one there, or beside it', async 
   await handler.open('thread:42', { ...where, beside: false, kind: 'link' })
   expect(dispatch).toHaveBeenLastCalledWith('thread.select', { machine: 'local', thread: '42' }, expect.objectContaining({ source: 'thread link' }))
   await handler.open('thread:42', { ...where, beside: true, kind: 'link' })
-  expect(dispatch).toHaveBeenLastCalledWith('pane.open', { id: '1', kind: 'thread', params: { thread: '42' } }, expect.objectContaining({ machine: 'local' }))
+  expect(dispatch).toHaveBeenLastCalledWith('pane.open', { thread: '1', kind: 'thread', params: { thread: '42' } }, expect.objectContaining({ machine: 'local' }))
   // Itself, beside itself, is just shown.
   await handler.open('thread:1', { ...where, beside: true, kind: 'link' })
   expect(dispatch).toHaveBeenLastCalledWith('thread.select', { machine: 'local', thread: '1' }, expect.anything())

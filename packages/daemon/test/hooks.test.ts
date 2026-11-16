@@ -33,7 +33,7 @@ const find = async (peer: RpcPeer, id: string) => [...await listed(peer), ...awa
 const done = (peer: RpcPeer, id: string) => until(async () => (await find(peer, id))?.status.state === 'done')
 /** The extensions and instructions a thread's agent has, once a turn configured it. */
 async function agentOf(peer: RpcPeer, id: string) {
-  const { value } = await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { id })
+  const { value } = await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { thread: id })
   const agent = value.docs['pi.agent'] as { extensions?: string[]; instructions?: string } | undefined
   return { extensions: agent?.extensions ?? [], instructions: agent?.instructions }
 }
@@ -72,7 +72,7 @@ it("takes part in a thread's life, in order: creating moves it and gives it stat
     },
   })
   const { peer, close } = await open([nest, after])
-  const thread = await peer.call<ThreadInfo>('thread.create', { prompt: 'hi', options: { nest: true } })
+  const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'hi', options: { nest: true } })
   const nested = join(dir, 'nested')
   expect(thread).toMatchObject({ cwd: nested, project: { root: dir }, ext: { nest: { made: nested } } })
   await done(peer, thread.id)
@@ -83,24 +83,24 @@ it("takes part in a thread's life, in order: creating moves it and gives it stat
     'nest turnStart', 'after turnStart', 'nest turnEnd', 'after turnEnd',
   ])
   heard.length = 0
-  await peer.call('thread.archive', { id: thread.id })
-  await peer.call('thread.unarchive', { id: thread.id })
+  await peer.call('thread.archive', { thread: thread.id })
+  await peer.call('thread.unarchive', { thread: thread.id })
   expect(heard).toEqual([
     'nest archiving false', 'after archiving false', 'nest archived true', 'after archived true',
     'nest unarchiving', 'after unarchiving', 'nest unarchived false', 'after unarchived false',
   ])
   // Nothing to change, nothing to hear: unarchiving one in use, archiving one put away.
   heard.length = 0
-  await peer.call('thread.unarchive', { id: thread.id })
-  await peer.call('thread.archive', { id: thread.id })
-  await peer.call('thread.archive', { id: thread.id })
+  await peer.call('thread.unarchive', { thread: thread.id })
+  await peer.call('thread.archive', { thread: thread.id })
+  await peer.call('thread.archive', { thread: thread.id })
   expect(heard).toEqual(['nest archiving false', 'after archiving false', 'nest archived true', 'after archived true'])
-  await peer.call('thread.unarchive', { id: thread.id })
+  await peer.call('thread.unarchive', { thread: thread.id })
   // Switched off, an extension's hooks and facts aren't for the thread.
   await peer.call('settings.set', { key: 'extensions.nest', value: false })
   expect((await find(peer, thread.id))!.ext).toBeUndefined()
   heard.length = 0
-  const plain = await peer.call<ThreadInfo>('thread.create', { options: { nest: true } })
+  const plain = await peer.call<ThreadInfo>('thread.start', { options: { nest: true } })
   expect(plain.cwd).toBe(dir)
   expect(heard).toEqual([`after creating ${dir}`, `after created ${dir}`])
   await close()
@@ -119,7 +119,7 @@ it('tells blocked once each time a thread comes to need the user, as the status 
     },
   })
   const { peer, close } = await open([asker])
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
   asking = thread.id
   api.invalidate()
   api.invalidate()
@@ -145,9 +145,9 @@ it("tells those whose unarchiving ran, in reverse, when a later one refuses: wha
     },
   })
   const { peer, close } = await open([part('first'), part('second'), part('third', true)])
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
-  await peer.call('thread.archive', { id: thread.id })
-  await expect(peer.call('thread.unarchive', { id: thread.id })).rejects.toMatchObject({ kind: 'refused', message: 'third: nope' })
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
+  await peer.call('thread.archive', { thread: thread.id })
+  await expect(peer.call('thread.unarchive', { thread: thread.id })).rejects.toMatchObject({ kind: 'refused', message: 'third: nope' })
   // The refusing hook did nothing to undo; the others undo in reverse, and it stays archived.
   expect(heard).toEqual(['first put back', 'second put back', 'second undone', 'first undone'])
   expect((await find(peer, thread.id))!.archived).toBe(true)
@@ -174,24 +174,24 @@ it('refuses when an -ing hook says no; a hook that throws otherwise is logged, a
     },
   })
   const { peer, close } = await open([guard])
-  await expect(peer.call('thread.create', { options: { guard: 'no' } })).rejects.toMatchObject({ kind: 'busy', message: 'Not now' })
+  await expect(peer.call('thread.start', { options: { guard: 'no' } })).rejects.toMatchObject({ kind: 'busy', message: 'Not now' })
   // A plain error says whose it is, as for the other -ing hooks.
-  await expect(peer.call('thread.create', { options: { guard: 'plain' } })).rejects.toMatchObject({ kind: 'refused', message: 'guard: No way' })
+  await expect(peer.call('thread.start', { options: { guard: 'plain' } })).rejects.toMatchObject({ kind: 'refused', message: 'guard: No way' })
   expect(await listed(peer)).toEqual([])
-  const thread = await peer.call<ThreadInfo>('thread.create', { prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'hi' })
   await done(peer, thread.id)
-  await expect(peer.call('thread.archive', { id: thread.id })).rejects.toMatchObject({ kind: 'busy', message: 'Still needed' })
+  await expect(peer.call('thread.archive', { thread: thread.id })).rejects.toMatchObject({ kind: 'busy', message: 'Still needed' })
   expect((await find(peer, thread.id))!.archived).toBeUndefined()
   refuse = false
-  await peer.call('thread.archive', { id: thread.id })
+  await peer.call('thread.archive', { thread: thread.id })
   expect((await find(peer, thread.id))!.archived).toBe(true)
   refuse = true
-  await expect(peer.call('thread.unarchive', { id: thread.id })).rejects.toMatchObject({ kind: 'refused', message: 'guard: nope' })
+  await expect(peer.call('thread.unarchive', { thread: thread.id })).rejects.toMatchObject({ kind: 'refused', message: 'guard: nope' })
   expect((await find(peer, thread.id))!.archived).toBe(true)
   refuse = false
-  await peer.call('thread.unarchive', { id: thread.id })
+  await peer.call('thread.unarchive', { thread: thread.id })
   // Its turns go on as ever.
-  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await peer.call('thread.send', { thread: thread.id, text: 'again' })
   await done(peer, thread.id)
   await close()
 })
@@ -208,7 +208,7 @@ it('keeps state with each thread, as facts clients see, across a restart', async
     },
   })
   const first = await open([notes])
-  const thread = await first.peer.call<ThreadInfo>('thread.create', {})
+  const thread = await first.peer.call<ThreadInfo>('thread.start', {})
   expect(thread.ext).toBeUndefined()
   await first.peer.call('notes.add', { id: thread.id })
   await first.peer.call('notes.add', { id: thread.id })
@@ -242,8 +242,8 @@ it("says what a run did in its done status, as clients first hear it's done: an 
   first.peer.on('threads.changed', ({ value }: { value: ThreadInfo[] }) => {
     for (const t of value) if (t.status.state === 'done') (done[t.id] ??= []).push(t.status)
   })
-  const plain = await first.peer.call<ThreadInfo>('thread.create', { prompt: 'Fix **the** build. Then the rest of it, which goes on and on.' })
-  const recapped = await first.peer.call<ThreadInfo>('thread.create', { prompt: 'recap me' })
+  const plain = await first.peer.call<ThreadInfo>('thread.start', { prompt: 'Fix **the** build. Then the rest of it, which goes on and on.' })
+  const recapped = await first.peer.call<ThreadInfo>('thread.start', { prompt: 'recap me' })
   await until(() => Boolean(done[plain.id] && done[recapped.id]))
   expect(done[plain.id]![0]).toEqual({ state: 'done', msg: 'echo: Fix the build.' })
   expect(done[recapped.id]![0]).toEqual({ state: 'done', msg: 'Recapped, with 0 calls' })
@@ -252,7 +252,7 @@ it("says what a run did in its done status, as clients first hear it's done: an 
   // Answered before a restart, and not seen yet: it says so after.
   const { peer, close } = await open([recaps])
   expect((await find(peer, plain.id))!.status).toEqual({ state: 'done', msg: 'echo: Fix the build.' })
-  await peer.call('thread.seen', { id: plain.id })
+  await peer.call('thread.seen', { thread: plain.id })
   expect((await find(peer, plain.id))!.status).toEqual({ state: 'idle' })
   await close()
 })
@@ -285,7 +285,7 @@ it("tells an extension of each tool call a thread's agent makes, once it ends, w
     const server = await listen(daemon, join(dir, 'superego.sock'))
     const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
     await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
-    const thread = await peer.call<ThreadInfo>('thread.create', { prompt: 'Look at the database' })
+    const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'Look at the database' })
     await done(peer, thread.id)
     await until(() => heard.length === 2)
     expect(heard).toEqual([
@@ -313,8 +313,8 @@ it("lets an extension choose a thread's agent: instructions, tools and what it g
   // It can't pick another extension's part.
   const fallback = defineDaemonExtension({ name: 'fallback', setup(superego) { superego.agentFor(() => answer ? { instructions: 'Anything.', extensions: [tools] } : undefined) } })
   const { peer, close } = await open([picker, fallback])
-  const mine = await peer.call<ThreadInfo>('thread.create', { prompt: 'hi', options: { picker: true } })
-  const other = await peer.call<ThreadInfo>('thread.create', { prompt: 'hi' })
+  const mine = await peer.call<ThreadInfo>('thread.start', { prompt: 'hi', options: { picker: true } })
+  const other = await peer.call<ThreadInfo>('thread.start', { prompt: 'hi' })
   expect(mine.without).toEqual(['coding-tools'])
   expect(other.without).toBeUndefined()
   await done(peer, mine.id)
@@ -328,7 +328,7 @@ it("lets an extension choose a thread's agent: instructions, tools and what it g
   expect(plain.extensions).not.toContain('picked')
   // No longer answering, its instructions go with it.
   answer = false
-  await peer.call('thread.submit', { id: other.id, text: 'again' })
+  await peer.call('thread.send', { thread: other.id, text: 'again' })
   await until(async () => !(await agentOf(peer, other.id)).instructions)
   await done(peer, other.id)
   expect((await agentOf(peer, other.id)).instructions).toBeFalsy()
@@ -342,29 +342,29 @@ it("runs an extension's own thread only as that extension's: refused while the t
   const picky = defineDaemonExtension({ name: 'picky', setup(superego) { superego.agentFor(({ id }) => id && id === target ? { without: ['own'] } : undefined) } })
   const own = defineDaemonExtension({ name: 'own', setup(superego) { api = superego } })
   const { peer, close } = await open([picky, own])
-  const thread = await api.threads.create({ hidden: true })
+  const thread = await api.threads.start({ hidden: true })
   expect(thread.owner).toBe('own')
-  await api.threads.submit(thread.id, 'hello')
+  await api.threads.send(thread.id, 'hello')
   await until(async () => (await api.threads.get(thread.id)).status.state === 'done')
   target = thread.id
-  await expect(peer.call('thread.submit', { id: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'invalid' })
+  await expect(peer.call('thread.send', { thread: thread.id, text: 'again' })).rejects.toMatchObject({ kind: 'invalid' })
   await close()
 })
 
 it('gives extensions the thread operations: create (hidden, as a child), submit, its last answer and entries, archive (now or when idle), unarchive', async () => {
   let api!: DaemonApi
   const { peer, close } = await open([defineDaemonExtension({ name: 'ops', setup(superego) { api = superego } })])
-  const own = await api.threads.create({ title: 'Own', hidden: true })
+  const own = await api.threads.start({ title: 'Own', hidden: true })
   expect(own.hidden).toBe(true)
   expect(await listed(peer)).toEqual([])
   expect((await api.threads.list({ hidden: true })).map((t) => t.id)).toEqual([own.id])
   // A hidden thread's children are top-level; another's are its children.
-  const top = await api.threads.create({ title: 'Top', parent: own.id })
+  const top = await api.threads.start({ title: 'Top', parent: own.id })
   expect(top.parent).toBeUndefined()
-  const child = await api.threads.create({ title: 'Child', parent: top.id })
+  const child = await api.threads.start({ title: 'Child', parent: top.id })
   expect(child.parent).toBe(top.id)
   expect((await listed(peer)).map((t) => t.id)).toEqual([child.id, top.id])
-  await api.threads.submit(top.id, 'hello')
+  await api.threads.send(top.id, 'hello')
   await done(peer, top.id)
   expect(await api.threads.lastAnswer(top.id)).toEqual(expect.any(String))
   expect(await api.threads.lastAnswer(child.id)).toBeUndefined()
@@ -402,7 +402,7 @@ export default defineDaemonExtension({
 `
   write({ 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./tagged.ts'] })\n`, 'tagged.ts': extension(1) })
   const { peer, close } = await open([], home)
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt: 'hi' })
   expect(thread.ext).toEqual({ tagged: { version: 1 } })
   await done(peer, thread.id)
   expect((await agentOf(peer, thread.id)).instructions).toBe('Version 1.')
@@ -411,11 +411,11 @@ export default defineDaemonExtension({
   mkdirSync(join(elsewhere, '.superego', 'profiles', 'default'), { recursive: true })
   writeFileSync(join(elsewhere, '.superego', 'profiles', 'default', 'profile.ts'), `import { defineProfile } from 'superego'\nexport default defineProfile({})\n`)
   await peer.call('profile.allow', { cwd: elsewhere })
-  const plain = await peer.call<ThreadInfo>('thread.create', { cwd: elsewhere })
+  const plain = await peer.call<ThreadInfo>('thread.start', { cwd: elsewhere })
   expect(plain.ext).toBeUndefined()
   // Changed, it's set up again: the old version's facts and choice are gone, not doubled.
   write({ 'tagged.ts': extension(2) })
-  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await peer.call('thread.send', { thread: thread.id, text: 'again' })
   await until(async () => (await find(peer, thread.id))!.ext?.tagged !== undefined && JSON.stringify((await find(peer, thread.id))!.ext) === '{"tagged":{"version":2}}')
   await done(peer, thread.id)
   expect((await agentOf(peer, thread.id)).instructions).toBe('Version 2.')
@@ -441,15 +441,15 @@ export default defineDaemonExtension({
 `)
   const heard = () => existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : []
   const first = await open([], home)
-  const away = await first.peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'Away' })
+  const away = await first.peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Away' })
   expect(away.ext).toEqual({ keeper: { kept: true } })
-  await first.peer.call('thread.archive', { id: away.id })
+  await first.peer.call('thread.archive', { thread: away.id })
   expect(heard()).toEqual(['archiving Away', 'archived Away'])
   await first.close()
 
   // Only an archived thread has the profile: nothing loads it at startup, so bringing it back does.
   const second = await open([], home)
-  await second.peer.call('thread.unarchive', { id: away.id })
+  await second.peer.call('thread.unarchive', { thread: away.id })
   expect(heard().slice(2)).toEqual(['unarchiving Away', 'unarchived Away'])
   expect((await find(second.peer, away.id))!.ext).toEqual({ keeper: { kept: true } })
   await second.close()
@@ -457,7 +457,7 @@ export default defineDaemonExtension({
   // A thread in use's profile loads at startup: its facts show, and its hooks run, without a turn.
   const { peer, close } = await open([], home)
   await until(async () => (await find(peer, away.id))!.ext?.keeper !== undefined)
-  await peer.call('thread.archive', { id: away.id })
+  await peer.call('thread.archive', { thread: away.id })
   expect(heard().slice(4)).toEqual(['archiving Away', 'archived Away'])
   await close()
 })
@@ -469,9 +469,9 @@ it('says what archiving did, a line from each extension whose hooks said one', a
   let api!: DaemonApi
   const grab = defineDaemonExtension({ name: 'grab', setup(s) { api = s } })
   const { peer, close } = await open([noting('tickets', 'Closed #12.', 'Unassigned.'), noting('quiet', undefined, undefined), grab])
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
-  expect(await peer.call('thread.archive', { id: thread.id })).toEqual({ notes: { tickets: 'Closed #12. Unassigned.' } })
-  await peer.call('thread.unarchive', { id: thread.id })
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
+  expect(await peer.call('thread.archive', { thread: thread.id })).toEqual({ notes: { tickets: 'Closed #12. Unassigned.' } })
+  await peer.call('thread.unarchive', { thread: thread.id })
   // To an extension too; nothing to say of one already away.
   expect(await api.threads.archive(thread.id)).toEqual({ notes: { tickets: 'Closed #12. Unassigned.' } })
   expect(await api.threads.archive(thread.id)).toEqual({ notes: {} })

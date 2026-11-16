@@ -46,7 +46,7 @@ export function ThreadRef({ machine, id, children, className = '', open: follow 
     if (follow) return follow(event.metaKey || event.ctrlKey)
     const beside = (event.metaKey || event.ctrlKey) && selection && selection.machine === machine && selection.thread !== id
     const done = beside
-      ? dispatch('pane.open', { id: selection.thread, kind: 'thread', params: { thread: id } }, { machine, source: 'thread link' })
+      ? dispatch('pane.open', { thread: selection.thread, kind: 'thread', params: { thread: id } }, { machine, source: 'thread link' })
       : dispatch('thread.select', { machine, thread: id }, { source: 'thread link' })
     void done.catch((error) => console.error(error))
   }

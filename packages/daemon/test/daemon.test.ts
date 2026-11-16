@@ -70,10 +70,10 @@ describe('daemon', () => {
 
   it('runs a thread, streams its view as ops, and derives status', async () => {
     const { peer, close } = await open()
-    const created = await peer.call<ThreadInfo>('thread.create', { title: 'first' })
+    const created = await peer.call<ThreadInfo>('thread.start', { title: 'first' })
     expect(created.status.state).toBe('idle')
 
-    const watched = await peer.call<{ sub: string; value: ConversationView }>('thread.watch', { id: created.id })
+    const watched = await peer.call<{ sub: string; value: ConversationView }>('thread.watch', { thread: created.id })
     let view = watched.value
     peer.on('watch.ops', ({ sub, ops }: Notifications['watch.ops']) => { if (sub === watched.sub) view = applyImmutable(view, ops as Op[]) })
 
@@ -82,7 +82,7 @@ describe('daemon', () => {
     peer.on('threads.changed', ({ value }: Notifications['threads.changed']) => changes.push(value))
     expect(list.value.map((s) => s.id)).toEqual([created.id])
 
-    await peer.call('thread.submit', { id: created.id, text: 'hello superego' })
+    await peer.call('thread.send', { thread: created.id, text: 'hello superego' })
     await until(() => view.entries.some((entry) => entry.kind === 'pi.assistant'))
     const answer = view.entries.find((entry) => entry.kind === 'pi.assistant')!
     expect(JSON.stringify(answer)).toContain('echo: hello superego')
@@ -90,7 +90,7 @@ describe('daemon', () => {
     await until(async () => (await threads(peer))[0]!.status.state === 'done')
     expect(changes.flat().some((s) => s.status.state === 'working')).toBe(true)
 
-    await peer.call('thread.seen', { id: created.id })
+    await peer.call('thread.seen', { thread: created.id })
     const [seen] = await threads(peer)
     expect(seen!.status.state).toBe('idle')
     // Facts for clients: the model it runs with, and when it last did something.
@@ -101,30 +101,30 @@ describe('daemon', () => {
 
   it('keeps threads across a daemon restart', async () => {
     const first = await open()
-    const created = await first.peer.call<ThreadInfo>('thread.create', {})
-    await first.peer.call('thread.submit', { id: created.id, text: 'remember me' })
+    const created = await first.peer.call<ThreadInfo>('thread.start', {})
+    await first.peer.call('thread.send', { thread: created.id, text: 'remember me' })
     await until(async () => (await threads(first.peer))[0]!.status.state === 'done')
     await first.close()
 
     const second = await open()
     const [again] = await threads(second.peer)
     expect(again).toMatchObject({ id: created.id, title: 'remember me', status: { state: 'done' } })
-    const { value } = await second.peer.call<{ value: ConversationView }>('thread.watch', { id: created.id })
+    const { value } = await second.peer.call<{ value: ConversationView }>('thread.watch', { thread: created.id })
     expect(JSON.stringify(value.entries)).toContain('echo: remember me')
     await second.close()
   })
 
   it('refuses to run without a model, pointing at settings', async () => {
     const { peer, close } = await open({ faux: false })
-    const created = await peer.call<ThreadInfo>('thread.create', {})
-    await expect(peer.call('thread.submit', { id: created.id, text: 'hi' })).rejects.toMatchObject({ kind: 'no_model', hint: expect.stringContaining('Settings') })
+    const created = await peer.call<ThreadInfo>('thread.start', {})
+    await expect(peer.call('thread.send', { thread: created.id, text: 'hi' })).rejects.toMatchObject({ kind: 'no_model', hint: expect.stringContaining('Settings') })
     await close()
   })
 
   it('serves settings: sections, validated values, persisted across restarts', async () => {
     const first = await open()
     const { value } = await first.peer.call<{ value: SettingsSnapshot }>('settings.watch', {})
-    expect(value.sections.map((s) => s.id)).toEqual(['model', 'providers', 'extensions', 'profiles', 'web', 'mcp', 'clients'])
+    expect(value.sections.map((s) => s.id)).toEqual(['model', 'providers', 'extensions', 'profiles', 'web', 'outside', 'clients'])
     const model = value.sections[0]!.settings.find((s) => s.key === 'agent.model')!
     expect(model.type === 'choice' && model.options.map((o) => o.value)).toContain('faux/faux-1')
     await expect(first.peer.call('settings.set', { key: 'agent.model', value: 'nope/nope' })).rejects.toMatchObject({ kind: 'invalid_setting' })
@@ -168,15 +168,15 @@ describe('new threads', () => {
     expect(catalog.models.map((m) => m.value)).toContain('faux/faux-1')
     expect(catalog.default.model).toBe('faux/faux-1')
 
-    await expect(peer.call('thread.create', { cwd: join(dir, 'nope') })).rejects.toMatchObject({ kind: 'invalid', message: expect.stringContaining('No folder') })
-    await expect(peer.call('thread.create', { model: 'nope/nope' })).rejects.toMatchObject({ kind: 'invalid' })
+    await expect(peer.call('thread.start', { cwd: join(dir, 'nope') })).rejects.toMatchObject({ kind: 'invalid', message: expect.stringContaining('No folder') })
+    await expect(peer.call('thread.start', { model: 'nope/nope' })).rejects.toMatchObject({ kind: 'invalid' })
 
-    const created = await peer.call<ThreadInfo>('thread.create', { cwd: dir, model: 'faux/faux-1', prompt: 'first words' })
+    const created = await peer.call<ThreadInfo>('thread.start', { cwd: dir, model: 'faux/faux-1', prompt: 'first words' })
     expect(created).toMatchObject({ cwd: dir, title: 'first words', ownModel: true, chosen: { model: 'faux/faux-1' } })
     await until(async () => (await threads(peer))[0]!.status.state === 'done')
     // Changing this machine's default leaves the thread on its own model.
     await peer.call('settings.set', { key: 'agent.model', value: 'faux/faux-1' })
-    await peer.call('thread.submit', { id: created.id, text: 'again' })
+    await peer.call('thread.send', { thread: created.id, text: 'again' })
     await until(async () => (await threads(peer))[0]!.status.state === 'done')
     expect((await threads(peer))[0]).toMatchObject({ model: 'faux-1', ownModel: true })
     await close()
@@ -200,8 +200,8 @@ describe('restart', () => {
     await peer.call('settings.set', { key: 'agent.model', value: 'replay/replay' })
 
     await expect(peer.call('daemon.restart', { build: 'other' })).rejects.toMatchObject({ kind: 'changed' })
-    const created = await peer.call<ThreadInfo>('thread.create', {})
-    await peer.call('thread.submit', { id: created.id, text: 'go' })
+    const created = await peer.call<ThreadInfo>('thread.start', {})
+    await peer.call('thread.send', { thread: created.id, text: 'go' })
     await until(async () => (await threads(peer))[0]!.status.state === 'working')
     expect(await peer.call('daemon.restart', { build: 'b1' })).toEqual({ restarted: false, busy: true })
     expect(restarts).toBe(0)
@@ -219,10 +219,10 @@ describe('record and replay', () => {
     const recording = join(dir, 'turns.jsonl')
     process.env.SUPEREGO_RECORD = recording
     const first = await open()
-    const one = await first.peer.call<ThreadInfo>('thread.create', {})
-    await first.peer.call('thread.submit', { id: one.id, text: 'first' })
+    const one = await first.peer.call<ThreadInfo>('thread.start', {})
+    await first.peer.call('thread.send', { thread: one.id, text: 'first' })
     await until(async () => (await threads(first.peer))[0]!.status.state === 'done')
-    await first.peer.call('thread.submit', { id: one.id, text: 'second' })
+    await first.peer.call('thread.send', { thread: one.id, text: 'second' })
     await until(async () => (await threads(first.peer))[0]!.status.state === 'done')
     await first.close()
     delete process.env.SUPEREGO_RECORD
@@ -234,14 +234,14 @@ describe('record and replay', () => {
     const server = await listen(daemon, join(replayDir, 'superego.sock'))
     const { peer, socket } = await connectSocket(join(replayDir, 'superego.sock'))
     await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
-    const created = await peer.call<ThreadInfo>('thread.create', {})
+    const created = await peer.call<ThreadInfo>('thread.start', {})
     const answers: string[] = []
     for (const text of ['anything', 'else', 'more']) {
-      await peer.call('thread.submit', { id: created.id, text })
+      await peer.call('thread.send', { thread: created.id, text })
       await until(async () => (await threads(peer))[0]!.status.state === 'done')
-      const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: created.id })
+      const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: created.id })
       answers.push(JSON.stringify(value.entries.filter((e) => e.kind === 'pi.assistant').at(-1)))
-      await peer.call('thread.seen', { id: created.id })
+      await peer.call('thread.seen', { thread: created.id })
     }
     expect(answers[0]).toContain('echo: first')
     expect(answers[1]).toContain('echo: second')
@@ -253,35 +253,35 @@ describe('record and replay', () => {
   it('lists its actions, runs them from the command line with coerced params, and logs each dispatch', async () => {
     const { peer, close } = await open()
     const actions = await peer.call<ActionInfo[]>('action.list', {})
-    expect(actions.map((a) => a.id)).toEqual(expect.arrayContaining(['thread.create', 'thread.submit', 'settings.set', 'daemon.restart']))
+    expect(actions.map((a) => a.id)).toEqual(expect.arrayContaining(['thread.start', 'thread.send', 'settings.set', 'daemon.restart']))
     expect(actions.find((a) => a.id === 'thread.rename')).toMatchObject({ thread: true, expose: expect.arrayContaining(['cli']) })
-    const created = await peer.call<ThreadInfo>('action.run', { id: 'thread.create', params: { title: 'from cli' }, exposure: 'cli' })
-    await peer.call('action.run', { id: 'thread.rename', params: { id: created.id, title: 'renamed' }, exposure: 'cli' })
+    const created = await peer.call<ThreadInfo>('action.run', { id: 'thread.start', params: { title: 'from cli' }, exposure: 'cli' })
+    await peer.call('action.run', { id: 'thread.rename', params: { thread: created.id, title: 'renamed' }, exposure: 'cli' })
     expect((await threads(peer)).find((s) => s.id === created.id)?.title).toBe('renamed')
-    await expect(peer.call('action.run', { id: 'thread.rename', params: { id: created.id }, exposure: 'cli' })).rejects.toMatchObject({ kind: 'invalid_params' })
+    await expect(peer.call('action.run', { id: 'thread.rename', params: { thread: created.id }, exposure: 'cli' })).rejects.toMatchObject({ kind: 'invalid_params' })
     await expect(peer.call('action.run', { id: 'nope.nope', exposure: 'cli' })).rejects.toMatchObject({ kind: 'unknown_action' })
     // Served under its own id, too: the app calls actions directly.
-    await peer.call('thread.seen', { id: created.id })
+    await peer.call('thread.seen', { thread: created.id })
     const log = await peer.call<ActionLogEntry[]>('action.log', {})
     expect(log.map((e) => [e.id, e.source, e.ok])).toEqual(expect.arrayContaining([
-      ['thread.create', 'cli', true], ['thread.rename', 'cli', true], ['thread.rename', 'cli', false], ['thread.seen', 'test', true],
+      ['thread.start', 'cli', true], ['thread.rename', 'cli', true], ['thread.rename', 'cli', false], ['thread.seen', 'test', true],
     ]))
     await close()
   })
 
   it('archives a thread out of the list, readable but taking nothing, and back', async () => {
     const { peer, close } = await open()
-    const kept = await peer.call<ThreadInfo>('thread.create', { title: 'kept' })
-    const old = await peer.call<ThreadInfo>('thread.create', { title: 'old' })
-    await peer.call('thread.archive', { id: old.id })
+    const kept = await peer.call<ThreadInfo>('thread.start', { title: 'kept' })
+    const old = await peer.call<ThreadInfo>('thread.start', { title: 'old' })
+    await peer.call('thread.archive', { thread: old.id })
     expect((await threads(peer)).map((s) => s.id)).toEqual([kept.id])
     const archived = await peer.call<ThreadInfo[]>('thread.list', { archived: true })
     expect(archived.map((s) => s.id)).toEqual([old.id])
     expect(archived[0]!.archived).toBe(true)
     // Put away, it can still be read, but not sent to.
-    await expect(peer.call('thread.watch', { id: old.id })).resolves.toMatchObject({ sub: expect.any(String) })
-    await expect(peer.call('thread.submit', { id: old.id, text: 'hi' })).rejects.toMatchObject({ kind: 'archived' })
-    await peer.call('thread.unarchive', { id: old.id })
+    await expect(peer.call('thread.watch', { thread: old.id })).resolves.toMatchObject({ sub: expect.any(String) })
+    await expect(peer.call('thread.send', { thread: old.id, text: 'hi' })).rejects.toMatchObject({ kind: 'archived' })
+    await peer.call('thread.unarchive', { thread: old.id })
     expect((await threads(peer)).find((s) => s.id === old.id)?.archived).toBeUndefined()
     expect((await threads(peer)).map((s) => s.id).sort()).toEqual([kept.id, old.id].sort())
     await close()
@@ -289,49 +289,49 @@ describe('record and replay', () => {
 
   it('keeps panes with a thread: open (beside, the same one once), focus, close', async () => {
     const { peer, close } = await open()
-    const thread = await peer.call<ThreadInfo>('thread.create', { title: 'panes' })
-    const diff = await peer.call<{ id: string }>('pane.open', { id: thread.id, kind: 'diff' })
-    const preview = await peer.call<{ id: string }>('pane.open', { id: thread.id, kind: 'preview', params: { url: 'http://localhost:3000' } })
-    expect((await peer.call<{ id: string }>('pane.open', { id: thread.id, kind: 'diff' })).id).toBe(diff.id)
+    const thread = await peer.call<ThreadInfo>('thread.start', { title: 'panes' })
+    const diff = await peer.call<{ id: string }>('pane.open', { thread: thread.id, kind: 'diff' })
+    const preview = await peer.call<{ id: string }>('pane.open', { thread: thread.id, kind: 'preview', params: { url: 'http://localhost:3000' } })
+    expect((await peer.call<{ id: string }>('pane.open', { thread: thread.id, kind: 'diff' })).id).toBe(diff.id)
     let info = (await threads(peer)).find((s) => s.id === thread.id)!
     expect(info.panes?.map((p) => p.kind)).toEqual(['diff', 'preview'])
     expect(info.pane).toBeUndefined()
-    await peer.call('pane.focus', { id: thread.id, pane: diff.id })
+    await peer.call('pane.focus', { thread: thread.id, pane: diff.id })
     expect((await threads(peer)).find((s) => s.id === thread.id)!.pane).toBe(diff.id)
-    await peer.call('pane.focus', { id: thread.id })
+    await peer.call('pane.focus', { thread: thread.id })
     expect((await threads(peer)).find((s) => s.id === thread.id)!.pane).toBeUndefined()
-    await peer.call('pane.focus', { id: thread.id, pane: diff.id })
-    await peer.call('pane.focus', { id: thread.id, pane: preview.id })
-    await peer.call('pane.close', { id: thread.id, pane: preview.id })
+    await peer.call('pane.focus', { thread: thread.id, pane: diff.id })
+    await peer.call('pane.focus', { thread: thread.id, pane: preview.id })
+    await peer.call('pane.close', { thread: thread.id, pane: preview.id })
     info = (await threads(peer)).find((s) => s.id === thread.id)!
     expect(info.panes?.map((p) => p.kind)).toEqual(['diff'])
     expect(info.pane).toBe(diff.id)
     // Params sent as a string of JSON, as models sometimes do, are kept as what they say.
-    const note = await peer.call<{ params: unknown }>('pane.open', { id: thread.id, kind: 'editor', params: '{"path": "a.md"}' })
+    const note = await peer.call<{ params: unknown }>('pane.open', { thread: thread.id, kind: 'editor', params: '{"path": "a.md"}' })
     expect(note.params).toEqual({ path: 'a.md' })
     await close()
   })
 
   it("reads and writes files in a thread's folder only", async () => {
     const { peer, close } = await open()
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
     await writeFile(join(dir, 'notes.md'), 'one\n')
-    expect((await peer.call<{ content: string }>('file.read', { id: thread.id, path: 'notes.md' })).content).toBe('one\n')
-    await expect(peer.call('file.read', { id: thread.id, path: '../../etc/passwd' })).rejects.toMatchObject({ kind: 'invalid' })
-    await peer.call('file.write', { id: thread.id, path: 'notes.md', content: 'two\n' })
-    expect((await peer.call<{ content: string }>('file.read', { id: thread.id, path: 'notes.md' })).content).toBe('two\n')
+    expect((await peer.call<{ content: string }>('file.read', { thread: thread.id, path: 'notes.md' })).content).toBe('one\n')
+    await expect(peer.call('file.read', { thread: thread.id, path: '../../etc/passwd' })).rejects.toMatchObject({ kind: 'invalid' })
+    await peer.call('file.write', { thread: thread.id, path: 'notes.md', content: 'two\n' })
+    expect((await peer.call<{ content: string }>('file.read', { thread: thread.id, path: 'notes.md' })).content).toBe('two\n')
     await close()
   })
 
   it("says which version of a thread's files there is, by the same rules as reading them", async () => {
     const { utimes } = await import('node:fs/promises')
     const { peer, close } = await open()
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
     await writeFile(join(dir, 'shot.png'), 'one')
     await utimes(join(dir, 'shot.png'), 1000, 1000)
-    const read = await peer.call<{ mtimeMs: number; size: number }>('file.read', { id: thread.id, path: 'shot.png', base64: true })
+    const read = await peer.call<{ mtimeMs: number; size: number }>('file.read', { thread: thread.id, path: 'shot.png', base64: true })
     expect(read).toMatchObject({ mtimeMs: 1_000_000, size: 3 })
-    const stat = (...paths: string[]) => peer.call<{ files: unknown[] }>('file.stat', { id: thread.id, paths })
+    const stat = (...paths: string[]) => peer.call<{ files: unknown[] }>('file.stat', { thread: thread.id, paths })
     expect(await stat('shot.png')).toEqual({ files: [{ mtimeMs: 1_000_000, size: 3 }] })
     await writeFile(join(dir, 'shot.png'), 'three')
     await utimes(join(dir, 'shot.png'), 2000, 2000)
@@ -345,15 +345,15 @@ describe('record and replay', () => {
   it('sends files with a message: saved on the machine, named to the agent, images as images', async () => {
     const { readFile } = await import('node:fs/promises')
     const { peer, close } = await open()
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
     const png = Buffer.from('89504e470d0a1a0a', 'hex').toString('base64')
-    await peer.call('thread.submit', { id: thread.id, text: 'look', attachments: [
+    await peer.call('thread.send', { thread: thread.id, text: 'look', attachments: [
       { name: 'shot.png', mimeType: 'image/png', data: png },
       { name: 'notes.md', mimeType: 'text/markdown', data: Buffer.from('# Hi\n').toString('base64') },
       { name: 'notes.md', mimeType: 'text/markdown', data: Buffer.from('again\n').toString('base64') },
     ] })
     await until(async () => (await threads(peer)).find((t) => t.id === thread.id)!.status.state === 'done')
-    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
+    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: thread.id })
     const user = value.entries.find((e) => e.kind === 'pi.user')!.model![0] as { content: { type: string; text?: string; mimeType?: string }[] }
     expect(user.content.map((b) => b.type)).toEqual(['text', 'text', 'image', 'text', 'text'])
     expect(user.content[0]!.text).toBe('look')
@@ -363,8 +363,8 @@ describe('record and replay', () => {
     expect(user.content[4]!.text).toContain(`path="${join(saved, 'notes-2.md')}"`)
     expect(await readFile(join(saved, 'shot.png'), 'base64')).toBe(png)
     // A message can be files alone; nothing at all is refused.
-    await peer.call('thread.submit', { id: thread.id, text: '', attachments: [{ name: 'a.txt', mimeType: 'text/plain', data: '' }] })
-    await expect(peer.call('thread.submit', { id: thread.id, text: '  ' })).rejects.toMatchObject({ kind: 'invalid' })
+    await peer.call('thread.send', { thread: thread.id, text: '', attachments: [{ name: 'a.txt', mimeType: 'text/plain', data: '' }] })
+    await expect(peer.call('thread.send', { thread: thread.id, text: '  ' })).rejects.toMatchObject({ kind: 'invalid' })
     await close()
   })
 
@@ -374,10 +374,10 @@ describe('record and replay', () => {
     await writeFile(join(dir, 'agents', 'AGENTS.md'), 'Always be kind.')
     await writeFile(join(dir, 'AGENTS.md'), 'This project uses pnpm.')
     const { peer, close } = await open()
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
-    await peer.call('thread.submit', { id: thread.id, text: 'hi' })
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
+    await peer.call('thread.send', { thread: thread.id, text: 'hi' })
     await until(async () => (await threads(peer)).find((t) => t.id === thread.id)!.status.state === 'done')
-    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
+    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: thread.id })
     const all = JSON.stringify(value)
     expect(all).toMatch(/Always be kind\.[^]*This project uses pnpm\./)
     await close()
@@ -387,10 +387,10 @@ describe('record and replay', () => {
     const { rename, unlink } = await import('node:fs/promises')
     await writeFile(join(dir, 'note.md'), 'one\n')
     const { peer, close } = await open()
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
     const seen: (string | null)[] = []
     peer.on('file.changed', (params: { content: string | null }) => { seen.push(params.content) })
-    const { content } = await peer.call<{ sub: string; content: string }>('file.watch', { id: thread.id, path: 'note.md' })
+    const { content } = await peer.call<{ sub: string; content: string }>('file.watch', { thread: thread.id, path: 'note.md' })
     expect(content).toBe('one\n')
     await writeFile(join(dir, 'note.md'), 'two\n')
     await until(() => seen.at(-1) === 'two\n')
@@ -404,19 +404,19 @@ describe('record and replay', () => {
 
   it('pages back through a thread older than its watch holds', async () => {
     const { peer, close } = await open()
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
     for (const text of ['one', 'two', 'three']) {
-      await peer.call('thread.submit', { id: thread.id, text })
+      await peer.call('thread.send', { thread: thread.id, text })
       await until(async () => (await threads(peer)).find((t) => t.id === thread.id)!.status.state === 'done')
     }
-    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
+    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: thread.id })
     const last = value.entries.at(-1)!.id as number
-    const page = await peer.call<{ entries: { id: number; kind: string }[]; more: boolean }>('thread.history', { id: thread.id, before: last, limit: 2 })
+    const page = await peer.call<{ entries: { id: number; kind: string }[]; more: boolean }>('thread.history', { thread: thread.id, before: last, limit: 2 })
     expect(page.entries).toHaveLength(2)
     expect(page.entries[0]!.id).toBeLessThan(page.entries[1]!.id)
     expect(page.entries[1]!.id).toBeLessThan(last)
     expect(page.more).toBe(true)
-    const all = await peer.call<{ entries: { id: number }[]; more: boolean }>('thread.history', { id: thread.id, before: last, limit: 200 })
+    const all = await peer.call<{ entries: { id: number }[]; more: boolean }>('thread.history', { thread: thread.id, before: last, limit: 200 })
     expect(all.more).toBe(false)
     expect(all.entries.length).toBe(value.entries.filter((e) => (e.id as number) < last).length)
     await close()
@@ -431,8 +431,8 @@ describe('record and replay', () => {
     await writeFile(join(dir, 'node_modules/pkg/Readme.md'), 'no\n')
     await writeFile(join(dir, 'Work/diagram.png'), '')
     const { peer, close } = await open()
-    const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
-    const find = async (name: string) => (await peer.call<{ path: string | null }>('file.find', { id: thread.id, name })).path
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
+    const find = async (name: string) => (await peer.call<{ path: string | null }>('file.find', { thread: thread.id, name })).path
     expect(await find('Plan')).toBe('Work/Plan.md')
     expect(await find('plan')).toBe('Work/Plan.md')
     expect(await find('Work/Old/Plan')).toBe('Work/Old/Plan.md')
@@ -440,7 +440,7 @@ describe('record and replay', () => {
     expect(await find('Readme')).toBeNull()
     expect(await find('../../etc/passwd')).toBeNull()
     // Paths as agents write them: a folder, a line, the whole path, or one past the folder.
-    const where = async (name: string) => peer.call('file.find', { id: thread.id, name })
+    const where = async (name: string) => peer.call('file.find', { thread: thread.id, name })
     expect(await where('Work/Old/')).toEqual({ path: 'Work/Old', folder: true })
     expect(await where('Work/Plan.md:12')).toEqual({ path: 'Work/Plan.md', line: 12 })
     expect(await where('Work/Plan.md#L3-L9')).toEqual({ path: 'Work/Plan.md', line: 3 })

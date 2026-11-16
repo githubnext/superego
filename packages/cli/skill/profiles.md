@@ -30,7 +30,7 @@ export default defineProfile({
   prompt: 'You answer customer email for Acme. Be brief.',
   extensions: ['./orders.ts'],                       // daemon side: see below
   ui: ['./ui/order.tsx'],                            // window side: defineUiExtension modules
-  panes: {                                           // pane kinds its UI adds, listed to the agent for open_pane
+  panes: {                                           // pane kinds its UI adds, listed to the agent for pane_open
     order: 'an order, with its lines and status. Params: { id }',
   },
   without: ['ask-user'],                             // built-ins to leave out
@@ -56,7 +56,7 @@ Every field is optional.
 - **`ui`** are modules for the window (`superego --skill ui`). They draw only in this profile's threads.
 - **`panes`** describes each pane kind the UI registers, so the agent knows it can open one and with which params.
 - **`without`** takes the names of optional extensions, the ones Settings → Extensions lists: the core's
-  `coding-tools` (read, write, edit, bash), `panes` (open_pane), `agents-md`, and the bundled `thread-tools`
+  `coding-tools` (read, write, edit, bash), `panes` (pane_open), `agents-md`, and the bundled `thread-tools`
   (thread_start, thread_read, thread_send, thread_list, thread_archive; `threads`, its old name, means it too),
   `thread-reports` (a thread started by another tells it when it finishes, fails or waits on a question), `ask-user`, `files`, `git`, `images`, `links`, `pane-ui` (open_ui, update_ui), `reply-ui` (show_ui, ask_ui), `skills`, `suggestions`, `tasks`, `web-panes`. Its
   threads get none of their tools or prompt sections, and the window shows none of their UI there. Required ones (the
@@ -133,7 +133,7 @@ superego profile revoke-ui default -m box    # Settings → Machines lists them 
 - **A thread keeps the profile it started with.** A profile made after a thread started (your first `default`, a
   project's new one) never reaches that thread, the one that wrote it included, so the user's open threads don't gain
   its tools: say so. Start a new thread to use it (`superego -p "…"`), or move an idle one onto it with `superego do
-  thread.setProfile --id <thread> --profile <name>` (refused while it's working).
+  thread.setProfile --thread <thread> --profile <name>` (refused while it's working).
 - The daemon loads a profile when a thread with it takes a turn, and again when its files changed: edit, then send the
   thread another message (a thread mid-run keeps what it started the run with). `superego extension reload` loads it
   now, and says why if it doesn't load. Daemon extensions are torn down (their cleanup runs) and set up again.

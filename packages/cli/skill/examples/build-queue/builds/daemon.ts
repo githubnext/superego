@@ -89,8 +89,8 @@ export default defineDaemonExtension({
     // ⌘⇧B: the queue as a pane beside the shown thread (its view fits a pane, so it's a pane kind of its id).
     superego.action(defineAction({
       id: 'builds.open', title: 'Show the build queue', runs: 'machine', expose: ['ui', 'cli'], keys: 'mod+shift+b', thread: true,
-      params: obj({ id: str() }),
-      run: ({ id }) => superego.dispatch('pane.open', { id, kind: VIEW }),
+      params: obj({ thread: str() }),
+      run: ({ thread }) => superego.dispatch('pane.open', { thread, kind: VIEW }),
     }))
 
     superego.view(VIEW, {

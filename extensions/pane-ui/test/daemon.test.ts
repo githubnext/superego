@@ -42,8 +42,8 @@ it('opens a ui pane with { id }, updates its UI by id, and keeps it across a res
   process.env.PANEUITEST_REPLAY_SPEED = '0'
   let { peer, close } = await open()
 
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
-  await peer.call('thread.submit', { id: thread.id, text: 'build it' })
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
+  await peer.call('thread.send', { thread: thread.id, text: 'build it' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
 
   const [info] = await peer.call<ThreadInfo[]>('thread.list', {})
@@ -53,7 +53,7 @@ it('opens a ui pane with { id }, updates its UI by id, and keeps it across a res
   expect(specs.status).toMatchObject({ id: 'status', title: 'Build: green', blocks: second })
   expect((await peer.call<{ value: ThreadSpecs | null }>('value.watch', { key: SPECS, scope: 'another' })).value).toBeNull()
 
-  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: thread.id })
+  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: thread.id })
   const results = value.entries.map((e) => e.model?.[0] as { role?: string; isError?: boolean; content?: { text?: string }[] } | undefined).filter((m) => m?.role === 'toolResult')
   expect(results.map((r) => r!.isError)).toEqual([false, false, true])
   expect(results[2]!.content![0]!.text).toContain('No UI pane "nope"')

@@ -173,7 +173,7 @@ can put tools in a pane's header or a count on its tab (`DiffPane`, `panes.tsx:2
    shown thread (`threads/src/ui.tsx:321`).
 8. **Live values are all or nothing.** `suggestions.next` is a `Record<thread, …>` of every thread, sent whole on every
    change to every watcher (`suggestions/src/daemon.ts:13`, `:56`). `ask-user.pending` is the same (`ask-user/src/daemon.ts:18`).
-9. **The agent is told only the built-in pane kinds.** The `open_pane` description is a hard-coded string
+9. **The agent is told only the built-in pane kinds.** The `pane_open` description is a hard-coded string
    (`daemon.ts:254-257`). Only profiles can add to it (`daemon.ts:532-534`). The `folder` pane that `files` adds
    (`files/src/ui.tsx:56`) is never described to the agent.
 10. **Pane kinds have no icon.** The strip's icons are a core table (`panes.tsx:190-192`), and the file-name style is
@@ -229,7 +229,7 @@ a piece stays in core or needs a structural addition. **No**: it's the runtime o
 | 9 | **Worktrees**: create, archive removes a clean one, unarchive restores it, the branch chip, the dialog's checkbox, `worktree:` in profiles | `daemon.ts:47-48`, `:644-660`, `:727-758`; `ThreadView.tsx:142`; `NewThread.tsx` | **Partly** | Needs lifecycle hooks: choose the cwd at create, act on archive and unarchive (D1), per-thread state and a `ThreadInfo` fact (D4), a field in the New thread dialog (U8). The profile key `worktree` would become extension options |
 | 10 | **Ego** (the meta agent): tools, prompt, `thread.meta`, `app.meta`, the rail button | `meta.ts` (133); `daemon.ts:410-411`, `:521-526`, `:681-693`; `actions.tsx:123-129`; `Shell.tsx:118-120` | **Partly** | The tools, prompt and button move. Missing: a thread kind that picks its own agent (the `meta` flag and `agentOf` override, D5), and a sanctioned way to reach the router (it uses `router` directly, `meta.ts:66`) |
 | 11 | **Web access**: HTTP and WebSocket server, token, settings section, address UI | `web.ts` (105); `daemon.ts:1034-1083`; `SettingsView.tsx:166-183` | **Partly** | The server and settings could be a daemon extension with HTTP routes and a `serve(peer)` hook (D8). The browser bridge (`web-bridge.ts`, `token-gate.ts`) is a client transport and stays core |
-| 12 | **Attachments** | `daemon.ts:568-598`; composer `ThreadView.tsx:760-770`, `:898-908`, `:932-938`; `attachments.ts` | **Partly** | The protocol (`Attachment` in `thread.submit`) stays. Saving files and inlining text could be a submit transform (D2), the composer's attach button a composer provider (U3). Low value: keep it in core for now |
+| 12 | **Attachments** | `daemon.ts:568-598`; composer `ThreadView.tsx:760-770`, `:898-908`, `:932-938`; `attachments.ts` | **Partly** | The protocol (`Attachment` in `thread.send`) stays. Saving files and inlining text could be a submit transform (D2), the composer's attach button a composer provider (U3). Low value: keep it in core for now |
 | 13 | **Unread** button and ⌘. | `Unread.tsx`; `Shell.tsx:121`, `:131`; `actions.tsx:110`, `:205-215`; `index.tsx:25-30` | **Yes** | It already falls back to the `rail` slot. Moving it needs the action to read `sessions` (U6) |
 | 14 | **Action log** dialog | `actions.tsx:144`, `:246-269`; `Shell.tsx:154` | **Yes** | An overlay and an action. Needs read access to the window router's log (U6) |
 | 15 | **Notifications** (done, failed, needs you) | `start.ts:207-222`; `app-settings.ts:35-41` | **Partly** | They run in the Electron main process, which has no extension API. A renderer `onThreadStatus` hook with the Notification API, plus a main-side "focused?" check, would do (U9) |
@@ -371,12 +371,12 @@ interface DaemonApi {
 
 ```ts
 interface DaemonApi {
-  /** Told to the agent in open_pane's description (and to Ego). The UI half registers the component under the same kind. */
+  /** Told to the agent in pane_open's description (and to Ego). The UI half registers the component under the same kind. */
   pane(kind: string, about: string): void
 }
 ```
 
-`open_pane`'s description (`daemon.ts:254-257`) is then built from the registered kinds plus the profile's `panes`
+`pane_open`'s description (`daemon.ts:254-257`) is then built from the registered kinds plus the profile's `panes`
 (`daemon.ts:532-534`), and `meta.ts:30` stops listing kinds by hand.
 
 ### D7. Scoped settings (S)
@@ -546,7 +546,7 @@ the ⌃1–9 code that links and ask-user each write.
 interface UiApi {
   /** A page in Settings' sidebar (rarely needed: sections suffice). */
   settingsPage(id: string, page: { title: string; component: ComponentType; desktopOnly?: boolean }): void
-  /** A field in the New thread dialog; its value goes to thread.create's `options[<name>]`. */
+  /** A field in the New thread dialog; its value goes to thread.start's `options[<name>]`. */
   newThreadField(C: ComponentType<{ machine: MachineEntry; cwd: string; value: Json | undefined; onChange(v: Json): void }>): void
 }
 ```
@@ -804,7 +804,7 @@ Each of these proves one extension point by moving a real feature through it.
 
 1. **`git` extension: Changes** (2 days). Adds D3 (read methods), D6 (pane descriptions) and U1. Moves `DiffPane` and
    `parseDiff` (`panes.tsx:253-331`), `thread.diff` (`daemon.ts:914-922`) and `panes.changes` ⌘⇧D
-   (`actions.tsx:146-149`). Done when core `panes.tsx` registers only `editor` and `thread`, and `open_pane`'s
+   (`actions.tsx:146-149`). Done when core `panes.tsx` registers only `editor` and `thread`, and `pane_open`'s
    description lists `diff` because `git` said so. Natural follow-ons: commit and branch actions.
 2. **`web-panes`: Preview and Artifact panes** (½ day). Today's API is enough for the panes; the artifact origin stays in
    core until D8.
@@ -920,7 +920,7 @@ them puts layout into an extension; they take layout-specific features out of th
   daemon's (`Trust` lives in its data dir), but the code runs on the local computer, where it can call any other
   machine. A profile allowed on a shared box therefore reaches your laptop's other machines. Before pushing profiles as
   the extension story, give profile UI a capability-limited bridge: its own machine, its own extension's actions,
-  `pane.*` and `thread.submit` for its threads. PLAN §3 mentions "a sandboxed tier comes later". This is the reason to
+  `pane.*` and `thread.send` for its threads. PLAN §3 mentions "a sandboxed tier comes later". This is the reason to
   bring it forward.
 - `settings` and `harness` in a profile's `DaemonApi` let it change machine-wide settings (provider keys among them,
   `agent-settings.ts`). D7's scoping should restrict profiles to their own keys.

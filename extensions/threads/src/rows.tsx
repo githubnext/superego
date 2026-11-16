@@ -38,7 +38,7 @@ export function registerLinks(superego: UiApi) {
     open(href, { machine, thread, beside }) {
       const id = href.slice(THREAD.length)
       return beside && thread && thread.id !== id
-        ? superego.dispatch('pane.open', { id: thread.id, kind: 'thread', params: { thread: id } }, { machine: machine!, source: 'thread link' }).then(() => {})
+        ? superego.dispatch('pane.open', { thread: thread.id, kind: 'thread', params: { thread: id } }, { machine: machine!, source: 'thread link' }).then(() => {})
         : superego.dispatch('thread.select', { machine: machine!, thread: id }, { source: 'thread link' }).then(() => {})
     },
   })

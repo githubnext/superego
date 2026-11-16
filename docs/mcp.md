@@ -11,7 +11,7 @@ Superego will speak MCP in both directions. They share a protocol and nothing el
 |---|---|---|
 | Superego is | an MCP *server* | an MCP *client* |
 | Who uses it | agents outside Superego: Claude Code, Codex, an editor | agents in Superego threads |
-| What they get | a machine's actions as tools: `thread_create`, `thread_submit`, … | other people's tools: `mcp__linear__create_issue` |
+| What they get | a machine's actions as tools: `thread_start`, `thread_send`, … | other people's tools: `mcp__linear__create_issue` |
 | Where | `superego mcp` (`packages/cli/src/mcp.ts`) | the bundled extension `mcp-servers` (`extensions/mcp-servers`) |
 | Settings | Settings → Outside agents (`mcp.*`) | Settings → MCP servers (`mcp-servers.*`) |
 | Profile | — | `mcp: ['linear']`, `mcpServers: { … }` |
@@ -496,13 +496,13 @@ Ego helps set up a server ("connect Linear"), within its settings-only powers:
   - OAuth tokens go only to the resource they were issued for
 - **HTTP servers must use `https`,** except on loopback.
 - **Clean environments** for stdio servers (above), in a process group of their own.
-- **Outside agents (`superego mcp`) never touch any of it.** No `mcp-servers.*` action says `'mcp'` in its `expose`:
+- **Outside agents (`superego mcp`) never touch any of it.** No `mcp-servers.*` action says `'outside'` in its `expose`:
   not list, add, edit, remove, Allow, sign-in or sign-out, set-secret, restart, or logs. A test checks that none of
   them is in the MCP list, as for settings and auth today. Nor can they get there through Ego (above). The servers'
   tools are never offered through `superego mcp`: the outside agent gets Superego's actions, not the servers
   Superego's agents use.
 
-  An outside agent can still start a thread, where the machine allows it (`mcp.startThreads`), and that thread gets
+  An outside agent can still start a thread, where the machine allows it (`outside.startThreads`), and that thread gets
   its servers like any other (§Decided questions).
 - **Tool results are untrusted input**, the way web pages are. The row and the result say which server they came
   from. There's nothing more to do in v1.
@@ -527,7 +527,7 @@ Ego helps set up a server ("connect Linear"), within its settings-only powers:
 These were open in the first draft; the user settled them.
 
 1. **Outside agents' threads get MCP servers**, like any thread of that profile. A thread an outside agent starts
-   (`mcp.startThreads`) works out its servers as any other does. The Can start threads setting says so in its
+   (`outside.startThreads`) works out its servers as any other does. The Can start threads setting says so in its
    description (Lanes 2 and 4).
 2. **No Client ID Metadata Documents for now.** There's no site to host Superego's client metadata on, so
    registration is a configured `clientId`, else dynamic client registration. CIMD is future work (§Future).

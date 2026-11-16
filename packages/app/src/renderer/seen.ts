@@ -8,7 +8,7 @@ export function registerSeen(core: UiApi) {
     const { focused, visible, selection, thread } = core.window
     if (!focused || !visible || !selection || thread?.id !== selection.thread) return
     if (thread.status.state !== 'done' && thread.status.state !== 'error') return
-    void core.dispatch('thread.seen', { id: selection.thread }, { machine: selection.machine, source: 'auto' }).catch(() => {})
+    void core.dispatch('thread.seen', { thread: selection.thread }, { machine: selection.machine, source: 'auto' }).catch(() => {})
   }
   core.on('select', look)
   core.on('focus', ({ focused }) => { if (focused) look() })

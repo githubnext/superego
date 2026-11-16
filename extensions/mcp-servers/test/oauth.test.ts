@@ -276,7 +276,7 @@ const turn = (content: unknown[], stopReason: string) => JSON.stringify({ at: 0,
 const calling = (name: string, args: object = {}) => turn([{ type: 'toolCall', id: `c${Math.random()}`, name, arguments: args }], 'toolUse')
 const answer = (text: string) => turn([{ type: 'text', text }], 'stop')
 async function results(peer: RpcPeer, id: string) {
-  const { value } = await peer.call<{ value: { entries: { model?: { role?: string; content?: { type: string; text?: string }[]; isError?: boolean }[] }[] } }>('thread.watch', { id })
+  const { value } = await peer.call<{ value: { entries: { model?: { role?: string; content?: { type: string; text?: string }[]; isError?: boolean }[] }[] } }>('thread.watch', { thread: id })
   return value.entries.map((e) => e.model?.[0]).filter((m) => m?.role === 'toolResult')
     .map((m) => `${m!.isError ? 'error: ' : ''}${m!.content?.map((c) => c.text ?? `[${c.type}]`).join('\n')}`)
 }
@@ -310,7 +310,7 @@ it('signs in through mcp-servers.login, uses the token for its tools, and signs 
   expect(JSON.stringify(said)).not.toContain(kept.tokens.access_token)
 
   // A thread's call goes with the token.
-  const thread = await peer.call<ThreadInfo>('thread.create', { prompt: 'go' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'go' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === thread.id)?.status.state === 'done', 'the thread')
   expect(await results(peer, thread.id)).toEqual(['hi'])
   expect(as.seen.bearer.at(-1)).toBe(`Bearer ${kept.tokens.access_token}`)
@@ -377,7 +377,7 @@ it("answers a remote machine's flow by its manual_code prompt, and puts a refuse
 
   // The authorization server forgets it: the next call's refresh is refused, and the server needs sign-in.
   as.revokeAll()
-  const thread = await peer.call<ThreadInfo>('thread.create', { prompt: 'go' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'go' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === thread.id)?.status.state === 'done', 'the thread')
   const [result] = await results(peer, thread.id)
   expect(result).toMatch(/^error: fx needs you to sign in again \(Settings → MCP servers\): refreshing its sign-in was refused/)

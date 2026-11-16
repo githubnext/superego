@@ -53,7 +53,7 @@ editing (`superego profile allow`).
 
 A thread keeps the profile it started with, so a profile made after it started (the first `default`, made by `new`)
 doesn't reach it: not the thread that made it, nor the user's other open threads. Start a new thread to use it, or move
-an idle one onto it (`superego do thread.setProfile --id <thread> --profile <name>`).
+an idle one onto it (`superego do thread.setProfile --thread <thread> --profile <name>`).
 
 ## A first extension, end to end
 
@@ -172,7 +172,7 @@ superego.action(defineAction({
 **Data-only** ([`build-queue`](examples/build-queue/builds/daemon.ts)): no UI code. The daemon half keeps a second
 scoped value, what the view shows, with a Cancel button on each build; the view reads it, each thread its own scope.
 The shortcut is a machine action with `keys`, offered while one of that machine's threads is shown (`thread: true`
-fills in its `id`); it opens the view as a pane, which a `thread` view that fits `pane` is.
+fills in its `thread`); it opens the view as a pane, which a `thread` view that fits `pane` is.
 
 <!-- check: daemon; declare const queue: import('superego').ScopedValue<Build[]> -->
 ```ts
@@ -184,8 +184,8 @@ const show = (thread: string) => view.set(thread, {
 })
 superego.view('builds.view', { title: 'Builds', icon: 'terminal', context: 'thread', fits: ['beside', 'pane'], default: 'beside', value: 'builds.view' })
 superego.action(defineAction({
-  id: 'builds.open', title: 'Show the build queue', runs: 'machine', keys: 'mod+shift+b', thread: true, params: obj({ id: str() }),
-  run: ({ id }) => superego.dispatch('pane.open', { id, kind: 'builds.view' }),
+  id: 'builds.open', title: 'Show the build queue', runs: 'machine', keys: 'mod+shift+b', thread: true, params: obj({ thread: str() }),
+  run: ({ thread }) => superego.dispatch('pane.open', { thread, kind: 'builds.view' }),
 }))
 ```
 
@@ -300,15 +300,15 @@ place, and the window's console has why.
 | Daemon half (`superego.` in `setup`) | For |
 |---|---|
 | `agent(defineExtension({ tools, sections, hooks }))` → `replace(next)`, `remove()` | the agent's tools, prompt sections and hooks. Its handle puts another part of the same name in its place (threads that have it get it from their next request to the model, mid-run too) or takes it away; called, it's `remove()`, so `setup: (s) => s.agent(part)` returns its cleanup. The handle: 1.7 |
-| `action(defineAction({ id: 'x.y', params, run }))` | an intent: logged, in ⌘K; `expose: ['ui', 'cli']` for `superego do`; `keys` binds it in the window while one of the machine's threads is shown (`thread: true`: its `id` filled in) |
+| `action(defineAction({ id: 'x.y', params, run }))` | an intent: logged, in ⌘K; `expose: ['ui', 'cli']` for `superego do`; `keys` binds it in the window while one of the machine's threads is shown (`thread: true`: its `thread` filled in) |
 | `method('x.y', run, { params })` | a read for the UI; params checked first |
 | `value('x.y', initial)` → `get`, `set`, `update` | live state the UI watches; in memory |
 | `scopedValue('x.y', initial)` → `get(scope)`, `set(scope, next)`, `update(scope, edit)`, `delete(scope)`, `scopes()` | live state kept per scope (a thread's id): a window watching one scope hears only its changes, never another thread's; in memory, so `delete` a thread's when it's done |
 | `signal` | aborted at teardown: for its own timers, watchers and fetches (below) |
-| `pane(kind, about)` | tell the agent about a pane kind, for `open_pane` |
+| `pane(kind, about)` | tell the agent about a pane kind, for `pane_open` |
 | `view('x.y', { title, icon, context, fits, default, value \| method })` | a view drawn from data (below): no UI code, so a remote machine's or a project profile's runs no code in the window; its buttons still have that machine's authority |
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
-| `submit(({ thread, text, attachments, content, by, exposure }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it. `by`: the extension that sent it (`threads.submit`, `threads.create`'s prompt), absent for the user's; `exposure`: `mcp` when an outside agent sent it, `cli` the command line |
+| `submit(({ thread, text, attachments, content, by, exposure }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it. `by`: the extension that sent it (`threads.send`, `threads.start`'s prompt), absent for the user's; `exposure`: `outside` when an outside agent sent it, `cli` the command line |
 | `settings.register({ id: 'x', settings })`, `settings.get`, `settings.snapshot`, `settings.onChange` | machine settings of its own (`x.…`); read any |
 | `dispatch(id, params)`, `actions(exposure)` | run any action on the machine as this extension (`settings.set`); list them |
 | `thread({ creating, abandoned, created, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchiveAbandoned, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
@@ -320,8 +320,8 @@ place, and the window's console has why.
 | `agentParts(({ id, hidden, owner, profile }) => [part])` | add to whatever agent a thread has: asked at every submit, with its profile as loaded now (`profile.spec`); answers with parts given with `agent(part, { always: false })`. They add up: every extension's, after the chooser's and before the profile's. May be async, up to 5s; later, or a throw, adds nothing to that turn. 1.7 |
 | `auth.flow(context, async (flow) => …)` → `{ flow }` | a sign-in flow of its own, for the client an action runs for (its context), carried as a provider's is: `flow.emit({ type: 'auth_url', url, callback })`, `await flow.prompt({ type: 'manual_code', message })`, `flow.signal`. It ends `done` when the function resolves, `failed` when it throws. The window draws it with `SignInFlow` (`superego/ui`). 1.7 |
 | `threads.list({ archived, hidden })`, `get(id)`, `of(conversationId)`, `conversation(id)`, `attachments(id)` | reach threads, and the folder a thread keeps files in |
-| `threads.create({ …, parent, hidden, options })`, `submit(id, text)`, `lastAnswer(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)`, `clear(id)` | start and run threads as the thread tools do; `hidden`: in no list, an agent of its own with no profile, that takes no messages while the extension is off (find it by its `owner` in `list({ hidden: true })`, not by its facts, which are gone while the extension is off); `entries`: the newest since it was last cleared, as pi-durable's entry records (not a stable shape); `clear`: start it over |
-| `machines.list()`, `machines.call(machine, method, params)` | the other machines this daemon reaches (its `machines.json`) and a call to one, as a client calls it (`thread.list`, `thread.create`); none when it reaches no others. 1.4 |
+| `threads.start({ …, parent, hidden, options })`, `send(id, text)`, `lastAnswer(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)`, `clear(id)` | start and run threads as the thread tools do; `hidden`: in no list, an agent of its own with no profile, that takes no messages while the extension is off (find it by its `owner` in `list({ hidden: true })`, not by its facts, which are gone while the extension is off); `entries`: the newest since it was last cleared, as pi-durable's entry records (not a stable shape); `clear`: start it over |
+| `machines.list()`, `machines.call(machine, method, params)` | the other machines this daemon reaches (its `machines.json`) and a call to one, as a client calls it (`thread.list`, `thread.start`); none when it reaches no others. 1.4 |
 | `agentsDir`, `dataDir` | the folder agents share (`~/.agents`): skills, `AGENTS.md`; this machine's data folder (`~/.superego`) |
 | `harness` | pi-durable itself; unstable |
 
@@ -329,7 +329,7 @@ place, and the window's console has why.
 |---|---|
 | `view('x.y', { title, icon, context, fits, default, narrow, withoutSpaces, order, component, railButton, width })` | UI the layout puts in places (below): a space, a rail button, beside the thread, the pane menu, the title bar; `default` where it goes unless the user moves it |
 | `slot(name, Component, { order })` | a component in a slot whose place behaviour decides (below): `header.chips` for a chip where the title bar says where a thread works, `thread.badge` for a small mark after its title in the sidebar (a `thread-badge`: a 12px icon with a `title`), `composer.above`, `details.section` (in thread details, ⌘I: an `<h5>` and what you know of the thread), `editor.side`, `editor.bar`, `overlay` |
-| `newThreadField({ component, from })` | a field in the New thread dialog: its value goes to `thread.create` as `options.<name>`, for the daemon half's `creating`; `from(thread)` its value for one started like `thread`; bundled only |
+| `newThreadField({ component, from })` | a field in the New thread dialog: its value goes to `thread.start` as `options.<name>`, for the daemon half's `creating`; `from(thread)` its value for one started like `thread`; bundled only |
 | `signal` | aborted at teardown (its profile's UI reloaded or revoked): for its own timers, listeners and fetches (below) |
 | `on(event, listener)` → off; `window` | hear the window: `thread.status` (`{ machine, thread, before }`; `before` undefined the first time it's seen), `select` (`{ selection, before }`), `focus` (`{ focused }`), `visibility` (`{ visible }`); `window` is `{ focused, visible, selection, thread }` now. In Electron and browsers alike |
 | `appSetting(key)` | one of the app's settings as it is now, outside React |
@@ -454,7 +454,7 @@ superego.link({
   match: 'wikilink:',
   open(href, { machine, thread }) {
     const { target, heading } = parseWikilink(href)!
-    return superego.dispatch('pane.open', { id: thread!.id, kind: 'note', params: { path: target, heading } }, { machine })
+    return superego.dispatch('pane.open', { thread: thread!.id, kind: 'note', params: { path: target, heading } }, { machine })
       .then(() => undefined, (error: Error) => error.message)
   },
   target: (href) => parseWikilink(href)!.target,
@@ -566,7 +566,7 @@ superego.view('orders.open', { title: 'Orders', icon: 'list', context: 'window',
 
 - The source is a live value of the extension's (`value`), or a method of its (`method`), read again as the thread
   moves on and after a button ran. A `thread` view's value is a `scopedValue`, each thread's content in its scope (or a plain value holding each thread's by its id: the window watches only that entry), and its method is
-  called with `{ id }`.
+  called with `{ thread }`.
 - Data views fit `space`, `beside` and `pane` (a `window` view: `space` and `beside`), and the layout places them as any
   other. A `thread` view in `pane` is a pane kind of its id; with `about`, the agent is told it can open it.
 - The window hears of them as every daemon's live value `view.list`. A view a machine's extension declares shows a
@@ -684,7 +684,7 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
 const state = superego.state<{ path: string; branch: string }>()
 superego.facts(({ state }) => state)                   // thread.ext.worktrees
 superego.thread<{ path: string; branch: string }>({   // the state its creating gives a thread
-  async creating(draft) {                              // draft.options: what thread.create asked for, by extension
+  async creating(draft) {                              // draft.options: what thread.start asked for, by extension
     if (draft.options.worktrees !== true || !draft.checkout) return
     const { path, branch } = await makeWorktree(draft.checkout.top)  // yours: git worktree add
     return { cwd: path, state: { path, branch } }
@@ -709,7 +709,7 @@ superego.thread<{ path: string; branch: string }>({   // the state its creating 
   whose `creating` already ran are told `abandoned(draft, state)`, in reverse, to undo it: a worktree goes again.
   Likewise, when a later `unarchiving` refuses (or bringing the thread back fails), those whose `unarchiving` already
   ran are told `unarchiveAbandoned(thread)`, in reverse, to undo what they put back; the thread stays archived.
-  `draft.options` is what the thread was asked for by extension: its profile's `options`, then `thread.create`'s.
+  `draft.options` is what the thread was asked for by extension: its profile's `options`, then `thread.start`'s.
 - The others are told, and awaited in turn. A throw there is logged, and the thread carries on. `archived` runs
   before clients see the thread archived, so it's where cleanup goes. Hooks aren't a transaction: archiving goes on
   past a cleanup that failed, and may be tried again (a restart between), so make cleanup idempotent, and safe to find
@@ -747,7 +747,7 @@ between the two) and the core's `markdown` are required. Everything else is opti
 `coding-tools`, `panes` and `agents-md`. A package may be two extensions, one per half,
 where the halves differ: `extensions/threads` is the required sidebar in the window, and `thread-tools`, the agent's
 thread tools, on the machine, so switching the tools off leaves the sidebar (and the rows and links naming threads).
-The core's `panes` is the agent's `open_pane`: switched off, the agent can't open panes, but the window's own pane
+The core's `panes` is the agent's `pane_open`: switched off, the agent can't open panes, but the window's own pane
 kinds stay, being the required core's. An extension with a UI half only needs no daemon half: the window declares it
 to each machine, which lists it and lets profiles do without it.
 

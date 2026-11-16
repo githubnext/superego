@@ -60,7 +60,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
               path: `${project.name} ${thread.title}`, current: isOn && !thread.pane,
               go: go(() => {
                 show()
-                if (thread.pane) void dispatch('pane.focus', { id: thread.id }, { machine: project.machine.id, source: 'navigator' })
+                if (thread.pane) void dispatch('pane.focus', { thread: thread.id }, { machine: project.machine.id, source: 'navigator' })
               }),
             },
             ...shownPanes(registry, { machine: project.machine.id, thread }).map((pane): Row => ({
@@ -68,7 +68,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
               path: `${project.name} ${thread.title} ${paneTitle(registry, pane, { machine: project.machine.id, thread })}`, current: isOn && thread.pane === pane.id,
               go: go(() => {
                 show()
-                void dispatch('pane.focus', { id: thread.id, pane: pane.id }, { machine: project.machine.id, source: 'navigator' })
+                void dispatch('pane.focus', { thread: thread.id, pane: pane.id }, { machine: project.machine.id, source: 'navigator' })
                 focusColumn(pane.id)
               }),
             })),

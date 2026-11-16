@@ -53,7 +53,7 @@ async function rejected(peer: RpcPeer) {
 /** A thread's run state as its transcript has it. */
 async function live(peer: RpcPeer, id: string) {
   let view: ConversationView | undefined
-  const watched = await peer.call<{ sub: string; value: ConversationView }>('thread.watch', { id })
+  const watched = await peer.call<{ sub: string; value: ConversationView }>('thread.watch', { thread: id })
   view = watched.value
   const off = peer.on('watch.ops', ({ sub, ops }: Notifications['watch.ops']) => { if (sub === watched.sub) view = applyImmutable(view!, ops as Op[]) })
   return { now: () => view!.docs['pi.live'] as LiveState | undefined, stop: async () => { off(); await peer.call('unwatch', { sub: watched.sub }) } }
@@ -64,7 +64,7 @@ it('waits for sign-in on a rejected key, fails new turns fast, and goes on when 
   const { peer, close } = await open()
   const value = await rejected(peer)
   const ids: string[] = []
-  for (const prompt of ['one', 'two', 'three']) ids.push((await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt })).id)
+  for (const prompt of ['one', 'two', 'three']) ids.push((await peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt })).id)
 
   // Each fails on the key, and waits: the same reason for all, not an error each.
   await until(() => waiting(peer, ids))
@@ -73,7 +73,7 @@ it('waits for sign-in on a rejected key, fails new turns fast, and goes on when 
   expect(value.now()[0]).toMatchObject({ provider: 'faux', name: 'faux', summary: 'faux rejected the API key', detail: expect.stringContaining('invalid x-api-key'), since: expect.any(Number) })
 
   // A new turn for the provider fails without asking it, and waits too.
-  const fourth = (await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'four' })).id
+  const fourth = (await peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt: 'four' })).id
   await until(() => waiting(peer, [fourth]))
   const its = await live(peer, fourth)
   await until(() => Boolean(its.now()?.runFailure))
@@ -92,7 +92,7 @@ it('waits for sign-in on a rejected key, fails new turns fast, and goes on when 
 it('waits again when the new key is rejected too, without retrying on its own', async () => {
   await storeKey('reject-1')
   const { peer, close } = await open()
-  const ids = [(await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'one' })).id, (await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'two' })).id]
+  const ids = [(await peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt: 'one' })).id, (await peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt: 'two' })).id]
   await until(() => waiting(peer, ids))
   const value = await rejected(peer)
   const firstSince = value.now()[0]!.since
@@ -125,7 +125,7 @@ it('waits again when the new key is rejected too, without retrying on its own', 
 it('keeps waiting across a restart, and retries what changed meanwhile', async () => {
   await storeKey('reject-1')
   let daemon = await open()
-  const id = (await daemon.peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'one' })).id
+  const id = (await daemon.peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt: 'one' })).id
   await until(() => waiting(daemon.peer, [id]))
   await daemon.close()
 
@@ -145,7 +145,7 @@ it('takes a bad key written just before the turns it stops as the one rejected: 
   const value = await rejected(peer)
   // The turns run, and are rejected, before the daemon hears auth.json change.
   await storeKey('reject-new')
-  const ids = [(await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'one' })).id, (await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'two' })).id]
+  const ids = [(await peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt: 'one' })).id, (await peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt: 'two' })).id]
   await until(() => waiting(peer, ids))
   await until(() => value.now()[0]?.threads.length === 2)
   const { since } = value.now()[0]!
@@ -160,7 +160,7 @@ it('takes a bad key written just before the turns it stops as the one rejected: 
 it('retries a turn rejected for a key replaced while it ran, with the new one', async () => {
   await storeKey('reject-held')
   const { peer, close } = await open()
-  const id = (await peer.call<ThreadInfo>('thread.create', { cwd: dir, prompt: 'one' })).id
+  const id = (await peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt: 'one' })).id
   // Asked with the old key; a new one is stored, and heard of, before the old one's rejection comes back.
   await until(() => heldRejections.length === 1)
   await storeKey('good')

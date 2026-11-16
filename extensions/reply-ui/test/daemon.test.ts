@@ -31,7 +31,7 @@ async function start(turns: string[]) {
   const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
   expect(hello.features).toContain('ext:reply-ui')
   const done = async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done'
-  const view = async (id: string) => (await peer.call<{ value: ConversationView }>('thread.watch', { id })).value
+  const view = async (id: string) => (await peer.call<{ value: ConversationView }>('thread.watch', { thread: id })).value
   const close = async () => { socket.destroy(); server.close(); await daemon.close(); delete process.env.REPLYUITEST_MODEL }
   return { peer, done, view, close }
 }
@@ -47,8 +47,8 @@ it('show_ui returns at once, with the whole UI in its details; bad blocks get er
     turn([{ type: 'toolCall', id: 'call-2', name: 'show_ui', arguments: { title: 'Layouts', blocks: BLOCKS } }], 'toolUse'),
     turn([{ type: 'text', text: 'Pick one when you like.' }], 'stop'),
   ])
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
-  await peer.call('thread.submit', { id: thread.id, text: 'show me layouts' })
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
+  await peer.call('thread.send', { thread: thread.id, text: 'show me layouts' })
   await until(done)
   const [bad, good] = toolResults(await view(thread.id))
   expect(bad!.isError).toBe(true)
@@ -64,7 +64,7 @@ it('ask_ui blocks the thread, takes an answer from any client, and returns value
     turn([{ type: 'toolCall', id: 'call-1', name: 'ask_ui', arguments: { title: 'Pick a layout', blocks: BLOCKS } }], 'toolUse'),
     turn([{ type: 'text', text: 'Lists it is.' }], 'stop'),
   ])
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
   // The thread's own scope; another's hears nothing.
   const watched = await peer.call<{ sub: string; value: Asking[] }>('value.watch', { key: ASKING, scope: thread.id })
   const other = await peer.call<{ sub: string; value: Asking[] }>('value.watch', { key: ASKING, scope: 'another' })
@@ -72,7 +72,7 @@ it('ask_ui blocks the thread, takes an answer from any client, and returns value
   const others: unknown[] = []
   peer.on('value.changed', ({ sub, value }: Notifications['value.changed']) => { if (sub === watched.sub) pending = value as Asking[]; if (sub === other.sub) others.push(value) })
 
-  await peer.call('thread.submit', { id: thread.id, text: 'set it up' })
+  await peer.call('thread.send', { thread: thread.id, text: 'set it up' })
   await until(() => pending.length === 1)
   expect(pending[0]).toMatchObject({ id: 'call-1', thread: thread.id, title: 'Pick a layout', blocks: BLOCKS })
   expect((await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status).toEqual({ state: 'blocked', kind: 'question', msg: 'Pick a layout' })
@@ -97,8 +97,8 @@ it('ask_ui takes an answer in words instead', async () => {
     turn([{ type: 'toolCall', id: 'call-1', name: 'ask_ui', arguments: { blocks: BLOCKS } }], 'toolUse'),
     turn([{ type: 'text', text: 'Fine.' }], 'stop'),
   ])
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
-  await peer.call('thread.submit', { id: thread.id, text: 'set it up' })
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
+  await peer.call('thread.send', { thread: thread.id, text: 'set it up' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'blocked')
   expect((await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status).toMatchObject({ msg: 'Waiting for your answer' })
   await peer.call(ANSWER, { id: 'call-1', text: ' whatever is fastest ' })

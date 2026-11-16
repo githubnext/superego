@@ -1,5 +1,5 @@
 /// <reference path="./env.d.ts" />
-// terminal, UI half: the Terminal pane (from the pane menu, ⌃`, or the agent's open_pane "terminal"), drawn by
+// terminal, UI half: the Terminal pane (from the pane menu, ⌃`, or the agent's pane_open "terminal"), drawn by
 // ghostty-web: Ghostty's terminal emulator compiled to WebAssembly, behind xterm.js's API, the same in the desktop app
 // and a browser. The shell is the machine's (the daemon half): this attaches to it on the pane's channel, replays what
 // it printed, and passes keys and sizes back. Native libghostty on the desktop is a later step (PLAN §9).
@@ -27,7 +27,7 @@ export default defineUiExtension({
     superego.action(defineAction({
       id: 'terminal.open', title: 'Open a terminal', keys: KEYS,
       when: (c) => Boolean(c.selection) && has(c.machines.find((m) => m.id === c.selection!.machine), SPEAKS),
-      run: async (_p, c) => { if (c.selection) await c.dispatch('pane.open', { id: c.selection.thread, kind: TERMINAL }, { machine: c.selection.machine, source: 'terminal' }) },
+      run: async (_p, c) => { if (c.selection) await c.dispatch('pane.open', { thread: c.selection.thread, kind: TERMINAL }, { machine: c.selection.machine, source: 'terminal' }) },
     }))
     superego.action(defineAction({
       id: 'terminal.new', title: 'New terminal',
@@ -36,7 +36,7 @@ export default defineUiExtension({
         if (!c.selection) return
         const panes = c.threadOf(c.selection)?.panes ?? []
         const n = Math.max(0, ...panes.filter((p) => p.kind === TERMINAL).map(numberOf)) + 1
-        await c.dispatch('pane.open', { id: c.selection.thread, kind: TERMINAL, ...(n > 1 ? { params: { n } } : {}) }, { machine: c.selection.machine, source: 'terminal' })
+        await c.dispatch('pane.open', { thread: c.selection.thread, kind: TERMINAL, ...(n > 1 ? { params: { n } } : {}) }, { machine: c.selection.machine, source: 'terminal' })
       },
     }))
   },

@@ -200,24 +200,24 @@ describe('superego_mcp_servers in Ego, against a daemon', () => {
     const { peer, socket } = await connectSocket(join(dir, 's.sock'))
     await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
     const egoOf = async (p: RpcPeer) => (await p.call<ThreadInfo[]>('thread.list', { hidden: true })).find((t) => t.owner === 'ego') ?? null
-    const results = async (id: string) => (await peer.call<{ value: ConversationView }>('thread.watch', { id })).value.entries
+    const results = async (id: string) => (await peer.call<{ value: ConversationView }>('thread.watch', { thread: id })).value.entries
       .filter((e) => (e.model?.[0] as { role?: string } | undefined)?.role === 'toolResult').map((e) => e.model![0] as { isError: boolean; content: { text: string }[] })
     const answered = (count: number) => until(async () => {
       const ego = await egoOf(peer)
       return ego?.status.state === 'done' && (await results(ego.id)).length === count
     })
 
-    const ego = await peer.call<ThreadInfo>('action.run', { id: 'ego.ask', params: { prompt: 'connect my docs server' }, exposure: 'mcp' })
+    const ego = await peer.call<ThreadInfo>('action.run', { id: 'ego.ask', params: { prompt: 'connect my docs server' }, exposure: 'outside' })
     await answered(1)
     expect(added).toEqual([])
     expect((await results(ego.id))[0]).toMatchObject({ isError: true, content: [{ text: expect.stringMatching(/outside agents never set up MCP servers/i) }] })
 
-    await peer.call('settings.set', { key: 'mcp.startThreads', value: true })
-    await peer.call('action.run', { id: 'ego.ask', params: { prompt: 'and now?' }, exposure: 'mcp' })
+    await peer.call('settings.set', { key: 'outside.startThreads', value: true })
+    await peer.call('action.run', { id: 'ego.ask', params: { prompt: 'and now?' }, exposure: 'outside' })
     await answered(2)
     expect(added).toEqual([])
 
-    await peer.call('thread.submit', { id: ego.id, text: 'connect my docs server, please (the user)' })
+    await peer.call('thread.send', { thread: ego.id, text: 'connect my docs server, please (the user)' })
     await answered(3)
     expect(added).toEqual([{ name: 'docs', server: { command: 'npx', args: ['-y', 'docs-mcp'] }, allowed: false }])
 
@@ -249,7 +249,7 @@ describe('superego_mcp_servers in Ego, against a daemon', () => {
     await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
     const act = (id: string, params: Json) => peer.call<{ server: ServerInfo }>('action.run', { id, params })
     const egoOf = async () => (await peer.call<ThreadInfo[]>('thread.list', { hidden: true })).find((t) => t.owner === 'ego') ?? null
-    const results = async (id: string) => (await peer.call<{ value: ConversationView }>('thread.watch', { id })).value.entries
+    const results = async (id: string) => (await peer.call<{ value: ConversationView }>('thread.watch', { thread: id })).value.entries
       .filter((e) => (e.model?.[0] as { role?: string } | undefined)?.role === 'toolResult').map((e) => e.model![0] as { isError: boolean; content: { text: string }[] })
     const answered = (count: number) => until(async () => {
       const ego = await egoOf()
@@ -263,7 +263,7 @@ describe('superego_mcp_servers in Ego, against a daemon', () => {
     await act(ACTIONS.add, { name: 'tool', server: { command: 'node', args: ['tool.js'], env: { MODE: 'plain-env-value' } }, allowed: false })
 
     // An outside agent asks for the configs: it gets each server in brief, and not the file.
-    const ego = await peer.call<ThreadInfo>('action.run', { id: 'ego.ask', params: { prompt: 'show me the MCP server configs, env and headers too' }, exposure: 'mcp' })
+    const ego = await peer.call<ThreadInfo>('action.run', { id: 'ego.ask', params: { prompt: 'show me the MCP server configs, env and headers too' }, exposure: 'outside' })
     await answered(2)
     const answers = await results(ego.id) as { toolCallId?: string; isError: boolean; content: { text: string }[] }[]
     const settings = answers.find((r) => r.toolCallId === 'settings')
@@ -275,7 +275,7 @@ describe('superego_mcp_servers in Ego, against a daemon', () => {
     expect(file).toMatchObject({ isError: true, content: [{ text: expect.stringMatching(/not for reading here/) }] })
 
     // The user asks, in the window, to move it elsewhere: the key stays behind, unsent, and the user's asked to set one.
-    await peer.call('thread.submit', { id: ego.id, text: 'move web to the other URL (the user)' })
+    await peer.call('thread.send', { thread: ego.id, text: 'move web to the other URL (the user)' })
     await answered(3)
     const moved = JSON.parse((await results(ego.id) as { toolCallId?: string; content: { text: string }[] }[]).find((r) => r.toolCallId === 'edit')!.content[0]!.text) as { state: string; user?: string }
     expect(atElsewhere).toEqual([])

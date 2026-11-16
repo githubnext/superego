@@ -61,9 +61,9 @@ export const lead: Task = {
     const asked = Date.now() - 1000
     let probe: Thread
     try {
-      probe = await world.rpc.call('thread.create', { cwd: world.project, title: 'Lead probe', prompt: JOB, ...(pick.name === 'default' ? {} : { profile: pick.name }) })
+      probe = await world.rpc.call('thread.start', { cwd: world.project, title: 'Lead probe', prompt: JOB, ...(pick.name === 'default' ? {} : { profile: pick.name }) })
     } catch (error) {
-      notes.push(`thread.create failed: ${(error as Error).message}`)
+      notes.push(`thread.start failed: ${(error as Error).message}`)
       return { pass: false, checks, notes, cost }
     }
     // Until the lead and everything under it are quiet (reports take a few seconds to arrive), 10 minutes or $2 at most.

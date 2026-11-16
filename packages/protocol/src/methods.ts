@@ -197,45 +197,45 @@ export type Methods = {
   'ch.open': { params: { ch: string; kind: string; params?: unknown; window: number }; result: { window: number } }
   /** The threads, newest first; `archived` lists the ones put away instead, `hidden` those in no list (extensions' own). */
   'thread.list': { params: { archived?: boolean; hidden?: boolean }; result: ThreadInfo[] }
-  'thread.create': { params: NewThread; result: ThreadInfo }
+  'thread.start': { params: NewThread; result: ThreadInfo }
   'agent.models': { params: {}; result: ModelCatalog }
   /** A file in a thread's folder (not outside it), as text. */
   /** `mtimeMs` and `size`: its version, as `file.stat` says it (absent from older daemons). */
-  'file.read': { params: { id: ThreadId; path: string; base64?: boolean }; result: { path: string; content: string; mtimeMs?: number; size?: number } }
+  'file.read': { params: { thread: ThreadId; path: string; base64?: boolean }; result: { path: string; content: string; mtimeMs?: number; size?: number } }
   /** Which version of each file there is, without reading them (null: none, or not the thread's). Absent from older daemons. */
-  'file.stat': { params: { id: ThreadId; paths: string[] }; result: { files: (FileVersion | null)[] } }
+  'file.stat': { params: { thread: ThreadId; paths: string[] }; result: { files: (FileVersion | null)[] } }
   /** A file in a thread's folder, then `file.changed` whenever it changes on disk (by anyone), until unwatched. */
-  'file.watch': { params: { id: ThreadId; path: string }; result: { sub: string; content: string | null } }
+  'file.watch': { params: { thread: ThreadId; path: string }; result: { sub: string; content: string | null } }
   /**
    * What a path a message names points at in a thread's folder: a file (or a note by its name), or a `folder` (`''` the
    * folder itself), with the `line` it names. `path` is null when there's nothing, `outside` when it's past the folder.
    */
-  'file.find': { params: { id: ThreadId; name: string }; result: { path: string | null; folder?: boolean; line?: number; outside?: boolean } }
+  'file.find': { params: { thread: ThreadId; name: string }; result: { path: string | null; folder?: boolean; line?: number; outside?: boolean } }
   /** A profile's UI extensions: their entry modules, and a hash that changes when any of its files do. */
   'profile.ui': { params: ProfileRef; result: { hash: string; entries: string[] } }
   /** One module of a profile's UI, as JavaScript (types stripped); its own imports are left for the window to load. */
   'profile.module': { params: ProfileRef & { path: string }; result: { path: string; code: string } }
-  'thread.rename': { params: { id: ThreadId; title: string }; result: null }
+  'thread.rename': { params: { thread: ThreadId; title: string }; result: null }
   /**
    * Run a thread with another profile from its next turn: by name, as `profile.list` gives them for its folder; none,
    * the default there (none of those either: no profile). The one it runs now, or null.
    */
-  'thread.setProfile': { params: { id: ThreadId; profile?: string }; result: ProfileRef | null }
-  'thread.submit': { params: { id: ThreadId; text: string; attachments?: AttachmentRef[]; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
-  'thread.abort': { params: { id: ThreadId }; result: null }
+  'thread.setProfile': { params: { thread: ThreadId; profile?: string }; result: ProfileRef | null }
+  'thread.send': { params: { thread: ThreadId; text: string; attachments?: AttachmentRef[]; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
+  'thread.stop': { params: { thread: ThreadId }; result: null }
   /** Take back a message sent while the agent was busy, still waiting its turn (an item of the thread's `pi.inbox`). */
-  'thread.withdraw': { params: { id: ThreadId; submission: string }; result: null }
+  'thread.withdraw': { params: { thread: ThreadId; submission: string }; result: null }
   /**
    * Send a follow-up waiting for the agent to finish now: the same item becomes a steer, going in after the current
    * step. `steers`, or what became of it first: `placed` (gone in already), `settled` (taken back, or done).
    */
-  'thread.steer': { params: { id: ThreadId; submission: string }; result: { status: 'steers' | 'placed' | 'settled' } }
+  'thread.steer': { params: { thread: ThreadId; submission: string }; result: { status: 'steers' | 'placed' | 'settled' } }
   /** The user looked at the thread: its done/error status clears. */
-  'thread.seen': { params: { id: ThreadId }; result: null }
+  'thread.seen': { params: { thread: ThreadId }; result: null }
   /** Entries older than `before` (an entry id), oldest first: scrolling back past a watch's window. */
-  'thread.history': { params: { id: ThreadId; before: number; limit?: number }; result: { entries: unknown[]; more: boolean } }
+  'thread.history': { params: { thread: ThreadId; before: number; limit?: number }; result: { entries: unknown[]; more: boolean } }
   /** Snapshot of the conversation view, then `watch.ops` notifications with Chord delta ops against it. */
-  'thread.watch': { params: { id: ThreadId }; result: { sub: string; value: ConversationView } }
+  'thread.watch': { params: { thread: ThreadId }; result: { sub: string; value: ConversationView } }
   /**
    * Snapshot of the thread list, then `threads.changed` notifications with the whole list. `hidden`: the threads no list
    * shows instead (extensions' own), for a window showing one.

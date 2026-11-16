@@ -86,7 +86,7 @@ type ThreadMeta = {
   ext?: Record<string, Json>
   /** Where its transcript starts now: the entry after the reset that last cleared it (`threads.clear`). */
   cleared?: number
-  /** The thread that started it (by thread_start, or thread.create's `parent`). */
+  /** The thread that started it (by thread_start, or thread.start's `parent`). */
   parent?: string
 }
 const ThreadDoc = defineDoc<ThreadMeta>({
@@ -245,8 +245,8 @@ function inFolder(folder: string, path: string) {
 }
 
 /** Attachments: what one may weigh, and how small a text file is to be shown to the model whole. */
-/** The setting that lets outside agents (MCP) start threads here. Off unless turned on. */
-export const MCP_THREADS = 'mcp.startThreads'
+/** The setting that lets outside agents (`superego mcp`) start threads here. Off unless turned on. */
+export const OUTSIDE_THREADS = 'outside.startThreads'
 const ATTACHMENT_LIMIT = 20 * 1024 * 1024
 /** An agent part as set up: as installed, how to take it away, and how to put another (of its name) in its place. */
 type Installed = { installed: Extension; undo(): void; replace(next: Extension): Extension }
@@ -417,7 +417,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const panesPart = defineExtension({
     name: 'panes',
     tools: [defineTool({
-      name: 'open_pane',
+      name: 'pane_open',
       description: 'Open a pane beside this conversation for the user to look at. The kinds there are, and the params each takes, are listed in your instructions under panes.',
       parameters: obj({ kind: str({ minLength: 1 }), title: opt(str()), params: opt(obj({}, { open: true, description: 'What the pane shows, as an object: { "path": "notes/a.md" }, not a string of JSON.' })) }),
       async execute({ kind, title, params }, api) {
@@ -430,7 +430,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     })],
     sections: [section('panes', ({ conversationId }) => {
       const kinds = panesOf(String(conversationId))
-      return `Panes you can open beside this conversation with open_pane, by kind:\n${kinds.map(({ kind, about }) => `- "${kind}": ${about}`).join('\n')}`
+      return `Panes you can open beside this conversation with pane_open, by kind:\n${kinds.map(({ kind, about }) => `- "${kind}": ${about}`).join('\n')}`
     })],
   })
   /**
@@ -791,7 +791,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const ref = await rebound(id)
     if (ref && !profileThere(ref)) {
       throw new RpcError('profile_missing', `No profile ${ref.name} at ${ref.dir}, nor one of that name for this thread's folder`, {
-        hint: `Give it another: ${options.app.id} do thread.setProfile --id ${id} --profile <name> (or none, for the default)`,
+        hint: `Give it another: ${options.app.id} do thread.setProfile --thread ${id} --profile <name> (or none, for the default)`,
       })
     }
     return ref
@@ -1221,8 +1221,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         of: (conversationId) => mounted.has(String(conversationId)) ? String(conversationId) : undefined,
         attachments: attachmentsOf,
         // An extension's attachments are inline: it has no connection to upload on.
-        create: ({ hidden, ...params }) => startThread({ ...params as Omit<NewThread, 'attachments'> & { attachments?: Attachment[] }, ...(hidden ? { hidden: extension.name } : {}), by: extension.name }),
-        async submit(id, text, { whenBusy = 'followUp', exposure } = {}) { await submit(id, text, randomUUID(), whenBusy, [], { by: extension.name, ...(exposure ? { exposure } : {}) }) },
+        start: ({ hidden, ...params }) => startThread({ ...params as Omit<NewThread, 'attachments'> & { attachments?: Attachment[] }, ...(hidden ? { hidden: extension.name } : {}), by: extension.name }),
+        async send(id, text, { whenBusy = 'followUp', exposure } = {}) { await submit(id, text, randomUUID(), whenBusy, [], { by: extension.name, ...(exposure ? { exposure } : {}) }) },
         lastAnswer: (id) => answerOf(id),
         entries: (id, limit = 20) => newest(id, limit),
         async archive(id, { whenIdle = false } = {}) {
@@ -1607,7 +1607,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   /**
    * Send `text` to a thread, with the model and thinking it chose, else what this machine's settings say now. `by`: the
-   * extension sending it (`threads.submit`, `threads.create`'s prompt); none for a client's (a window, the command line).
+   * extension sending it (`threads.send`, `threads.start`'s prompt); none for a client's (a window, the command line).
    * `exposure`: whom for, when a client ran it as the command line or an outside agent (`DaemonContext.exposure`).
    */
   async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp', attachments: Attachment[] = [], { by, exposure }: { by?: string; exposure?: Exposure } = {}) {
@@ -1728,27 +1728,27 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   // Outside agents (`superego mcp`) start threads only once this machine lets them: the tool isn't listed until then,
   // and refused if called anyway.
   settings.register({
-    id: 'mcp', title: 'Outside agents', order: 82,
+    id: 'outside', title: 'Outside agents', order: 82,
     description: `Agents using this machine through ${options.app.id} mcp.`,
     settings: [{
-      key: MCP_THREADS, title: 'Can start threads', default: false, type: { type: 'boolean' },
+      key: OUTSIDE_THREADS, title: 'Can start threads', default: false, type: { type: 'boolean' },
       description: "A thread one starts is like any other here: it has its profile's MCP servers, or those for threads without a profile.",
     }],
   })
   /** Why an outside agent may not run `id` now, of what's exposed to it; nothing when it may. */
-  const mcpRefusal = (id: string) => id === 'thread.create' && settings.get(MCP_THREADS) !== true
+  const outsideRefusal = (id: string) => id === 'thread.start' && settings.get(OUTSIDE_THREADS) !== true
     ? new RpcError('not_allowed', "Outside agents can't start threads on this machine", { hint: 'Turn on Settings → Outside agents → Can start threads.' })
     : undefined
   router.register(defineAction({
-    id: 'thread.create', title: 'Start a thread (no dialog)', runs: 'machine', expose: ['ui', 'cli', 'mcp'],
-    description: 'Start a thread: an agent working in `cwd` (default: the machine\'s), with `prompt` as its first message. Its id comes back; thread.submit sends it more.',
+    id: 'thread.start', title: 'Start a thread (no dialog)', runs: 'machine', expose: ['ui', 'cli', 'outside'],
+    description: 'Start a thread: an agent working in `cwd` (default: the machine\'s), with `prompt` as its first message. Its id comes back; thread.send sends it more.',
     params: obj({
       cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), attachments: opt(arr(ATTACHMENT)), profile: opt(str()),
       worktree: opt(bool()), parent: opt(str()), options: opt(obj({}, { open: true })),
     }),
     // Uploads are inline again by now (see connection.ts).
     run(params, { exposure }) {
-      const refused = exposure === 'mcp' && mcpRefusal('thread.create')
+      const refused = exposure === 'outside' && outsideRefusal('thread.start')
       if (refused) throw refused
       return startThread({ ...params as Omit<NewThread, 'attachments'> & { attachments?: Attachment[] }, ...(exposure ? { exposure } : {}) })
     },
@@ -1855,8 +1855,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     await tellPaneClosed(id, closed)
   }
   router.register(defineAction({
-    id: 'profile.list', title: 'List profiles', runs: 'machine', expose: ['ui', 'cli', 'mcp'],
-    description: 'The profiles a thread in `cwd` could start with (thread.create\'s `profile`), and whether each may run.',
+    id: 'profile.list', title: 'List profiles', runs: 'machine', expose: ['ui', 'cli', 'outside'],
+    description: 'The profiles a thread in `cwd` could start with (thread.start\'s `profile`), and whether each may run.',
     params: obj({ cwd: opt(str()) }),
     async run({ cwd }) {
       const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
@@ -1892,22 +1892,22 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   }))
   router.register(defineAction({
-    id: 'thread.submit', title: 'Send a message', runs: 'machine', expose: ['ui', 'cli', 'mcp'], ...thread,
+    id: 'thread.send', title: 'Send a message', runs: 'machine', expose: ['ui', 'cli', 'outside'], ...thread,
     description: 'Send a thread a message. While it works, `whenBusy` says how: `steer` (now) or `followUp` (after this turn).',
-    params: obj({ id: str(), text: str(), attachments: opt(arr(ATTACHMENT)), requestId: opt(str()), whenBusy: opt(union([lit('steer'), lit('followUp')])) }),
-    run: async ({ id, text, attachments, requestId, whenBusy }, { exposure }) => ({ submission: await submit(id, text, requestId ?? randomUUID(), whenBusy, attachments, exposure ? { exposure } : {}) }),
+    params: obj({ thread: str(), text: str(), attachments: opt(arr(ATTACHMENT)), requestId: opt(str()), whenBusy: opt(union([lit('steer'), lit('followUp')])) }),
+    run: async ({ thread: id, text, attachments, requestId, whenBusy }, { exposure }) => ({ submission: await submit(id, text, requestId ?? randomUUID(), whenBusy, attachments, exposure ? { exposure } : {}) }),
   }))
   router.register(defineAction({
-    id: 'thread.abort', title: 'Stop the agent', runs: 'machine', expose: ['ui', 'cli', 'mcp'], ...thread,
+    id: 'thread.stop', title: 'Stop the agent', runs: 'machine', expose: ['ui', 'cli', 'outside'], ...thread,
     description: 'Stop a thread\'s agent mid-turn. The thread stays, and takes messages again.',
-    params: obj({ id: str() }),
-    async run({ id }) { await (await get(id)).conversation.abort(context); return null },
+    params: obj({ thread: str() }),
+    async run({ thread: id }) { await (await get(id)).conversation.abort(context); return null },
   }))
   router.register(defineAction({
     id: 'thread.withdraw', title: 'Take back a message waiting its turn', runs: 'machine', expose: ['ui', 'cli'], ...thread,
-    params: obj({ id: str(), submission: str() }),
+    params: obj({ thread: str(), submission: str() }),
     // Gone in already (or settled), it stays: only what still waits can be taken back.
-    async run({ id, submission }) {
+    async run({ thread: id, submission }) {
       await get(id)
       await harness.abortSubmission(Number(submission) as SubmissionId, context, Number(id) as ConversationId)
       return null
@@ -1916,8 +1916,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   router.register(defineAction({
     id: 'thread.steer', title: 'Send a waiting message now', runs: 'machine', expose: ['ui', 'cli'], ...thread,
     description: 'Send a follow-up waiting for the agent to finish now: it becomes a steer, going in after the current step. The agent isn\'t stopped. `status`: `steers`, or what became of it first (`placed`: gone in already; `settled`: taken back or done).',
-    params: obj({ id: str(), submission: str() }),
-    async run({ id, submission }) {
+    params: obj({ thread: str(), submission: str() }),
+    async run({ thread: id, submission }) {
       const m = await get(id)
       const sid = Number(submission) as SubmissionId
       if (!Number.isInteger(sid)) throw new RpcError('invalid', `No message ${submission} in this thread`)
@@ -1936,9 +1936,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     },
   }))
   router.register(defineAction({
-    id: 'thread.archive', title: 'Archive the thread', runs: 'machine', expose: ['ui', 'cli', 'mcp'], keys: 'mod+shift+e', ...thread,
-    params: obj({ id: str() }),
-    async run({ id }) {
+    id: 'thread.archive', title: 'Archive the thread', runs: 'machine', expose: ['ui', 'cli', 'outside'], keys: 'mod+shift+e', ...thread,
+    params: obj({ thread: str() }),
+    async run({ thread: id }) {
       return await archive(id)
     },
   }))
@@ -1997,19 +1997,19 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     await (await get(id)).conversation.submit({ type: 'write', entry: { kind: NOTE_ENTRY, data: { text } } }, context)
   }
   router.register(defineAction({
-    id: 'thread.unarchive', title: 'Unarchive the thread', runs: 'machine', expose: ['ui', 'cli', 'mcp'], ...thread,
-    params: obj({ id: str() }),
-    async run({ id }) { await unarchive(id); return null },
+    id: 'thread.unarchive', title: 'Unarchive the thread', runs: 'machine', expose: ['ui', 'cli', 'outside'], ...thread,
+    params: obj({ thread: str() }),
+    async run({ thread: id }) { await unarchive(id); return null },
   }))
   router.register(defineAction({
-    id: 'pane.open', title: 'Open a pane', runs: 'machine', expose: ['ui', 'cli', 'mcp'], ...thread,
-    params: obj({ id: str(), kind: str({ minLength: 1 }), title: opt(str()), params: opt(unknown()) }),
-    run: ({ id, kind, title, params }) => openPane(id, { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}) }),
+    id: 'pane.open', title: 'Open a pane', runs: 'machine', expose: ['ui', 'cli', 'outside'], ...thread,
+    params: obj({ thread: str(), kind: str({ minLength: 1 }), title: opt(str()), params: opt(unknown()) }),
+    run: ({ thread: id, kind, title, params }) => openPane(id, { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}) }),
   }))
   router.register(defineAction({
     id: 'pane.update', title: 'Change what a pane shows', runs: 'machine', expose: ['ui', 'cli'], ...thread,
-    params: obj({ id: str(), pane: str(), title: opt(str()), params: opt(unknown()) }),
-    async run({ id, pane, title, params }) {
+    params: obj({ thread: str(), pane: str(), title: opt(str()), params: opt(unknown()) }),
+    async run({ thread: id, pane, title, params }) {
       await get(id)
       let found = false
       await updateMeta(id, (meta) => {
@@ -2026,8 +2026,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }))
   router.register(defineAction({
     id: 'pane.close', title: 'Close a pane', runs: 'machine', expose: ['ui', 'cli'], ...thread,
-    params: obj({ id: str(), pane: str() }),
-    async run({ id, pane }) {
+    params: obj({ thread: str(), pane: str() }),
+    async run({ thread: id, pane }) {
       await get(id)
       let closed: Pane | undefined
       await updateMeta(id, (meta) => {
@@ -2048,8 +2048,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }))
   router.register(defineAction({
     id: 'pane.focus', title: 'Bring a pane to the front', runs: 'machine', expose: ['ui', 'cli'], ...thread,
-    params: obj({ id: str(), pane: opt(str()) }),
-    async run({ id, pane }) {
+    params: obj({ thread: str(), pane: opt(str()) }),
+    async run({ thread: id, pane }) {
       await get(id)
       await updateMeta(id, (meta) => { if (pane && meta.panes?.some((p) => p.id === pane)) meta.pane = pane; else delete meta.pane })
       changed()
@@ -2058,23 +2058,23 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }))
   router.register(defineAction({
     id: 'file.write', title: 'Save a file', runs: 'machine', expose: ['ui', 'cli'], ...thread,
-    params: obj({ id: str(), path: str({ minLength: 1 }), content: str() }),
-    async run({ id, path, content }) {
+    params: obj({ thread: str(), path: str({ minLength: 1 }), content: str() }),
+    async run({ thread: id, path, content }) {
       const file = editable((await get(id)).meta.cwd, path)
       await writeFile(file, content)
       return { path: file }
     },
   }))
   router.register(defineAction({
-    id: 'thread.rename', title: 'Rename the thread', runs: 'machine', expose: ['ui', 'cli', 'mcp'], ...thread,
-    params: obj({ id: str(), title: str({ minLength: 1 }) }),
-    async run({ id, title }) { await updateMeta(id, (meta) => { meta.title = title }); return null },
+    id: 'thread.rename', title: 'Rename the thread', runs: 'machine', expose: ['ui', 'cli', 'outside'], ...thread,
+    params: obj({ thread: str(), title: str({ minLength: 1 }) }),
+    async run({ thread: id, title }) { await updateMeta(id, (meta) => { meta.title = title }); return null },
   }))
   router.register(defineAction({
     id: 'thread.setProfile', title: "Change the thread's profile", runs: 'machine', expose: ['ui', 'cli'], ...thread,
     description: "Run the thread with another profile from its next turn: `profile` by name, as profile.list gives them for its folder; none, the default (if there's none of those, plain Superego). Refused while it runs, and for a project's profile not allowed yet (profile.allow).",
-    params: obj({ id: str(), profile: opt(str()) }),
-    async run({ id, profile: name }) {
+    params: obj({ thread: str(), profile: opt(str()) }),
+    async run({ thread: id, profile: name }) {
       const m = await get(id)
       if (m.meta.owner) throw new RpcError('invalid', `This thread is the ${m.meta.owner} extension's: it runs as that extension makes it`)
       if (m.live?.run) throw new RpcError('busy', 'This thread is working', { hint: 'Change its profile once it finishes.' })
@@ -2091,8 +2091,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }))
   router.register(defineAction({
     id: 'thread.seen', title: 'Mark as seen', runs: 'machine', expose: ['ui', 'cli'], ...thread,
-    params: obj({ id: str() }),
-    async run({ id }) {
+    params: obj({ thread: str() }),
+    async run({ thread: id }) {
       const m = await get(id)
       const seen: NonNullable<ThreadMeta['seen']> = {}
       if (m.lastEntryId !== undefined) seen.entryId = m.lastEntryId
@@ -2219,7 +2219,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         'relay.call': ({ machine: target, method, params }: Methods['relay.call']['params']) => relayed.call(target, method, params),
         'thread.list': ({ archived, hidden }: { archived?: boolean; hidden?: boolean } = {}) => list({ archived: Boolean(archived), hidden: Boolean(hidden) }),
         'agent.models': async () => agent.catalog(),
-        'file.read': async ({ id, path, base64 }: { id: string; path: string; base64?: boolean }) => {
+        'file.read': async ({ thread: id, path, base64 }: { thread: string; path: string; base64?: boolean }) => {
           const file = threadFile((await get(id)).meta.cwd, id, path)
           const info = await stat(file).catch(() => undefined)
           if (!info?.isFile()) throw new RpcError('not_found', `No file ${path}`)
@@ -2228,7 +2228,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         },
         // Which version of each file there is, without its bytes: what the window checks its images against. A path
         // file.read wouldn't read, or no file, is null.
-        'file.stat': async ({ id, paths }: { id: string; paths: string[] }) => {
+        'file.stat': async ({ thread: id, paths }: { thread: string; paths: string[] }) => {
           const { cwd } = (await get(id)).meta
           return {
             files: await Promise.all(paths.map(async (path) => {
@@ -2237,7 +2237,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
             })),
           }
         },
-        'file.find': async ({ id, name }: { id: string; name: string }) => locate((await get(id)).meta.cwd, name),
+        'file.find': async ({ thread: id, name }: { thread: string; name: string }) => locate((await get(id)).meta.cwd, name),
         // A profile's UI is its code too: served only for a real profile folder, and only once it is allowed.
         'profile.ui': async (ref: ProfileRef) => {
           // One that was loaded and is gone now is let go of (profileOf), and the window's UI of it with it.
@@ -2252,7 +2252,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           return profileModule(ref.dir, path)
         },
         /** Older entries than a watch's window holds: the page before `before`, oldest first, and whether there are more. */
-        async 'thread.history'({ id, before, limit = 50 }: { id: string; before: number; limit?: number }) {
+        async 'thread.history'({ thread: id, before, limit = 50 }: { thread: string; before: number; limit?: number }) {
           const m = await get(id)
           const page = await m.conversation.entries({ maxEntryId: (before - 1) as EntryId, order: 'descending' }, Math.min(Math.max(1, limit), 200), undefined, context)
           // A cleared thread's history starts where it was cleared.
@@ -2260,7 +2260,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           const entries = [...page.items].reverse().filter((e) => Number(e.id) >= start)
           return { entries, more: page.next !== undefined && entries.length === page.items.length }
         },
-        async 'thread.watch'({ id }: { id: string }) {
+        async 'thread.watch'({ thread: id }: { thread: string }) {
           const m = await get(id)
           const from = m.meta.cleared
           const watch = await m.conversation.watch(context, from !== undefined ? { from: from as EntryId } : undefined)
@@ -2293,7 +2293,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           return { sub, value }
         },
         'settings.watch': serveSettings(settings, (params) => notify('settings.changed', params), subs)['settings.watch'],
-        async 'file.watch'({ id, path }: { id: string; path: string }) {
+        async 'file.watch'({ thread: id, path }: { thread: string; path: string }) {
           const file = editable((await get(id)).meta.cwd, path)
           const read = () => stat(file).then((info) => info.isFile() && info.size <= 16 * 1024 * 1024 ? readFile(file, 'utf8') : null, () => null)
           let last = await read()
@@ -2318,7 +2318,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           return null
         },
         /** Every action here, as data: id, title, params schema, who may run it; given `exposure`, those it may run now. */
-        'action.list': async ({ exposure }: { exposure?: Exposure } = {}) => router.list(exposure).filter((a) => exposure !== 'mcp' || !mcpRefusal(a.id)),
+        'action.list': async ({ exposure }: { exposure?: Exposure } = {}) => router.list(exposure).filter((a) => exposure !== 'outside' || !outsideRefusal(a.id)),
         /** Run an action by id, as `exposure` (the command line passes `cli`); params may be strings to coerce. */
         'action.run': ({ id, params, exposure }: { id: string; params?: unknown; exposure?: Exposure }) =>
           router.dispatch(id, params, { notify, source: client, ...(exposure ? { exposure } : {}) }, { source: exposure ?? client, client: by(), ...(exposure ? { exposure } : {}) }),
@@ -2433,7 +2433,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         web = await serveWeb({ root: options.webRoot!, port, devices: webDevices, serve: daemon.serve,
           tailscale: () => served && { ...served, pairOwner: pairOwner(), nodeAt },
           artifact: async (thread, path, elsewhere) => elsewhere
-            ? Buffer.from((await relay.call(elsewhere, 'file.read', { id: thread, path, base64: true }) as { content: string }).content, 'base64')
+            ? Buffer.from((await relay.call(elsewhere, 'file.read', { thread, path, base64: true }) as { content: string }).content, 'base64')
             : readFile(inFolder((await get(thread)).meta.cwd, path)) })
       } catch (error) {
         webError = (error as Error).message

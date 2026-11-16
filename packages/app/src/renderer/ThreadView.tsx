@@ -131,7 +131,7 @@ function TitleField({ machine, thread }: { machine: MachineEntry; thread: Thread
     done.current = true
     stopRename()
     const next = title?.trim()
-    if (next && next !== thread.title) void dispatch('thread.rename', { id: thread.id, title: next }, { machine: machine.id, source: 'titlebar' }).catch((error) => console.error(error))
+    if (next && next !== thread.title) void dispatch('thread.rename', { thread: thread.id, title: next }, { machine: machine.id, source: 'titlebar' }).catch((error) => console.error(error))
   }
   return (
     <input className="titlebar__field" aria-label="Thread title" defaultValue={thread.title} autoFocus spellCheck={false}
@@ -168,7 +168,7 @@ export function ThreadTools({ machine, thread, panes = true }: { machine: Machin
         : thread.archived
         ? <UnarchiveButton machine={machine} thread={thread} />
         : (
-          <IconButton label="Archive (⌘⇧E)" className="thread__archive" onClick={() => void dispatch('thread.archive', { id: thread.id }, { machine: machine.id, source: 'header' })}>
+          <IconButton label="Archive (⌘⇧E)" className="thread__archive" onClick={() => void dispatch('thread.archive', { thread: thread.id }, { machine: machine.id, source: 'header' })}>
             <ArchiveIcon size={15} aria-hidden />
           </IconButton>
         )}
@@ -180,7 +180,7 @@ export function ThreadTools({ machine, thread, panes = true }: { machine: Machin
 function UnarchiveButton({ machine, thread, className = '' }: { machine: MachineEntry; thread: ThreadInfo; className?: string }) {
   const dispatch = useRegistry().router.dispatch
   return (
-    <Button className={`thread__unarchive ${className}`} onClick={() => void dispatch('thread.unarchive', { id: thread.id }, { machine: machine.id, source: 'header' }).catch((error) => console.error(error))}>
+    <Button className={`thread__unarchive ${className}`} onClick={() => void dispatch('thread.unarchive', { thread: thread.id }, { machine: machine.id, source: 'header' }).catch((error) => console.error(error))}>
       <ArrowCounterClockwiseIcon size={14} aria-hidden /> Unarchive
     </Button>
   )
@@ -204,14 +204,14 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
   threadRef.current = thread
   const openFile = useCallback(async (name: string): Promise<string | undefined> => {
     try {
-      const found = await client(machine.id).call('file.find', { id: thread.id, name })
+      const found = await client(machine.id).call('file.find', { thread: thread.id, name })
       const folder = shortPath(threadRef.current.cwd)
       if (found.outside) return `outside ${folder}, where this thread works`
       if (found.path === null) return `not in ${folder}`
       const where = { machine: machine.id, thread: threadRef.current }
       const kind = found.folder ? folderKind(registry, where) : fileKind(registry, where, found.path)
       if (!kind) return found.folder ? 'a folder, and nothing here shows folders' : 'a file, and nothing here shows files'
-      await dispatch('pane.open', { id: thread.id, kind, params: { path: found.path, ...(found.line ? { line: found.line } : {}) } }, { machine: machine.id, source: 'thread' })
+      await dispatch('pane.open', { thread: thread.id, kind, params: { path: found.path, ...(found.line ? { line: found.line } : {}) } }, { machine: machine.id, source: 'thread' })
       return undefined
     } catch (error) { return (error as Error).message }
   }, [machine.id, thread.id, registry])
@@ -221,7 +221,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
   const openUrl = useCallback((url: string) => {
     if (!webKind) return
     const host = URL.parse(url)?.host
-    void dispatch('pane.open', { id: thread.id, kind: webKind, ...(host ? { title: host } : {}), params: { url } }, { machine: machine.id, source: 'thread' })
+    void dispatch('pane.open', { thread: thread.id, kind: webKind, ...(host ? { title: host } : {}), params: { url } }, { machine: machine.id, source: 'thread' })
       .catch((error) => console.error(error))
   }, [machine.id, thread.id, webKind])
   const watched = useThreadView(machine.id, machine.state === 'connected', thread.id)
@@ -258,7 +258,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
     const first = entries[0]
     if (!el || !first || atStart || older.loading) return
     setOlder((o) => ({ ...o, loading: true }))
-    void client(machine.id).call('thread.history', { id: thread.id, before: first.id as number, limit: 50 }).then(({ entries: page, more }) => {
+    void client(machine.id).call('thread.history', { thread: thread.id, before: first.id as number, limit: 50 }).then(({ entries: page, more }) => {
       keep.current = { height: el.scrollHeight, top: el.scrollTop }
       for (const entry of page as EntryRecord[]) seen.current.set(entry.id as number, entry)
       setOlder({ more: more && page.length > 0, loading: false })
@@ -418,7 +418,7 @@ function Queued({ machine, thread, inbox }: { machine: MachineEntry; thread: Thr
   const steerable = useActions(machine.id).some((action) => action.id === 'thread.steer')
   const items = (inbox?.items ?? []).filter((item) => item.mode !== 'write')
   if (!items.length) return null
-  const act = (id: 'thread.withdraw' | 'thread.steer', submission: string) => void dispatch(id, { id: thread.id, submission }, { machine: machine.id, source: 'composer' })
+  const act = (id: 'thread.withdraw' | 'thread.steer', submission: string) => void dispatch(id, { thread: thread.id, submission }, { machine: machine.id, source: 'composer' })
     .catch((error) => console.error(error))
   const firstFollowUp = items.find((item) => item.mode === 'followUp')
   return (
@@ -822,8 +822,8 @@ function Composer({ machine, thread, busy, inbox, onJump }: { machine: MachineEn
     setError(undefined)
     try {
       if (claim) { await claim.submit(value); return }
-      await dispatch('thread.submit', {
-        id: thread.id, text: value, ...(sending.length ? { attachments: sending } : {}), requestId: crypto.randomUUID(), ...(busy ? { whenBusy } : {}),
+      await dispatch('thread.send', {
+        thread: thread.id, text: value, ...(sending.length ? { attachments: sending } : {}), requestId: crypto.randomUUID(), ...(busy ? { whenBusy } : {}),
       }, { machine: machine.id, source: 'composer' })
     } catch (error) {
       setText(value)
@@ -849,7 +849,7 @@ function Composer({ machine, thread, busy, inbox, onJump }: { machine: MachineEn
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [numbered])
-  const abort = () => dispatch('thread.abort', { id: thread.id }, { machine: machine.id, source: 'composer' })
+  const abort = () => dispatch('thread.stop', { thread: thread.id }, { machine: machine.id, source: 'composer' })
   // Its profile gone from under it: another picked for it (not from a daemon without thread.setProfile).
   const switchable = useActions(machine.id).some((action) => action.id === 'thread.setProfile')
   /** A project's profile the thread runs, changed (or found where its own moved): allowed as it is now, then sent. */
@@ -996,7 +996,7 @@ export function PaneMenu({ machine, thread, add = false }: { machine: MachineEnt
   const where = { machine: machine.id, thread }
   const kinds = paneMenu(registry, useLayout(where).placed, where)
   if (!kinds.length) return null
-  const open = (kind: string) => void registry.router.dispatch('pane.open', { id: thread.id, kind }, { machine: machine.id, source: 'header' })
+  const open = (kind: string) => void registry.router.dispatch('pane.open', { thread: thread.id, kind }, { machine: machine.id, source: 'header' })
   return (
     <Menu.Root>
       <Menu.Trigger render={<IconButton label="Open a pane beside" className="thread__panes" />}>

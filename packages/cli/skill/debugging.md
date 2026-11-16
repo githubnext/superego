@@ -4,13 +4,13 @@
 
 | What failed | Where it says so |
 |---|---|
-| a profile or its daemon extensions didn't load | the command or message that started a turn: `superego create -P <name>`, `superego send <thread> …`, the app's composer. Also `~/.superego/daemon.log` |
+| a profile or its daemon extensions didn't load | the command or message that started a turn: `superego start -P <name>`, `superego send <thread> …`, the app's composer. Also `~/.superego/daemon.log` |
 | a tool threw | the transcript, as the tool call's error result (the model sees it too) |
 | an action threw | its caller: `superego do …` prints it; `superego actions log` keeps the latest, with errors |
 | a profile's UI didn't load or a component threw | the window's developer tools console (View → Toggle Developer Tools, ⌥⌘I) |
 | the daemon itself | `~/.superego/daemon.log` |
 
-Load a profile without waiting for a model: `superego create . -P <name>` loads it and prints an error if it can't (and starts an
+Load a profile without waiting for a model: `superego start . -P <name>` loads it and prints an error if it can't (and starts an
 empty thread when it can: archive it after).
 With `SUPEREGO_MODEL=faux` in the daemon's environment, turns echo instead of calling a provider.
 

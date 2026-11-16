@@ -30,13 +30,13 @@ void (async () => {
   const state = (id) => `window.superego.call('local', 'thread.list', {}).then((list) => list.find((s) => s.id === '${id}')?.status.state)`
   /** Send `text` and wait for the answer: seen first, so "done" can only mean this run finished. */
   const turnOn = async (id, text) => {
-    await run(`window.superego.call('local', 'thread.seen', { id: '${id}' })`)
-    await run(`window.superego.call('local', 'thread.submit', { id: '${id}', text: ${JSON.stringify(text)} })`)
+    await run(`window.superego.call('local', 'thread.seen', { thread: '${id}' })`)
+    await run(`window.superego.call('local', 'thread.send', { thread: '${id}', text: ${JSON.stringify(text)} })`)
     await until(`${state(id)}.then((s) => s === 'done' || s === 'error')`, `answer in ${id}`)
   }
   const ids = []
   for (const thread of threads) {
-    const { id } = await run(`window.superego.call('local', 'thread.create', { cwd: ${JSON.stringify(project)} })`)
+    const { id } = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(project)} })`)
     ids.push(id)
     await turnOn(id, thread.prompt)
     for (const text of thread.followUps) await turnOn(id, text)
@@ -45,7 +45,7 @@ void (async () => {
   const out = process.env.SUPEREGO_SHOWCASE_OUT
   const shot = async (name) => writeFileSync(`${out}/${name}.png`, (await win().webContents.capturePage()).toPNG())
   for (const [index, id] of ids.entries()) {
-    await run(`window.superego.call('local', 'thread.seen', { id: '${id}' })`)
+    await run(`window.superego.call('local', 'thread.seen', { thread: '${id}' })`)
     await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.dataset.thread === '${id}' || li.textContent.includes(${JSON.stringify(threads[index].prompt.slice(0, 20))}))?.click()`)
     // Shown once the title bar names it and its transcript is in (a thread may be just a prompt and its answer).
     const title = await run(`window.superego.call('local', 'thread.list', {}).then((list) => list.find((t) => t.id === '${id}').title)`)
@@ -72,7 +72,7 @@ void (async () => {
   }
   // A Markdown file beside the first thread, rendered and in live preview, light and dark.
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.dataset.thread === '${ids[0]}' || li.textContent.includes(${JSON.stringify(threads[0].prompt.slice(0, 20))}))?.click()`)
-  await run(`window.superego.call('local', 'pane.open', { id: '${ids[0]}', kind: 'editor', params: { path: 'README.md' } })`)
+  await run(`window.superego.call('local', 'pane.open', { thread: '${ids[0]}', kind: 'editor', params: { path: 'README.md' } })`)
   for (const mode of ['Rendered', 'Live']) {
     await until(`document.querySelector('.file-editor__mode') && ([...document.querySelectorAll('.file-editor__mode button')].find((b) => b.textContent === '${mode}').click(), true)`, `${mode} shown`)
     for (const theme of ['light', 'dark']) {

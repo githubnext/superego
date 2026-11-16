@@ -58,7 +58,7 @@ it('lists, keys, logs and restarts MCP servers, and says which a thread has', { 
   expect(await json(['mcp-servers', 'restart', 'fx'])).toMatchObject({ name: 'fx', tools: 6 })
   await expect(superego(['mcp-servers', 'restart', 'nope'])).rejects.toThrow(/No MCP server nope/)
 
-  const thread = await json(['create', home, '-p', 'hi'])
+  const thread = await json(['start', home, '-p', 'hi'])
   await until(async () => (await json(['threads']))[0]?.status.state === 'done')
   expect(await superego(['extensions', '--thread', thread.id])).toMatch(/MCP servers \(as of its last turn\):\n\s+fx: this machine's, \w+, 6 tools/)
 })

@@ -39,7 +39,7 @@ export function ProfileSwitch({ machine, thread, onSwitched }: { machine: string
     setError(undefined)
     try {
       if (allow) await dispatch('profile.allow', { cwd: thread.cwd, name: choice!.name }, { machine, source: 'composer' })
-      await dispatch('thread.setProfile', { id: thread.id, ...(picked ? { profile: picked } : {}) }, { machine, source: 'composer' })
+      await dispatch('thread.setProfile', { thread: thread.id, ...(picked ? { profile: picked } : {}) }, { machine, source: 'composer' })
       onSwitched()
     } catch (e) {
       setError((e as Error).message)

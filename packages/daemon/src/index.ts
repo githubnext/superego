@@ -1,4 +1,4 @@
-export { MCP_THREADS, openDaemon, type Daemon, type DaemonOptions } from './daemon.ts'
+export { OUTSIDE_THREADS, openDaemon, type Daemon, type DaemonOptions } from './daemon.ts'
 export { listen, connectSocket } from './server.ts'
 export { appEnv, daemonStarting, defaultDataDir, socketPath, spawnDaemon } from './paths.ts'
 export { serveDaemon } from './serve.ts'

@@ -28,7 +28,7 @@ export const kanban: Task = {
     const checks: Record<string, boolean> = { pane_kind_found: false, pane_opens: false, renders_threads: false, columns_by_status: false, live_updates: false, in_default_profile: false }
     if (!probes.length) return { pass: false, checks, notes, cost: 0 }
 
-    for (const title of SEEDED) await world.rpc.call('thread.create', { cwd: world.project, title })
+    for (const title of SEEDED) await world.rpc.call('thread.start', { cwd: world.project, title })
     const shots = join(out, 'shots')
     mkdirSync(shots, { recursive: true })
     const resultFile = join(out, 'pane-check.json')

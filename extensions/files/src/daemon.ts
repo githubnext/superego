@@ -43,14 +43,14 @@ export default defineDaemonExtension({
   setup(superego) {
     // A short cache: the tree and quick open ask often, and a folder changes slowly.
     const cache = new Map<string, { at: number; list: Promise<FileList> }>()
-    superego.method(LIST, async ({ id }) => {
-      const { cwd } = await superego.threads.get(id)
+    superego.method(LIST, async ({ thread }) => {
+      const { cwd } = await superego.threads.get(thread)
       const hit = cache.get(cwd)
       if (hit && Date.now() - hit.at < 3_000) return hit.list
       const list = listFiles(cwd)
       cache.set(cwd, { at: Date.now(), list })
       return list
-    }, { params: obj({ id: str() }) })
+    }, { params: obj({ thread: str() }) })
     superego.pane(FOLDER, '{ path }: a folder in the working folder ("" for the folder itself), as a tree to open its files from')
   },
 })

@@ -50,7 +50,7 @@ export async function readThread(call: Call, id: string, { wait = false, signal,
     }
     return undefined
   }
-  const history = async () => (await call<{ entries: Entry[] }>('thread.history', { id, before: Number.MAX_SAFE_INTEGER, limit: 50 })).entries
+  const history = async () => (await call<{ entries: Entry[] }>('thread.history', { thread: id, before: Number.MAX_SAFE_INTEGER, limit: 50 })).entries
   let thread = await find()
   if (!thread) throw new RpcError('not_found', `No thread ${id} on ${label}`)
   const since = Date.now()

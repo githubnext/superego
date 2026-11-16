@@ -108,7 +108,7 @@ it('lists the machines it reaches, passes calls on, and brings their news back t
 
   const watch = await call<{ sub: string; value: ThreadInfo[] }>(a.peer, hub.box, 'threads.watch', {})
   expect(watch.value).toEqual([])
-  const thread = await call<ThreadInfo>(a.peer, hub.box, 'thread.create', { title: 'Over there' })
+  const thread = await call<ThreadInfo>(a.peer, hub.box, 'thread.start', { title: 'Over there' })
   await until(() => a.events.some((e) => e.machine === hub.box && e.method === 'threads.changed'
     && (e.params as Notifications['threads.changed']).sub === watch.sub && (e.params as Notifications['threads.changed']).value.some((t) => t.id === thread.id)))
   // b never called the box: none of its news.
@@ -133,14 +133,14 @@ it('passes large attachments on, uploaded to the hub and again to the machine', 
   const hub = await hubReaching(box)
   const a = await client(hub.socket)
   await until(() => a.machines().find((m) => m.id === hub.box)?.state === 'connected')
-  const thread = await call<ThreadInfo>(a.peer, hub.box, 'thread.create', { title: 'files' })
+  const thread = await call<ThreadInfo>(a.peer, hub.box, 'thread.start', { title: 'files' })
   const bytes = Buffer.alloc(300 * 1024, 'x')
   const id = await upload(a.peer, { name: 'big.txt', mimeType: 'text/plain', bytes })
-  await call(a.peer, hub.box, 'thread.submit', { id: thread.id, text: 'see', attachments: [{ name: 'big.txt', mimeType: 'text/plain', upload: id }] })
+  await call(a.peer, hub.box, 'thread.send', { thread: thread.id, text: 'see', attachments: [{ name: 'big.txt', mimeType: 'text/plain', upload: id }] })
   expect((await readFile(join(box.dataDir, 'attachments', thread.id, 'big.txt'))).equals(bytes)).toBe(true)
   // Through action.run too, as the window sends it.
   const again = await upload(a.peer, { name: 'again.txt', mimeType: 'text/plain', bytes })
-  await call(a.peer, hub.box, 'action.run', { id: 'thread.submit', params: { id: thread.id, text: 'more', attachments: [{ name: 'again.txt', mimeType: 'text/plain', upload: again }] } })
+  await call(a.peer, hub.box, 'action.run', { id: 'thread.send', params: { thread: thread.id, text: 'more', attachments: [{ name: 'again.txt', mimeType: 'text/plain', upload: again }] } })
   expect((await readFile(join(box.dataDir, 'attachments', thread.id, 'again.txt'))).equals(bytes)).toBe(true)
 })
 
@@ -171,7 +171,7 @@ it('lets an agent start a thread on another machine', async () => {
   const a = await client(hub.socket)
   await until(() => a.machines().find((m) => m.id === hub.box)?.state === 'connected')
 
-  const parent = await a.peer.call<ThreadInfo>('thread.create', { prompt: 'Have the box count its files', title: 'Parent' })
+  const parent = await a.peer.call<ThreadInfo>('thread.start', { prompt: 'Have the box count its files', title: 'Parent' })
   await until(async () => (await a.peer.call<ThreadInfo[]>('thread.list', {}))[0]?.status.state === 'done')
   const there = await call<ThreadInfo[]>(a.peer, hub.box, 'thread.list', {})
   expect(there).toHaveLength(1)
@@ -179,7 +179,7 @@ it('lets an agent start a thread on another machine', async () => {
   expect(there[0]!.parent).toBeUndefined()
   // Its own catalog has the parent only: the child lives over there.
   expect((await a.peer.call<ThreadInfo[]>('thread.list', {})).map((t) => t.id)).toEqual([parent.id])
-  const { value } = await a.peer.call<{ value: { entries: unknown[] } }>('thread.watch', { id: parent.id })
+  const { value } = await a.peer.call<{ value: { entries: unknown[] } }>('thread.watch', { thread: parent.id })
   const transcript = JSON.stringify(value.entries)
   expect(transcript).toContain('Box (id ')
   expect(transcript).toContain(`Started \\"Remote count\\" (thread ${there[0]!.id} on Box)`)

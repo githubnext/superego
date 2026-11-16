@@ -52,61 +52,61 @@ afterAll(async () => {
 
 it('starts threads only once the machine lets outside agents', async () => {
   // Off at first: no tool, and refused if called anyway, saying where to turn it on; the window's own way still works.
-  expect(await names()).not.toContain('thread_create')
-  const refused = await client.callTool({ name: 'thread_create', arguments: { cwd: home } })
+  expect(await names()).not.toContain('thread_start')
+  const refused = await client.callTool({ name: 'thread_start', arguments: { cwd: home } })
   expect(refused.isError).toBe(true)
   expect(text(refused)).toMatch(/can't start threads[\s\S]*Settings → Outside agents/)
-  await direct('action.run', { id: 'thread.create', params: { cwd: home, title: 'from the window' } })
+  await direct('action.run', { id: 'thread.start', params: { cwd: home, title: 'from the window' } })
 
   // Turned on: the list changes (told to the client), and it starts one.
   let told = false
   client.setNotificationHandler(ToolListChangedNotificationSchema, async () => { told = true })
-  await direct('settings.set', { key: 'mcp.startThreads', value: true })
+  await direct('settings.set', { key: 'outside.startThreads', value: true })
   await until(async () => told)
-  expect(await names()).toContain('thread_create')
+  expect(await names()).toContain('thread_start')
 }, 60_000)
 
-it('serves the actions exposed to mcp as tools, and logs their runs as mcp', async () => {
+it('serves the actions exposed to outside agents as tools, and logs their runs as outside', async () => {
   const { tools } = await client.listTools()
   const offered = tools.map((t) => t.name)
   expect(offered).toEqual(expect.arrayContaining([
-    'thread_create', 'thread_submit', 'thread_abort', 'thread_rename', 'thread_archive', 'thread_unarchive', 'pane_open', 'profile_list', 'ego_ask', 'thread_list', 'thread_read',
+    'thread_start', 'thread_send', 'thread_stop', 'thread_rename', 'thread_archive', 'thread_unarchive', 'pane_open', 'profile_list', 'ego_ask', 'thread_list', 'thread_read',
   ]))
   // Only those that opt in: nothing that changes settings, signs in or out, trusts a profile or restarts the daemon.
   for (const kept of ['settings_set', 'auth_login', 'profile_allow', 'daemon_restart', 'file_write', 'ego_clear']) expect(offered).not.toContain(kept)
-  expect(tools.find((t) => t.name === 'thread_rename')!.inputSchema).toMatchObject({ type: 'object', required: ['id', 'title'] })
+  expect(tools.find((t) => t.name === 'thread_rename')!.inputSchema).toMatchObject({ type: 'object', required: ['thread', 'title'] })
 
-  const created = JSON.parse(text(await client.callTool({ name: 'thread_create', arguments: { cwd: home, prompt: 'hi from mcp' } })))
+  const created = JSON.parse(text(await client.callTool({ name: 'thread_start', arguments: { cwd: home, prompt: 'hi from mcp' } })))
   expect(created).toMatchObject({ id: expect.any(String), title: 'hi from mcp' })
-  const read = JSON.parse(text(await client.callTool({ name: 'thread_read', arguments: { id: created.id, wait: true } })))
+  const read = JSON.parse(text(await client.callTool({ name: 'thread_read', arguments: { thread: created.id, wait: true } })))
   expect(read.thread).toMatchObject({ id: created.id, state: 'done' })
   expect(read.answer).toBeTruthy()
 
-  await client.callTool({ name: 'thread_rename', arguments: { id: created.id, title: 'named over mcp' } })
+  await client.callTool({ name: 'thread_rename', arguments: { thread: created.id, title: 'named over mcp' } })
   const listed = JSON.parse(text(await client.callTool({ name: 'thread_list', arguments: {} })))
   expect(listed.find((t: { id: string }) => t.id === created.id)).toMatchObject({ title: 'named over mcp' })
 
   // A refusal is the tool's error, not the server's.
-  const bad = await client.callTool({ name: 'thread_rename', arguments: { id: created.id } })
+  const bad = await client.callTool({ name: 'thread_rename', arguments: { thread: created.id } })
   expect(bad.isError).toBe(true)
   expect(text(bad)).toMatch(/title/)
   expect((await client.callTool({ name: 'settings_set', arguments: { key: 'agent.model', value: 'x' } })).isError).toBe(true)
 
   // A pane beside it; archived, and back.
-  await client.callTool({ name: 'pane_open', arguments: { id: created.id, kind: 'preview', params: { url: 'https://example.com' } } })
-  await client.callTool({ name: 'thread_archive', arguments: { id: created.id } })
-  const archived = JSON.parse(text(await client.callTool({ name: 'thread_read', arguments: { id: created.id } })))
+  await client.callTool({ name: 'pane_open', arguments: { thread: created.id, kind: 'preview', params: { url: 'https://example.com' } } })
+  await client.callTool({ name: 'thread_archive', arguments: { thread: created.id } })
+  const archived = JSON.parse(text(await client.callTool({ name: 'thread_read', arguments: { thread: created.id } })))
   expect(archived.thread).toMatchObject({ archived: true })
-  await client.callTool({ name: 'thread_unarchive', arguments: { id: created.id } })
+  await client.callTool({ name: 'thread_unarchive', arguments: { thread: created.id } })
   const back = await direct<{ id: string; panes?: { kind: string }[] }[]>('thread.list', {})
   expect(back.find((t) => t.id === created.id)?.panes).toEqual([expect.objectContaining({ kind: 'preview' })])
 
-  // The same log as the window's and the command line's, from mcp, by a client named for the MCP client.
+  // The same log as the window's and the command line's, from outside, by a client named for the MCP client.
   const { peer, socket } = await connectSocket(socketPath({ id: 'superego', name: 'Superego' }, home))
   try {
     const log = await peer.call<{ id: string; source: string; ok: boolean; client?: { kind: string; label: string } }[]>('action.log', {})
-    expect(log.find((e) => e.id === 'thread.rename' && e.ok)).toMatchObject({ source: 'mcp', client: { kind: 'superego-mcp', label: 'mcp-test (MCP)' } })
-    expect(log.some((e) => e.id === 'thread.create' && e.source === 'mcp')).toBe(true)
+    expect(log.find((e) => e.id === 'thread.rename' && e.ok)).toMatchObject({ source: 'outside', client: { kind: 'superego-mcp', label: 'mcp-test (outside agent)' } })
+    expect(log.some((e) => e.id === 'thread.start' && e.source === 'outside')).toBe(true)
   } finally {
     socket.destroy()
   }
@@ -115,11 +115,11 @@ it('serves the actions exposed to mcp as tools, and logs their runs as mcp', asy
 it("asks this machine's Ego, whose answer reads as any thread's, and which stays out of the list", async () => {
   const ego = JSON.parse(text(await client.callTool({ name: 'ego_ask', arguments: { prompt: 'how is this machine set up?' } })))
   expect(ego).toMatchObject({ id: expect.any(String), hidden: true, ext: { ego: true } })
-  await until(async () => JSON.parse(text(await client.callTool({ name: 'thread_read', arguments: { id: ego.id, wait: true } }))).answer !== undefined)
+  await until(async () => JSON.parse(text(await client.callTool({ name: 'thread_read', arguments: { thread: ego.id, wait: true } }))).answer !== undefined)
   const listed = JSON.parse(text(await client.callTool({ name: 'thread_list', arguments: {} })))
   expect(listed.some((t: { id: string }) => t.id === ego.id)).toBe(false)
   // Told that an outside agent asked: what its thread_start goes by (see extensions/ego's tests).
-  const { value } = await direct<{ value: { entries: { model?: { role: string; content: unknown }[] }[] } }>('thread.watch', { id: ego.id })
+  const { value } = await direct<{ value: { entries: { model?: { role: string; content: unknown }[] }[] } }>('thread.watch', { thread: ego.id })
   const asked = value.entries.find((e) => e.model?.[0]?.role === 'user')!.model![0]!.content
   expect(JSON.stringify(asked)).toMatch(/<outside-agent>[\s\S]*how is this machine set up\?/)
 }, 60_000)

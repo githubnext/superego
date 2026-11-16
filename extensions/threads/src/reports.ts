@@ -105,7 +105,7 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
     const info = (id: string) => s.threads.get(id).catch(() => undefined)
     const reports = reporter({
       info, answer: (id) => s.threads.lastAnswer(id), read: (thread) => reads.read(thread),
-      send: (id, text) => s.threads.submit(id, text, { whenBusy: 'followUp' }),
+      send: (id, text) => s.threads.send(id, text, { whenBusy: 'followUp' }),
     }, batching)
     // Whether a child works for its parent (see the top): set by the messages it's sent, false once the user writes.
     const working = s.state<boolean>()

@@ -13,7 +13,7 @@ command's usage, options and examples.
 
 ```sh
 superego [dir] [-p prompt] [-P profile] [-w]   # start a thread in dir (default: here) and open it in the app
-superego create [dir] [-p prompt] [-P profile] [-w]   # the same without the app; prints the id (also: new)
+superego start [dir] [-p prompt] [-P profile] [-w]   # the same without the app; prints the id (also: new)
 superego open <thread>                         # show a thread in the app
 superego send <thread> <text...>               # send a message
 superego threads [--archived]                  # list them (also: ls)
@@ -25,9 +25,9 @@ superego unread [--count]                      # what's done, failed or needs yo
   yours, or none.
 - `-w` gives the thread a git worktree of its own: `~/.superego/worktrees/<repo>/<slug>`, branch `superego/<slug>`.
 - On another machine (`-m`), `dir` is a path there.
-- `superego do thread.create --parent <thread> …` starts it as that thread's child (nested under it in the sidebar).
+- `superego do thread.start --parent <thread> …` starts it as that thread's child (nested under it in the sidebar).
   Inside a thread, agents have `thread_start`, `thread_read` (`wait: true`), `thread_send`, `thread_list` and
-  `thread_archive` (a thread that isn't working, or with no id their own, once the turn ends), and name threads in
+  `thread_archive` (a thread that isn't working, or with no `thread` their own, once the turn ends), and name threads in
   messages as `[title](thread:<id>)`.
 
 A thread's status is `idle`, `working`, `done`, `blocked` (waiting on the user: a question, say) or `error`. Blocked
@@ -36,7 +36,7 @@ once they change (`superego threads` says which provider, and how to sign in aga
 script, `read --wait` (it waits for the answer to a message just sent too; `--json` for `{ thread, answer }`):
 
 ```sh
-id=$(superego create . -p "Summarise the open TODOs")
+id=$(superego start . -p "Summarise the open TODOs")
 superego read "$id" --wait
 superego send "$id" "Now the tests" && superego read "$id" --wait
 ```
@@ -63,9 +63,9 @@ Useful ones:
 
 | Action | Does |
 |---|---|
-| `thread.create` `cwd? title? prompt? profile? model? worktree?` | start a thread |
-| `thread.submit` `id text whenBusy?=steer\|followUp` | send a message |
-| `thread.abort` `id` | stop the agent |
+| `thread.start` `cwd? title? prompt? profile? model? worktree?` | start a thread |
+| `thread.send` `id text whenBusy?=steer\|followUp` | send a message |
+| `thread.stop` `id` | stop the agent |
 | `thread.rename` `id title`, `thread.archive` `id`, `thread.unarchive` `id` | `thread.archive` answers `{ notes }`, what extensions did (its worktree removed, say). Ego is never archived |
 | `pane.open` `id kind title? params?` | open a pane beside a thread (`editor`, `thread`; `diff` from git, `preview` and `artifact` from web-panes; a profile's own) |
 | `pane.close` `id pane`, `pane.focus` `id pane?` | |
@@ -81,28 +81,29 @@ superego do pane.open --params '{"id":"<thread>","kind":"editor","params":{"path
 
 Extensions add their own actions (`ask-user.answer`, `vault.graph`); they show in the list too.
 
-## MCP
+## Outside agents
 
-`superego mcp` serves a machine's actions to an agent outside Superego, as an MCP server on stdio:
+`superego mcp` serves a machine's actions to agents outside Superego (outside agents), as an MCP server on stdio:
 
 ```sh
 claude mcp add superego -- superego mcp         # or {"command": "superego", "args": ["mcp"]} in a client's config
 superego mcp -m <machine>                       # one server per machine
 ```
 
-Each action exposed to `mcp` is a tool named for its id with `_` for `.` (`thread.create` is `thread_create`), its
-schema the action's; it runs through `action.run` with `exposure: 'mcp'`, so `superego actions log` shows it from `mcp`.
-Exposed: `thread.submit`, `thread.abort`, `thread.rename`, `thread.archive`, `thread.unarchive`, `pane.open`,
-`profile.list`, `ego.ask` (the machine's Ego; its answer comes as any thread's), and `thread.create` once the machine
+Each action exposed to `outside` is a tool named for its id with `_` for `.` (`thread.start` is `thread_start`, the
+same name as the tool agents inside have), its schema the action's; it runs through `action.run` with
+`exposure: 'outside'`, so `superego actions log` shows it from `outside`.
+Exposed: `thread.send`, `thread.stop`, `thread.rename`, `thread.archive`, `thread.unarchive`, `pane.open`,
+`profile.list`, `ego.ask` (the machine's Ego; its answer comes as any thread's), and `thread.start` once the machine
 allows it:
 
 ```sh
-superego settings set mcp.startThreads true   # Settings → Outside agents → Can start threads; off by default
+superego settings set outside.startThreads true   # Settings → Outside agents → Can start threads; off by default
 ```
 
-Two tools of the server's own read: `thread_list` (`archived?`) and `thread_read` (`id wait?`: its state and last
+Two tools of the server's own read: `thread_list` (`archived?`) and `thread_read` (`thread wait?`: its state and last
 answer, after it stops working with `wait`; Ego's thread too). Nothing that changes settings, signs in, trusts a
-profile, writes files or restarts the daemon is a tool; an extension's action becomes one by adding `'mcp'` to its
+profile, writes files or restarts the daemon is a tool; an extension's action becomes one by adding `'outside'` to its
 `expose`. The tools follow the machine's extensions and settings as they change (`tools/list_changed`).
 
 ## Profiles

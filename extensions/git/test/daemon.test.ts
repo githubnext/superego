@@ -42,25 +42,25 @@ it("reads a thread's changes by git: the diff against HEAD and the files not tra
   await writeFile(join(repo, 'new.md'), 'new\n')
   const { peer, hello, close } = await open()
   expect(hello.features).toContain('ext:git')
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: repo })
-  const changes = await peer.call<Changes>(DIFF, { id: thread.id })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: repo })
+  const changes = await peer.call<Changes>(DIFF, { thread: thread.id })
   expect(changes.repo).toBe(true)
   expect(changes.diff).toContain('-one')
   expect(changes.diff).toContain('+two')
   expect(changes.untracked).toEqual(['new.md'])
   // A read, not an action; and a folder that isn't a repository says so.
   expect((await peer.call<ActionInfo[]>('action.list', {})).map((a) => a.id)).not.toContain(DIFF)
-  const plain = await peer.call<ThreadInfo>('thread.create', { cwd: join(dir, 'data') })
-  expect(await peer.call<Changes>(DIFF, { id: plain.id })).toEqual({ diff: '', untracked: [], repo: false })
+  const plain = await peer.call<ThreadInfo>('thread.start', { cwd: join(dir, 'data') })
+  expect(await peer.call<Changes>(DIFF, { thread: plain.id })).toEqual({ diff: '', untracked: [], repo: false })
   await close()
 })
 
 it('tells the agent it can open Changes, unless the machine has git off', async () => {
   const { peer, close } = await open()
   const prompt = async (text: string) => {
-    const thread = await peer.call<ThreadInfo>('thread.create', { prompt: text })
+    const thread = await peer.call<ThreadInfo>('thread.start', { prompt: text })
     await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === thread.id)!.status.state === 'done')
-    return JSON.stringify((await peer.call<{ value: unknown }>('thread.watch', { id: thread.id })).value)
+    return JSON.stringify((await peer.call<{ value: unknown }>('thread.watch', { thread: thread.id })).value)
   }
   expect(await prompt('hi')).toContain('\\"diff\\": the changes in the working folder')
   await peer.call('settings.set', { key: 'extensions.git', value: false })
@@ -70,7 +70,7 @@ it('tells the agent it can open Changes, unless the machine has git off', async 
 
 it("refuses to open Changes for the agent where git is off, naming the kinds there are", async () => {
   const turn = (content: unknown[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
-  const call = (id: string) => turn([{ type: 'toolCall', id, name: 'open_pane', arguments: { kind: 'diff' } }], 'toolUse')
+  const call = (id: string) => turn([{ type: 'toolCall', id, name: 'pane_open', arguments: { kind: 'diff' } }], 'toolUse')
   await writeFile(join(dir, 'turns.jsonl'), [call('on'), turn([{ type: 'text', text: 'There.' }], 'stop'), call('off'), turn([{ type: 'text', text: 'There.' }], 'stop')].join('\n') + '\n')
   const data = join(dir, 'data')
   await mkdir(data)
@@ -83,15 +83,15 @@ it("refuses to open Changes for the agent where git is off, naming the kinds the
   type Result = { role?: string; toolCallId?: string; isError?: boolean; content?: { text?: string }[] }
   const results = async (id: string) => {
     await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)!.status.state === 'done')
-    const { value } = await peer.call<{ value: { entries: { model?: unknown[] }[] } }>('thread.watch', { id })
+    const { value } = await peer.call<{ value: { entries: { model?: unknown[] }[] } }>('thread.watch', { thread: id })
     return new Map(value.entries.map((e) => e.model?.[0] as Result | undefined).filter((m): m is Result => m?.role === 'toolResult').map((m) => [m.toolCallId!, m]))
   }
-  const on = await peer.call<ThreadInfo>('thread.create', { prompt: 'show me' })
+  const on = await peer.call<ThreadInfo>('thread.start', { prompt: 'show me' })
   expect((await results(on.id)).get('on')?.isError).toBeFalsy()
   expect((await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === on.id)!.panes?.map((p) => p.kind)).toEqual(['diff'])
 
   await peer.call('settings.set', { key: 'extensions.git', value: false })
-  const off = await peer.call<ThreadInfo>('thread.create', { prompt: 'show me' })
+  const off = await peer.call<ThreadInfo>('thread.start', { prompt: 'show me' })
   const refused = (await results(off.id)).get('off')!
   expect(refused.isError).toBe(true)
   expect(refused.content?.[0]?.text).toContain('no "diff" pane')

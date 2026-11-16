@@ -40,14 +40,14 @@ function groups(id: string, name: string): Entry[][] {
         examples: [`${id} unread --count`, `${id} unread --json | jq .count`],
       },
       {
-        use: 'create [dir] [-p prompt] [-P profile] [-w]', does: 'Start a thread without opening the app; prints its id (also: new)', options: [prompt, threadProfile, worktree],
-        examples: [`${id} create . -p "Summarise the open TODOs"`],
+        use: 'start [dir] [-p prompt] [-P profile] [-w]', does: 'Start a thread without opening the app; prints its id (also: new)', options: [prompt, threadProfile, worktree],
+        examples: [`${id} start . -p "Summarise the open TODOs"`],
       },
       { use: 'send <thread> <text...>', does: 'Send a message to a thread', examples: [`${id} send <thread> "Now the tests" && ${id} read <thread> --wait`] },
       {
         use: 'read <thread> [--wait]', does: 'Where a thread stands, and its last answer;\n--wait: once it has stopped working (on a message just sent too)',
         options: [['    --wait', 'Wait while it works, then print its answer']],
-        examples: [`id=$(${id} create . -p "Summarise the open TODOs")`, `${id} read "$id" --wait`],
+        examples: [`id=$(${id} start . -p "Summarise the open TODOs")`, `${id} read "$id" --wait`],
       },
     ],
     [
@@ -64,7 +64,7 @@ function groups(id: string, name: string): Entry[][] {
     [
       {
         use: 'extensions [--thread T]', does: "What each extension on this machine is, where it's from, how it stands and\nwhat it registered; with --thread, what that thread goes without, and why",
-        options: [['    --thread <id>', 'What that thread goes without, and why']],
+        options: [['    --thread <thread>', 'What that thread goes without, and why']],
       },
       {
         use: 'extension new <name> [--ui] [-P profile] [--user]', does: "Make an extension in this project's profile (or yours): data-only, or with a UI half",
@@ -110,10 +110,10 @@ function groups(id: string, name: string): Entry[][] {
       { use: 'actions [--all]', does: 'List the actions a machine takes from the command line (--all: every action)' },
       {
         use: "do <action> [--<param> <value>...] [--params '<json>']", does: "Run an action; values are coerced to the action's schema",
-        examples: [`${id} do thread.rename --id <thread> --title "Release notes"`],
+        examples: [`${id} do thread.rename --thread <thread> --title "Release notes"`],
       },
       { use: 'actions log', does: 'Its newest dispatches, from anywhere' },
-      { use: 'mcp', does: "Serve a machine's actions exposed to MCP as tools, over stdio, for agents elsewhere" },
+      { use: 'mcp', does: "Serve a machine's actions exposed to outside agents as MCP tools, over stdio" },
       { use: 'mcp-servers', does: "The MCP servers a machine's agents use (Settings → MCP servers): how each stands" },
       { use: 'mcp-servers logs <name> [--lines N]', does: 'Its log: stderr, log messages, connection errors (secrets hidden)' },
       { use: 'mcp-servers restart <name>', does: 'Stop it, forget that it failed, and start it again to check it' },
@@ -144,7 +144,7 @@ const wordsOf = (entry: Entry) => {
 }
 
 /** Other names commands go by, as the dispatch takes them. */
-const ALIASES: Record<string, string> = { ls: 'threads', new: 'create', profiles: 'profile' }
+const ALIASES: Record<string, string> = { ls: 'threads', new: 'start', profiles: 'profile' }
 
 /** The commands the table names, first words: what `superego <word>` runs rather than taking as a folder. */
 export function commandNames(): Set<string> {

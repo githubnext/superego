@@ -33,12 +33,12 @@ const find = async (peer: RpcPeer, id: string) => (await peer.call<ThreadInfo[]>
 const done = (peer: RpcPeer, id: string) => until(async () => (await find(peer, id))?.status.state === 'done')
 /** The extensions a thread's agent has, once a turn configured it. */
 async function partsOf(peer: RpcPeer, id: string) {
-  const { value } = await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { id })
+  const { value } = await peer.call<{ value: { docs: Record<string, unknown> } }>('thread.watch', { thread: id })
   return (value.docs['pi.agent'] as { extensions?: string[] } | undefined)?.extensions ?? []
 }
 /** The tool results in a thread's transcript, as text. */
 async function results(peer: RpcPeer, id: string) {
-  const { value } = await peer.call<{ value: { entries: { model?: { role?: string; content?: { text?: string }[]; isError?: boolean }[] }[] } }>('thread.watch', { id })
+  const { value } = await peer.call<{ value: { entries: { model?: { role?: string; content?: { text?: string }[]; isError?: boolean }[] }[] } }>('thread.watch', { thread: id })
   return value.entries.map((e) => e.model?.[0]).filter((m) => m?.role === 'toolResult').map((m) => `${m!.isError ? 'error: ' : ''}${m!.content?.map((c) => c.text).join('')}`)
 }
 const write = (root: string, files: Record<string, string>) => {
@@ -71,19 +71,19 @@ it("adds every extension's parts to whatever agent a thread has: after the choos
   })
   const failing = defineDaemonExtension({ name: 'failing', setup(s) { s.agentParts(() => { throw new Error('no') }) } })
   const { peer, close } = await open([picker, adder, slow, failing], { agentPartsLimit: 200 })
-  const thread = await peer.call<ThreadInfo>('thread.create', { prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'hi' })
   await done(peer, thread.id)
   const parts = await partsOf(peer, thread.id)
   expect(parts.filter((name) => ['picked', 'extra', 'late'].includes(name))).toEqual(['picked', 'extra'])
   expect(parts).toContain('coding-tools')
   expect(asked).toEqual([{ id: thread.id, hidden: false }])
   // An extension's own thread says so.
-  const own = await api.threads.create({ hidden: true, prompt: 'mine' })
+  const own = await api.threads.start({ hidden: true, prompt: 'mine' })
   await until(() => asked.length === 2)
   expect(asked[1]).toEqual({ id: own.id, hidden: true, owner: 'adder' })
   // Switched off, it isn't asked, and adds nothing.
   await peer.call('settings.set', { key: 'extensions.adder', value: false })
-  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await peer.call('thread.send', { thread: thread.id, text: 'again' })
   await done(peer, thread.id)
   expect(asked).toHaveLength(2)
   expect(await partsOf(peer, thread.id)).not.toContain('extra')
@@ -115,13 +115,13 @@ it('replaces a part mid-run: the next step of the run has its new tools, without
     },
   })
   const { peer, close } = await open([swapper], { model: `replay:${recording}` })
-  const thread = await peer.call<ThreadInfo>('thread.create', { prompt: 'go' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'go' })
   await done(peer, thread.id)
   expect(await results(peer, thread.id)).toEqual(['swapped', 'after ran'])
   expect(await partsOf(peer, thread.id)).toContain('swapper')
   // Removed, the next turn goes without it.
   removeIt()
-  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await peer.call('thread.send', { thread: thread.id, text: 'again' })
   await done(peer, thread.id)
   expect(await partsOf(peer, thread.id)).not.toContain('swapper')
   await close()
@@ -190,7 +190,7 @@ it("gives agentParts the profile as loaded now: mcp and mcpServers merged over e
   const reader = defineDaemonExtension({ name: 'reader', setup(s) { s.agentParts(({ profile }) => { specs.push(profile && { ref: profile.ref.scope, mcp: profile.spec.mcp, mcpServers: profile.spec.mcpServers }) }) } })
   const { peer, close } = await open([reader])
   await peer.call('profile.allow', { cwd: project })
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: project, prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, prompt: 'hi' })
   await done(peer, thread.id)
   expect(specs.at(-1)).toEqual({
     ref: 'project',
@@ -200,7 +200,7 @@ it("gives agentParts the profile as loaded now: mcp and mcpServers merged over e
   // Edited (and allowed again), the next turn has it.
   write(projectProfile, { 'profile.ts': profileTs({ extends: 'user:default', mcp: [] }) })
   await peer.call('profile.allow', { cwd: project })
-  await peer.call('thread.submit', { id: thread.id, text: 'again' })
+  await peer.call('thread.send', { thread: thread.id, text: 'again' })
   await done(peer, thread.id)
   expect(specs.at(-1)).toMatchObject({ mcp: ['linear', 'sentry'], mcpServers: { docs: { args: ['user.js'] } } })
   // Names a tool prefix can carry, and a command or a URL each.
@@ -212,7 +212,7 @@ it("gives agentParts the profile as loaded now: mcp and mcpServers merged over e
   ] as const) {
     write(projectProfile, { 'profile.ts': profileTs(spec) })
     await peer.call('profile.allow', { cwd: project })
-    await expect(peer.call('thread.create', { cwd: project })).rejects.toThrow(error)
+    await expect(peer.call('thread.start', { cwd: project })).rejects.toThrow(error)
   }
   await close()
 })

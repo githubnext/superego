@@ -36,7 +36,7 @@ it('serves an extension method as a plain read: called by name, checked, not an 
   })
   const { peer, hello, close } = await open([notes])
   expect(hello.methods).toContain('notes.folder')
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
   expect(await peer.call('notes.folder', { id: thread.id })).toEqual({ cwd: dir })
   await expect(peer.call('notes.folder', {})).rejects.toMatchObject({ kind: 'invalid_params' })
   await expect(peer.call('notes.folder', { id: '999' })).rejects.toMatchObject({ kind: 'not_found' })
@@ -49,9 +49,9 @@ it('serves an extension method as a plain read: called by name, checked, not an 
 it("tells the agent the pane kinds extensions describe, beside the core's", async () => {
   const notes = defineDaemonExtension({ name: 'notes', setup(superego) { superego.pane('graph', 'the notes as a graph; no params') } })
   const { peer, close } = await open([notes])
-  const thread = await peer.call<ThreadInfo>('thread.create', { prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'hi' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
-  const { value } = await peer.call<{ value: { entries: { model?: { role?: string; content?: unknown }[] }[]; docs: Record<string, unknown> } }>('thread.watch', { id: thread.id })
+  const { value } = await peer.call<{ value: { entries: { model?: { role?: string; content?: unknown }[] }[]; docs: Record<string, unknown> } }>('thread.watch', { thread: thread.id })
   const prompt = JSON.stringify(value)
   expect(prompt).toContain('\\"graph\\": the notes as a graph; no params')
   expect(prompt).toContain('\\"editor\\": { path }: a file')
@@ -68,7 +68,7 @@ it('lists optional extensions in Settings, and tells clients what each thread go
   const keys = value.sections.find((s) => s.id === 'extensions')!.settings.map((s) => s.key)
   // The core's own parts and the optional bundled one; never a required one.
   expect(keys).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.links'])
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
   expect(thread.without).toBeUndefined()
   await peer.call('settings.set', { key: 'extensions.links', value: false })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.without?.join() === 'links')
@@ -91,14 +91,14 @@ it('transforms what a message gives the agent, in order, but not for a thread th
     setup(superego) { superego.submit(({ content }) => [...content, { type: 'text', text: `${content.length} before me` }]) },
   })
   const { peer, close } = await open([stamp, count])
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
   const users = async () => {
-    const { value } = await peer.call<{ value: { entries: { kind: string; model?: { content: unknown }[] }[] } }>('thread.watch', { id: thread.id })
+    const { value } = await peer.call<{ value: { entries: { kind: string; model?: { content: unknown }[] }[] } }>('thread.watch', { thread: thread.id })
     return value.entries.filter((e) => e.kind === 'pi.user').map((e) => e.model![0]!.content)
   }
   const send = async (text: string) => {
     const before = (await users()).length
-    await peer.call('thread.submit', { id: thread.id, text })
+    await peer.call('thread.send', { thread: thread.id, text })
     await until(async () => (await users()).length > before && (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
     return (await users()).at(-1)
   }
@@ -117,10 +117,10 @@ it("counts only what a transform returns, not what it changes in place, with att
     setup(superego) { superego.submit(({ content }) => { content.push({ type: 'text', text: 'meddled' }) }) },
   })
   const { peer, close } = await open([meddle])
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
-  await peer.call('thread.submit', { id: thread.id, text: 'look', attachments: [{ name: 'a.txt', mimeType: 'text/plain', data: Buffer.from('a').toString('base64') }] })
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
+  await peer.call('thread.send', { thread: thread.id, text: 'look', attachments: [{ name: 'a.txt', mimeType: 'text/plain', data: Buffer.from('a').toString('base64') }] })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
-  const { value } = await peer.call<{ value: { entries: { kind: string; model?: { content: unknown }[] }[] } }>('thread.watch', { id: thread.id })
+  const { value } = await peer.call<{ value: { entries: { kind: string; model?: { content: unknown }[] }[] } }>('thread.watch', { thread: thread.id })
   expect(JSON.stringify(value.entries.find((e) => e.kind === 'pi.user')!.model![0]!.content)).not.toContain('meddled')
   await close()
 })
@@ -161,7 +161,7 @@ it("knows the extensions a window declares that have no daemon half: a switch fo
   await peer.call('extensions.declare', { extensions: [{ name: 'links', version: '1.0.0', title: 'Web links' }] })
   const again = await peer.call<{ value: { sections: { id: string; settings: { key: string; title: string }[] }[] } }>('settings.watch', {})
   expect(again.value.sections.find((s) => s.id === 'extensions')!.settings.find((s) => s.key === 'extensions.links')!.title).toBe('Web links')
-  await peer.call<ThreadInfo>('thread.create', {})
+  await peer.call<ThreadInfo>('thread.start', {})
   await peer.call('settings.set', { key: 'extensions.links', value: false })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.without?.join() === 'links')
   await close()
@@ -199,10 +199,10 @@ it('announces data views, fed by a value, whose buttons run its actions: a round
   await until(async () => content.items![0]!.status === 'done')
   expect(content.items![0]).toMatchObject({ subtitle: 'Ada · shipped', actions: [] })
   // A thread view's method is called with the thread; told to the agent as a pane it can open, by what it shows.
-  const thread = await peer.call<ThreadInfo>('thread.create', { prompt: 'hi' })
+  const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'hi' })
   expect(await peer.call('orders.notes', { id: thread.id })).toEqual({ markdown: `Notes for ${thread.id}` })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
-  const { value } = await peer.call<{ value: unknown }>('thread.watch', { id: thread.id })
+  const { value } = await peer.call<{ value: unknown }>('thread.watch', { thread: thread.id })
   expect(JSON.stringify(value)).toContain(`\\"orders.notes\\": the thread's order notes; no params`)
   await close()
 })

@@ -25,7 +25,7 @@ function NotePane({ machine, thread, pane }: PaneProps) {
   const { path, heading, block } = (pane.params ?? {}) as Params
   const [note, setNote] = useState<Note>()
   const [error, setError] = useState<string>()
-  const open = (kind: string, params: Record<string, unknown>, title?: string) => void dispatch('pane.open', { id: thread.id, kind, params, ...(title ? { title } : {}) }, { machine: machine.id })
+  const open = (kind: string, params: Record<string, unknown>, title?: string) => void dispatch('pane.open', { thread: thread.id, kind, params, ...(title ? { title } : {}) }, { machine: machine.id })
 
   // Which note (a [[name]] resolves as Obsidian would) and what links to it, again as the thread moves on.
   useEffect(() => {
@@ -69,7 +69,7 @@ export default defineUiExtension({
         const params = { path: link.target, ...(link.heading ? { heading: link.heading } : {}), ...(link.block ? { block: link.block } : {}) }
         try {
           const found = await superego.dispatch('vault.note', { id: thread.id, ...params }, { machine }) as Note
-          await superego.dispatch('pane.open', { id: thread.id, kind: 'note', title: found.title, params: { ...params, path: found.path } }, { machine })
+          await superego.dispatch('pane.open', { thread: thread.id, kind: 'note', title: found.title, params: { ...params, path: found.path } }, { machine })
           return undefined
         } catch (error) { return (error as Error).message }
       },

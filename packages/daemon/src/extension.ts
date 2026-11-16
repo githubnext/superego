@@ -90,11 +90,11 @@ export type MessageBlock = { type: 'text'; text: string } | { type: 'image'; dat
  */
 export type OutgoingMessage = {
   thread: ThreadInfo; text: string; attachments: Attachment[]; content: MessageBlock[]
-  /** The extension that sent it (`threads.submit`, or `threads.create`'s prompt): absent for a client's, the user's. */
+  /** The extension that sent it (`threads.send`, or `threads.start`'s prompt): absent for a client's, the user's. */
   by?: string
   /**
    * Whom it was sent for, when that's said: a client running as the command line (`cli`) or an outside agent (`mcp`,
-   * through `superego mcp`), as `DaemonContext.exposure`; or what an extension's `threads.submit` passed on. Absent
+   * through `superego mcp`), as `DaemonContext.exposure`; or what an extension's `threads.send` passed on. Absent
    * for a window's.
    */
   exposure?: Exposure
@@ -225,7 +225,7 @@ export type AgentPart = (() => void) & {
 /** A thread as an `agentParts` sees it, at submit. 1.7. */
 export type AgentPartsThread = {
   id: string
-  /** An extension's own thread, in no list (`threads.create({ hidden })`): Ego's, say. */
+  /** An extension's own thread, in no list (`threads.start({ hidden })`): Ego's, say. */
   hidden: boolean
   /** The extension whose thread it is, for a hidden one. */
   owner?: string
@@ -332,7 +332,7 @@ export type DaemonApi = {
   channel(kind: string, accept: ChannelAcceptor): void
   /**
    * Tell the agent about a kind of pane its UI half draws (`superego.pane(kind, …)` there), and the params it takes:
-   * open_pane can open it from then on. A profile's extension's are for that profile's threads.
+   * pane_open can open it from then on. A profile's extension's are for that profile's threads.
    */
   pane(kind: string, about: string): void
   /**
@@ -387,18 +387,18 @@ export type DaemonApi = {
      */
     attachments(id: string): string
     /**
-     * Start a thread, as `thread.create` does (its `creating` hooks too): `parent`, a thread's own child; `hidden`, in
+     * Start a thread, as `thread.start` does (its `creating` hooks too): `parent`, a thread's own child; `hidden`, in
      * no list, and this extension's (`owner`; a hidden parent's children are top-level). A hidden thread has no profile,
      * and takes no messages while the extension that made it is off, or goes without it. Find it again by its `owner`
      * in `list({ hidden: true })`: its facts aren't there while the extension is off.
      */
-    create(params: NewThread & { hidden?: boolean }): Promise<ThreadInfo>
+    start(params: NewThread & { hidden?: boolean }): Promise<ThreadInfo>
     /**
      * Send a thread a message, as a user would; when it's working, `whenBusy` says how (default: after this run).
      * `exposure`: whom for, when an action of this extension's sends it on a client's behalf (its context's `exposure`),
      * for submit transforms to see.
      */
-    submit(id: string, text: string, options?: { whenBusy?: 'steer' | 'followUp'; exposure?: Exposure }): Promise<void>
+    send(id: string, text: string, options?: { whenBusy?: 'steer' | 'followUp'; exposure?: Exposure }): Promise<void>
     /** Its last answer, as text, if it has one. */
     lastAnswer(id: string): Promise<string | undefined>
     /**
@@ -421,7 +421,7 @@ export type DaemonApi = {
   }
   /**
    * The other machines this daemon reaches (its `machines.json`), and a call to one of them: its methods
-   * and actions as a client calls them (`thread.list`, `thread.create`, …). None when the daemon reaches no others. 1.4.
+   * and actions as a client calls them (`thread.list`, `thread.start`, …). None when the daemon reaches no others. 1.4.
    */
   machines: {
     /** The machines it reaches, by id. */

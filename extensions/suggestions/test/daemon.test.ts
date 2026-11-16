@@ -29,13 +29,13 @@ it('asks the thread\'s model for next prompts once it answers, and drops them wh
   let next = watched.value
   peer.on('value.changed', ({ sub, value }: Notifications['value.changed']) => { if (sub === watched.sub) next = value as Record<string, Suggested> })
 
-  const thread = await peer.call<ThreadInfo>('thread.create', {})
-  await peer.call('thread.submit', { id: thread.id, text: '["Run the tests", "Commit this"]' })
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
+  await peer.call('thread.send', { thread: thread.id, text: '["Run the tests", "Commit this"]' })
   await until(() => next[thread.id] !== undefined)
   expect(next[thread.id]!.prompts).toEqual(['Run the tests', 'Commit this'])
 
   // Its next message takes them away; this answer suggests nothing (its last array is empty), so none come back.
-  await peer.call('thread.submit', { id: thread.id, text: '[]' })
+  await peer.call('thread.send', { thread: thread.id, text: '[]' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done' && next[thread.id] === undefined)
 
   socket.destroy(); server.close(); await daemon.close()

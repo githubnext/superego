@@ -151,7 +151,7 @@ export function FileEditor({ machine, thread, path, line, actions, children, onO
     setNote({ text: 'Saving…' })
     saving.current = content
     try {
-      await dispatch('file.write', { id: thread.id, path, content }, { machine: machine.id, source: 'editor' })
+      await dispatch('file.write', { thread: thread.id, path, content }, { machine: machine.id, source: 'editor' })
       disk.current = content
       setNote({ text: 'Saved' })
     } catch (error) { setNote({ text: (error as Error).message, error: true }) }
@@ -179,7 +179,7 @@ export function FileEditor({ machine, thread, path, line, actions, children, onO
     setText(undefined)
     setNote(undefined)
     setConflict(undefined)
-    client(machine.id).call('file.read', { id: thread.id, path }).then(({ content }) => {
+    client(machine.id).call('file.read', { thread: thread.id, path }).then(({ content }) => {
       if (!alive || !host.current) return
       disk.current = content
       setText(content)
@@ -292,7 +292,7 @@ export function FileEditor({ machine, thread, path, line, actions, children, onO
       else disk.current = content
     }
     const off = peer.on('file.changed', (params) => { if (params.sub === sub) apply(params.content) })
-    peer.call('file.watch', { id: thread.id, path }).then((result) => {
+    peer.call('file.watch', { thread: thread.id, path }).then((result) => {
       if (stopped) return void peer.call('unwatch', { sub: result.sub }).catch(() => {})
       sub = result.sub
       apply(result.content)
@@ -326,13 +326,13 @@ export function FileEditor({ machine, thread, path, line, actions, children, onO
       const peer = client(machine.id)
       const at = /^(.+?)((?::\d+)+|#L\d+.*)$/.exec(name)
       const near = resolve(folderOf(path), at?.[1] ?? name)
-      const beside = near ? await peer.call('file.find', { id: thread.id, name: `${near}${at?.[2] ?? ''}` }) : undefined
-      const found = beside && (beside.path === near || beside.path === `${near}.md`) ? beside : await peer.call('file.find', { id: thread.id, name })
+      const beside = near ? await peer.call('file.find', { thread: thread.id, name: `${near}${at?.[2] ?? ''}` }) : undefined
+      const found = beside && (beside.path === near || beside.path === `${near}.md`) ? beside : await peer.call('file.find', { thread: thread.id, name })
       if (found.outside) return "outside this thread's folder"
       if (found.path === null) return "not in this thread's folder"
       const kind = found.folder ? folderKind(registry, { machine: machine.id, thread }) : fileKind(registry, { machine: machine.id, thread }, found.path)
       if (!kind) return found.folder ? 'a folder, and nothing here shows folders' : 'a file, and nothing here shows files'
-      await dispatch('pane.open', { id: thread.id, kind, params: { path: found.path, ...(found.line ? { line: found.line } : {}) } }, { machine: machine.id, source: 'editor' })
+      await dispatch('pane.open', { thread: thread.id, kind, params: { path: found.path, ...(found.line ? { line: found.line } : {}) } }, { machine: machine.id, source: 'editor' })
       return undefined
     } catch (error) { return (error as Error).message }
   }
@@ -346,13 +346,13 @@ export function FileEditor({ machine, thread, path, line, actions, children, onO
   const openUrl = useCallback((url: string) => {
     if (!webKind) return
     const host = URL.parse(url)?.host
-    void dispatch('pane.open', { id: thread.id, kind: webKind, ...(host ? { title: host } : {}), params: { url } }, { machine: machine.id, source: 'editor' })
+    void dispatch('pane.open', { thread: thread.id, kind: webKind, ...(host ? { title: host } : {}), params: { url } }, { machine: machine.id, source: 'editor' })
       .catch((error) => console.error(error))
   }, [machine.id, thread.id, webKind])
   const linkThread = useMemo(() => thread, [thread.id, thread.profile?.dir, String(thread.without)])
   const links = useMemo<LinkPlaceValue>(() => ({ machine: machine.id, thread: linkThread, openFile, ...(webKind ? { openUrl } : {}) }), [machine.id, linkThread, openFile, webKind, openUrl])
   linksRef.current = links
-  const openIn = (kind: string | undefined, file: string) => kind && dispatch('pane.open', { id: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'editor' })
+  const openIn = (kind: string | undefined, file: string) => kind && dispatch('pane.open', { thread: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'editor' })
   // Its images, read from beside it on the thread's machine.
   const images = useMemo(() => imagesIn(machine, thread.id, thread.cwd, folderOf(path)), [machine, thread.id, thread.cwd, path])
   const slot: EditorSlotProps = {

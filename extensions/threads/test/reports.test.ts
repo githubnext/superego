@@ -137,7 +137,7 @@ it('notes a parent reading its child through thread_read', async () => {
   }
   const read = tools(h).tools!.find((t) => t.name === 'thread_read')!
   expect(reads.read(find('2'))).toBe(false)
-  await read.execute({ id: '2' } as never, { conversationId: 1 } as never, {} as never)
+  await read.execute({ thread: '2' } as never, { conversationId: 1 } as never, {} as never)
   expect(reads.read(find('2'))).toBe(true)
 })
 
@@ -161,14 +161,14 @@ it("relays a child's answer to the parent that started it, as a message from it"
   const { peer, socket } = await connectSocket(join(dir, 's.sock'))
   try {
     await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
-    const parent = await peer.call<ThreadInfo>('thread.create', { prompt: 'split the work', title: 'Lead' })
-    const entries = async () => JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { id: parent.id })).value.entries)
+    const parent = await peer.call<ThreadInfo>('thread.start', { prompt: 'split the work', title: 'Lead' })
+    const entries = async () => JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { thread: parent.id })).value.entries)
     for (let i = 0; i < 600 && !(await entries()).includes('Noted.'); i++) await new Promise((r) => setTimeout(r, 25))
     const child = (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id !== parent.id)!
     // The two run at once, so either may have taken either answer.
     expect(await entries()).toMatch(new RegExp(`From \\[Dates\\]\\(thread:${child.id}\\): finished\\.\\\\n\\\\n(Started it|Dates are UTC)\\.`))
     // Both are told how it works: the parent that its children report, the child that its answer is relayed.
-    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { id: child.id })
+    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: child.id })
     expect(JSON.stringify(value)).toContain('relayed to [Lead]')
   } finally {
     socket.destroy(); server.close(); await daemon.close()
@@ -196,11 +196,11 @@ it("reports only what the parent asked for: not the user's own conversation in t
   // The parent starts a child, which reports; then the user talks to the child.
   await turns(turn([{ type: 'toolCall', id: 'c1', name: 'thread_start', arguments: { prompt: 'Look into the dates', title: 'Dates' } }], 'toolUse'), say('zz-one'), say('zz-two'), say('zz-noted'), say('zz-icons'))
   let { peer, close } = await open()
-  const entries = async (id: string) => JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { id })).value.entries)
+  const entries = async (id: string) => JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { thread: id })).value.entries)
   const idle = async (id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)?.status.state === 'done'
   const until = async (check: () => Promise<boolean>) => { for (let i = 0; i < 400 && !(await check()); i++) await new Promise((r) => setTimeout(r, 25)); expect(await check()).toBe(true) }
   try {
-    const parent = await peer.call<ThreadInfo>('thread.create', { prompt: 'split the work', title: 'Lead' })
+    const parent = await peer.call<ThreadInfo>('thread.start', { prompt: 'split the work', title: 'Lead' })
     await until(async () => (await entries(parent.id)).includes('zz-noted'))
     const child = (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.parent === parent.id)!
     const reports = async () => (await entries(parent.id)).split(`From [Dates](thread:${child.id})`).length - 1
@@ -210,16 +210,16 @@ it("reports only what the parent asked for: not the user's own conversation in t
     expect(await ext(child.id)).toEqual({ toParent: true })
     expect(await ext(parent.id)).toBeUndefined()
     // The user's own message to the child, and its answer: not the parent's business.
-    await peer.call('thread.submit', { id: child.id, text: 'and the icons?' })
+    await peer.call('thread.send', { thread: child.id, text: 'and the icons?' })
     await until(async () => (await entries(child.id)).includes('zz-icons') && await idle(child.id))
     await new Promise((r) => setTimeout(r, 300))
     expect(await reports()).toBe(1)
     expect(await ext(child.id)).toBeUndefined()
     // The parent sends it more, after a restart (what the child does is kept): reported again.
     await close()
-    await turns(turn([{ type: 'toolCall', id: 'c2', name: 'thread_send', arguments: { id: child.id, text: 'More?' } }], 'toolUse'), say('zz-three'), say('zz-four'), say('zz-thanks'))
+    await turns(turn([{ type: 'toolCall', id: 'c2', name: 'thread_send', arguments: { thread: child.id, text: 'More?' } }], 'toolUse'), say('zz-three'), say('zz-four'), say('zz-thanks'))
     ;({ peer, close } = await open())
-    await peer.call('thread.submit', { id: parent.id, text: 'ask it for more' })
+    await peer.call('thread.send', { thread: parent.id, text: 'ask it for more' })
     await until(async () => await reports() === 2)
     expect(await ext(child.id)).toEqual({ toParent: true })
   } finally {
@@ -254,17 +254,17 @@ it("tells clients a child reports only while its parent hears: not once the pare
   const until = async (check: () => Promise<boolean>) => { for (let i = 0; i < 400 && !(await check()); i++) await new Promise((r) => setTimeout(r, 25)); expect(await check()).toBe(true) }
   const run = (id: string, params: Json) => peer.call('action.run', { id, params })
   try {
-    const parent = await peer.call<ThreadInfo>('thread.create', { prompt: 'split the work', title: 'Lead' })
-    await until(async () => JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { id: parent.id })).value.entries).includes('zz-noted'))
+    const parent = await peer.call<ThreadInfo>('thread.start', { prompt: 'split the work', title: 'Lead' })
+    await until(async () => JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { thread: parent.id })).value.entries).includes('zz-noted'))
     const child = (await all()).find((t) => t.parent === parent.id)!
     expect(await ext(child.id)).toEqual({ toParent: true })
     // Its parent archived, its report would reach no one: it notifies for itself.
-    await run('thread.archive', { id: parent.id })
+    await run('thread.archive', { thread: parent.id })
     await until(async () => await ext(child.id) === undefined)
-    await run('thread.unarchive', { id: parent.id })
+    await run('thread.unarchive', { thread: parent.id })
     await until(async () => JSON.stringify(await ext(child.id)) === '{"toParent":true}')
     // Looked at again from the start, after a restart.
-    await run('thread.archive', { id: parent.id })
+    await run('thread.archive', { thread: parent.id })
     await close()
     ;({ peer, close } = await open())
     await until(async () => await ext(child.id) === undefined)

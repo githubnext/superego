@@ -41,13 +41,13 @@ project    a git repository (its worktrees too) or a folder, on a machine
   under its parent in the sidebar, with "from" its parent in the title bar. It reads another (`thread_read`, waiting for
   it with `wait: true`), messages one (`thread_send`), lists those around (`thread_list`), and archives one
   (`thread_archive`): a finished child, or its own thread once its turn ends, but not a thread still working. A message
-  names a thread as `[its title](thread:<id>)`, shown as that thread to open (⌘-click: beside). `thread.create` takes
+  names a thread as `[its title](thread:<id>)`, shown as that thread to open (⌘-click: beside). `thread.start` takes
   `parent` too. The same tools take `machine`, any machine its daemon reaches (`thread_machines` lists them): a thread
   started there is that machine's own, not nested under its parent, whose catalog is elsewhere.
 - **Panes** sit beside the thread as a row of columns that scrolls sideways (Dinky's scrolling layout), or stacked in
   one column beside it, as tabs, so nothing passes the window's edge (Settings → Appearance → Panes, the strip's
   switch, `⌘⇧\`); the thread and its panes are kept with the thread, so every client sees the same. The agent opens
-  them too (`open_pane`). One can be maximized for a while (its tab's button, a double click on its title, `⌘⇧↩`):
+  them too (`pane_open`). One can be maximized for a while (its tab's button, a double click on its title, `⌘⇧↩`):
   over the thread and the rest, in this window only, until Esc, Restore, or another pane or thread.
   Built in: the file editor (Markdown rendered, in live preview as Obsidian shows it, or as source) and another thread.
   Bundled extensions add Changes (git's diff, `git`), Preview (a web page) and Artifact (an HTML file the agent wrote,
@@ -183,8 +183,9 @@ older (or newer) than this computer's gets a dot beside its name in the sidebar 
 and reconnects, asking first if agents are working there, since the daemon restarts.
 
 `superego mcp` is an MCP server on stdio, for agents outside Superego (Claude Code, Codex, an editor's): each action a
-machine exposes to MCP is a tool (`thread.create` as `thread_create`), run as `superego do` runs it and in the same
-action log, from `mcp`; `thread_list` and `thread_read` (a thread's state and last answer, waiting for it if asked) read.
+machine exposes to outside agents is a tool named as the action (`thread.start` as `thread_start`, `pane.open` as
+`pane_open`: the same names as the tools of agents inside), run as `superego do` runs it and in the same action log,
+from `outside`; `thread_list` and `thread_read` (a thread's state and last answer, waiting for it if asked) read.
 Only actions that opt in are there: starting threads, sending them messages, stopping and renaming them, listing
 profiles. One server serves one machine; `superego mcp -m <machine>` serves another. Add it as
 `claude mcp add superego -- superego mcp`, or as `{"command": "superego", "args": ["mcp"]}` in a client's config.
@@ -243,7 +244,7 @@ export default defineProfile({
   prompt: 'You answer customer email for Acme. Be brief.',
   extensions: ['./orders.ts'],     // agent extensions, or daemon extensions (actions, live values), from 'superego'
   ui: ['./ui/order.tsx'],          // defineUiExtension({ name, setup(superego) { superego.pane('order', …) } }) from 'superego/ui'
-  panes: { order: 'an order, with its lines and status. Params: { id }' },  // told to the agent, for open_pane
+  panes: { order: 'an order, with its lines and status. Params: { id }' },  // told to the agent, for pane_open
   mcp: ['linear', 'sentry'],       // the machine's MCP servers its threads use (Settings → MCP servers), by name
   mcpServers: {                    // servers of its own: a command (run in the project's root) or a URL
     docs: { command: 'node', args: ['./tools/docs-mcp.js'], auth: { type: 'env', names: ['DOCS_TOKEN'] } },

@@ -163,7 +163,7 @@ async function runOne(p: Planned, inst: ReturnType<typeof install>) {
     log(`world at ${worldDir}; asking by ${p.route} on ${p.model}`)
     const ask = async (text: string) => {
       if (p.route === 'ego') return (await world!.rpc.call<Thread>('action.run', { id: 'ego.ask', params: { prompt: text }, exposure: 'cli' })).id
-      return (await world!.rpc.call<Thread>('thread.create', { cwd: world!.project, prompt: text })).id
+      return (await world!.rpc.call<Thread>('thread.start', { cwd: world!.project, prompt: text })).id
     }
     const askedAt = Date.now()
     const first = await ask(p.task.request)
@@ -178,7 +178,7 @@ async function runOne(p: Planned, inst: ReturnType<typeof install>) {
       if (over) {
         stopReason = over
         log(`stopping: ${over} ($${cost.toFixed(2)}, ${Math.round((Date.now() - startedAt) / 1000)}s)`)
-        for (const t of working) await world.rpc.call('thread.abort', { id: t.id }).catch(() => {})
+        for (const t of working) await world.rpc.call('thread.stop', { thread: t.id }).catch(() => {})
         await sleep(3000)
         break
       }
@@ -193,7 +193,7 @@ async function runOne(p: Planned, inst: ReturnType<typeof install>) {
         quiet = 0
         log('nothing built yet: nudging')
         if (p.route === 'ego') await ask(NUDGE)
-        else await world.rpc.call('thread.submit', { id: first, text: NUDGE })
+        else await world.rpc.call('thread.send', { thread: first, text: NUDGE })
         continue
       }
       break

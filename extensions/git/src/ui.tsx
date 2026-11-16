@@ -1,5 +1,5 @@
 /// <reference path="./env.d.ts" />
-// git, UI half: Changes, a pane beside the thread (from its pane menu, ⌘⇧D, or the agent's open_pane "diff") with what
+// git, UI half: Changes, a pane beside the thread (from its pane menu, ⌘⇧D, or the agent's pane_open "diff") with what
 // changed in its folder, file by file, refreshed as the thread moves on. Its tab in the strip says how much: +N −N.
 // Files git doesn't track yet are listed under it, each to open beside.
 import { defineAction, defineUiExtension, Diff, fileKind, has, PaneHeader, parseDiff, useDispatch, useMethod, useRegistry, useTabNote, type PaneProps } from '@superego/app/ui'
@@ -15,7 +15,7 @@ export default defineUiExtension({
       id: 'git.changes', title: 'Show changes', keys: 'mod+shift+d',
       // Not on a machine without a git daemon half this speaks: an older Superego there has no git.diff.
       when: (c) => Boolean(c.selection) && has(c.machines.find((m) => m.id === c.selection!.machine), SPEAKS),
-      run: async (_p, c) => { if (c.selection) await c.dispatch('pane.open', { id: c.selection.thread, kind: CHANGES }, { machine: c.selection.machine, source: 'git' }) },
+      run: async (_p, c) => { if (c.selection) await c.dispatch('pane.open', { thread: c.selection.thread, kind: CHANGES }, { machine: c.selection.machine, source: 'git' }) },
     }))
   },
 })
@@ -28,7 +28,7 @@ function ChangesPane({ machine, thread }: PaneProps) {
   const registry = useRegistry()
   const dispatch = useDispatch()
   const able = has(machine, SPEAKS)
-  const { data: changes, error, refetch } = useMethod<Changes>(machine.id, DIFF, { id: thread.id }, { enabled: able, refresh: `${thread.activeAt}/${thread.status.state}` })
+  const { data: changes, error, refetch } = useMethod<Changes>(machine.id, DIFF, { thread: thread.id }, { enabled: able, refresh: `${thread.activeAt}/${thread.status.state}` })
   const files = changes?.repo ? parseDiff(changes.diff) : []
   const added = files.reduce((sum, f) => sum + f.added, 0)
   const removed = files.reduce((sum, f) => sum + f.removed, 0)
@@ -40,7 +40,7 @@ function ChangesPane({ machine, thread }: PaneProps) {
   const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
   const open = (path: string) => {
     const kind = fileKind(registry, { machine: machine.id, thread }, path)
-    if (kind) void dispatch('pane.open', { id: thread.id, kind, params: { path } }, { machine: machine.id, source: 'git' })
+    if (kind) void dispatch('pane.open', { thread: thread.id, kind, params: { path } }, { machine: machine.id, source: 'git' })
   }
   return (
     <div className="pane-scroll diff-pane">

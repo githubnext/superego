@@ -4,15 +4,15 @@
 // tools and the threads' own. Its thread is the hidden one it owns (`owner`), with this extension's state set (and the
 // fact `ext.ego` for windows).
 //
-// Outside agents (`superego mcp`) ask it too (`ego.ask`, or `thread.submit` to its thread), but start threads through it
+// Outside agents (`superego mcp`) ask it too (`ego.ask`, or `thread.send` to its thread), but start threads through it
 // no more than they may themselves: each message one sends goes with a block saying so (`OUTSIDE`), and while
-// `mcp.startThreads` is off, thread_start refuses when the message its call answers has it: the user message before
+// `outside.startThreads` is off, thread_start refuses when the message its call answers has it: the user message before
 // the model's message that made the call, not whichever is newest (the user may type while an outside agent's turn
 // runs). A turn the user asks for in the window, in the same conversation, still starts threads. Nor do they set up MCP servers through it:
 // superego_mcp_servers refuses whenever the message it's answering came from one, whatever the setting.
 import { hostname } from 'node:os'
 import { MachineStore } from '@superego/client'
-import { defineDaemonExtension, MCP_THREADS, type DaemonExtension } from '@superego/daemon'
+import { defineDaemonExtension, OUTSIDE_THREADS, type DaemonExtension } from '@superego/daemon'
 import { agentName, defineAction, obj, opt, RpcError, str, type ThreadInfo } from '@superego/protocol'
 import { about, ASK, CLEAR, OUTSIDE, outsideBlocks } from './shared.ts'
 import { egoPrompt, egoTools, type MachineDirectory } from './tools.ts'
@@ -60,10 +60,10 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         snapshot: () => superego.settings.snapshot(),
         ...(machines ? { machines: () => machines(dataDir) } : {}),
         // The threads it starts are ordinary ones, top-level in their projects.
-        threads: { info: (id) => threads.get(id).catch(() => undefined), list: () => threads.list(), answer: (id) => threads.lastAnswer(id), start: (params) => threads.create(params) },
+        threads: { info: (id) => threads.get(id).catch(() => undefined), list: () => threads.list(), answer: (id) => threads.lastAnswer(id), start: (params) => threads.start(params) },
         // Read as it's called: the setting may have changed since the message came.
         async refuseStart(conversation, callId) {
-          if (superego.settings.get(MCP_THREADS) === true) return undefined
+          if (superego.settings.get(OUTSIDE_THREADS) === true) return undefined
           const at = threads.of(conversation)
           if (at && !await fromOutside(at, callId)) return undefined
           return "An outside agent asked for this, and outside agents can't start threads on this machine. The user can allow it in Settings → Outside agents → Can start threads."
@@ -76,7 +76,7 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         },
       })
       // An outside agent's message to Ego says so.
-      superego.submit(({ thread, exposure, content }) => exposure === 'mcp' && isEgo(thread) ? [{ type: 'text', text: OUTSIDE }, ...content] : undefined)
+      superego.submit(({ thread, exposure, content }) => exposure === 'outside' && isEgo(thread) ? [{ type: 'text', text: OUTSIDE }, ...content] : undefined)
       // Its tools are for its thread only.
       superego.agent(tools, { always: false })
       const state = superego.state<true>()
@@ -98,7 +98,7 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         if (!found) return undefined
         if (found.archived) await threads.unarchive(found.id)
         if (await state.get(found.id) !== true) await state.set(found.id, true)
-        if (found.title !== name) await superego.dispatch('thread.rename', { id: found.id, title: name })
+        if (found.title !== name) await superego.dispatch('thread.rename', { thread: found.id, title: name })
         return found.id
       }
       let looking: Promise<string | undefined> | undefined
@@ -108,7 +108,7 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
       async function thread(): Promise<string> {
         if (id) return id
         if (await look()) return id!
-        making ??= threads.create({ cwd: dataDir, title: name, hidden: true }).then(async (made) => {
+        making ??= threads.start({ cwd: dataDir, title: name, hidden: true }).then(async (made) => {
           await state.set(made.id, true)
           return id = made.id
         }).finally(() => { making = undefined })
@@ -122,12 +122,12 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         },
       })
       superego.action(defineAction({
-        id: ASK, title: `Ask ${name} about ${superego.app.name} and how it's set up`, runs: 'machine', expose: ['ui', 'cli', 'mcp'],
+        id: ASK, title: `Ask ${name} about ${superego.app.name} and how it's set up`, runs: 'machine', expose: ['ui', 'cli', 'outside'],
         description: `Send \`prompt\` to ${name}, this machine's own agent, in its one thread (made the first time). That thread comes back; read its answer as any thread's.`,
         params: obj({ prompt: opt(str()) }),
         async run({ prompt }, { exposure }) {
           const at = await thread()
-          if (prompt?.trim()) await threads.submit(at, prompt, { whenBusy: 'followUp', ...(exposure ? { exposure } : {}) })
+          if (prompt?.trim()) await threads.send(at, prompt, { whenBusy: 'followUp', ...(exposure ? { exposure } : {}) })
           return threads.get(at)
         },
       }))
@@ -137,7 +137,7 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         async run() {
           const at = await thread()
           await threads.clear(at)
-          if ((await threads.get(at)).title !== name) await superego.dispatch('thread.rename', { id: at, title: name })
+          if ((await threads.get(at)).title !== name) await superego.dispatch('thread.rename', { thread: at, title: name })
           return threads.get(at)
         },
       }))

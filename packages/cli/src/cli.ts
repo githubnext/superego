@@ -178,8 +178,8 @@ async function startThread(args: { dir?: string; machine?: string; prompt?: stri
   // A local directory is resolved here; on another machine it is passed as given, or left to that daemon's default.
   const cwd = machine.config ? args.dir : resolve(args.dir ?? '.')
   const thread = await on(machine, async (call) => {
-    // Actions take their parameters by name; thread.create picks the folder's profile unless one is named.
-    const created = await call('action.run', { id: 'thread.create', params: { ...(cwd ? { cwd } : {}), ...(args.profile ? { profile: args.profile } : {}), ...(args.prompt ? { prompt: args.prompt } : {}), ...(args.worktree ? { worktree: true } : {}) }, exposure: 'cli' }) as ThreadInfo
+    // Actions take their parameters by name; thread.start picks the folder's profile unless one is named.
+    const created = await call('action.run', { id: 'thread.start', params: { ...(cwd ? { cwd } : {}), ...(args.profile ? { profile: args.profile } : {}), ...(args.prompt ? { prompt: args.prompt } : {}), ...(args.worktree ? { worktree: true } : {}) }, exposure: 'cli' }) as ThreadInfo
     return created
   })
   if (args.open) openInApp(machine.id, thread.id)
@@ -1042,14 +1042,14 @@ async function main() {
     }
     case 'threads': case 'ls': return threads(values.machine, Boolean(values.archived))
     case 'unread': return unreadCommand(values.machine, Boolean(values.count))
-    case 'new': case 'create': return startThread({ dir: rest[0], machine: values.machine, prompt: values.prompt, profile: values.profile, worktree: values.worktree, open: false })
+    case 'new': case 'start': return startThread({ dir: rest[0], machine: values.machine, prompt: values.prompt, profile: values.profile, worktree: values.worktree, open: false })
     case 'profile': case 'profiles': return profileCommand(rest[0], rest.slice(1), values)
     case 'extension': case 'extensions': return extensionCommand(rest[0], rest.slice(1), values)
     case 'read': return readCommand(rest[0], values)
     case 'send': {
       const [id, ...text] = rest
       if (!id || !text.length) throw new RpcError('usage', `${app.id} send <thread> <text...>`)
-      await on(resolveMachine(values.machine), (call) => call('thread.submit', { id, text: text.join(' ') }))
+      await on(resolveMachine(values.machine), (call) => call('thread.send', { thread: id, text: text.join(' ') }))
       return print({ ok: true }, () => {})
     }
     case 'machines': return machinesCommand(rest[0], rest.slice(1), values)

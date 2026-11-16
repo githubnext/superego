@@ -1,5 +1,5 @@
 /// <reference path="./env.d.ts" />
-// web-panes, UI half: Preview, a web page beside the thread (a link it names, opened beside; the agent's open_pane
+// web-panes, UI half: Preview, a web page beside the thread (a link it names, opened beside; the agent's pane_open
 // "preview"), and Artifact, an HTML file the agent wrote, shown as a page. Both reload from their header; an artifact
 // also whenever the thread moves on, as it may have rewritten it.
 import { useEffect, useState } from 'react'

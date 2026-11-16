@@ -50,7 +50,7 @@ export default defineUiExtension({
 ```
 
 Then, in `profile.ts`: `ui: ['./ui/order.tsx'], panes: { order: 'an order, with its lines. Params: { id }' }` (or, from
-a daemon extension, `superego.pane('order', '…')`). The agent opens it with `open_pane({ kind: 'order', params: { id: '1234' } })`; so can you, with
+a daemon extension, `superego.pane('order', '…')`). The agent opens it with `pane_open({ kind: 'order', params: { id: '1234' } })`; so can you, with
 `superego do pane.open --params '{"id":"<thread>","kind":"order","params":{"id":"1234"}}'`.
 
 ## What a module can import
@@ -132,7 +132,7 @@ Talking to the daemon:
 - `call(machine.id, 'orders.find', params)`: a read, a daemon extension's method (or any protocol method). A promise of
   its result.
 - `useDispatch()` → `dispatch(id, params, { machine: machine.id })`: run an action (a daemon extension's, or a
-  built-in like `pane.open`, `thread.submit`): something that changes things. Returns a promise of its result.
+  built-in like `pane.open`, `thread.send`): something that changes things. Returns a promise of its result.
 - `useValue<T>(machine.id, machine.state === 'connected', 'orders.recent')`: a daemon extension's live value, kept
   current. Undefined until it arrives, null while nothing publishes it yet (the profile hasn't loaded). However many
   components watch the same value, the window holds one subscription.
@@ -142,9 +142,9 @@ Opening things:
 
 <!-- check: ui; declare const dispatch: import('superego/ui').Dispatch, thread: ThreadInfo -->
 ```ts
-dispatch('pane.open', { id: thread.id, kind: 'editor', params: { path: 'notes/a.md', line: 12 } }, { machine: machine.id })
-dispatch('pane.open', { id: thread.id, kind: 'preview', params: { url: 'http://localhost:3000' } }, { machine: machine.id })
-dispatch('thread.submit', { id: thread.id, text: 'Ship it' }, { machine: machine.id })
+dispatch('pane.open', { thread: thread.id, kind: 'editor', params: { path: 'notes/a.md', line: 12 } }, { machine: machine.id })
+dispatch('pane.open', { thread: thread.id, kind: 'preview', params: { url: 'http://localhost:3000' } }, { machine: machine.id })
+dispatch('thread.send', { thread: thread.id, text: 'Ship it' }, { machine: machine.id })
 ```
 
 Components: `Button`, `IconButton`, `TextField`, `TextArea`, `Select`, `Switch`, `List`, `ListItem`, `Panel`,

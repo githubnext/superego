@@ -72,7 +72,7 @@ export function terminalExtension({ spawn = spawnPty, shell = userShell }: { spa
           onStatus: () => publish(thread),
           // `exit`: done with it, so its pane goes. Anything else stays to be read, and started again.
           onExit: (code) => {
-            if (code === 0) void superego.dispatch('pane.close', { id: thread, pane }).catch((error) => console.error('terminal: closing its pane:', error))
+            if (code === 0) void superego.dispatch('pane.close', { thread: thread, pane }).catch((error) => console.error('terminal: closing its pane:', error))
           },
         })
         terminals.set(key, terminal)

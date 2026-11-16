@@ -88,7 +88,7 @@ Bundled extensions get more than a profile's:
   work in the transcript (as `tasks` does).
 - **New thread fields**: `superego.newThreadField({ component, from })`. `component` gets `{ machine, cwd, value,
   onChange }` and draws a field in the dialog (a checkbox: `<label className="new-thread__check">`); its value goes to
-  `thread.create` as `options.<name>`, for the daemon half's `creating` hook. `from(thread)` is its value for a thread
+  `thread.start` as `options.<name>`, for the daemon half's `creating` hook. `from(thread)` is its value for a thread
   started like that one (⌘N). Shown while the machine picked has the extension. `worktrees` has one.
 - **Window actions** with keys: `superego.action(defineAction({ id: 'orders.open', title, keys: 'mod+shift+o', when, run(params, context) { … } }))`;
   ids start with the extension's name. `when(context)` says when keys and the palette offer it (`(c) => Boolean(c.selection)`);

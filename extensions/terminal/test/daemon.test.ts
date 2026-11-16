@@ -58,8 +58,8 @@ async function attach(peer: RpcPeer, thread: string, pane: string, size = { cols
 }
 
 async function terminalPane(peer: RpcPeer, params?: unknown) {
-  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
-  const pane = await peer.call<Pane>('pane.open', { id: thread.id, kind: 'terminal', ...(params ? { params } : {}) })
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
+  const pane = await peer.call<Pane>('pane.open', { thread: thread.id, kind: 'terminal', ...(params ? { params } : {}) })
   return { thread: thread.id, pane: pane.id }
 }
 
@@ -114,16 +114,16 @@ it('stops the shell when its pane closes or its thread is archived', async () =>
   }
   const closing = await terminalPane(peer)
   const one = await pidOf(closing.thread, closing.pane)
-  await peer.call('pane.close', { id: closing.thread, pane: closing.pane })
+  await peer.call('pane.close', { thread: closing.thread, pane: closing.pane })
   await until(() => !alive(one), 'the shell to stop as its pane closed')
   await expect(Channels.of(peer).open(IO, { thread: closing.thread, pane: closing.pane })).rejects.toThrow(/No terminal pane/)
 
   const archiving = await terminalPane(peer)
   const two = await pidOf(archiving.thread, archiving.pane)
-  const other = await peer.call<Pane>('pane.open', { id: archiving.thread, kind: 'terminal', params: { n: 2 } })
+  const other = await peer.call<Pane>('pane.open', { thread: archiving.thread, kind: 'terminal', params: { n: 2 } })
   const three = await pidOf(archiving.thread, other.id)
   expect(three).not.toBe(two)
-  await peer.call('thread.archive', { id: archiving.thread })
+  await peer.call('thread.archive', { thread: archiving.thread })
   await until(() => !alive(two) && !alive(three), 'both shells to stop as the thread was archived')
   await close()
 })

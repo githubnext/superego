@@ -43,7 +43,7 @@ const decode = (base64: string): Uint8Array<ArrayBuffer> => {
 
 type Read = { content: string; mtimeMs?: number; size?: number }
 async function read(entry: Pick<Entry, 'machine' | 'thread' | 'path' | 'type'>) {
-  const { content, mtimeMs, size } = await rpc<Read>(entry.machine, 'file.read', { id: entry.thread, path: entry.path, base64: true })
+  const { content, mtimeMs, size } = await rpc<Read>(entry.machine, 'file.read', { thread: entry.thread, path: entry.path, base64: true })
   const url = URL.createObjectURL(new Blob([decode(content)], { type: entry.type }))
   return { url, version: typeof mtimeMs === 'number' && typeof size === 'number' ? { mtimeMs, size } : undefined }
 }
@@ -104,7 +104,7 @@ async function check(group: Entry[]) {
   const checking = new Promise<void>((resolve) => { done = resolve })
   for (const entry of group) { entry.checking = checking; entry.checkedAt = now() }
   try {
-    const { files } = await rpc<{ files: (FileVersion | null)[] }>(machine, 'file.stat', { id: thread, paths: group.map((e) => e.path) })
+    const { files } = await rpc<{ files: (FileVersion | null)[] }>(machine, 'file.stat', { thread: thread, paths: group.map((e) => e.path) })
     await Promise.all(group.map((entry, index) => {
       const version = files[index]
       // Gone (or unreadable now): what was shown stays.

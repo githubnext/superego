@@ -281,7 +281,7 @@ function Open({ block }: { block: Extract<Block, { type: 'open' }> }) {
   const dispatch = useDispatch()
   const [error, setError] = useState<string>()
   const params = block.kind === 'preview' ? { url: block.url } : block.kind === 'diff' ? undefined : { path: block.path, ...(block.line ? { line: block.line } : {}) }
-  const open = () => dispatch('pane.open', { id: thread.id, kind: block.kind, ...(params ? { params } : {}) }, { machine: machine.id, source: 'blocks' })
+  const open = () => dispatch('pane.open', { thread: thread.id, kind: block.kind, ...(params ? { params } : {}) }, { machine: machine.id, source: 'blocks' })
     .then(() => setError(undefined), (e: Error) => setError(e.message))
   return (
     <span className="blocks-open">

@@ -63,7 +63,7 @@ describe('superego', () => {
   })
 
   it('starts the daemon on demand and runs threads', async () => {
-    const created = await superegoJson(['create', home, '-p', 'hi from the cli'])
+    const created = await superegoJson(['start', home, '-p', 'hi from the cli'])
     expect(created).toMatchObject({ machine: 'local', cwd: home })
     await until(async () => (await superegoJson(['threads']))[0]?.status.state === 'done')
     await superego(['send', created.id, 'again'])
@@ -72,7 +72,7 @@ describe('superego', () => {
   }, starting(1))
 
   it("reads a thread's last answer, waiting while it works, a message just sent too", async () => {
-    const created = await superegoJson(['create', home, '-p', 'first question'])
+    const created = await superegoJson(['start', home, '-p', 'first question'])
     expect(await superegoJson(['read', created.id, '--wait'])).toMatchObject({ thread: { id: created.id, state: 'done' }, answer: 'echo: first question' })
     await superego(['send', created.id, 'second question'])
     // Right after the send: its answer to that, not the one before.
@@ -104,14 +104,14 @@ describe('superego', () => {
 
   it('lists actions and runs any of them with do', async () => {
     const actions = await superegoJson(['actions'])
-    expect(actions.map((a: any) => a.id)).toEqual(expect.arrayContaining(['thread.create', 'thread.rename', 'ask-user.answer']))
-    expect(await superego(['actions'])).toMatch(/thread\.rename\s+id title\s+Rename the thread/)
-    const created = await superegoJson(['do', 'thread.create', '--title', 'via do'])
-    await superego(['do', 'thread.rename', '--id', created.id, '--title', 'renamed via do'])
+    expect(actions.map((a: any) => a.id)).toEqual(expect.arrayContaining(['thread.start', 'thread.rename', 'ask-user.answer']))
+    expect(await superego(['actions'])).toMatch(/thread\.rename\s+thread title\s+Rename the thread/)
+    const created = await superegoJson(['do', 'thread.start', '--title', 'via do'])
+    await superego(['do', 'thread.rename', '--thread', created.id, '--title', 'renamed via do'])
     expect((await superegoJson(['threads'])).find((s: any) => s.id === created.id).title).toBe('renamed via do')
-    await superego(['do', 'thread.rename', `--params`, JSON.stringify({ id: created.id, title: 'from json' })])
+    await superego(['do', 'thread.rename', `--params`, JSON.stringify({ thread: created.id, title: 'from json' })])
     expect((await superegoJson(['threads'])).find((s: any) => s.id === created.id).title).toBe('from json')
-    await expect(superego(['do', 'thread.rename', '--id', created.id])).rejects.toThrow(/title/)
+    await expect(superego(['do', 'thread.rename', '--thread', created.id])).rejects.toThrow(/title/)
     await expect(superego(['do', 'nope.nope'])).rejects.toThrow(/nope\.nope/)
     expect((await superegoJson(['actions', 'log'])).some((e: any) => e.id === 'thread.rename' && e.source === 'cli')).toBe(true)
   })
@@ -128,9 +128,9 @@ describe('superego', () => {
     writeFileSync(join(made.dir, 'orders.ts'), `import { defineExtension, defineTool, obj, str } from 'superego'
 export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'find_order', label: 'Find order', description: 'Find an order.', parameters: obj({ number: str() }), async execute() { return { output: [{ type: 'text', text: 'shipped' }] } } })] })
 `)
-    await expect(superego(['create', project, '-P', 'support'])).rejects.toThrow(/allow/)
+    await expect(superego(['start', project, '-P', 'support'])).rejects.toThrow(/allow/)
     await superego(['profile', 'allow', 'support'], undefined, project)
-    const thread = await superegoJson(['create', project, '-P', 'support', '-p', 'hello'])
+    const thread = await superegoJson(['start', project, '-P', 'support', '-p', 'hello'])
     expect(thread.profile).toMatchObject({ name: 'support', scope: 'project' })
     await until(async () => (await superegoJson(['threads'])).find((s: any) => s.id === thread.id)?.status.state === 'done')
     // Its types again, as after a fresh clone: still allowed, since only its tsconfig.json was written.
@@ -149,7 +149,7 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     const list = await superegoJson(['machines'])
     expect(list.map((m: any) => [m.label, m.state])).toEqual([['This computer', 'answers'], ['Second', 'answers']])
 
-    const remote = await superegoJson(['create', '-m', 'second', '-p', 'over there'])
+    const remote = await superegoJson(['start', '-m', 'second', '-p', 'over there'])
     expect(remote.machine).not.toBe('local')
     await until(async () => (await superegoJson(['threads', '-m', 'Second']))[0]?.status.state === 'done')
     expect((await superegoJson(['threads'])).some((s: any) => s.id === remote.id && s.title === 'over there')).toBe(false)
@@ -248,7 +248,7 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
   it('marks threads waiting for sign-in, and says how to sign in again', async () => {
     // The scripted model rejects a key that starts with "reject", as Anthropic does one it doesn't know.
     writeFileSync(join(home, 'auth.json'), JSON.stringify({ faux: { type: 'api_key', key: 'reject-me' } }))
-    const created = await superegoJson(['create', home, '-p', 'are you there'])
+    const created = await superegoJson(['start', home, '-p', 'are you there'])
     await until(async () => (await superegoJson(['threads'])).find((t: any) => t.id === created.id)?.status.kind === 'auth')
     const listed = await superego(['threads'])
     expect(listed).toMatch(new RegExp(`${created.id}\\s+~ waiting for sign-in`))

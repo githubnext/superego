@@ -17,7 +17,7 @@ machine   a daemon (this computer, or one reached over ssh)
       └─ pane   a view beside the thread: a diff, a file, a web page, a profile's own
 ```
 
-Everything the app does is an **action** with an id (`thread.create`, `pane.open`, `vault.graph`). The command line,
+Everything the app does is an **action** with an id (`thread.start`, `pane.open`, `vault.graph`). The command line,
 the window, keyboard shortcuts and extensions all run actions. `superego actions` lists what a machine offers.
 
 ## Extending Superego: start with `extension new`
@@ -53,12 +53,12 @@ Each says which profile it uses. `superego <command> --help` gives any command's
 
 ```sh
 superego                          # start a thread here and open it in the app
-superego create . -p "fix tests"  # start one without the app; prints its id
+superego start . -p "fix tests"  # start one without the app; prints its id
 superego send <thread> "and the docs" && superego read <thread> --wait   # its answer, once it stops working
 superego threads --json           # every thread, with its status
 superego actions                  # what `superego do` can run
 superego mcp                      # those exposed to MCP, as an MCP server on stdio (cli topic)
-superego do thread.rename --id <thread> --title "Fix the tests"
+superego do thread.rename --thread <thread> --title "Fix the tests"
 superego profile new [name]       # .superego/profiles/<name>/profile.ts, in this project, with types for an editor
 superego daemon restart           # onto the installed code
 ```
