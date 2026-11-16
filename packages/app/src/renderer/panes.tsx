@@ -23,7 +23,7 @@ import { fileKind, paneKind, paneTitle, shownPanes, useNarrow, useRegistry, View
 import { Contained } from './contained.tsx'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
-import { PaneMenu, ThreadBody } from './ThreadView.tsx'
+import { ThreadBody } from './ThreadView.tsx'
 import { PaneMoveTo } from './view-menu.tsx'
 import { FileEditor } from './file-editor.tsx'
 import { BRING_FORWARD, focusRegion } from './focus.ts'
@@ -259,7 +259,6 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
               {widths.map((w, i) => <i key={i} className={shown[i]! >= 0.5 ? 'is-in' : ''} style={{ width: Math.max(4, Math.round((w / total) * 52)) }} />)}
             </span>
           )}
-          <PaneMenu machine={machine} thread={thread} add />
           <SegmentedControl label="Pane layout" className="strip__layout" options={LAYOUTS} value={stacked ? 'stack' : 'scroll'}
             onChange={(next) => void dispatch('pane.layout', { layout: next }, { source: 'strip' })} />
         </>

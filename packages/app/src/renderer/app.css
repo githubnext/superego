@@ -794,8 +794,6 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .strip__map { flex: none; display: flex; align-items: center; gap: 2px; padding: 0 6px; }
 .strip__map i { display: block; height: 8px; border-radius: 2px; background: light-dark(rgb(0 0 0 / .1), rgb(255 255 255 / .12)); }
 .strip__map i.is-in { background: light-dark(rgb(0 0 0 / .32), rgb(255 255 255 / .36)); }
-.strip .thread__panes { width: 26px; height: 24px; min-height: 24px; color: var(--superego-muted); box-shadow: none; background: none; }
-.strip .thread__panes:hover { background: var(--superego-hover); color: var(--superego-text); }
 /* Wide, the strip sits in the title bar: the tabs on a quiet track, the focused one raised. */
 /* Short of room, the tabs shrink to their icons, then the track. */
 .app__strip { display: flex; min-width: 0; }
@@ -806,7 +804,6 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .app__strip .strip__tab.is-focused { background: var(--superego-raised); color: var(--superego-text); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(255 255 255 / .08)), 0 1px 2px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); }
 .app__strip .strip__tab.is-away { color: var(--superego-faint); }
 .app__strip .strip__tab:not(.is-focused):hover { background: var(--superego-hover); color: var(--superego-text); }
-.app__strip .strip .thread__panes { width: 28px; height: 28px; min-height: 28px; border-radius: 6px; }
 .strip__layout { margin-left: 2px; }
 /* Narrow: a switcher, one column at a time. */
 .strip--narrow { height: 40px; border-bottom: 0; padding: 0 8px; }

@@ -179,7 +179,7 @@ void (async () => {
   await both('tab-menu')
   await closeMenus()
   // The menu that opens panes: a right-click on an entry is its view's menu, which takes it out of there.
-  await run(`document.querySelector('.strip .thread__panes').click()`)
+  await run(`document.querySelector('.thread__panes').click()`)
   await until(`document.querySelectorAll('.superego-menu .superego-menu__item').length > 0`, 'the menu that opens panes')
   const offered = await items('.superego-menu')
   await run(`(() => { const i = document.querySelector('.superego-menu .superego-menu__item'); const r = i.getBoundingClientRect(); i.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: r.left + 10, clientY: r.top + 5 })) })()`)

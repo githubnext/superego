@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react'
 import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
 import { NOTE_ENTRY, waitingForSignIn, type Attachment, type ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CheckIcon, FileIcon, type Icon as PhosphorIcon, IconButton, ListIcon, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, PanePlusIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TextArea, XIcon } from '@superego/ui'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CheckIcon, FileIcon, type Icon as PhosphorIcon, IconButton, ListIcon, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, PanePlusIcon, StatusGlyph, statusLabel, StopIcon, TextArea, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
 import { completionsIn, divideWork, entryOwner, entryView, fileKind, folderKind, paneMenu, PlacedViews, sentWithIn, Slot, shownPanes, toolOwner, toolRow, toolView, unfoldedTool, urlKind, useLayout, useRegistry, type ToolRowCall, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
@@ -158,7 +158,6 @@ function TitleField({ machine, thread }: { machine: MachineEntry; thread: Thread
  * the pane menu to the caller (a phone's thread sheet lists the panes itself).
  */
 export function ThreadTools({ machine, thread, panes = true }: { machine: MachineEntry; thread: ThreadInfo; panes?: boolean }) {
-  const registry = useRegistry()
   return (
     <span className="thread__tools">
       <span className="thread__chips">
@@ -167,8 +166,8 @@ export function ThreadTools({ machine, thread, panes = true }: { machine: Machin
         {thread.profile && <ProfileChip machine={machine} thread={{ ...thread, profile: thread.profile }} />}
       </span>
       <PlacedViews place="header" machine={machine} thread={thread} frame={withContextMenu('header', { machine: machine.id, thread })} />
-      {/* Without a pane shown, there's no strip to open one from: here instead. */}
-      {panes && !shownPanes(registry, { machine: machine.id, thread }).length && <PaneMenu machine={machine} thread={thread} />}
+      {/* The one way to open a pane, last in the title bar, with panes shown or not. */}
+      {panes && <PaneMenu machine={machine} thread={thread} />}
     </span>
   )
 }
@@ -988,7 +987,7 @@ function Composer({ machine, thread, busy, inbox, onJump }: { machine: MachineEn
  * Open a pane beside the thread: the kinds that show something without being told what (Changes, a profile's own).
  * Each is a view the layout puts in the pane menu: a right-click on it moves it elsewhere or takes it out.
  */
-export function PaneMenu({ machine, thread, add = false }: { machine: MachineEntry; thread: ThreadInfo; add?: boolean }) {
+export function PaneMenu({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const registry = useRegistry()
   const where = { machine: machine.id, thread }
   const kinds = paneMenu(registry, useLayout(where).placed, where)
@@ -997,7 +996,7 @@ export function PaneMenu({ machine, thread, add = false }: { machine: MachineEnt
   return (
     <Menu.Root>
       <Menu.Trigger render={<IconButton label="Open a pane beside" className="thread__panes" />}>
-        {add ? <PlusIcon size={14} aria-hidden /> : <PanePlusIcon size={18} aria-hidden />}
+        <PanePlusIcon size={18} aria-hidden />
       </Menu.Trigger>
       <Menu.Popup align="end">
         {kinds.map(({ kind, title }) => (
