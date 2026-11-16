@@ -13,7 +13,7 @@ import { useLocalState } from './local-state.ts'
 import { readAttachment, splitMessage } from './attachments.ts'
 import { askFor, complete, completing, menuFor, type Completion, type Offered } from './composer.ts'
 import { ProfileSwitch } from './profile-pick.tsx'
-import { UnarchiveButton } from './thread-header.tsx'
+import { UnarchiveButton } from './thread-actions.tsx'
 import type { Message } from './transcript.tsx'
 
 /**

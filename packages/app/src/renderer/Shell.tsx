@@ -19,7 +19,8 @@ import { ViewContextMenu, withContextMenu, withMenuButton } from './view-menu.ts
 import { refreshFontsSoon } from './fonts.ts'
 import { AuthNotice } from './AuthNotice.tsx'
 import { ThreadView } from './ThreadView.tsx'
-import { ArchiveButton, ThreadTitle, ThreadTools, UnarchiveButton } from './thread-header.tsx'
+import { ThreadTitle, ThreadTools } from './thread-header.tsx'
+import { ArchiveButton, UnarchiveButton } from './thread-actions.tsx'
 import { StripSlot } from './panes.tsx'
 import { useSidebarEdge } from './sidebar-edge.tsx'
 import { SettingsView } from './SettingsView.tsx'
@@ -100,7 +101,7 @@ export function Shell() {
       const found = allThreads[s.machine]?.find((x) => x.id === s.thread) ?? (s.machine === selection?.machine && s.thread === selection.thread ? thread : undefined)
       return found?.panes ? { ...found, panes: shownPanes(registry, { machine: s.machine, thread: found }) } : found
     },
-    projects, lastThread, appSetting: (key) => watched<SettingsSnapshot>('app', 'settings.watch', {})?.values[key] as never,
+    projects, lastThread, appSetting: (key) => watched<SettingsSnapshot>(APP, 'settings.watch', {})?.values[key] as never,
     toggleSidebar: () => narrow ? setDrawer((open) => !open) : sidebar.show(),
     back: history.back, forward: history.forward,
     railTabs: tabsNow,
