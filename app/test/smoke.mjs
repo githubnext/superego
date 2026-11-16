@@ -1,6 +1,7 @@
 // Headless end-to-end: the real app, the real daemon (scripted model), driven through the renderer.
 // Phase "first" creates a thread and chats; phase "reopen" is a fresh app process that must find it on the same
-// daemon, which outlived the first app. Run by test/smoke.sh.
+// daemon, which outlived the first app; phase "generation" finds a daemon of another protocol generation instead, and
+// restarts it. Run by test/smoke.sh.
 import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron'
 
 const phase = process.env.SUPEREGO_SMOKE_PHASE ?? 'first'
@@ -85,6 +86,21 @@ const key = async (keyCode, modifiers = ['meta']) => {
   const contents = BrowserWindow.getAllWindows()[0].webContents
   contents.sendInputEvent({ type: 'keyDown', keyCode, modifiers })
   contents.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
+}
+
+if (phase === 'generation') {
+  // smoke.sh put a daemon of another protocol generation in place: it refuses the link, which gives up on it, so the
+  // app can't ask it anything. It's restarted onto this build all the same, and the threads are there again.
+  await openNotice('service', 'restart required, refused by another generation')
+  await until(`document.querySelector('.rail-notice__popup .service-notice')?.textContent.includes('Restart required')`, 'restart required, in full')
+  await run(`[...document.querySelectorAll('.rail-notice__popup .service-notice button')].find((b) => b.textContent === 'Restart when idle').click()`)
+  await until(`!document.querySelector('.rail-notice--service') && Boolean(document.querySelector('.threads.is-ready'))`, 'restarted onto this generation', 40_000)
+  if (!(await run(`window.superego.call('local', 'thread.list', {})`)).length) { await fail('the restart lost the threads'); throw new Error('failed') }
+  console.log('smoke(generation): ok')
+  clearTimeout(deadline)
+  writeFileSync(`${process.env.SUPEREGO_HOME}/passed`, '')
+  app.exit(0)
+  return
 }
 
 await until(`Boolean(document.querySelector('.threads.is-ready'))`, 'local machine connected')

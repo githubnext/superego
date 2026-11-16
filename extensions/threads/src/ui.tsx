@@ -77,7 +77,7 @@ function Threads() {
           <NewThreadButton label="New thread…" />
         </span>
       </div>
-      {projects.length === 0 && <div className="threads__empty">{ready ? 'Start a thread in a folder to see its project here.' : 'Connecting…'}</div>}
+      {projects.length === 0 && <div className="threads__empty">{ready ? 'Start a thread in a folder to see its project here.' : local?.state === 'connecting' || !local?.error ? 'Connecting…' : local.error}</div>}
       {projects.map((project) => (
         <section key={project.key} className={`threads-project ${project.machine.state !== 'connected' ? 'is-stale' : ''}`}>
           <div className="threads-project__head">

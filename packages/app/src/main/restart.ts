@@ -15,7 +15,8 @@ export type ServiceState = {
   error?: string
 }
 export type ServiceAction = 'restart' | 'interrupt' | 'later' | 'review'
-export type ServiceSnapshot = { installedBuild: string; runningBuild: string; busy: boolean; canRestartWhenIdle: boolean }
+/** `runningBuild`: unknown of a daemon that refuses this app's protocol generation, and so never this one's. */
+export type ServiceSnapshot = { installedBuild: string; runningBuild?: string; busy: boolean; canRestartWhenIdle: boolean }
 
 export type RestartIO = {
   inspect(): Promise<ServiceSnapshot>

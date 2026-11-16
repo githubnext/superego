@@ -1,5 +1,6 @@
 #!/bin/sh
-# Two app processes against one daemon, which must outlive the first. Cleans up the daemon afterwards.
+# Two app processes against one daemon, which must outlive the first; then a third against a daemon of another protocol
+# generation, which it restarts. Cleans up the daemon afterwards.
 set -e
 cd "$(dirname "$0")/.."
 # A heavy check: it waits for a slot (../scripts/check.ts), is stopped after 8 minutes (SUPEREGO_SMOKE_TIMEOUT, in
@@ -95,3 +96,14 @@ ELECTRON=node_modules/.bin/electron
 run_app env SUPEREGO_SMOKE_PHASE=first $ELECTRON test/smoke.mjs
 kill -0 "$(cat "$SUPEREGO_HOME/daemon.pid" 2>/dev/null)" 2>/dev/null || { echo "daemon did not outlive the app"; exit 1; }
 run_app env SUPEREGO_SMOKE_PHASE=reopen $ELECTRON test/smoke.mjs
+# A daemon of another protocol generation in its place: it refuses the app, which offers to restart it all the same.
+pid=$(cat "$SUPEREGO_HOME/daemon.pid")
+kill "$pid"
+i=0
+while kill -0 "$pid" 2>/dev/null && [ $i -lt 50 ]; do sleep 0.2; i=$((i + 1)); done
+export SUPEREGO_SOCKET="$SUPEREGO_HOME/generation.sock"
+rm -f "$SUPEREGO_HOME/daemon.pid"
+node test/old-generation.mjs "$SUPEREGO_SOCKET" "$SUPEREGO_HOME/daemon.pid" &
+i=0
+while [ ! -e "$SUPEREGO_HOME/daemon.pid" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+run_app env SUPEREGO_SMOKE_PHASE=generation $ELECTRON test/smoke.mjs

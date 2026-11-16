@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, protocol, session, shell, type MenuItemConstructorOptions } from 'electron'
-import { appEnv, daemonStarting, defaultDataDir, readBuild, socketPath, spawnDaemon } from '@superego/daemon/client'
+import { appEnv, daemonStarting, defaultDataDir, pidPath, readBuild, socketPath, spawnDaemon } from '@superego/daemon/client'
 import {
   arr, bool, compareVersions, defineAction, int, lit, nullable, obj, opt, Router, RpcError, str, union, unknown, waitingForSignIn,
   type AppConfig, type Channel, type DeclaredSection, type Json, type Notifications, type ProfileRef, type ThreadInfo,
@@ -213,8 +213,9 @@ export function startApp(appConfig: AppConfig) {
     if (method === '$connection') {
       broadcast({ machine: APP, method: '$machines', params: machineEntries() })
       refreshDesktop()
+      // Restart required, now it's connected again or has refused (another generation)?
+      if (machine === 'local') setTimeout(pollService)
       if ((params as { state: string }).state === 'connected') {
-        if (machine === 'local') setTimeout(pollService)
         void (linkOf(machine)!.call('threads.watch', {}) as Promise<{ sub: string; value: ThreadInfo[] }>).then(({ sub, value }) => {
           watchSubs.set(machine, sub)
           track(machine, value, false)
@@ -632,28 +633,53 @@ export function startApp(appConfig: AppConfig) {
     }
   }
 
+  /**
+   * Whether this computer's daemon refused the link for speaking another protocol generation. The link gives up on it
+   * for good, and it says nothing of itself (its build, its pid, whether agents are working), but it's restarted the
+   * same as any daemon out of date.
+   */
+  const refused = () => local?.error?.kind === 'version_mismatch'
+  /** The daemon's pid, as it names itself beside its data (and names its successor as it hands over). */
+  function daemonPid() {
+    try { return Number(readFileSync(pidPath(dataDir), 'utf8')) || undefined } catch { return undefined }
+  }
+  async function exited(pid: number) {
+    const deadline = Date.now() + 10_000
+    for (;;) {
+      try { process.kill(pid, 0) } catch { return }
+      if (Date.now() > deadline) throw new Error('The background process did not stop. See daemon.log in the data dir.')
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+  }
+
   const service = new ServiceRestart({
     async inspect() {
       const link = local
-      if (!link?.hello || link.state !== 'connected') throw new Error('The background process is not connected.')
+      const hello = link?.state === 'connected' ? link.hello : undefined
+      if (!hello && !refused()) throw new Error('The background process is not connected.')
       return {
         // The daemon the app would start now is the code next to it on disk.
         installedBuild: readBuild(import.meta.dirname),
-        runningBuild: link.hello.machine.build,
-        canRestartWhenIdle: link.has('restart'),
-        busy: (threadsOf.get('local') ?? []).some((s) => s.status.state === 'working'),
+        ...(hello ? { runningBuild: hello.machine.build } : {}),
+        canRestartWhenIdle: Boolean(hello && link!.has('restart')),
+        // One that refused can't say whether agents are working: they're taken to be, so stopping it asks first.
+        busy: !hello || (threadsOf.get('local') ?? []).some((s) => s.status.state === 'working'),
       }
     },
     async restart(snapshot, interrupt) {
-      const link = local!
-      const pid = link.hello?.machine.pid
-      if (link.has('restart')) {
-        const result = await link.call('daemon.restart', { build: snapshot.runningBuild, interrupt }) as { restarted: boolean }
+      if (snapshot.canRestartWhenIdle) {
+        const pid = local?.hello?.machine.pid
+        const result = await local!.call('daemon.restart', { build: snapshot.runningBuild, interrupt }) as { restarted: boolean }
         if (!result.restarted) return 'busy'
-      } else if (pid) {
-        // Too old to restart itself: stop it (consented to), and the link starts the new one.
-        process.kill(pid, 'SIGTERM')
+        return (await reconnected(pid)).machine.build
       }
+      // One that can't restart itself (too old, or of another generation): stop it, consented to, and link again,
+      // which starts the one installed here.
+      const pid = daemonPid()
+      if (!pid) throw new Error('Could not find the background process. See daemon.pid in the data dir.')
+      try { process.kill(pid, 'SIGTERM') } catch {}
+      await exited(pid)
+      restartLocal()
       return (await reconnected(pid)).machine.build
     },
     async confirmInterruption(snapshot) {
@@ -670,7 +696,7 @@ export function startApp(appConfig: AppConfig) {
       refreshDesktop()
     },
   })
-  const pollService = () => { if (local?.state === 'connected') void service.poll() }
+  const pollService = () => { if (local?.state === 'connected' || refused()) void service.poll() }
   setInterval(pollService, 3000).unref()
 
   /** Quit, and stop this computer's daemon and its agents too, asking first while any are working. */
@@ -684,7 +710,7 @@ export function startApp(appConfig: AppConfig) {
       })
       if (response !== 0) return
     }
-    const pid = local?.hello?.machine.pid
+    const pid = daemonPid()
     for (const link of allLinks()) link.stop()
     if (pid) try { process.kill(pid, 'SIGTERM') } catch {}
     app.quit()
