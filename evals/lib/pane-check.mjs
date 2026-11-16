@@ -3,12 +3,10 @@
 // (window.superegoRegistered), opens each beside the thread, and reports what the pane drew: its text, whether it
 // failed, a screenshot of the pane, and whether a thread started afterwards shows up in it (live data).
 // Run by evals/tasks/kanban.ts as `Electron pane-check.mjs`, with EVAL_WINDOW_CHECK set to its JSON input.
-import { openWindow } from './window.mjs'
+import { windowCheck } from './window.mjs'
 
-// Not awaited at the top: Electron's `ready` comes only once the entry module has run.
-void openWindow().then(async (w) => {
-  if (!w) return
-  const { input, result, finish, run, sleep, until, call, show, shoot, registered } = w
+await windowCheck(async (w) => {
+  const { input, result, run, until, soon, call, show, shot, registered } = w
   result.kinds = {}
   result.registered = {}
   for (const [i, probe] of input.probes.entries()) {
@@ -21,12 +19,15 @@ void openWindow().then(async (w) => {
     await show(title)
     // The pane kinds of the thread's profile, as the window registered them: the profile's UI, and its data views.
     const dir = (await call('thread.list', {})).find((t) => t.id === thread.id)?.profile?.dir
-    let kinds = []
-    for (let tries = 0; tries < 10 && !kinds.length; tries++) {
+    const kindsNow = async () => {
       const now = await registered()
-      if (!now) { result.errors.push('window.superegoRegistered is missing: an app from before it'); break }
-      kinds = [...new Set(now.panes.filter((p) => p.profile && (!dir || p.profile.replace(/\/private(?=\/tmp)/g, "").includes(dir.replace(/^\/private(?=\/tmp)/, "")))).map((p) => p.kind))]
-      if (!kinds.length) await sleep(500)
+      if (!now) throw new Error('window.superegoRegistered is missing: an app from before it')
+      return [...new Set(now.panes.filter((p) => p.profile && (!dir || p.profile.replace(/\/private(?=\/tmp)/g, "").includes(dir.replace(/^\/private(?=\/tmp)/, "")))).map((p) => p.kind))]
+    }
+    // Its profile's UI loads as the thread shows: its pane kinds, once there (none, after a while, is the finding).
+    let kinds = []
+    try { kinds = await until(async () => { const found = await kindsNow(); return found.length && found }, 'its pane kinds', 5000) } catch (error) {
+      if (/superegoRegistered is missing/.test(error.message)) result.errors.push(error.message)
     }
     result.registered[name] = kinds
     // Most likely first: kinds that sound like a board.
@@ -38,18 +39,17 @@ void openWindow().then(async (w) => {
       const pane = (await call('thread.list', {})).find((t) => t.id === thread.id)?.panes?.find((p) => p.kind === kind)
       if (!pane) { report.error = 'no pane after pane.open'; continue }
       const column = `document.querySelector('.panes > [data-column="${pane.id}"]')`
-      report.opened = Boolean(await until(`Boolean(${column})`, 10_000))
-      // Give it time to fetch and draw; done once the seeded threads show, or after a while.
-      await until(`(${column}?.innerText ?? '').includes(${JSON.stringify(input.titles[0])})`, 15_000)
-      await sleep(1000)
+      report.opened = Boolean(await soon(`Boolean(${column})`, 10_000))
+      // Drawn once the seeded threads show (or, after a while, as it is), and at rest.
+      await soon(`(${column}?.innerText ?? '').includes(${JSON.stringify(input.titles[0])})`, 15_000)
+      await w.settled()
       report.text = String(await run(`${column}?.innerText ?? ''`).catch(() => '')).slice(0, 4000)
       report.failed = Boolean(await run(`Boolean(${column}?.querySelector('.extension-failed'))`).catch(() => false))
-      report.screenshot = await shoot(`${input.shots}/${key.replace(/[^\w.-]+/g, '_')}.png`, column)
+      report.screenshot = await shot(`${input.shots}/${key.replace(/[^\w.-]+/g, '_')}.png`, column)
       // Live: a thread started now shows up without anything else happening.
       const fresh = `Live check ${Date.now() % 10000}`
       await call('thread.start', { cwd: input.project, title: fresh })
-      report.live = Boolean(await until(`(${column}?.innerText ?? '').includes(${JSON.stringify(fresh)})`, 12_000))
+      report.live = Boolean(await soon(`(${column}?.innerText ?? '').includes(${JSON.stringify(fresh)})`, 12_000))
     }
   }
-  finish(0)
 })

@@ -2,12 +2,10 @@
 // title (the `thread.badge` slot): before any thread is opened, then after one of the profile's threads is (its UI
 // loads as it shows). Run by evals/tasks/db-badge.ts as `Electron badge-check.mjs`, with EVAL_WINDOW_CHECK set to its
 // JSON input: { titles, open, shots, out, main }.
-import { openWindow } from './window.mjs'
+import { windowCheck } from './window.mjs'
 
-// Not awaited at the top: Electron's `ready` comes only once the entry module has run.
-void openWindow().then(async (w) => {
-  if (!w) return
-  const { input, result, finish, sleep, until, run, row, show, shoot, registered } = w
+await windowCheck(async (w) => {
+  const { input, result, until, soon, run, row, show, shot, settled, registered } = w
   /** What each probe's row shows after its title: the badge's text, title and label, and whether one drew at all. */
   const badges = () => run(`(${JSON.stringify(input.titles)}).map((title) => {
     const li = ${row('__TITLE__').replace('"__TITLE__"', 'title')}
@@ -19,20 +17,23 @@ void openWindow().then(async (w) => {
   result.steps = []
   const step = (what) => result.steps.push(`${what} ${Date.now() % 1_000_000}`)
   step('start')
-  await until(`Boolean(${row(input.titles[0])})`)
+  await soon(`Boolean(${row(input.titles[0])})`)
   step('rows')
-  await sleep(2000)
+  // Before any thread is opened, a profile's UI loads for its listed threads: a badge, if one draws, soon (none, after a
+  // while, is the finding).
+  const drawn = async () => (await badges()).some((b) => b.badge)
+  await until(drawn, 'a badge before any thread is opened', 2000).catch(() => undefined)
+  await settled()
   result.before = await badges()
   step('before')
   await show(input.open)
   step('shown')
-  // Its profile's UI, loaded: give a badge time to draw from the thread's facts.
-  for (let i = 0; i < 20; i++) { result.after = await badges(); if (result.after.some((b) => b.badge)) break; await sleep(500) }
-  await sleep(1000)
+  // Its profile's UI, loaded: a badge drawn from the thread's facts, then the rest at rest.
+  await until(drawn, 'a badge once a thread is shown', 10_000).catch(() => undefined)
+  await settled()
   result.after = await badges()
   step('after')
   result.slots = (await registered())?.slots?.['thread.badge'] ?? []
-  result.screenshot = await shoot(`${input.shots}/sidebar.png`, `document.querySelector('.superego-list-item')?.closest('section')?.parentElement`)
+  result.screenshot = await shot(`${input.shots}/sidebar.png`, `document.querySelector('.superego-list-item')?.closest('section')?.parentElement`)
   step('shot')
-  finish(0)
 })

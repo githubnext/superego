@@ -1,33 +1,17 @@
 // Screenshots of the window's layout (run by test/look.sh): the sidebar shown and hidden (the threads as dots); the thread
 // alone (and dragged narrower) and with Changes beside it (and a file past it); a long title, parent and branch; thread
 // details, their menu and the layout's file beside the thread; a phone, its drawer open, a data view in it, the thread's sheet; a data view
-// as a space; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
-import { app, BrowserWindow, nativeTheme } from 'electron'
-import { writeFileSync } from 'node:fs'
+// as a space; the first-launch page, ⌘N's dialog, Settings and its Keyboard; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
+import { openApp } from './harness.mjs'
 import { threads } from './showcase/threads.mjs'
 
-const fail = (message) => { console.error(`look: FAIL ${message}`); app.exit(1) }
-process.on('uncaughtException', (error) => fail(`uncaught: ${error.stack ?? error}`))
-app.on('web-contents-created', (_e, contents) => contents.on('console-message', (event) => { if (event.level === 'error') console.error('renderer:', event.message) }))
-setTimeout(() => fail('timed out'), 180_000)
-
-await import('../out/main/main.js')
-void (async () => {
-  await app.whenReady()
-  const win = () => BrowserWindow.getAllWindows()[0]
-  const run = (js) => win().webContents.executeJavaScript(js)
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-  const until = async (js, label, ms = 30_000) => {
-    for (let i = 0; i < ms / 100; i++) {
-      if (win() && !win().webContents.isLoading()) { const value = await run(js).catch(() => undefined); if (value) return value }
-      await sleep(100)
-    }
-    fail(`waiting for ${label}`)
-    throw new Error(label)
-  }
-  await until(`window.superego.machines().then((list) => list.find((m) => m.id === 'local')?.state === 'connected')`, 'local machine')
+await openApp({ name: 'look', timeout: 180_000 }, async (t) => {
+  const { run, until } = t
   const [width, height] = (process.env.LOOK_SIZE ?? '1100x760').split('x').map(Number)
-  win().setContentSize(width, height)
+  await t.resize(width, height)
+  // A fresh home: the first-launch page, before any thread.
+  await until(`document.querySelectorAll('.onboarding .onboarding__extension').length > 1`, 'the first-launch page')
+  await t.both('onboarding')
   const project = process.env.SUPEREGO_SHOWCASE_PROJECT
   const state = (id) => `window.superego.call('local', 'thread.list', {}).then((list) => list.find((s) => s.id === '${id}')?.status.state)`
   const turnOn = async (id, text) => {
@@ -49,16 +33,14 @@ void (async () => {
   await run(`[...document.querySelectorAll('.superego-list-item, .threads-rail__dot')].find((li) => (li.textContent + li.getAttribute('aria-label')).includes(${JSON.stringify(title)}.slice(0, 12)))?.click()`)
   await until(`document.querySelectorAll('.transcript .msg').length >= 2`, 'thread shown')
   const out = process.env.SUPEREGO_SHOWCASE_OUT
-  const shot = async (name) => writeFileSync(`${out}/${name}.png`, (await win().webContents.capturePage()).toPNG())
   const setting = (key, value) => run(`window.superego.call('app', 'app.settings.set', { key: '${key}', value: ${JSON.stringify(value)} })`)
   const end = () => run(`document.querySelectorAll('.thread__scroll').forEach((el) => { el.scrollTop = el.scrollHeight })`)
   const both = async (name) => {
     for (const theme of ['light', 'dark']) {
-      nativeTheme.themeSource = theme
-      await sleep(400)
+      await t.theme(theme)
       await end()
-      await sleep(200)
-      await shot(`${name}-${theme}`)
+      await t.settled()
+      await t.shot(`${name}-${theme}`)
     }
   }
   await both('open')
@@ -66,7 +48,7 @@ void (async () => {
   await run(`(() => { const b = document.querySelector('.app__rail .superego-context[data-view="threads.list"] button'); const r = b.getBoundingClientRect()
     b.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })) })()`)
   await until(`!!document.querySelector('.view-menu')`, 'rail menu')
-  await sleep(200)
+  await t.settled()
   await both('rail-menu')
   await run(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
   await until(`!document.querySelector('.view-menu')`, 'rail menu closed')
@@ -79,24 +61,24 @@ void (async () => {
     ${up ? `window.dispatchEvent(new PointerEvent('pointerup', { clientX: x + ${dx}, clientY: y }))` : ''} })()`)
   await edge(180 - await sidebarWidth())
   await until(`window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['app.sidebar.width'] === 180)`, 'sidebar at 180')
-  await sleep(300)
+  await t.settled()
   console.log('sidebar least:', await sidebarWidth())
   await both('sidebar-180')
   await edge(420 - await sidebarWidth())
   await until(`window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['app.sidebar.width'] === 420)`, 'sidebar at 420')
-  await sleep(300)
+  await t.settled()
   console.log('sidebar most:', await sidebarWidth())
   await both('sidebar-420')
   await edge(120 - await sidebarWidth(), { up: false })
-  await sleep(300)
+  await t.settled()
   await both('sidebar-hiding')
   await run(`window.dispatchEvent(new PointerEvent('pointerup', { clientX: 0, clientY: 0 }))`)
   await until(`!!document.querySelector('.threads-rail') && !document.querySelector('.app.is-hiding')`, 'hidden, the threads as dots')
-  await sleep(300)
+  await t.settled()
   await both('sidebar-hidden')
   await edge(300)
   await until(`!!document.querySelector('.threads-project')`, 'dragged out from the rail')
-  await sleep(300)
+  await t.settled()
   console.log('sidebar dragged out:', await sidebarWidth())
   await both('sidebar-out')
   await run(`document.querySelector('.app__edge').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`)
@@ -108,16 +90,16 @@ void (async () => {
     window.dispatchEvent(new PointerEvent('pointermove', { clientX: x + ${dx}, clientY: y }))
     window.dispatchEvent(new PointerEvent('pointerup', { clientX: x + ${dx}, clientY: y })) })()`)
   await dragBy(-360)
-  await sleep(300)
+  await t.settled()
   console.log('dragged:', await run(`document.querySelector('.panes__column--thread').offsetWidth`))
   await both('open-dragged')
   await run(`${handle}.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`)
-  await sleep(300)
+  await t.settled()
   console.log('reset:', await run(`document.querySelector('.panes__column--thread').offsetWidth`))
   console.log('open:', await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'diff' }).then((r) => JSON.stringify(r), (e) => 'ERR ' + e.message)`))
   await until(`!!document.querySelector('.git-changes, .diff-file')`, 'changes')
   console.log('pane:', await run(`document.querySelector('.panes__column:last-child')?.innerText.slice(0, 200)`))
-  await sleep(500)
+  await t.settled()
   await both('open-changes')
   // Changes focused, a file beside it off to the right.
   await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'editor', params: { path: 'README.md' } })`)
@@ -125,14 +107,14 @@ void (async () => {
   const panesOf = () => run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').panes.map((p) => p.id))`)
   const [diffId, editorId] = await panesOf()
   await run(`window.superego.call('local', 'pane.focus', { thread: '${id}', pane: '${diffId}' })`)
-  await sleep(300)
+  await t.settled()
   await run(`document.querySelector('[data-column="${diffId}"]')?.focus()`)
   await both('open-changes-file')
   await run(`window.superego.call('local', 'pane.close', { thread: '${id}', pane: '${editorId}' })`)
   await run(`document.activeElement?.blur()`)
-  await sleep(300)
+  await until(`!document.querySelector('[data-column="${editorId}"]')`, 'the file closed')
   await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true }))`)
-  await sleep(300)
+  await until(`!document.querySelector('.app__sidebar')`, 'the sidebar hidden')
   await both('dots-changes')
   // Focus shown: the thread holds the keyboard.
   await run(`document.querySelector('.composer textarea')?.focus()`)
@@ -140,22 +122,20 @@ void (async () => {
   await run(`document.activeElement?.blur()`)
   const paneId = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').panes[0].id)`)
   await run(`window.superego.call('local', 'pane.close', { thread: '${id}', pane: '${paneId}' })`)
-  await sleep(300)
+  await until(`!document.querySelector('[data-column="${paneId}"]')`, 'Changes closed')
   await both('dots')
   // A long title, a parent and a long branch, then archived: the title bar fits the window, wide and at its narrowest.
   await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true }))`)
   const long = 'Make the next and previous thread keys follow the order the sidebar shows them in, children under their parents'
-  const { id: longId } = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(project)}, worktree: true, parent: '${id}', title: ${JSON.stringify(long)} })`)
+  const { id: longId } = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(project)}, options: { worktrees: true }, parent: '${id}', title: ${JSON.stringify(long)} })`)
   await until(`([...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('Make the next'))?.click(), document.querySelector('.thread__title')?.title === ${JSON.stringify(long)})`, 'long thread shown')
   const tight = async (name) => {
     await both(name)
     for (const narrow of [860, 600]) {
-      win().setContentSize(narrow, height)
-      await sleep(300)
+      await t.resize(narrow, height)
       await both(`${name}-${narrow}`)
     }
-    win().setContentSize(width, height)
-    await sleep(300)
+    await t.resize(width, height)
   }
   await tight('long')
   await run(`window.superego.call('local', 'thread.archive', { thread: '${longId}' })`)
@@ -171,21 +151,19 @@ void (async () => {
   await until(`[...document.querySelectorAll('.view-menu .superego-menu__item')].some((i) => i.textContent === 'Move to')`, 'view menu')
   await run(`[...document.querySelectorAll('.view-menu .superego-menu__item')].find((i) => i.textContent === 'Move to').focus()`)
   await run(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))`)
-  await sleep(300)
+  await t.settled()
   await both('details-menu')
   await run(`[...document.querySelectorAll('.view-menu .superego-menu__item')].find((i) => i.textContent === 'Edit layout…').click()`)
   await until(`!!document.querySelector('.layout-note')`, 'layout.json beside the thread')
-  await sleep(500)
+  await t.settled()
   await both('layout-file')
   const layoutPane = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').panes.at(-1).id)`)
   await run(`window.superego.call('local', 'pane.close', { thread: '${id}', pane: '${layoutPane}' })`)
   await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i', metaKey: true, bubbles: true }))`)
   await until(`!document.querySelector('.threads-details')`, 'details hidden')
   // The window goes no narrower than 600: zoomed, its page is a phone's 375.
-  win().setContentSize(600, height)
-  win().webContents.setZoomFactor(1.6)
-  // Laid out again from the wide window: a theme changed at once can miss the next shot.
-  await sleep(1500)
+  await t.resize(600, height)
+  await t.zoom(1.6)
   await both('phone')
   await run(`document.querySelector('.app__mobilebar button')?.click()`)
   await until(`!!document.querySelector('.app__sidebar')`, 'drawer')
@@ -208,16 +186,28 @@ void (async () => {
   await run(`document.querySelector('.thread-sheet .threads-model').click()`)
   await run(`document.querySelector('.app__scrim--sheet').click()`)
   // Wide again: the data view as a space, its button in the rail.
-  win().webContents.setZoomFactor(1)
-  win().setContentSize(width, height)
-  await sleep(1000)
+  await t.zoom(1)
+  await t.resize(width, height)
   await until(`!!document.querySelector('.app__rail [aria-label="Skills"]')`, 'Skills in the rail')
   await run(`document.querySelector('.app__rail [aria-label="Skills"]').click()`)
   await until(`document.querySelector('.data-view--space')?.textContent.includes('$release')`, 'skills space')
-  await sleep(1500)
+  await t.settled()
   await both('data-view')
   await setting('app.layout', {})
+  // ⌘N's dialog, with what extensions add to it.
+  await t.click('.app__rail [aria-label="Threads"]')
+  t.key('n')
+  await until(`[...document.querySelectorAll('.new-thread .worktrees-check')].length > 0`, 'the new thread dialog')
+  await t.both('new-thread')
+  t.key('Escape', [])
+  await until(`!document.querySelector('.new-thread')`, 'the new thread dialog closed')
+  // Settings: the app's own, and its Keyboard with a clash in it.
+  await t.click('.app__settings')
+  await until(`document.querySelector('.settings')?.textContent.includes('Appearance')`, 'Settings')
+  await t.both('settings')
+  await setting('app.keys', { 'app.sidebar': 'mod+shift+r', 'app.palette': 'mod+shift+r' })
+  await until(`Boolean(document.querySelector('[data-action="app.sidebar"] .keymap__clash'))`, 'a clash in Keyboard')
+  await t.both('keyboard', `document.querySelector('.keymap').scrollIntoView()`)
+  await setting('app.keys', {})
   console.log(`look: done in ${out}`)
-  writeFileSync(`${process.env.SUPEREGO_HOME}/passed`, '')
-  app.exit(0)
-})()
+})

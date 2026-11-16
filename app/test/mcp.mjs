@@ -2,43 +2,15 @@
 // (running, needing a key, needing sign-in, signed in, switched off, waiting for Allow), an OAuth client's secret, the Add dialog filled from the catalogue,
 // and a thread that called a server's tools: its rows (one open, with its arguments, result and image), its chip's list
 // and thread details. Light and dark, into $SUPEREGO_SHOWCASE_OUT.
-import { app, BrowserWindow, nativeTheme } from 'electron'
-import { writeFileSync } from 'node:fs'
+import { openApp } from './harness.mjs'
 
-const fail = (message) => { console.error(`look: FAIL ${message}`); app.exit(1) }
-process.on('uncaughtException', (error) => fail(`uncaught: ${error.stack ?? error}`))
-app.on('web-contents-created', (_e, contents) => contents.on('console-message', (event) => { if (event.level === 'error') console.error('renderer:', event.message) }))
-setTimeout(() => fail('timed out'), 180_000)
-
-await import('../out/main/main.js')
-void (async () => {
-  await app.whenReady()
-  const out = process.env.SUPEREGO_SHOWCASE_OUT
-  const win = () => BrowserWindow.getAllWindows()[0]
-  const run = (js) => win().webContents.executeJavaScript(js)
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-  const until = async (js, label, ms = 30_000) => {
-    for (let i = 0; i < ms / 100; i++) {
-      if (win() && !win().webContents.isLoading()) { const value = await run(js).catch(() => undefined); if (value) return value }
-      await sleep(100)
-    }
-    fail(`waiting for ${label}`)
-    throw new Error(label)
-  }
-  const both = async (name, before = '') => {
-    for (const theme of ['light', 'dark']) {
-      nativeTheme.themeSource = theme
-      await sleep(400)
-      if (before) await run(before)
-      await sleep(150)
-      writeFileSync(`${out}/${name}-${theme}.png`, (await win().webContents.capturePage()).toPNG())
-    }
-  }
+await openApp({ name: 'mcp', timeout: 180_000 }, async (t) => {
+  const { run, until } = t
+  const both = t.both
   const click = (selector, text) => run(`[...document.querySelectorAll(${JSON.stringify(selector)})].find((el) => el.textContent.includes(${JSON.stringify(text)}))?.click()`)
   const escape = () => run(`document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
 
-  await until(`window.superego.machines().then((list) => list.find((m) => m.id === 'local')?.state === 'connected')`, 'local machine')
-  win().setContentSize(1100, 760)
+  await t.resize(1100, 760)
 
   // A thread without a profile: it has the servers used in threads without one (the tracker, as "linear").
   const project = process.env.SUPEREGO_SHOWCASE_PROJECT
@@ -50,7 +22,7 @@ void (async () => {
   await until(`document.querySelectorAll('.transcript .msg').length >= 2`, 'thread shown')
   // Its run of work open, and the call that filed the issue and the chart open in it.
   await run(`document.querySelectorAll('.transcript details:not([open])').forEach((d) => { if (!d.closest('.step') || d.classList.contains('steps') || d.querySelector(':scope > summary')?.textContent.match(/Called|Create|Chart|MCP/)) d.open = true })`)
-  await sleep(200)
+  await until(`document.querySelectorAll('.step').length > 0`, 'its steps open')
   await run(`document.querySelectorAll('.step').forEach((d) => { if (/Create issue|Chart/.test(d.textContent)) d.open = true })`)
   await until(`!!document.querySelector('.mcp-call')`, 'an MCP row open')
   await both('mcp-transcript', `document.querySelectorAll('.thread__scroll').forEach((el) => { el.scrollTop = el.scrollHeight })`)
@@ -96,8 +68,4 @@ void (async () => {
   await until(`[...document.querySelectorAll('.mcp-dialog input')].some((i) => i.value === 'SENTRY_ACCESS_TOKEN')`, 'Sentry filled in')
   await both('mcp-add')
   await escape()
-
-  nativeTheme.themeSource = 'system'
-  writeFileSync(`${process.env.SUPEREGO_HOME}/passed`, '')
-  app.exit(0)
-})()
+})

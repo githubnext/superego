@@ -1,29 +1,12 @@
 // Screenshots of Settings → Web access (run by `test/look.sh <dir> web`): pairing a device, the devices paired, and each
 // state Tailscale can be in, light and dark. A stub `tailscale` stands in for the real one (test/showcase/tailscale.sh).
-import { app, BrowserWindow, nativeTheme } from 'electron'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { request } from 'node:http'
+import { openApp } from './harness.mjs'
 
-const fail = (message) => { console.error(`look: FAIL ${message}`); app.exit(1) }
-process.on('uncaughtException', (error) => fail(`uncaught: ${error.stack ?? error}`))
-setTimeout(() => fail('timed out'), 180_000)
-
-await import('../out/main/main.js')
-void (async () => {
-  await app.whenReady()
+await openApp({ name: 'web', timeout: 180_000 }, async (t) => {
+  const { run, until } = t
   const home = process.env.SUPEREGO_HOME
-  const out = process.env.SUPEREGO_SHOWCASE_OUT
-  const win = () => BrowserWindow.getAllWindows()[0]
-  const run = (js) => win().webContents.executeJavaScript(js)
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-  const until = async (js, label, ms = 30_000) => {
-    for (let i = 0; i < ms / 100; i++) {
-      if (win() && !win().webContents.isLoading()) { const value = await run(js).catch(() => undefined); if (value) return value }
-      await sleep(100)
-    }
-    fail(`waiting for ${label}`)
-    throw new Error(label)
-  }
   const http = (port, path, headers, body) => new Promise((resolve, reject) => {
     const req = request({ host: '127.0.0.1', port, path, method: body ? 'POST' : 'GET', headers }, (res) => { res.resume(); res.on('end', () => resolve(res)) })
     req.on('error', reject)
@@ -31,21 +14,12 @@ void (async () => {
   })
   const call = (method, params = {}) => run(`window.superego.call('local', ${JSON.stringify(method)}, ${JSON.stringify(params)})`)
   const set = (key, value) => call('settings.set', { key, value })
-  const both = async (name) => {
-    for (const theme of ['light', 'dark']) {
-      nativeTheme.themeSource = theme
-      await sleep(400)
-      await run(`document.querySelector('.web-access')?.scrollIntoView({ block: 'end' })`)
-      await sleep(150)
-      writeFileSync(`${out}/${name}-${theme}.png`, (await win().webContents.capturePage()).toPNG())
-    }
-  }
+  const both = (name) => t.both(name, `document.querySelector('.web-access')?.scrollIntoView({ block: 'end' })`)
 
   // Never the machine's own tailscale: only the stub may be on PATH (look.sh sees to it).
   const real = (process.env.PATH ?? '').split(':').filter((dir) => dir && dir !== `${home}/bin` && existsSync(`${dir}/tailscale`))
-  if (real.length) return fail(`a real tailscale is on PATH (${real.join(', ')}): run this through test/look.sh <dir> web`)
-  await until(`window.superego.machines().then((list) => list.find((m) => m.id === 'local')?.state === 'connected')`, 'local machine')
-  win().setContentSize(1100, 760)
+  if (real.length) t.fail(`a real tailscale is on PATH (${real.join(', ')}): run this through test/look.sh <dir> web`)
+  await t.resize(1100, 760)
   const port = 20000 + Math.floor(Math.random() * 20000)
   await set('web.port', port)
   await set('web.access', 'local')
@@ -98,7 +72,4 @@ void (async () => {
   renameSync(`${home}/bin/tailscale`, `${home}/bin/tailscale-gone`)
   await tailscale('missing', status)
   await both('web-tailscale-missing')
-  nativeTheme.themeSource = 'system'
-  writeFileSync(`${home}/passed`, '')
-  app.exit(0)
-})()
+})

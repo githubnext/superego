@@ -1,53 +1,42 @@
-// The window checks' shared start: the installed app, headless, on the run's daemon (its environment), its main loaded
-// from `input.main`. Each check (pane-check.mjs, badge-check.mjs) runs as `Electron <check>.mjs` with its JSON input in
-// EVAL_WINDOW_CHECK, writes its result to `input.out`, and quits.
-import { app, BrowserWindow } from 'electron'
+// The window checks' shared start, on the app's own harness (app/test/harness.mjs): the installed app, headless, on the
+// run's daemon (its environment), its main loaded from `input.main`. Each check (pane-check.mjs, badge-check.mjs) runs as
+// `Electron <check>.mjs` with its JSON input in EVAL_WINDOW_CHECK, writes its result to `input.out`, and quits. A check
+// reports what it found rather than failing: a wait that runs out is a finding (`soon` gives undefined), and anything
+// that goes wrong is kept in `result.errors`.
+import { app } from 'electron'
 import { writeFileSync } from 'node:fs'
+import { openApp } from '../../app/test/harness.mjs'
 
-/** The window, once connected: run from a promise the entry module doesn't await (Electron's `ready` waits for it). */
-export async function openWindow() {
+/**
+ * Run `check(w)` once the window is connected, with the harness's helpers and the check's own: `input`, `result`,
+ * `soon(js, ms)`, `call`, `row`, `show`, `registered`. Awaited at the top of the check's module.
+ */
+export async function windowCheck(check) {
   const input = JSON.parse(process.env.EVAL_WINDOW_CHECK)
   const result = { errors: [], console: [] }
-  const finish = (code = 0) => { writeFileSync(input.out, JSON.stringify(result, null, 2)); app.exit(code) }
-  process.on('uncaughtException', (error) => { result.errors.push(`uncaught: ${error.stack ?? error}`); finish(1) })
+  const finish = (code) => { writeFileSync(input.out, JSON.stringify(result, null, 2)); app.exit(code) }
   app.on('web-contents-created', (_e, contents) => contents.on('console-message', (event) => {
     if (event.level === 'error' || event.level === 'warning') result.console.push(String(event.message).slice(0, 500))
   }))
-  setTimeout(() => { result.errors.push('timed out'); finish(1) }, 170_000)
-
-  await import(input.main)
-  await app.whenReady()
-  const win = () => BrowserWindow.getAllWindows()[0]
-  const run = (js) => win().webContents.executeJavaScript(js)
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-  const until = async (js, ms = 20_000) => {
-    for (let i = 0; i < ms / 200; i++) {
-      if (win() && !win().webContents.isLoading()) { const value = await run(js).catch(() => undefined); if (value) return value }
-      await sleep(200)
+  await openApp({
+    name: 'eval window check', main: input.main, timeout: 170_000, size: [1500, 1000], shots: input.shots,
+    onFail: (message) => { result.errors.push(message); finish(1) },
+    onPass: () => finish(0),
+  }, async (t) => {
+    /** What `until` gives, or undefined once `ms` is up: for a check, not finding it is the finding. */
+    const soon = (js, ms = 20_000) => t.until(js, 'a finding', ms).catch(() => undefined)
+    const call = (method, params) => t.call(method, params)
+    /** The sidebar's row for a thread, by its title (an expression). */
+    const row = (title) => `[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes(${JSON.stringify(title)}))`
+    /** Show a thread, by its title in the sidebar; its profile's UI loads as it shows. */
+    const show = async (title) => {
+      await soon(`Boolean(${row(title)})`)
+      await t.run(`${row(title)}?.click()`)
+      await soon(`document.querySelector('.thread__title')?.textContent === ${JSON.stringify(title)}`)
+      await t.settled()
     }
-    return undefined
-  }
-  const call = (method, params) => run(`window.superego.call('local', ${JSON.stringify(method)}, ${JSON.stringify(params)})`)
-  /** The sidebar's row for a thread, by its title (an expression). */
-  const row = (title) => `[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes(${JSON.stringify(title)}))`
-  /** Show a thread, by its title in the sidebar; its profile's UI loads as it shows. */
-  const show = async (title) => {
-    await until(`Boolean(${row(title)})`)
-    await run(`${row(title)}?.click()`)
-    await sleep(2500)
-  }
-  /** A screenshot of the window, or of an element's box (an expression), as PNG. */
-  const shoot = async (path, element) => {
-    const box = element && await run(`(() => { const r = ${element}?.getBoundingClientRect(); return r && { x: Math.floor(r.x), y: Math.floor(r.y), width: Math.ceil(r.width), height: Math.ceil(r.height) } })()`).catch(() => undefined)
-    writeFileSync(path, (await win().webContents.capturePage(box && box.width && box.height ? box : undefined)).toPNG())
-    return path
-  }
-  /** What the window's extensions registered now (window.superegoRegistered: panes, slots and views, by owner). */
-  const registered = () => run('window.superegoRegistered?.() ?? null')
-  if (!await until(`window.superego.machines().then((list) => list.find((m) => m.id === 'local')?.state === 'connected')`, 30_000)) {
-    result.errors.push('the window never connected'); finish(1)
-    return undefined
-  }
-  win().setContentSize(1500, 1000)
-  return { input, result, finish, win, run, sleep, until, call, row, show, shoot, registered }
+    /** What the window's extensions registered now (window.superegoRegistered: panes, slots and views, by owner). */
+    const registered = () => t.run('window.superegoRegistered?.() ?? null')
+    await check({ ...t, input, result, soon, call, row, show, registered })
+  })
 }

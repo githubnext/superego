@@ -3,31 +3,13 @@
 // by its shortcut; a pane maximized in each, and restored (Esc, a double click, another pane opening). Checks on the way that a stack never passes the window's edge, and that the last pane's handle is
 // clear of it and drags the pane wider. Light and dark, into
 // $SUPEREGO_SHOWCASE_OUT.
-import { app, BrowserWindow, nativeTheme } from 'electron'
-import { writeFileSync } from 'node:fs'
+import { openApp } from './harness.mjs'
 import { threads } from './showcase/threads.mjs'
 
-const fail = (message) => { console.error(`panes: FAIL ${message}`); app.exit(1) }
-process.on('uncaughtException', (error) => fail(`uncaught: ${error.stack ?? error}`))
-app.on('web-contents-created', (_e, contents) => contents.on('console-message', (event) => { if (event.level === 'error') console.error('renderer:', event.message) }))
-setTimeout(() => fail('timed out'), 240_000)
 
-await import('../out/main/main.js')
-void (async () => {
-  await app.whenReady()
-  const win = () => BrowserWindow.getAllWindows()[0]
-  const run = (js) => win().webContents.executeJavaScript(js)
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-  const until = async (js, label, ms = 30_000) => {
-    for (let i = 0; i < ms / 100; i++) {
-      if (win() && !win().webContents.isLoading()) { const value = await run(js).catch(() => undefined); if (value) return value }
-      await sleep(100)
-    }
-    fail(`waiting for ${label}`)
-    throw new Error(label)
-  }
-  await until(`window.superego.machines().then((list) => list.find((m) => m.id === 'local')?.state === 'connected')`, 'local machine')
-  win().setContentSize(1300, 820)
+await openApp({ name: 'panes', timeout: 240_000 }, async (t) => {
+  const { run, until } = t
+  await t.resize(1300, 820)
   const project = process.env.SUPEREGO_SHOWCASE_PROJECT
   const { id } = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(project)} })`)
   await run(`window.superego.call('local', 'thread.send', { thread: '${id}', text: ${JSON.stringify(threads[0].prompt)} })`)
@@ -35,24 +17,19 @@ void (async () => {
   await run(`window.superego.call('local', 'thread.seen', { thread: '${id}' })`)
   await run(`document.querySelector('.app__sidebar .superego-list-item')?.click()`)
   await until(`document.querySelectorAll('.transcript .msg').length >= 2`, 'thread shown')
-  // A hidden window's page never has focus, so focus moves wouldn't hold; emulate it (nothing reaches the screen).
-  const dbg = win().webContents.debugger
-  dbg.attach()
-  await dbg.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true })
+  await t.emulateFocus()
 
-  const out = process.env.SUPEREGO_SHOWCASE_OUT
   const both = async (name) => {
     for (const theme of ['light', 'dark']) {
-      nativeTheme.themeSource = theme
-      await sleep(400)
-      writeFileSync(`${out}/panes-${name}-${theme}.png`, (await win().webContents.capturePage()).toPNG())
+      await t.theme(theme)
+      await t.shot(`panes-${name}-${theme}`)
     }
   }
   const paneIds = () => run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').panes.map((p) => p.id))`)
   const open = async (kind, params, ready) => {
     await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: '${kind}', params: ${JSON.stringify(params)} })`)
     await until(ready, kind)
-    await sleep(400)
+    await t.settled()
   }
   const key = (init) => run(`window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, ...${JSON.stringify(init)} }))`)
   const shownPanes = () => run(`[...document.querySelectorAll('.panes > [data-column]:not([data-column="thread"])')].filter((c) => getComputedStyle(c).visibility !== 'hidden').map((c) => c.dataset.column)`)
@@ -61,19 +38,18 @@ void (async () => {
   await open('editor', { path: 'README.md' }, `!!document.querySelector('.file-editor .cm-content')`)
   await open('folder', { path: '' }, `!!document.querySelector('.files-tree__row')`)
   const [diff, editor, folder] = await paneIds()
-  if (!folder) fail('three panes')
+  if (!folder) t.fail('three panes')
   // Scrolled: the editor focused, the row past the window's edge.
   await run(`window.superego.call('local', 'pane.focus', { thread: '${id}', pane: '${editor}' })`)
-  await sleep(600)
-  const scrolled = await run(`(() => { const p = document.querySelector('.panes'); return p.scrollWidth > p.clientWidth })()`)
-  if (!scrolled) fail('scrolled: the row should run past the window')
+  await until(`(() => { const p = document.querySelector('.panes'); return p.scrollWidth > p.clientWidth })()`, 'scrolled: the row past the window')
+  await t.settled()
   await both('scroll')
   // The last pane focused, its handle in view clear of the window's edge; dragged out, it grows and the row scrolls on.
   await run(`window.superego.call('local', 'pane.focus', { thread: '${id}', pane: '${folder}' })`)
-  await sleep(600)
   const handle = `[...document.querySelectorAll('.panes > .panes__gap')].at(-1)`
-  const clear = await run(`(() => { const p = document.querySelector('.panes').getBoundingClientRect(), h = ${handle}.getBoundingClientRect(); return Math.round(p.right - h.right) })()`)
-  if (clear < 16) fail(`the last handle should be clear of the window's edge, not ${clear}px from it`)
+  // Scrolled to the last pane: its handle in view, clear of the window's edge.
+  await until(`(() => { const p = document.querySelector('.panes').getBoundingClientRect(), h = ${handle}.getBoundingClientRect(); return p.right - h.right >= 16 })()`, "the last handle clear of the window's edge")
+  await t.settled()
   await both('scroll-end')
   const lastWidth = () => run(`document.querySelector('[data-column="${folder}"]').offsetWidth`)
   const before = await lastWidth()
@@ -85,7 +61,7 @@ void (async () => {
   await run(`${handle}.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`)
   await until(`document.querySelector('[data-column="${folder}"]').offsetWidth === ${before}`, 'the last pane put back')
   await run(`window.superego.call('local', 'pane.focus', { thread: '${id}', pane: '${editor}' })`)
-  await sleep(600)
+  await t.settled()
 
   // Maximized from its tab's button: over the whole of the thread's area, the rest kept under it as they were (the
   // row's scroll too). An Esc the editor has no use for restores it.
@@ -93,34 +69,34 @@ void (async () => {
   const rowScroll = await run(`document.querySelector('.panes').scrollLeft`)
   await run(`document.querySelector('[data-column="${editor}"] .panes__maximize').click()`)
   await until(`document.querySelector('.panes > .is-maximized')?.dataset.column === '${editor}'`, 'maximized from its button')
-  await sleep(300)
+  await t.settled()
   const covers = await run(`(() => { const s = document.querySelector('.sheet').getBoundingClientRect(), c = document.querySelector('[data-column="${editor}"]').getBoundingClientRect(); return [s.width - c.width, s.height - c.height].every((d) => Math.abs(d) < 1) })()`)
-  if (!covers) fail('maximized: the pane should cover the thread and the rest')
-  if (JSON.stringify(await shownPanes()) !== JSON.stringify([editor])) fail(`maximized: only it shown, not ${await shownPanes()}`)
-  if (!await run(`document.querySelector('[data-column="thread"]').inert`)) fail('maximized: the thread under it is out of reach')
-  if (await run(`document.querySelector('[data-column="${editor}"] .panes__maximize').getAttribute('aria-label')`) !== 'Restore README.md') fail('maximized: its button restores')
+  if (!covers) t.fail('maximized: the pane should cover the thread and the rest')
+  if (JSON.stringify(await shownPanes()) !== JSON.stringify([editor])) t.fail(`maximized: only it shown, not ${await shownPanes()}`)
+  if (!await run(`document.querySelector('[data-column="thread"]').inert`)) t.fail('maximized: the thread under it is out of reach')
+  if (await run(`document.querySelector('[data-column="${editor}"] .panes__maximize').getAttribute('aria-label')`) !== 'Restore README.md') t.fail('maximized: its button restores')
   await both('scroll-maximized')
   await run(`document.querySelector('[data-column="${editor}"] .cm-content').focus()`)
   await run(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }))`)
   await until(`!document.querySelector('.panes.has-maximized')`, 'Esc restored it')
-  if (await run(`document.querySelector('.panes').scrollLeft`) !== rowScroll) fail('restored: the row scrolled as it was')
-  if (JSON.stringify(await shownPanes()) !== JSON.stringify([diff, editor, folder])) fail(`restored: every pane shown, not ${await shownPanes()}`)
+  if (await run(`document.querySelector('.panes').scrollLeft`) !== rowScroll) t.fail('restored: the row scrolled as it was')
+  if (JSON.stringify(await shownPanes()) !== JSON.stringify([diff, editor, folder])) t.fail(`restored: every pane shown, not ${await shownPanes()}`)
 
   // Stacked, from the strip's switch: the focused pane in front, and nothing past the window's edge.
   await run(`document.querySelector('.strip__layout [aria-label="Stack panes"]').click()`)
   await until(`!!document.querySelector('.panes--stack')`, 'stacked')
-  await sleep(400)
+  await t.settled()
   const fits = () => run(`(() => { const p = document.querySelector('.panes'); return p.scrollWidth <= p.clientWidth })()`)
-  if (!await fits()) fail('stacked: the row passes the window')
-  if (JSON.stringify(await shownPanes()) !== JSON.stringify([editor])) fail(`stacked: the focused pane in front, not ${await shownPanes()}`)
+  if (!await fits()) t.fail('stacked: the row passes the window')
+  if (JSON.stringify(await shownPanes()) !== JSON.stringify([editor])) t.fail(`stacked: the focused pane in front, not ${await shownPanes()}`)
   await both('stack')
 
   // A tab in the strip brings its pane to the front, with the focus; ⌃Tab the next; ⌘⌥← the one before.
   const tab = (pane) => run(`[...document.querySelectorAll('.strip__tab')][${JSON.stringify([undefined, diff, editor, folder])}.indexOf(${JSON.stringify(pane)})].click()`)
   const inFront = async (pane, label) => {
     await until(`document.activeElement?.closest('[data-column]')?.dataset.column === '${pane}'`, `${label}: focus`)
-    await sleep(200)
-    if (JSON.stringify(await shownPanes()) !== JSON.stringify([pane])) fail(`${label}: ${pane} in front, not ${await shownPanes()}`)
+    await t.settled()
+    if (JSON.stringify(await shownPanes()) !== JSON.stringify([pane])) t.fail(`${label}: ${pane} in front, not ${await shownPanes()}`)
   }
   await tab(diff)
   await inFront(diff, 'strip')
@@ -145,11 +121,11 @@ void (async () => {
   // Opened from outside the window (the agent's pane_open, another client's): in front, the focus left where it was.
   await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'editor', params: { path: 'src/dates.mjs' } })`)
   await until(`document.querySelectorAll('.panes > [data-column]').length === 5`, 'a fourth pane')
-  await sleep(400)
+  await t.settled()
   const fourth = (await paneIds()).at(-1)
-  if (JSON.stringify(await shownPanes()) !== JSON.stringify([fourth])) fail(`opened: the new pane in front, not ${await shownPanes()}`)
-  if (await maximized()) fail('opened: the layout restored')
-  if (!await fits()) fail('stacked with four: the row passes the window')
+  if (JSON.stringify(await shownPanes()) !== JSON.stringify([fourth])) t.fail(`opened: the new pane in front, not ${await shownPanes()}`)
+  if (await maximized()) t.fail('opened: the layout restored')
+  if (!await fits()) t.fail('stacked with four: the row passes the window')
   await both('stack-opened')
 
   // A pane's ···, for a view that goes elsewhere too: Move to, with what its buttons do (Maximize, Close). None otherwise.
@@ -162,18 +138,18 @@ void (async () => {
   const closeMenus = async () => {
     for (let i = 0; i < 3 && await run(`!!document.querySelector('.superego-menu')`); i++) {
       await run(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))`)
-      await sleep(200)
+      await t.settled()
     }
     await until(`!document.querySelector('.superego-menu')`, 'menus closed')
   }
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
   for (const pane of [diff, editor]) {
-    if (await run(`!!document.querySelector('[data-column="${pane}"] .panes__tab .view-menu__button')`)) fail(`a pane with nowhere to move: no ···`)
+    if (await run(`!!document.querySelector('[data-column="${pane}"] .panes__tab .view-menu__button')`)) t.fail(`a pane with nowhere to move: no ···`)
   }
   await open('threads.details', {}, `!!document.querySelector('.panes__column .threads-details')`)
   const details = (await paneIds()).at(-1)
   const shown = await menuOf(details)
-  if (!same(shown, ['Maximize⌘⇧↩', 'Move to', 'Close⌘W'])) fail(`a view's pane's menu: Maximize, Move to and Close, not ${shown}`)
+  if (!same(shown, ['Maximize⌘⇧↩', 'Move to', 'Close⌘W'])) t.fail(`a view's pane's menu: Maximize, Move to and Close, not ${shown}`)
   await run(`[...document.querySelectorAll('.pane-menu .superego-menu__item')].find((i) => i.textContent === 'Move to').click()`)
   await until(`!!document.querySelector('.view-menu__places [data-place]')`, 'Move to →')
   await both('tab-menu')
@@ -184,7 +160,7 @@ void (async () => {
   const offered = await items('.superego-menu')
   await run(`(() => { const i = document.querySelector('.superego-menu .superego-menu__item'); const r = i.getBoundingClientRect(); i.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: r.left + 10, clientY: r.top + 5 })) })()`)
   await until(`!!document.querySelector('.view-menu [data-remove]')`, 'an entry\'s own menu')
-  if (await run(`document.querySelector('.view-menu [data-remove]').textContent`) !== 'Remove from pane menu') fail('an entry\'s menu: Remove from pane menu')
+  if (await run(`document.querySelector('.view-menu [data-remove]').textContent`) !== 'Remove from pane menu') t.fail('an entry\'s menu: Remove from pane menu')
   await both('open-menu-entry')
   await run(`document.querySelector('.view-menu [data-remove]').click()`)
   await until(`![...document.querySelectorAll('.superego-menu .superego-menu__item')].some((i) => i.textContent === ${JSON.stringify(offered[0])})`, `${offered[0]} out of the menu that opens panes`)
@@ -193,7 +169,4 @@ void (async () => {
   // Its shortcut toggles it back.
   await key({ key: '|', code: 'Backslash', metaKey: true, shiftKey: true })
   await until(`!document.querySelector('.panes--stack')`, 'scrolled again')
-  console.log(`panes: done in ${out}`)
-  writeFileSync(`${process.env.SUPEREGO_HOME}/passed`, '')
-  app.exit(0)
-})()
+})
