@@ -5,19 +5,20 @@ import { ArrowClockwiseIcon, Button } from '@superego/ui'
 import { useRegistry } from './extension.tsx'
 import { RailNotice } from './rail-notice.tsx'
 import type { ServiceAction, ServiceState } from '../shared/service.ts'
+import { APP } from '../shared/app-settings.ts'
 
 export function ServiceNotice({ rail = false }: { rail?: boolean }) {
   const [state, setState] = useState<ServiceState>()
   useEffect(() => {
     let live = true
-    const off = window.superego.onEvent((event) => { if (event.machine === 'app' && event.method === 'service.changed') setState(event.params as ServiceState) })
-    void (window.superego.call('app', 'service.get', {}) as Promise<ServiceState>).then((next) => { if (live) setState((current) => current ?? next) })
+    const off = window.superego.onEvent((event) => { if (event.machine === APP && event.method === 'service.changed') setState(event.params as ServiceState) })
+    void (window.superego.call(APP, 'service.get', {}) as Promise<ServiceState>).then((next) => { if (live) setState((current) => current ?? next) })
     return () => { live = false; off() }
   }, [])
   const dispatch = useRegistry().router.dispatch
   if (!state || state.phase === 'current') return null
 
-  const act = (action: ServiceAction) => void dispatch('service.act', { action }, { machine: 'app', source: 'notice' }).catch((error: Error) => {
+  const act = (action: ServiceAction) => void dispatch('service.act', { action }, { machine: APP, source: 'notice' }).catch((error: Error) => {
     setState((current) => current && { ...current, phase: 'error', deferred: false, error: error.message })
   })
   const restarting = state.phase === 'restarting'

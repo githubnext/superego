@@ -11,6 +11,7 @@ import { Markdown } from './Markdown.tsx'
 import { declineUi, dismissRevokedUi, reopenUi, usePendingUi, useProfileSource, useRevokedUi } from './profile-ui.ts'
 import { useRegistry } from './extension.tsx'
 import { RailNotice } from './rail-notice.tsx'
+import { APP } from '../shared/app-settings.ts'
 
 /** A size in bytes, as people say it. */
 export const sizeOf = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -34,7 +35,7 @@ function ProfileUiNotice({ machine, thread }: { machine: MachineEntry; thread: T
   const say = (id: 'profile.allowUi' | 'profile.declineUi') => {
     setError(undefined)
     const { machine, profile, hash, files } = pending
-    return dispatch(id, { machine, profile, hash, files }, { machine: 'app', source: 'profile-ui' }).catch((e: Error) => { setError(e.message); throw e })
+    return dispatch(id, { machine, profile, hash, files }, { machine: APP, source: 'profile-ui' }).catch((e: Error) => { setError(e.message); throw e })
   }
   const notNow = () => void say('profile.declineUi').then(() => declineUi(pending), () => {})
   const show = (path: string) => void dispatch('pane.open', {

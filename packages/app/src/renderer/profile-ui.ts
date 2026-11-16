@@ -21,6 +21,7 @@ import {
 } from '@superego/client/profile-ui'
 import { machine as client } from './client.ts'
 import { useRegistry, type Registry, type UiExtension } from './extension.tsx'
+import { APP } from '../shared/app-settings.ts'
 
 /** What a profile's modules import by name: built on first use, from this window's own modules. */
 let shared: Promise<Map<string, string>> | undefined
@@ -76,14 +77,14 @@ let allowedLoad: Promise<AllowedUi[]> | undefined
 function allowedList() {
   return allowedLoad ??= (async () => {
     window.superego.onEvent((event) => {
-      if (event.machine !== 'app') return
+      if (event.machine !== APP) return
       if (event.method === 'profileUi.allowed') { allowed = event.params as AllowedUi[]; void settle() }
       if (event.method === 'profileUi.declined') { declined = event.params as AllowedUi[]; changed() }
     })
     // A window with no say of its own (superego/testing's) answers none.
     const [yes, no] = await Promise.all([
-      window.superego.call('app', 'profileUi.allowed', {}) as Promise<AllowedUi[] | null>,
-      window.superego.call('app', 'profileUi.declined', {}) as Promise<AllowedUi[] | null>,
+      window.superego.call(APP, 'profileUi.allowed', {}) as Promise<AllowedUi[] | null>,
+      window.superego.call(APP, 'profileUi.declined', {}) as Promise<AllowedUi[] | null>,
     ])
     allowed = yes ?? []
     declined = no ?? []

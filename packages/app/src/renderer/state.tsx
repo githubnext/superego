@@ -16,6 +16,7 @@ import { focusProvider } from './provider-focus.ts'
 import { useWindowEvents } from './window-events.ts'
 import { freeze, projectKey, useProjectList, type Project } from './projects.ts'
 import { sidebarIsHidden, showSidebar, TIGHT, type SidebarMode } from './sidebar-mode.ts'
+import { APP } from '../shared/app-settings.ts'
 
 /** The thread the window shows: its machine's id and its own. */
 export type Selection = { machine: string; thread: string }
@@ -107,7 +108,7 @@ export function useShell() {
     openSettings: () => openSettings(true),
     /** Settings, on a machine's Providers, at `provider`: to sign in to it again. */
     signIn: (machine: string, provider: string) => {
-      setLocalState('settings.target', machine, 'app')
+      setLocalState('settings.target', machine, APP)
       focusProvider(machine, provider)
       openSettings(true)
     },

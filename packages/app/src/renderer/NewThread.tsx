@@ -12,6 +12,7 @@ import { shortPath } from './short-path.ts'
 import { ProfileSelect } from './profile-pick.tsx'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines, useSelection, type NewThreadStart } from './state.tsx'
+import { APP } from '../shared/app-settings.ts'
 
 /** Where the last thread started from here was: its machine, and the folder on each machine. Every window's. */
 type Last = { machine?: string; cwd?: Record<string, string> }
@@ -135,7 +136,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void create() }
   }
   const browse = async () => {
-    const picked = await window.superego.call('app', 'app.pickFolder', { defaultPath: cwd || undefined }) as string | null
+    const picked = await window.superego.call(APP, 'app.pickFolder', { defaultPath: cwd || undefined }) as string | null
     if (picked) setCwd(picked)
   }
 

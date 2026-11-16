@@ -7,7 +7,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { SettingsSnapshot } from '@superego/protocol'
 import { Button, Dialog, TextArea, WarningIcon } from '@superego/ui'
 import { useAppSetting, useSettings, watched } from './client.ts'
-import { LAYOUT } from '../shared/app-settings.ts'
+import { APP, LAYOUT } from '../shared/app-settings.ts'
 import { parseLayout, PLACES, type LayoutView } from '../shared/layout.ts'
 import { defineWindowAction } from './actions.tsx'
 import { useRegistry, type EditorSlotProps, type Registry, type UiApi } from './extension.tsx'
@@ -22,17 +22,17 @@ export function registerLayoutText(core: UiApi) {
     id: 'layout.edit', title: 'Edit layout…',
     async run(_params, c) {
       if (window.superego.web) return editing.set(true)
-      const file = dataOf(watched<SettingsSnapshot>('app', 'settings.watch', {}))?.file
+      const file = dataOf(watched<SettingsSnapshot>(APP, 'settings.watch', {}))?.file
       if (file && c.selection?.machine === 'local') {
         await c.dispatch('pane.open', { thread: c.selection.thread, kind: 'editor', params: { path: file } }, { machine: 'local', source: 'layout' })
-      } else await c.dispatch('app.layout.open', {}, { machine: 'app', source: 'layout' })
+      } else await c.dispatch('app.layout.open', {}, { machine: APP, source: 'layout' })
     },
   }))
   core.slot('editor.bar', LayoutFileNote)
 }
 
 /** What's wrong with the layout file, if anything. */
-const useLayoutData = () => window.superego.web ? undefined : dataOf(useSettings('app', true))
+const useLayoutData = () => window.superego.web ? undefined : dataOf(useSettings(APP, true))
 
 /**
  * The window's views, as the layout knows them: one entry an id. Declared in several scopes (a profile's on two
@@ -55,7 +55,7 @@ export function LayoutViews() {
   const key = JSON.stringify(views)
   useEffect(() => {
     if (window.superego.web) return
-    const timer = setTimeout(() => void registry.router.dispatch('app.layout.views', { views }, { machine: 'app', source: 'layout' }).catch(() => {}), 500)
+    const timer = setTimeout(() => void registry.router.dispatch('app.layout.views', { views }, { machine: APP, source: 'layout' }).catch(() => {}), 500)
     return () => clearTimeout(timer)
   }, [key])
   return null
@@ -119,7 +119,7 @@ function LayoutDialog({ onClose }: { onClose(): void }) {
   const save = () => {
     const read = parseLayout(text, layoutViews(registry.views))
     if ('problem' in read) return setProblem(read.problem)
-    registry.router.dispatch('app.settings.set', { key: LAYOUT, value: read.layout }, { machine: 'app', source: 'layout' }).then(onClose, (error: Error) => setProblem(error.message))
+    registry.router.dispatch('app.settings.set', { key: LAYOUT, value: read.layout }, { machine: APP, source: 'layout' }).then(onClose, (error: Error) => setProblem(error.message))
   }
   return (
     <Dialog title="Layout" size="medium" onClose={onClose} className="layout-editor">

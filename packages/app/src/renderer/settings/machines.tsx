@@ -12,6 +12,7 @@ import { mergeSettings, type MergedSetting } from '../merge-settings.ts'
 import { useAllowedUi, useDeclinedUi } from '../profile-ui.ts'
 import { RevokedUiNotice, sizeOf } from '../profile-ui-notice.tsx'
 import { Setting } from './controls.tsx'
+import { APP } from '../../shared/app-settings.ts'
 
 /** A machine's connection, as a status glyph. */
 export const machineGlyph = (state: MachineEntry['state']): Status =>
@@ -36,7 +37,7 @@ export function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpe
   const [via, setVia] = useState(false)
   const [error, setError] = useState<string>()
   const dispatch = useRegistry().router.dispatch
-  const act = (id: string, params: Record<string, unknown>) => { setError(undefined); return dispatch(id, params, { machine: 'app', source: 'settings' }).catch((e: Error) => { setError(e.message); throw e }) }
+  const act = (id: string, params: Record<string, unknown>) => { setError(undefined); return dispatch(id, params, { machine: APP, source: 'settings' }).catch((e: Error) => { setError(e.message); throw e }) }
   const allowedUi = useAllowedUi()
   const declinedUi = useDeclinedUi()
   // In a browser, the machines are those the daemon serving the page reaches: they are managed on its computer.

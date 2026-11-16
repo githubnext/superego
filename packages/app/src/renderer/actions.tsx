@@ -6,7 +6,7 @@ import { lit, obj, opt, Router, str, union, type ActionDef, type ActionInfo, typ
 import { Dialog } from '@superego/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
-import { PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
+import { APP, PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
 import { threadBeside, type Project } from './projects.ts'
 import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
@@ -78,7 +78,7 @@ export function createWindowRouter() {
   const conditions = new Map<string, (context: WindowContext) => boolean>()
   /** The shell keeps this current; actions read it when they run. */
   let context: WindowContext | undefined
-  /** What the app and each machine offer, by target ('app' or a machine id). */
+  /** What the app and each machine offer, by target (`APP` or a machine id). */
   const remote = new Map<string, ActionInfo[]>()
   const listeners = new Set<() => void>()
   let version = 0
@@ -88,8 +88,8 @@ export function createWindowRouter() {
       if (!context) return Promise.reject(new Error('The window is not ready'))
       return router.dispatch(id, params, context, { source })
     }
-    if (machine === 'app' || remote.get('app')?.some((a) => a.id === id)) {
-      return router.track(id, params, source, () => window.superego.call('app', id, params))
+    if (machine === APP || remote.get(APP)?.some((a) => a.id === id)) {
+      return router.track(id, params, source, () => window.superego.call(APP, id, params))
     }
     const target = machine ?? (typeof params.machine === 'string' ? params.machine : undefined) ?? context?.selection?.machine ?? 'local'
     const action = remote.get(target)?.find((a) => a.id === id)
@@ -120,7 +120,7 @@ export function createWindowRouter() {
       try { return when(context) } catch (error) { console.error(`${id}: when failed`, error); return false }
     },
     setContext(next: Omit<WindowContext, 'dispatch'>) { context = { ...next, dispatch } },
-    /** Fetch what `target` offers ('app', or a connected machine's id). */
+    /** Fetch what `target` offers (`APP`, or a connected machine's id). */
     async load(target: string) {
       const what = 'Fetching its actions'
       try {
@@ -134,7 +134,7 @@ export function createWindowRouter() {
     },
     /** Every action this window can dispatch: its own, the app's, and `machine`'s. */
     all(machine?: string): ActionInfo[] {
-      return [...router.list(), ...(remote.get('app') ?? []), ...(machine ? remote.get(machine) ?? [] : [])]
+      return [...router.list(), ...(remote.get(APP) ?? []), ...(machine ? remote.get(machine) ?? [] : [])]
     },
     /** Changes whenever what `all` returns may have. */
     version: () => version,
@@ -182,13 +182,13 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
     params: obj({ layout: opt(union([lit('scroll'), lit('stack')])) }),
     run: ({ layout }, c) => c.dispatch('app.settings.set', {
       key: PANE_LAYOUT, value: layout ?? (c.appSetting<PaneLayout>(PANE_LAYOUT) === 'stack' ? 'scroll' : 'stack'),
-    }, { machine: 'app', source: 'panes' }),
+    }, { machine: APP, source: 'panes' }),
   }),
   // Another window (in a browser, another tab), starting as a copy of this one: the same thread, space and sidebar,
   // from where each goes its own way.
   defineWindowAction({
     id: 'app.newWindow', title: 'New window', keys: 'mod+shift+n',
-    run: async () => { if (window.superego.web) window.open(location.href, '_blank'); else await window.superego.call('app', 'app.newWindow', { state: windowState() }) },
+    run: async () => { if (window.superego.web) window.open(location.href, '_blank'); else await window.superego.call(APP, 'app.newWindow', { state: windowState() }) },
   }),
   // In dev only: restart the window's dev server so packages linked since it started resolve (see dev-packages.ts).
   ...(typeof __SUPEREGO_DEV_SERVER__ === 'string' ? [defineWindowAction({
@@ -207,10 +207,10 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
     run: async ({ machine }, c) => {
       const id = machine ?? updatable(c)
       // Settings, at Machines (SettingsView's own section key), where the update's output shows.
-      setLocalState('settings.target', '$machines', 'app')
+      setLocalState('settings.target', '$machines', APP)
       c.openSettings()
       if (!id) return
-      await window.superego.call('app', 'app.updateMachine', { machine: id })
+      await window.superego.call(APP, 'app.updateMachine', { machine: id })
     },
   }),
   defineWindowAction({ id: 'app.log', title: 'Show action log', run: (_p, c) => c.showLog() }),

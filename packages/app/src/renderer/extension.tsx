@@ -19,7 +19,7 @@ import { createWindowRouter, type Dispatch, type WindowAction, type WindowContex
 import { useSettings, watched } from './client.ts'
 import { createStore, type Store } from './local-state.ts'
 import { NARROW } from './maximized.ts'
-import { LAYOUT } from '../shared/app-settings.ts'
+import { APP, LAYOUT } from '../shared/app-settings.ts'
 import { isLayout, PLACES, resolveLayout, THREAD_PLACES, type Layout, type Place, type Placed, type Placement } from '../shared/layout.ts'
 import type { CompletionProvider, CompletionWord, SentWith } from './composer.ts'
 import { dataIcon, DataViewBody } from './data-views.tsx'
@@ -256,7 +256,7 @@ export type LinkHandler = {
 /** An entry of a kind an extension writes (`kind` is its own, like `git.commit`). */
 export type EntryProps = { machine: MachineEntry; thread: ThreadInfo; entry: { id: number; kind: string; data?: unknown } }
 
-/** What a settings section's own component gets (`settings`): whose settings (`'app'`, or a machine's id), and the section. */
+/** What a settings section's own component gets (`settings`): whose settings (`APP`, or a machine's id), and the section. */
 export type SettingsComponentProps = { target: string; section: SectionInfo }
 
 /** A block of what the agent wrote: thinking, text, or a tool call (`id`, `name`, `arguments`). */
@@ -634,7 +634,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         return () => { const at = registry.listeners.indexOf(entry); if (at >= 0) registry.listeners.splice(at, 1) }
       },
       get window() { return registry.window },
-      appSetting: (key) => watched<SettingsSnapshot>('app', 'settings.watch', {})?.values[key] as never,
+      appSetting: (key) => watched<SettingsSnapshot>(APP, 'settings.watch', {})?.values[key] as never,
       tool: (name, view, options) => {
         if (name.indexOf('*') !== -1 && name.indexOf('*') !== name.length - 1) return console.warn(`Extension ${extension.name}: tool ${name}: a * may only end a name (a prefix)`)
         unique(registry.tools, 'name', { name, ...(isComponent(view) ? { component: view } : { row: view }), fold: options?.fold !== false }, 'tool')
@@ -855,7 +855,7 @@ export const placedFor = (registry: Registry, layout: Layout | undefined, { narr
 export function useLayout(where?: Where): { placed: Placed; narrow: boolean } {
   const registry = useRegistry()
   const version = useSyncExternalStore(registry.subscribe, () => registry.version)
-  const stored = useSettings('app', true)?.values[LAYOUT]
+  const stored = useSettings(APP, true)?.values[LAYOUT]
   const narrow = useNarrow()
   const key = JSON.stringify(stored ?? null)
   const scope = where ? `${where.machine}\u0000${where.thread.profile?.dir ?? ''}\u0000${where.thread.without?.join() ?? ''}` : ''
@@ -981,7 +981,7 @@ export const entryView = (registry: Registry, kind: string, where: Where) => loo
 /** The extension that draws entries of `kind` for `where`, if one does. */
 export const entryOwner = (registry: Registry, kind: string, where: Where) => lookUp(registry.entries, where, (e) => e.kind === kind)?.owner.extension
 
-/** The component under the settings section that names `ui`, on `target` (a machine, or 'app'): a profile's there first, as lookups take it. */
+/** The component under the settings section that names `ui`, on `target` (a machine, or `APP`): a profile's there first, as lookups take it. */
 export function settingsView(registry: Registry, ui: string, target: string) {
   const found = registry.settings.filter((s) => s.ui === ui && (!s.owner.profile || s.owner.profile.startsWith(`${target}\u0000`)))
   return (found.find((s) => s.owner.profile) ?? found[0])?.component

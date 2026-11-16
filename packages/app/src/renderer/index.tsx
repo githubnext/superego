@@ -8,7 +8,7 @@ import './app.css'
 import { bool, obj, opt, str, type AppConfig, type SettingsSnapshot } from '@superego/protocol'
 import { watched } from './client.ts'
 import { createRegistry, layoutOf, placeScope, RegistryProvider, scopedViews, type Registry, type UiExtension } from './extension.tsx'
-import { LAYOUT } from '../shared/app-settings.ts'
+import { APP, LAYOUT } from '../shared/app-settings.ts'
 import { placeView, type Place } from '../shared/layout.ts'
 import { registerLayoutText } from './layout-text.tsx'
 import { Profiles } from './settings/profiles.tsx'
@@ -33,9 +33,9 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
   if (!window.superego) window.superego = webBridge()
   const registry = windowRegistry(app, extensions)
   window.superegoRegistered = () => registeredIn(registry)
-  void registry.router.load('app')
+  void registry.router.load(APP)
   // Declared before anything renders, so a component reading or setting them finds them registered.
-  for (const { owner: _owner, ...section } of registry.appSettings) void window.superego.call('app', 'settings.register', { section }).catch((error) => console.error(error))
+  for (const { owner: _owner, ...section } of registry.appSettings) void window.superego.call(APP, 'settings.register', { section }).catch((error) => console.error(error))
   createRoot(root).render(
     <StrictMode>
       <RegistryProvider registry={registry}>
@@ -107,7 +107,7 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
       params: obj({ view: str(), place: str(), on: opt(bool()), from: opt(str()), narrow: opt(bool()), machine: opt(str()), thread: opt(str()) }),
       run({ view, place, on, from, narrow, machine, thread }, c) {
         // Changed from the settings as last heard: before they're heard, there's nothing to change it from.
-        if (!watched<SettingsSnapshot>('app', 'settings.watch', {})) throw new Error("The layout isn't loaded yet")
+        if (!watched<SettingsSnapshot>(APP, 'settings.watch', {})) throw new Error("The layout isn't loaded yet")
         const at = machine && thread ? { machine, thread } : c.selection
         const info = at && c.threadOf(at)
         if (machine && thread && !info) throw new Error(`No thread ${thread} on ${machine} here`)
@@ -116,13 +116,13 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
         const value = placeView(scopedViews(registry, scope), layoutOf(c.appSetting(LAYOUT)), view, place as Place, {
           ...(on === undefined ? {} : { on }), ...(from ? { from: from as Place } : {}), ...(narrow ? { narrow } : {}),
         })
-        return c.dispatch('app.settings.set', { key: LAYOUT, value }, { machine: 'app', source: 'layout' })
+        return c.dispatch('app.settings.set', { key: LAYOUT, value }, { machine: APP, source: 'layout' })
       },
     }))
     // Every view back where it goes by default, wide and on a phone: in a browser too, which keeps its layout itself.
     core.action(defineWindowAction({
       id: 'layout.reset', title: 'Reset layout',
-      run: (_params, c) => c.dispatch('app.settings.set', { key: LAYOUT, value: {} }, { machine: 'app', source: 'layout' }),
+      run: (_params, c) => c.dispatch('app.settings.set', { key: LAYOUT, value: {} }, { machine: APP, source: 'layout' }),
     }))
     registerLayoutText(core)
   })

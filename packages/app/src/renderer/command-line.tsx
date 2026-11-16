@@ -5,6 +5,7 @@ import { Button } from '@superego/ui'
 import type { CommandLineInfo } from '../shared/bridge.ts'
 import { useApp, useRegistry } from './extension.tsx'
 import { shortPath } from './short-path.ts'
+import { APP } from '../shared/app-settings.ts'
 
 export function CommandLine({ section }: { target: string; section: SectionInfo }) {
   const { id } = useApp()
@@ -14,7 +15,7 @@ export function CommandLine({ section }: { target: string; section: SectionInfo 
   if (!info?.kind) return null
   const run = (action: string) => {
     setError(undefined)
-    void dispatch(action, {}, { machine: 'app', source: 'settings' }).catch((e: Error) => setError(e.message))
+    void dispatch(action, {}, { machine: APP, source: 'settings' }).catch((e: Error) => setError(e.message))
   }
   const path = <code>{shortPath(info.path)}</code>
   const install = info.kind === 'link' ? 'Link' : 'Install'
