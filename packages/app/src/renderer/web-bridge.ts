@@ -2,11 +2,12 @@
 // page (its Web access setting), instead of Electron's preload. That daemon is "local", and every machine it reaches is
 // here too: calls for them go through it (`relay.call`) and their news comes back from it (`relay.event`). What the
 // desktop keeps in its main process (the app's own settings) is kept in this browser.
-import { Channels, PROTOCOL_VERSION, RpcError, RpcPeer, versionOf, type ActionInfo, type Channel, type Hello, type Json, type Notifications } from '@superego/protocol'
-import { declaredSpec, serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
+import { Channels, PROTOCOL_VERSION, RpcError, RpcPeer, versionOf, type Channel, type Hello, type Notifications } from '@superego/protocol'
+import type { SettingsStore } from '@superego/settings'
 import { carriesFiles, uploadAttachments } from '@superego/client/uploads'
-import type { BridgeChannel, BrowserAppHandlers, MachineEntry, SuperegoBridge, SuperegoEvent } from '../shared/bridge.ts'
-import { APP, registerAppSettings } from '../shared/app-settings.ts'
+import type { BridgeChannel, MachineEntry, SuperegoBridge, SuperegoEvent } from '../shared/bridge.ts'
+import { APP } from '../shared/app-settings.ts'
+import { pageApp } from './page-app.ts'
 import { askPairing, LIMITED, type Pairing } from './pair-gate.ts'
 
 const SETTINGS = 'superego.appSettings'
@@ -163,16 +164,7 @@ export function webBridge(): SuperegoBridge {
     .then((paired) => paired === 'ok' ? connect() : ask(paired === 'limited' ? LIMITED : 'That link has expired or was used already.'), () => connect())
 
   // ── The app's own endpoint, here in the page ───────────────────────────────────────────────────────────────────
-  const settings = new SettingsRegistry(store)
-  registerAppSettings(settings)
-  const subs = new Map<string, () => unknown>()
-  const served = serveSettings(settings, (params) => emit({ machine: APP, method: 'settings.changed', params }), subs)
-  /** The app's actions a page can run: the desktop's main process has more (adding machines, updating them, …). */
-  const actions: Record<string, { info: ActionInfo; run(params: never): Promise<unknown> }> = {
-    'app.settings.set': {
-      info: { id: 'app.settings.set', title: 'Change an app setting', runs: 'app', expose: ['ui'] },
-      run: async ({ key, value }: { key: string; value: Json }) => { await settings.set(key, value); return null },
-    },
+  const app = pageApp(emit, { store, actions: {
     /** This page's own connection, or the serving daemon's link to another machine. */
     'machine.reconnect': {
       info: { id: 'machine.reconnect', title: 'Reconnect a machine', runs: 'app', expose: ['ui'] },
@@ -182,21 +174,7 @@ export function webBridge(): SuperegoBridge {
         return null
       },
     },
-  }
-  const app = {
-    'settings.watch': served['settings.watch'],
-    'settings.register': async ({ section }) => { settings.upsert(declaredSpec(section)); return null },
-    unwatch: async ({ sub }) => { await subs.get(sub)?.(); subs.delete(sub); return null },
-    'action.list': async () => Object.values(actions).map((action) => action.info),
-    'action.log': async () => [],
-    'app.ready': async () => ({}),
-    'service.get': async () => ({ phase: 'current', busy: false, deferred: false }),
-    // Another machine's profile UI (reached through this daemon) is allowed only on a desktop: none runs here.
-    'profileUi.allowed': async () => [],
-    'profileUi.declined': async () => [],
-  } satisfies BrowserAppHandlers
-  const answer = (method: string): ((params: never) => Promise<unknown>) | undefined =>
-    method in app ? app[method as keyof typeof app] as (params: never) => Promise<unknown> : actions[method]?.run
+  } })
 
   /** A call on the daemon, its larger attachments sent ahead as uploads (see @superego/client's uploads.ts). */
   const send = async (method: string, params: unknown) => {
@@ -208,11 +186,7 @@ export function webBridge(): SuperegoBridge {
 
   return {
     async call(machine, method, params) {
-      if (machine === APP) {
-        const handler = answer(method)
-        if (!handler) throw new RpcError('unsupported', `${method} is part of the desktop app`)
-        return handler(params as never)
-      }
+      if (machine === APP) return app.call(method, params)
       if (machine === 'local') return send(method, params)
       if (!entries.some((m) => m.id === machine)) throw new RpcError('not_found', `No machine ${machine} here`)
       return send('relay.call', { machine, method, params })

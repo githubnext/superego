@@ -257,7 +257,7 @@ it('queues builds and shows the thread its own', async () => {
 - **`isRunning(pid)`**: whether a process is still there, to check that what an extension started stopped with it.
   The queue examples' tests cancel a build whose command starts a `sleep` of its own, and check it's gone once the
   build says cancelled.
-- **`mountUi({ extensions, profile, machines, layout, narrow, select })`**: `extensions` are set up as the app's,
+- **`mountUi({ extensions, profile, machines, layout, narrow, select, window })`**: `extensions` are set up as the app's,
   `profile: { ref, extensions }` as that profile's (drawn only in its threads). `machines` are test daemons
   (`daemonMachine(daemon, id)`) or fakes: `fakeMachine({ threads, values, methods, extensions, features })`, whose
   `setValue(key, value, scope)` changes a live value, and whose `calls` say what the window asked. Without setup, a
@@ -268,7 +268,11 @@ it('queues builds and shows the thread its own', async () => {
   `render({ view, place, thread })` (`text()`, `find(selector)`, `click(text)`), `placed(place, { thread })`,
   `press(keys)`, `dispatch`, `select`, `setMachine(id, { state: 'disconnected' })`, `installProfile`, `until`, and
   `unmount()`, which lets a profile's UI the window is still fetching land, then tears every extension down (their
-  `signal`s abort): unmount before closing the daemons it's on.
+  `signal`s abort): unmount before closing the daemons it's on. `window: true` draws the whole window, as the app does
+  (`ui.window`: the rail, the sidebar, the thread, ⌘K, Settings, and what opens over them), to see your view in place
+  and drive it as a person would: `key('mod+k')` presses keys where the focus is, `type(selector, text)` types into a
+  field. Its app settings are the app's own. Give its test file `// @vitest-environment happy-dom`: the window's menus
+  and dialogs open, and its fields take typing, only in a DOM that was there as React and they loaded.
 - **A pane kind or a slot**: `render({ pane: { kind, params } })` and `render({ slot, props })` draw them as the
   window does, for `thread`: an id the machine has, or a `ThreadInfo` as it is (`testThread({ cwd, profile, without })`);
   without one, the selected thread, the machine's first, or a made-up one of `mountUi`'s profile. A kind or slot that

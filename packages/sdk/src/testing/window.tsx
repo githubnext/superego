@@ -9,8 +9,8 @@ import {
 } from '@superego/protocol'
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '@superego/app/shared'
 import {
-  bound, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, PaneBody, paneKind, placedFor, PlacedViews, profileUisLoaded, RegistryProvider, resetProfileUi,
-  scopedViews, seenIn, setLocalState, ShellStateProvider, Slot, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, windowRegistry,
+  bound, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, pageApp, PaneBody, paneKind, placedFor, PlacedViews, profileUisLoaded, RegistryProvider, resetProfileUi,
+  scopedViews, seenIn, setLocalState, Shell as Window, ShellStateProvider, Slot, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, windowRegistry,
   type BehaviourSlot, type Layout, type Place, type Registry, type SlotProps, type UiExtension, type ViewProps,
 } from '@superego/app/internals'
 import type { LinkHandler, LinkWhere, ToolRow, ToolRowCall } from '@superego/app/ui'
@@ -207,6 +207,11 @@ export type MountOptions = {
   select?: { machine?: string; thread: string }
   /** The app the window is: a test one unless given. */
   app?: AppConfig
+  /**
+   * Draw the whole window, as the app does (`ui.window`): the rail, the sidebar, the title bar, the thread shown and what's
+   * beside it, the palette (⌘K), Settings. Keys pressed on it (`ui.key`) go where the app's would.
+   */
+  window?: boolean
 }
 
 /**
@@ -250,6 +255,19 @@ export type TestWindow = {
   machines: TestMachine[]
   /** Every call the window made (not its watches), by machine. */
   calls: { machine: string; method: string; params: any }[]
+  /** The whole window, as `mountUi({ window: true })` draws it, with what it opens over itself (menus, dialogs). */
+  window: Rendered | undefined
+  /**
+   * A key pressed where the focus is (the window's body, if nothing has it), as the keyboard sends it: `mod+k`,
+   * `shift+mod+]`, `escape`, `enter`, `ctrl+1`. Unlike `press`, it goes through the page: what has the focus hears it
+   * first, then the window's shortcuts.
+   */
+  key(keys: string): Promise<void>
+  /**
+   * Type `text` into the field `selector` matches (in the whole page), as a person would: focused, its value set, an input
+   * event. React hears it only in a DOM that was there as it loaded (`// @vitest-environment happy-dom`).
+   */
+  type(selector: string, text: string): Promise<void>
   /**
    * Draw a view by its id in a place, or everything the layout puts in a place (a thread's place: give the thread); a
    * pane of a kind (`{ pane: { kind, params } }`); or what fills a slot (`{ slot: 'thread.badge', thread }`). A view,
@@ -287,8 +305,8 @@ export type TestWindow = {
   installProfile(machine: string, ref: ProfileRef, extensions: UiExtension[]): Promise<void>
   /** Let what's under way settle: answers, effects, renders. */
   settle(): Promise<void>
-  /** Wait until `check` holds, letting what's under way settle between tries (a machine's answer, a value changing). */
-  until(check: () => boolean, what?: string, timeout?: number): Promise<void>
+  /** Wait until `check` holds (or its promise gives true), letting what's under way settle between tries (a machine's answer, a value changing). */
+  until(check: () => boolean | Promise<boolean>, what?: string, timeout?: number): Promise<void>
   /**
    * Take everything down: what's drawn, and every extension's setup (its signal aborted, its cleanup run). A profile's UI
    * it's still fetching lands first: unmount before closing the daemons it's on.
@@ -325,26 +343,22 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   const calls: TestWindow['calls'] = []
   const eventListeners = new Set<(event: SuperegoEvent) => void>()
   const emit = (event: SuperegoEvent) => { for (const l of eventListeners) l(event) }
-  // The app's own settings, kept here: the layout among them.
-  const appValues: Record<string, Json> = { ...(options.layout ? { [LAYOUT]: options.layout as Json } : {}) }
-  const appWatches = new Set<string>()
-  let appSubs = 0
+  // The app's own endpoint, as a browser's page keeps it: its settings (the layout among them) the app's own.
+  const appSide = pageApp((event) => inActNow(() => emit(event)))
+  if (options.layout) await appSide.settings.set(LAYOUT, options.layout as Json).catch((error: unknown) => { letGoOfDom(); throw error })
   const entries = () => machines.map((m) => ({ ...m.entry }))
   // What a machine says (a live value changing, a thread's status) re-renders what shows it: in `act`, as React asks of a test.
   const offs = machines.map((m) => m.listen((method, params) => inActNow(() => emit({ machine: m.id, method, params }))))
   const bridge: SuperegoBridge = {
     async call(machine, method, params: any) {
       if (machine === 'app') {
-        if (method === 'settings.watch') { const sub = `app${++appSubs}`; appWatches.add(sub); return { sub, value: { sections: [], values: appValues } } }
-        if (method === 'app.settings.set') {
-          appValues[params.key] = params.value
-          for (const sub of appWatches) emit({ machine: 'app', method: 'settings.changed', params: { sub, value: { sections: [], values: { ...appValues } } } })
-          return null
-        }
-        if (method === 'unwatch') { appWatches.delete(params.sub); return null }
-        if (method === 'action.list') return []
-        // The window says which thread it shows, on every selection: the app's business, not a test's.
-        if (method === 'app.shown') return null
+        const answer = appSide.answer(method)
+        if (answer) return answer(params as never)
+        // The window says which thread it shows, on every selection, and which keys it takes: the app's business, not a test's.
+        if (method === 'app.shown' || method === 'app.boundKeys') return null
+        if (method === 'app.windows') return []
+        // The window and the app it's in are one build here.
+        if (method === 'app.build') return { differs: false }
         calls.push({ machine, method, params })
         return null
       }
@@ -385,6 +399,9 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       throw error
     }
   })()
+  // As the app sets a window up: the app's own actions fetched, and the app settings its extensions declare registered.
+  await registry.router.load('app')
+  for (const { owner: _owner, ...section } of registry.appSettings) await appSide.call('settings.register', { section })
 
   // The shell's state as the window has it, for the router's context and for `select`.
   let shell: { select(selection: { machine: string; thread: string } | undefined): void; selection?: { machine: string; thread: string }; threads: Record<string, ThreadInfo[] | undefined> } = { select() {}, threads: {} }
@@ -393,10 +410,12 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     const all = useAllThreads()
     const list = useMachines()
     shell = { select, ...(selection ? { selection } : {}), threads: all }
+    // The whole window drawn: its shell says what actions see, as the app's does.
+    if (options.window) return <>{children}</>
     registry.router.setContext({
       app, machines: list, selection, select, openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, showLog() {},
       threadOf: (s) => all[s.machine]?.find((t) => t.id === s.thread), projects: [], lastThread: {},
-      appSetting: (key) => appValues[key] as never, toggleSidebar() {}, back() {}, forward() {}, railTabs: () => [],
+      appSetting: (key) => appSide.settings.get(key) as never, toggleSidebar() {}, back() {}, forward() {}, railTabs: () => [],
     })
     return <>{children}</>
   }
@@ -413,12 +432,58 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     await settle()
     return { container, root }
   }
-  // The shell's state, drawn once: machines and their threads followed, selection and context kept.
-  const base = await draw(null)
+  // The shell's state, drawn once: machines and their threads followed, selection and context kept. The whole window, if asked.
+  const base = await draw(options.window ? <Window /> : null)
   const machineOf = (id?: string) => id ?? machines[0]!.id
+
+  /** What's drawn in `container`, to look in and click. */
+  const rendered = (container: HTMLElement, unmount: () => Promise<void>): Rendered => ({
+    container,
+    text: () => container.textContent ?? '',
+    find: (selector) => container.querySelector<HTMLElement>(selector),
+    async click(text) {
+      const target = [...container.querySelectorAll<HTMLElement>('button, a, [role="button"]')].find((el) => el.textContent?.trim() === text)
+        ?? container.querySelector<HTMLElement>(text)
+      if (!target) throw new Error(`Nothing to click that says "${text}" in: ${container.textContent}`)
+      await inAct(async () => { target.click() })
+      await settle()
+    },
+    unmount,
+  })
 
   const ui: TestWindow = {
     registry, machines, calls,
+    // The page's body: what the window opens over itself (menus, dialogs, the palette) is drawn there, outside its root.
+    window: options.window ? rendered(document.body, async () => { throw new Error('The whole window goes with the test window: unmount that') }) : undefined,
+    async key(keys) {
+      const parts = keys.toLowerCase().split('+')
+      const name = parts.pop()!
+      const mac = navigator.platform ? navigator.platform.startsWith('Mac') : process.platform === 'darwin'
+      const key = KEY_NAMES[name] ?? name
+      const init: KeyboardEventInit = {
+        key, code: /^[a-z]$/.test(name) ? `Key${name.toUpperCase()}` : /^[0-9]$/.test(name) ? `Digit${name}` : CODES[name] ?? key,
+        metaKey: parts.includes('meta') || (mac && parts.includes('mod')), ctrlKey: parts.includes('ctrl') || (!mac && parts.includes('mod')),
+        shiftKey: parts.includes('shift'), altKey: parts.includes('alt'), bubbles: true, cancelable: true,
+      }
+      const target = document.activeElement && document.activeElement !== document.body ? document.activeElement : document.body
+      const view = target.ownerDocument.defaultView as unknown as typeof globalThis
+      await inAct(async () => {
+        if (target.dispatchEvent(new view.KeyboardEvent('keydown', init))) target.dispatchEvent(new view.KeyboardEvent('keyup', init))
+      })
+      await settle()
+    },
+    async type(selector, text) {
+      const field = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)
+      if (!field) throw new Error(`No field ${selector} to type into`)
+      await inAct(async () => {
+        field.focus()
+        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), 'value')!.set!.call(field, text)
+        // The DOM's own Event (Node has one of its own, which the DOM refuses).
+        const view = field.ownerDocument.defaultView as unknown as typeof globalThis
+        field.dispatchEvent(new view.Event('input', { bubbles: true }))
+      })
+      await settle()
+    },
     async render(what) {
       const at = machineOf(what.machine)
       const given = what.thread
@@ -466,24 +531,12 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
         node = <Draw view={view} place={place} machine={at} thread={given} registry={registry} />
       }
       const { container, root } = await draw(node)
-      return {
-        container,
-        text: () => container.textContent ?? '',
-        find: (selector) => container.querySelector<HTMLElement>(selector),
-        async click(text) {
-          const target = [...container.querySelectorAll<HTMLElement>('button, a, [role="button"]')].find((el) => el.textContent?.trim() === text)
-            ?? container.querySelector<HTMLElement>(text)
-          if (!target) throw new Error(`Nothing to click that says "${text}" in: ${container.textContent}`)
-          await inAct(async () => { target.click() })
-          await settle()
-        },
-        async unmount() { await inAct(async () => root.unmount()); roots.delete(root); container.remove() },
-      }
+      return rendered(container, async () => { await inAct(async () => root.unmount()); roots.delete(root); container.remove() })
     },
     placed(place, where) {
       const thread = where && threadOf(machineOf(where.machine), where.thread)
       const scope = thread ? { machine: machineOf(where!.machine), thread } : undefined
-      return placedFor(registry, layoutOf(appValues[LAYOUT]), { narrow, where: scope })[place]
+      return placedFor(registry, layoutOf(appSide.settings.get(LAYOUT)), { narrow, where: scope })[place]
     },
     toolRow: (name, where) => toolRow(registry, name, whereOf(where)),
     describeRun: (tools, where) => describeRun(tools.map(called), (name) => toolRow(registry, name, whereOf(where))),
@@ -524,7 +577,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     settle,
     async until(check, what = 'the condition', timeout = 10_000) {
       const end = Date.now() + timeout
-      while (!check()) {
+      while (!await check()) {
         if (Date.now() > end) throw new Error(`Timed out waiting for ${what}`)
         await inAct(async () => { await new Promise((r) => setTimeout(r, 20)) })
       }
@@ -567,6 +620,17 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     throw new Error(`No slot ${slot}: ${Object.keys(registry.slots).join(', ')} (one that's a place now is a view: render({ view, place }))`)
   }
   return ui
+}
+
+/** Keys by the names `ui.key` takes, as a keyboard event says them. */
+const KEY_NAMES: Record<string, string> = {
+  enter: 'Enter', escape: 'Escape', esc: 'Escape', tab: 'Tab', backspace: 'Backspace', delete: 'Delete', space: ' ',
+  up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight',
+}
+/** Punctuation keys' places on the keyboard, which shortcuts go by (what they type changes with shift). */
+const CODES: Record<string, string> = {
+  '[': 'BracketLeft', ']': 'BracketRight', '/': 'Slash', '.': 'Period', ',': 'Comma', '`': 'Backquote', '\\': 'Backslash',
+  ';': 'Semicolon', "'": 'Quote', '-': 'Minus', '=': 'Equal',
 }
 
 /** A view (or a place's views) as the window draws it, for the thread given, looked up live. */
