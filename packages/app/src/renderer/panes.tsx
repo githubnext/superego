@@ -23,7 +23,7 @@ import { fileKind, paneKind, paneTitle, shownPanes, useNarrow, useRegistry, View
 import { Contained } from './contained.tsx'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
-import { ThreadBody } from './ThreadView.tsx'
+import { ThreadBody } from './thread-body.tsx'
 import { PaneMoveTo } from './view-menu.tsx'
 import { FileEditor } from './file-editor.tsx'
 import { BRING_FORWARD, focusRegion } from './focus.ts'

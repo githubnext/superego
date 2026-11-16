@@ -6,11 +6,14 @@
 // They stay the core's, not the files' or web-panes' extensions': both are optional, and a link to a file or a page
 // must work in a thread that goes without them (a file opens in the core's editor, a page in the browser).
 // A thread's transcript keeps the links it draws, in order, for ⌃O's list (`transcriptLinks`).
-import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { ThreadInfo } from '@superego/protocol'
 import { SquareSplitHorizontalIcon } from '@superego/ui'
-import { whose, type LinkAttributes, type LinkHandler, type LinkProps, type LinkWhere, type UiApi } from './extension.tsx'
+import { machine as client } from './client.ts'
+import { fileKind, folderKind, urlKind, useRegistry, whose, type LinkAttributes, type LinkHandler, type LinkProps, type LinkWhere, type UiApi } from './extension.tsx'
 import { Contained } from './contained.tsx'
-import { looksLikePath } from './markdown-html.ts'
+import { looksLikePath, resolve } from './markdown-html.ts'
+import { shortPath } from './short-path.ts'
 import { parseWikilink, WIKILINK } from './wikilinks.ts'
 
 /** A link drawn in a transcript: what it says, where it goes, and a way to follow it. */
@@ -20,6 +23,48 @@ type Kept = TranscriptLink & { element: Element }
 /** Where Markdown is drawn, for its links; `collect` keeps them for a thread's transcript. */
 export type LinkPlaceValue = LinkWhere & { collect?: (link: Kept) => () => void }
 export const LinkPlace = createContext<LinkPlaceValue>({})
+
+/**
+ * Where a thread's Markdown is drawn (its transcript, a file's rendered text), for its links: a file it names opens
+ * beside the thread, in the pane kind that takes it, at the line it names (a folder in the kind that shows folders);
+ * else why not, for the link to say. A file's links (`near`: the folder it's in) look beside it first. A web page opens
+ * beside it in the pane kind that shows web pages; with none here, links open in the browser only. Kept the same while
+ * what links care about is, so the text isn't drawn again as the thread moves on.
+ */
+export function useLinkPlace(machine: string, thread: ThreadInfo, { near, source }: { near?: string; source: string }): LinkPlaceValue {
+  const registry = useRegistry()
+  const latest = useRef({ machine, thread, near, source, registry })
+  latest.current = { machine, thread, near, source, registry }
+  const openFile = useCallback(async (name: string): Promise<string | undefined> => {
+    const { machine, thread, near, source, registry } = latest.current
+    try {
+      const peer = client(machine)
+      const at = /^(.+?)((?::\d+)+|#L\d+.*)$/.exec(name)
+      const beside = near === undefined ? undefined : resolve(near, at?.[1] ?? name)
+      const there = beside ? await peer.call('file.find', { thread: thread.id, name: `${beside}${at?.[2] ?? ''}` }) : undefined
+      const found = there && (there.path === beside || there.path === `${beside}.md`) ? there : await peer.call('file.find', { thread: thread.id, name })
+      const folder = shortPath(thread.cwd)
+      if (found.outside) return `outside ${folder}, where this thread works`
+      if (found.path === null) return `not in ${folder}`
+      const where = { machine, thread }
+      const kind = found.folder ? folderKind(registry, where) : fileKind(registry, where, found.path)
+      if (!kind) return found.folder ? 'a folder, and nothing here shows folders' : 'a file, and nothing here shows files'
+      await registry.router.dispatch('pane.open', { thread: thread.id, kind, params: { path: found.path, ...(found.line ? { line: found.line } : {}) } }, { machine, source })
+      return undefined
+    } catch (error) { return (error as Error).message }
+  }, [])
+  const web = urlKind(registry, { machine, thread })
+  const openUrl = useCallback((url: string) => {
+    const { machine, thread, source, registry } = latest.current
+    const kind = urlKind(registry, { machine, thread })
+    if (!kind) return
+    const host = URL.parse(url)?.host
+    void registry.router.dispatch('pane.open', { thread: thread.id, kind, ...(host ? { title: host } : {}), params: { url } }, { machine, source })
+      .catch((error) => console.error(error))
+  }, [])
+  const linkThread = useMemo(() => thread, [thread.id, thread.profile?.dir, String(thread.without)])
+  return useMemo(() => ({ machine, thread: linkThread, openFile, ...(web ? { openUrl } : {}) }), [machine, linkThread, web])
+}
 
 /** By thread: one window draws one transcript (Shell's ThreadView), so a thread's links are one view's. */
 const kept = new Map<string, Set<Kept>>()

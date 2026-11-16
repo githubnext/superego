@@ -4,7 +4,7 @@ import type { ProfileInfo, ThreadInfo } from '@superego/protocol'
 import { IdentificationBadgeIcon, Popover } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { useRegistry } from './extension.tsx'
-import { shortPath } from './ThreadView.tsx'
+import { shortPath } from './short-path.ts'
 
 /**
  * The profile's name, opening a card: what it's for, where it lives, and what it brings (its extensions and MCP

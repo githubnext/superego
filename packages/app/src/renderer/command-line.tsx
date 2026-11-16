@@ -4,7 +4,7 @@ import type { SectionInfo } from '@superego/protocol'
 import { Button } from '@superego/ui'
 import type { CommandLineInfo } from '../shared.ts'
 import { useApp, useRegistry } from './extension.tsx'
-import { shortPath } from './ThreadView.tsx'
+import { shortPath } from './short-path.ts'
 
 export function CommandLine({ section }: { target: string; section: SectionInfo }) {
   const { id } = useApp()

@@ -4,7 +4,7 @@
 // view updates, or, with edits of yours not yet saved, it asks which to keep.
 // The editor pane is this; a profile's own panes use it too (the obsidian profile's notes). Its links, rendered or in
 // live preview, are followed by the link handlers, as a message's are: a thread's profile can claim them its own way.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { history, historyKeymap, standardKeymap } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { foldGutter, HighlightStyle, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
@@ -17,11 +17,12 @@ import type { ThreadInfo } from '@superego/protocol'
 import { Button } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { machine as client } from './client.ts'
-import { fileKind, folderKind, linkHandler, Slot, urlKind, useRegistry, type EditorSlotProps } from './extension.tsx'
+import { fileKind, linkHandler, Slot, useRegistry, type EditorSlotProps } from './extension.tsx'
 import { Images, imagesIn, Markdown } from './Markdown.tsx'
-import { follow, LinkPlace, type LinkPlaceValue } from './links.tsx'
+import { follow, LinkPlace, useLinkPlace } from './links.tsx'
+import { useLocalState } from './local-state.ts'
 import { codeHighlight } from './code-highlight.ts'
-import { folderOf, resolve } from './markdown-html.ts'
+import { folderOf } from './markdown-html.ts'
 import { linkAt, livePreview } from './live-markdown.ts'
 import { arrivals } from './arrivals.ts'
 
@@ -44,12 +45,9 @@ export type FileEditorProps = {
   onOpenFile?: (path: string, options: { beside: boolean }) => void
 }
 
-const MODE = 'superego.editor.mode'
 /** How Markdown shows: read, as a message is; in live preview; or as source. */
 type Mode = 'rendered' | 'live' | 'source'
 const MODES: { mode: Mode; label: string }[] = [{ mode: 'rendered', label: 'Rendered' }, { mode: 'live', label: 'Live' }, { mode: 'source', label: 'Source' }]
-/** As last chosen; live preview if never (or something this doesn't know). */
-const storedMode = (): Mode => MODES.find((m) => m.mode === localStorage.getItem(MODE))?.mode ?? 'live'
 /** Where each file was left (scroll and cursor), for as long as the window lives: it opens there again. */
 const places = new Map<string, { top: number; anchor: number; head: number }>()
 /**
@@ -106,7 +104,9 @@ function goToLine(view: EditorView, line: number, scroller: HTMLElement | null) 
 /** A file of the thread's folder, to read and edit, as the core's editor pane shows it. */
 export function FileEditor({ machine, thread, path, line, actions, children, onOpenFile }: FileEditorProps) {
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path)
-  const [mode, setMode] = useState<Mode>(storedMode)
+  // As last chosen, in any window; live preview if never (or something this doesn't know).
+  const [stored, setMode] = useLocalState<Mode>('editor.mode', 'live', { shared: true })
+  const mode = MODES.some((m) => m.mode === stored) ? stored : 'live'
   /** The editor in live preview: shown, or kept behind the rendered text. */
   const live = isMarkdown && mode !== 'source'
   const rendered = isMarkdown && mode === 'rendered'
@@ -159,15 +159,16 @@ export function FileEditor({ machine, thread, path, line, actions, children, onO
   const saveRef = useRef(save)
   saveRef.current = save
 
+  // Where its links are: a file it names is looked for beside it first, as a link in it means, else as a message's
+  // would be (by its name, anywhere in the folder).
+  const links = useLinkPlace(machine.id, thread, { near: folderOf(path), source: 'editor' })
   // A link in live preview (a click on it, or ⌘-click while it's being edited; ⌘: beside), followed by its handler, as
   // in rendered text; one none claims, in the browser.
   const open = (href: string, beside: boolean) => {
-    const where = linksRef.current
-    const handler = where && linkHandler(registry, href, 'link', where)
+    const handler = linkHandler(registry, href, 'link', links)
     if (!handler) return void (/^[a-z][\w+.-]*:/i.test(href) && window.open(href, '_blank', 'noopener,noreferrer'))
-    void follow(handler, href, 'link', where, beside).then((problem) => { if (problem) setNote({ text: `${href}: ${problem}`, error: true }) })
+    void follow(handler, href, 'link', links, beside).then((problem) => { if (problem) setNote({ text: `${href}: ${problem}`, error: true }) })
   }
-  const linksRef = useRef<LinkPlaceValue>(undefined)
   const openRef = useRef(open)
   openRef.current = open
 
@@ -312,46 +313,12 @@ export function FileEditor({ machine, thread, path, line, actions, children, onO
   const keepMine = () => { disk.current = conflict; setConflict(undefined); void save() }
 
   const chooseMode = (next: Mode) => {
-    localStorage.setItem(MODE, next)
     const el = scroller.current
     if (el && (next === 'rendered') !== rendered) through.current = el.scrollTop / Math.max(1, el.scrollHeight - el.clientHeight)
     if (next === 'rendered' && view.current) setText(view.current.state.doc.toString())
     setMode(next)
   }
 
-  // A file the text names: from beside this one first, as a link in it means, else as a message's would be (by its
-  // name, anywhere in the folder). Opened beside the thread, in the pane kind that takes it; else why not.
-  const findAndOpen = async (name: string): Promise<string | undefined> => {
-    try {
-      const peer = client(machine.id)
-      const at = /^(.+?)((?::\d+)+|#L\d+.*)$/.exec(name)
-      const near = resolve(folderOf(path), at?.[1] ?? name)
-      const beside = near ? await peer.call('file.find', { thread: thread.id, name: `${near}${at?.[2] ?? ''}` }) : undefined
-      const found = beside && (beside.path === near || beside.path === `${near}.md`) ? beside : await peer.call('file.find', { thread: thread.id, name })
-      if (found.outside) return "outside this thread's folder"
-      if (found.path === null) return "not in this thread's folder"
-      const kind = found.folder ? folderKind(registry, { machine: machine.id, thread }) : fileKind(registry, { machine: machine.id, thread }, found.path)
-      if (!kind) return found.folder ? 'a folder, and nothing here shows folders' : 'a file, and nothing here shows files'
-      await dispatch('pane.open', { thread: thread.id, kind, params: { path: found.path, ...(found.line ? { line: found.line } : {}) } }, { machine: machine.id, source: 'editor' })
-      return undefined
-    } catch (error) { return (error as Error).message }
-  }
-  const findAndOpenRef = useRef(findAndOpen)
-  findAndOpenRef.current = findAndOpen
-  // Kept the same, so the rendered text isn't laid out again on each render here.
-  const openFile = useCallback((name: string) => findAndOpenRef.current(name), [])
-  // A web page it links to, opened beside the thread in the pane kind that shows web pages; with none here, links open in
-  // the browser only.
-  const webKind = urlKind(registry, { machine: machine.id, thread })
-  const openUrl = useCallback((url: string) => {
-    if (!webKind) return
-    const host = URL.parse(url)?.host
-    void dispatch('pane.open', { thread: thread.id, kind: webKind, ...(host ? { title: host } : {}), params: { url } }, { machine: machine.id, source: 'editor' })
-      .catch((error) => console.error(error))
-  }, [machine.id, thread.id, webKind])
-  const linkThread = useMemo(() => thread, [thread.id, thread.profile?.dir, String(thread.without)])
-  const links = useMemo<LinkPlaceValue>(() => ({ machine: machine.id, thread: linkThread, openFile, ...(webKind ? { openUrl } : {}) }), [machine.id, linkThread, openFile, webKind, openUrl])
-  linksRef.current = links
   const openIn = (kind: string | undefined, file: string) => kind && dispatch('pane.open', { thread: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'editor' })
   // Its images, read from beside it on the thread's machine.
   const images = useMemo(() => imagesIn(machine, thread.id, thread.cwd, folderOf(path)), [machine, thread.id, thread.cwd, path])
