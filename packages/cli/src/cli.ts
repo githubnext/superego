@@ -843,7 +843,7 @@ async function doCommand(argv: string[]) {
 async function readCommand(id: string | undefined, values: { machine?: string; wait?: boolean }) {
   if (!id) throw new RpcError('usage', `${app.id} read <thread> [--wait]`)
   const machine = resolveMachine(values.machine)
-  const read = await on(machine, (call) => readThread((method, params) => call(method as MethodName, params as never) as never, id, { wait: Boolean(values.wait), label: machine.label }))
+  const read = await on(machine, (call, hello) => readThread((method, params) => call(method as MethodName, params as never) as never, hello, id, { wait: Boolean(values.wait), label: machine.label }))
   print(read, () => {
     const { thread, answer } = read
     // Its status, but when it's done: that's the start of its answer.

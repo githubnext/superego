@@ -340,7 +340,7 @@ it('keeps how a message came with it: who sent it, from which thread, for whom; 
   await close()
 })
 
-it("waits until a thread isn't working (threads.idle), and tells its last answer (thread.lastAnswer)", async () => {
+it("waits until a thread isn't working (threads.idle, thread.read), and tells its last answer (thread.lastAnswer, thread.read)", async () => {
   // The run holds in a tool until the test lets it go, then answers.
   const turn = (content: unknown[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
   await writeFile(join(dir, 'turns.jsonl'), [turn([{ type: 'toolCall', id: 'c1', name: 'hold', arguments: {} }], 'toolUse'), turn([{ type: 'text', text: 'Let go.' }], 'stop')].join('\n') + '\n')
@@ -363,14 +363,18 @@ it("waits until a thread isn't working (threads.idle), and tells its last answer
   const given = api!.threads.idle(thread.id, { signal: stop.signal })
   stop.abort()
   expect((await given).status.state).toBe('working')
+  expect(await peer.call('thread.read', { thread: thread.id })).toMatchObject({ thread: { id: thread.id, status: { state: 'working' } }, answer: null })
   const waited = api!.threads.idle(thread.id)
+  const read = peer.call('thread.read', { thread: thread.id, wait: true })
   let ended = false
-  void waited.then(() => { ended = true })
+  void Promise.all([waited, read]).then(() => { ended = true })
   await new Promise((r) => setTimeout(r, 50))
   expect(ended).toBe(false)
   release()
   expect((await waited).status.state).toBe('done')
+  expect(await read).toMatchObject({ thread: { status: { state: 'done' } }, answer: 'Let go.' })
   expect(await peer.call('thread.lastAnswer', { thread: thread.id })).toEqual({ text: 'Let go.' })
+  await expect(peer.call('thread.read', { thread: '999' })).rejects.toMatchObject({ kind: 'not_found' })
   // Not working: at once.
   expect((await api!.threads.idle(thread.id)).status.state).toBe('done')
   await expect(api!.threads.idle('999')).rejects.toMatchObject({ kind: 'not_found' })

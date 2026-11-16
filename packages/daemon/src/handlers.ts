@@ -37,6 +37,7 @@ const PARAMS: Record<string, JsonSchema> = {
   'profile.module': params({ ...PROFILE_REF, path: str() }),
   'thread.history': params({ thread, before: num(), limit: opt(num()) }),
   'thread.lastAnswer': params({ thread }),
+  'thread.read': params({ thread, wait: opt(bool()) }),
   'thread.watch': params({ thread }),
   'threads.watch': params({ hidden: opt(bool()) }),
   'value.watch': params({ key: str(), scope: opt(str()) }),
@@ -114,6 +115,17 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
     'profile.module': ({ path, ...ref }: Methods['profile.module']['params']) => profiles.module(ref, path),
     'thread.history': ({ thread: id, before, limit }: Methods['thread.history']['params']) => threads.history(id, before, limit),
     'thread.lastAnswer': async ({ thread: id }: Methods['thread.lastAnswer']['params']) => ({ text: (await threads.lastAnswer(id)) ?? null }),
+    // A wait ends with the connection: held as a watch is, so its close stops it.
+    async 'thread.read'({ thread: id, wait }: Methods['thread.read']['params']) {
+      const waiting = sub()
+      const stop = new AbortController()
+      subs.set(waiting, () => stop.abort())
+      try {
+        return await threads.read(id, { wait: Boolean(wait), signal: stop.signal })
+      } finally {
+        subs.delete(waiting)
+      }
+    },
     async 'thread.watch'({ thread: id }: Methods['thread.watch']['params']) {
       const watching = sub()
       // Held before the watch starts, so one that ends at once (its thread cleared meanwhile) still says so. Its end

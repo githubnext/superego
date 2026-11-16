@@ -91,7 +91,7 @@ export async function serveMcp({ app, label, connect }: McpOptions): Promise<voi
   server.setRequestHandler(CallToolRequestSchema, async ({ params: { name, arguments: args = {} } }, { signal }) => {
     try {
       if (name === 'thread_list') return text((await call<ThreadInfo[]>('thread.list', { archived: Boolean(args.archived) })).map(brief))
-      if (name === 'thread_read') return text(await readThread(call, String(args.thread ?? ''), { wait: Boolean(args.wait), signal, label }))
+      if (name === 'thread_read') return text(await readThread(call, (await daemon()).hello, String(args.thread ?? ''), { wait: Boolean(args.wait), signal, label }))
       // Any other is an action, by its id: the daemon refuses one that isn't exposed, or isn't allowed now, saying why.
       return text(await call('action.run', { id: name.replaceAll('_', '.'), params: args, exposure: 'outside' }) ?? { ok: true })
     } catch (error) {

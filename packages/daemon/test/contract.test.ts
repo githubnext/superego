@@ -6,7 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { contractProblem, defineApp, EXTENSION_API, PROTOCOL_VERSION, RELEASED, type ExtensionAbout, type ExtensionManifest, type Hello, type RpcPeer } from '@superego/protocol'
+import { contractProblem, defineApp, EXTENSION_API, FEATURES, PROTOCOL_VERSION, RELEASED, type ExtensionAbout, type ExtensionManifest, type Hello, type RpcPeer } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonExtension } from '../src/index.ts'
 import { until } from './until.ts'
 
@@ -56,7 +56,7 @@ it('announces each extension at its version, in hello and as it changes', async 
   const { peer, hello, close } = await open([git, mine])
   expect(hello.api).toBe(EXTENSION_API)
   // Extensions are in `extensions` only: `features` is the protocol's.
-  expect(hello.features).toEqual([])
+  expect(hello.features).toEqual([...FEATURES])
   const of = (list: ExtensionManifest[] | undefined, name: string) => list?.find((e) => e.name === name)
   expect(of(hello.extensions, 'git')).toEqual({ name: 'git', version: '1.3.0', api: '^2' })
   // One that says no version is announced without one: clients count it 0.0.0.

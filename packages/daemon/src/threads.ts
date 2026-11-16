@@ -37,6 +37,9 @@ export function paneParams(params: unknown): Json {
 }
 
 /** An origin with only what it says: no undefined keys, to keep in an entry. */
+/** How long a message just sent may wait for its run to start before `thread.read`'s wait stops waiting for it. */
+const STARTING = 10_000
+
 const originOf = ({ by, from, exposure }: MessageOrigin): MessageOrigin => ({ ...(by ? { by } : {}), ...(from ? { from } : {}), ...(exposure ? { exposure } : {}) })
 
 /**
@@ -474,6 +477,37 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     })
   }
 
+  /** Once any thread changes, `ms` passes, or `signal` aborts. */
+  const changeOrAfter = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve) => {
+    const off = host.onChanged(done)
+    const timer = setTimeout(done, ms)
+    signal?.addEventListener('abort', done, { once: true })
+    function done() { off(); clearTimeout(timer); signal?.removeEventListener('abort', done); resolve() }
+  })
+
+  /** Whether a thread's newest message is the user's, with no reply begun: one just sent, before its run starts. */
+  async function unanswered(id: string) {
+    const last = (await newest(id, 20)).map((entry) => entry.model?.[0] as { role?: string } | undefined).find((message) => message?.role)
+    return last?.role === 'user'
+  }
+
+  /**
+   * A thread and its last answer (`thread.read`). `wait`: once it isn't working (`idle`), and has answered a message
+   * just sent, unless its run doesn't start within `STARTING`; or once `signal` aborts.
+   */
+  async function read(id: string, { wait = false, signal }: { wait?: boolean; signal?: AbortSignal } = {}) {
+    let thread = info(id, await get(id))
+    const since = Date.now()
+    while (wait && !signal?.aborted) {
+      thread = await idle(id, signal)
+      if (thread.status.state === 'blocked' || thread.status.state === 'error' || !await unanswered(id)) break
+      const left = STARTING - (Date.now() - since)
+      if (left <= 0) break
+      await changeOrAfter(left, signal)
+    }
+    return { thread, answer: (await answerOf(id)) ?? null }
+  }
+
   /**
    * A message's content as extensions' send transforms leave it (a skill it names brought along, say): each in turn,
    * those of extensions the thread goes without skipped, and a profile's for its own threads only. Untouched, it's sent
@@ -727,7 +761,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   }
 
   return {
-    list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, tellPaneClosed, submit, startThread, archive, unarchive, openPane, history, lastAnswer: answerOf,
+    list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, tellPaneClosed, submit, startThread, archive, unarchive, openPane, history, lastAnswer: answerOf, read,
     watchTranscript, apiFor, retrySignIn, rejectedNow, learnConversations,
   }
 }

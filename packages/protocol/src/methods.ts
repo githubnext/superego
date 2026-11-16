@@ -40,9 +40,9 @@ export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.t
 /**
  * What a daemon of this build offers beyond what its generation began with, announced in `hello`. Clients check a
  * feature before using it, so an older daemon of the generation keeps working with a newer app (and the other way
- * round) for whatever both know. Generation 2 has added none yet: everything it began with is there.
+ * round) for whatever both know. `thread-read`: the `thread.read` method.
  */
-export const FEATURES = [] as const
+export const FEATURES = ['thread-read'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -265,6 +265,12 @@ export type Methods = {
   'thread.history': { params: { thread: ThreadId; before: number; limit?: number }; result: { entries: unknown[]; more: boolean } }
   /** Its last answer, as text (the newest assistant message that says something), if it has one. */
   'thread.lastAnswer': { params: { thread: ThreadId }; result: { text: string | null } }
+  /**
+   * A thread (listed, archived or hidden) and its last answer, as `thread.lastAnswer` says it. `wait`: once it isn't
+   * working, and has answered a message just sent (unless its run doesn't start within ten seconds); a connection
+   * that closes stops the wait. With the `thread-read` feature.
+   */
+  'thread.read': { params: { thread: ThreadId; wait?: boolean }; result: { thread: ThreadInfo; answer: string | null } }
   /** Snapshot of the conversation view, then `watch.ops` notifications with Chord delta ops against it. */
   'thread.watch': { params: { thread: ThreadId }; result: { sub: string; value: ConversationView } }
   /**

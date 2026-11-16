@@ -7,7 +7,7 @@
 // Plain tools on a host, so Ego's own (`thread_read`, `thread_list`, its `thread_start`) are built from the same parts.
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { bool, obj, opt, str } from '@earendil-works/pi-schema'
-import { linkTo, type Json, type MachineEntry, type ThreadInfo } from '@superego/protocol'
+import { linkTo, offers, type Json, type MachineEntry, type ThreadInfo } from '@superego/protocol'
 
 /** A thread to start, as `thread.start` takes it. */
 type NewChild = { prompt: string; title?: string; cwd?: string; profile?: string; options?: Record<string, Json> }
@@ -40,11 +40,11 @@ export type ThreadsHost = {
 /** A message from another thread, as thread_send sends it: from whom, for the agent reading it. */
 const fromLine = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `From ${linkTo(thread)}:`
 
-/** `ms` from now, or as soon as `signal` aborts. */
-const pause = (ms: number, signal: AbortSignal | undefined) => new Promise<void>((resolve) => {
-  const timer = setTimeout(done, ms)
-  signal?.addEventListener('abort', done, { once: true })
-  function done() { clearTimeout(timer); signal?.removeEventListener('abort', done); resolve() }
+/** Rejects once `signal` aborts: what a wait races, so Stop ends it at once. */
+const stopped = (signal: AbortSignal) => new Promise<never>((_, reject) => {
+  const stop = () => reject(new Error('Stopped waiting'))
+  if (signal.aborted) stop()
+  else signal.addEventListener('abort', stop, { once: true })
 })
 
 const text = (value: string) => ({ output: [{ type: 'text' as const, text: value }] })
@@ -63,9 +63,10 @@ type Place = {
   send(id: string, text: string, from: string): Promise<void>
   /** How a message names one of its threads. */
   name(thread: Pick<ThreadInfo, 'id' | 'title'>): string
-  /** The machine's name, for a place elsewhere, and how a thread starts there. */
+  /** The machine's name, for a place elsewhere, how a thread starts there, and how it's read (its `thread.read`). */
   away?: string
   start?(params: NewChild): Promise<ThreadInfo>
+  read?(id: string, wait: boolean): Promise<{ thread: ThreadInfo; answer: string | null }>
 }
 
 const MACHINE = opt(str({ description: 'Another machine this one reaches, by name or id (thread_machines lists them). Unset: this machine.' }))
@@ -87,6 +88,10 @@ function placeOf(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'hostname'
     list,
     info: async (id) => (await list()).find((t) => t.id === id),
     answer: async (id) => (await call<{ text: string | null }>('thread.lastAnswer', { thread: id })).text ?? undefined,
+    async read(id, wait) {
+      if (!offers(found, 'thread-read')) throw new Error(`${found.label} runs a Superego that can't read its threads from here: update it`)
+      return call('thread.read', { thread: id, wait })
+    },
     send: async (id, message) => { await call('thread.send', { thread: id, text: message, whenBusy: 'followUp' }) },
     name: (thread) => `"${thread.title}" (thread ${thread.id} on ${found.label})`,
   }
@@ -102,23 +107,21 @@ export function readTool(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'i
     async execute({ thread: id, wait, machine }, api, context) {
       const place = placeOf(host, machine)
       if (wait && !place.away && id === String(api.conversationId)) throw new Error('A thread can\'t wait on itself')
-      let thread = await place.info(id)
-      if (!thread) throw new Error(`No thread ${id}${place.away ? ` on ${place.away}` : ''}`)
-      // Here, the daemon says when its run ends; elsewhere, it's asked every second, until it's gone from its list (archived).
-      while (wait && thread.status.state === 'working') {
-        if (place.away) await pause(1000, context.abortSignal)
-        else thread = await host.idle(id, context.abortSignal)
-        if (context.abortSignal?.aborted) throw new Error('Stopped waiting')
-        if (place.away) {
-          const now = await place.info(id)
-          if (!now) throw new Error(`No thread ${id} on ${place.away} any more (archived, or gone)`)
-          thread = now
-        }
+      const signal = context.abortSignal
+      const read = async (): Promise<{ thread: ThreadInfo; answer: string | null | undefined }> => {
+        // Elsewhere, its daemon reads it and waits (a wait left there when Stopped ends with its run).
+        if (place.read) return place.read(id, Boolean(wait))
+        // Here, the daemon says when its run ends.
+        const found = await place.info(id)
+        if (!found) throw new Error(`No thread ${id}`)
+        const thread = wait && found.status.state === 'working' ? await host.idle(id, signal) : found
+        return { thread, answer: await place.answer(id) }
       }
+      const { thread, answer } = await (signal ? Promise.race([read(), stopped(signal)]) : read())
+      if (signal?.aborted) throw new Error('Stopped waiting')
       const all = await place.list()
-      const parent = thread.parent ? all.find((t) => t.id === thread!.parent) : undefined
+      const parent = thread.parent ? all.find((t) => t.id === thread.parent) : undefined
       const children = all.filter((t) => t.parent === id)
-      const answer = await place.answer(id)
       if (!place.away) await host.read?.(String(api.conversationId), thread)
       return text([
         lineOf(thread, place.name),

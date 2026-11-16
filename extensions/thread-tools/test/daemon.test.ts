@@ -176,24 +176,35 @@ it('reads a thread: where it stands, who started it, and its last answer, waitin
   await expect(stopped).rejects.toThrow('Stopped waiting')
 })
 
-it("waits on a thread elsewhere by asking every second: ends when it's gone from the list, and at once on Stop", async () => {
+it("reads a thread elsewhere with its daemon's thread.read, which waits there; an older one says to update; Stop ends it at once", async () => {
   const h = host()
-  const box: MachineEntry = { id: 'm1', label: 'box', state: 'connected' }
-  let remote = [{ ...h.threads[1]!, id: '7' }]
-  const away = { ...h, machines: () => [box], remote: async (_machine: string, method: string) => method === 'thread.list' ? remote : null }
-  const archived = run(away, 'thread_read', { thread: '7', wait: true, machine: 'box' })
-  await new Promise((r) => setTimeout(r, 50))
-  remote = []
-  await expect(archived).rejects.toThrow('No thread 7 on box any more')
-  // Stopped mid-pause: not a second later.
-  remote = [{ ...h.threads[1]!, id: '7' }]
+  const box: MachineEntry = { id: 'm1', label: 'box', state: 'connected', features: ['thread-read'] }
+  const remote = [{ ...h.threads[1]!, id: '7' }]
+  const asked: unknown[] = []
+  let answer = (_: unknown) => {}
+  const away = {
+    ...h, machines: () => [box],
+    remote: async (_machine: string, method: string, params: unknown) => {
+      if (method === 'thread.list') return remote
+      asked.push([method, params])
+      return new Promise((resolve) => { answer = resolve })
+    },
+  }
+  const reading = run(away, 'thread_read', { thread: '7', wait: true, machine: 'box' })
+  await new Promise((r) => setTimeout(r, 20))
+  expect(asked).toEqual([['thread.read', { thread: '7', wait: true }]])
+  answer({ thread: { ...remote[0]!, status: { state: 'done' } }, answer: 'Shipped.' })
+  const read = await reading
+  expect(read).toContain('"Child [one]" (thread 7 on box): done')
+  expect(read).toContain('Its last answer:\nShipped.')
+  // Stopped while its daemon waits.
   const stop = new AbortController()
-  const started = Date.now()
   const stopped = run(away, 'thread_read', { thread: '7', wait: true, machine: 'box' }, 1, stop.signal)
-  await new Promise((r) => setTimeout(r, 50))
+  await new Promise((r) => setTimeout(r, 20))
   stop.abort()
   await expect(stopped).rejects.toThrow('Stopped waiting')
-  expect(Date.now() - started).toBeLessThan(900)
+  box.features = []
+  await expect(run(away, 'thread_read', { thread: '7', machine: 'box' })).rejects.toThrow("box runs a Superego that can't read its threads from here: update it")
 })
 
 it('notes what a thread read, for its reports (threads.noteRead)', async () => {
