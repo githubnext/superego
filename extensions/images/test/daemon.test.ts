@@ -1,44 +1,29 @@
+// images against a real daemon: show_images checks each image, keeps a copy among the thread's files for every client
+// to read, and says what it couldn't show.
 import { mkdir, mkdtemp, readFile, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import type { ConversationView } from '@earendil-works/pi-durable'
-import { connectSocket, listen, openDaemon } from '@superego/daemon'
-import { defineApp, PROTOCOL_VERSION, type Hello, type Json, type ThreadInfo } from '@superego/protocol'
+import type { Json } from '@superego/protocol'
+import { callTool, say, testDaemon } from '@superego/sdk/testing'
 import images, { MAX_BYTES } from '../src/daemon.ts'
 import type { ShowDetails } from '../src/shared.ts'
 import { png } from './fixtures.ts'
 
-const app = defineApp({ name: 'test', id: 'imagestest' })
 let dir: string
-afterEach(async () => { await rm(dir, { recursive: true, force: true }); delete process.env.IMAGESTEST_MODEL })
+afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
-const until = async (check: () => boolean | Promise<boolean>) => {
-  for (let i = 0; i < 200; i++) { if (await check()) return; await new Promise((r) => setTimeout(r, 25)) }
-  throw new Error('timed out')
-}
-const turn = (content: Json[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
-const show = (id: string, args: Json) => turn([{ type: 'toolCall', id, name: 'show_images', arguments: args }], 'toolUse')
+const show = (id: string, args: Record<string, Json>) => callTool('show_images', args, id)
 type Result = { role?: string; toolCallId?: string; isError?: boolean; content?: { text?: string }[]; details?: ShowDetails }
 
-/** A daemon whose model makes `calls` in turn, then stops; the results of each, by call id. */
-async function run(calls: string[]) {
-  await writeFile(join(dir, 'turns.jsonl'), [...calls, turn([{ type: 'text', text: 'There.' }], 'stop')].join('\n') + '\n')
-  process.env.IMAGESTEST_MODEL = `replay:${join(dir, 'turns.jsonl')}`
-  process.env.IMAGESTEST_REPLAY_SPEED = '0'
-  const daemon = await openDaemon({ app, dataDir: join(dir, 'home'), defaultCwd: join(dir, 'project'), extensions: [images] })
-  const server = await listen(daemon, join(dir, 's.sock'))
-  const { peer, socket } = await connectSocket(join(dir, 's.sock'))
-  const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
-  expect(hello.extensions.map((e) => e.name)).toContain('images')
-  const thread = await peer.call<ThreadInfo>('thread.start', {})
-  await peer.call('thread.send', { thread: thread.id, text: 'show me' })
-  await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
-  const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: thread.id })
-  const results = new Map(value.entries.map((e) => e.model?.[0] as Result | undefined)
+/** A daemon (its data in `dir/home`) whose model makes `calls` in turn in a thread in `dir/project`, then stops; the results of each, by call id. */
+async function run(calls: ReturnType<typeof show>[]) {
+  const daemon = await testDaemon({ extensions: [images], dataDir: join(dir, 'home'), model: [...calls, say('There.')] })
+  expect(daemon.extensions.map((e) => e.name)).toContain('images')
+  const thread = await daemon.thread('show me', { cwd: join(dir, 'project') })
+  const results = new Map((JSON.parse(await daemon.transcript(thread.id)) as { model?: Result[] }[]).map((e) => e.model?.[0])
     .filter((m): m is Result => m?.role === 'toolResult').map((m) => [m.toolCallId!, m]))
-  const close = async () => { socket.destroy(); server.close(); await daemon.close() }
-  return { peer, thread, results, close }
+  return { peer: daemon.peer, thread, results, close: () => daemon.close() }
 }
 
 it('shows files and web images, kept among the thread’s files for every client to read', async () => {

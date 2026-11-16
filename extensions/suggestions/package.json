@@ -17,6 +17,7 @@
     "react": "^19"
   },
   "devDependencies": {
+    "@superego/sdk": "workspace:*",
     "@types/react": "^19",
     "react": "^19"
   }

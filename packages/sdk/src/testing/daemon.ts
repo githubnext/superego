@@ -23,7 +23,7 @@ export type TestDaemonOptions = {
    * every request with the last user message, for as many turns as it's asked (a side call to the thread's model too).
    */
   model?: Turn[] | 'echo'
-  /** The daemon's data folder: a new one in tmp unless given (`restart` keeps it). */
+  /** The daemon's data folder: a new one in tmp unless given (made if it isn't there; `restart` keeps it). */
   dataDir?: string
   /** How long a setup may take (15s in the app): shorter, to test one that hangs. */
   setupTimeout?: number
@@ -79,8 +79,11 @@ export type TestDaemon = {
   reload(): Promise<void>
   /** Wait until `check` holds, trying every 25ms. */
   until(check: () => boolean | Promise<boolean>, what?: string, timeout?: number): Promise<void>
-  /** Stop it and start it again on the same folder (threads, state and the profile kept), with a new script (the echo model stays). */
-  restart(options?: { model?: Turn[] | 'echo' }): Promise<TestDaemon>
+  /**
+   * Stop it and start it again on the same folder (threads, state and the profile kept), with a new script (the echo
+   * model stays). `whileStopped` runs between: what changes while no daemon runs (a branch merged by hand).
+   */
+  restart(options?: { model?: Turn[] | 'echo'; whileStopped?: () => unknown }): Promise<TestDaemon>
   /** Stop it, and remove its folder (unless it was given one). */
   close(): Promise<void>
 }
@@ -99,6 +102,7 @@ let opened = 0
 export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestDaemon> {
   const given = Boolean(options.dataDir)
   const dataDir = options.dataDir ?? await mkdtemp(join(tmpdir(), 'superego-test-'))
+  await mkdir(dataDir, { recursive: true })
   const name = options.profileName ?? 'default'
   let profileDir: string | undefined
   if (options.profile !== undefined) {
@@ -228,8 +232,9 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
       await peer.call('action.run', { id: 'profile.reload', params: { name } })
     },
     until,
-    async restart({ model } = {}) {
+    async restart({ model, whileStopped } = {}) {
       await stop()
+      await whileStopped?.()
       return testDaemon({ ...options, dataDir, model: model ?? (options.model === 'echo' ? 'echo' : []), appId: app.id } as TestDaemonOptions).then((next) => {
         // The folder is this test's still: the new one removes it when it closes, unless it was given.
         if (!given) (next as { close(): Promise<void> }).close = closeAndRemove(next.close)

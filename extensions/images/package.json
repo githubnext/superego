@@ -20,6 +20,7 @@
     "react-dom": "^19"
   },
   "devDependencies": {
+    "@superego/sdk": "workspace:*",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "react": "^19",

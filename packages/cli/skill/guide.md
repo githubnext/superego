@@ -252,8 +252,8 @@ it('queues builds and shows the thread its own', async () => {
   `until(check)`, `extensions` (the manifests of those set up and on there, kept current: where yours shows) and
   `features` (protocol features only); `app` (its own id), `dataDir` and `agentsDir` (skills go in `skills/`); `peer`,
   the connection (`Channels.of(daemon.peer)` opens a channel), and `connect()` for another client's, as a second
-  window; `edit(path, content)` then `reload()` to load a change (a helper edited alone loads too); `restart({ model })`
-  on the same folder; `close()`.
+  window; `edit(path, content)` then `reload()` to load a change (a helper edited alone loads too); `restart({ model,
+  whileStopped })` on the same folder (`whileStopped` runs while no daemon does); `close()`.
 - **`isRunning(pid)`**: whether a process is still there, to check that what an extension started stopped with it.
   The queue examples' tests cancel a build whose command starts a `sleep` of its own, and check it's gone once the
   build says cancelled.
