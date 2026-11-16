@@ -149,6 +149,14 @@ if (phase === 'first') {
     ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
   })()`)
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: typed message')`, 'typed answer rendered')
+  // The native menu is for content, as selection is: a right-click on a message or in the composer goes through to it;
+  // one on the chrome around them is cancelled, so it never shows there.
+  const menu = await run(`['.msg--user', '.composer textarea', '.transcript', '.app__rail'].map((selector) => {
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    document.querySelector(selector).dispatchEvent(event)
+    return event.defaultPrevented
+  }).join()`)
+  if (menu !== 'false,false,true,true') { await fail(`native menu on content only, not chrome: ${menu}`); throw new Error('failed') }
   // Your messages read as Markdown too, each newline kept: a thread link, code, a highlighted block; a lone * stays.
   const said = `From [this thread](thread:${id}):\nrun \`pnpm test\` * twice\n\n\`\`\`ts\nconst a = 1\n\`\`\``
   await run(`window.superego.call('local', 'thread.send', { thread: '${id}', text: ${JSON.stringify(said)} })`)

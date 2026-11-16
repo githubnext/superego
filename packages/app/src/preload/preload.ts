@@ -81,3 +81,11 @@ contextBridge.executeInMainWorld({
   },
   args: [bridge],
 })
+
+// The native menu (main/context-menu.ts) is for content, as selection is: a right-click on the chrome (what the styles
+// make unselectable, and that isn't a field) gets none. Last to hear it, after the app's own menus.
+window.addEventListener('contextmenu', (event) => {
+  const target = event.target instanceof Element ? event.target : null
+  if (!target || target.closest('input, textarea, [contenteditable]:not([contenteditable="false"])')) return
+  if (getComputedStyle(target).userSelect === 'none') event.preventDefault()
+})

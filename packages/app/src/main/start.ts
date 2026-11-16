@@ -15,6 +15,7 @@ import { LayoutFile, type LayoutView } from './layout-file.ts'
 import { Link, loginInTerminal, MachineLinks, MachineStore, openLocal as openLocalSocket, runUpdate, UiAllowStore } from '@superego/client'
 import { installTypes } from '@superego/client/author-types'
 import { MenuBar } from './tray.ts'
+import { attachContextMenu } from './context-menu.ts'
 import { commandLine } from './command-line.ts'
 import { ServiceRestart, type ServiceAction } from './restart.ts'
 import { createSignInCatcher } from './sign-in-callback.ts'
@@ -777,6 +778,7 @@ export function startApp(appConfig: AppConfig) {
       show: !headless,
       webPreferences: { preload: join(import.meta.dirname, '../preload/preload.cjs'), sandbox: true, contextIsolation: true },
     })
+    attachContextMenu(window.webContents, { dev: !app.isPackaged })
     // Links (sign-in pages, docs) open in the browser, never in the app.
     window.webContents.setWindowOpenHandler(({ url }) => {
       if (/^https?:/.test(url)) void shell.openExternal(url)
