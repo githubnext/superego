@@ -15,7 +15,7 @@ import type { DaemonContext } from '@superego/daemon/sdk'
 import { RpcError, type Json } from '@superego/protocol'
 import { checkConfig, ConfigFile, optionalSecretNames, profileServerNames, profileServers, profileServersProblem, secretNames } from './config.ts'
 import { Callbacks, DEFAULT_CALLBACK_PORT, redirectOf } from './loopback.ts'
-import { EGO, egoPart } from './ego.ts'
+import { EGO, egoPart, userAsked } from './ego.ts'
 import { signIn } from './oauth.ts'
 import { mayHaveRun } from './results.ts'
 import { oauthResource, Runtime, type RuntimeOptions, type Server } from './servers.ts'
@@ -227,15 +227,15 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         return { chosen, left }
       }
 
-      // Ego sets servers up, for the user in the window: never for an outside agent (a message it's answering that came
-      // from one, or one not to be found), whatever outside agents may do otherwise.
+      // Ego sets servers up for the user alone, whatever outside agents may do otherwise: only when the message its call
+      // answers is the user's own (`userAsked`). One from another thread, an extension or an outside agent, or one not
+      // to be found, is refused: a thread may be passing on what an outside agent told it.
       const ego = egoPart({
         app: superego.app, data: sectionData,
         dispatch: (id, params) => superego.dispatch(id, params),
         async refuse(conversation, callId) {
-          const origin = await superego.threads.answering(conversation, callId)
-          if (origin && origin.exposure !== 'outside') return undefined
-          return 'An outside agent asked for this. Outside agents never set up MCP servers: the user does, in Settings → MCP servers (or asks here in the window).'
+          if (userAsked(await superego.threads.answering(conversation, callId))) return undefined
+          return "This message isn't the user's own: it's from an outside agent, another thread or an extension. Only the user sets up MCP servers, in Settings → MCP servers (or by asking here in the window)."
         },
       })
       superego.agent(ego, { always: false })

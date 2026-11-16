@@ -494,6 +494,9 @@ importers:
       '@superego/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
+      '@superego/thread-tools':
+        specifier: workspace:*
+        version: link:../thread-tools
       '@superego/worktrees':
         specifier: workspace:*
         version: link:../worktrees

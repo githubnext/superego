@@ -6,17 +6,28 @@
 //
 // Outside agents (`superego mcp`) ask it too (`ego.ask`, or `thread.send` to its thread), but start threads through it
 // no more than they may themselves: each message one sends goes with a block saying so (`OUTSIDE`, for the model and the
-// window), and while `outside.startThreads` is off, thread_start refuses when the message its call answers came from one
-// (`threads.answering`). A turn the user asks for in the window, in the same conversation, still starts threads.
+// window), and while `outside.startThreads` is off, thread_start runs only for the user's own message (`userAsked`, by
+// `threads.answering`). One another thread sent (thread_send) or another extension counts as an outside agent's: the
+// thread may be passing on what an outside agent told it. A turn the user asks for in the window, in the same
+// conversation, still starts threads.
 import { hostname } from 'node:os'
 import { obj, opt, str } from '@earendil-works/pi-schema'
 import { defineAction, defineDaemonExtension, OUTSIDE_THREADS, type DaemonExtension } from '@superego/daemon'
-import { agentName, RpcError, type ThreadInfo } from '@superego/protocol'
+import { agentName, RpcError, type MessageOrigin, type ThreadInfo } from '@superego/protocol'
 import { about, ASK, CLEAR, OUTSIDE } from './shared.ts'
 import { egoPrompt, egoTools } from './tools.ts'
 
 /** Settings' section of switches for optional extensions, one `extensions.<name>` each. */
 const EXTENSIONS = 'extensions'
+
+/**
+ * Whether a message Ego answers is the user's own: a window's or the command line's, straight to its thread (no `by`,
+ * no `from`), or passed on by `ego.ask` for one (`by` Ego, with the client's exposure). Not an outside agent's, and not
+ * one another thread (`from`) or another extension (`by`) sent: those may carry an outside agent's words. Unknown
+ * (undefined) isn't the user's either.
+ */
+export const userAsked = (origin: MessageOrigin | undefined) =>
+  !!origin && !origin.from && origin.exposure !== 'outside' && (!origin.by || origin.by === about.name)
 
 /** What Ego goes without, of what every thread has: it changes nothing itself, and starts threads its own way. */
 const WITHOUT = ['coding-tools', 'thread-tools']
@@ -44,10 +55,8 @@ export function ego(): DaemonExtension {
         // Read as it's called: the setting may have changed since the message came.
         async refuseStart(conversation, callId) {
           if (superego.settings.get(OUTSIDE_THREADS) === true) return undefined
-          // One not to be found counts as an outside agent's.
-          const origin = await threads.answering(conversation, callId)
-          if (origin && origin.exposure !== 'outside') return undefined
-          return "An outside agent asked for this, and outside agents can't start threads on this machine. The user can allow it in Settings → Outside agents → Can start threads."
+          if (userAsked(await threads.answering(conversation, callId))) return undefined
+          return "This message isn't the user's own: it's from an outside agent, another thread or an extension, and outside agents can't start threads on this machine. The user can allow it in Settings → Outside agents → Can start threads."
         },
       })
       // An outside agent's message to Ego says so.

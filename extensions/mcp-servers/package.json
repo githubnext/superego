@@ -25,6 +25,7 @@
   "devDependencies": {
     "@superego/ego": "workspace:*",
     "@superego/sdk": "workspace:*",
+    "@superego/thread-tools": "workspace:*",
     "@superego/worktrees": "workspace:*",
     "@types/react": "^19",
     "@types/react-dom": "^19.3.0",
