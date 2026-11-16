@@ -5,8 +5,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { defineApp, type DataViewInfo, type ThreadInfo } from '@superego/protocol'
 import { checkContent, checkDataViews, contentOf, LIMITS } from '../src/renderer/data-view-check.ts'
-import { DataContent, DataViewBoundary, runViewAction } from '../src/renderer/data-views.tsx'
-import { createRegistry, defineUiExtension, paneKind, paneMenu, RegistryProvider, viewsIn } from '../src/renderer/extension.tsx'
+import { DataContent, runViewAction } from '../src/renderer/data-views.tsx'
+import { defineUiExtension } from '../src/renderer/extension-api.ts'
+import { createRegistry, RegistryProvider } from '../src/renderer/registry.tsx'
+import { paneKind } from '../src/renderer/lookups.ts'
+import { paneMenu, viewsIn } from '../src/renderer/placement.tsx'
 import { resolveLayout } from '../src/shared/layout.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
@@ -208,15 +211,4 @@ describe("a data view's buttons", () => {
     expect(calls).toHaveLength(1)
   })
 
-})
-
-describe('a data view that throws as it draws', () => {
-  it('says so in its place, with Try again', () => {
-    const boundary = new DataViewBoundary({ id: 'orders.recent', place: 'beside', children: null })
-    boundary.state = DataViewBoundary.getDerivedStateFromError(new Error('boom'))
-    const html = renderToStaticMarkup(boundary.render() as never)
-    expect(html).toContain('orders.recent couldn’t be drawn')
-    expect(html).toContain('title="boom"')
-    expect(html).toContain('Try again')
-  })
 })

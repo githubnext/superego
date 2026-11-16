@@ -3,9 +3,10 @@
 // → to the first child. ⌃P, ⌃T and ⌃G show only projects, threads or panes (again: everything). Enter goes there.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Dialog, StatusGlyph } from '@superego/ui'
-import type { Pane, Status, ThreadInfo } from '@superego/protocol'
+import type { Status, ThreadInfo } from '@superego/protocol'
 import { score } from './score.ts'
-import { paneTitle, shownPanes, useRegistry } from './extension.tsx'
+import { useRegistry } from './registry.tsx'
+import { paneTitle, shownPanes } from './lookups.ts'
 import { useMachines, useSelection, useProjects } from './state.tsx'
 import { showProject } from './actions.tsx'
 import type { Project } from './projects.ts'

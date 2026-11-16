@@ -10,7 +10,7 @@ import { APP } from '../shared/app-settings.ts'
 import { BADGE, browserNotification, createNotices, NOTIFY, type ThreadNotification } from '../shared/notifications.ts'
 import { call, useAppSetting } from './client.ts'
 import type { ComposerWhere } from './composer.ts'
-import type { UiApi } from './extension.tsx'
+import type { UiApi } from './extension-api.ts'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useRejections, useSelection } from './state.tsx'
 

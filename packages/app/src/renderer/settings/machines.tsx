@@ -5,7 +5,7 @@ import { remoteCommand, type Json, type SettingsSnapshot, type Status } from '@s
 import { Button, Select, StatusGlyph, Switch, TextField } from '@superego/ui'
 import type { MachineEntry } from '../../shared/bridge.ts'
 import { useSettings } from '../client.ts'
-import { useApp, useRegistry } from '../extension.tsx'
+import { useApp, useRegistry } from '../registry.tsx'
 import { driftNote, MachineDrift } from '../machine-drift.tsx'
 import { useMachineProblems } from '../machine-problems.ts'
 import { mergeSettings, type MergedSetting } from '../merge-settings.ts'

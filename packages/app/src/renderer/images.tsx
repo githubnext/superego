@@ -27,7 +27,7 @@ export type ImageItem = {
   alt?: string
 }
 
-export const imageFileName = (name: string) => name.replace(/[?#].*$/, '').split('/').filter(Boolean).at(-1) ?? name
+const imageFileName = (name: string) => name.replace(/[?#].*$/, '').split('/').filter(Boolean).at(-1) ?? name
 
 /** What an image is called, to someone who can't see it and in a tooltip: its alt text, else its caption, else its name. */
 export const describeImage = (image: ImageItem) => image.alt || image.caption || imageFileName(image.name)
@@ -92,7 +92,7 @@ export function useImageSource(machine: MachineEntry, thread: string, image: Ima
  * Whether `ref` has come near the screen yet (within a screenful of where what scrolls it is scrolled); once it has, it
  * stays true. `from` is where to look for what scrolls it (past a carousel's own strip, say).
  */
-export function useNear(ref: RefObject<Element | null>, from?: (element: Element) => Element | null | undefined): boolean {
+function useNear(ref: RefObject<Element | null>, from?: (element: Element) => Element | null | undefined): boolean {
   const [near, setNear] = useState(false)
   useEffect(() => {
     const element = ref.current

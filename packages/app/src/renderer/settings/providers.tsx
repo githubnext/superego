@@ -4,7 +4,7 @@ import { AUTH_REJECTED, type ProviderAuthInfo, type ProviderRejection, type Sect
 import { Button, TextField } from '@superego/ui'
 import { waitingPhrase } from '../../shared/notifications.ts'
 import { useValue } from '../client.ts'
-import { useRegistry } from '../extension.tsx'
+import { useRegistry } from '../registry.tsx'
 import { takeProviderFocus } from '../provider-focus.ts'
 import { SignInFlow } from '../sign-in-flow.tsx'
 import { useMachines } from '../state.tsx'

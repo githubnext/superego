@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { ProfileInfo, ThreadInfo } from '@superego/protocol'
 import { Button, Select } from '@superego/ui'
-import { useRegistry } from './extension.tsx'
+import { useRegistry } from './registry.tsx'
 
 /** Which of `profiles` (as profile.list gives them): by name, the default as none. */
 export function ProfileSelect({ profiles, value, onChange }: { profiles: ProfileInfo[]; value: string | null; onChange(value: string | null): void }) {

@@ -1,7 +1,7 @@
 // Looking at a finished or failed thread marks it seen: shown in a window that has the focus, when it's selected, when
 // it finishes while shown, or when the window comes back to the front showing it. A question (blocked) waits for its
 // answer instead.
-import type { UiApi } from './extension.tsx'
+import type { UiApi } from './extension-api.ts'
 
 export function registerSeen(core: UiApi) {
   const look = () => {

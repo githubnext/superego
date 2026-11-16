@@ -1,13 +1,13 @@
 // What the shell knows and shares: the machines, every connected machine's threads (one subscription each, whatever
 // number of components show them), which thread is selected, and the Settings dialog; those two kept in the window
 // across reloads; and where the window has been, to go back and forward.
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AUTH_REJECTED, DATA_VIEWS, type Json, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { has, machine as client, useHiddenThreads, useMachineList, useThreads as useThreadsWatch, useValue } from './client.ts'
 import { checkDataViews, warnDropped } from './data-view-check.ts'
 import { clearProblem, reportProblem } from './machine-problems.ts'
-import { useRegistry } from './extension.tsx'
+import { useRegistry } from './registry.tsx'
 import { useImageRechecks } from './images.tsx'
 import { useListedProfileUis } from './profile-ui.ts'
 import { emptyHistory, step, visit, type History, type Place } from './history.ts'
@@ -16,7 +16,8 @@ import { focusProvider } from './provider-focus.ts'
 import { useWindowEvents } from './window-events.ts'
 import { Notifications } from './notifications.tsx'
 import { freeze, projectKey, useProjectList, type Project } from './projects.ts'
-import { sidebarIsHidden, showSidebar, TIGHT, type SidebarMode } from './sidebar-mode.ts'
+import { sidebarIsHidden, showSidebar, type SidebarMode } from './sidebar-mode.ts'
+import { TIGHT, useMedia } from './media.ts'
 import { APP } from '../shared/app-settings.ts'
 
 /** The thread the window shows: its machine's id and its own. */
@@ -275,13 +276,4 @@ export function useNewThreadDialog() {
 export function useSettingsDialog() {
   const { settingsOpen, openSettings } = useShellState()
   return { open: settingsOpen, close: () => openSettings(false) }
-}
-
-/** Whether the window matches a media query, as it's resized. */
-function useMedia(query: string) {
-  return useSyncExternalStore((change) => {
-    const list = matchMedia(query)
-    list.addEventListener('change', change)
-    return () => list.removeEventListener('change', change)
-  }, () => matchMedia(query).matches)
 }

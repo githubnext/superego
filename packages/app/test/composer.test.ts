@@ -3,7 +3,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { defineApp, type ThreadInfo } from '@superego/protocol'
 import { askFor, complete, completing, menuFor, readSent, type Completion, type CompletionProvider, type CompletionWord, type Offered, type SentWith } from '../src/renderer/composer.ts'
-import { completionsIn, createRegistry, defineUiExtension, sentWithIn } from '../src/renderer/extension.tsx'
+import { defineUiExtension } from '../src/renderer/extension-api.ts'
+import { createRegistry } from '../src/renderer/registry.tsx'
+import { completionsIn, sentWithIn } from '../src/renderer/lookups.ts'
 
 const hash: CompletionProvider = {
   title: 'Tags',

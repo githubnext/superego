@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import type { SectionInfo } from '@superego/protocol'
 import { Button, TextField } from '@superego/ui'
 import { renderSVG } from 'uqr'
-import { useRegistry } from './extension.tsx'
+import { useRegistry } from './registry.tsx'
 
 type Device = { id: string; name: string; created?: number; lastSeen: number; address: string; tailscale?: true }
 type Tailscale =

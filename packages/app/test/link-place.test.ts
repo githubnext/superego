@@ -5,7 +5,7 @@ import { act, createElement as h } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { defineApp, type ThreadInfo } from '@superego/protocol'
-import { createRegistry, RegistryProvider, type Registry } from '../src/renderer/extension.tsx'
+import { createRegistry, RegistryProvider, type Registry } from '../src/renderer/registry.tsx'
 import { useLinkPlace, type LinkPlaceValue } from '../src/renderer/links.tsx'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true

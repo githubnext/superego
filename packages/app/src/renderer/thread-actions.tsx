@@ -3,7 +3,7 @@
 import type { ThreadInfo } from '@superego/protocol'
 import { ArchiveIcon, ArrowCounterClockwiseIcon, Button, IconButton } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
-import { useRegistry } from './extension.tsx'
+import { useRegistry } from './registry.tsx'
 
 /** Puts the thread away (⌘⇧E): out of its project, its worktree kept. Not an extension's own hidden thread. */
 export function ArchiveButton({ machine, thread, className = '' }: { machine: MachineEntry; thread: ThreadInfo; className?: string }) {

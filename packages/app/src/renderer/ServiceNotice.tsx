@@ -2,7 +2,7 @@
 // modal: restart now, when idle, or later (which leaves a quiet reminder). Wide, in the rail (`rail`).
 import { useEffect, useState } from 'react'
 import { ArrowClockwiseIcon, Button } from '@superego/ui'
-import { useRegistry } from './extension.tsx'
+import { useRegistry } from './registry.tsx'
 import { RailNotice } from './rail-notice.tsx'
 import type { ServiceAction, ServiceState } from '../shared/service.ts'
 import { APP } from '../shared/app-settings.ts'

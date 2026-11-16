@@ -4,7 +4,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { ProviderRejection, ThreadInfo } from '@superego/protocol'
 import { rejectionChanges, statusChanges, type Rejected, type Statuses } from '../shared/changes.ts'
-import type { Registry } from './extension.tsx'
+import type { Registry } from './registry.tsx'
 import type { Selection } from './state.tsx'
 
 const same = (a: Selection | undefined, b: Selection | undefined) => a?.machine === b?.machine && a?.thread === b?.thread

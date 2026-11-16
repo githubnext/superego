@@ -15,7 +15,8 @@ import { startRename } from './rename.ts'
 import { setLocalState, windowState } from './local-state.ts'
 import { clearProblem, reportProblem } from './machine-problems.ts'
 import { showOnboarding } from './Onboarding.tsx'
-import { maximizedPane, maximizedStore, NARROW, toggleMaximized } from './maximized.ts'
+import { maximizedPane, maximizedStore, toggleMaximized } from './maximized.ts'
+import { NARROW } from './media.ts'
 import { RAIL_TABS, tabAction, type RailTab } from './rail-tabs.ts'
 
 /** What a window action gets besides its parameters. */

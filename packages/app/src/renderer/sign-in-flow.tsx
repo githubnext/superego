@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { AuthEvent, AuthPrompt, Notifications } from '@superego/protocol'
 import { Button, TextField } from '@superego/ui'
 import { machine as client } from './client.ts'
-import { useRegistry } from './extension.tsx'
+import { useRegistry } from './registry.tsx'
 
 /** The sign-in flow a `SignInFlow` runs: where, what to, and how it starts. */
 export type SignInFlowProps = {

@@ -5,7 +5,7 @@
 // code here; its buttons still have that machine's authority. What a machine sends is checked as it lands
 // (data-view-check.ts), and a view that fails to draw says so in its place, not in the shell's. The registry makes each
 // a view (see `setDataViews`), and the layout places it as any other.
-import { Component, useEffect, useMemo, useState, useSyncExternalStore, type ComponentType, type ErrorInfo, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
 import type { DataIcon, DataViewInfo, Json, Status, ThreadInfo, ViewAction } from '@superego/protocol'
 import {
   ArchiveIcon, BellIcon, Button, ChatsIcon, CheckIcon, ColumnsIcon, FileTextIcon, FolderSimpleIcon, GearSixIcon, GlobeIcon, IconButton, ListIcon, Panel,
@@ -14,7 +14,7 @@ import {
 import type { MachineEntry } from '../shared/bridge.ts'
 import { call, useMethod, useValue } from './client.ts'
 import { checkContent, warnDropped } from './data-view-check.ts'
-import { useRegistry, type Registry } from './extension.tsx'
+import { useRegistry, type Registry } from './registry.tsx'
 import type { Place } from '../shared/layout.ts'
 import { Markdown } from './Markdown.tsx'
 import { useAllThreads, useMachines } from './state.tsx'
@@ -37,33 +37,9 @@ function declaredOn(registry: Registry, machine: string, id: string, thread?: Th
 
 /**
  * A data view in a place: a thread's, from its machine; the window's, from every machine that has it (each under its
- * name, when there are several).
+ * name, when there are several). Drawn as views are, apart (`Contained`, where it's placed).
  */
-export function DataViewBody(props: { id: string; place: Place; machine?: MachineEntry; thread?: ThreadInfo }) {
-  return <DataViewBoundary id={props.id} place={props.place}><DataViewInner {...props} /></DataViewBoundary>
-}
-
-/**
- * A data view that threw as it drew: a quiet word in its place, and Try again; the shell around it goes on. (5A's
- * shared view boundary, once it lands, can take this one's place.)
- */
-export class DataViewBoundary extends Component<{ id: string; place: Place; children: ReactNode }, { error?: Error }> {
-  override state: { error?: Error } = {}
-  static getDerivedStateFromError(error: Error) { return { error } }
-  override componentDidCatch(error: Error, info: ErrorInfo) { console.error(`Data view ${this.props.id} failed to draw`, error, info.componentStack) }
-  override render() {
-    if (!this.state.error) return this.props.children
-    return (
-      <div className={`data-view data-view--${this.props.place}`}>
-        <div className="data-view__dropped" title={this.state.error.message}>
-          {this.props.id} couldn’t be drawn. <button type="button" className="data-view__retry" onClick={() => this.setState({ error: undefined })}>Try again</button>
-        </div>
-      </div>
-    )
-  }
-}
-
-function DataViewInner({ id, place, machine, thread }: { id: string; place: Place; machine?: MachineEntry; thread?: ThreadInfo }) {
+export function DataViewBody({ id, place, machine, thread }: { id: string; place: Place; machine?: MachineEntry; thread?: ThreadInfo }) {
   const registry = useRegistry()
   useSyncExternalStore(registry.subscribe, () => registry.version)
   const machines = useMachines()

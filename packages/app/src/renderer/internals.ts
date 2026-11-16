@@ -1,9 +1,9 @@
 /// <reference path="./env.d.ts" />
 // The window's parts a test harness puts together (`superego/testing`'s `mountUi`): not for extensions.
-export {
-  createRegistry, layoutOf, linkHandler, toolRow, paneKind, placedFor, PlacedViews, RegistryProvider, scopedViews, seenIn, Slot, ViewScopeProvider,
-  type BehaviourSlot, type Registry, type SlotProps, type UiExtension, type ViewProps,
-} from './extension.tsx'
+export type { BehaviourSlot, SlotProps, UiExtension, ViewProps } from './extension-api.ts'
+export { createRegistry, RegistryProvider, seenIn, type Registry } from './registry.tsx'
+export { linkHandler, paneKind, toolRow, urlKind } from './lookups.ts'
+export { layoutOf, placedFor, PlacedViews, scopedViews, Slot, ViewScopeProvider } from './placement.tsx'
 export { PaneBody } from './panes.tsx'
 export { DescribedCall, describeRun, mainKind } from './tool-rows.tsx'
 export { ShellStateProvider, useAllThreads, useMachines, useSelection } from './state.tsx'

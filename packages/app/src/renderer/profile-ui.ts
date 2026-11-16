@@ -20,7 +20,8 @@ import {
   collectProfileUi, filesOf, hashProfileUi, isAllowed, pointImports, resolveSpecifier, type AllowedUi, type ProfileUiSources,
 } from '@superego/client/profile-ui'
 import { machine as client } from './client.ts'
-import { useRegistry, type Registry, type UiExtension } from './extension.tsx'
+import type { UiExtension } from './extension-api.ts'
+import { profileScope, useRegistry, type Registry } from './registry.tsx'
 import { APP } from '../shared/app-settings.ts'
 
 /** What a profile's modules import by name: built on first use, from this window's own modules. */
@@ -119,7 +120,7 @@ type Known = {
 }
 const known = new Map<string, Known>()
 const loading = new Map<string, Promise<void>>()
-const keyOf = (machine: string, dir: string) => `${machine}:${dir}`
+const keyOf = (machine: string, dir: string) => profileScope(machine, { dir })
 
 const listeners = new Set<() => void>()
 let version = 0

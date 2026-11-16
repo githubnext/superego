@@ -3,7 +3,7 @@
 // The core is the first to describe its own: the coding tools (read, bash, edit, write).
 import { useState, type ReactNode } from 'react'
 import { CaretRightIcon, FilePlusIcon, FileTextIcon, PencilSimpleIcon, SparkleIcon, StatusGlyph, TerminalIcon, WrenchIcon } from '@superego/ui'
-import type { ToolRow, ToolRowCall, UiApi, WorkBlock } from './extension.tsx'
+import type { ToolRow, ToolRowCall, UiApi, WorkBlock } from './extension-api.ts'
 import { Scroll } from './Markdown.tsx'
 import { DiffStat } from './diff.tsx'
 

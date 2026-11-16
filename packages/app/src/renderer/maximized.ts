@@ -3,9 +3,6 @@
 // longer wanted: Esc, Restore, the pane closing, another opening, another thread shown, the window going narrow.
 import { createStore } from './local-state.ts'
 
-/** A window as narrow as a phone's: no rail, the space a drawer, one column at a time (and nothing to maximize). */
-export const NARROW = '(max-width: 599px)'
-
 export type Maximized = {
   /** The thread's key: `<machine>/<thread>`. */
   thread: string

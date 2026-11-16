@@ -3,7 +3,7 @@
 import { describeDrift, drifted } from '@superego/protocol'
 import { Tooltip } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
-import { useApp } from './extension.tsx'
+import { useApp } from './registry.tsx'
 
 /** What to say about a machine's Superego, if anything: its update going on or failed, else how it differs from ours. */
 export function driftNote(machine: MachineEntry, name = 'Superego'): { text: string; tone: 'behind' | 'other' | 'updating' | 'failed' } | undefined {

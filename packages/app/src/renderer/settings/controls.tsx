@@ -3,10 +3,9 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { Json, SettingInfo } from '@superego/protocol'
 import { Button, FontPicker, Select, Switch, TextField } from '@superego/ui'
-import { loadFonts } from '../client.ts'
 import { fonts } from '../fonts.ts'
 import { Keymap } from '../Keymap.tsx'
-import { useRegistry } from '../extension.tsx'
+import { useRegistry } from '../registry.tsx'
 import { useSettingsDialog } from '../state.tsx'
 
 /** The layout's row: to its text, and back to the defaults. Always here, whatever the layout hides. */
@@ -44,7 +43,7 @@ export function Setting({ setting, value, apply, mixed, note }: {
     case 'number': control = <TextField type="number" aria-label={setting.title} defaultValue={String(value ?? '')} min={setting.min} max={setting.max} step={setting.step}
       disabled={disabled} onBlur={(e) => set(Number(e.target.value))} />; break
     case 'font': control = <FontPicker label={setting.title} value={typeof value === 'string' ? value : null} monospace={setting.monospace}
-      nullLabel={setting.nullLabel} fonts={knownFonts} loadFonts={loadFonts} onChange={set} />; break
+      nullLabel={setting.nullLabel} fonts={knownFonts} loadFonts={fonts.load} onChange={set} />; break
     case 'color': control = <ColorField label={setting.title} value={typeof value === 'string' ? value : String(setting.default ?? '')} fallback={String(setting.default ?? '')} disabled={disabled} onChange={set} onInvalid={setError} />; break
     case 'keymap': return <Keymap setting={setting} value={value} apply={apply} />
     case 'layout': control = <LayoutControl />; break

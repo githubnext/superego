@@ -21,7 +21,7 @@ pnpm link:cli             # `superego` on PATH, from this checkout
 |---|---|
 | `packages/protocol` | the contract: methods, JSON-RPC, actions, status types |
 | `packages/daemon` | the daemon: threads, profiles, worktrees, the daemon half of the extension API (`extension.ts`) |
-| `packages/app` | the window: shell, panes, editor, the UI half of the extension API (`renderer/extension.tsx`), `superego/ui` exports (`renderer/index.tsx`) |
+| `packages/app` | the window: shell, panes, editor, the UI half of the extension API (`renderer/extension-api.ts`; the registry, `renderer/registry.tsx`), `superego/ui` exports (`renderer/index.tsx`) |
 | `packages/cli` | the `superego` command; this skill is in `packages/cli/skill/` |
 | `packages/ui` | components and design tokens |
 | `extensions/*` | bundled extensions |

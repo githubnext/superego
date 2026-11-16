@@ -6,7 +6,9 @@ import { defineWindowAction } from '../src/renderer/actions.tsx'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
 import { Contained } from '../src/renderer/contained.tsx'
-import { createRegistry, defineUiExtension, entryView, paneKind, fileKind, seenIn, settingsView, shownPanes, toolView, urlKind, type UiExtension } from '../src/renderer/extension.tsx'
+import { defineUiExtension, type UiExtension } from '../src/renderer/extension-api.ts'
+import { createRegistry, seenIn } from '../src/renderer/registry.tsx'
+import { entryView, paneKind, fileKind, settingsView, shownPanes, toolView, urlKind } from '../src/renderer/lookups.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
 const profile = { scope: 'user' as const, name: 'default', dir: '/home/me/.superego/profiles/default' }

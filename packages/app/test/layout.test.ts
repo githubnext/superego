@@ -2,7 +2,9 @@
 // stands in for a space while there's none; placing and taking out; settings from before the layout read into it.
 import { describe, expect, it } from 'vitest'
 import { defineApp, type Json, type ThreadInfo } from '@superego/protocol'
-import { createRegistry, defineUiExtension, paneMenu, placedFor, viewsIn, type UiExtension } from '../src/renderer/extension.tsx'
+import { defineUiExtension, type UiExtension } from '../src/renderer/extension-api.ts'
+import { createRegistry } from '../src/renderer/registry.tsx'
+import { paneMenu, placedFor, viewsIn } from '../src/renderer/placement.tsx'
 import { isLayout, placesNow, placeView, resolveLayout, type Layout, type Placeable } from '../src/shared/layout.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })

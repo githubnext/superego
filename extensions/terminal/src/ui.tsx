@@ -3,8 +3,7 @@
 // and a browser. The shell is the machine's (the daemon half): this attaches to it on the pane's channel, replays what
 // it printed, and passes keys and sizes back. Native libghostty on the desktop is a later step (docs/design.md, Next).
 import { useEffect, useRef, useState } from 'react'
-import { call, channel as openChannel, defineAction, defineUiExtension, PaneButton, StatusGlyph, useAppSetting, useTabNote, useValue, type BridgeChannel, type PaneProps } from '@superego/app/ui'
-import { MONO_FONT } from '@superego/app/app-settings'
+import { call, channel as openChannel, defineAction, defineUiExtension, MONO_FONT, PaneButton, StatusGlyph, useAppSetting, useTabNote, useValue, type BridgeChannel, type PaneProps } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'
 import { TerminalIcon } from '@superego/ui'
 import './styles.css'

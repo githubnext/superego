@@ -2,7 +2,8 @@
 // status changes the shell works out from each machine's threads.
 import { describe, expect, it } from 'vitest'
 import { defineApp, type Status, type ThreadInfo } from '@superego/protocol'
-import { createRegistry, defineUiExtension, type WindowEvents } from '../src/renderer/extension.tsx'
+import { defineUiExtension, type WindowEvents } from '../src/renderer/extension-api.ts'
+import { createRegistry } from '../src/renderer/registry.tsx'
 import { rejectionChanges, statusChanges, type Statuses } from '../src/shared/changes.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })

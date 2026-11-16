@@ -5,11 +5,11 @@
 import { useState } from 'react'
 import { Button, FileTextIcon, ShieldWarningIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
-import type { PaneProps, UiApi } from './extension.tsx'
+import type { PaneProps, UiApi } from './extension-api.ts'
 import type { ThreadInfo } from '@superego/protocol'
 import { Markdown } from './Markdown.tsx'
 import { declineUi, dismissRevokedUi, reopenUi, usePendingUi, useProfileSource, useRevokedUi } from './profile-ui.ts'
-import { useRegistry } from './extension.tsx'
+import { useRegistry } from './registry.tsx'
 import { RailNotice } from './rail-notice.tsx'
 import { APP } from '../shared/app-settings.ts'
 

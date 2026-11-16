@@ -4,7 +4,7 @@
 import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import { StatusGlyph } from '@superego/ui'
-import { useRegistry } from './extension.tsx'
+import { useRegistry } from './registry.tsx'
 import { useSelection, useThreads } from './state.tsx'
 
 /**

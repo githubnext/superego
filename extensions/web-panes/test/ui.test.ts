@@ -1,8 +1,8 @@
 // web-panes' UI half in a window: web links open beside a thread in Preview, the one kind that takes URLs (a profile's
 // own first), and nowhere while the thread goes without web-panes.
 import { afterEach, expect, it } from 'vitest'
-import { paneKind } from '@superego/app/internals'
-import { defineUiExtension, fileKind, urlKind } from '@superego/app/ui'
+import { paneKind, urlKind } from '@superego/app/internals'
+import { defineUiExtension, fileKind } from '@superego/app/ui'
 import { mountUi, testThread, type TestWindow } from '@superego/sdk/testing'
 import webPanes from '../src/ui.tsx'
 import { ARTIFACT, PREVIEW } from '../src/shared.ts'

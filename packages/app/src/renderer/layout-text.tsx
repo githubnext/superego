@@ -10,7 +10,8 @@ import { useAppSetting, useSettings, watched } from './client.ts'
 import { APP, LAYOUT } from '../shared/app-settings.ts'
 import { parseLayout, PLACES, type LayoutView } from '../shared/layout.ts'
 import { defineWindowAction } from './actions.tsx'
-import { useRegistry, type EditorSlotProps, type Registry, type UiApi } from './extension.tsx'
+import type { EditorSlotProps, UiApi } from './extension-api.ts'
+import { useRegistry, type Registry } from './registry.tsx'
 import { RailNotice } from './rail-notice.tsx'
 
 type LayoutData = { file: string; problem?: string; missing?: string[] }

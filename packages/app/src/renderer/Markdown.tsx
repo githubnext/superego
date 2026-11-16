@@ -15,7 +15,8 @@ import type { MachineEntry } from '../shared/bridge.ts'
 import { ImageFrame, imageSourceOf, onImageChange, type ImageItem } from './images.tsx'
 import { Lightbox } from './lightbox.tsx'
 import { CheckIcon, CopyIcon } from '@superego/ui'
-import { linkHandler, linkSchemes, useOptionalRegistry } from './extension.tsx'
+import { useOptionalRegistry } from './registry.tsx'
+import { linkHandler, linkSchemes } from './lookups.ts'
 import { Claimed, LinkPlace, WIKILINK, wikilinks } from './links.tsx'
 
 /** Code scrolls sideways, never wraps; it fades at the right edge only while a line runs past it. */

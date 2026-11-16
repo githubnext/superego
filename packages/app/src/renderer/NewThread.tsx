@@ -4,7 +4,7 @@
 // (worktrees' checkbox), each sent as `options[<extension>]`.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { Json, ModelCatalog, ProfileInfo, ThreadInfo } from '@superego/protocol'
-import { useRegistry, type Registry } from './extension.tsx'
+import { useRegistry, type Registry } from './registry.tsx'
 import { Contained } from './contained.tsx'
 import { Button, Dialog, Select, TextArea, TextField } from '@superego/ui'
 import { has, machine as client } from './client.ts'

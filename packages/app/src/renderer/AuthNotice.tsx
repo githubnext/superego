@@ -3,7 +3,7 @@
 // Dismissed, it stays away until the provider rejects them again. Wide, each in the rail (`rail`).
 import { Button, IconButton, KeyIcon, XIcon } from '@superego/ui'
 import { waitingPhrase } from '../shared/notifications.ts'
-import { useRegistry } from './extension.tsx'
+import { useRegistry } from './registry.tsx'
 import { useLocalState } from './local-state.ts'
 import { RailNotice } from './rail-notice.tsx'
 import { useMachines, useRejections, useShell } from './state.tsx'

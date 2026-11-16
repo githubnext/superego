@@ -6,8 +6,7 @@ import type { ConversationView } from '@earendil-works/pi-durable'
 import { extensionVersion, offers } from '@superego/protocol'
 import type { Client, ClientInfo, Feature, Json, MethodName, Notifications, Params, Result, ThreadInfo, SettingsSnapshot } from '@superego/protocol'
 import type { BridgeChannel, MachineEntry, MachineId, SuperegoBridge } from '../shared/bridge.ts'
-import { useRegistry } from './extension.tsx'
-import { fonts } from './fonts.ts'
+import { useRegistry } from './registry.tsx'
 import { APP } from '../shared/app-settings.ts'
 
 declare global {
@@ -43,9 +42,6 @@ export function useMachineList(): MachineEntry[] {
   }, [])
   return machines
 }
-
-/** The families of the fonts installed here, through the Local Font Access API (kept once asked). */
-export const loadFonts = (): Promise<string[]> => fonts.load()
 
 /**
  * A watch shared by everyone who wants it: one subscription per (machine, method, params), however many components
@@ -180,7 +176,7 @@ export function sharedWatch<T>(machineId: MachineId, method: string, params: unk
  * notifications (`events`) with `fold`. Every component watching the same thing shares one subscription, which runs
  * while any of them has it connected.
  */
-export function useWatch<T>(
+function useWatch<T>(
   machineId: MachineId, connected: boolean, method: string, params: object | undefined,
   fold: (value: T, method: string, params: any) => T,
   events: (keyof Notifications)[],

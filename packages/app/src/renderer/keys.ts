@@ -2,7 +2,7 @@
 import { createContext, useContext, useSyncExternalStore } from 'react'
 import type { ActionInfo } from '@superego/protocol'
 import { useAppSetting } from './client.ts'
-import { useRegistry } from './extension.tsx'
+import { useRegistry } from './registry.tsx'
 import { KEYMAP } from '../shared/app-settings.ts'
 import { bound, keyLabel, type Keymap } from '../shared/shortcuts.ts'
 import { tabAction } from './rail-tabs.ts'

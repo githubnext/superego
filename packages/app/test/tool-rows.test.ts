@@ -4,7 +4,9 @@ import { createElement, memo } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { defineApp, type ThreadInfo } from '@superego/protocol'
-import { createRegistry, defineUiExtension, toolRow, toolView, unfoldedTool, type ToolRowCall, type WorkBlock } from '../src/renderer/extension.tsx'
+import { defineUiExtension, type ToolRowCall, type WorkBlock } from '../src/renderer/extension-api.ts'
+import { createRegistry } from '../src/renderer/registry.tsx'
+import { toolRow, toolView, unfoldedTool } from '../src/renderer/lookups.ts'
 import { DescribedCall, describeRun, mainKind, registerToolRows, statOf } from '../src/renderer/tool-rows.tsx'
 
 const app = defineApp({ name: 'superego', id: 'superego' })

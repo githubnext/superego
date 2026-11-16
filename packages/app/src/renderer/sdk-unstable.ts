@@ -1,28 +1,23 @@
 /// <reference path="./env.d.ts" />
 // What `import … from 'superego/unstable'` gives: the window's own workings, which the bundled extensions build on and
 // which change whenever the window does, with no notice in the extension API's version. Reach for one only when the
-// stable surface (`superego/ui`, sdk-ui.ts) has nothing for it, and say so where it's used.
-export {
-  fileKind, layoutOf, Slot, urlKind, useRegistry, type Registry,
-} from './extension.tsx'
-export { LAYOUT } from '../shared/app-settings.ts'
-export type { Layout } from '../shared/layout.ts'
-export { runsBare } from './actions.tsx'
-export { useActions, useKeymap } from './keys.ts'
-export { useShell, useSidebar } from './state.tsx'
-export { groupProjects, nest, projectKey, SORT, unreadList, type Project, type Sort } from './projects.ts'
+// stable surface (`superego/ui`, sdk-ui.ts) has nothing for it, and say so where it's used. It holds what the bundled
+// extensions and blocks use, and no more: a test harness's parts are internals.ts.
+export { useRegistry, type Registry } from './registry.tsx'
+export { fileKind } from './lookups.ts'
+export { Slot } from './placement.tsx'
+export { MONO_FONT } from '../shared/app-settings.ts'
 export { showProject } from './actions.tsx'
+export { useShell } from './state.tsx'
+export { groupProjects, SORT, unreadList, type Project, type Sort } from './projects.ts'
 export { useLocalState } from './local-state.ts'
 export { score } from './score.ts'
-export { livePreview } from './live-markdown.ts'
-export { channel, loadFonts, machine, useSettings, useThreadView, useWatch } from './client.ts'
+export { channel, useThreadView } from './client.ts'
 export type { BridgeChannel } from '../shared/bridge.ts'
-export type { MachineUpdate } from '../shared/bridge.ts'
-export { describeImage, ImageFrame, imageFileName, imageSourceOf, useImageSource, useNear, type ImageItem, type LoadedImage } from './images.tsx'
+export { describeImage, ImageFrame, useImageSource } from './images.tsx'
 export { Lightbox } from './lightbox.tsx'
-export { driftNote, MachineDrift } from './machine-drift.tsx'
+export { MachineDrift } from './machine-drift.tsx'
 export { Output } from './tool-rows.tsx'
-export { FontPicker, isMonospace, TooltipProvider } from '@superego/ui'
 // What's unread: one rule for the bell, notifications and the counts (see @superego/protocol's status.ts); in the
 // window, as `unreadList` (projects.ts).
 export { unread } from '@superego/protocol'

@@ -8,14 +8,14 @@
 // In the order an author meets them (the order of the flattened 'superego/ui' they read).
 
 // Defining a UI half, and what its setup is given.
-export { defineUiExtension, type UiExtension, type UiApi } from './extension.tsx'
+export { defineUiExtension, type UiExtension, type UiApi } from './extension-api.ts'
 export { defineWindowAction as defineAction, type WindowAction, type WindowContext } from './actions.tsx'
 export type { Dispatch } from './actions.tsx'
 export type {
   View, ViewContext, ViewProps, PaneKind, PaneProps, SlotProps, BehaviourSlot, EditorSlotProps, SpaceRailProps, ToolCallProps, ToolRow,
   ToolRowCall, ToolState, EntryProps, LinkHandler, LinkProps, LinkWhere, LinkAttributes, NewThreadField, NewThreadFieldProps, SettingsComponentProps,
   WindowEvent, WindowEvents, WindowState, WorkRun, WorkPart, WorkBlock, WorkStatus,
-} from './extension.tsx'
+} from './extension-api.ts'
 export type { Place, Placement } from '../shared/layout.ts'
 export type { Store } from './local-state.ts'
 export type { Completion, CompletionProvider, CompletionWord, ComposerWhere, SentBlock, SentWith } from './composer.ts'
@@ -25,7 +25,9 @@ export { useValue, useMethod, call, has, version, useAppSetting, type MethodStat
 export { useMachines, useThreads, useAllThreads, useSelection, useProjects, type Selection } from './state.tsx'
 export type { Project } from './projects.ts'
 export { useDispatch } from './Shell.tsx'
-export { usePlacement, useApp, useNarrow } from './extension.tsx'
+export { useApp } from './registry.tsx'
+export { usePlacement } from './placement.tsx'
+export { useNarrow } from './media.ts'
 export { useShortcut, useRailShortcut, keyLabel } from './keys.ts'
 export { useComposer, useComposerClaim, type Composer, type ComposerClaim } from './composer-view.tsx'
 export { EXTENSION_API, statusLabel } from '@superego/protocol'
