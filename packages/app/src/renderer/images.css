@@ -25,14 +25,20 @@
 
 /* The lightbox: the whole window, dark in either theme, so the image is what's seen. */
 .lightbox {
-  position: fixed; inset: 0; z-index: 1000; display: flex; outline: none; color: #fff; -webkit-app-region: no-drag;
+  position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; outline: none; color: #fff; -webkit-app-region: no-drag;
   background: rgb(12 12 14 / .92); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
   animation: image-fade .14s ease-out;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
-.lightbox__stage { position: relative; flex: 1; min-width: 0; display: grid; place-items: center; overflow: hidden; touch-action: none; padding: 56px 64px; }
+/* The stage's one cell is the room it has (inside its padding, above any caption): the image fits it both ways, and
+   is never drawn larger than it is. */
+.lightbox__stage {
+  position: relative; flex: 1; min-height: 0; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center;
+  overflow: hidden; touch-action: none; padding: 56px 64px;
+}
+.lightbox:has(.lightbox__caption) .lightbox__stage { padding-bottom: 12px; }
 .lightbox__image {
-  max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; cursor: zoom-in; -webkit-user-select: none; user-select: none;
+  width: auto; height: auto; max-width: 100%; max-height: 100%; border-radius: 4px; cursor: zoom-in; -webkit-user-select: none; user-select: none;
   opacity: 0; transition: transform .2s cubic-bezier(.2, .8, .2, 1), opacity .15s ease; will-change: transform;
 }
 .lightbox__image.is-ready { opacity: 1; }
@@ -56,7 +62,7 @@
 .lightbox__side--prev { left: calc(env(safe-area-inset-left) + 10px); }
 .lightbox__side--next { right: calc(env(safe-area-inset-right) + 10px); }
 .lightbox__caption {
-  position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 16px); translate: -50% 0; max-width: min(720px, calc(100% - 32px));
+  flex: none; align-self: center; margin: 0 16px 16px; max-width: min(720px, calc(100% - 32px)); max-height: 30vh; overflow: auto;
   padding: 6px 12px; border-radius: 8px; background: rgb(0 0 0 / .45); color: rgb(255 255 255 / .9); font-size: var(--superego-text-ui); line-height: 1.45; text-align: center;
   -webkit-user-select: text; user-select: text;
 }
@@ -64,7 +70,7 @@
 @media (max-width: 760px) {
   .lightbox__stage { padding: 56px 8px 72px; }
   .lightbox__side { top: auto; bottom: calc(env(safe-area-inset-bottom) + 12px); translate: none; width: 40px; height: 40px; }
-  .lightbox__caption { bottom: calc(env(safe-area-inset-bottom) + 64px); }
+  .lightbox:has(.lightbox__side) .lightbox__caption { margin-bottom: 64px; }
 }
 
 @keyframes image-shimmer { from { background-position: 100% 0; } to { background-position: -50% 0; } }

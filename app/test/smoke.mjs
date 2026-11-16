@@ -75,6 +75,15 @@ async function restartOntoNewCode(change, { atRest = false } = {}) {
   if (after.machine.id !== before.machine.id || !(await run(`window.superego.call('local', 'thread.list', {})`)).length) { await fail('restart lost the machine or its threads'); throw new Error('failed') }
   return after
 }
+/** The lightbox's image whole, to scale: inside the stage's padding and above the caption, never larger than it is. */
+const fitted = `(() => {
+  const img = document.querySelector('.lightbox .lightbox__image.is-ready'), stage = document.querySelector('.lightbox__stage')
+  if (!img || !img.complete) return false
+  const r = img.getBoundingClientRect(), s = stage.getBoundingClientRect(), cs = getComputedStyle(stage), caption = document.querySelector('.lightbox__caption')?.getBoundingClientRect()
+  const inside = r.top >= s.top + parseFloat(cs.paddingTop) - 1 && r.bottom <= s.bottom - parseFloat(cs.paddingBottom) + 1 && r.left >= s.left + parseFloat(cs.paddingLeft) - 1 && r.right <= s.right - parseFloat(cs.paddingRight) + 1
+  const shaped = Math.abs(r.width / r.height - img.naturalWidth / img.naturalHeight) < 0.02 && r.width <= img.naturalWidth && r.height <= img.naturalHeight
+  return inside && shaped && r.bottom <= innerHeight && r.right <= innerWidth && (!caption || r.bottom <= caption.top) && r.width > 20 && r.height > 20
+})()`
 /** With SUPEREGO_SMOKE_SHOTS=<dir>, a screenshot of the window at this point. */
 const shot = async (name) => {
   if (!process.env.SUPEREGO_SMOKE_SHOTS) return
@@ -245,6 +254,7 @@ if (phase === 'first') {
     writeFileSync(`${shots}/${name}.png`, nativeImage.createFromBitmap(pixels, { width, height }).toPNG())
   }
   picture('wide', 1280, 720, 40)
+  picture('tall', 400, 3000, 160); picture('panorama', 3000, 400, 90)
   picture('a', 640, 480, 200); picture('b', 640, 480, 120); picture('gone', 480, 640, 10)
   for (const n of [1, 2, 3, 4, 5, 6]) picture(String(n), 900 - n * 40, 600, n * 37)
   const showing = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(shots)} }).then((s) => window.superego.call('local', 'thread.send', { thread: s.id, text: 'show me the screens' }).then(() => s.id))`)
@@ -295,6 +305,15 @@ if (phase === 'first') {
   await until(`document.querySelector('.lightbox__broken')?.textContent.includes('gone.png')`, 'the gone one, broken in the lightbox too')
   await key2('Escape')
   await until(`!document.querySelector('.lightbox') && document.activeElement === document.querySelector('.images--grid .images__frame')`, 'lightbox closed by Escape, focus back')
+  // A very tall image and a very wide one each fit the window whole, both ways (`fitted`).
+  for (const [nth, name] of [[1, 'lightbox-tall'], [2, 'lightbox-wide']]) {
+    await run(`(() => { const f = document.querySelectorAll('.images--single')[${nth}]; f.scrollIntoView({ block: 'center' }); f.querySelector('.images__frame').click() })()`)
+    await until(fitted, `${name}: the whole image, fitted`)
+    await new Promise((r) => setTimeout(r, 300))
+    await shot(name)
+    await key2('Escape')
+    await until(`!document.querySelector('.lightbox')`, `${name} closed`)
+  }
   // Its answer's own images, inline: read from the thread's folder (by a relative path, file:// or a whole one), fitted
   // to the column; one outside the folder is refused, quietly, saying why. Any opens in the same lightbox, through the
   // message's images.
@@ -1201,7 +1220,9 @@ if (phase === 'first') {
   await browser.webContents.executeJavaScript(`document.querySelector('.app__mobilebar button').click()`)
   await inBrowser(`Boolean(document.querySelector('.app.has-drawer .app__sidebar'))`, 'drawer open again')
   await browser.webContents.executeJavaScript(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('show me the screens')).click()`)
-  await inBrowser(`Boolean(document.querySelector('.images--single .images__frame.is-ready') && document.querySelector('.images--carousel .images__frame.is-ready'))`, 'images read over the web')
+  // Each is read as it nears the screen: scrolled to in turn.
+  await inBrowser(`(() => { document.querySelector('.images--single')?.scrollIntoView({ block: 'center' }); return Boolean(document.querySelector('.images--single .images__frame.is-ready')) })()`, 'an image read over the web')
+  await inBrowser(`(() => { document.querySelector('.images--carousel')?.scrollIntoView({ block: 'center' }); return Boolean(document.querySelector('.images--carousel .images__frame.is-ready')) })()`, 'images read over the web')
   await browser.webContents.executeJavaScript(`document.querySelector('.images--carousel').scrollIntoView({ block: 'center' })`)
   await new Promise((r) => setTimeout(r, 300))
   if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-images.png`, (await browser.webContents.capturePage()).toPNG())
@@ -1211,6 +1232,12 @@ if (phase === 'first') {
   if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-lightbox.png`, (await browser.webContents.capturePage()).toPNG())
   await browser.webContents.executeJavaScript(`document.querySelector('.lightbox__bar button[aria-label="Close"]').click()`)
   await inBrowser(`!document.querySelector('.lightbox')`, 'lightbox closed on a phone')
+  await browser.webContents.executeJavaScript(`(() => { const f = document.querySelectorAll('.images--single')[1]; f.scrollIntoView({ block: 'center' }); f.querySelector('.images__frame').click() })()`)
+  await inBrowser(fitted, 'a tall image fitted on a phone')
+  await new Promise((r) => setTimeout(r, 300))
+  if (process.env.SUPEREGO_SMOKE_SHOTS) writeFileSync(`${process.env.SUPEREGO_SMOKE_SHOTS}/phone-lightbox-tall.png`, (await browser.webContents.capturePage()).toPNG())
+  await browser.webContents.executeJavaScript(`document.querySelector('.lightbox__bar button[aria-label="Close"]').click()`)
+  await inBrowser(`!document.querySelector('.lightbox')`, 'tall lightbox closed on a phone')
   // An artifact over the web, by the device's cookie: the page, and a file it links to (from its sandbox's own origin).
   await main.webContents.executeJavaScript(`window.superego.call('local', 'file.write', { thread: '${paned}', path: 'pic.html', content: '<img src="dot.svg" onload="parent.postMessage(\\'loaded\\', \\'*\\')" onerror="parent.postMessage(\\'failed\\', \\'*\\')">' })`)
   await main.webContents.executeJavaScript(`window.superego.call('local', 'file.write', { thread: '${paned}', path: 'dot.svg', content: '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>' })`)
