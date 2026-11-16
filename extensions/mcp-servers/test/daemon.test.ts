@@ -133,7 +133,7 @@ it('reaches a URL server with an API key it keeps to itself, and needs sign-in w
   expect(await results(peer, thread.id)).toEqual(['over http'])
   // Only the store has it: mode 0600, and never in what clients see.
   expect(statSync(join(dir, 'mcp-auth.json')).mode & 0o777).toBe(0o600)
-  expect(JSON.parse(await readFile(join(dir, 'mcp-auth.json'), 'utf8'))).toEqual({ 'server:web': { key: 'good-key' } })
+  expect(JSON.parse(await readFile(join(dir, 'mcp-auth.json'), 'utf8'))).toEqual({ 'server:web': { key: 'good-key', '@for': JSON.stringify([new URL(http.url).origin, 'api-key', 'authorization', 'Bearer']) } })
   const { value } = await peer.call<{ value: unknown }>('settings.watch', {})
   expect(JSON.stringify(value)).not.toContain('good-key')
   expect(await readFile(join(dir, 'mcp-servers.json'), 'utf8')).not.toContain('good-key')
@@ -143,6 +143,57 @@ it('reaches a URL server with an API key it keeps to itself, and needs sign-in w
   expect((await act<LogResult>(peer, 'log', { server: 'web' })).text).not.toMatch(/bad-key|good-key/)
   await close()
   await http.close()
+})
+
+it("never sends a stored key anywhere it wasn't set for: a new origin, header or scheme forgets it, and so does the server going", async () => {
+  const sent: (string | undefined)[] = []
+  const home = await serveHttp()
+  const elsewhere = await serveHttp((authorization) => sent.push(authorization))
+  const { peer, close } = await open()
+  const stored = async () => existsSync(join(dir, 'mcp-auth.json')) ? JSON.parse(await readFile(join(dir, 'mcp-auth.json'), 'utf8')) as Record<string, Record<string, string>> : {}
+  const web = (url: string, more: Partial<ServerConfig> = {}): ServerConfig => ({ url, auth: { type: 'api-key' }, ...more })
+  const setKey = async () => (await act(peer, 'set-secret', { server: 'web', values: { key: 'good-key' } })).server
+  await act(peer, 'add', { name: 'web', server: web(home.url) })
+  expect((await setKey()).tools).toBe(6)
+
+  // The same origin, another path, a title: kept.
+  expect((await act(peer, 'edit', { name: 'web', server: web(`${home.url}?v=2`, { title: 'Web' }) })).server).toMatchObject({ tools: 6, secrets: [{ name: 'key', set: true }] })
+  // Another origin (as Ego's edit would send it, auth and all): forgotten before it connects, never sent there.
+  const moved = (await act(peer, 'edit', { name: 'web', server: web(elsewhere.url) })).server
+  expect(moved).toMatchObject({ state: 'needs-sign-in', secrets: [{ name: 'key', set: false }] })
+  expect(sent).toEqual([])
+  expect(await stored()).toEqual({})
+  expect((await act<LogResult>(peer, 'log', { server: 'web' })).text).toMatch(/secrets[^\n]*forgotten/)
+
+  // Back home, set again; then another header, or another scheme: forgotten too.
+  await act(peer, 'edit', { name: 'web', server: web(home.url) })
+  await setKey()
+  expect((await act(peer, 'edit', { name: 'web', server: web(home.url, { auth: { type: 'api-key', header: 'X-Api-Key' } }) })).server.secrets).toEqual([{ name: 'key', set: false }])
+  await act(peer, 'edit', { name: 'web', server: web(home.url) })
+  await setKey()
+  expect((await act(peer, 'edit', { name: 'web', server: web(home.url, { auth: { type: 'api-key', scheme: 'Token' } }) })).server.secrets).toEqual([{ name: 'key', set: false }])
+
+  // By hand in the file too, and a rename takes its key along.
+  await act(peer, 'edit', { name: 'web', server: web(home.url) })
+  await setKey()
+  await act(peer, 'edit', { name: 'web', rename: 'site', server: web(home.url) })
+  expect(Object.keys(await stored())).toEqual(['server:site'])
+  writeFileSync(join(dir, 'mcp-servers.json'), JSON.stringify({ servers: { site: web(elsewhere.url) } }))
+  await until(async () => (await section(peer)).servers[0]?.config.url === elsewhere.url, 'the hand edit to be read')
+  expect(await stored()).toEqual({})
+  // Nothing reached the other origin at all: without its key, the server waits for one.
+  expect(sent).toEqual([])
+
+  // A server taken out of the file by hand takes its secrets with it; one added under its name later starts without.
+  writeFileSync(join(dir, 'mcp-servers.json'), JSON.stringify({ servers: { site: web(home.url) } }))
+  await until(async () => (await section(peer)).servers[0]?.config.url === home.url, 'the hand edit to be read')
+  await act(peer, 'set-secret', { server: 'site', values: { key: 'good-key' } })
+  writeFileSync(join(dir, 'mcp-servers.json'), JSON.stringify({ servers: {} }))
+  await until(async () => (await section(peer)).servers.length === 0, 'the server to go')
+  expect(await stored()).toEqual({})
+  await close()
+  await home.close()
+  await elsewhere.close()
 })
 
 it('times out a call that hangs, and tells the server to stop', async () => {

@@ -116,7 +116,7 @@ Entries:
 
 | Key | What |
 |---|---|
-| `server:<id>` | an API key, or the values of `auth.names`; `client-secret` for a client registered by hand |
+| `server:<id>` | an API key, or the values of `auth.names`; `client-secret` for a client registered by hand; `@for`, what they were set for (below) |
 | `oauth:<resource>` | tokens (access, refresh, expiry, scope), keyed by the server's canonical URL (its OAuth resource), with what refreshing them takes: the discovery state, the client they were issued to, the `resource` asked for |
 | `client:<issuer> <redirect>` | the client registration with that authorization server (from DCR) |
 
@@ -127,6 +127,12 @@ daemon.
 project's server therefore never gets a key the user typed for a machine server of the same name. OAuth tokens are
 keyed by resource instead: two configs that point at the same URL share one sign-in. That's safe, because the token
 was issued for that URL.
+
+A server's secrets are tied to what they were set for (`@for`): a URL server's origin, and its API key's header and
+scheme (or its OAuth client id); `command` for a command's. When a machine server's config stops matching, by an
+edit or by hand, they're forgotten before the runtime takes the new config, and the server needs sign-in again. A
+machine server that's gone, from the file or by rename, takes its `server:<name>` with it, and one added under that
+name starts without.
 
 Nothing in this file ever reaches a client. Settings sees "set" or "not set", "signed in as …" when the server says,
 and the expiry.
@@ -467,8 +473,12 @@ Ego helps set up a server ("connect Linear"), within its settings-only powers:
 - **A command it adds waits for the user.** It's saved with `allowed: false`, and Settings shows the whole command
   line with **Allow**. Running a command is running code, which is more than setup. A URL server needs no Allow; it
   only needs sign-in, which only the user can do anyway.
-- **Not for outside agents.** When the message Ego is answering came with `<outside-agent>`, the tool refuses, the
-  same way `thread_start` does. A server is a way to run commands and reach accounts.
+- **Not for outside agents.** When the message the call answers (the last user message before the model's message
+  that made it) came with `<outside-agent>`, the tool refuses, the same way `thread_start` does. A server is a way to
+  run commands and reach accounts.
+- **Configs in brief.** `superego_settings` shows the `mcp-servers` section as the tool's `list` does (name, what it
+  runs, state, what the user does next), never env or header values, and Ego's `read` won't open `mcp-servers.json`:
+  an outside agent may be the one asking.
 - Ego's own thread uses no MCP servers (hidden threads get none, as above).
 
 ### Security
@@ -770,10 +780,21 @@ rows working once Lane 3 lands (they do).
   diagnostics.
 - Ego's tool is `servers-tool.ts`. Besides having no secret field, it refuses a config that slips one in: an env var
   named like one (it asks for `secretEnv` names instead), a value shaped like a key, a flag that takes one, or a URL
-  carrying credentials. An edit to a command waits for Allow again. Ego's `read` won't open `auth.json` or
-  `mcp-auth.json`.
+  carrying credentials. An edit to a command waits for Allow again. Ego's `read` won't open `auth.json`,
+  `mcp-auth.json` or `mcp-servers.json`.
 - The header chip is a view (`mcp-servers.chip`, in `header`), so the user's layout can move it.
 - `app/test/look.sh <dir> mcp` shoots the section and a transcript with MCP rows.
+
+## Review fixes
+
+From the independent review of the client support (`~/.superego/mcp-review.md`):
+
+- **H1, M2, L6 (secrets and where they go):** a stored key is tied to the origin, header and scheme it was set for,
+  and forgotten when they change (by Ego's edit or by hand), so it's never sent to a new URL without the user setting
+  it again; a gone machine server's secrets are deleted. Ego's `superego_settings` shows MCP servers in brief, and its
+  `read` refuses `mcp-servers.json`, so env and header values reach neither Ego nor an outside agent through it. Ego
+  decides "an outside agent asked" by the message a tool call answers, not the newest one. A profile's server isn't
+  re-checked this way: its config changes only with `profile.ts`, which needs allowing again.
 
 ## Future
 

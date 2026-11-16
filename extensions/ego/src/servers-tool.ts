@@ -28,8 +28,11 @@ export function userStep(server: Pick<ServerInfo, 'name' | 'state' | 'config' | 
   }
 }
 
-/** A server as Ego reports it: what it is and runs, how it stands, and what the user still has to do. */
-const brief = (s: ServerInfo) => ({
+/**
+ * A server as Ego reports it: what it is and runs, how it stands, and what the user still has to do. Never its config's
+ * env or header values (a header may well hold a key): what Ego sees, an outside agent asking it may see too.
+ */
+export const brief = (s: ServerInfo) => ({
   name: s.name, ...(s.config.title ? { title: s.config.title } : {}), runs: s.runs, state: s.state,
   ...(s.tools !== undefined ? { tools: s.tools } : {}), ...(s.error ? { error: s.error } : {}),
   ...(s.from.type === 'profile' ? { profile: s.from.profile, project: s.from.project } : { unprofiled: s.config.unprofiled === true }),
@@ -87,11 +90,19 @@ export function configFrom(fields: Fields, base: ServerConfig = {}): ServerConfi
   return config
 }
 
+/** Settings → MCP servers as Ego reads it (`superego_settings`): each server in brief. */
+export function briefSection(data: SectionData & { problem?: string }) {
+  return { servers: data.servers.map(brief), profiles: data.profiles.map(brief), ...(data.problem ? { problem: data.problem } : {}) }
+}
+
 export function serversTool({ dispatch, snapshot, refuse }: {
   dispatch(id: string, params: Record<string, Json>): Promise<unknown>
   snapshot(): Promise<SettingsSnapshot>
-  /** Why it may not run now, in the turn of conversation `conversation` (an outside agent asked); nothing when it may. */
-  refuse?(conversation: number): Promise<string | undefined>
+  /**
+   * Why it may not run now, for its call `callId` in conversation `conversation` (an outside agent asked); nothing when
+   * it may.
+   */
+  refuse?(conversation: number, callId: string): Promise<string | undefined>
 }) {
   const json = (value: unknown) => ({ output: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] })
   /** The machine's servers, as Settings has them; none when the extension is off here. */
@@ -133,7 +144,7 @@ export function serversTool({ dispatch, snapshot, refuse }: {
       on: opt(bool({ description: 'unprofiled: whether threads without a profile use it' })),
     }),
     async execute({ op, name, catalog, on, ...fields }, api) {
-      const refused = await refuse?.(Number(api.conversationId))
+      const refused = await refuse?.(Number(api.conversationId), api.callId)
       if (refused) throw new Error(refused)
       switch (op) {
         case 'list': { const data = await servers(); return json({ servers: data.servers.map(brief), profiles: data.profiles.map(brief) }) }

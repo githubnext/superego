@@ -25,6 +25,27 @@ import { SecretStore, serverKey, type ServerSecrets } from './store.ts'
 /** What a thread's last turn had, kept with the thread (for its facts across restarts): server ids, and those left out. */
 type Memo = { servers: string[]; left?: { name: string; why: LeftOutReason }[] }
 
+/**
+ * What a server's stored secrets were set for, kept with them in its entry as `@for`: a URL server's origin and how it
+ * signs in (an API key's header and scheme, an OAuth client's id), or `command` for a command's (they go only to the
+ * command, and a command someone other than the user changes waits for Allow). When the config no longer matches (its
+ * URL moved to another origin, say), the secrets are forgotten before it's used, and the server needs sign-in again:
+ * a key is never sent anywhere but where it was set for.
+ */
+const BOUND = '@for'
+export function boundTo(config: ServerConfig): string {
+  if (!config.url) return 'command'
+  let origin: string
+  try { origin = new URL(config.url).origin } catch { origin = config.url }
+  const auth = config.auth
+  if (auth?.type === 'api-key') {
+    const header = (auth.header ?? 'Authorization').toLowerCase()
+    return JSON.stringify([origin, 'api-key', header, auth.scheme ?? (header === 'authorization' ? 'Bearer' : '')])
+  }
+  if (auth?.type === 'oauth') return JSON.stringify([origin, 'oauth', auth.clientId ?? ''])
+  return JSON.stringify([origin, auth?.type ?? 'none'])
+}
+
 /** The part every thread with servers gets: the prompt section and the hook that tells the model of interrupted calls. */
 const SHARED = 'mcp-servers'
 /** `tool_search`, for threads with a server whose tools are deferred. */
@@ -71,13 +92,41 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         }
       }
 
+      /** Forget the stored secrets of each server whose config no longer matches what they were set for (`boundTo`). */
+      async function forgetMoved(servers: Record<string, ServerConfig>) {
+        for (const [name, config] of Object.entries(servers)) {
+          const bound = boundTo(config)
+          const stored = await store.read<ServerSecrets>(serverKey(name))
+          if (!stored || stored[BOUND] === bound) continue
+          let forgot = false
+          await store.modify<ServerSecrets>(serverKey(name), (current) => {
+            if (!current || current[BOUND] === bound) return current
+            forgot = true
+            return undefined
+          })
+          if (forgot) runtime.machine(name)?.log.write("its config changed where its secrets go (URL, header or sign-in): they're forgotten, to be set again")
+        }
+      }
+      /** Forget the stored secrets of machine servers that are gone: `names`, or on the first reload any left behind. */
+      async function forgetGone(servers: Record<string, ServerConfig>, names: string[] | undefined) {
+        const keys = names?.map(serverKey) ?? (await store.keys()).filter((key) => key.startsWith(serverKey('')) && !key.includes('#'))
+        for (const key of keys) if (!(key.slice(serverKey('').length) in servers)) await store.delete(key)
+      }
+
       // The machine's servers, as the file says (read again when it changes, by an action or by hand).
       let fileProblem: string | undefined
       let reloads: Promise<void> = Promise.resolve()
+      let first = true
       /** One at a time: an action's and the file watcher's never add the same server twice. */
       const reload = () => reloads = reloads.then(async () => {
         try {
-          await runtime.syncMachine((await file.read()).servers)
+          const { servers } = await file.read()
+          // Before the runtime takes the new config, so it never connects with secrets set for another.
+          await forgetMoved(servers).catch((error: unknown) => console.error('mcp-servers: checking stored secrets failed:', error))
+          const had = [...runtime.servers.values()].filter((s) => s.from.type === 'machine').map((s) => s.name)
+          await runtime.syncMachine(servers)
+          await forgetGone(servers, first ? undefined : had).catch((error: unknown) => console.error('mcp-servers: forgetting secrets failed:', error))
+          first = false
           fileProblem = undefined
         } catch (error) {
           fileProblem = `${file.path} doesn't read: ${error instanceof Error ? error.message : String(error)}`
@@ -252,7 +301,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         await runtime.check(server, checkWait)
         return { server: await runtime.info(server) as ServerInfo & Json }
       }
-      const save = async (edit: (servers: Record<string, ServerConfig>) => void) => {
+      const save = async (edit: (servers: Record<string, ServerConfig>) => void | Promise<void>) => {
         await file.modify((f) => edit(f.servers))
         await reload()
       }
@@ -267,9 +316,11 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         params: ADD_PARAMS,
         async run({ name, server, allowed }) {
           checkConfig(name, server as ServerConfig)
-          await save((servers) => {
+          await save(async (servers) => {
             if (servers[name]) throw new RpcError('exists', `There's already an MCP server ${name}`)
             servers[name] = clean(server as ServerConfig, allowed)
+            // A new server starts with no secrets, whatever was left under its name.
+            await store.delete(serverKey(name))
           })
           return checked(runtime.machine(name))
         },
@@ -281,8 +332,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         async run({ name, server, rename, allowed }) {
           const next = rename ?? name
           checkConfig(next, server as ServerConfig)
-          let moved: ServerSecrets | undefined
-          await save((servers) => {
+          await save(async (servers) => {
             const before = servers[name]
             if (!before) throw new RpcError('not_found', `No MCP server ${name} on this machine`)
             if (next !== name && servers[next]) throw new RpcError('exists', `There's already an MCP server ${next}`)
@@ -291,13 +341,14 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
             const entries = Object.entries(servers).map(([key, value]) => key === name ? [next, config] as const : [key, value] as const)
             for (const key of Object.keys(servers)) delete servers[key]
             for (const [key, value] of entries) servers[key] = value
+            // Its secrets go with it, before the file says so (the reload forgets those of a server that's gone); they're
+            // kept only if they still go where they were set for (`forgetMoved`).
+            if (next !== name) {
+              const moved = await store.read<ServerSecrets>(serverKey(name))
+              await store.modify(serverKey(next), () => moved)
+              await store.delete(serverKey(name))
+            }
           })
-          if (next !== name) {
-            moved = await store.read<ServerSecrets>(serverKey(name))
-            if (moved) { await store.modify(serverKey(next), () => moved); await store.delete(serverKey(name)) }
-            const renamed = runtime.machine(next)
-            if (renamed) await runtime.secretsChanged(renamed)
-          }
           return checked(runtime.machine(next))
         },
       }))
@@ -349,10 +400,13 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
           if (unknown.length) {
             throw new RpcError('invalid', `${server.name} takes no secret ${unknown.join(', ')}`, { hint: names.length ? `It takes: ${names.join(', ')}.` : 'Its auth asks for none.' })
           }
+          const bound = boundTo(server.config)
           await store.modify<ServerSecrets>(serverKey(id), (current) => {
-            const next: ServerSecrets = { ...current }
+            // Those set for another config aren't kept (`boundTo`).
+            const next: ServerSecrets = current?.[BOUND] === bound ? { ...current } : {}
             for (const [name, value] of Object.entries(values)) { if (value === null || value === '') delete next[name]; else next[name] = value }
-            return Object.keys(next).length ? next : undefined
+            delete next[BOUND]
+            return Object.keys(next).length ? { ...next, [BOUND]: bound } : undefined
           })
           await runtime.secretsChanged(server)
           return checked(server)

@@ -9,7 +9,8 @@ import { basename, dirname, resolve } from 'node:path'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { createReadTool } from '@earendil-works/pi-durable/tools'
 import { lineOf, linkTo, readTool } from '@superego/threads/tools'
-import { serversTool } from './servers-tool.ts'
+import { SECTION as SERVERS, type SectionData } from '@superego/mcp-servers/shared'
+import { briefSection, serversTool } from './servers-tool.ts'
 import { bool, lit, obj, opt, str, union, unknown, type ActionInfo, type Exposure, type Json, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 
 /** The machines a computer reaches, as the app keeps them (`machines.json`). */
@@ -20,8 +21,11 @@ export type MachineDirectory = {
   remove(id: string): Promise<unknown>
 }
 
-/** The data folder's credential stores: providers' (pi-ai's) and MCP servers'. */
-const SECRET_FILES = ['auth.json', 'mcp-auth.json']
+/**
+ * The data folder's credential stores, providers' (pi-ai's) and MCP servers', and the MCP servers' configs, whose env
+ * and header values may hold keys too (superego_mcp_servers lists the servers instead).
+ */
+const SECRET_FILES = ['auth.json', 'mcp-auth.json', 'mcp-servers.json']
 
 /** What Ego needs of the daemon's threads: the listed ones (never Ego itself), and starting a top-level one. */
 export type EgoThreads = {
@@ -107,7 +111,8 @@ What ${name} is:
 Data folder layout (${dataDir}): settings.json (this machine's settings), app-settings.json (the app's), machines.json
 (the machines this computer reaches), mcp-servers.json (its MCP servers), profiles/, worktrees/, attachments/,
 trusted-profiles.json. Settings, machines and MCP servers change through your tools, the rest through actions
-(profile.allow, …) a thread runs, not by hand. auth.json and mcp-auth.json hold sign-ins and keys: you don't read them.`
+(profile.allow, …) a thread runs, not by hand. auth.json and mcp-auth.json hold sign-ins and keys, and mcp-servers.json
+may too (in env and header values): you don't read them; superego_mcp_servers lists the servers.`
 }
 
 /**
@@ -123,10 +128,10 @@ export function metaExtension({ dir, dispatch, actions, snapshot, machines, thre
   snapshot(): Promise<SettingsSnapshot>
   machines?: () => MachineDirectory
   threads: EgoThreads
-  /** Why thread_start may not start a thread now, in the turn of conversation `conversation`; nothing when it may. */
-  refuseStart?(conversation: number): Promise<string | undefined>
+  /** Why thread_start may not start a thread now, for its call `callId` in conversation `conversation`; nothing when it may. */
+  refuseStart?(conversation: number, callId: string): Promise<string | undefined>
   /** Why superego_mcp_servers may not run now (an outside agent asked), likewise. */
-  refuseServers?(conversation: number): Promise<string | undefined>
+  refuseServers?(conversation: number, callId: string): Promise<string | undefined>
 }) {
   const json = (value: unknown) => ({ output: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] })
   const text = (value: string) => ({ output: [{ type: 'text' as const, text: value }] })
@@ -159,8 +164,10 @@ export function metaExtension({ dir, dispatch, actions, snapshot, machines, thre
       parameters: obj({}),
       async execute() {
         const { sections, values } = await snapshot()
+        // MCP servers in brief: their configs' env and header values aren't for transcripts (an outside agent may be asking).
+        const dataOf = (section: (typeof sections)[number]) => section.id === SERVERS && section.data ? briefSection(section.data as unknown as SectionData) : section.data
         return json(sections.map((section) => ({
-          id: section.id, title: section.title, ...(section.data !== undefined ? { data: section.data } : {}),
+          id: section.id, title: section.title, ...(section.data !== undefined ? { data: dataOf(section) } : {}),
           settings: section.settings.filter((s) => !s.hidden).map(({ key, title, description, default: initial, disabled, ...type }) => ({
             key, title, ...(description ? { description } : {}), type, default: initial, value: values[key] ?? initial, ...(disabled ? { disabled } : {}),
           })),
@@ -213,7 +220,7 @@ export function metaExtension({ dir, dispatch, actions, snapshot, machines, thre
         title: opt(str()), profile: opt(str()), worktree: opt(bool({ description: 'Work in a git worktree of its own.' })),
       }),
       async execute({ cwd, ...args }, api) {
-        const refused = await refuseStart?.(Number(api.conversationId))
+        const refused = await refuseStart?.(Number(api.conversationId), api.callId)
         if (refused) throw new Error(refused)
         const thread = await threads.start({ ...args, cwd: folder(cwd) })
         return { ...text(`Started ${linkTo(thread)} (id ${thread.id}), in ${thread.cwd}.`), details: { id: thread.id, title: thread.title } }
