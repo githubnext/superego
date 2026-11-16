@@ -46,6 +46,8 @@ export type SectionInfo = {
   ui?: string
   /** Read-only state for the custom component. */
   data?: Json
+  /** The live value (`value.watch`) the custom component draws from instead, given to it as its `data`. */
+  value?: string
 }
 
 export type SettingsSnapshot = { sections: SectionInfo[]; values: Record<string, Json> }

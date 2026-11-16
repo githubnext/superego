@@ -192,6 +192,12 @@ export class Values {
     }
   }
 
+  /** A value whole, as it is now: null when nobody publishes it. */
+  current(name: string): Json {
+    const entry = this.#entries.get(name)
+    return entry ? wholeOf(entry) : null
+  }
+
   /** The values named `<prefix>.<…>` watched now: by how many whole, and in how many scopes (the inspector's). */
   watchedUnder(prefix: string) {
     return [...this.#entries].filter(([key, entry]) => key.startsWith(`${prefix}.`) && (entry.listeners.size || entry.watchers.size))

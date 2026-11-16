@@ -16,7 +16,7 @@ import { defineApp, PROTOCOL_VERSION, type AuthEvent, type AuthPrompt, type Noti
 import { mcpServersExtension } from '../src/daemon.ts'
 import { Callbacks, catchRedirect, redirectOf } from '../src/loopback.ts'
 import { clientKey, OAuthAccess, readRedirect, resourceOf, signIn, tokenKey, type SignedIn, type SignInOptions } from '../src/oauth.ts'
-import type { CheckResult, SectionData, ServerInfo } from '../src/shared.ts'
+import { SERVERS_VALUE, type CheckResult, type SectionData, type ServerInfo } from '../src/shared.ts'
 import { SecretStore, serverKey } from '../src/store.ts'
 import { serveOAuth } from './auth-server.ts'
 import { serveHttp } from './fixture.ts'
@@ -267,9 +267,12 @@ async function open(port: number, turns: string[] = []) {
   return { peer, events }
 }
 const act = <T = CheckResult>(peer: RpcPeer, id: string, params: object) => peer.call<T>('action.run', { id: `mcp-servers.${id}`, params })
+/** What Settings → MCP servers draws: the live value it names, once a change just made is told (10ms after it settles). */
 const section = async (peer: RpcPeer) => {
-  const { value } = await peer.call<{ value: { sections: { id: string; data?: SectionData }[] } }>('settings.watch', {})
-  return value.sections.find((s) => s.id === 'mcp-servers')!.data!
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  const { sub, value } = await peer.call<{ sub: string; value: SectionData }>('value.watch', { key: SERVERS_VALUE })
+  await peer.call('unwatch', { sub })
+  return value
 }
 const info = async (peer: RpcPeer, name: string) => (await section(peer)).servers.find((s) => s.name === name) as ServerInfo
 const turn = (content: unknown[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } }) + '\n'

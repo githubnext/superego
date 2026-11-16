@@ -21,7 +21,13 @@ export type SectionSpec = {
   order?: number
   settings: SettingSpec[]
   ui?: string
+  /** Read-only state for the custom component, read with each snapshot. */
   data?: () => Json | Promise<Json>
+  /**
+   * Or the live value its custom component draws from (`<extension>.<key>`), instead of `data`: it reaches the
+   * component as its `data`, kept current as the value changes, and isn't sent again with every snapshot.
+   */
+  value?: string
 }
 
 export interface SettingsStore {
@@ -156,6 +162,7 @@ export class SettingsRegistry {
         ...(section.description ? { description: section.description } : {}),
         ...(section.ui ? { ui: section.ui } : {}),
         ...(data !== undefined ? { data } : {}),
+        ...(section.value ? { value: section.value } : {}),
       })
     }
     sections.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title))

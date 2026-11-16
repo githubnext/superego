@@ -11,7 +11,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi, type DaemonExtension } from '@superego/daemon'
 import { defineApp, PROTOCOL_VERSION, type ActionInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { mcpServersExtension, type McpServersOptions } from '../src/daemon.ts'
-import type { CheckResult, LogResult, SectionData, ServerConfig, ThreadServers } from '../src/shared.ts'
+import { SERVERS_VALUE, type CheckResult, type LogResult, type SectionData, type ServerConfig, type ThreadServers } from '../src/shared.ts'
 import { serveHttp } from './fixture.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
@@ -72,9 +72,12 @@ async function results(peer: RpcPeer, id: string) {
   return value.entries.map((e) => e.model?.[0]).filter((m) => m?.role === 'toolResult')
     .map((m) => `${m!.isError ? 'error: ' : ''}${m!.content?.map((c) => c.type === 'text' ? c.text : `[${c.type}]`).join('\n')}`)
 }
+/** What Settings → MCP servers draws: the live value it names, once a change just made is told (10ms after it settles). */
 const section = async (peer: RpcPeer) => {
-  const { value } = await peer.call<{ value: { sections: { id: string; data?: SectionData }[] } }>('settings.watch', {})
-  return value.sections.find((s) => s.id === 'mcp-servers')!.data!
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  const { sub, value } = await peer.call<{ sub: string; value: SectionData }>('value.watch', { key: SERVERS_VALUE })
+  await peer.call('unwatch', { sub })
+  return value
 }
 const write = (root: string, files: Record<string, string>) => {
   for (const [path, content] of Object.entries(files)) {

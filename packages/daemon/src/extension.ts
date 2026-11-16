@@ -286,7 +286,10 @@ export type DaemonApi = {
   settings: {
     register(section: SectionSpec): void
     get<T extends Json>(key: string): T
-    /** Every section with its settings and values, as clients see them. */
+    /**
+     * Every section with its settings and values, as clients see them; a section drawn from a live value (`value`) with
+     * that value, as it is now, as its `data`.
+     */
     snapshot(): Promise<SettingsSnapshot>
     /** Something in the settings changed. */
     onChange(listener: () => void): void

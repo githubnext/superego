@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { AUTH_REJECTED, DATA_VIEWS, defineAction, defineApp, MESSAGE_ENTRY, obj, PROTOCOL_VERSION, str, type ActionInfo, type MessageOrigin, type DataViewInfo, type Hello, type Notifications, type ThreadInfo, type ViewContent } from '@superego/protocol'
+import { AUTH_REJECTED, DATA_VIEWS, defineAction, defineApp, MESSAGE_ENTRY, obj, PROTOCOL_VERSION, str, type ActionInfo, type MessageOrigin, type SettingsSnapshot, type DataViewInfo, type Hello, type Notifications, type ThreadInfo, type ViewContent } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi, type DaemonExtension, type LiveValue, type ScopedValue, type ThreadState } from '../src/index.ts'
 import { answeredBy } from '../src/threads.ts'
 import { until } from './until.ts'
@@ -352,5 +352,27 @@ it("publishes an extension's state with each thread, if asked: read in as a thre
   const again = await peer.call<{ sub: string; value: unknown }>('value.watch', { key: 'counter.counts', scope: thread.id })
   await until(async () => of(again.sub).length === 1)
   expect(of(again.sub)).toEqual([{ n: 5 }])
+  await close()
+})
+
+it('draws a settings section from a live value: clients get its name, not the data again; an extension reading the snapshot gets the data', async () => {
+  let api!: DaemonApi
+  let live!: LiveValue<{ n: number }>
+  const panel = defineDaemonExtension({
+    name: 'panel',
+    setup(superego) {
+      api = superego
+      live = superego.value('panel.state', { n: 1 })
+      superego.settings.register({ id: 'panel', title: 'Panel', ui: 'panel', settings: [], value: 'panel.state' })
+      expect(() => superego.settings.register({ id: 'panel.more', title: 'More', settings: [], value: 'other.state' })).toThrow(/must name/)
+    },
+  })
+  const { peer, close } = await open([panel])
+  const { value } = await peer.call<{ value: SettingsSnapshot }>('settings.watch', {})
+  const section = value.sections.find((s) => s.id === 'panel')!
+  expect(section.value).toBe('panel.state')
+  expect(section.data).toBeUndefined()
+  live.set({ n: 2 })
+  expect((await api.settings.snapshot()).sections.find((s) => s.id === 'panel')!.data).toEqual({ n: 2 })
   await close()
 })

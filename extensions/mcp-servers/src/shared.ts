@@ -1,6 +1,6 @@
 // What both halves agree on (and the command line, and Ego's tool): what the extension is, a server's config as
-// `<dataDir>/mcp-servers.json` keeps it, what Settings → MCP servers draws (the section's `data`, kept current as the
-// live value `mcp-servers.servers`), what a thread says of its servers (`thread.facts['mcp-servers']`), and the actions
+// `<dataDir>/mcp-servers.json` keeps it, what Settings → MCP servers draws (the live value `mcp-servers.servers`, the
+// section's data), what a thread says of its servers (`thread.facts['mcp-servers']`), and the actions
 // with their params. See docs/mcp.md.
 import { arr, bool, lit, num, obj, opt, str, union, type ExtensionAbout, type Json, type Static } from '@superego/protocol'
 import { map, oneOf } from '@earendil-works/pi-schema'
@@ -144,9 +144,13 @@ export type ServerInfo = {
  * `servers`: the machine's, in the file's order; `profiles`: those of profiles seen on this machine (each once its
  * profile was allowed and a thread of it took a turn).
  */
-export type SectionData = { servers: ServerInfo[]; profiles: ServerInfo[] }
+export type SectionData = {
+  servers: ServerInfo[]; profiles: ServerInfo[]
+  /** Why `mcp-servers.json` doesn't read, if it doesn't. */
+  problem?: string
+}
 
-/** The section's id and its `ui`, and the live value that keeps its data current. */
+/** The section's id and its `ui`, and the live value it draws from. */
 export const SECTION = 'mcp-servers'
 export const SERVERS_VALUE = 'mcp-servers.servers'
 

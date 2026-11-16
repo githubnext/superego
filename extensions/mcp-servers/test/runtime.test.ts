@@ -13,7 +13,7 @@ import { connectSocket, listen, openDaemon, type DaemonApi } from '@superego/dae
 import { defineApp, PROTOCOL_VERSION, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { mcpServersExtension } from '../src/daemon.ts'
 import { Runtime, type Server } from '../src/servers.ts'
-import type { CheckResult, SectionData, ServerConfig } from '../src/shared.ts'
+import { SERVERS_VALUE, type CheckResult, type SectionData, type ServerConfig } from '../src/shared.ts'
 import { SecretStore } from '../src/store.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
@@ -149,9 +149,12 @@ async function open(turns: string[] = []) {
 }
 const find = async (peer: RpcPeer, id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)
 const done = (peer: RpcPeer, id: string) => until(async () => (await find(peer, id))?.status.state === 'done', 'the thread to be done', 30_000)
+/** What Settings → MCP servers draws: the live value it names, once a change just made is told (10ms after it settles). */
 const section = async (peer: RpcPeer) => {
-  const { value } = await peer.call<{ value: { sections: { id: string; data?: SectionData }[] } }>('settings.watch', {})
-  return value.sections.find((s) => s.id === 'mcp-servers')!.data!
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  const { sub, value } = await peer.call<{ sub: string; value: SectionData }>('value.watch', { key: SERVERS_VALUE })
+  await peer.call('unwatch', { sub })
+  return value
 }
 const profileTs = (spec: object) => `import { defineProfile } from 'superego'\nexport default defineProfile(${JSON.stringify(spec)})\n`
 const writeProfile = (project: string, spec: object) => {

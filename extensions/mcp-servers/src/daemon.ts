@@ -89,6 +89,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         return {
           servers: await Promise.all(all.filter((s) => s.from.type === 'machine').map((s) => runtime.info(s))),
           profiles: await Promise.all(all.filter((s) => s.from.type === 'profile').map((s) => runtime.info(s))),
+          ...(fileProblem ? { problem: fileProblem } : {}),
         }
       }
 
@@ -132,6 +133,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
           fileProblem = `${file.path} doesn't read: ${error instanceof Error ? error.message : String(error)}`
           console.error(`mcp-servers: ${fileProblem}`)
         }
+        changed()
       })
       await reload()
       await runtime.loadCached()
@@ -277,7 +279,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
       superego.settings.register({
         id: SECTION, title: 'MCP servers', order: 25, ui: SECTION, settings: [],
         description: "Tools from other services for this machine's agents. A profile uses them by name (mcp: ['linear']); threads without one, those marked so.",
-        data: async () => ({ ...await sectionData(), ...(fileProblem ? { problem: fileProblem } : {}) }) as SectionData & Json,
+        value: SERVERS_VALUE,
       })
       changed()
 

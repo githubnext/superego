@@ -1,11 +1,11 @@
 // Settings, drawn generically from what each endpoint registers: the app's own settings and every machine's. Sections
 // may name a custom component (`ui`) drawn below their settings; the Providers section is one.
 import { useEffect } from 'react'
-import type { SectionInfo, SettingsSnapshot } from '@superego/protocol'
+import type { Json, SectionInfo, SettingsSnapshot } from '@superego/protocol'
 import { Dialog, StatusGlyph } from '@superego/ui'
 import { APP } from '../shared/app-settings.ts'
 import type { MachineEntry } from '../shared/bridge.ts'
-import { useSettings } from './client.ts'
+import { useSettings, useValue } from './client.ts'
 import { Contained } from './contained.tsx'
 import { settingsView, useRegistry } from './extension.tsx'
 import { useLocalState } from './local-state.ts'
@@ -50,7 +50,7 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
             : target === ALL ? <AllMachines machines={editable} />
             : !connected ? <p className="settings__note">{machine?.label} is {machine?.state}. Its settings live on it, so they show once it is back.</p>
             : !snapshot ? <p className="settings__note">Loading…</p>
-            : snapshot.sections.filter((section) => section.ui || section.settings.some((s) => !s.hidden)).map((section) => <Section key={section.id} target={target} section={section} values={snapshot.values} />)}
+            : snapshot.sections.filter((section) => section.ui || section.settings.some((s) => !s.hidden)).map((section) => <Section key={section.id} machine={machine} target={target} section={section} values={snapshot.values} />)}
         </div>
       </div>
   )
@@ -59,10 +59,12 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
     : <Dialog title="Settings" size="large" onClose={onClose} className="settings">{body}</Dialog>
 }
 
-function Section({ target, section, values }: { target: string; section: SectionInfo; values: SettingsSnapshot['values'] }) {
+function Section({ machine, target, section, values }: { machine: MachineEntry | undefined; target: string; section: SectionInfo; values: SettingsSnapshot['values'] }) {
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
   const Custom = section.ui ? settingsView(registry, section.ui, target) : undefined
+  // Drawn from a live value: that's its data, kept current.
+  const live = useValue<Json>(section.value ? machine : undefined, section.value ?? '')
   return (
     <section className="settings-section">
       <h2>{section.title}</h2>
@@ -71,7 +73,7 @@ function Section({ target, section, values }: { target: string; section: Section
         <Setting key={setting.key} setting={setting} value={values[setting.key] ?? null}
           apply={(value) => dispatch(target === APP ? 'app.settings.set' : 'settings.set', { key: setting.key, value }, { machine: target, source: 'settings' })} />
       ))}
-      {Custom && <Contained name={section.ui!}><Custom target={target} section={section} /></Contained>}
+      {Custom && <Contained name={section.ui!}><Custom target={target} section={section.value ? { ...section, ...(live != null ? { data: live } : {}) } : section} /></Contained>}
     </section>
   )
 }

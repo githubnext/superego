@@ -454,11 +454,16 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
           life.live(`the settings ${section.id}`)
           ownKey(section.id)
           for (const setting of section.settings) ownKey(setting.key)
+          if (section.value !== undefined) ownKey(section.value)
           note('settings', section.id)
           undo(settings.register(section), 'settings')
         },
         get: (key) => settings.get(key),
-        snapshot: () => settings.snapshot(),
+        // A section drawn from a live value has it as its data here, as it is now.
+        snapshot: async () => {
+          const snapshot = await settings.snapshot()
+          return { ...snapshot, sections: snapshot.sections.map((section) => section.value ? { ...section, data: values.current(section.value) } : section) }
+        },
         onChange: (listener) => { life.live('a settings listener'); undo(settings.onChange(listener), 'a settings listener') },
       },
       action: (action) => { life.live(`the action ${action.id}`); undo(router.register({ ...action, id: named(extension.name, action.id) }), 'an action'); note('actions', action.keys ? `${action.id} (${action.keys})` : action.id) },
