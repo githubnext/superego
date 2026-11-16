@@ -10,12 +10,12 @@ import files from '@superego/files/daemon'
 import git from '@superego/git/daemon'
 import images from '@superego/images/daemon'
 import paneUi from '@superego/pane-ui/daemon'
-import replyUi from '@superego/reply-ui/daemon'
+import answerUi from '@superego/answer-ui/daemon'
 import skills from '@superego/skills/daemon'
 import tasks from '@superego/tasks/daemon'
 import terminal from '@superego/terminal/daemon'
-import threadReports from '@superego/threads/reports'
-import threadTools from '@superego/threads/daemon'
+import threadReports from '@superego/thread-reports/daemon'
+import threadTools from '@superego/thread-tools/daemon'
 import suggestions from '@superego/suggestions/daemon'
 import webPanes from '@superego/web-panes/daemon'
 import worktrees from '@superego/worktrees/daemon'
@@ -25,7 +25,7 @@ const dataDir = process.env.SUPEREGO_HOME
 if (!dataDir) throw new Error('Native spike requires an explicit SUPEREGO_HOME')
 const root = join(dirname(process.execPath), '../Resources/renderer')
 const daemon = await openDaemon({ app, dataDir, defaultCwd: process.env.SUPEREGO_CWD ?? dataDir,
-  agentsDir: process.env.SUPEREGO_AGENTS, extensions: [worktrees, askUser, ego, files, git, images, paneUi, replyUi, skills, tasks, terminal, threadTools, threadReports, suggestions, webPanes] })
+  agentsDir: process.env.SUPEREGO_AGENTS, extensions: [worktrees, askUser, ego, files, git, images, paneUi, answerUi, skills, tasks, terminal, threadTools, threadReports, suggestions, webPanes] })
 const socket = await listen(daemon, join(dataDir, 'superego.sock'))
 const devices = await WebDevices.open(dataDir)
 const web = await serveWeb({ root, port: 0, devices, serve: (peer) => daemon.serve(peer) })

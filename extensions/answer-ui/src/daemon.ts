@@ -1,4 +1,4 @@
-// reply-ui, daemon half: UI an agent puts in its reply. `show_ui` draws blocks in the transcript and returns at once;
+// answer-ui, daemon half: UI an agent puts in its answer. `show_ui` draws blocks in the transcript and returns at once;
 // what the user clicks later comes back as their next message. `ask_ui` draws them and waits, as ask_user does: the
 // thread shows as blocked, the UI is published in the thread's scope for every client, and any of them can answer.
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
@@ -8,7 +8,7 @@ import { defineDaemonExtension } from '@superego/daemon'
 import { defineAction, RpcError } from '@superego/protocol'
 import { about, ANSWER, ASK, ASKING, SHOW, type AskDetails, type Asking, type Spec } from './shared.ts'
 
-const SHOW_DESCRIPTION = `Show the user UI in your reply, in the transcript, and return at once. When they later press a button or pick a choice, it arrives as their next message (like "→ Option B", with any inputs' values); don't wait for it.
+const SHOW_DESCRIPTION = `Show the user UI in your answer, in the transcript, and return at once. When they later press a button or pick a choice, it arrives as their next message (like "→ Option B", with any inputs' values); don't wait for it.
 Use it when something is clearer seen than read: options side by side with previews, a comparison table, a small dashboard or chart, or a few next steps to offer as buttons. Don't use it for ordinary answers, explanations, summaries or code: Markdown text is better for those, and most replies need no UI. To wait for the user's answer before carrying on, use ${ASK}.
 
 ${BLOCKS_GUIDE}`
@@ -33,7 +33,7 @@ export default defineDaemonExtension({
       ({ ...(title ? { title } : {}), blocks: checkBlocks(blocks), ...(submit ? { submit } : {}) })
 
     superego.agent(defineExtension({
-      name: 'reply-ui',
+      name: 'answer-ui',
       tools: [
         defineTool({
           name: SHOW,

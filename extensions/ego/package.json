@@ -15,7 +15,7 @@
     "@superego/daemon": "workspace:*",
     "@superego/mcp-servers": "workspace:*",
     "@superego/protocol": "workspace:*",
-    "@superego/threads": "workspace:*",
+    "@superego/thread-tools": "workspace:*",
     "@superego/ui": "workspace:*"
   },
   "peerDependencies": {

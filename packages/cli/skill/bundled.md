@@ -63,8 +63,8 @@ that goes without it gets none of its agent parts or pane kinds, and the window 
 (`ThreadInfo.without`): its panes already open are kept with the thread but not shown, its actions not offered. `required: true` is for what the app is (the sidebar): never listed, never left out. Nothing
 else decides this. An extension whose work is all in the window needs no daemon half (`links` has none): the window
 declares its `about` to every machine it connects to, so each lists it in Settings and profiles can do without it.
-Where the halves should differ, a package can be two extensions, an `about` each: `threads` is the required sidebar
-(its UI half), and its daemon half is `thread-tools`, the agent's thread tools, optional.
+Where a window part and a machine part should differ, make them two extensions, a folder and an `about` each:
+`threads` is the required sidebar (UI only), and `thread-tools`, the agent's thread tools, is optional (daemon only).
 
 Then wire it in:
 

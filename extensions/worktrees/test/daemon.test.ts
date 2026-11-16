@@ -219,7 +219,7 @@ it("is removed when the thread tools archive a thread, a thread's own only once 
   const git = repository()
   writeFileSync(join(dir, '.gitignore'), '*\n!readme.md\n!.gitignore\n')
   git('add', '.'); git('commit', '-q', '-m', 'ignore')
-  const { default: threadTools } = await import('@superego/threads/daemon')
+  const { default: threadTools } = await import('@superego/thread-tools/daemon')
   const turn = (content: Json[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
   const first = await open(dir, [threadTools])
   const child = await first.peer.call<ThreadInfo>('thread.start', { cwd: dir, title: 'Child', worktree: true })

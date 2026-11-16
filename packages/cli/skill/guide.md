@@ -744,9 +744,9 @@ Bundled extensions also declare whether they're required, once, in `about` (spre
 
 Only the sidebar (`threads`), `worktrees` (archiving removes a folder and unarchiving puts it back: never switched off
 between the two) and the core's `markdown` are required. Everything else is optional, `ego` too, and the core's own
-`coding-tools`, `panes` and `agents-md`. A package may be two extensions, one per half,
-where the halves differ: `extensions/threads` is the required sidebar in the window, and `thread-tools`, the agent's
-thread tools, on the machine, so switching the tools off leaves the sidebar (and the rows and links naming threads).
+`coding-tools`, `panes` and `agents-md`. Where a window part and a machine part should differ, they are two
+extensions: `threads` is the required sidebar in the window, and `thread-tools`, the agent's thread tools, an optional
+one on the machine, so switching the tools off leaves the sidebar (and the rows and links naming threads).
 The core's `panes` is the agent's `pane_open`: switched off, the agent can't open panes, but the window's own pane
 kinds stay, being the required core's. An extension with a UI half only needs no daemon half: the window declares it
 to each machine, which lists it and lets profiles do without it.
@@ -770,7 +770,9 @@ source, at `extensions/<name>/src`, so only a checkout has them.
 | `links` | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
 | `unread` | UI only: a view in the rail `withoutSpaces` and in a phone's `drawer`, an action with keys reading projects, an app setting |
 | `notifications` | UI only: `on('thread.status')`, `on('auth.rejected')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
-| `threads` | the required one: views (the list a `space` with a `rail` of its own, details in the `beside` with ⌘I, the model in the `header`), app settings, tool rows and a `link`; its daemon half is two other, optional extensions: `thread-tools`, on `superego.threads`, and `thread-reports`, report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by a send transform's `by`) |
+| `threads` | the required one, UI only: views (the list a `space` with a `rail` of its own, details in the `beside` with ⌘I, the model in the `header`), app settings, tool rows and a `link` |
+| `thread-tools` | daemon only: the agent's thread tools, on `superego.threads` |
+| `thread-reports` | daemon only: report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by a send transform's `by`) |
 | `worktrees` | `thread` hooks (`starting` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `header.chips` chip, a `thread.badge` mark and a `newThreadField` |
 | `mcp-servers` | a settings section drawn by a component of its own (`settings(ui, …)`) from a live value, with dialogs and `SignInFlow`; tool rows by prefix (`mcp__*`) with a call's own `verb` and images; a `header` view, a `details.section` slot and a `composer.above` notice, all from the thread's facts |
 | `ego` | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `value` older windows follow (the rail button reads the selection); a view in the `rail`, and in a phone's `drawer` |

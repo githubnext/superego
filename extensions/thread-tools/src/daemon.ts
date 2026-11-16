@@ -1,13 +1,13 @@
-// threads, daemon half: the agent's thread tools (tools.ts), on `superego.threads`. An extension of its own name,
+// thread-tools, daemon half: the agent's thread tools (tools.ts), on `superego.threads`. An extension of its own,
 // `thread-tools`, so a machine can switch them off and a profile go without them while the sidebar stays.
 import { hostname } from 'node:os'
 import { defineDaemonExtension } from '@superego/daemon'
 import { readsOf } from './reads.ts'
-import { toolsAbout } from './shared.ts'
+import { about } from './shared.ts'
 import { threadTools } from './tools.ts'
 
 export default defineDaemonExtension({
-  ...toolsAbout,
+  ...about,
   setup: (s) => s.agent(threadTools({
     info: (id) => s.threads.get(id).catch(() => undefined),
     list: () => s.threads.list(),

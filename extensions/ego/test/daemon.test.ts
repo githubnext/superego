@@ -159,7 +159,7 @@ it('finds its thread again when switched on after starting off, instead of makin
 })
 
 it("isn't archived by another thread's thread_archive either", async () => {
-  const { default: threadTools } = await import('@superego/threads/daemon')
+  const { default: threadTools } = await import('@superego/thread-tools/daemon')
   const first = await open()
   const egoThread = await first.peer.call<ThreadInfo>('ego.ask', {})
   await first.close()

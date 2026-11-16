@@ -1,0 +1,13 @@
+{
+  "name": "@superego/thread-reports",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { "./daemon": "./src/daemon.ts", "./shared": "./src/shared.ts" },
+  "dependencies": {
+    "@earendil-works/pi-durable": "1.5.0",
+    "@superego/daemon": "workspace:*",
+    "@superego/protocol": "workspace:*",
+    "@superego/thread-tools": "workspace:*"
+  }
+}

@@ -13,14 +13,14 @@ import git from '@superego/git/daemon'
 import images from '@superego/images/daemon'
 import mcpServers from '@superego/mcp-servers/daemon'
 import paneUi from '@superego/pane-ui/daemon'
-import replyUi from '@superego/reply-ui/daemon'
+import answerUi from '@superego/answer-ui/daemon'
 import { skillsExtension } from '@superego/skills/daemon'
 import { SKILL_DIR } from '@superego/cli/skill'
 import suggestions from '@superego/suggestions/daemon'
 import tasks from '@superego/tasks/daemon'
 import terminal from '@superego/terminal/daemon'
-import threadReports from '@superego/threads/reports'
-import threadTools from '@superego/threads/daemon'
+import threadReports from '@superego/thread-reports/daemon'
+import threadTools from '@superego/thread-tools/daemon'
 import webPanes from '@superego/web-panes/daemon'
 import worktrees from '@superego/worktrees/daemon'
 import app from '../superego.config.ts'
@@ -34,7 +34,7 @@ const skills = skillsExtension({ own: [SKILL_DIR] })
 // The daemon links to the machines this computer reaches (the same list the app and `superego machines` keep), to serve
 // them to browsers and agents (see the daemon's relay.ts).
 serveDaemon({
-  app, defaultCwd: homedir(), extensions: [worktrees, askUser, ego, files, git, images, mcpServers, paneUi, replyUi, skills, suggestions, tasks, terminal, threadTools, threadReports, webPanes], ...(webRoot ? { webRoot } : {}),
+  app, defaultCwd: homedir(), extensions: [worktrees, askUser, ego, files, git, images, mcpServers, paneUi, answerUi, skills, suggestions, tasks, terminal, threadTools, threadReports, webPanes], ...(webRoot ? { webRoot } : {}),
   reach: (dataDir, self) => machineHub({ app, dataDir, self }),
 }).catch((error) => {
   console.error(error)

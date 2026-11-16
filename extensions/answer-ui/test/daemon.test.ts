@@ -5,10 +5,10 @@ import { afterEach, expect, it } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
 import { defineApp, PROTOCOL_VERSION, type Json, type Notifications, type ThreadInfo } from '@superego/protocol'
-import replyUi from '../src/daemon.ts'
+import answerUi from '../src/daemon.ts'
 import { ANSWER, ASKING, type Asking } from '../src/shared.ts'
 
-const app = defineApp({ name: 'test', id: 'replyuitest' })
+const app = defineApp({ name: 'test', id: 'answeruitest' })
 let dir: string
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
@@ -21,18 +21,18 @@ type Message = { role?: string; isError?: boolean; content?: { text?: string }[]
 const toolResults = (view: ConversationView) => view.entries.map((entry) => entry.model?.[0] as Message | undefined).filter((m) => m?.role === 'toolResult')
 
 async function start(turns: string[]) {
-  dir = await mkdtemp(join(tmpdir(), 'superego-reply-ui-'))
+  dir = await mkdtemp(join(tmpdir(), 'superego-answer-ui-'))
   await writeFile(join(dir, 'turns.jsonl'), turns.join('\n') + '\n')
-  process.env.REPLYUITEST_MODEL = `replay:${join(dir, 'turns.jsonl')}`
-  process.env.REPLYUITEST_REPLAY_SPEED = '0'
-  const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, extensions: [replyUi] })
+  process.env.ANSWERUITEST_MODEL = `replay:${join(dir, 'turns.jsonl')}`
+  process.env.ANSWERUITEST_REPLAY_SPEED = '0'
+  const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, extensions: [answerUi] })
   const server = await listen(daemon, join(dir, 's.sock'))
   const { peer, socket } = await connectSocket(join(dir, 's.sock'))
   const hello = await peer.call<{ features: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
-  expect(hello.features).toContain('ext:reply-ui')
+  expect(hello.features).toContain('ext:answer-ui')
   const done = async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done'
   const view = async (id: string) => (await peer.call<{ value: ConversationView }>('thread.watch', { thread: id })).value
-  const close = async () => { socket.destroy(); server.close(); await daemon.close(); delete process.env.REPLYUITEST_MODEL }
+  const close = async () => { socket.destroy(); server.close(); await daemon.close(); delete process.env.ANSWERUITEST_MODEL }
   return { peer, done, view, close }
 }
 

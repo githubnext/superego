@@ -20,7 +20,7 @@
     "@earendil-works/chord": "1.5.0",
     "@earendil-works/pi-ai": "1.5.0",
     "@earendil-works/pi-durable": "1.5.0",
-    "@superego/threads": "workspace:*",
+    "@superego/thread-tools": "workspace:*",
     "@types/react": "^19",
     "@types/react-dom": "^19.3.0",
     "react": "^19",

@@ -6,8 +6,8 @@ import type { ExtensionAbout } from '@superego/protocol'
 export const SHOW = 'show_ui'
 export const ASK = 'ask_ui'
 /** The UI each thread's agent waits on, a scoped value by thread (`Asking[]`). */
-export const ASKING = 'reply-ui.asking'
-export const ANSWER = 'reply-ui.answer'
+export const ASKING = 'answer-ui.asking'
+export const ANSWER = 'answer-ui.answer'
 
 /** What the agent drew: a title, its blocks, and (ask_ui) the submit button's label. */
 export type Spec = { title?: string; blocks: Block[]; submit?: string }
@@ -20,6 +20,6 @@ export type AskDetails = Spec & { id: string; answer?: Reply }
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
 export const about = {
-  name: 'reply-ui', version: '1.0.0', api: '^2', title: 'UI in replies',
-  description: 'Let the agent reply with buttons, choices, forms, tables and pages of its own, in the transcript.',
+  name: 'answer-ui', version: '1.0.0', api: '^2', title: 'UI in answers',
+  description: 'Let the agent answer with buttons, choices, forms, tables and pages of its own, in the transcript.',
 } satisfies ExtensionAbout

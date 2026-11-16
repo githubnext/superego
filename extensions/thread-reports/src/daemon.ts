@@ -1,4 +1,4 @@
-// thread-reports, daemon half: report-back. When a thread started by another (a child) ends a run (answered, failed or
+// thread-reports: report-back. When a thread started by another (a child) ends a run (answered, failed or
 // stopped) or comes to wait on a question, its parent gets a message saying so, from it, with the first lines of its
 // answer. Reports close together go as one message; one the parent has read already (thread_read, waiting on it, say)
 // isn't sent at all. A message is like thread_send's: "From [child](thread:<id>): …", queued after the parent's run.
@@ -18,9 +18,10 @@
 import { defineExtension, section } from '@earendil-works/pi-durable'
 import { defineDaemonExtension } from '@superego/daemon'
 import { waitingForSignIn, type ThreadInfo } from '@superego/protocol'
-import { readsOf } from './reads.ts'
-import { fromLine, linkTo, senderOf } from './tools.ts'
-import { REPORTED, reportsAbout, toolsAbout } from './shared.ts'
+import { readsOf } from '@superego/thread-tools/reads'
+import { about as toolsAbout } from '@superego/thread-tools/shared'
+import { fromLine, linkTo, senderOf } from '@superego/thread-tools/tools'
+import { about as reportsAbout, REPORTED } from './shared.ts'
 
 /** What reporting needs of the daemon. */
 export type ReportsHost = {

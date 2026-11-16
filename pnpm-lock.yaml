@@ -216,6 +216,9 @@ importers:
       '@lydell/node-pty':
         specifier: 1.2.0-beta.18
         version: 1.2.0-beta.18
+      '@superego/answer-ui':
+        specifier: workspace:*
+        version: link:../extensions/answer-ui
       '@superego/app':
         specifier: workspace:*
         version: link:../packages/app
@@ -258,9 +261,6 @@ importers:
       '@superego/protocol':
         specifier: workspace:*
         version: link:../packages/protocol
-      '@superego/reply-ui':
-        specifier: workspace:*
-        version: link:../extensions/reply-ui
       '@superego/skills':
         specifier: workspace:*
         version: link:../extensions/skills
@@ -273,6 +273,12 @@ importers:
       '@superego/terminal':
         specifier: workspace:*
         version: link:../extensions/terminal
+      '@superego/thread-reports':
+        specifier: workspace:*
+        version: link:../extensions/thread-reports
+      '@superego/thread-tools':
+        specifier: workspace:*
+        version: link:../extensions/thread-tools
       '@superego/threads':
         specifier: workspace:*
         version: link:../extensions/threads
@@ -295,6 +301,37 @@ importers:
       electron-vite:
         specifier: 6.0.0
         version: 6.0.0(vite@8.3.5(@types/node@24.19.2))
+
+  extensions/answer-ui:
+    dependencies:
+      '@earendil-works/pi-durable':
+        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+      '@earendil-works/pi-schema':
+        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@superego/blocks':
+        specifier: workspace:*
+        version: link:../../packages/blocks
+      '@superego/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@superego/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      react:
+        specifier: ^19
+        version: 19.3.1
 
   extensions/ask-user:
     dependencies:
@@ -347,9 +384,9 @@ importers:
       '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@superego/threads':
+      '@superego/thread-tools':
         specifier: workspace:*
-        version: link:../threads
+        version: link:../thread-tools
       '@superego/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -560,37 +597,6 @@ importers:
         specifier: ^19
         version: 19.3.1
 
-  extensions/reply-ui:
-    dependencies:
-      '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
-      '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
-      '@superego/app':
-        specifier: workspace:*
-        version: link:../../packages/app
-      '@superego/blocks':
-        specifier: workspace:*
-        version: link:../../packages/blocks
-      '@superego/daemon':
-        specifier: workspace:*
-        version: link:../../packages/daemon
-      '@superego/protocol':
-        specifier: workspace:*
-        version: link:../../packages/protocol
-      '@superego/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-    devDependencies:
-      '@types/react':
-        specifier: ^19
-        version: 19.3.0
-      react:
-        specifier: ^19
-        version: 19.3.1
-
   extensions/skills:
     dependencies:
       '@earendil-works/pi-durable':
@@ -697,17 +703,42 @@ importers:
         specifier: ^19
         version: 19.3.1
 
-  extensions/threads:
+  extensions/thread-reports:
     dependencies:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
         version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
-      '@superego/app':
-        specifier: workspace:*
-        version: link:../../packages/app
       '@superego/daemon':
         specifier: workspace:*
         version: link:../../packages/daemon
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@superego/thread-tools':
+        specifier: workspace:*
+        version: link:../thread-tools
+
+  extensions/thread-tools:
+    dependencies:
+      '@earendil-works/pi-durable':
+        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+      '@superego/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+    devDependencies:
+      '@superego/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
+
+  extensions/threads:
+    dependencies:
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../../packages/app
       '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -715,9 +746,6 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
-      '@superego/settings':
-        specifier: workspace:*
-        version: link:../../packages/settings
       '@types/react':
         specifier: ^19
         version: 19.3.0
@@ -796,9 +824,9 @@ importers:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
         version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
-      '@superego/threads':
+      '@superego/thread-tools':
         specifier: workspace:*
-        version: link:../threads
+        version: link:../thread-tools
       '@types/react':
         specifier: ^19
         version: 19.3.0

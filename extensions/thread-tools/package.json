@@ -1,0 +1,13 @@
+{
+  "name": "@superego/thread-tools",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { "./daemon": "./src/daemon.ts", "./reads": "./src/reads.ts", "./shared": "./src/shared.ts", "./tools": "./src/tools.ts" },
+  "dependencies": {
+    "@earendil-works/pi-durable": "1.5.0",
+    "@superego/daemon": "workspace:*",
+    "@superego/protocol": "workspace:*"
+  },
+  "devDependencies": { "@superego/settings": "workspace:*" }
+}

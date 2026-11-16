@@ -6,10 +6,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
 import { defineApp, PROTOCOL_VERSION, type Json, type ThreadInfo } from '@superego/protocol'
-import threadTools from '../src/daemon.ts'
-import { readLog } from '../src/reads.ts'
-import threadReports, { excerpt, reporter, threadReports as withBatching, type ReportsHost } from '../src/reports.ts'
-import { threadTools as tools } from '../src/tools.ts'
+import threadTools from '@superego/thread-tools/daemon'
+import { readLog } from '@superego/thread-tools/reads'
+import threadReports, { excerpt, reporter, threadReports as withBatching, type ReportsHost } from '../src/daemon.ts'
+import { threadTools as tools } from '@superego/thread-tools/tools'
 
 const thread = (id: string, title: string, extra: Partial<ThreadInfo> = {}): ThreadInfo =>
   ({ id, title, cwd: '/p', createdAt: 0, activeAt: 1, project: { root: '/p', name: 'p' }, status: { state: 'done' }, ...extra })

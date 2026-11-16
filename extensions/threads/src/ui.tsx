@@ -7,7 +7,7 @@
 // - details (`threads.details`): what the thread runs with, spent and touched, then what other extensions say of it (the
 //   `details.section` slot: its MCP servers, say); beside it or not, ⌘I
 // - the model (`threads.model`), in the title bar: a button that shows or hides the details
-// It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are its daemon half's.
+// It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are thread-tools'.
 import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   call, defineAction, defineUiExtension, MachineDrift, showProject, Slot, SORT, unread, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut,
