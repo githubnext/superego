@@ -57,11 +57,10 @@ describe('when to notify', () => {
     expect(notices.threads('studio', [thread('error')])).toEqual([])
   })
 
-  it("says nothing of what changed while a machine was away (it's heard again, not announced)", () => {
+  it('notifies of what changed while a machine was away, as its list is heard again', () => {
     const notices = createNotices()
     notices.threads('box', [thread('working')])
-    expect(notices.threads('box', [thread('done')], false)).toEqual([])
-    notices.threads('box', [thread('working')])
+    // Away (asleep, its link down): nothing heard. Back: its list again, with the thread done meanwhile.
     expect(notices.threads('box', [thread('done')])).toHaveLength(1)
   })
 
@@ -90,7 +89,7 @@ describe('when to notify', () => {
     expect(browserNotification(once[0]!).body).toBe('2 threads are waiting. Sign in again to go on.')
     // None waiting yet: nothing to say.
     expect(notices.rejections('box', [rejection(3, [])])).toEqual([])
-    // Heard again on reconnecting: not announced.
-    expect(notices.rejections('box', [rejection(4)], false)).toEqual([])
+    // Rejected again while the machine was away: news, heard as it reconnects.
+    expect(notices.rejections('box', [rejection(4)])).toHaveLength(1)
   })
 })

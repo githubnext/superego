@@ -73,11 +73,11 @@ export function startApp(appConfig: AppConfig) {
     },
     // Restart required, now it's connected again or has refused (another generation)?
     connection(machine) { if (machine === 'local') setTimeout(service.poll) },
-    threads(machine, threads, announce) {
+    threads(machine, threads) {
       desktop.refresh()
-      notifier.track(machine, threads, announce)
+      notifier.track(machine, threads)
     },
-    rejected: (machine, rejections, announce) => notifier.rejected(machine, rejections, announce),
+    rejected: (machine, rejections) => notifier.rejected(machine, rejections),
   })
   const service = createService({
     app: appConfig, dataDir, headless, machines,

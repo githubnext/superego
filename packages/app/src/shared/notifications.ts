@@ -55,22 +55,21 @@ export function signInNotification(machine: MachineId, rejection: Pick<ProviderR
 }
 
 /**
- * What to notify of as each machine's threads and rejected providers are heard: a thread changing to want a look (not
- * one first heard), and a provider rejecting the credentials (again), once for every thread it stops. `announce` false
- * as a machine (re)connects: what changed meanwhile isn't news. Whether to show them (the setting, a window in front)
- * is the caller's.
+ * What to notify of as each machine's threads and rejected providers are heard: a thread changing to want a look, and
+ * a provider rejecting the credentials (again), once for every thread it stops. What's first heard (on starting, from a
+ * new machine) isn't news; what changed while a machine was away (asleep, its link down) is, heard as it reconnects.
+ * Whether to show them (the setting, a window in front) is the caller's.
  */
 export function createNotices() {
   const statuses: Statuses = new Map()
   const rejected: Rejected = new Map()
   return {
-    threads(machine: MachineId, threads: ThreadInfo[], announce = true): ThreadNotification[] {
-      const changes = statusChanges(statuses, { [machine]: threads })
-      return announce ? changes.flatMap(({ thread, before }) => before === undefined ? [] : threadNotification(machine, thread) ?? []) : []
+    threads(machine: MachineId, threads: ThreadInfo[]): ThreadNotification[] {
+      return statusChanges(statuses, { [machine]: threads })
+        .flatMap(({ thread, before }) => before === undefined ? [] : threadNotification(machine, thread) ?? [])
     },
-    rejections(machine: MachineId, rejections: ProviderRejection[], announce = true): ThreadNotification[] {
-      const changes = rejectionChanges(rejected, { [machine]: rejections })
-      return announce ? changes.flatMap(({ rejection }) => signInNotification(machine, rejection) ?? []) : []
+    rejections(machine: MachineId, rejections: ProviderRejection[]): ThreadNotification[] {
+      return rejectionChanges(rejected, { [machine]: rejections }).flatMap(({ rejection }) => signInNotification(machine, rejection) ?? [])
     },
   }
 }

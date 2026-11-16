@@ -34,55 +34,67 @@ afterEach(() => { delete (globalThis as { superegoNotifications?: unknown }).sup
 describe('notifications', () => {
   it('notifies of a thread changing to want a look, not of one first heard, on by default', () => {
     const { track } = notifier()
-    track('local', [thread('a', { state: 'done' })], false)
+    track('local', [thread('a', { state: 'done' })])
     expect(notices()).toEqual([])
-    track('local', [thread('a', { state: 'working' })], true)
-    track('local', [thread('a', { state: 'done', msg: 'All done.' })], true)
+    track('local', [thread('a', { state: 'working' })])
+    track('local', [thread('a', { state: 'done', msg: 'All done.' })])
     expect(notices()).toEqual([{ machine: 'local', thread: 'a', title: 'a', status: 'Finished', text: 'All done.' }])
   })
 
   it('notifies once for a change, however often its list is heard (every window open, one decider)', () => {
     const { track } = notifier()
-    track('local', [thread('a', { state: 'working' })], false)
-    for (let i = 0; i < 3; i++) track('local', [thread('a', { state: 'done' })], true)
+    track('local', [thread('a', { state: 'working' })])
+    for (let i = 0; i < 3; i++) track('local', [thread('a', { state: 'done' })])
     expect(notices()).toHaveLength(1)
   })
 
   it('shows nothing over a window in front, and notifies again once none is', () => {
     const { track } = notifier()
-    track('local', [thread('a', { state: 'working' }), thread('b', { state: 'working' })], false)
+    track('local', [thread('a', { state: 'working' }), thread('b', { state: 'working' })])
     focused = true
-    track('local', [thread('a', { state: 'done' }), thread('b', { state: 'working' })], true)
+    track('local', [thread('a', { state: 'done' }), thread('b', { state: 'working' })])
     expect(notices()).toEqual([])
     focused = false
-    track('local', [thread('a', { state: 'done' }), thread('b', { state: 'error' })], true)
+    track('local', [thread('a', { state: 'done' }), thread('b', { state: 'error' })])
     expect(notices().map((n) => n.thread)).toEqual(['b'])
   })
 
   it('says nothing with the setting off', () => {
     const { track, rejected } = notifier({ [NOTIFY]: false })
-    rejected('local', [], false)
-    track('local', [thread('a', { state: 'working' })], false)
-    track('local', [thread('a', { state: 'done' })], true)
-    rejected('local', [rejection(1, ['a'])], true)
+    rejected('local', [])
+    track('local', [thread('a', { state: 'working' })])
+    track('local', [thread('a', { state: 'done' })])
+    rejected('local', [rejection(1, ['a'])])
     expect(notices()).toEqual([])
   })
 
   it('notifies once as a provider rejects a machine\'s credentials, not once for each thread it stops', () => {
     const { track, rejected } = notifier()
-    rejected('local', [], false)
-    track('local', [thread('a', { state: 'working' }), thread('b', { state: 'working' })], false)
-    track('local', [thread('a', { state: 'blocked', kind: 'auth', msg: 'faux rejected the API key' }), thread('b', { state: 'working' })], true)
-    rejected('local', [rejection(1, ['a'])], true)
-    track('local', [thread('a', { state: 'blocked', kind: 'auth' }), thread('b', { state: 'blocked', kind: 'auth' })], true)
-    rejected('local', [rejection(1, ['a', 'b'])], true)
+    rejected('local', [])
+    track('local', [thread('a', { state: 'working' }), thread('b', { state: 'working' })])
+    track('local', [thread('a', { state: 'blocked', kind: 'auth', msg: 'faux rejected the API key' }), thread('b', { state: 'working' })])
+    rejected('local', [rejection(1, ['a'])])
+    track('local', [thread('a', { state: 'blocked', kind: 'auth' }), thread('b', { state: 'blocked', kind: 'auth' })])
+    rejected('local', [rejection(1, ['a', 'b'])])
     expect(notices()).toEqual([{ machine: 'local', thread: 'a', title: 'faux rejected the API key', text: expect.stringContaining('Sign in again') }])
     // Signed in, then rejected again: another notice.
-    rejected('local', [], true)
-    rejected('local', [rejection(2, ['b'])], true)
+    rejected('local', [])
+    rejected('local', [rejection(2, ['b'])])
     expect(notices().map((notice) => notice.thread)).toEqual(['a', 'b'])
-    // Heard on (re)connecting: not news.
-    rejected('local', [rejection(3, ['b'])], false)
+  })
+
+  it('notifies once of what changed while a machine was away, as it reconnects', () => {
+    const { track, rejected } = notifier()
+    track('box', [thread('a', { state: 'working' }), thread('b', { state: 'working' })])
+    rejected('box', [])
+    // The link drops (the laptop sleeps): nothing is heard. Meanwhile a finishes and the provider rejects the key.
+    // It reconnects: the lists are heard afresh, and what changed is news, once.
+    track('box', [thread('a', { state: 'done', msg: 'All done.' }), thread('b', { state: 'working' })])
+    rejected('box', [rejection(1, ['b'])])
+    expect(notices().map((n) => n.title)).toEqual(['a', 'faux rejected the API key'])
+    // Heard again (another window, a second watch): nothing more.
+    track('box', [thread('a', { state: 'done', msg: 'All done.' }), thread('b', { state: 'working' })])
+    rejected('box', [rejection(1, ['b'])])
     expect(notices()).toHaveLength(2)
   })
 })

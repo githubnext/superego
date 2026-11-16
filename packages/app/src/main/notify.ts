@@ -27,13 +27,13 @@ export type Notifier = ReturnType<typeof createNotifier>
 export function createNotifier({ headless, settings, machines, windowFocused, lookedAt, open }: NotifierOptions) {
   const notices = createNotices()
 
-  /** A machine's threads as now heard (`announce`: changed, not first heard on connecting). */
-  function track(machine: string, threads: ThreadInfo[], announce: boolean) {
-    for (const notice of notices.threads(machine, threads, announce)) notify(notice)
+  /** A machine's threads as now heard. */
+  function track(machine: string, threads: ThreadInfo[]) {
+    for (const notice of notices.threads(machine, threads)) notify(notice)
   }
-  /** A machine's providers that rejected its credentials, as now heard (`announce` as for `track`). */
-  function rejected(machine: string, rejections: ProviderRejection[], announce: boolean) {
-    for (const notice of notices.rejections(machine, rejections, announce)) notify(notice)
+  /** A machine's providers that rejected its credentials, as now heard. */
+  function rejected(machine: string, rejections: ProviderRejection[]) {
+    for (const notice of notices.rejections(machine, rejections)) notify(notice)
   }
 
   let badge = 0

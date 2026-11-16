@@ -31,10 +31,10 @@ export type MachinesOptions = {
   changed(): void
   /** A machine's link connected, or gave up, or dropped. */
   connection(machine: string): void
-  /** A machine's threads, as the app now knows them: `announce` when they changed, not when first heard on connecting. */
-  threads(machine: string, threads: ThreadInfo[], announce: boolean): void
-  /** A machine's providers that rejected its credentials (`auth.rejected`): `announce` as for `threads`. */
-  rejected(machine: string, rejections: ProviderRejection[], announce: boolean): void
+  /** A machine's threads, as the app now knows them: on (re)connecting, and as they change. */
+  threads(machine: string, threads: ThreadInfo[]): void
+  /** A machine's providers that rejected its credentials (`auth.rejected`), as for `threads`. */
+  rejected(machine: string, rejections: ProviderRejection[]): void
 }
 
 export type Machines = ReturnType<typeof createMachines>
@@ -109,9 +109,9 @@ export function createMachines({ app: appConfig, dataDir, headless, broadcast, o
   const threadsOf = new Map<string, ThreadInfo[]>()
   const watchSubs = new Map<string, string>()
   const rejectedSubs = new Map<string, string>()
-  const track = (machine: string, threads: ThreadInfo[], announce: boolean) => {
+  const track = (machine: string, threads: ThreadInfo[]) => {
     threadsOf.set(machine, threads)
-    tracked(machine, threads, announce)
+    tracked(machine, threads)
   }
   const signIns = createSignInCatcher((machine, params) => linkOf(machine)?.call('auth.respond', params) ?? Promise.resolve())
   function heard(machine: string, method: string, params: unknown) {
@@ -122,22 +122,22 @@ export function createMachines({ app: appConfig, dataDir, headless, broadcast, o
       if ((params as { state: string }).state === 'connected') {
         void (linkOf(machine)!.call('threads.watch', {}) as Promise<{ sub: string; value: ThreadInfo[] }>).then(({ sub, value }) => {
           watchSubs.set(machine, sub)
-          track(machine, value, false)
+          track(machine, value)
         }).catch(() => {})
         void (linkOf(machine)!.call('value.watch', { key: AUTH_REJECTED }) as Promise<{ sub: string; value: ProviderRejection[] | null }>).then(({ sub, value }) => {
           rejectedSubs.set(machine, sub)
-          rejected(machine, value ?? [], false)
+          rejected(machine, value ?? [])
         }).catch(() => {})
       }
       return
     }
     if (method === 'value.changed') {
       const { sub, value } = params as Notifications['value.changed']
-      if (rejectedSubs.get(machine) === sub) rejected(machine, (value ?? []) as ProviderRejection[], true)
+      if (rejectedSubs.get(machine) === sub) rejected(machine, (value ?? []) as ProviderRejection[])
     }
     if (method === 'threads.changed') {
       const { sub, value } = params as Notifications['threads.changed']
-      if (watchSubs.get(machine) === sub) track(machine, value, true)
+      if (watchSubs.get(machine) === sub) track(machine, value)
     }
     // Another computer's sign-in: its browser redirect comes back here (sign-in-callback.ts).
     if (method === 'auth.event' && machine !== 'local') {
