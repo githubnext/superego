@@ -178,15 +178,6 @@ describe("the user's own profiles, in the default data dir under ~", () => {
       await close()
     } finally { vi.unstubAllEnvs() }
   })
-
-  it("loads one taken for a project's (a thread started before they were told apart) as the user's, unallowed", async () => {
-    const ref: ProfileRef = { scope: 'project', name: 'chief', dir: chief() }
-    const loaded = await loadProfile(ref, join(dataDir, 'profiles'), new Allowances(dataDir))
-    expect(loaded).toMatchObject({ scope: 'user', name: 'chief', spec: { prompt: 'Run my day.' } })
-    const { peer, close } = await open(dataDir)
-    expect(await peer.call('profile.ui', ref)).toMatchObject({ entries: ['./ui.ts'] })
-    await close()
-  })
 })
 
 it("lets a project's profile replace the user's, or extend it", async () => {

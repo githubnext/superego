@@ -16,7 +16,7 @@ export function versionMismatch(app: AppConfig, hostname: string, version: unkno
   })
 }
 
-/** How large one upload may be: what a message may carry (see ATTACHMENT_LIMIT in daemon.ts). */
+/** How large one upload may be: what one attachment may weigh, which a message is held to too. */
 export const UPLOAD_LIMIT = 20 * 1024 * 1024
 /** How much one connection may hold in uploads not yet used. */
 const HELD_LIMIT = 4 * UPLOAD_LIMIT

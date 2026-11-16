@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { DATA_VIEWS, defineAction, defineApp, obj, PROTOCOL_VERSION, str, type ActionInfo, type DataViewInfo, type Hello, type Notifications, type RpcPeer, type ThreadInfo, type ViewContent } from '@superego/protocol'
+import { AUTH_REJECTED, DATA_VIEWS, defineAction, defineApp, obj, PROTOCOL_VERSION, str, type ActionInfo, type DataViewInfo, type Hello, type Notifications, type RpcPeer, type ThreadInfo, type ViewContent } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonExtension, type LiveValue, type ScopedValue } from '../src/index.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
@@ -43,6 +43,17 @@ it('serves an extension method as a plain read: called by name, checked, not an 
   // A read: not offered as an action, not in the log.
   expect((await peer.call<ActionInfo[]>('action.list', {})).map((a) => a.id)).not.toContain('notes.folder')
   expect(JSON.stringify(await peer.call('action.log', {}))).not.toContain('notes.folder')
+  await close()
+})
+
+it('blocks a thread only by the status of an extension it has: not one switched off', async () => {
+  const asker = defineDaemonExtension({ name: 'asker', setup(superego) { superego.status(() => ({ kind: 'question', msg: 'Which?' })) } })
+  const { peer, close } = await open([asker])
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
+  const status = async () => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === thread.id)!.status
+  expect(await status()).toMatchObject({ state: 'blocked', msg: 'Which?' })
+  await peer.call('settings.set', { key: 'extensions.asker', value: false })
+  expect(await status()).toEqual({ state: 'idle' })
   await close()
 })
 
@@ -141,10 +152,16 @@ it('tells clients when what it offers changes: an extension switched off, or set
   await close()
 })
 
-it("reserves the core's namespaces: every core method and action is in one, and no extension takes one", async () => {
+it("reserves the core's namespaces: every core method, action, setting and value is in one, and no extension takes one", async () => {
   const { RESERVED } = await import('../src/daemon.ts')
-  const { hello, close } = await open([])
+  const { peer, hello, close } = await open([])
   for (const method of hello.methods) expect(RESERVED, method).toContain(method.split('.')[0])
+  const { value } = await peer.call<{ value: { sections: { id: string; settings: { key: string }[] }[] } }>('settings.watch', {})
+  for (const section of value.sections) {
+    expect(RESERVED, section.id).toContain(section.id.split('.')[0])
+    for (const { key } of section.settings) expect(RESERVED, key).toContain(key.split('.')[0])
+  }
+  for (const key of [AUTH_REJECTED, DATA_VIEWS]) expect(RESERVED, key).toContain(key.split('.')[0])
   await close()
   await expect(open([defineDaemonExtension({ name: 'thread', setup() {} })])).rejects.toThrow(/core's own/)
 })

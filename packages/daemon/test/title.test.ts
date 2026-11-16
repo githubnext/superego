@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { titleOf } from '../src/daemon.ts'
+import { titleOf } from '../src/names.ts'
 
 it('titles a thread with its first sentence, cut at a word when long', () => {
   expect(titleOf('Why does the smoke test flake on fonts? It failed once right after a build.')).toBe('Why does the smoke test flake on fonts?')

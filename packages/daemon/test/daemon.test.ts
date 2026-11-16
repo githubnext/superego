@@ -171,13 +171,13 @@ describe('new threads', () => {
     await expect(peer.call('thread.start', { model: 'nope/nope' })).rejects.toMatchObject({ kind: 'invalid' })
 
     const created = await peer.call<ThreadInfo>('thread.start', { cwd: dir, model: 'faux/faux-1', prompt: 'first words' })
-    expect(created).toMatchObject({ cwd: dir, title: 'first words', ownModel: true, chosen: { model: 'faux/faux-1' } })
+    expect(created).toMatchObject({ cwd: dir, title: 'first words', chosen: { model: 'faux/faux-1' } })
     await until(async () => (await threads(peer))[0]!.status.state === 'done')
     // Changing this machine's default leaves the thread on its own model.
     await peer.call('settings.set', { key: 'agent.model', value: 'faux/faux-1' })
     await peer.call('thread.send', { thread: created.id, text: 'again' })
     await until(async () => (await threads(peer))[0]!.status.state === 'done')
-    expect((await threads(peer))[0]).toMatchObject({ model: 'faux-1', ownModel: true })
+    expect((await threads(peer))[0]).toMatchObject({ model: 'faux-1', chosen: { model: 'faux/faux-1' } })
     await close()
   })
 })
@@ -209,7 +209,12 @@ describe('restart', () => {
     await until(() => restarts === 1)
     expect(successorEnv).toEqual({ ANTHROPIC_API_KEY: 'k' })
     await expect(peer.call('thread.list', {})).rejects.toMatchObject({ kind: 'restarting' })
-    socket.destroy(); server.close(); await daemon.close()
+    // Closing for it, its extensions going aren't announced: a client would ask after them, and be told it's restarting.
+    const told: unknown[] = []
+    peer.on('features.changed', (params) => { told.push(params) })
+    await daemon.close()
+    expect(told).toEqual([])
+    socket.destroy(); server.close()
   })
 })
 

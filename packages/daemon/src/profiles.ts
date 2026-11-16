@@ -17,13 +17,14 @@
 import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
 import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import * as nodeModule from 'node:module'
 import type { Extension } from '@earendil-works/pi-durable'
 import type { DaemonExtension } from './extension.ts'
 import { RpcError, type Json } from '@superego/protocol'
 import { CODE, digestOf, graphOf, versionedImport, versionedUrl, versionOf, within } from './module-graph.ts'
+import { writeAtomic } from './write-atomic.ts'
 
 /** A profile, as its profile.ts default-exports it (`defineProfile`): its agent's model, prompt and extensions, its UI. */
 export type ProfileSpec = {
@@ -261,13 +262,13 @@ export async function hashProfile(dir: string): Promise<string> {
  * Which project profiles may run here: the hash each was allowed at, and of each file it lists from outside its folder
  * then (that's code it runs too). Kept in the daemon's data dir.
  */
-type Allowed = Record<string, string | { hash: string; files: Record<string, string> }>
+type Allowed = Record<string, { hash: string; files: Record<string, string> }>
 export class Allowances {
   #path: string
   #allowed: Allowed | undefined
   constructor(dataDir: string) { this.#path = join(dataDir, 'allowed-profiles.json') }
   async #load() { return this.#allowed ??= JSON.parse(await readFile(this.#path, 'utf8').catch(() => '{}')) as Allowed }
-  async #of(ref: ProfileRef) { const at = (await this.#load())[ref.dir]; return typeof at === 'string' ? { hash: at, files: {} } : at }
+  async #of(ref: ProfileRef) { return (await this.#load())[ref.dir] }
   async allowed(ref: ProfileRef, hash: string) { return ref.scope === 'user' || (await this.#of(ref))?.hash === hash }
   /** Whether `file`, listed from outside the profile's folder, is as it was when the profile was allowed. */
   async allowedFile(ref: ProfileRef, file: string) { return ref.scope === 'user' || (await this.#of(ref))?.files[file] === await hashProfile(file) }
@@ -276,9 +277,8 @@ export class Allowances {
     const all = await this.#load()
     const files = Object.fromEntries(await Promise.all((await outsideFiles(ref)).map(async (file) => [file, await hashProfile(file)])))
     const hash = await hashProfile(ref.dir)
-    all[ref.dir] = Object.keys(files).length ? { hash, files } : hash
-    await mkdir(dirname(this.#path), { recursive: true })
-    await writeFile(this.#path, JSON.stringify(all, null, 2) + '\n', { mode: 0o600 })
+    all[ref.dir] = { hash, files }
+    await writeAtomic(this.#path, JSON.stringify(all, null, 2) + '\n')
     return hash
   }
 }
@@ -361,17 +361,8 @@ async function outsideFiles(ref: ProfileRef) {
   return (spec?.extensions ?? []).map((path) => resolve(ref.dir, path)).filter((file) => !within(ref.dir, file) && existsSync(file))
 }
 
-/**
- * A ref as it should be scoped: one of the user's own profiles, though taken for a project's (as threads started
- * before the user's profiles were told apart from a project's have it), is the user's.
- */
-export function scoped(ref: ProfileRef, userRoot: string): ProfileRef {
-  return ref.scope === 'project' && same(dirname(ref.dir), userRoot) ? { ...ref, scope: 'user' } : ref
-}
-
 /** Load a profile (and what it extends) fresh from disk; refuses a project's profile that isn't allowed as it is now. */
-export async function loadProfile(given: ProfileRef, userRoot: string, allowances: Allowances): Promise<LoadedProfile> {
-  const ref = scoped(given, userRoot)
+export async function loadProfile(ref: ProfileRef, userRoot: string, allowances: Allowances): Promise<LoadedProfile> {
   const hash = await hashProfile(ref.dir)
   if (!(await allowances.allowed(ref, hash))) {
     throw new RpcError('profile_not_allowed', `The profile ${ref.name} in ${dirname(dirname(dirname(ref.dir)))} runs that project's code: allow it first (again, if it changed since)`, {
@@ -440,8 +431,7 @@ function ownerOf(file: string, ref: ProfileRef, userRoot: string) {
 }
 
 /** Whether `dir` is a profile folder at all: under the user's profiles, or a project's `.superego/profiles`. */
-export function isProfileDir(given: ProfileRef, userRoot: string): boolean {
-  const ref = scoped(given, userRoot)
+export function isProfileDir(ref: ProfileRef, userRoot: string): boolean {
   const parent = dirname(ref.dir)
   const ok = ref.scope === 'user' ? resolve(parent) === resolve(userRoot) : parent.endsWith(join('.superego', 'profiles'))
   return ok && ref.name === ref.dir.split(/[\\/]/).at(-1) && existsSync(join(ref.dir, 'profile.ts'))

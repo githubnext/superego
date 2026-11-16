@@ -3,7 +3,8 @@
 import { readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
-const quote = (value: string) => value.replace(/[&"<>]/g, (c) => `&#${c.charCodeAt(0)};`)
+/** A value for an XML-like attribute (`path="…"`), its special characters escaped. */
+export const quote = (value: string) => value.replace(/[&"<>]/g, (c) => `&#${c.charCodeAt(0)};`)
 
 /**
  * Standing instructions: `AGENTS.md` in `agentsDir`, then each one from the filesystem's root down to `cwd`, the

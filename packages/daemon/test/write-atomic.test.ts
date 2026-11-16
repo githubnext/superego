@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { writeAtomic, writeQueue } from '../src/write-atomic.ts'
+import { writeAtomic, writeOnce, writeQueue } from '../src/write-atomic.ts'
 
 let dir: string
 beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'write-atomic-')) })
@@ -40,4 +40,13 @@ it('queues writes in turn: the file ends with the last, and one failing stops no
   await rm(blocked, { recursive: true })
   await toFolder('y')
   expect(await readFile(blocked, 'utf8')).toBe('y')
+})
+
+it('writes a file once: of two at once, the first wins, and neither leaves a temporary file', async () => {
+  const path = join(dir, 'id')
+  const wrote = await Promise.all([writeOnce(path, 'a'), writeOnce(path, 'b')])
+  expect(wrote.filter(Boolean)).toHaveLength(1)
+  expect(await readFile(path, 'utf8')).toBe(wrote[0] ? 'a' : 'b')
+  expect(await writeOnce(path, 'c')).toBe(false)
+  expect(await readdir(dir)).toEqual(['id'])
 })
