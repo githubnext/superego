@@ -561,10 +561,18 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     queueMicrotask(() => { listQueued = false; for (const listener of listListeners) listener() })
   }
 
-  async function mount(id: ConversationId) {
+  /** Threads being mounted: two asking at once get the one, watched once (else each run is told twice). */
+  const mounting = new Map<string, Promise<Mounted>>()
+  async function mount(id: ConversationId): Promise<Mounted> {
     const key = String(id)
-    const existing = mounted.get(key)
+    const existing = mounted.get(key) ?? mounting.get(key)
     if (existing) return existing
+    const next = mountAnew(id).finally(() => mounting.delete(key))
+    mounting.set(key, next)
+    return next
+  }
+  async function mountAnew(id: ConversationId) {
+    const key = String(id)
     const conversation = await harness.conversation(id, context)
     if (!conversation) throw new RpcError('not_found', `No thread ${key}`)
     // A one-entry window is enough to know the newest entry and the live run.

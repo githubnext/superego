@@ -20,13 +20,15 @@ function host() {
   const answers: Record<string, string> = { 2: 'Dates are UTC now.\nAll tests pass.', 3: 'Icons swapped.', 4: 'Found it.' }
   const sent: [string, string][] = []
   const reads = readLog()
+  const busy = new Set<string>()
   const h: ReportsHost = {
+    busy: (t) => busy.has(t.id) || t.status.state === 'working',
     info: async (id) => threads.find((t) => t.id === id),
     answer: async (id) => answers[id],
     send: async (id, text) => { sent.push([id, text]) },
     read: (t) => reads.read(t),
   }
-  return { threads, sent, reads, h, find: (id: string) => threads.find((t) => t.id === id)! }
+  return { threads, sent, reads, busy, h, find: (id: string) => threads.find((t) => t.id === id)! }
 }
 
 beforeEach(() => { vi.useFakeTimers() })
@@ -120,6 +122,86 @@ it("doesn't relay to a parent that goes without reports; drops what's waiting wh
   reports.stop()
   await vi.advanceTimersByTimeAsync(10)
   expect(sent).toEqual([])
+})
+
+it("holds a busy parent's reports until its run ends, then sends what it hasn't read since", async () => {
+  const { h, sent, find, reads, busy } = host()
+  const reports = reporter(h, { quietMs: 10, maxMs: 10 })
+  busy.add('1')
+  await reports.report(find('2'))
+  await reports.report(find('3'))
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(sent).toEqual([])
+  // Read during the run: it has that one already.
+  reads.note('1', find('2'))
+  busy.delete('1')
+  reports.idle('1')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(sent).toEqual([['1', 'From [Icons](thread:3): finished.\n\nIcons swapped.']])
+})
+
+it('sends a busy parent one report after its run, however long, and none for a child read or archived meanwhile', async () => {
+  const { h, sent, find, reads, busy } = host()
+  const reports = reporter(h, { quietMs: 10, maxMs: 10 })
+  busy.add('1')
+  await reports.report(find('2'))
+  await vi.advanceTimersByTimeAsync(15 * 60_000)
+  // Another run's end (a child's) isn't the parent's.
+  reports.idle('2')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(sent).toEqual([])
+  busy.delete('1')
+  reports.idle('1')
+  reports.idle('1')
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(sent).toHaveLength(1)
+  // Its run ending while a batch is looked at, found working as it was: it goes all the same.
+  sent.length = 0
+  busy.add('1')
+  let found!: () => void
+  const info = h.info
+  h.info = async (id) => { const t = await info(id); if (id === '1') { h.info = info; await new Promise<void>((r) => { found = r }) } return { ...t!, status: { state: 'working' } } }
+  await reports.report(find('2'))
+  await vi.advanceTimersByTimeAsync(10)
+  busy.delete('1')
+  reports.idle('1')
+  found()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(sent).toEqual([['1', 'From [Dates](thread:2): finished.\n\nDates are UTC now.\nAll tests pass.']])
+  // Archived while it waited: dropped. Read while it waited, all of it: nothing sent.
+  sent.length = 0
+  busy.add('1')
+  await reports.report(find('3'))
+  await vi.advanceTimersByTimeAsync(10)
+  find('3').archived = true
+  busy.delete('1')
+  reports.idle('1')
+  await vi.advanceTimersByTimeAsync(0)
+  find('2').activeAt = 2
+  busy.add('1')
+  await reports.report(find('2'))
+  await vi.advanceTimersByTimeAsync(10)
+  reads.note('1', find('2'))
+  busy.delete('1')
+  reports.idle('1')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(sent).toEqual([])
+})
+
+it("sends an idle parent's reports as soon as they're batched", async () => {
+  const { h, sent, find } = host()
+  const reports = reporter(h, { quietMs: 10, maxMs: 10 })
+  await reports.report(find('2'))
+  await vi.advanceTimersByTimeAsync(10)
+  expect(sent).toHaveLength(1)
+})
+
+it("says a run that answered the parent's thread_send replied", async () => {
+  const { h, sent, find } = host()
+  const reports = reporter(h, { quietMs: 10, maxMs: 10 })
+  await reports.report(find('3'), { replied: true })
+  await vi.advanceTimersByTimeAsync(10)
+  expect(sent).toEqual([['1', 'From [Icons](thread:3): replied.\n\nIcons swapped.']])
 })
 
 it('keeps a long answer to its first lines', () => {
@@ -221,6 +303,7 @@ it("reports only what the parent asked for: not the user's own conversation in t
     ;({ peer, close } = await open())
     await peer.call('thread.send', { thread: parent.id, text: 'ask it for more' })
     await until(async () => await reports() === 2)
+    expect(await entries(parent.id)).toContain(`From [Dates](thread:${child.id}): replied.`)
     expect(await facts(child.id)).toEqual({ toParent: true })
   } finally {
     await close()
