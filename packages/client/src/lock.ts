@@ -24,7 +24,9 @@ export async function withLock<T>(path: string, fn: () => T | Promise<T>): Promi
     for (;;) {
       try { linkSync(mine, path); break } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
       const pid = holder(path)
-      if (pid !== undefined && !alive(pid)) rmSync(path, { force: true })
+      // Its holder died without letting go: passed over. Unless it's another's by now: the one read let go and ended
+      // since, and the lock was taken again.
+      if (pid !== undefined && !alive(pid) && holder(path) === pid) rmSync(path, { force: true })
       else await new Promise((resolve) => setTimeout(resolve, 100))
     }
   } finally {
