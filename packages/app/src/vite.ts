@@ -11,12 +11,15 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'electron-vite'
 import { writeCommit } from '@superego/daemon/client'
 import { newPackages } from './dev-packages.ts'
+import { buildStamp } from './main-build.ts'
 
 export function superegoConfig(root: string) {
   // The app's command line, when it has one: in a packaged app, out/main/cli.js is what `<id>` runs (see command-line.ts).
   const cli = resolve(root, 'src/cli.ts')
   // With it, what `<id> extension test` runs (out/main/author-test.js): the SDK's type checker and test runner.
   const entries: Record<string, string> = existsSync(cli) ? { cli, 'author-test': authorTest(root) } : {}
+  // Which build of the main process and preload a window runs beside (see main-build.ts).
+  const stamp = buildStamp()
   return defineConfig({
     main: {
       build: {
@@ -25,6 +28,7 @@ export function superegoConfig(root: string) {
         lib: { entry: { main: resolve(root, 'src/main.ts'), daemon: resolve(root, 'src/daemon.ts'), ...entries } },
       },
       plugins: [
+        stamp.main,
         // The commit it's built from, written in: a packaged app has no checkout to ask.
         { name: 'superego-commit', writeBundle: (options) => writeCommit(root, options.dir!) },
         { name: 'superego-native', writeBundle: (options) => copyNative(root, resolve(options.dir!, '../node_modules')) },
@@ -38,12 +42,13 @@ export function superegoConfig(root: string) {
     preload: {
       // Sandboxed preloads must be CommonJS.
       build: { externalizeDeps: false, rolldownOptions: { external: ['electron'] }, lib: { entry: fileURLToPath(new URL('./preload/preload.ts', import.meta.url)), formats: ['cjs'] } },
+      plugins: [stamp.preload],
     },
     renderer: {
       root: resolve(root, 'src/renderer'),
       build: { rolldownOptions: { input: resolve(root, 'src/renderer/index.html') } },
       // In dev, packages linked after the server started resolve without restarting by hand (see dev-packages.ts).
-      plugins: [react(), newPackages(root)],
+      plugins: [react(), newPackages(root), stamp.renderer],
     },
   })
 }

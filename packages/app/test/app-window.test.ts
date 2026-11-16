@@ -22,7 +22,7 @@ function setUp() {
   const window = new AppWindow('w1', browser as never, (window) => appMethods(window, {
     settings, router, notifier,
     service: { state: { phase: 'current', busy: false, deferred: false } },
-    machines: {} as never, windows: {} as never, desktop: {} as never,
+    machines: {} as never, windows: {} as never, desktop: {} as never, build: undefined,
   }))
   return { settings, router, notifier, sent, window }
 }

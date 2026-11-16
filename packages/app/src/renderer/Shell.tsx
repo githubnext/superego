@@ -17,6 +17,7 @@ import { Contained } from './contained.tsx'
 import { RailButton } from './marks.tsx'
 import { forgetWindows, useLocalState } from './local-state.ts'
 import { ServiceNotice } from './ServiceNotice.tsx'
+import { BuildNotice } from './BuildNotice.tsx'
 import { RevokedUiNotice } from './profile-ui-notice.tsx'
 import { LayoutEditor, LayoutNotice, LayoutViews } from './layout-text.tsx'
 import { ViewContextMenu, withContextMenu, withMenuButton } from './view-menu.tsx'
@@ -123,7 +124,7 @@ export function Shell() {
   )
   const sideOpen = spaces.length > 0 && (narrow ? drawer : !sidebar.hidden && tab === 'space')
   // The notices: wide, in the rail above Settings, each a mark that opens to all it says; on a phone, at the drawer's foot.
-  const notices = <><AuthNotice rail={!narrow} /><ServiceNotice rail={!narrow} /><LayoutNotice rail={!narrow} /><RevokedUiNotice rail={!narrow} /></>
+  const notices = <><AuthNotice rail={!narrow} /><ServiceNotice rail={!narrow} /><BuildNotice rail={!narrow} /><LayoutNotice rail={!narrow} /><RevokedUiNotice rail={!narrow} /></>
   // Wide: across the top a title bar (the window's buttons, then where you are, the thread's columns and what the thread
   // says about itself); down the left a rail (what extensions put there, Settings) and the sidebar beside it; the rest holds the
   // thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.

@@ -2,7 +2,7 @@
 // Phase "first" creates a thread and chats; phase "reopen" is a fresh app process that must find it on the same
 // daemon, which outlived the first app; phase "generation" finds a daemon of another protocol generation instead, and
 // restarts it. Run by test/smoke.sh.
-import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron'
+import { app, BrowserWindow, nativeImage, nativeTheme, net } from 'electron'
 
 const phase = process.env.SUPEREGO_SMOKE_PHASE ?? 'first'
 import { mkdirSync as makeDir, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -74,6 +74,36 @@ async function restartOntoNewCode(change, { atRest = false } = {}) {
   const after = await run(`window.superego.call('local', 'hello', { client: 'smoke', version: 2 })`)
   if (after.machine.id !== before.machine.id || !(await run(`window.superego.call('local', 'thread.list', {})`)).length) { await fail('restart lost the machine or its threads'); throw new Error('failed') }
   return after
+}
+/**
+ * The window reloaded onto another build than the main process's (its code served with another build in it, as if out/
+ * had been rebuilt under the app): "App updated", whose Restart relaunches the app and quits (both held here). Served as
+ * built again, a reload finds them alike.
+ */
+async function windowOfAnotherBuild() {
+  if (await run(`Boolean(document.querySelector('.rail-notice--build'))`)) { await fail('app updated, though built together'); throw new Error('failed') }
+  const { build } = JSON.parse(readFileSync(new URL('../out/main/build.json', import.meta.url), 'utf8'))
+  const contents = BrowserWindow.getAllWindows()[0].webContents
+  const renderer = new URL('../out/renderer/', import.meta.url).href
+  contents.session.protocol.handle('file', async (request) => {
+    const response = await net.fetch(request, { bypassCustomProtocolHandlers: true })
+    if (!request.url.startsWith(renderer) || !request.url.endsWith('.js')) return response
+    return new Response((await response.text()).replaceAll(build, 'smoke0builds'), { headers: response.headers })
+  })
+  contents.reload()
+  await openNotice('build', 'app updated')
+  await until(`document.querySelector('.rail-notice--build')?.getAttribute('aria-label') === 'App updated' && document.querySelector('.rail-notice__popup .build-notice')?.textContent.includes('The app was updated: restart to use it.')`, 'app updated, in full')
+  const held = { relaunch: app.relaunch, quit: app.quit }
+  const asked = []
+  app.relaunch = () => asked.push('relaunch')
+  app.quit = () => asked.push('quit')
+  await run(`[...document.querySelectorAll('.rail-notice__popup .build-notice button')].find((b) => b.textContent === 'Restart').click()`)
+  for (let i = 0; i < 50 && asked.length < 2; i++) await new Promise((r) => setTimeout(r, 100))
+  Object.assign(app, held)
+  if (asked.join() !== 'relaunch,quit') { await fail(`restart asked for ${asked.join() || 'nothing'}`); throw new Error('failed') }
+  contents.session.protocol.unhandle('file')
+  contents.reload()
+  await until(`Boolean(document.querySelector('.threads.is-ready')) && !document.querySelector('.rail-notice--build')`, 'built together again, after a reload')
 }
 /** The lightbox's image whole, to scale: inside the stage's padding and above the caption, never larger than it is. */
 const fitted = `(() => {
@@ -1461,6 +1491,7 @@ if (phase === 'first') {
   await restartOntoNewCode(() => rmSync(STRAY, { force: true }), { atRest: true })
   // App settings persisted in the app's own file.
   await until(`document.documentElement.style.getPropertyValue('--superego-mono').includes('Menlo')`, 'font after reopen')
+  await windowOfAnotherBuild()
   console.log('smoke(reopen): ok')
 }
 // Passed: smoke.sh stops the app if it hangs on its way out (see run-app.sh).

@@ -8,6 +8,7 @@ import type { AppHandlers } from '../shared/bridge.ts'
 import type { LayoutView } from '../shared/layout.ts'
 import type { ServiceAction } from '../shared/service.ts'
 import { windowState, type AppWindow, type Windows } from './app-windows.ts'
+import { buildsDiffer } from './build.ts'
 import type { commandLine } from './command-line.ts'
 import type { Desktop } from './desktop.ts'
 import type { LayoutFile } from './layout-file.ts'
@@ -26,10 +27,12 @@ export type EndpointOptions = {
   machines: Pick<Machines, 'update' | 'uiAllowed'>
   windows: Pick<Windows, 'create' | 'ids'>
   desktop: Pick<Desktop, 'state'>
+  /** The main process's build; unknown in a packaged app, whose windows never run another. */
+  build: string | undefined
 }
 
 /** A window's methods on the app's endpoint. */
-export function appMethods(window: AppWindow, { settings, router, service, notifier, machines, windows, desktop }: EndpointOptions): AppHandlers {
+export function appMethods(window: AppWindow, { settings, router, service, notifier, machines, windows, desktop, build }: EndpointOptions): AppHandlers {
   return {
     'settings.watch': serveSettings(settings, (params) => window.sendApp('settings.changed', params), window.subs)['settings.watch'],
     async unwatch({ sub }) { window.subs.get(sub)?.(); window.subs.delete(sub); return null },
@@ -41,6 +44,7 @@ export function appMethods(window: AppWindow, { settings, router, service, notif
     'action.list': async () => router.list(),
     'action.log': async () => router.log(),
     async 'service.get'() { return service.state },
+    async 'app.build'({ build: window }) { return { differs: buildsDiffer(window, build) } },
     async 'app.ready'() {
       window.ready = true
       const what = window.pending
@@ -80,13 +84,15 @@ export function callApp(router: Router<AppActionContext>, window: AppWindow, met
 }
 
 /** The app's own actions, besides the machines' (machines.ts). */
-export function registerAppActions(router: Router<AppActionContext>, { app: appConfig, settings, cli, service, layoutFile, quit }: {
+export function registerAppActions(router: Router<AppActionContext>, { app: appConfig, settings, cli, service, layoutFile, quit, restart }: {
   app: AppConfig
   settings: SettingsRegistry
   cli: ReturnType<typeof commandLine>
   service: Pick<Service, 'state' | 'act'>
   layoutFile: LayoutFile
   quit(): void
+  /** Quit and start again, onto the build on disk now. */
+  restart(): void
 }) {
   router.register(defineAction({
     id: 'app.settings.set', title: 'Change an app setting', runs: 'app', expose: ['ui', 'cli'],
@@ -126,4 +132,5 @@ export function registerAppActions(router: Router<AppActionContext>, { app: appC
     async run() { await layoutFile.read(); const error = await shell.openPath(layoutFile.path); if (error) throw new RpcError('failed', error); return null },
   }))
   router.register(defineAction({ id: 'app.quit', title: `Quit ${appConfig.name}`, runs: 'app', run: quit }))
+  router.register(defineAction({ id: 'app.restart', title: `Restart ${appConfig.name}`, runs: 'app', expose: ['ui'], run: restart }))
 }

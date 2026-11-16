@@ -3,13 +3,14 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { appEnv, defaultDataDir } from '@superego/daemon/client'
 import { installTypes } from '@superego/client/author-types'
-import { createRouter, type AppConfig } from '@superego/protocol'
+import { createRouter, envName, type AppConfig } from '@superego/protocol'
 import { SettingsRegistry } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import { APP, registerAppSettings } from '../shared/app-settings.ts'
 import type { ThreadRef } from '../shared/bridge.ts'
 import { appMethods, callApp, registerAppActions, type AppActionContext } from './app-endpoint.ts'
 import { createWindows, setUpSession } from './app-windows.ts'
+import { readMainBuild } from './build.ts'
 import { registerArtifactScheme, serveArtifacts } from './artifacts.ts'
 import { commandLine } from './command-line.ts'
 import { createDesktop } from './desktop.ts'
@@ -30,6 +31,12 @@ export function startApp(appConfig: AppConfig) {
   // Before it finishes launching, so the Dock never shows it.
   if (headless) app.dock?.hide()
   const dataDir = defaultDataDir(appConfig)
+  // Which build this is, for the windows to compare theirs with; none in a packaged app, whose build never changes.
+  const build = readMainBuild(import.meta.dirname)
+  // Under `pnpm dev` (scripts/dev.ts), restarting is quitting with this code: the dev script builds the main process
+  // again and starts it. Not passed on to the daemon this starts, nor its agents.
+  const devRestart = Number(appEnv(appConfig)('DEV_RESTART')) || undefined
+  delete process.env[envName(appConfig, 'DEV_RESTART')]
 
   // The app's own settings, kept in its data dir; the windows' extensions declare theirs beside them.
   const settings = new SettingsRegistry(new FileSettingsStore(join(dataDir, 'app-settings.json')))
@@ -95,10 +102,10 @@ export function startApp(appConfig: AppConfig) {
 
   const router = createRouter<AppActionContext>()
   machines.registerActions(router)
-  registerAppActions(router, { app: appConfig, settings, cli, service, layoutFile, quit: () => app.quit() })
+  registerAppActions(router, { app: appConfig, settings, cli, service, layoutFile, quit: () => app.quit(), restart: () => restartApp(devRestart) })
   const windows = createWindows({
     app: appConfig, dataDir, headless,
-    methods: (window) => appMethods(window, { settings, router, service, notifier, machines, windows, desktop }),
+    methods: (window) => appMethods(window, { settings, router, service, notifier, machines, windows, desktop, build }),
     changed: () => desktop.refresh(),
     lookedAtChanged: () => notifier.refreshBadge(),
     closed(window) {
@@ -137,6 +144,17 @@ export function startApp(appConfig: AppConfig) {
   app.on('window-all-closed', () => desktop.allClosed())
   // Every window open as it quits comes back at the next launch.
   app.on('before-quit', () => { windows.quitting(); layoutFile.stop(); machines.stop() })
+}
+
+/**
+ * Quit (the windows open now come back) and start again, onto the build on disk now. Under `pnpm dev`, by
+ * quitting with `devRestart`: relaunched here, the app would run the main process it was built with and lose the dev
+ * server, so the dev script builds it again and starts it.
+ */
+function restartApp(devRestart: number | undefined) {
+  if (devRestart) app.once('will-quit', (event) => { event.preventDefault(); app.exit(devRestart) })
+  else app.relaunch()
+  app.quit()
 }
 
 /** `--superego-open=<machine>/<thread>`, as `superego` passes it. */

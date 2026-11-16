@@ -91,6 +91,11 @@ export type AppHandlers = {
   'service.get'(): Promise<ServiceState>
   /** The page is listening for app events: answer with what it was asked to show before it was. */
   'app.ready'(): Promise<{ open?: ThreadRef; settings?: boolean }>
+  /**
+   * Whether the window's build (the hash of the main process's sources as the window was loaded) differs from the one
+   * the main process runs: then the window calls what the main process may not know, until the app restarts.
+   */
+  'app.build'(params: { build?: string }): Promise<{ differs: boolean }>
   /** The profile UIs from other machines allowed to run in this computer's windows (see profile-ui.ts). */
   'profileUi.allowed'(): Promise<AllowedUi[]>
   /** The ones put off ("Not now"), for the sources they were then: the window doesn't ask about those again. */

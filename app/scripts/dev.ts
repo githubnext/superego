@@ -3,6 +3,9 @@
 //
 // `--home <dir>` runs it on another data dir: its own daemon, settings, keys, machines and window state, beside the one
 // in ~/.superego (the same as SUPEREGO_HOME). `--fresh` does so in a new empty dir, to see the app as it comes.
+//
+// The window's "Restart" (once its code moved on without the main process's: see @superego/app's main-build.ts) quits
+// the app with RESTART: electron-vite runs again, building the main process and preload anew.
 import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -36,8 +39,17 @@ if (fresh >= 0) {
 }
 if (home) console.log(`${app.name} data in ${home}`)
 
-const child = spawn('electron-vite', ['dev', ...args], {
-  cwd: root, stdio: 'inherit',
-  env: { ...process.env, ELECTRON_EXEC_PATH: devApp(root, app), ...(home ? { [envName(app, 'HOME')]: home } : {}) },
-})
-child.on('exit', (code) => process.exit(code ?? 0))
+const RESTART = 75
+const env = {
+  ...process.env, ELECTRON_EXEC_PATH: devApp(root, app), [envName(app, 'DEV_RESTART')]: String(RESTART),
+  ...(home ? { [envName(app, 'HOME')]: home } : {}),
+}
+function start() {
+  const child = spawn('electron-vite', ['dev', ...args], { cwd: root, stdio: 'inherit', env })
+  child.on('exit', (code) => {
+    if (code !== RESTART) process.exit(code ?? 0)
+    console.log(`${app.name}: restarting`)
+    start()
+  })
+}
+start()
