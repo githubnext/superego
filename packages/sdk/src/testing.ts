@@ -8,5 +8,5 @@ export { testDaemon, type TestDaemon, type TestDaemonOptions, type Watched } fro
 export { callTool, callTools, say, type Turn } from './testing/model.ts'
 export { isRunning } from './testing/process.ts'
 export {
-  daemonMachine, fakeMachine, mountUi, testThread, type FakeMachineOptions, type MountOptions, type Rendered, type RenderWhat, type TestMachine, type TestWindow,
+  daemonMachine, fakeMachine, mountUi, testThread, type FakeMachineOptions, type MountOptions, type Rendered, type RenderWhat, type TestMachine, type TestWhere, type TestWindow,
 } from './testing/window.tsx'

@@ -273,6 +273,11 @@ it('queues builds and shows the thread its own', async () => {
   window does, for `thread`: an id the machine has, or a `ThreadInfo` as it is (`testThread({ cwd, profile, without })`);
   without one, the selected thread, the machine's first, or a made-up one of `mountUi`'s profile. A kind or slot that
   thread wouldn't see (a profile's in another profile's thread, one it goes `without`) throws, saying what it has.
+- **Tool rows and links**: `render({ tool: { name, arguments, state, result }, thread })` draws a call's row as the
+  transcript does, from what your `superego.tool` said; `toolRow(name, { thread })` is that description,
+  `describeRun(['read', 'mcp__x__y'], { thread })` a run's folded line and `mainKind` the tool it's shown as.
+  `linkHandler(href, 'link' | 'code', { thread })` is what claims a link there (no thread: outside any, a settings page),
+  and `urlKind({ thread })` the pane kind web pages open in.
 
   <!-- check: ui; import { expect } from 'vitest'; import { testThread, type TestWindow } from 'superego/testing'; declare const window: TestWindow; declare const thread: ThreadInfo -->
   ```ts

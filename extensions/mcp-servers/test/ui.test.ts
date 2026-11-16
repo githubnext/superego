@@ -3,20 +3,16 @@
 // Settings (its state, Sign in or Set key, Allow with the whole command line).
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
-import { createRouter, defineAction, defineApp, type ThreadInfo } from '@superego/protocol'
-// The registry isn't part of the UI API (the window builds it), so it's taken from where it's made.
-import type { ToolRowCall } from '../../../packages/app/src/renderer/extension-api.ts'
-import { createRegistry, seenIn } from '../../../packages/app/src/renderer/registry.tsx'
-import { toolRow } from '../../../packages/app/src/renderer/lookups.ts'
-import { DescribedCall, describeRun, registerToolRows } from '../../../packages/app/src/renderer/tool-rows.tsx'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import type { ToolRowCall } from '@superego/app/ui'
+import { createRouter, defineAction, type ThreadInfo } from '@superego/protocol'
+import { mountUi, type TestWindow } from '@superego/sdk/testing'
 import mcpServers, { Chip, NoticeFor } from '../src/ui.tsx'
 import { ServerRow } from '../src/settings.tsx'
 import { CATALOG, fromCatalog } from '../src/catalog.ts'
 import { ago, authMenu, checkText, commandLine, configOf, emptyForm, formOf, nameFrom, secretLabel, secretPlaceholder, signInDetails, signInText, splitCommandLine, stateText } from '../src/describe.ts'
 import { ADD_PARAMS, splitToolName, type ServerInfo, type ThreadServers } from '../src/shared.ts'
 
-const app = defineApp({ name: 'superego', id: 'superego' })
 const machine = { id: 'local', label: 'This Mac', state: 'connected' } as never
 const servers: ThreadServers = {
   servers: [
@@ -166,14 +162,22 @@ describe('the Add and Edit form', () => {
 })
 
 describe('what it draws', () => {
-  const registry = createRegistry(app, [mcpServers], registerToolRows)
+  let ui: TestWindow
+  beforeAll(async () => { ui = await mountUi({ extensions: [mcpServers] }) })
+  afterAll(async () => { await ui.unmount() })
   const where = { machine: 'local', thread: thread(servers) }
-  const call = (name: string, args: Record<string, unknown>, more: Partial<ToolRowCall> = {}): ToolRowCall =>
-    ({ machine, thread: where.thread, call: { id: 'c', name, arguments: args }, state: 'done', ...more })
-  const row = (c: ToolRowCall) => html(createElement(DescribedCall, { row: toolRow(registry, c.call.name, where), call: c }))
+  type Call = { name: string; arguments: Record<string, unknown> } & Partial<Pick<ToolRowCall, 'state' | 'result'>>
+  const call = (name: string, args: Record<string, unknown>, more: Partial<Call> = {}): Call => ({ name, arguments: args, ...more })
+  /** A call's row as the transcript draws it, as HTML. */
+  const row = async (c: Call) => {
+    const drawn = await ui.render({ tool: c, thread: where.thread })
+    const markup = drawn.container.innerHTML
+    await drawn.unmount()
+    return markup
+  }
 
-  it("draws an MCP call: the plug, the verb, the server and tool, what it's about; open, its arguments, result and images", () => {
-    const done = row(call('mcp__linear__create_issue', { title: 'Fix login', body: 'long\ntext' }, {
+  it("draws an MCP call: the plug, the verb, the server and tool, what it's about; open, its arguments, result and images", async () => {
+    const done = await row(call('mcp__linear__create_issue', { title: 'Fix login', body: 'long\ntext' }, {
       result: { text: 'Created ENG-1', isError: false, details: { server: 'linear', tool: 'create_issue', title: 'Create issue', serverTitle: 'Linear' }, images: [{ data: 'AAAA', mimeType: 'image/png' }] },
     }))
     expect(done).toContain('>Called<')
@@ -183,39 +187,40 @@ describe('what it draws', () => {
     expect(done).toContain('Created ENG-1')
     expect(done).toContain('src="data:image/png;base64,AAAA"')
     // Before its result, by its name, the server's title from the thread.
-    const running = row(call('mcp__linear__list_issues', {}, { state: 'working' }))
+    const running = await row(call('mcp__linear__list_issues', {}, { state: 'working' }))
     expect(running).toContain('>Calling<')
     expect(running).toContain('Linear · list_issues')
     expect(running).not.toContain('Arguments')
-    const failed = row(call('mcp__github__get_me', {}, { state: 'error', result: { text: 'github needs you to sign in again', isError: true } }))
+    const failed = await row(call('mcp__github__get_me', {}, { state: 'error', result: { text: 'github needs you to sign in again', isError: true } }))
     expect(failed).toContain('>Failed<')
     expect(failed).toContain('github · get_me')
     expect(failed).toContain('github needs you to sign in again')
-    const cut = row(call('mcp__linear__create_issue', {}, { state: 'error', result: { text: 'linear.create_issue was running when Superego stopped.', isError: true, details: { server: 'linear', tool: 'create_issue', interrupted: true } } }))
+    const cut = await row(call('mcp__linear__create_issue', {}, { state: 'error', result: { text: 'linear.create_issue was running when Superego stopped.', isError: true, details: { server: 'linear', tool: 'create_issue', interrupted: true } } }))
     expect(cut).toContain('Interrupted: may have run')
     expect(cut).not.toContain('>Failed<')
     // Only by its details, whatever its text says.
-    expect(row(call('mcp__linear__create_issue', {}, { state: 'error', result: { text: 'linear.create_issue was running when Superego stopped.', isError: true } }))).toContain('>Failed<')
+    expect(await row(call('mcp__linear__create_issue', {}, { state: 'error', result: { text: 'linear.create_issue was running when Superego stopped.', isError: true } }))).toContain('>Failed<')
     // A run of them, in a line.
-    const block = (name: string) => ({ type: 'toolCall' as const, id: name, name, arguments: {} })
-    expect(describeRun([block('mcp__linear__a'), block('mcp__linear__b'), block('read')], (name) => toolRow(registry, name, where))).toEqual(['Called 2 MCP tools and read a file'])
+    expect(ui.describeRun(['mcp__linear__a', 'mcp__linear__b', 'read'], where)).toEqual(['Called 2 MCP tools and read a file'])
   })
 
-  it('draws a tool search: what it looked for, and what it loaded', () => {
-    const searched = row(call('tool_search', { query: 'issue' }, { result: { text: 'Loaded 2 tools.', isError: false, details: { loaded: ['mcp__linear__create_issue', 'mcp__linear__list_issues'] } } }))
+  it('draws a tool search: what it looked for, and what it loaded', async () => {
+    const searched = await row(call('tool_search', { query: 'issue' }, { result: { text: 'Loaded 2 tools.', isError: false, details: { loaded: ['mcp__linear__create_issue', 'mcp__linear__list_issues'] } } }))
     expect(searched).toContain('Looked for tools')
     expect(searched).toContain('“issue”')
     expect(searched).toContain('2 loaded')
     expect(searched).toContain('Linear · <code>create_issue</code>')
-    expect(row(call('tool_search', { query: 'zzz' }, { result: { text: 'No matching tools found.', isError: false, details: { loaded: [] } } }))).toContain('none found')
+    expect(await row(call('tool_search', { query: 'zzz' }, { result: { text: 'No matching tools found.', isError: false, details: { loaded: [] } } }))).toContain('none found')
   })
 
-  it("shows a thread's servers in its header and details, and why any were left out", () => {
+  it("shows a thread's servers in its header and details, and why any were left out", async () => {
     const chip = html(createElement(Chip, { place: 'header', machine, thread: where.thread }))
     expect(chip).toContain('2 servers')
     expect(chip).toContain('is-troubled')
     expect(html(createElement(Chip, { place: 'header', machine, thread: thread() }))).toBe('')
-    const details = seenIn(registry.slots['details.section'], where).map(({ component }) => html(createElement(component, { machine, thread: where.thread }))).join('')
+    const drawn = await ui.render({ slot: 'details.section', thread: where.thread })
+    const details = drawn.container.innerHTML
+    await drawn.unmount()
     expect(details).toContain('<h5>MCP servers</h5>')
     expect(details).toContain('Linear')
     expect(details).toContain('Running · 23 tools')
@@ -223,7 +228,7 @@ describe('what it draws', () => {
     expect(details).toContain('Set its key')
     expect(details).toContain('Left out: no such server here')
     // None for a thread that goes without the extension.
-    expect(seenIn(registry.slots['details.section'], { machine: 'local', thread: { ...where.thread, without: ['mcp-servers'] } })).toEqual([])
+    await expect(ui.render({ slot: 'details.section', thread: { ...where.thread, without: ['mcp-servers'] } })).rejects.toThrow(/Nothing fills details.section/)
   })
 
   it('asks the user to sign in, or to set a key', () => {

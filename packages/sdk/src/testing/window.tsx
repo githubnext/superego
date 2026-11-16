@@ -9,10 +9,11 @@ import {
 } from '@superego/protocol'
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '@superego/app/shared'
 import {
-  bound, LAYOUT, layoutOf, normalize, PaneBody, paneKind, placedFor, PlacedViews, profileUisLoaded, RegistryProvider, resetProfileUi, scopedViews, seenIn, setLocalState, ShellStateProvider, Slot,
-  ViewScopeProvider, useAllThreads, useMachines, useSelection, windowRegistry, type BehaviourSlot, type Layout, type Place, type Registry, type SlotProps,
-  type UiExtension, type ViewProps,
+  bound, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, PaneBody, paneKind, placedFor, PlacedViews, profileUisLoaded, RegistryProvider, resetProfileUi,
+  scopedViews, seenIn, setLocalState, ShellStateProvider, Slot, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, windowRegistry,
+  type BehaviourSlot, type Layout, type Place, type Registry, type SlotProps, type UiExtension, type ViewProps,
 } from '@superego/app/internals'
+import type { LinkHandler, LinkWhere, ToolRow, ToolRowCall } from '@superego/app/ui'
 import type { TestDaemon } from './daemon.ts'
 import { useDom } from './dom.ts'
 
@@ -220,7 +221,12 @@ export type RenderWhat<S extends BehaviourSlot = BehaviourSlot> = { machine?: st
   | { pane: { kind: string; params?: Json; title?: string; id?: string } }
   /** Everything in a slot, as the window draws it, with the props it gives (a thread's slots: its machine and thread; the editor's: `path`, `open`). */
   | { slot: S; props?: Partial<SlotProps[S]> }
+  /** A tool call's row in the transcript, as the extension that describes the tool says (`superego.tool`): `state` done unless given. */
+  | { tool: { name: string; arguments?: Record<string, unknown>; id?: string } & Partial<Pick<ToolRowCall, 'state' | 'result' | 'live'>> }
 )
+
+/** Where in the window a lookup is for: a machine (the first, unless given) and a thread, as `render` takes them. */
+export type TestWhere = { machine?: string; thread?: string | ThreadInfo }
 
 /** What `render` drew, to look in and click. */
 export type Rendered = {
@@ -252,6 +258,23 @@ export type TestWindow = {
   render<S extends BehaviourSlot>(what: RenderWhat<S>): Promise<Rendered>
   /** The views the layout puts in `place` (a thread's: give the thread), as ids. */
   placed(place: Place, where?: { machine?: string; thread: string }): string[]
+  /**
+   * How the transcript reads calls to the tool `name` in a thread (`where`: as `render`'s), as the extension that
+   * describes them said (`superego.tool`, a prefix's like `mcp__*`); `{}`, the core's defaults. Draw one with
+   * `render({ tool })`.
+   */
+  toolRow(name: string, where?: TestWhere): ToolRow
+  /** A run of calls to these tools, as its folded line says it ("Read 2 files and ran a command"), in parts. */
+  describeRun(tools: string[], where?: TestWhere): string[]
+  /** Which tool a run of calls to these is shown as (its icon): the weightiest. */
+  mainKind(tools: string[], where?: TestWhere): string
+  /**
+   * What claims `href` (a link's, or inline code's text) in a thread's messages (`where.thread`), or outside any thread
+   * without one (a settings page): its handler, if one claims it.
+   */
+  linkHandler(href: string, kind: 'link' | 'code', where?: TestWhere): LinkHandler | undefined
+  /** The pane kind web pages open in, in a thread (`where`: as `render`'s), if any shows them. */
+  urlKind(where?: TestWhere): string | undefined
   /** Show a thread (or none), as clicking it in the sidebar would. */
   select(selection: { machine?: string; thread: string } | undefined): Promise<void>
   /** Run an action through the window's router, as code in it would. */
@@ -401,7 +424,12 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       const given = what.thread
       if (typeof given === 'string' && !threadOf(at, given)) throw new Error(`No thread ${given} on ${at}: give it to the machine (threads), or give a ThreadInfo`)
       let node: ReactNode
-      if ('pane' in what || ('slot' in what && what.slot !== 'overlay' && what.slot !== 'onboarding')) {
+      if ('tool' in what) {
+        const { name, arguments: args = {}, id = 'call-1', state = 'done', ...rest } = what.tool
+        const thread = given ?? defaultThread(at)
+        node = <InThread machine={at} thread={thread} draw={(machine, info) =>
+          <DescribedCall row={toolRow(registry, name, { machine: at, thread: info })} call={{ machine, thread: info, call: { id, name, arguments: args }, state, ...rest }} />} />
+      } else if ('pane' in what || ('slot' in what && what.slot !== 'overlay' && what.slot !== 'onboarding')) {
         // A pane or a thread's slot is always some thread's.
         const thread = given ?? defaultThread(at)
         const info = typeof thread === 'string' ? threadOf(at, thread)! : thread
@@ -457,6 +485,14 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       const scope = thread ? { machine: machineOf(where!.machine), thread } : undefined
       return placedFor(registry, layoutOf(appValues[LAYOUT]), { narrow, where: scope })[place]
     },
+    toolRow: (name, where) => toolRow(registry, name, whereOf(where)),
+    describeRun: (tools, where) => describeRun(tools.map(called), (name) => toolRow(registry, name, whereOf(where))),
+    mainKind: (tools, where) => mainKind(tools.map(called), (name) => toolRow(registry, name, whereOf(where))),
+    linkHandler(href, kind, where = {}) {
+      const at: LinkWhere = where.thread === undefined ? {} : whereOf(where)
+      return linkHandler(registry, href, kind, at)
+    },
+    urlKind: (where) => urlKind(registry, whereOf(where)),
     async select(selection) {
       await inAct(async () => { shell!.select(selection && { machine: machineOf(selection.machine), thread: selection.thread }) })
       await settle()
@@ -508,6 +544,16 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     },
   }
   const threadOf = (machine: string, id: string) => shell.threads[machine]?.find((t) => t.id === id)
+  /** A lookup's machine and thread, as `render` picks them. */
+  const whereOf = (where: TestWhere = {}) => {
+    const machine = machineOf(where.machine)
+    const thread = where.thread ?? defaultThread(machine)
+    const info = typeof thread === 'string' ? threadOf(machine, thread) : thread
+    if (!info) throw new Error(`No thread ${String(thread)} on ${machine}: give it to the machine (threads), or give a ThreadInfo`)
+    return { machine, thread: info }
+  }
+  /** A call to the tool `name`, as a run's blocks have it. */
+  const called = (name: string) => ({ type: 'toolCall' as const, id: name, name, arguments: {} })
   // The thread a pane or slot is drawn for when none is given: the selected one, the machine's first, else one made up.
   const defaultThread = (machine: string): string | ThreadInfo => {
     if (shell.selection?.machine === machine && threadOf(machine, shell.selection.thread)) return shell.selection.thread

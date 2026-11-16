@@ -1,10 +1,7 @@
 // The UI half's thread tool rows and `thread:` links, in a window: what a run of them says, how each row reads, and
 // where a thread link is claimed and what following one does.
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ToolRowCall } from '@superego/app/ui'
-import { DescribedCall, describeRun, linkHandler, mainKind, toolRow } from '@superego/app/internals'
 import { mountUi, testThread, type TestWindow } from '@superego/sdk/testing'
 import threads from '../src/ui.tsx'
 
@@ -14,22 +11,21 @@ let ui: TestWindow
 beforeEach(async () => { ui = await mountUi({ extensions: [threads] }) })
 afterEach(async () => { await ui.unmount() })
 
-const rowOf = (name: string) => toolRow(ui.registry, name, where)
-const tool = (name: string) => ({ type: 'toolCall' as const, id: name, name, arguments: {} })
+const rowOf = (name: string) => ui.toolRow(name, { thread })
 const call = (name: string, args: Record<string, unknown>, more: Partial<ToolRowCall> = {}): ToolRowCall =>
   ({ machine: { id: 'local', label: 'This Mac', state: 'connected' }, thread, call: { id: 'c', name, arguments: args }, state: 'done', ...more })
 /** The thread a row names, by its `ThreadRef`'s id. */
 const named = (name: string, c: ToolRowCall) => (rowOf(name).subject?.(c) as { props?: { id?: string } } | undefined)?.props?.id
 
-it('says what a run of thread tools did, and reads each row', () => {
-  expect(describeRun([tool('thread_start'), tool('thread_read'), tool('thread_read')], rowOf)).toEqual(['Started a thread and read 2 threads'])
-  expect(mainKind([tool('thread_list'), tool('read')], rowOf)).toBe('read')
-  expect(renderToStaticMarkup(createElement(DescribedCall, { row: rowOf('thread_list'), call: call('thread_list', {}) }))).not.toContain('row__arg')
-  const failed = renderToStaticMarkup(createElement(DescribedCall, { row: rowOf('thread_start'), call: call('thread_start', { title: 'Dates' }, { state: 'error', result: { text: 'no', isError: true } }) }))
-  expect(failed).toContain('Couldn’t start a thread')
-  expect(failed).toContain('>Dates<')
+it('says what a run of thread tools did, and reads each row', async () => {
+  expect(ui.describeRun(['thread_start', 'thread_read', 'thread_read'], { thread })).toEqual(['Started a thread and read 2 threads'])
+  expect(ui.mainKind(['thread_list', 'read'], { thread })).toBe('read')
+  expect((await ui.render({ tool: { name: 'thread_list' }, thread })).find('.row__arg')).toBeNull()
+  const failed = await ui.render({ tool: { name: 'thread_start', arguments: { title: 'Dates' }, state: 'error', result: { text: 'no', isError: true } }, thread })
+  expect(failed.text()).toContain('Couldn’t start a thread')
+  expect(failed.container.innerHTML).toContain('>Dates<')
   // Its own, not another's: a thread that goes without the tools (Ego) still shows them.
-  expect(toolRow(ui.registry, 'thread_read', { machine: 'local', thread: { ...thread, without: ['thread-tools'] } }).verbs?.[0]).toBe('Read')
+  expect(ui.toolRow('thread_read', { thread: { ...thread, without: ['thread-tools'] } }).verbs?.[0]).toBe('Read')
 })
 
 it('names the thread each call is about, and leaves out what only repeats it', () => {
@@ -52,9 +48,9 @@ it('names the thread each call is about, and leaves out what only repeats it', (
 })
 
 it('claims thread: links in a thread, and opens one there, or beside it', async () => {
-  expect(linkHandler(ui.registry, 'thread:42', 'link', {})).toBeUndefined()
-  expect(linkHandler(ui.registry, 'thread:42', 'code', where)).toBeUndefined()
-  const handler = linkHandler(ui.registry, 'thread:42', 'link', where)!
+  expect(ui.linkHandler('thread:42', 'link')).toBeUndefined()
+  expect(ui.linkHandler('thread:42', 'code', where)).toBeUndefined()
+  const handler = ui.linkHandler('thread:42', 'link', where)!
   const dispatch = vi.spyOn(ui.registry.router, 'dispatch').mockResolvedValue(undefined as never)
   await handler.open('thread:42', { ...where, beside: false, kind: 'link' })
   expect(dispatch).toHaveBeenLastCalledWith('thread.select', { machine: 'local', thread: '42' }, expect.objectContaining({ source: 'thread link' }))
