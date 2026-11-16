@@ -471,7 +471,8 @@ if (phase === 'first') {
   writeFileSync(layoutFile, '{ "place": { "threads.detail": "beside" } }')
   await until(`document.querySelector('.layout-note:not(.is-problem)')?.textContent.includes('not here now, kept for when they\\'re back: threads.detail') && !document.querySelector('.rail-notice--layout')`, 'a view not here applied, and noted')
   writeFileSync(layoutFile, '{}')
-  await until(`${layoutNow()}.then((l) => l === '{}') && !document.querySelector('.app__beside') && !document.querySelector('.rail-notice--layout')`, 'the layout reset from the file')
+  // The whole check inside the promise: one before `&&` is truthy as it is, and wouldn't be waited for.
+  await until(`${layoutNow()}.then((l) => l === '{}' && !document.querySelector('.app__beside') && !document.querySelector('.rail-notice--layout'))`, 'the layout reset from the file')
   await run(`window.superego.call('local', 'thread.list', {}).then((list) => Promise.all(list.flatMap((t) => (t.panes ?? []).filter((p) => p.params?.path === ${JSON.stringify(layoutFile)}).map((p) => window.superego.call('local', 'pane.close', { thread: t.id, pane: p.id })))))`)
   await until(`!document.querySelector('.layout-note')`, 'layout.json closed')
   await run(`window.superego.call('app', 'app.settings.set', { key: 'app.sort', value: 'created' })`)
