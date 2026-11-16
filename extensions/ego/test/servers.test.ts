@@ -16,7 +16,7 @@ import { CATALOG } from '@superego/mcp-servers/catalog'
 import { mcpServersExtension } from '@superego/mcp-servers/daemon'
 import { answersOutside, ego as egoExtension } from '../src/daemon.ts'
 import { OUTSIDE } from '../src/shared.ts'
-import { metaExtension } from '../src/tools.ts'
+import { egoTools } from '../src/tools.ts'
 import { configFrom, serversTool, userStep } from '../src/servers-tool.ts'
 
 type Tool = { name: string; parameters: { properties: Record<string, { description?: string }> }; execute(params: unknown, api: unknown, context?: unknown): Promise<{ output: { text: string }[] }> }
@@ -152,7 +152,7 @@ describe("Ego's read tool", () => {
     await writeFile(join(dir, 'auth.json'), '{"anthropic":"sk-x"}')
     await writeFile(join(dir, 'mcp-servers.json'), '{"servers":{}}')
     const at = machine()
-    const { tools = [] } = metaExtension({ dir, dispatch: at.dispatch, actions: () => [], snapshot: at.snapshot, threads: { info: async () => undefined, list: async () => [], start: async () => { throw new Error('no') }, answer: async () => undefined } })
+    const { tools = [] } = egoTools({ dir, dispatch: at.dispatch, actions: () => [], snapshot: at.snapshot, threads: { info: async () => undefined, list: async () => [], start: async () => { throw new Error('no') }, answer: async () => undefined } })
     const read = (tools as unknown as Tool[]).find((t) => t.name === 'read')!
     const api = { conversationId: 1, cwd: dir, env: process.env }
     for (const path of ['mcp-auth.json', './auth.json', join(dir, 'sub', '..', 'mcp-auth.json'), 'mcp-servers.json']) {
@@ -199,7 +199,7 @@ describe('superego_mcp_servers in Ego, against a daemon', () => {
     const server = await listen(daemon, join(dir, 's.sock'))
     const { peer, socket } = await connectSocket(join(dir, 's.sock'))
     await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
-    const egoOf = async (p: RpcPeer) => (await p.call<{ value: ThreadInfo | null }>('value.watch', { key: 'ego.thread' })).value
+    const egoOf = async (p: RpcPeer) => (await p.call<ThreadInfo[]>('thread.list', { hidden: true })).find((t) => t.owner === 'ego') ?? null
     const results = async (id: string) => (await peer.call<{ value: ConversationView }>('thread.watch', { id })).value.entries
       .filter((e) => (e.model?.[0] as { role?: string } | undefined)?.role === 'toolResult').map((e) => e.model![0] as { isError: boolean; content: { text: string }[] })
     const answered = (count: number) => until(async () => {
@@ -248,7 +248,7 @@ describe('superego_mcp_servers in Ego, against a daemon', () => {
     const { peer, socket } = await connectSocket(join(dir, 's.sock'))
     await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
     const act = (id: string, params: Json) => peer.call<{ server: ServerInfo }>('action.run', { id, params })
-    const egoOf = async () => (await peer.call<{ value: ThreadInfo | null }>('value.watch', { key: 'ego.thread' })).value
+    const egoOf = async () => (await peer.call<ThreadInfo[]>('thread.list', { hidden: true })).find((t) => t.owner === 'ego') ?? null
     const results = async (id: string) => (await peer.call<{ value: ConversationView }>('thread.watch', { id })).value.entries
       .filter((e) => (e.model?.[0] as { role?: string } | undefined)?.role === 'toolResult').map((e) => e.model![0] as { isError: boolean; content: { text: string }[] })
     const answered = (count: number) => until(async () => {

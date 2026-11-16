@@ -116,7 +116,7 @@ machines.watch → snapshot + machines.changed     relay.call {machine, method, 
 machines.reconnect {id}
 ```
 
-Reads and streams (`*.list`, `*.watch`) stay plain methods. Everything that changes something is an action (§3a). The protocol version is a generation and stays 1; peers negotiate by `features`, not by version. The method table only grows: `RELEASED` (packages/protocol/src/released.ts) names what generation 1 released, `released-actions.json` beside it the params of its actions, and a test fails when a daemon no longer answers one or an action's params break a caller.
+Reads and streams (`*.list`, `*.watch`) stay plain methods. Everything that changes something is an action (§3a). The protocol version is a generation (now 2); peers negotiate by `features`, not by version. Within a generation the method table only grows: `RELEASED` (packages/protocol/src/released.ts) names what the generation released, `released-actions.json` beside it the params of its actions, and a test fails when a daemon no longer answers one or an action's params break a caller.
 
 ### Entities
 

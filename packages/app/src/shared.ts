@@ -1,7 +1,7 @@
 // The contract between the main process and the renderer, exposed as `window.superego` by the preload.
 import type { ConnectionState, MachineConfig, MachineEntry as Base, MachineId } from '@superego/client/shared'
-import type { SettingSpec, SettingsStore } from '@superego/settings'
-import { firstLine, lastParagraph, MIGRATIONS, shorten, waitingForSignIn, type Channel, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
+import type { SettingSpec } from '@superego/settings'
+import { firstLine, lastParagraph, shorten, waitingForSignIn, type Channel, type ProviderRejection, type ThreadInfo, type VersionDrift } from '@superego/protocol'
 
 export type { ConnectionState, MachineConfig, MachineId }
 
@@ -89,15 +89,6 @@ export function signInNotice(machine: MachineId, rejection: Pick<ProviderRejecti
 export const NOTIFY = 'notifications.enabled'
 
 /**
- * The app's settings kept under another key now: a value stored under the old one is read as the new one's (and saved
- * so), by the desktop app and a browser alike.
- */
-export const APP_MOVED: Record<string, string> = MIGRATIONS['app-settings'].renames
-
-/** Actions known by another id now: a shortcut set for the old one (in `app.keys`) is the new one's. */
-export const ACTIONS_MOVED: Record<string, string> = MIGRATIONS['action-keys'].renames
-
-/**
  * Where the window's views go (see renderer/layout.ts): edited as text (layout.json, see main/layout-file.ts; in a
  * browser, in the window) and from the views' own menus. In Settings, the way to both and back to the defaults, which
  * no layout can take away.
@@ -115,45 +106,6 @@ export type PaneLayout = 'scroll' | 'stack'
 export const PANE_LAYOUT_SETTING: SettingSpec = {
   key: PANE_LAYOUT, title: 'Panes', default: 'scroll', description: 'Stacked, they share one column, as tabs.',
   type: { type: 'choice', options: [{ value: 'scroll', label: 'Scroll' }, { value: 'stack', label: 'Stack' }] },
-}
-
-/**
- * `store` with the placement settings there were before views were placed by `app.layout` read into it (and saved so,
- * with the next change): `threads.details` on is the threads' details in the aside. A migration of stored settings
- * (MIGRATIONS' `layout`), not of the wire.
- */
-export function withMovedLayout(store: SettingsStore): SettingsStore {
-  return {
-    load() {
-      const values = store.load()
-      if (!('threads.details' in values)) return values
-      const { 'threads.details': details, ...rest } = values
-      const layout = rest['app.layout']
-      const kept = layout && typeof layout === 'object' && !Array.isArray(layout) ? layout : {}
-      const place = kept.place && typeof kept.place === 'object' && !Array.isArray(kept.place) ? kept.place : {}
-      if (details !== true || 'threads.details' in place) return rest
-      return { ...rest, 'app.layout': { ...kept, place: { ...place, 'threads.details': 'aside' } } }
-    },
-    save: (values) => store.save(values),
-  }
-}
-
-/** `store` with what `app.keys` holds for an action's old id read as its new one's (and saved so). */
-export function withMovedActions(store: SettingsStore): SettingsStore {
-  return {
-    load() {
-      const values = store.load()
-      const keys = values['app.keys']
-      if (!keys || typeof keys !== 'object' || Array.isArray(keys)) return values
-      const moved = { ...keys }
-      for (const [old, now] of Object.entries(ACTIONS_MOVED)) {
-        if (old in moved && !(now in moved)) moved[now] = moved[old]!
-        delete moved[old]
-      }
-      return { ...values, 'app.keys': moved }
-    },
-    save: (values) => store.save(values),
-  }
 }
 
 /** A notification from a machine's daemon, `$connection` when a link's state changes, or `$machines` with the whole list. */

@@ -14,9 +14,9 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
 import { createCodingTools } from '@earendil-works/pi-durable/tools'
 import {
-  aliasesOf, arr, type Attachment, AUTH_REJECTED, type ChannelAcceptor, Channels, compareVersion, contractProblem, EXTENSION_API, type ExtensionManifest, manifestOf, parseVersion, UNVERSIONED, DATA_VIEWS, dataViewProblem, type DataViewInfo, type ExtensionReport, type ExtensionsReport, paramsParser, bool, defineAction, deriveStatus, FEATURES, Lifetime, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
+  arr, type Attachment, AUTH_REJECTED, type ChannelAcceptor, Channels, compareVersion, contractProblem, EXTENSION_API, type ExtensionManifest, manifestOf, parseVersion, UNVERSIONED, DATA_VIEWS, dataViewProblem, type DataViewInfo, type ExtensionReport, type ExtensionsReport, paramsParser, bool, defineAction, deriveStatus, FEATURES, Lifetime, NOTE_ENTRY, int, lit, nullable, num, obj, opt, type Pane, PROTOCOL_VERSION, Router, RpcError, str, union, unknown, type AppConfig, type Exposure, type ExtensionAbout, type Json, type MachineInfo, type Methods, type NewThread, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
-import { serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
+import { serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import { createAgentSettings } from './agent-settings.ts'
 import { createAuthFlows } from './auth-flows.ts'
@@ -35,7 +35,7 @@ import { serveWeb, type ServedByTailscale, type WebServer } from './web.ts'
 import { WebDevices } from './web-devices.ts'
 import { startServe, stopServe, tailnetNames, type TailscaleState } from './tailscale.ts'
 import { agentsInstructions } from './agents-md.ts'
-import { defineProfile, findProfile, RENAMED, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, profileThere, provideSdk, relocated, Trust, type LoadedProfile, type ProfileDaemonExtension, type ProfileRef } from './profiles.ts'
+import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, profileThere, provideSdk, relocated, Trust, type LoadedProfile, type ProfileDaemonExtension, type ProfileRef } from './profiles.ts'
 import { serveConnection, versionMismatch } from './connection.ts'
 import { Clients, type Via } from './clients.ts'
 import { keepsRunning } from './service.ts'
@@ -43,38 +43,20 @@ import { createRelay, type MachineReach } from './relay.ts'
 
 const context = BACKGROUND_CONTEXT
 
-/**
- * Which conversations are threads, oldest first; child conversations (subagents) aren't. `ego` is from before Ego's
- * thread was a hidden one like any other: a thread kept apart from these (see migrateHidden).
- */
-const Catalog = defineDoc<{ ids: number[]; ego?: number }>({
+/** Which conversations are threads, oldest first; child conversations (subagents) aren't. */
+const Catalog = defineDoc<{ ids: number[] }>({
   kind: 'superego.catalog', version: 1, scope: 'session', initial: () => ({ ids: [] }), checkpointWhen: () => true,
 })
-
-// Names kept on the wire for older windows, from the one table of them (ALIASES in @superego/protocol), each until its
-// milestone.
-/** Methods (and actions) moved into an extension, by their old names: answered by the extension's while it's set up. */
-const MOVED_METHODS: Record<string, string> = Object.fromEntries(aliasesOf('method').map((a) => [a.old, a.now]))
-/** Watches moved into an extension's live value: the old watch method, the value it follows now, and the notification older windows listen for (`{ sub, value }`). */
-const MOVED_WATCHES: Record<string, { value: string; event: string }> = Object.fromEntries(aliasesOf('watch').map((a) => [a.old, { value: a.now, event: a.event }]))
-/** Features that became an extension's: announced by their old names too, while it is. */
-const MOVED_FEATURES: Record<string, string> = Object.fromEntries(aliasesOf('feature').map((a) => [a.old, a.now]))
-/** Thread fields that became an extension's fact: given by their old names too (the branch chip, Ego's Clear). */
-const MOVED_FACTS = (ext: Record<string, Json> | undefined) =>
-  Object.fromEntries(aliasesOf('fact').filter((a) => ext?.[a.now] !== undefined).map((a) => [a.old, ext![a.now]!]))
-/** Settings kept under another key now: a value stored under the old one is read as the new one's. */
-const MOVED = Object.fromEntries(Object.entries(RENAMED).map(([old, now]) => [`extensions.${old}`, `extensions.${now}`]))
 
 /**
  * Names no extension can take: the core's own namespaces (its methods, actions and settings are `<namespace>.<…>`), so
  * an extension's method can't be shadowed by the core's, nor its settings mixed in with them. A test keeps it in step.
  */
 export const RESERVED = new Set([
-  'action', 'agent', 'app', 'auth', 'core', 'daemon', 'extensions', 'file', 'hello', 'meta', 'model', 'pane', 'profile', 'profiles',
-  'providers', 'settings', 'skill', 'thread', 'threads', 'unwatch', 'value', 'view', 'watch', 'web',
+  'action', 'agent', 'app', 'auth', 'core', 'daemon', 'extensions', 'file', 'hello', 'model', 'pane', 'profile', 'profiles',
+  'providers', 'settings', 'thread', 'threads', 'unwatch', 'value', 'view', 'watch', 'web',
   // A connection's own (heartbeat, channels), who is connected, and the machines this one reaches.
   'ping', 'ch', 'clients', 'client', 'machines', 'relay',
-  // `skill` is no longer the core's, but older windows still call skill.list (see MOVED_METHODS).
 ])
 
 /** A path as told to the user: under their home folder, from `~`. */
@@ -96,10 +78,6 @@ type ThreadMeta = {
   pane?: string
   /** Its session: the project folder it belongs to (a repository's main checkout, or where it started). */
   root?: string
-  /** From before extensions kept state: the worktrees extension's (see LEGACY). */
-  worktree?: Json
-  /** From before extensions kept state: the ego extension's (see LEGACY). */
-  meta?: boolean
   /** In no list: an extension's own thread, opened by id. */
   hidden?: boolean
   /** The extension that made it, for a hidden thread: it takes no messages while that one is off. */
@@ -116,19 +94,9 @@ const ThreadDoc = defineDoc<ThreadMeta>({
   initial: () => ({ title: '', cwd: '', createdAt: 0 }), checkpointWhen: () => true,
 })
 
-/**
- * Extensions' state from before extensions kept their own: read from the field the core kept it in, until the extension
- * first writes its state, which moves it. So a thread from before reads the same, and nothing needs copying. A
- * migration of data, not of clients (MIGRATIONS' `thread-state`): remove only once databases from before extensions kept
- * state (2026-11) are no longer opened, with migrateHidden; never with a protocol bump.
- */
-const LEGACY: Record<string, { read(meta: ThreadMeta): Json | undefined; drop(meta: ThreadMeta): void }> = {
-  worktrees: { read: (meta) => meta.worktree, drop: (meta) => { delete meta.worktree } },
-  ego: { read: (meta) => meta.meta ? true : undefined, drop: (meta) => { delete meta.meta } },
-}
 /** An extension's state with a thread. */
 const stateOf = (meta: ThreadMeta, name: string): Json | undefined =>
-  meta.ext && Object.hasOwn(meta.ext, name) ? meta.ext[name] : LEGACY[name]?.read(meta)
+  meta.ext && Object.hasOwn(meta.ext, name) ? meta.ext[name] : undefined
 /**
  * A live value by name, as the daemon keeps it: a plain one's `value`, or a scoped one's value in each scope (`scopes`);
  * who watches it whole (`listeners`), and who watches one scope of it (`watchers`, by scope).
@@ -222,8 +190,6 @@ type Mounted = {
   failure?: number | null
   /** The credentials (a hash) its provider had as its run started: a rejection is for those, not any stored since. */
   ranWith?: string
-  /** Its session, found from its folder, for a thread from before threads kept it. */
-  root?: string
   /** What its last run did, in a line (see recap.ts): its done status says it. */
   recap?: string
   stop(): Promise<unknown>
@@ -348,7 +314,7 @@ export async function locate(root: string, name: string): Promise<{ path: string
 
 export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
-  const settings = new SettingsRegistry(withMovedKeys(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')), MOVED))
+  const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')))
   const flows = createAuthFlows()
   const agent = await createAgentSettings(settings, options.dataDir, options.app, flows)
   const registry = createRegistry()
@@ -425,7 +391,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const without = switchedOff(profile)
     const choice = meta && choiceOf(id, meta, without)
     for (const name of choice?.without ?? []) {
-      const known = extensions.get(RENAMED[name] ?? name)
+      const known = extensions.get(name)
       if (known && !known.required) without.add(known.name)
     }
     return { choice, without }
@@ -608,7 +574,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       meta: (await harness.snapshot(ThreadDoc, id, context)) ?? { title: '', cwd: defaultCwd, createdAt: 0 },
       stop: () => watch.stop(),
     }
-    if (!entry.meta.root) entry.root = (await checkoutOf(entry.meta.cwd).catch(() => undefined))?.root
     const absorb = (view: ConversationView) => {
       const wasRunning = Boolean(entry.live?.run)
       entry.live = view.docs['pi.live'] as LiveState | undefined
@@ -657,7 +622,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     ...(m.meta.profile ? { profile: m.meta.profile } : {}),
     ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),
     session: { root: rootOf(m), name: basename(rootOf(m)) },
-    ...withMovedFacts(factsInfo(id, m.meta, without)),
+    ...factsInfo(id, m.meta, without),
     ...(m.meta.archived ? { archived: true } : {}),
     ...(m.meta.hidden ? { hidden: true, ...(m.meta.owner ? { owner: m.meta.owner } : {}) } : {}),
     ...(m.meta.parent ? { parent: m.meta.parent } : {}),
@@ -734,9 +699,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     return Object.keys(ext).length ? { ext } : {}
   }
-  const withMovedFacts = (facts: Pick<ThreadInfo, 'ext'>) => ({ ...facts, ...MOVED_FACTS(facts.ext) })
-  /** A thread's session: kept since it started; for older threads, found from its folder once (else the folder). */
-  const rootOf = (m: Mounted) => m.meta.root ?? m.root ?? m.meta.cwd
+  /** A thread's session, kept since it started (the folder, for a thread there's no record of). */
+  const rootOf = (m: Mounted) => m.meta.root ?? m.meta.cwd
   /** Only an assistant answer makes a thread "done"; the user's own message does not. */
   const lastAnswer = (m: Mounted) => m.live?.run ? undefined : m.lastEntryId
 
@@ -769,11 +733,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     changed()
   }
 
-  /** Change an extension's state with a thread: `undefined` forgets it (and anything the core kept of it before, LEGACY). */
+  /** Change an extension's state with a thread: `undefined` forgets it. */
   function editState(id: string, name: string, edit: (current: Json | undefined) => Json | undefined) {
     return updateMeta(id, (meta) => {
       const next = clone(edit(clone(stateOf(meta, name))))
-      LEGACY[name]?.drop(meta)
       if (next !== undefined) meta.ext = { ...meta.ext, [name]: next }
       else if (meta.ext && Object.hasOwn(meta.ext, name)) {
         const { [name]: _gone, ...rest } = meta.ext
@@ -1011,7 +974,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const offer = () => {
     const on = offered()
     const named = on.map(({ name }) => `ext:${name}`)
-    return { features: [...FEATURES, ...named, ...Object.entries(MOVED_FEATURES).filter(([, now]) => named.includes(now)).map(([old]) => old)], extensions: on }
+    return { features: [...FEATURES, ...named], extensions: on }
   }
   const features = () => offer().features
   let announcedOffer = ''
@@ -1335,8 +1298,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   // The core's own, then the bundled ones: for the daemon's life, each giving every thread its agent parts unless the
   // thread goes without it.
-  // Before any extension looks for its hidden threads.
-  await migrateHidden()
   for (const extension of [...core, ...options.extensions ?? []]) {
     daemonLife.add(await setUp(extension, (part, always) => {
       if (always) return installBuiltin(part, extension.name)
@@ -1570,7 +1531,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       if (required) continue
       if (settings.get(`extensions.${name}`) === false) without.push({ extension: name, why: 'switched off on this machine (Settings → Extensions)' })
       else if (profile?.spec.without?.includes(name)) without.push({ extension: name, why: `its profile ${profile.name} goes without it (without)` })
-      else if (choice?.without?.some((n) => (RENAMED[n] ?? n) === name)) without.push({ extension: name, why: `${choice.by}'s agentFor chose an agent without it` })
+      else if (choice?.without?.includes(name)) without.push({ extension: name, why: `${choice.by}'s agentFor chose an agent without it` })
     }
     for (const [name, { profiles: dirs }] of inspected) {
       if (!dirs || (meta.profile && dirs.has(meta.profile.dir))) continue
@@ -1893,38 +1854,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     for (const stop of transcriptWatches.get(id) ?? []) void stop()
     await tellPaneClosed(id, closed)
   }
-  /**
-   * Hidden threads from before extensions made them: Ego's, kept apart in the catalog (`ego`), or older, listed and
-   * marked `meta`. Each becomes a hidden thread of the ego extension, which takes one up and leaves the rest. Remove
-   * with LEGACY (and the catalog's `ego`), once databases from before (2026-11) are no longer opened (MIGRATIONS'
-   * `hidden-threads`).
-   */
-  async function migrateHidden() {
-    const catalog = await harness.snapshot(Catalog, context)
-    const marked: number[] = []
-    for (const id of catalog?.ids ?? []) {
-      const meta = await harness.snapshot(ThreadDoc, id as ConversationId, context)
-      if (meta?.meta && !meta.hidden) marked.push(id)
-      // An extension's own thread made with the user's default profile, as one was for a while: it has none now.
-      if (meta?.owner && meta.profile) {
-        await (await harness.conversation(id as ConversationId, context))?.commit(async (tx) => { delete (await tx.doc(ThreadDoc, id as ConversationId)).profile }, context)
-      }
-    }
-    const kept = catalog?.ego
-    if (kept === undefined && !marked.length) return
-    await harness.commit(async (tx) => {
-      const doc = await tx.doc(Catalog)
-      if (doc.ego !== undefined && !doc.ids.includes(doc.ego)) doc.ids = [...doc.ids, doc.ego].sort((a, b) => a - b)
-      delete doc.ego
-    }, context)
-    for (const id of [...marked, ...(kept === undefined ? [] : [kept])]) {
-      await (await harness.conversation(id as ConversationId, context))?.commit(async (tx) => {
-        const meta = await tx.doc(ThreadDoc, id as ConversationId)
-        meta.hidden = true
-        meta.owner = 'ego'
-      }, context)
-    }
-  }
   router.register(defineAction({
     id: 'profile.list', title: 'List profiles', runs: 'machine', expose: ['ui', 'cli', 'mcp'],
     description: 'The profiles a thread in `cwd` could start with (thread.create\'s `profile`), and whether each may run.',
@@ -2010,11 +1939,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     id: 'thread.archive', title: 'Archive the thread', runs: 'machine', expose: ['ui', 'cli', 'mcp'], keys: 'mod+shift+e', ...thread,
     params: obj({ id: str() }),
     async run({ id }) {
-      const { notes } = await archive(id)
-      // `worktree`: what a window older than `notes` reads, from the worktrees extension's facts (the alias
-      // 'thread.archive:worktree').
-      const worktree = info(id, await get(id)).ext?.worktrees as { removed?: boolean } | undefined
-      return { notes, worktree: worktree ? (worktree.removed ? 'removed' as const : 'kept' as const) : null }
+      return await archive(id)
     },
   }))
   /**
@@ -2386,9 +2311,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
           return { sub, content: last }
         },
         'value.watch': ({ key, scope }: Methods['value.watch']['params']) => watchValue(key, scope, (sub, value) => notify('value.changed', { sub, key, value })),
-        // Watches that moved into an extension's value, under their old names and notifications.
-        ...Object.fromEntries(Object.entries(MOVED_WATCHES).map(([method, { value: key, event }]) =>
-          [method, () => watchValue(key, undefined, (sub, value) => peer.notify(event, { sub, value }))])),
         async unwatch({ sub }: { sub: string }) {
           const stop = subs.get(sub)
           subs.delete(sub)
@@ -2399,7 +2321,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         'action.list': async ({ exposure }: { exposure?: Exposure } = {}) => router.list(exposure).filter((a) => exposure !== 'mcp' || !mcpRefusal(a.id)),
         /** Run an action by id, as `exposure` (the command line passes `cli`); params may be strings to coerce. */
         'action.run': ({ id, params, exposure }: { id: string; params?: unknown; exposure?: Exposure }) =>
-          router.dispatch(router.has(id) ? id : MOVED_METHODS[id] ?? id, params, { notify, source: client, ...(exposure ? { exposure } : {}) }, { source: exposure ?? client, client: by(), ...(exposure ? { exposure } : {}) }),
+          router.dispatch(id, params, { notify, source: client, ...(exposure ? { exposure } : {}) }, { source: exposure ?? client, client: by(), ...(exposure ? { exposure } : {}) }),
         /** The newest dispatches on this machine, oldest first. */
         'action.log': async () => router.log(),
         /** The window's extensions, as each declares itself: those without a daemon half become known here (see declare). */
@@ -2447,9 +2369,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       // Actions under their ids, and extensions' methods: looked up as they're called, so a profile's registered since
       // this connection opened are there too.
       peer.handleOthers((method) => {
-        const name = router.has(method) || methods.has(method) ? method : MOVED_METHODS[method] ?? method
-        if (router.has(name)) return open(method, (params) => router.dispatch(name, params, ctx(), { source: client, client: by() }))
-        const read = methods.get(name)
+        if (router.has(method)) return open(method, (params) => router.dispatch(method, params, ctx(), { source: client, client: by() }))
+        const read = methods.get(method)
         return read && open(method, read)
       })
       return () => {
@@ -2498,7 +2419,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const applyWebNow = async () => {
     const access = settings.get<string>('web.access') ?? 'off'
     const port = settings.get<number>('web.port') ?? 7777
-    if (access !== 'off') await webDevices.setNotice(undefined)
     const key = access === 'off' || !options.webRoot ? '' : `${access}:${port}`
     if (key === webKey) return
     webKey = key
@@ -2557,14 +2477,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     ],
     data: () => ({
       url: webAddress() ?? null, tailscale: tailscale ?? null, devices: webDeviceList(),
-      notice: webDevices.notice ?? null, error: webError ?? null,
+      error: webError ?? null,
     }),
   })
-  // Serving the local network (plain HTTP, one token) is gone: a machine that did is off now, and Settings says why.
-  if (settings.get('web.access') === 'network') {
-    await settings.reset('web.access')
-    await webDevices.setNotice('Serving the local network over plain HTTP is gone: use Tailscale to reach this machine from other devices.')
-  }
   webDevices.onChange(() => settings.invalidate())
   // Pairing switched on for the owner's login: their devices through Tailscale get in no more, as of now.
   let pairingOwner = pairOwner()

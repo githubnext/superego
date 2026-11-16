@@ -42,7 +42,7 @@ describe('daemon', () => {
   it('rejects a client speaking another protocol version', async () => {
     const { peer, close } = await open()
     await expect(peer.call('hello', { client: 'test', version: 999 })).rejects.toMatchObject({
-      kind: 'version_mismatch', message: expect.stringContaining('generation 1, and this client speaks generation 999'), hint: expect.stringMatching(/^Update superego on /),
+      kind: 'version_mismatch', message: expect.stringContaining('generation 2, and this client speaks generation 999'), hint: expect.stringMatching(/^Update superego on /),
     })
     await close()
   })

@@ -109,7 +109,7 @@ export default defineDaemonExtension({
         const exists = await stat(tree.path).then(() => true, () => false)
         const clean = exists && (await git(tree.path, ['status', '--porcelain']).catch(() => 'unknown')) === ''
         // Said, in a line, in what archiving answers (thread_archive tells the agent).
-        if (exists && !(clean && await removeWorktree(tree.path, tree.root ?? thread.session.root))) {
+        if (exists && !(clean && await removeWorktree(tree.path, tree.root))) {
           return { note: clean ? `Kept the worktree ${tree.path}: it couldn't be removed.` : `Kept the worktree ${tree.path}: it has uncommitted changes.` }
         }
         await state.set(thread.id, { ...tree, removed: true })
@@ -119,16 +119,15 @@ export default defineDaemonExtension({
       async unarchiving(thread) {
         const tree = await state.get(thread.id)
         if (!tree?.removed) return
-        // Its main checkout: kept with it, else (a thread from before) its session's, when that is a repository. When
-        // it isn't, there's nothing to put it back from: it comes back without, as it always did.
-        const root = tree.root ?? thread.session.root
+        // Its main checkout gone, there's nothing to put it back from: it comes back without.
+        const { root } = tree
         if (!await git(root, ['rev-parse', '--git-dir']).then(() => true, () => false)) return
         await mkdir(dirname(tree.path), { recursive: true })
         // Pruned first, in case a process ended before letting go of it (see removeWorktree).
         await git(root, ['worktree', 'prune']).catch(() => {})
         await git(root, ['worktree', 'add', '-q', tree.path, tree.branch])
           .catch((error: Error) => { throw new RpcError('invalid', `Couldn't restore its worktree: ${error.message}`) })
-        await state.set(thread.id, { path: tree.path, branch: tree.branch, ...(tree.root ? { root: tree.root } : {}) })
+        await state.set(thread.id, { path: tree.path, branch: tree.branch, root })
       },
     })
     void sweepRemoved(folder)

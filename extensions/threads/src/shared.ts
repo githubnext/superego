@@ -10,10 +10,7 @@ export const about = {
   name: 'threads', version: '1.0.0', api: '^1', title: 'Sidebar', description: 'Sessions and their threads, sorted, as a list or a rail, with thread details.', required: true,
 } satisfies ExtensionAbout
 
-/**
- * The daemon half: the agent's thread tools, optional. A profile's `without: ['threads']`, from when the switch had the
- * sidebar's name, still means these (the daemon's `RENAMED`).
- */
+/** The daemon half: the agent's thread tools, optional. */
 export const toolsAbout = {
   name: 'thread-tools', version: '1.1.0', api: '^1.4', title: 'Thread tools', description: 'Start threads of their own, read, message and archive others, on this machine and those it reaches.',
 } satisfies ExtensionAbout

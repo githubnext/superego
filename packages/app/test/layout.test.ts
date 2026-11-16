@@ -2,10 +2,8 @@
 // stands in for a space while there's none; placing and taking out; settings from before the layout read into it.
 import { describe, expect, it } from 'vitest'
 import { defineApp, type Json, type ThreadInfo } from '@superego/protocol'
-import { MemorySettingsStore } from '@superego/settings'
 import { createRegistry, defineUiExtension, paneMenu, placedFor, viewsIn, type UiExtension } from '../src/renderer/extension.tsx'
 import { isLayout, placesNow, placeView, resolveLayout, type Layout, type Placeable } from '../src/renderer/layout.ts'
-import { withMovedLayout } from '../src/shared.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
 const None = () => null
@@ -171,18 +169,15 @@ describe('views in the registry', () => {
     setup(superego) {
       superego.view('orders.recent', { title: 'Recent orders', context: 'window', fits: ['space', 'rail'], default: 'space', component: None })
       superego.view('orders.order', { title: 'Order', context: 'thread', fits: ['aside', 'pane'], default: 'pane', component: None })
-      superego.slot('thread.header', None)
-      superego.slot('thread.header', None, { order: 5 })
       superego.pane('orders.log', { title: 'Log', component: None, menu: true })
     },
   })
   const thread: ThreadInfo = { id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, session: { root: '/', name: '/' }, status: { state: 'idle' } }
 
-  it("declares views, slots in the old places as views of them, and a pane menu that's the layout's", () => {
+  it("declares views, and a pane menu that's the layout's", () => {
     const registry = createRegistry(app, [orders], () => {})
-    expect(registry.views.map((v) => v.id)).toEqual(['orders.recent', 'orders.order', 'orders.thread.header', 'orders.thread.header.2', 'orders.log'])
+    expect(registry.views.map((v) => v.id)).toEqual(['orders.recent', 'orders.order', 'orders.log'])
     const placed = resolveLayout(registry.views, undefined)
-    expect(placed.header).toEqual(['orders.thread.header.2', 'orders.thread.header'])
     const where = { machine: 'local', thread }
     expect(paneMenu(registry, placed, where)).toEqual([{ kind: 'orders.order', title: 'Order' }, { kind: 'orders.log', title: 'Log' }])
     expect(paneMenu(registry, resolveLayout(registry.views, { place: { 'orders.log': null } }), where).map((m) => m.kind)).toEqual(['orders.order'])
@@ -242,22 +237,5 @@ describe('views in the registry', () => {
     const withBoard = placedFor(registry, undefined, { where: onBox })
     expect(withBoard.aside).toEqual(['notes.board'])
     expect(viewsIn(registry, withBoard, 'aside', onBox).map((v) => v.machines)).toEqual([['box']])
-  })
-})
-
-describe('settings from before the layout', () => {
-  it("reads thread details turned on as the details in the aside, and drops the old setting", () => {
-    expect(withMovedLayout(new MemorySettingsStore({ 'threads.details': true, 'app.keys': {} })).load())
-      .toEqual({ 'app.keys': {}, 'app.layout': { place: { 'threads.details': 'aside' } } })
-    expect(withMovedLayout(new MemorySettingsStore({ 'threads.details': false })).load()).toEqual({})
-    // A layout that already says where details go wins.
-    expect(withMovedLayout(new MemorySettingsStore({ 'threads.details': true, 'app.layout': { place: { 'threads.details': null }, order: {} } })).load())
-      .toEqual({ 'app.layout': { place: { 'threads.details': null }, order: {} } })
-    expect(withMovedLayout(new MemorySettingsStore({ 'app.layout': { order: {} } })).load()).toEqual({ 'app.layout': { order: {} } })
-  })
-
-  it('places the views the old settings did, so the window looks as it did', () => {
-    const layout = withMovedLayout(new MemorySettingsStore({ 'threads.details': true })).load()['app.layout'] as Layout
-    expect(resolveLayout(bundled, layout).aside).toEqual(['threads.details'])
   })
 })

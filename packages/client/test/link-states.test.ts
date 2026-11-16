@@ -47,7 +47,7 @@ describe('a link whose ssh needs a login', () => {
   it('carries what hello says about the daemon surviving a logout', async () => {
     const peer = new RpcPeer(() => {})
     const transport: Transport = { peer, closed: new Promise(() => {}), close: () => {} }
-    peer.call = (async () => ({ version: 1, features: ['keeps-running'], methods: [], machine: { id: 'm', hostname: 'h', platform: 'linux', pid: 1, dataDir: '/', build: 'b', keepsRunning: { service: null, afterLogout: false } } })) as typeof peer.call
+    peer.call = (async () => ({ version: 2, features: ['keeps-running'], methods: [], machine: { id: 'm', hostname: 'h', platform: 'linux', pid: 1, dataDir: '/', build: 'b', keepsRunning: { service: null, afterLogout: false } } })) as typeof peer.call
     const { link } = states(async () => transport)
     link.start()
     await new Promise((resolve) => setTimeout(resolve, 100))

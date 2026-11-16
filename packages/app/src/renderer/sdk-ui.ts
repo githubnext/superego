@@ -12,7 +12,7 @@ export { defineUiExtension, type UiExtension, type UiApi } from './extension.tsx
 export { defineWindowAction as defineAction, type WindowAction, type WindowContext } from './actions.tsx'
 export type { Dispatch } from './actions.tsx'
 export type {
-  View, ViewContext, ViewProps, PaneKind, PaneProps, SlotName, SlotProps, BehaviourSlot, EditorSlotProps, SpaceRailProps, ToolCallProps, ToolRow,
+  View, ViewContext, ViewProps, PaneKind, PaneProps, SlotProps, BehaviourSlot, EditorSlotProps, SpaceRailProps, ToolCallProps, ToolRow,
   ToolRowCall, ToolState, EntryProps, LinkHandler, LinkProps, LinkWhere, LinkAttributes, NewThreadField, NewThreadFieldProps, SettingsComponentProps,
   WindowEvent, WindowEvents, WindowState, WorkRun, WorkPart, WorkBlock, WorkStatus,
 } from './extension.tsx'

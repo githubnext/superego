@@ -42,6 +42,6 @@ export async function openRpc(socket: string): Promise<Rpc> {
     },
     close: () => conn.destroy(),
   }
-  await rpc.call('hello', { client: 'superego-eval', version: 1, label: 'eval' }).catch(() => {})
+  await rpc.call('hello', { client: 'superego-eval', version: 2, label: 'eval' }).catch(() => {})
   return rpc
 }

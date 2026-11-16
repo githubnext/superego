@@ -36,8 +36,8 @@ export type EgoThreads = {
   answer(id: string): Promise<string | undefined>
 }
 
-/** What the meta agent is told, before the tools' own descriptions. */
-export function metaPrompt({ name, agent, id, dataDir, agentsDir, hostname }: { name: string; agent?: string; id: string; dataDir: string; agentsDir: string; hostname: string }) {
+/** What Ego is told, before the tools' own descriptions. */
+export function egoPrompt({ name, agent, id, dataDir, agentsDir, hostname }: { name: string; agent?: string; id: string; dataDir: string; agentsDir: string; hostname: string }) {
   return `You are ${agent ? `${agent}, ` : ''}${name}'s own agent: you answer the user's questions about ${name}, the app they are
 talking to you in, and about how it is set up on this machine (settings, profiles, skills, machines, projects, threads).
 You run on ${hostname}, in ${dataDir}, ${name}'s data folder there. Be brief and practical.
@@ -122,10 +122,10 @@ may too (in env and header values): you don't read them; superego_mcp_servers li
 }
 
 /**
- * The meta agent's tools: they read, except those for setup, which is Ego's own to change (superego_set_setting,
+ * Ego's tools: they read, except those for setup, which is Ego's own to change (superego_set_setting,
  * superego_machines), and thread_start, which hands any other work to a thread.
  */
-export function metaExtension({ dir, dispatch, actions, snapshot, machines, threads, refuseStart, refuseServers }: {
+export function egoTools({ dir, dispatch, actions, snapshot, machines, threads, refuseStart, refuseServers }: {
   /** Ego's own folder, the data folder: where relative paths start. */
   dir: string
   /** Run an action on this machine (`settings.set`, `profile.list`), and list them. */
@@ -258,6 +258,6 @@ export function metaExtension({ dir, dispatch, actions, snapshot, machines, thre
       return json(directory.list())
     },
   }) as typeof tools[number])
-  return defineExtension({ name: 'meta', tools })
+  return defineExtension({ name: 'ego', tools })
 }
 

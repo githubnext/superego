@@ -3,9 +3,9 @@
 // here too: calls for them go through it (`relay.call`) and their news comes back from it (`relay.event`). What the
 // desktop keeps in its main process (the app's own settings) is kept in this browser.
 import { Channels, FEATURES, offers, PROTOCOL_VERSION, RpcError, RpcPeer, versionOf, type DeclaredSection, type Hello, type Notifications } from '@superego/protocol'
-import { declaredSpec, serveSettings, SettingsRegistry, withMovedKeys, type SettingsStore } from '@superego/settings'
+import { declaredSpec, serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { carriesFiles, uploadAttachments } from '@superego/client/uploads'
-import { APP_MOVED, bridgeChannel, browserNotice, LAYOUT_SETTING, PANE_LAYOUT_SETTING, withMovedActions, withMovedLayout, type MachineEntry, type SuperegoBridge, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
+import { bridgeChannel, browserNotice, LAYOUT_SETTING, PANE_LAYOUT_SETTING, type MachineEntry, type SuperegoBridge, type SuperegoEvent, type ThreadNotice } from '../shared.ts'
 import { askPairing, LIMITED, type Pairing } from './pair-gate.ts'
 
 const SETTINGS = 'superego.appSettings'
@@ -41,11 +41,11 @@ async function admitted(): Promise<Pairing> {
   return 'ok'
 }
 
-/** App settings, kept in localStorage; those kept under an old key (or a shortcut under an old action's id) read as their new one's, as the desktop app's are. */
-const store: SettingsStore = withMovedLayout(withMovedActions(withMovedKeys({
+/** App settings, kept in localStorage. */
+const store: SettingsStore = {
   load: () => { try { return JSON.parse(localStorage.getItem(SETTINGS) ?? '{}') } catch { return {} } },
   save: async (values) => localStorage.setItem(SETTINGS, JSON.stringify(values)),
-}, APP_MOVED)))
+}
 
 export function webBridge(): SuperegoBridge {
   const listeners = new Set<(event: SuperegoEvent) => void>()

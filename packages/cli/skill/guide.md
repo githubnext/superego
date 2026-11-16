@@ -27,7 +27,7 @@ A profile's halves import `'superego'` and `'superego/ui'`. A bundled extension'
 | `'superego'` | the daemon half and a profile: `defineDaemonExtension`, `defineProfile`, `defineExtension`, `defineTool`, `defineAction`, the schema helpers (`obj`, `str`, …), `RpcError`, `spawnGroup` (a command run as a process tree that stops as one), and their types (`DaemonApi`, `ScopedValue`, `ViewContent`, …) | stable: follows the extension API's version |
 | `'superego/ui'` | the UI half: `defineUiExtension`, `defineAction`, hooks (`useMethod`, `useValue`, `useDispatch`, `useSelection`, …), `call`, `has`, `version`, components to build from (`Markdown`, `PaneHeader`, `Picker`, `Diff`, `FileEditor`, `Button`, the icons), and their types | stable |
 | `'superego/testing'` | test helpers: a daemon with a scripted model, a window with a fake bridge, `isRunning(pid)` (see [Testing](#testing)) | stable |
-| `'superego/unstable'` | the window's workings the bundled extensions build on: `useRegistry`, `useShell`, `useSidebar`, `fileKind`, the session list, `useWatch`, `useThreadView`, … | none: changes with the window. A profile's UI still finds these in `'superego/ui'` until 2027-03-01, without types |
+| `'superego/unstable'` | the window's workings the bundled extensions build on: `useRegistry`, `useShell`, `useSidebar`, `fileKind`, the session list, `useWatch`, `useThreadView`, … | none: changes with the window |
 
 On a `DaemonApi`, `harness` (pi-durable itself) and `threads.entries`' records are pi-durable's shapes, unstable too.
 Everything else in the tables below is stable.
@@ -328,7 +328,7 @@ place, and the window's console has why.
 | UI half (`superego.` in `setup`) | For |
 |---|---|
 | `view('x.y', { title, icon, context, fits, default, narrow, withoutSpaces, order, component, rail, width })` | UI the layout puts in places (below): a space, a rail button, beside the thread, the pane menu, the title bar; `default` where it goes unless the user moves it |
-| `slot(name, Component, { order })` | a component in a slot whose place behaviour decides (below): `thread.crumb` for a chip where the title bar says where a thread works, `thread.badge` for a small mark after its title in the sidebar (a `thread-badge`: a 12px icon with a `title`), `composer.above`, `thread.details` (in thread details, ⌘I: an `<h5>` and what you know of the thread), `editor.side`, `editor.bar`, `overlay`. The old places (`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) are deprecated: declare a `view` |
+| `slot(name, Component, { order })` | a component in a slot whose place behaviour decides (below): `thread.crumb` for a chip where the title bar says where a thread works, `thread.badge` for a small mark after its title in the sidebar (a `thread-badge`: a 12px icon with a `title`), `composer.above`, `thread.details` (in thread details, ⌘I: an `<h5>` and what you know of the thread), `editor.side`, `editor.bar`, `overlay` |
 | `newThreadField({ component, from })` | a field in the New thread dialog: its value goes to `thread.create` as `options.<name>`, for the daemon half's `creating`; `from(thread)` its value for one started like `thread`; bundled only |
 | `signal` | aborted at teardown (its profile's UI reloaded or revoked): for its own timers, listeners and fetches (below) |
 | `on(event, listener)` → off; `window` | hear the window: `thread.status` (`{ machine, thread, before }`; `before` undefined the first time it's seen), `select` (`{ selection, before }`), `focus` (`{ focused }`), `visibility` (`{ visible }`); `window` is `{ focused, visible, selection, thread }` now. In Electron and browsers alike |
@@ -368,7 +368,7 @@ Three versions, each for its own question:
 |---|---|---|---|
 | **The release** | the code a machine runs: its git commit (the packages are `0.0.0`) | `hello.machine.commit`, Settings → Machines ("an older Superego") | the user, who updates |
 | **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`1.8.0`; 1.1 added `signal`, a UI `setup`'s cleanup and `unarchiveAbandoned`; 1.2 `scopedValue` and `useValue`'s `scope`, `useMethod`, a profile's window actions, and `'superego/unstable'` apart; 1.3 `spawnGroup`; 1.4 `machines`; 1.5 channels and `paneClosed`; 1.6 `recap`; 1.7 `agentParts`, `agent()`'s handle, `auth.flow`, tool rows by prefix and `SignInFlow`; 1.8 `toolCalls`) | `hello.api` | the host, setting an extension up |
-| **The protocol** | the wire: a generation, `PROTOCOL_VERSION` (`1`), and in it the features each side announces | `hello.version`, `hello.features` | both ends, at `hello` |
+| **The protocol** | the wire: a generation, `PROTOCOL_VERSION` (`2`), and in it the features each side announces | `hello.version`, `hello.features` | both ends, at `hello` |
 
 And each extension's own **version**, semver, which its other half, profiles and scripts rely on.
 
@@ -403,14 +403,13 @@ the window:
 ```ts
 has(machine, 'ext:git')          // set up and on there, at any version
 has(machine, 'ext:git@^1.2')     // at 1.2 or later in 1.x
-has(machine, 'ext:git@<2')       // any version this UI half speaks, a daemon from before versions too
+has(machine, 'ext:git@<2')       // any version this UI half speaks
 has(machine, 'ext:git#stat')     // one that declares the capability
 version(machine, 'git')          // '1.3.0'; '0.0.0' when it says none; undefined when it isn't there or is off
 ```
 
 Ranges are the usual ones: `^1.2`, `~1.2`, `>=1.2 <3`, `1.2` (1.2.x), `*`, joined with `||`. A UI half checks the
 daemon half by the majors it speaks (`git` and `skills` ask for `@<2`); a shape that changed in a minor, by `@^1.<minor>`.
-`ask-user` takes options as objects only from `@^1`, and from a daemon from before versions maps plain labels too.
 
 Windows declare their extensions to each machine (`extensions.declare`), so one with no daemon half is listed there.
 When two windows declare one differently, the newest version's word is taken, whatever order they connect in (at the
@@ -421,26 +420,15 @@ same version, the two are settled by what they say, the same way each time); an 
 What a window and a daemon of different releases do with each other:
 
 - **Another protocol generation:** refused at `hello` (`version_mismatch`: *Update superego on the older side*).
-  A generation changes only for a break nothing can bridge, and starts with no aliases.
+  A generation changes for a break nothing can bridge, and starts clean: no old names, no read-throughs of old data.
 - **The same generation:** they work together. The core's methods, actions, notifications and features only grow in
-  a generation: `RELEASED` (`packages/protocol/src/released.ts`) lists what generation 1 released, and a test holds
-  the daemon to answering all of it. Add to it as things are released; nothing leaves it but with a new generation.
-  Anything newer is announced in `FEATURES` and checked with `has` before it's used.
-- **A newer window, an older daemon:** the window checks what it uses (`has(machine, 'threads')`,
-  `has(machine, 'ext:git@<2')`), and offers nothing, or says so, where the daemon lacks it. A daemon from before
-  versions announces no manifests: its extensions are there, at `0.0.0`.
-- **An older window, a newer daemon:** the daemon keeps what it moved or renamed answering by the old name, for a
-  while: the aliases in `ALIASES` (`packages/protocol/src/compat.ts`: `thread.diff` as `git.diff`, the `ego` feature,
-  `ThreadInfo.worktree`…). An extension a major ahead of what the window's UI half speaks is left alone by it.
-- **How long aliases live:** each has a milestone (`until`), three months or so after the move, and goes then, or
-  with the next generation if that's sooner. A test fails once one is past it: take the entry out, and the code that
-  keeps it (the daemon's `MOVED_*` are read from the table). So the skew supported is a window and a daemon of the
-  same generation released within an alias's lifetime of each other; further apart, the newer side's checks still
-  hold, but what moved is gone.
-- **Stored data is not the wire:** what an older release stored (a thread's state in the core's old fields, Ego's
-  thread from before hidden threads, a setting or a shortcut under an old name, a profile's `without: ['threads']`)
-  is read through by the migrations in `MIGRATIONS`, kept for as long as data from before may still be opened. A
-  protocol generation doesn't remove one.
+  a generation: `RELEASED` (`packages/protocol/src/released.ts`) lists what generation 2 released, and a test holds
+  the daemon to answering all of it. Anything newer is announced in `FEATURES` and checked with `has` before it's
+  used; a window checks an extension's daemon half the same way (`has(machine, 'ext:git@<2')`), and offers nothing,
+  or says so, where it's missing. An extension a major ahead of what the window's UI half speaks is left alone by it.
+- **Renaming something released** waits for the next generation. Until then, a moved name can be kept answering as an
+  alias in `ALIASES` (`packages/protocol/src/compat.ts`), each with a milestone it goes by; generation 2 has none.
+- **Stored data** isn't migrated: what an older release stored under an old name or in an old place isn't read.
 
 ## Links
 
@@ -551,9 +539,7 @@ superego.view('ego.button', { title: 'Ask Ego', icon: LifebuoyIcon, context: 'wi
 - A profile's views fit only the places that show a thread (`aside`, `pane`, `header`), in its own threads.
 
 Slots are places that behaviour decides, so the layout doesn't move them: a question card sits on the composer it asks
-for. They get `{ machine, thread }`; the editor's also `path` and `open(path)`. `superego.slot` in one of the old places
-(`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) is deprecated, and goes after 2027-03-01
-(`ALIASES['ui:view-slots']`): until then it declares a view of that place, `<extension>.<slot>`, with a warning.
+for. They get `{ machine, thread }`; the editor's also `path` and `open(path)`.
 
 ### Data-only views
 
@@ -739,8 +725,6 @@ superego.thread<{ path: string; branch: string }>({   // the state its creating 
   across a restart. What its hooks said they did (or why it couldn't be) is then said in the thread, as Superego's
   own note (`superego.note`).
 - State is kept in the thread's document under the extension's name, so it persists, and goes with the thread.
-  `ThreadMeta.worktree` and `meta`, from before, read as the `worktrees` and `ego` extensions' state until those write
-  it (`LEGACY` in daemon.ts), which moves it: a daemon downgraded after that no longer sees it. Ego's thread from before (kept apart, or listed and marked `meta`) is a hidden one now.
   Facts are recomputed whenever the thread's info is; `invalidate()` when something else they read changed. A
   profile's show once its profile has loaded: at startup for the threads in use, else when one of its threads is.
 - `agentFor` is called often: quick, and without side effects. The thread's own model wins over its answer, its answer

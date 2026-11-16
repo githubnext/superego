@@ -86,7 +86,7 @@ describe('optional and required extensions', () => {
       superego.tool('ask_user', Card)
     },
   })
-  const required = defineUiExtension({ name: 'threads', required: true, setup(superego) { superego.slot('thread.aside', Sidebar) } })
+  const required = defineUiExtension({ name: 'threads', required: true, setup(superego) { superego.view('threads.details', { title: 'Details', context: 'thread', fits: ['aside'], default: 'aside', component: Sidebar }) } })
 
   it("draws nothing of an optional extension for a thread that goes without it, and all of a required one's", () => {
     const registry = createRegistry(app, [optional, required], () => {})
@@ -95,7 +95,7 @@ describe('optional and required extensions', () => {
     expect(toolView(registry, 'ask_user', with_)).toBe(Card)
     expect(toolView(registry, 'ask_user', without)).toBeUndefined()
     expect(seenIn(registry.slots['composer.above'], without)).toHaveLength(0)
-    expect(seenIn(registry.views, without).map((e) => e.id)).toEqual(['threads.thread.aside'])
+    expect(seenIn(registry.views, without).map((e) => e.id)).toEqual(['threads.details'])
   })
 
   it("hides the open panes of an optional extension a thread goes without, keeping the core's and unknown kinds", () => {

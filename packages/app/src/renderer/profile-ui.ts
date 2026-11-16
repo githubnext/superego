@@ -27,11 +27,8 @@ let shared: Promise<Map<string, string>> | undefined
 function sharedModules() {
   return shared ??= (async () => {
     const [react, jsx, stable, unstable] = await Promise.all([import('react'), import('react/jsx-runtime'), import('./sdk-ui.ts'), import('./sdk-unstable.ts')])
-    // 'superego/ui' still answers for the window's workings it had before they were 'superego/unstable', until the
-    // alias's milestone (ALIASES['superego/ui:unstable']); its types have only the stable surface.
-    const ui = { ...unstable, ...stable }
     const g = globalThis as { __superegoShared?: Record<string, Record<string, unknown>> }
-    g.__superegoShared = { react: { ...react }, 'react/jsx-runtime': { ...jsx }, 'superego/ui': ui, 'superego/unstable': { ...unstable } }
+    g.__superegoShared = { react: { ...react }, 'react/jsx-runtime': { ...jsx }, 'superego/ui': { ...stable }, 'superego/unstable': { ...unstable } }
     const urls = new Map<string, string>()
     for (const [name, exports] of Object.entries(g.__superegoShared)) {
       const names = Object.keys(exports).filter((key) => /^[A-Za-z_$][\w$]*$/.test(key) && key !== 'default')

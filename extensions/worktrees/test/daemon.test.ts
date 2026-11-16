@@ -1,7 +1,7 @@
 // worktrees against a real daemon: a thread's own worktree made, removed when archived clean, kept with changes, put
 // back when unarchived; what a previous process left half-deleted swept; and a worktree kept before extensions had state.
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
@@ -37,8 +37,8 @@ const listed = async (peer: RpcPeer, archived = false) => peer.call<ThreadInfo[]
 const find = async (peer: RpcPeer, id: string) => [...await listed(peer), ...await listed(peer, true)].find((t) => t.id === id)
 /** A thread's worktree, as clients see it: the extension's fact. */
 const treeOf = (thread: ThreadInfo | undefined) => thread?.ext?.worktrees as Worktree | undefined
-/** Archive a thread: what `thread.archive` says (`notes`, and `worktree` for older windows). */
-const archive = (peer: RpcPeer, id: string) => peer.call<{ notes: Record<string, string>; worktree: string | null }>('thread.archive', { id })
+/** Archive a thread: what `thread.archive` says (`notes`). */
+const archive = (peer: RpcPeer, id: string) => peer.call<{ notes: Record<string, string> }>('thread.archive', { id })
 /** A repository in the test's folder, with a first commit. */
 function repository() {
   const git = (...args: string[]) => execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { encoding: 'utf8' }).trim()
@@ -69,14 +69,12 @@ it('gives a thread in a repository a worktree of its own when asked, in the same
   expect(thread.cwd).toBe(join(tree.path, 'app'))
   expect(thread.session).toEqual({ root, name: basename(root) })
   expect(git('branch', '--list', tree.branch)).toContain(tree.branch)
-  // Under its old name too, for older windows' branch chip.
-  expect((thread as { worktree?: unknown }).worktree).toEqual(tree)
   // Otherwise in place: the same session.
   const here = await peer.call<ThreadInfo>('thread.create', { cwd: dir })
   expect(treeOf(here)).toBeUndefined()
   expect(here.session.root).toBe(root)
   // Archived with nothing uncommitted: the worktree goes, the branch stays; unarchived, it's back.
-  expect(await archive(peer, thread.id)).toEqual({ notes: { worktrees: `Removed the worktree ${tree.path}; branch ${tree.branch} kept.` }, worktree: 'removed' })
+  expect(await archive(peer, thread.id)).toEqual({ notes: { worktrees: `Removed the worktree ${tree.path}; branch ${tree.branch} kept.` } })
   expect(existsSync(tree.path)).toBe(false)
   expect(git('branch', '--list', tree.branch)).toContain(tree.branch)
   // Let go of by git at once; its files deleted after.
@@ -86,7 +84,7 @@ it('gives a thread in a repository a worktree of its own when asked, in the same
   expect(existsSync(join(tree.path, 'app/readme.md'))).toBe(true)
   // With changes in it, archiving leaves it be.
   await writeFile(join(tree.path, 'app/wip.md'), 'wip\n')
-  expect(await archive(peer, thread.id)).toEqual({ notes: { worktrees: `Kept the worktree ${tree.path}: it has uncommitted changes.` }, worktree: 'kept' })
+  expect(await archive(peer, thread.id)).toEqual({ notes: { worktrees: `Kept the worktree ${tree.path}: it has uncommitted changes.` } })
   expect(existsSync(join(tree.path, 'app/wip.md'))).toBe(true)
   // Gone already (deleted by hand): said so, not that it was removed.
   await peer.call('thread.unarchive', { id: thread.id })
@@ -102,44 +100,6 @@ it('deletes the worktrees a previous process was deleting when it ended', async 
   const { close } = await open()
   await until(async () => !existsSync(join(repo, '.fix-a1b2c3.removing-0badf00d')))
   expect(existsSync(join(repo, 'in-use-d4e5f6'))).toBe(true)
-  await close()
-})
-
-it('reads the worktree a thread kept before extensions had state, as its own, and moves it when it changes', async () => {
-  const repo = join(dir, 'repo')
-  mkdirSync(repo)
-  const git = (...args: string[]) => execFileSync('git', ['-C', repo, '-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { encoding: 'utf8' }).trim()
-  git('init', '-q'); writeFileSync(join(repo, 'readme.md'), 'hi\n'); git('add', '.'); git('commit', '-q', '-m', 'start')
-  const tree = { path: join(dir, 'data', 'worktrees', 'repo', 'old-abc123'), branch: 'superego/old-abc123' }
-  mkdirSync(join(dir, 'data', 'worktrees', 'repo'), { recursive: true })
-  git('worktree', 'add', '-q', '-b', tree.branch, tree.path, 'HEAD')
-  // A database as an older daemon left it: the worktree in the thread's own metadata.
-  const { Harness, createRegistry, defineDoc } = await import('@earendil-works/pi-durable')
-  const { openNodeSqliteStorage } = await import('@earendil-works/pi-durable/storage/sqlite/node')
-  const { createModels } = await import('@earendil-works/pi-ai/models')
-  const { BACKGROUND_CONTEXT: context } = await import('@earendil-works/chord/context')
-  const Catalog = defineDoc<{ ids: number[] }>({ kind: 'superego.catalog', version: 1, scope: 'session', initial: () => ({ ids: [] }), checkpointWhen: () => true })
-  const ThreadDoc = defineDoc<Record<string, Json>>({
-    kind: 'superego.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current', initial: () => ({ title: '', cwd: '', createdAt: 0 }), checkpointWhen: () => true,
-  })
-  const root = await realpath(repo)
-  const harness = await Harness.open(await openNodeSqliteStorage(join(dir, 'data', 'superego.sqlite')), { models: createModels(), registry: createRegistry() }, context)
-  const old = await harness.createConversation({
-    ownership: { kind: 'ownerless' }, agent: { cwd: tree.path },
-    init: async (tx, created) => { Object.assign(await tx.doc(ThreadDoc, created), { title: 'Old', cwd: tree.path, root, createdAt: 1, worktree: tree }); (await tx.doc(Catalog)).ids.push(created) },
-  }, context)
-  await harness.close(context)
-
-  const { peer, close } = await open(join(dir, 'data'))
-  const id = String(old.id)
-  expect(await find(peer, id)).toMatchObject({ ext: { worktrees: tree } })
-  // Archived clean, it goes as ever, and is then kept as the extension's.
-  expect((await archive(peer, id)).worktree).toBe('removed')
-  expect(existsSync(tree.path)).toBe(false)
-  expect(await find(peer, id)).toMatchObject({ ext: { worktrees: { ...tree, removed: true } } })
-  await peer.call('thread.unarchive', { id })
-  expect(existsSync(join(tree.path, 'readme.md'))).toBe(true)
-  expect(treeOf(await find(peer, id))).toEqual(tree)
   await close()
 })
 
@@ -166,36 +126,16 @@ it("gives a profile's threads worktrees through its options, unless a thread is 
   await close()
 })
 
-it("brings an old thread back without its worktree when there's no checkout to restore it from", async () => {
-  // A thread from before threads kept their session: its session is found from its folder, its worktree's, gone once
-  // archived. There's nothing to put it back from, so it comes back without, as it always did, rather than refusing.
-  const git = repository()
-  const tree = { path: join(dir, 'data', 'worktrees', 'repo', 'old-abc123'), branch: 'superego/old-abc123' }
-  mkdirSync(dirname(tree.path), { recursive: true })
-  git('worktree', 'add', '-q', '-b', tree.branch, tree.path, 'HEAD')
-  const { Harness, createRegistry, defineDoc } = await import('@earendil-works/pi-durable')
-  const { openNodeSqliteStorage } = await import('@earendil-works/pi-durable/storage/sqlite/node')
-  const { createModels } = await import('@earendil-works/pi-ai/models')
-  const { BACKGROUND_CONTEXT: context } = await import('@earendil-works/chord/context')
-  const Catalog = defineDoc<{ ids: number[] }>({ kind: 'superego.catalog', version: 1, scope: 'session', initial: () => ({ ids: [] }), checkpointWhen: () => true })
-  const ThreadDoc = defineDoc<Record<string, Json>>({
-    kind: 'superego.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current', initial: () => ({ title: '', cwd: '', createdAt: 0 }), checkpointWhen: () => true,
-  })
-  const harness = await Harness.open(await openNodeSqliteStorage(join(dir, 'data', 'superego.sqlite')), { models: createModels(), registry: createRegistry() }, context)
-  const old = await harness.createConversation({
-    ownership: { kind: 'ownerless' }, agent: { cwd: tree.path },
-    init: async (tx, created) => { Object.assign(await tx.doc(ThreadDoc, created), { title: 'Old', cwd: tree.path, createdAt: 1, worktree: tree }); (await tx.doc(Catalog)).ids.push(created) },
-  }, context)
-  await harness.close(context)
-  const id = String(old.id)
-  const first = await open(join(dir, 'data'))
-  expect((await archive(first.peer, id)).worktree).toBe('removed')
-  await first.close()
-  // Started again, it no longer knows its session from its folder.
-  const { peer, close } = await open(join(dir, 'data'))
-  await peer.call('thread.unarchive', { id })
-  expect((await find(peer, id))!.archived).toBeUndefined()
-  expect(treeOf(await find(peer, id))).toMatchObject({ removed: true })
+it("brings a thread back without its worktree when there's no checkout to restore it from", async () => {
+  repository()
+  const { peer, close } = await open()
+  const thread = await peer.call<ThreadInfo>('thread.create', { cwd: dir, title: 'Orphan', worktree: true })
+  expect(Object.values((await archive(peer, thread.id)).notes)[0]).toMatch(/^Removed the worktree/)
+  // Its main checkout is no repository any more: nothing to put it back from, so it comes back without rather than refusing.
+  rmSync(join(dir, '.git'), { recursive: true, force: true })
+  await peer.call('thread.unarchive', { id: thread.id })
+  expect((await find(peer, thread.id))!.archived).toBeUndefined()
+  expect(treeOf(await find(peer, thread.id))).toMatchObject({ removed: true })
   await close()
 })
 
@@ -211,7 +151,7 @@ it('stops what still runs from a worktree before archiving removes it, but leave
   const exited = (child: typeof working) => new Promise<void>((resolve) => child.once('exit', () => resolve()))
   const ended = Promise.all([exited(working), exited(serving)])
   await new Promise((resolve) => setTimeout(resolve, 200))
-  expect((await archive(peer, thread.id)).worktree).toBe('removed')
+  expect(Object.values((await archive(peer, thread.id)).notes)[0]).toMatch(/^Removed the worktree/)
   await ended
   expect(existsSync(tree.path)).toBe(false)
   await close()

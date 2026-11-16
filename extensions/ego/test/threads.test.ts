@@ -21,7 +21,7 @@ const until = async (check: () => boolean | Promise<boolean>) => {
 }
 const turn = (content: Json[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
 /** Ego's thread as the window follows it: null until it's first opened. */
-const egoOf = async (peer: RpcPeer) => (await peer.call<{ value: ThreadInfo | null }>('value.watch', { key: 'ego.thread' })).value
+const egoOf = async (peer: RpcPeer) => (await peer.call<ThreadInfo[]>('thread.list', { hidden: true })).find((t) => t.owner === 'ego') ?? null
 
 it('lets Ego hand work to a thread of its own: top-level in its project, listed, not under Ego', async () => {
   const project = join(dir, 'project')

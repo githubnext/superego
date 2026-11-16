@@ -83,10 +83,8 @@ Bundled extensions get more than a profile's:
   isn't a space (Ego's, `order: 10`); `drawer` the foot of a phone's drawer, beside Settings; `titlebar` the title
   bar's start. `default` is where it starts (none: offered, the user places it), `narrow` where it goes on a phone,
   `withoutSpaces` where it goes while no view is in `space` (Unread's bell in the rail). The user's layout decides in
-  the end: read where it is with `usePlacement(id, place)`, never keep a setting of your own for it. `slot()` in the
-  old places (`sidebar`, `rail`, `footer`, `thread.aside`, `thread.header`) is deprecated, and goes after 2027-03-01
-  (`ALIASES['ui:view-slots']`): until then it declares a view of that place, `<extension>.<slot>`, with a warning.
-  Declare the `view`. And **`superego.work(divide)`** to group a run of
+  the end: read where it is with `usePlacement(id, place)`, never keep a setting of your own for it. And
+  **`superego.work(divide)`** to group a run of
   work in the transcript (as `tasks` does).
 - **New thread fields**: `superego.newThreadField({ component, from })`. `component` gets `{ machine, cwd, value,
   onChange }` and draws a field in the dialog (a checkbox: `<label className="new-thread__check">`); its value goes to
@@ -111,10 +109,8 @@ Bundled extensions get more than a profile's:
   again whenever that changes, so `has(machine, 'ext:orders')` says whether a machine has it now (a profile's once the
   profile loads). Watching a value needs no check: it's null until the extension publishes it. Check it before calling the
   daemon half's methods: a machine running an older Superego may not have them, or a newer one a major ahead
-  (`has(machine, 'ext:orders@<2')`; `about` says the extension's `version` and the extension `api` it needs). Renaming
-  a method or action keeps the old name as an alias until a milestone: an entry in `ALIASES`
-  (`packages/protocol/src/compat.ts`), from which the daemon's `MOVED_*` are read. See "Versions and compatibility" in
-  the guide (`guide.md`).
+  (`has(machine, 'ext:orders@<2')`; `about` says the extension's `version` and the extension `api` it needs). See
+  "Versions and compatibility" in the guide (`guide.md`).
 
 ## Tests
 

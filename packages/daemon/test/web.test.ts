@@ -2,7 +2,6 @@
 // expiry; the migration from the single token and from the local network; and Tailscale serve's identity, trusted only
 // through serve (a stub `tailscale` on PATH stands in for the real one).
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
 import { request as httpRequest } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -93,12 +92,6 @@ describe('devices', () => {
   it('names a device from its browser', () => {
     expect(deviceName('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36')).toBe('Chrome on Mac')
     expect(deviceName('')).toBe('A browser')
-  })
-
-  it('retires the old token', async () => {
-    await writeFile(join(dir, 'web-token'), 'old\n')
-    await WebDevices.open(dir)
-    expect(existsSync(join(dir, 'web-token'))).toBe(false)
   })
 })
 
@@ -284,17 +277,6 @@ describe('the daemon’s web access', () => {
   it('refuses to pair while web access is off', async () => {
     const { peer, close } = await open()
     await expect(peer.call('web.pair', {})).rejects.toMatchObject({ kind: 'web_off' })
-    await close()
-  })
-
-  it('turns off serving the local network, saying why', async () => {
-    await writeFile(join(dir, 'web-token'), 'old\n')
-    const { peer, section, close } = await open({ 'web.access': 'network' as never })
-    const snapshot = (await peer.call<{ value: SettingsSnapshot }>('settings.watch', {})).value
-    expect(snapshot.values['web.access']).toBe('off')
-    expect(snapshot.sections.find((s) => s.id === 'web')!.settings.find((s) => s.key === 'web.access')).toMatchObject({ options: [{ value: 'off' }, { value: 'local' }, { value: 'tailscale' }] })
-    expect((await section()).data).toMatchObject({ notice: expect.stringContaining('Tailscale') })
-    expect(existsSync(join(dir, 'web-token'))).toBe(false)
     await close()
   })
 

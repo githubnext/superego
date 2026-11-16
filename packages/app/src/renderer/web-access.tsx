@@ -11,7 +11,7 @@ type Tailscale =
   | { state: 'starting' | 'missing' | 'logged-out' }
   | { state: 'no-https' | 'busy' | 'error'; message?: string }
   | { state: 'serving'; url: string; name: string; owner?: string }
-type Data = { url?: string | null; tailscale?: Tailscale | null; devices?: Device[]; notice?: string | null; error?: string | null }
+type Data = { url?: string | null; tailscale?: Tailscale | null; devices?: Device[]; error?: string | null }
 type Ticket = { link: string; code: string; expires: number }
 
 /** "just now", "5 min ago", "3 h ago", "12 days ago". */
@@ -35,7 +35,7 @@ function TailscaleState({ tailscale }: { tailscale: Tailscale }) {
 }
 
 export function WebAccess({ target, section }: { target: string; section: SectionInfo }) {
-  const { url, tailscale, devices = [], notice, error } = (section.data ?? {}) as Data
+  const { url, tailscale, devices = [], error } = (section.data ?? {}) as Data
   const dispatch = useRegistry().router.dispatch
   const run = (id: string, params: Record<string, unknown> = {}) => dispatch(id, params, { machine: target, source: 'settings' })
   const [ticket, setTicket] = useState<Ticket>()
@@ -61,7 +61,6 @@ export function WebAccess({ target, section }: { target: string; section: Sectio
 
   return (
     <div className="web-access">
-      {notice && <p className="settings__note web-access__notice">{notice}</p>}
       {error && <p className="setting__error">{error}</p>}
       {tailscale && <TailscaleState tailscale={tailscale} />}
       {url && (

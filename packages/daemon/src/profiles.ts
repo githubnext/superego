@@ -21,7 +21,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import * as nodeModule from 'node:module'
 import type { Extension } from '@earendil-works/pi-durable'
 import type { DaemonExtension } from './extension.ts'
-import { MIGRATIONS, RpcError, type Json } from '@superego/protocol'
+import { RpcError, type Json } from '@superego/protocol'
 import { CODE, digestOf, graphOf, versionedImport, versionedUrl, versionOf, within } from './module-graph.ts'
 
 /** A profile, as its profile.ts default-exports it (`defineProfile`): its agent's model, prompt and extensions, its UI. */
@@ -136,12 +136,6 @@ export const defineProfile = (spec: ProfileSpec) => spec
 
 /** A profile: the user's (`~/.superego/profiles/<name>`) or a project's (`.superego/profiles/<name>`), and its folder. */
 export type ProfileRef = { scope: 'user' | 'project'; name: string; dir: string }
-
-/**
- * Extensions known by another name now: a profile's `without` of the old name goes without the new one (and says so in
- * Settings), and its switch in Settings keeps what was stored under the old name.
- */
-export const RENAMED: Record<string, string> = MIGRATIONS['extension-names'].renames
 
 /**
  * A daemon extension a profile names, and which: `key` is its file at the version loaded (the module's URL, versioned
@@ -413,7 +407,7 @@ export async function loadProfile(given: ProfileRef, userRoot: string, trust: Tr
   const merged: ProfileSpec = {
     ...base?.spec, ...spec,
     prompt: [base?.spec.prompt, spec.prompt].filter(Boolean).join('\n\n') || undefined,
-    without: [...new Set([...(base?.spec.without ?? []), ...(spec.without ?? [])].map((name) => RENAMED[name] ?? name))],
+    without: [...new Set([...(base?.spec.without ?? []), ...(spec.without ?? [])])],
     options: { ...base?.spec.options, ...spec.options },
     ...(base?.spec.mcp || spec.mcp ? { mcp: [...new Set([...base?.spec.mcp ?? [], ...spec.mcp ?? []])] } : {}),
     ...(base?.spec.mcpServers || spec.mcpServers ? { mcpServers: { ...base?.spec.mcpServers, ...spec.mcpServers } } : {}),

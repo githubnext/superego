@@ -3,9 +3,9 @@
 // the composer with the question and its numbered options (a free answer is typed below them); in the transcript, the
 // question and the answer it got.
 import { useState } from 'react'
-import { defineUiExtension, has, useDispatch, keyLabel, Markdown, useComposer, useComposerClaim, useValue, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
+import { defineUiExtension, useDispatch, keyLabel, Markdown, useComposer, useComposerClaim, useValue, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
-import { about, ANSWER, ASKING, PENDING, TOOL, type AskDetails, type Option, type Question } from './shared.ts'
+import { about, ANSWER, ASKING, TOOL, type AskDetails, type Question } from './shared.ts'
 import { answerOf, keyMove, partsOf } from './question.ts'
 import './styles.css'
 
@@ -17,15 +17,8 @@ export default defineUiExtension({
   },
 })
 
-/**
- * The questions a thread's agent waits on: its own scope of them (1.1), or, from an older daemon half, every thread's
- * picked for it (`ALIASES['ask-user:pending']`). None where the daemon half isn't set up (its value stays null).
- */
-function useAsking(machine: MachineEntry, thread: ThreadInfo) {
-  const scoped = has(machine, 'ext:ask-user@^1.1')
-  const questions = useValue<Question[]>(machine, scoped ? ASKING : PENDING, scoped ? { scope: thread.id } : {}) ?? []
-  return scoped ? questions : questions.filter((q) => q.thread === thread.id)
-}
+/** The questions a thread's agent waits on. None where the daemon half isn't set up (its value stays null). */
+const useAsking = (machine: MachineEntry, thread: ThreadInfo) => useValue<Question[]>(machine, ASKING, { scope: thread.id }) ?? []
 
 function Waiting({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const questions = useAsking(machine, thread)
@@ -41,9 +34,7 @@ function QuestionCard({ machine, question }: { machine: MachineEntry; question: 
   // Typing a free answer drops it: ⏎ then sends what's typed.
   const highlighted = useComposer().text.trim() ? undefined : active
   const dispatch = useDispatch()
-  // ask-user 1.0 gives options as objects; a daemon from before versions may give plain labels (the alias
-  // 'ask-user:labels', until its milestone).
-  const options = has(machine, 'ext:ask-user@^1') ? question.options : question.options.map((option): Option => typeof option === 'string' ? { label: option } : option)
+  const { options } = question
   const { context, ask } = partsOf(question.question)
   const answer = (value: string) => {
     setError(undefined)

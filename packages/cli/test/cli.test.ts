@@ -188,7 +188,7 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     onTestFinished(() => superego(['machines', 'rm', 'Third']).then(() => {}, () => {}))
     const all = await superegoJson(['machines'])
     const here = all.find((m: any) => m.id === 'local'), there = all.find((m: any) => m.label === 'Third')
-    expect(here.version).toMatchObject({ commit: expect.stringMatching(/^[0-9a-f]{40}$/), protocol: 1 })
+    expect(here.version).toMatchObject({ commit: expect.stringMatching(/^[0-9a-f]{40}$/), protocol: 2 })
     expect(there).toMatchObject({ drift: { state: 'current' } })
     expect(await superego(['machines'])).not.toContain('runs an')
 

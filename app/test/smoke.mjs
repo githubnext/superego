@@ -70,7 +70,7 @@ async function restartOntoNewCode(change, { atRest = false } = {}) {
     await key('/')
     await until(`Boolean(document.querySelector('.app__sidebar .threads-session'))`, 'the list again after the restart')
   }
-  const after = await run(`window.superego.call('local', 'hello', { client: 'smoke', version: 1 })`)
+  const after = await run(`window.superego.call('local', 'hello', { client: 'smoke', version: 2 })`)
   if (after.machine.id !== before.machine.id || !(await run(`window.superego.call('local', 'thread.list', {})`)).length) { await fail('restart lost the machine or its threads'); throw new Error('failed') }
   return after
 }

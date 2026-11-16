@@ -1,6 +1,6 @@
 // The extension contract as a daemon keeps it: an extension the host's API can't serve is refused, what each extension
 // set up is at is announced (hello, features.changed), windows' declarations are settled the same whatever order they
-// come in, and the core still answers all protocol generation 1 released.
+// come in, and the core still answers all its protocol generation released.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -78,10 +78,10 @@ it('announces each extension at its version, in hello and as it changes', async 
   await close()
 })
 
-it("still answers every method and action protocol generation 1 released, and refuses another generation", async () => {
+it("still answers every method and action its protocol generation released, and refuses another generation", async () => {
   const { peer, hello, close } = await open()
   expect(RELEASED.generation).toBe(PROTOCOL_VERSION)
-  for (const method of RELEASED.methods) expect(hello.methods, `${method} was released in generation 1`).toContain(method)
+  for (const method of RELEASED.methods) expect(hello.methods, `${method} was released in generation ${RELEASED.generation}`).toContain(method)
   for (const feature of RELEASED.features) expect(hello.features).toContain(feature)
   await expect(peer.call('hello', { client: 'test', version: PROTOCOL_VERSION + 1 })).rejects.toMatchObject({ kind: 'version_mismatch' })
   await close()
@@ -132,18 +132,6 @@ it("never lets an older window's declaration take back what a newer one said", a
   // A version that isn't one is ignored.
   await peer.call('extensions.declare', { extensions: [{ name: 'links', version: '9', title: 'Bad' }] })
   expect(await switchOf(peer, 'links')).toBeUndefined()
-  await close()
-})
-
-it('answers an older window as it knew things: plain ext: features, and moved methods by their old names', async () => {
-  const skills = defineDaemonExtension({ name: 'skills', version: '1.0.0', api: '^1', setup(superego) { superego.method('skills.list', async () => [{ name: 'pdf' }]) } })
-  const { close } = await open([skills])
-  const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
-  // An older window says no features of its own, and reads only `features`.
-  const hello = await peer.call<Hello>('hello', { client: 'superego-app', version: PROTOCOL_VERSION })
-  expect(hello.features).toContain('ext:skills')
-  expect(await peer.call('skill.list', {})).toEqual([{ name: 'pdf' }])
-  socket.destroy()
   await close()
 })
 

@@ -3,7 +3,7 @@
 // device's name, when it was paired and last seen, and from where. A device unused for 90 days stops working.
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { rm, writeFile } from 'node:fs/promises'
+import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 export const DEVICE_COOKIE = 'superego-device'
@@ -20,7 +20,7 @@ const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 type Stored = { id: string; name: string; hash: string; created: number; lastSeen: number; address: string }
 /** The owner's own Tailscale login, seen from one of their tailnet devices: admitted without pairing (see web.ts). */
 type Seen = { node: string; lastSeen: number; address: string }
-type State = { devices: Stored[]; tailscale: Seen[]; notice?: string }
+type State = { devices: Stored[]; tailscale: Seen[] }
 
 /** A device as Settings and the CLI show it: never its secret. */
 export type DeviceInfo = { id: string; name: string; created?: number; lastSeen: number; address: string; tailscale?: true }
@@ -57,14 +57,13 @@ export class WebDevices {
     this.#state = (() => {
       try {
         const read = JSON.parse(readFileSync(this.#path, 'utf8')) as Partial<State>
-        return { devices: read.devices ?? [], tailscale: read.tailscale ?? [], ...(read.notice ? { notice: read.notice } : {}) }
+        return { devices: read.devices ?? [], tailscale: read.tailscale ?? [] }
       } catch { return { devices: [], tailscale: [] } }
     })()
   }
 
-  /** Open the devices of `dataDir`, retiring the single token web access had before (`web-token`): it's no longer accepted. */
+  /** Open the devices of `dataDir`. */
   static async open(dataDir: string, options?: { now?: () => number }): Promise<WebDevices> {
-    await rm(join(dataDir, 'web-token'), { force: true })
     return new WebDevices(dataDir, options)
   }
 
@@ -153,16 +152,6 @@ export class WebDevices {
   onChange(listener: () => void): () => void { this.#changed.add(listener); return () => { this.#changed.delete(listener) } }
   /** Once what's changed is written: seeing a device saves it in the background. */
   saved(): Promise<void> { return this.#saving }
-
-  // ── Notice: why web access is off, after an update turned it off ─────────────────────────────────────────────────
-
-  get notice(): string | undefined { return this.#state.notice }
-  async setNotice(notice: string | undefined): Promise<void> {
-    if (this.#state.notice === notice) return
-    if (notice) this.#state.notice = notice
-    else delete this.#state.notice
-    await this.#save()
-  }
 
   // ── Failed attempts, per address ─────────────────────────────────────────────────────────────────────────────────
 

@@ -2,10 +2,10 @@
 // desktop. The window's extensions declare theirs (whether to notify, say) here too.
 // They are served under the reserved machine id "app" with the same settings methods a daemon answers.
 import { join } from 'node:path'
-import { SettingsRegistry, withMovedKeys } from '@superego/settings'
+import { SettingsRegistry } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import type { AppConfig } from '@superego/protocol'
-import { APP_MOVED, LAYOUT_SETTING, PANE_LAYOUT_SETTING, TEXT_SIZES, withMovedActions, withMovedLayout } from '../shared.ts'
+import { LAYOUT_SETTING, PANE_LAYOUT_SETTING, TEXT_SIZES } from '../shared.ts'
 
 export const APP = 'app'
 export const APP_KEYS = {
@@ -13,7 +13,7 @@ export const APP_KEYS = {
 } as const
 
 export function createAppSettings(dataDir: string, app: AppConfig) {
-  const settings = new SettingsRegistry(withMovedLayout(withMovedActions(withMovedKeys(new FileSettingsStore(join(dataDir, 'app-settings.json')), APP_MOVED))))
+  const settings = new SettingsRegistry(new FileSettingsStore(join(dataDir, 'app-settings.json')))
   settings.register({
     id: 'appearance', title: 'Appearance', order: 50,
     settings: [

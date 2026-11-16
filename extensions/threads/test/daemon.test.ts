@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -157,26 +157,6 @@ it('is a switch of its own in Settings: off, the agent goes without the tools', 
   const off = await partsOf(peer, 'hi again')
   expect(off.parts).not.toContain('thread-tools')
   expect(off.thread.without).toContain('thread-tools')
-  await close()
-})
-
-it('keeps a switch stored under its old name: the thread tools were "threads"', async () => {
-  const { daemon, close } = await open({ 'extensions.threads': false })
-  expect(daemon.settings.get('extensions.thread-tools')).toBe(false)
-  await close()
-})
-
-it("takes a profile's `without: ['threads']`, from when the switch had the sidebar's name, as going without the tools", async () => {
-  const profile = join(dir, 'profiles', 'default')
-  await mkdir(profile, { recursive: true })
-  await writeFile(join(profile, 'profile.ts'), `import { defineProfile } from 'superego'\nexport default defineProfile({ without: ['threads'] })\n`)
-  const { peer, close } = await open()
-  const { thread, parts } = await partsOf(peer, 'hi')
-  expect(thread.without).toEqual(['thread-tools'])
-  expect(parts).not.toContain('thread-tools')
-  // Settings says so by the new name too.
-  const { value } = await peer.call<{ value: { sections: { id: string; data?: { name: string; without?: string[] }[] }[] } }>('settings.watch', {})
-  expect(value.sections.find((s) => s.id === 'profiles')!.data!.find((p) => p.name === 'default')!.without).toEqual(['thread-tools'])
   await close()
 })
 

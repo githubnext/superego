@@ -11,7 +11,7 @@
 // after is refused). What it draws is drawn apart (`Contained`): a component that throws takes only its own place. A profile's UI is owned by that profile on its machine too, and draws only in
 // that profile's threads there.
 import { createContext, Fragment, useContext, useEffect, useMemo, useState, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type ReactNode } from 'react'
-import { ALIASES, contractProblem } from '@superego/protocol'
+import { contractProblem } from '@superego/protocol'
 import type { AppConfig, DataViewInfo, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, ProviderRejection, SectionInfo, SettingsSnapshot, Status, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared.ts'
 import { useSelection, type Selection } from './state.tsx'
@@ -48,30 +48,15 @@ export type BehaviourSlot =
   /** Always there, over everything: an extension's own dialogs (a quick open), drawn while it wants them. */
   | 'overlay'
 
-/**
- * Slots that are places now, deprecated (`ALIASES['ui:view-slots']`): `slot()` with one of these declares a view (`<extension>.<slot>`) that the layout puts
- * there by default. `superego.view` says more (a title, an icon, other places it fits).
- */
-const VIEW_SLOTS = { 'sidebar': 'space', 'rail': 'rail', 'footer': 'drawer', 'thread.header': 'header', 'thread.aside': 'aside' } as const satisfies Record<string, Place>
-export type ViewSlot = keyof typeof VIEW_SLOTS
-
-/** Where `slot()` can put UI: a behaviour slot, or one of the places it used to name (see `VIEW_SLOTS`). */
-export type SlotName = BehaviourSlot | ViewSlot
-
 /** What a slot beside a file editor gets: the file, and a way to show another. */
 export type EditorSlotProps = { machine: MachineEntry; thread: ThreadInfo; path: string; open(path: string, options?: { beside?: boolean }): void }
 
 /** What each slot's component is drawn with, by slot. */
 export type SlotProps = {
-  'sidebar': Record<string, never>
-  'rail': Record<string, never>
-  'footer': Record<string, never>
-  'thread.header': { machine: MachineEntry; thread: ThreadInfo }
   'thread.crumb': { machine: MachineEntry; thread: ThreadInfo }
   'thread.badge': { machine: MachineEntry; thread: ThreadInfo }
   'composer.above': { machine: MachineEntry; thread: ThreadInfo }
   'thread.details': { machine: MachineEntry; thread: ThreadInfo }
-  'thread.aside': { machine: MachineEntry; thread: ThreadInfo }
   'editor.side': EditorSlotProps
   'editor.bar': EditorSlotProps
   'overlay': Record<string, never>
@@ -331,12 +316,6 @@ export type UiApi = {
   view<C extends ViewContext>(id: string, view: View<C>): void
   /** A component in a slot whose place behaviour decides (`thread.crumb`, `composer.above`, the editor's, `overlay`), in `order`. */
   slot<S extends BehaviourSlot>(slot: S, component: ComponentType<SlotProps[S]>, options?: { order?: number }): void
-  /**
-   * @deprecated These slots are places now: declare a view (`superego.view('<extension>.<name>', { fits, default, … })`),
-   * which says its title and icon and can be moved. Until 2027-03-01 (`ALIASES['ui:view-slots']`) this still declares
-   * a view of that place, `<extension>.<slot>`, placed there by default, with a warning.
-   */
-  slot<S extends ViewSlot>(slot: S, component: ComponentType<SlotProps[S]>, options?: { order?: number }): void
   /**
    * Hear what happens in the window (see `WindowEvents`): a thread's status changing, the thread shown changing, the
    * window's focus and visibility. Listening stops at teardown, or with the function returned. `window` is how things
@@ -633,19 +612,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
           }, 'pane kind')
         }
       },
-      slot(slot: SlotName, component: ComponentType<any>, options?: { order?: number }) {
-        if (slot in VIEW_SLOTS) {
-          console.warn(`Extension ${extension.name}: slot('${slot}') is deprecated, and goes after ${ALIASES['ui:view-slots'].until}: declare a view, superego.view('${extension.name}.<name>', { title, context, fits: ['${VIEW_SLOTS[slot as ViewSlot]}'], default: '${VIEW_SLOTS[slot as ViewSlot]}', component })`)
-          const place = VIEW_SLOTS[slot as ViewSlot]
-          const base = `${extension.name}.${slot}`
-          const taken = registry.views.filter((v) => v.owner === owner && (v.id === base || v.id.startsWith(`${base}.`))).length
-          const Component = component as ComponentType<object>
-          return declare(`${base}${taken ? `.${taken + 1}` : ''}`, {
-            title: extension.title ?? extension.name, context: THREAD_PLACES.includes(place) ? 'thread' : 'window', fits: [place], default: place,
-            ...(options?.order !== undefined ? { order: options.order } : {}),
-            component: ({ place: _place, ...props }: ViewProps) => <Component {...props} />,
-          })
-        }
+      slot(slot: BehaviourSlot, component: ComponentType<any>, options?: { order?: number }) {
         // A profile's UI draws in its threads' slots; the overlay is the app's, with no thread.
         if (profile && slot === 'overlay') return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
         const list = registry.slots[slot as BehaviourSlot] as Owned<{ component: ComponentType<never>; order: number }>[]

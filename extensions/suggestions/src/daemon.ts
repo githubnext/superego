@@ -8,7 +8,7 @@ import { promptsOf, SYSTEM, transcriptOf } from './suggest.ts'
 export default defineDaemonExtension({
   ...about,
   setup(superego) {
-    // Watched by each thread for its own; whole, it's every thread's by id, as windows from before 1.1 read it.
+    // Watched by each thread for its own.
     const next = superego.scopedValue<Suggested | null>(NEXT, null)
     // Each thread's latest ask: an answer that comes back after the thread moved on is dropped.
     const asks = new Map<string, number>()

@@ -2,7 +2,7 @@
 // time it's asked for (`ego.ask`) and kept: never archived, cleared instead (`ego.clear`). Its agent is chosen for that
 // thread alone (`agentFor`): what Superego is (tools.ts's prompt) and tools that read and set up, instead of the coding
 // tools and the threads' own. Its thread is the hidden one it owns (`owner`), with this extension's state set (and the
-// fact `ext.ego` for windows); an older Ego (the core's, marked `meta`) is taken up as one by the core.
+// fact `ext.ego` for windows).
 //
 // Outside agents (`superego mcp`) ask it too (`ego.ask`, or `thread.submit` to its thread), but start threads through it
 // no more than they may themselves: each message one sends goes with a block saying so (`OUTSIDE`), and while
@@ -14,8 +14,8 @@ import { hostname } from 'node:os'
 import { MachineStore } from '@superego/client'
 import { defineDaemonExtension, MCP_THREADS, type DaemonExtension } from '@superego/daemon'
 import { agentName, defineAction, obj, opt, RpcError, str, type ThreadInfo } from '@superego/protocol'
-import { about, ASK, CLEAR, OUTSIDE, outsideBlocks, THREAD } from './shared.ts'
-import { metaExtension, metaPrompt, type MachineDirectory } from './tools.ts'
+import { about, ASK, CLEAR, OUTSIDE, outsideBlocks } from './shared.ts'
+import { egoPrompt, egoTools, type MachineDirectory } from './tools.ts'
 
 type Message = { role?: string; content?: unknown }
 
@@ -53,7 +53,7 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
       const isEgo = (thread: ThreadInfo) => thread.owner === about.name
       /** Whether tool call `callId` in a thread answers an outside agent's message (`answersOutside`). */
       const fromOutside = async (id: string, callId: string) => answersOutside(await threads.entries(id, 500), callId)
-      const tools = metaExtension({
+      const tools = egoTools({
         dir: dataDir,
         dispatch: (id, params) => superego.dispatch(id, params),
         actions: (exposure) => superego.actions(exposure),
@@ -82,7 +82,7 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
       const state = superego.state<true>()
       superego.facts<true>(({ state }) => state === true ? true : undefined)
       superego.agentFor<true>(({ state }) => state === true ? {
-        instructions: metaPrompt({ name: superego.app.name, ...(superego.app.agent ? { agent: superego.app.agent } : {}), id: superego.app.id, dataDir, agentsDir: superego.agentsDir, hostname: hostname() }),
+        instructions: egoPrompt({ name: superego.app.name, ...(superego.app.agent ? { agent: superego.app.agent } : {}), id: superego.app.id, dataDir, agentsDir: superego.agentsDir, hostname: hostname() }),
         extensions: [tools], without: WITHOUT,
       } : undefined)
 
@@ -90,10 +90,6 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
       // last in use, brought back if archived; else made the first time it's asked for, however many ask. Looked for
       // from the start, and again whenever it's asked for and none was found yet (switched on later, say).
       let id: string | undefined
-      // Its thread, for older windows (`meta.watch`; this one finds it among the hidden threads it watches). Coarse:
-      // set again as a run starts, ends or waits on the user, and when it's asked or cleared; not as it's read.
-      const live = superego.value<ThreadInfo | null>(THREAD, null)
-      const refresh = async () => { if (id) live.set(await threads.get(id)) }
       async function find(): Promise<string | undefined> {
         const all = [...await threads.list({ hidden: true }), ...await threads.list({ hidden: true, archived: true })].filter(isEgo)
         // Newest first as listed; the one used last wins, so a second Ego made while the first was missed is no
@@ -106,7 +102,7 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         return found.id
       }
       let looking: Promise<string | undefined> | undefined
-      const look = () => looking ??= find().then((at) => { id = at; return refresh().then(() => at) }).finally(() => { looking = undefined })
+      const look = () => looking ??= find().then((at) => id = at).finally(() => { looking = undefined })
       look().catch((error) => console.error('Ego: finding its thread failed:', error))
       let making: Promise<string> | undefined
       async function thread(): Promise<string> {
@@ -119,11 +115,7 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         return making
       }
 
-      const ours = (thread: ThreadInfo) => thread.id === id
       superego.thread({
-        turnStart: (t) => ours(t) ? refresh() : undefined,
-        turnEnd: (t) => ours(t) ? refresh() : undefined,
-        blocked: (t) => ours(t) ? refresh() : undefined,
         // Kept, not archived: cleared instead.
         archiving(t) {
           if (isEgo(t)) throw new RpcError('invalid', `${name} isn't archived`, { hint: 'Clear it instead.' })
@@ -136,7 +128,6 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         async run({ prompt }, { exposure }) {
           const at = await thread()
           if (prompt?.trim()) await threads.submit(at, prompt, { whenBusy: 'followUp', ...(exposure ? { exposure } : {}) })
-          await refresh()
           return threads.get(at)
         },
       }))
@@ -147,7 +138,6 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
           const at = await thread()
           await threads.clear(at)
           if ((await threads.get(at)).title !== name) await superego.dispatch('thread.rename', { id: at, title: name })
-          await refresh()
           return threads.get(at)
         },
       }))
