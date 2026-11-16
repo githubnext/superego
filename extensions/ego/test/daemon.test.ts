@@ -16,7 +16,6 @@ let dir: string
 beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-ego-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
-// Without the app's list of machines: no superego_machines tool (see tools.test.ts).
 const open = async (more: DaemonExtension[] = [], model = 'faux') => {
   process.env.SUPEREGO_MODEL = model
   process.env.SUPEREGO_REPLAY_SPEED = '0'
@@ -54,10 +53,9 @@ it("keeps superego's own agent as one hidden thread per machine, in its data fol
   const all = JSON.stringify(value.entries)
   expect(all).toContain("You are superego's own agent")
   expect(all).toContain('What you change yourself is setup')
-  // Tools that read, and thread_start; settings it changes itself (machines too, where the app gives it the list:
-  // see tools.test.ts); nothing that writes files or runs commands.
+  // Tools that read, and thread_start; settings and machines it changes itself; nothing that writes files or runs commands.
   const tools = (value.entries.find((e) => e.kind === 'pi.system')!.model![0] as { toolsAdded: { name: string }[] }).toolsAdded.map((t) => t.name)
-  expect(tools.sort()).toEqual(['ls', 'pane_open', 'read', 'superego_actions', 'superego_mcp_servers', 'superego_profiles', 'superego_set_setting', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
+  expect(tools.sort()).toEqual(['ls', 'pane_open', 'read', 'superego_actions', 'superego_machines', 'superego_mcp_servers', 'superego_profiles', 'superego_set_setting', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
   for (const tool of ['write', 'edit', 'bash', 'superego_run', 'thread_send']) expect(tools).not.toContain(tool)
   // Other threads don't get its tools or prompt, and don't see it.
   const plain = await first.peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt: 'hi' })

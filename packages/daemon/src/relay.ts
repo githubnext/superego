@@ -5,12 +5,23 @@
 // every connection that has called that machine. Watches a connection opened elsewhere end when it goes.
 import { RpcError, type MachineEntry } from '@superego/protocol'
 
+/** A machine to add: reached with ssh (`target`, running `command` there if not Superego's own), or `via` any command piping stdio to it. */
+export type MachineDraft = { label?: string; target?: string; command?: string; via?: string }
+/** What can change of a machine. */
+export type MachinePatch = { label?: string; enabled?: boolean; target?: string; command?: string }
+
 /** The machines this daemon reaches, as the host keeps them. Without one, it reaches none. */
 export type MachineReach = {
   /** The configured machines, as entries (not this one). */
   list(): MachineEntry[]
   /** Call one through its link. */
   call(machine: string, method: string, params: unknown): Promise<unknown>
+  /** Add one to the list (`machines.json`): by ssh target, or `via` a command; linked to on its own. */
+  add(machine: MachineDraft): Promise<MachineEntry>
+  /** Change one: its name, whether it's linked to, or how it's reached. */
+  update(id: string, patch: MachinePatch): Promise<MachineEntry>
+  /** Take one off the list. */
+  remove(id: string): Promise<void>
   /** Their notifications; `$connection` when a link's state changes, `$machines` when the list does. */
   onEvent(listener: (machine: string, method: string, params: unknown) => void): () => void
   reconnect(id: string): void
@@ -83,6 +94,11 @@ export function createRelay(reach: MachineReach | undefined, self: () => Machine
     async call(machine: string, method: string, params: unknown) {
       linked(machine)
       return reach!.call(machine, method, params)
+    },
+    /** The list itself (`machines.json`), as an extension edits it: refused when this daemon keeps none. */
+    get list(): Pick<MachineReach, 'add' | 'update' | 'remove'> {
+      if (!reach) throw new RpcError('invalid', "This daemon reaches no other machines: the app keeps them, and this one wasn't given them")
+      return reach
     },
     reconnect(id: string) {
       if (id === 'local') throw new RpcError('invalid', 'This machine has no link to itself')

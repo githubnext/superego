@@ -550,6 +550,9 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       machines: {
         list: () => later.relay().entries().slice(1),
         call: (machine, method, params) => later.relay().call(machine, method, params ?? {}),
+        add: (machine) => later.relay().list.add(machine),
+        update: (id, patch) => later.relay().list.update(id, patch),
+        remove: (id) => later.relay().list.remove(id),
       },
     }
     const teardown = () => { life.dispose() }

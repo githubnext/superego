@@ -11,15 +11,17 @@ import { createReadTool } from '@earendil-works/pi-durable/tools'
 import { lineOf, readTool } from '@superego/thread-tools/tools'
 import { SECTION as SERVERS, type SectionData } from '@superego/mcp-servers/shared'
 import { briefSection, serversTool } from './servers-tool.ts'
-import { bool, linkTo, lit, obj, opt, str, union, unknown, type ActionInfo, type Exposure, type Json, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
+import type { DaemonApi } from '@superego/daemon'
+import { bool, linkTo, lit, obj, opt, str, union, unknown, type ActionInfo, type Exposure, type Json, type MachineEntry, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 
-/** The machines a computer reaches, as the app keeps them (`machines.json`). */
-export type MachineDirectory = {
-  list(): { id: string; label: string; target: string; command?: string; via?: string; enabled: boolean }[]
-  add(input: { label?: string; target?: string; command?: string; via?: string }): Promise<{ id: string; label: string }>
-  update(id: string, patch: { label?: string; enabled?: boolean }): Promise<unknown>
-  remove(id: string): Promise<unknown>
-}
+/** The machines this computer reaches, as the daemon has them (`superego.machines`): to list and change. */
+export type EgoMachines = Pick<DaemonApi['machines'], 'list' | 'add' | 'update' | 'remove'>
+
+/** A machine as superego_machines tells it: what it's called, how it's reached, and how its link stands. */
+const briefMachine = (m: MachineEntry) => ({
+  id: m.id, label: m.label, state: m.state, ...(m.error ? { error: m.error } : {}),
+  ...(m.remote ? { route: m.remote.route, enabled: m.remote.enabled } : {}), ...(m.machine ? { hostname: m.machine.hostname } : {}),
+})
 
 /**
  * The data folder's credential stores, providers' (pi-ai's) and MCP servers', and the MCP servers' configs, whose env
@@ -132,7 +134,7 @@ export function egoTools({ dir, dispatch, actions, snapshot, machines, threads, 
   dispatch(id: string, params: Record<string, Json>): Promise<unknown>
   actions(exposure: Exposure): ActionInfo[]
   snapshot(): Promise<SettingsSnapshot>
-  machines?: () => MachineDirectory
+  machines?: EgoMachines
   threads: EgoThreads
   /** Why thread_start may not start a thread now, for its call `callId` in conversation `conversation`; nothing when it may. */
   refuseStart?(conversation: number, callId: string): Promise<string | undefined>
@@ -246,16 +248,16 @@ export function egoTools({ dir, dispatch, actions, snapshot, machines, threads, 
       name: opt(str({ description: 'add, rename: what to call it' })),
     }),
     async execute({ op, machine, target, via, command, name }) {
-      const directory = machines()
-      if (op === 'list') return json(directory.list())
-      if (op === 'add') return json(await directory.add({ ...(target ? { target } : {}), ...(via ? { via } : {}), ...(command ? { command } : {}), ...(name ? { label: name } : {}) }))
-      const all = directory.list()
+      const list = () => machines.list().map(briefMachine)
+      if (op === 'list') return json(list())
+      if (op === 'add') return json(briefMachine(await machines.add({ ...(target ? { target } : {}), ...(via ? { via } : {}), ...(command ? { command } : {}), ...(name ? { label: name } : {}) })))
+      const all = machines.list()
       const found = all.find((m) => m.id === machine) ?? all.filter((m) => m.label.toLowerCase() === machine?.toLowerCase()).at(0)
       if (!found) throw new Error(`No machine ${machine ?? '(none given)'}: ${all.map((m) => m.label).join(', ') || 'none added yet'}`)
-      if (op === 'remove') await directory.remove(found.id)
-      else if (op === 'rename') { if (!name?.trim()) throw new Error('rename needs a name'); await directory.update(found.id, { label: name.trim() }) }
-      else await directory.update(found.id, { enabled: op === 'enable' })
-      return json(directory.list())
+      if (op === 'remove') await machines.remove(found.id)
+      else if (op === 'rename') { if (!name?.trim()) throw new Error('rename needs a name'); await machines.update(found.id, { label: name.trim() }) }
+      else await machines.update(found.id, { enabled: op === 'enable' })
+      return json(list())
     },
   }) as typeof tools[number])
   return defineExtension({ name: 'ego', tools })

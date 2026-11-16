@@ -16,8 +16,9 @@ import type { AuthFlow } from './auth-flows.ts'
 import type { DaemonContext } from './host.ts'
 import type { ProfileRef, ProfileSpec } from './profiles.ts'
 import type { RunRecord } from './recap.ts'
+import type { MachineDraft, MachinePatch } from './relay.ts'
 
-export type { AuthFlow, RunRecord }
+export type { AuthFlow, MachineDraft, MachinePatch, RunRecord }
 
 /** A tool call that ended, as `toolCalls` hears it: its thread, what the agent asked, and how it went. */
 export type ToolCallRecord = {
@@ -446,13 +447,23 @@ export type DaemonApi = {
     clear(id: string): Promise<void>
   }
   /**
-   * The other machines this daemon reaches (its `machines.json`), and a call to one of them: its methods
-   * and actions as a client calls them (`thread.list`, `thread.start`, …). None when the daemon reaches no others.
+   * The other machines this daemon reaches (its `machines.json`, the list the app and `superego machines` keep), a call
+   * to one of them (its methods and actions as a client calls them: `thread.list`, `thread.start`, …), and the list
+   * itself to change. None when the daemon reaches no others; changing the list then is refused.
    */
   machines: {
     /** The machines it reaches, by id. */
     list(): MachineEntry[]
     /** Call a method or dispatch an action on `machine`, by its id. */
     call(machine: string, method: string, params?: unknown): Promise<unknown>
+    /**
+     * Add one: reached with ssh (`target`, `user@host` or a Host of `~/.ssh/config`; `command`, what runs there instead
+     * of Superego's own), or `via` any command piping stdio to it. The daemon and the app link to it on their own.
+     */
+    add(machine: MachineDraft): Promise<MachineEntry>
+    /** Change one, by id: its name (`label`), whether it's linked to (`enabled`), or how it's reached. */
+    update(id: string, patch: MachinePatch): Promise<MachineEntry>
+    /** Take one off the list, by id. */
+    remove(id: string): Promise<void>
   }
 }

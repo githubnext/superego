@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { connectSocket, listen, openDaemon, type MachineReach } from '@superego/daemon'
+import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi, type MachineReach } from '@superego/daemon'
 import threadTools from '../../../extensions/thread-tools/src/daemon.ts'
 import { defineApp, PROTOCOL_VERSION, type Json, type MachineEntry, type Notifications, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { machineHub, MachineStore, upload } from '../src/index.ts'
@@ -184,4 +184,21 @@ it('lets an agent start a thread on another machine', async () => {
   expect(transcript).toContain(`Started \\"Remote count\\" (thread ${there[0]!.id} on Box)`)
   // The box's faux model answers the child's prompt.
   await until(async () => (await call<ThreadInfo[]>(a.peer, hub.box, 'thread.list', {}))[0]?.status.state === 'done')
+})
+
+it("lets an extension change the list (superego.machines): added, renamed, switched off and removed, in machines.json", async () => {
+  let machines!: DaemonApi['machines']
+  const keeper = defineDaemonExtension({ name: 'keeper', setup(superego) { machines = superego.machines } })
+  const dataDir = join(dir, 'hub')
+  const daemon = await openDaemon({ app: hubApp, dataDir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [keeper], reach: (self) => machineHub({ app: hubApp, dataDir, self }) })
+  cleanups.push(() => daemon.close())
+  const added = await machines.add({ label: 'Box', target: 'me@box' })
+  expect(added).toMatchObject({ label: 'Box', remote: { enabled: true, ssh: true } })
+  expect(machines.list().map((m) => m.label)).toEqual(['Box'])
+  expect(await machines.update(added.id, { label: 'Build box', enabled: false })).toMatchObject({ label: 'Build box', state: 'disabled' })
+  expect(JSON.parse(await readFile(join(dataDir, 'machines.json'), 'utf8'))).toMatchObject([{ id: added.id, label: 'Build box', target: 'me@box', enabled: false }])
+  await machines.remove(added.id)
+  expect(machines.list()).toEqual([])
+  await expect(machines.remove(added.id)).rejects.toMatchObject({ kind: 'not_found' })
+  await expect(machines.add({ target: '-oProxyCommand=x' })).rejects.toMatchObject({ kind: 'invalid' })
 })

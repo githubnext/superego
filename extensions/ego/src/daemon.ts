@@ -10,20 +10,16 @@
 // (`threads.answering`). A turn the user asks for in the window, in the same conversation, still starts threads. Nor do they set up MCP servers through it:
 // superego_mcp_servers refuses whenever the message it's answering came from one, whatever the setting.
 import { hostname } from 'node:os'
-import { MachineStore } from '@superego/client'
 import { defineDaemonExtension, OUTSIDE_THREADS, type DaemonExtension } from '@superego/daemon'
 import { agentName, defineAction, obj, opt, RpcError, str, type ThreadInfo } from '@superego/protocol'
 import { about, ASK, CLEAR, OUTSIDE } from './shared.ts'
-import { egoPrompt, egoTools, type MachineDirectory } from './tools.ts'
+import { egoPrompt, egoTools } from './tools.ts'
 
 /** What Ego goes without, of what every thread has: it changes nothing itself, and starts threads its own way. */
 const WITHOUT = ['coding-tools', 'thread-tools']
 
-/**
- * Ego, given the machines this computer reaches (`machines.json` in the data folder, as the app keeps them) to set up.
- * Without them it has no superego_machines tool.
- */
-export function ego({ machines }: { machines?: (dataDir: string) => MachineDirectory } = {}): DaemonExtension {
+/** Ego. */
+export function ego(): DaemonExtension {
   return defineDaemonExtension({
     ...about,
     setup(superego) {
@@ -40,7 +36,7 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
         dispatch: (id, params) => superego.dispatch(id, params),
         actions: (exposure) => superego.actions(exposure),
         snapshot: () => superego.settings.snapshot(),
-        ...(machines ? { machines: () => machines(dataDir) } : {}),
+        machines: superego.machines,
         // The threads it starts are ordinary ones, top-level in their projects.
         threads: { info: (id) => threads.get(id).catch(() => undefined), list: () => threads.list(), answer: (id) => threads.lastAnswer(id), start: (params) => threads.start(params) },
         // Read as it's called: the setting may have changed since the message came.
@@ -125,4 +121,4 @@ export function ego({ machines }: { machines?: (dataDir: string) => MachineDirec
   })
 }
 
-export default ego({ machines: (dataDir) => new MachineStore(dataDir) })
+export default ego()

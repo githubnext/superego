@@ -2,8 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { defineAction, obj, opt, Router, str, unknown, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
-import { egoTools, egoPrompt, type EgoThreads, type MachineDirectory } from '../src/tools.ts'
+import { defineAction, obj, opt, Router, str, unknown, type MachineEntry, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
+import { egoTools, egoPrompt, type EgoMachines, type EgoThreads } from '../src/tools.ts'
 
 type Tool = { name: string; execute(params: unknown, api: unknown, context?: unknown): Promise<{ output: { text: string }[] }> }
 const text = async (tools: readonly unknown[], name: string, params: unknown) => {
@@ -38,8 +38,9 @@ describe("Ego's tools", () => {
       const set: unknown[] = []
       router.register(defineAction({ id: 'settings.set', title: 'Set', runs: 'machine', expose: ['cli'], params: obj({ key: str(), value: unknown() }), run: (params) => { set.push(params); return null } }))
       router.register(defineAction({ id: 'profile.list', title: 'Profiles', runs: 'machine', expose: ['cli'], params: obj({ cwd: opt(str()) }), run: ({ cwd }) => [{ name: 'default', dir: cwd }] }))
-      const machines: MachineDirectory = { list: () => [{ id: 'm1', label: 'box', target: 'me@box', enabled: true }], add: async () => ({ id: 'm2', label: 'x' }), update: async () => {}, remove: async () => {} }
-      const { tools = [] } = egoTools({ dir, ...on(router), snapshot, machines: () => machines, threads: threads() })
+      const box: MachineEntry = { id: 'm1', label: 'box', state: 'connected', remote: { route: 'ssh me@box superego connect --start', enabled: true, ssh: true } }
+      const machines: EgoMachines = { list: () => [box], add: async () => box, update: async () => box, remove: async () => {} }
+      const { tools = [] } = egoTools({ dir, ...on(router), snapshot, machines, threads: threads() })
       const names = (tools as unknown as Tool[]).map((t) => t.name)
       expect(names.sort()).toEqual(['ls', 'read', 'superego_actions', 'superego_machines', 'superego_mcp_servers', 'superego_profiles', 'superego_set_setting', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
       // Setup (settings, machines) is what it changes itself; files, profiles, skills and code go to threads, so it has
@@ -53,7 +54,7 @@ describe("Ego's tools", () => {
       // What it reads.
       expect((await run(tools, 'superego_actions', {}) as { id: string }[]).map((a) => a.id)).toEqual(['echo.say', 'settings.set', 'profile.list'])
       expect(await run(tools, 'superego_settings', {})).toEqual([{ id: 'agent', title: 'Agent', settings: [{ key: 'agent.model', title: 'Model', type: { type: 'string' }, default: null, value: 'faux/faux-1' }] }])
-      expect(await run(tools, 'superego_machines', { op: 'list' })).toEqual(machines.list())
+      expect(await run(tools, 'superego_machines', { op: 'list' })).toEqual([{ id: 'm1', label: 'box', state: 'connected', route: 'ssh me@box superego connect --start', enabled: true }])
       expect(await run(tools, 'superego_profiles', { cwd: 'proj' })).toEqual([{ name: 'default', dir: join(dir, 'proj') }])
       await mkdir(join(dir, 'profiles'))
       await writeFile(join(dir, 'settings.json'), '{}')
@@ -67,18 +68,23 @@ describe("Ego's tools", () => {
   })
 
   it('adds, renames, disables and removes machines in the list it is given', async () => {
-    let list: ReturnType<MachineDirectory['list']> = []
-    const directory: MachineDirectory = {
+    let list: MachineEntry[] = []
+    const entry = (id: string, label: string, target: string, enabled = true): MachineEntry =>
+      ({ id, label, state: enabled ? 'connecting' : 'disabled', remote: { route: `ssh ${target}`, enabled, ssh: true } })
+    const machines: EgoMachines = {
       list: () => list,
-      add: async ({ label, target = '' }) => { const added = { id: `m${list.length + 1}`, label: label ?? target, target, enabled: true }; list = [...list, added]; return added },
-      update: async (id, patch) => { list = list.map((m) => m.id === id ? { ...m, ...patch } : m) },
+      add: async ({ label, target = '' }) => { const added = entry(`m${list.length + 1}`, label ?? target, target); list = [...list, added]; return added },
+      update: async (id, { label, enabled }) => {
+        list = list.map((m) => m.id === id ? entry(m.id, label ?? m.label, m.remote!.route.slice(4), enabled ?? m.remote!.enabled) : m)
+        return list.find((m) => m.id === id)!
+      },
       remove: async (id) => { list = list.filter((m) => m.id !== id) },
     }
-    const { tools = [] } = egoTools({ dir: '/data', ...on(new Router()), snapshot, machines: () => directory, threads: threads() })
+    const { tools = [] } = egoTools({ dir: '/data', ...on(new Router()), snapshot, machines, threads: threads() })
     await run(tools, 'superego_machines', { op: 'add', target: 'me@box', name: 'box' })
     await run(tools, 'superego_machines', { op: 'rename', machine: 'box', name: 'Build box' })
     await run(tools, 'superego_machines', { op: 'disable', machine: 'Build box' })
-    expect(await run(tools, 'superego_machines', { op: 'list' })).toEqual([{ id: 'm1', label: 'Build box', target: 'me@box', enabled: false }])
+    expect(await run(tools, 'superego_machines', { op: 'list' })).toEqual([{ id: 'm1', label: 'Build box', state: 'disabled', route: 'ssh me@box', enabled: false }])
     await run(tools, 'superego_machines', { op: 'remove', machine: 'm1' })
     expect(list).toEqual([])
     await expect(run(tools, 'superego_machines', { op: 'enable', machine: 'nope' })).rejects.toThrow(/No machine nope/)

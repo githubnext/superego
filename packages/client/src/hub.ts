@@ -18,12 +18,29 @@ export function machineHub({ app, dataDir, self, store = new MachineStore(dataDi
     onChange: () => emit('$machines', '$machines', null),
   })
   const unfollow = links.follow()
+  const entryOf = (id: string) => {
+    const entry = links.entries().find((e) => e.id === id)
+    if (!entry) throw new RpcError('not_found', `No machine ${id}`)
+    return entry
+  }
   return {
     list: () => links.entries(),
     async call(machine, method, params) {
       const link = links.get(machine)
       if (!link) throw new RpcError('disconnected', `${store.get(machine)?.label ?? machine} is turned off`)
       return link.call(method, params)
+    },
+    async add(draft) {
+      const added = await store.add(draft)
+      return entryOf(added.id)
+    },
+    async update(id, patch) {
+      await store.update(id, patch)
+      return entryOf(id)
+    },
+    async remove(id) {
+      if (!store.get(id)) throw new RpcError('not_found', `No machine ${id}`)
+      await store.remove(id)
     },
     onEvent(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
     reconnect: (id) => links.restart(id),
