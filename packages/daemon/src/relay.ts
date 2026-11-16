@@ -31,6 +31,9 @@ type Peer = {
 
 const key = (machine: string, sub: string) => `${machine}\n${sub}`
 
+/** The links to the other machines, as createRelay keeps them. */
+export type Relay = ReturnType<typeof createRelay>
+
 export function createRelay(reach: MachineReach | undefined, self: () => MachineEntry) {
   const peers = new Set<Peer>()
   const owners = new Map<string, Peer>()
