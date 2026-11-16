@@ -1,11 +1,7 @@
 // Report-back: a child's run ending (or its question) told to its parent, batched, and not when the parent read it.
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { ConversationView } from '@earendil-works/pi-durable'
-import { connectSocket, listen, openDaemon } from '@superego/daemon'
-import { defineApp, PROTOCOL_VERSION, type Json, type ThreadInfo } from '@superego/protocol'
+import type { ThreadInfo } from '@superego/protocol'
+import { callTool, say, testDaemon, type TestDaemon } from '@superego/sdk/testing'
 import threadTools from '@superego/thread-tools/daemon'
 import threadReports, { excerpt, reporter, threadReports as withBatching, type ReportsHost } from '../src/daemon.ts'
 
@@ -217,137 +213,79 @@ it('keeps a long answer to its first lines', () => {
   expect(excerpt('x'.repeat(700))).toBe(`${'x'.repeat(600)}…\n\n(thread_read has the rest.)`)
 })
 
-// End to end: a daemon with the thread tools and reports, its model replayed.
+// End to end: a daemon with the thread tools and reports, its model scripted.
+const list = async (daemon: TestDaemon) => [...await daemon.call<ThreadInfo[]>('thread.list', {}), ...await daemon.call<ThreadInfo[]>('thread.list', { archived: true })]
+const quiet = async (daemon: TestDaemon, id: string) => (await list(daemon)).find((t) => t.id === id)?.quiet
+const startsDates = callTool('thread_start', { prompt: 'Look into the dates', title: 'Dates' })
+
 it("relays a child's answer to the parent that started it, as a message from it", async () => {
   vi.useRealTimers()
-  const dir = await mkdtemp(join(tmpdir(), 'superego-reports-'))
-  const turn = (content: Json[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
   // The parent starts a child and ends its turn; the child answers; the parent answers the report.
-  await writeFile(join(dir, 'turns.jsonl'), [
-    turn([{ type: 'toolCall', id: 'c1', name: 'thread_start', arguments: { prompt: 'Look into the dates', title: 'Dates' } }], 'toolUse'),
-    turn([{ type: 'text', text: 'Started it.' }], 'stop'),
-    turn([{ type: 'text', text: 'Dates are UTC.' }], 'stop'),
-    turn([{ type: 'text', text: 'Noted.' }], 'stop'),
-  ].join('\n') + '\n')
-  process.env.REPORTSTEST_MODEL = `replay:${join(dir, 'turns.jsonl')}`
-  process.env.REPORTSTEST_REPLAY_SPEED = '0'
-  const app = defineApp({ name: 'test', id: 'reportstest' })
-  const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [threadTools, threadReports] })
-  const server = await listen(daemon, join(dir, 's.sock'))
-  const { peer, socket } = await connectSocket(join(dir, 's.sock'))
+  const daemon = await testDaemon({ extensions: [threadTools, threadReports], model: [startsDates, say('Started it.'), say('Dates are UTC.'), say('Noted.')] })
   try {
-    await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
-    const parent = await peer.call<ThreadInfo>('thread.start', { prompt: 'split the work', title: 'Lead' })
-    const entries = async () => JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { thread: parent.id })).value.entries)
-    for (let i = 0; i < 600 && !(await entries()).includes('Noted.'); i++) await new Promise((r) => setTimeout(r, 25))
-    const child = (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id !== parent.id)!
+    const parent = await daemon.thread('split the work', { title: 'Lead' })
+    await daemon.until(async () => (await daemon.transcript(parent.id)).includes('Noted.'), 'the parent to answer the report')
+    const child = (await list(daemon)).find((t) => t.parent === parent.id)!
     // The two run at once, so either may have taken either answer.
-    expect(await entries()).toMatch(new RegExp(`From \\[Dates\\]\\(thread:${child.id}\\): finished\\.\\\\n\\\\n(Started it|Dates are UTC)\\.`))
+    expect(await daemon.transcript(parent.id)).toMatch(new RegExp(`From \\[Dates\\]\\(thread:${child.id}\\): finished\\.\\\\n\\\\n(Started it|Dates are UTC)\\.`))
     // Both are told how it works: the parent that its children report, the child that its answer is relayed.
-    const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: child.id })
+    const { value } = await daemon.call<{ value: unknown }>('thread.watch', { thread: child.id })
     expect(JSON.stringify(value)).toContain('relayed to [Lead]')
   } finally {
-    socket.destroy(); server.close(); await daemon.close()
-    delete process.env.REPORTSTEST_MODEL
-    await rm(dir, { recursive: true, force: true })
+    await daemon.close()
   }
 }, 40_000)
 
 it("reports only what the parent asked for: not the user's own conversation in the child, until the parent sends it again", async () => {
   vi.useRealTimers()
-  const dir = await mkdtemp(join(tmpdir(), 'superego-reports-'))
-  const turn = (content: Json[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
-  const say = (text: string) => turn([{ type: 'text', text }], 'stop')
-  const turns = (...lines: string[]) => writeFile(join(dir, 'turns.jsonl'), lines.join('\n') + '\n')
-  process.env.REPORTSTEST_MODEL = `replay:${join(dir, 'turns.jsonl')}`
-  process.env.REPORTSTEST_REPLAY_SPEED = '0'
-  const app = defineApp({ name: 'test', id: 'reportstest' })
-  async function open() {
-    const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [threadTools, withBatching({ quietMs: 50, maxMs: 200 })] })
-    const server = await listen(daemon, join(dir, 's.sock'))
-    const { peer, socket } = await connectSocket(join(dir, 's.sock'))
-    await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
-    return { peer, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
-  }
+  const batching = { quietMs: 50, maxMs: 200 }
   // The parent starts a child, which reports; then the user talks to the child.
-  await turns(turn([{ type: 'toolCall', id: 'c1', name: 'thread_start', arguments: { prompt: 'Look into the dates', title: 'Dates' } }], 'toolUse'), say('zz-one'), say('zz-two'), say('zz-noted'), say('zz-icons'))
-  let { peer, close } = await open()
-  const entries = async (id: string) => JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { thread: id })).value.entries)
-  const idle = async (id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)?.status.state === 'done'
-  const until = async (check: () => Promise<boolean>) => { for (let i = 0; i < 400 && !(await check()); i++) await new Promise((r) => setTimeout(r, 25)); expect(await check()).toBe(true) }
+  let daemon = await testDaemon({ extensions: [threadTools, withBatching(batching)], model: [startsDates, say('zz-one'), say('zz-two'), say('zz-noted'), say('zz-icons')] })
   try {
-    const parent = await peer.call<ThreadInfo>('thread.start', { prompt: 'split the work', title: 'Lead' })
-    await until(async () => (await entries(parent.id)).includes('zz-noted'))
-    const child = (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.parent === parent.id)!
-    const reports = async () => (await entries(parent.id)).split(`From [Dates](thread:${child.id})`).length - 1
+    const parent = await daemon.thread('split the work', { title: 'Lead' })
+    await daemon.until(async () => (await daemon.transcript(parent.id)).includes('zz-noted'), 'the parent to answer the report')
+    const child = (await list(daemon)).find((t) => t.parent === parent.id)!
+    const reports = async () => (await daemon.transcript(parent.id)).split(`From [Dates](thread:${child.id})`).length - 1
     expect(await reports()).toBe(1)
     // Quiet while it works for its parent (so its finishing isn't unread); the parent isn't.
-    const quiet = async (id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)?.quiet
-    expect(await quiet(child.id)).toBe(true)
-    expect(await quiet(parent.id)).toBeUndefined()
+    expect(await quiet(daemon, child.id)).toBe(true)
+    expect(await quiet(daemon, parent.id)).toBeUndefined()
     // The user's own message to the child, and its answer: not the parent's business.
-    await peer.call('thread.send', { thread: child.id, text: 'and the icons?' })
-    await until(async () => (await entries(child.id)).includes('zz-icons') && await idle(child.id))
-    await new Promise((r) => setTimeout(r, 300))
+    await daemon.send(child.id, 'and the icons?')
+    expect(await daemon.transcript(child.id)).toContain('zz-icons')
+    // Nothing to wait for: a report would have gone well within this (maxMs).
+    await new Promise((r) => setTimeout(r, batching.maxMs + 100))
     expect(await reports()).toBe(1)
-    expect(await quiet(child.id)).toBeUndefined()
+    expect(await quiet(daemon, child.id)).toBeUndefined()
     // The parent sends it more, after a restart (what the child does is kept): reported again.
-    await close()
-    await turns(turn([{ type: 'toolCall', id: 'c2', name: 'thread_send', arguments: { thread: child.id, text: 'More?' } }], 'toolUse'), say('zz-three'), say('zz-four'), say('zz-thanks'))
-    ;({ peer, close } = await open())
-    await peer.call('thread.send', { thread: parent.id, text: 'ask it for more' })
-    await until(async () => await reports() === 2)
-    expect(await entries(parent.id)).toContain(`From [Dates](thread:${child.id}): replied.`)
-    expect(await quiet(child.id)).toBe(true)
+    daemon = await daemon.restart({ model: [callTool('thread_send', { thread: child.id, text: 'More?' }), say('zz-three'), say('zz-four'), say('zz-thanks')] })
+    await daemon.call('thread.send', { thread: parent.id, text: 'ask it for more' })
+    await daemon.until(async () => await reports() === 2, 'the second report')
+    expect(await daemon.transcript(parent.id)).toContain(`From [Dates](thread:${child.id}): replied.`)
+    expect(await quiet(daemon, child.id)).toBe(true)
   } finally {
-    await close()
-    delete process.env.REPORTSTEST_MODEL
-    await rm(dir, { recursive: true, force: true })
+    await daemon.close()
   }
 }, 40_000)
 
 it("makes a child quiet only while its parent hears: not once the parent is archived, again once it's back", async () => {
   vi.useRealTimers()
-  const dir = await mkdtemp(join(tmpdir(), 'superego-reports-'))
-  const turn = (content: Json[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
-  const say = (text: string) => turn([{ type: 'text', text }], 'stop')
-  await writeFile(join(dir, 'turns.jsonl'), [
-    turn([{ type: 'toolCall', id: 'c1', name: 'thread_start', arguments: { prompt: 'Look into the dates', title: 'Dates' } }], 'toolUse'),
-    say('zz-one'), say('zz-two'), say('zz-noted'),
-  ].join('\n') + '\n')
-  process.env.REPORTSTEST_MODEL = `replay:${join(dir, 'turns.jsonl')}`
-  process.env.REPORTSTEST_REPLAY_SPEED = '0'
-  const app = defineApp({ name: 'test', id: 'reportstest' })
-  async function open() {
-    const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [threadTools, withBatching({ quietMs: 50, maxMs: 200 })] })
-    const server = await listen(daemon, join(dir, 's.sock'))
-    const { peer, socket } = await connectSocket(join(dir, 's.sock'))
-    await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
-    return { peer, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
-  }
-  let { peer, close } = await open()
-  const all = async () => [...await peer.call<ThreadInfo[]>('thread.list', {}), ...await peer.call<ThreadInfo[]>('thread.list', { archived: true })]
-  const quiet = async (id: string) => (await all()).find((t) => t.id === id)?.quiet
-  const until = async (check: () => Promise<boolean>) => { for (let i = 0; i < 400 && !(await check()); i++) await new Promise((r) => setTimeout(r, 25)); expect(await check()).toBe(true) }
-  const run = (id: string, params: Json) => peer.call('action.run', { id, params })
+  let daemon = await testDaemon({ extensions: [threadTools, withBatching({ quietMs: 50, maxMs: 200 })], model: [startsDates, say('zz-one'), say('zz-two'), say('zz-noted')] })
   try {
-    const parent = await peer.call<ThreadInfo>('thread.start', { prompt: 'split the work', title: 'Lead' })
-    await until(async () => JSON.stringify((await peer.call<{ value: ConversationView }>('thread.watch', { thread: parent.id })).value.entries).includes('zz-noted'))
-    const child = (await all()).find((t) => t.parent === parent.id)!
-    expect(await quiet(child.id)).toBe(true)
+    const parent = await daemon.thread('split the work', { title: 'Lead' })
+    await daemon.until(async () => (await daemon.transcript(parent.id)).includes('zz-noted'), 'the parent to answer the report')
+    const child = (await list(daemon)).find((t) => t.parent === parent.id)!
+    expect(await quiet(daemon, child.id)).toBe(true)
     // Its parent archived, its report would reach no one: it notifies for itself.
-    await run('thread.archive', { thread: parent.id })
-    await until(async () => await quiet(child.id) === undefined)
-    await run('thread.unarchive', { thread: parent.id })
-    await until(async () => await quiet(child.id) === true)
+    await daemon.dispatch('thread.archive', { thread: parent.id })
+    await daemon.until(async () => await quiet(daemon, child.id) === undefined, 'the child to be unquiet')
+    await daemon.dispatch('thread.unarchive', { thread: parent.id })
+    await daemon.until(async () => await quiet(daemon, child.id) === true, 'the child to be quiet')
     // Looked at again from the start, after a restart.
-    await run('thread.archive', { thread: parent.id })
-    await close()
-    ;({ peer, close } = await open())
-    await until(async () => await quiet(child.id) === undefined)
+    await daemon.dispatch('thread.archive', { thread: parent.id })
+    daemon = await daemon.restart()
+    await daemon.until(async () => await quiet(daemon, child.id) === undefined, 'the child to be unquiet after a restart')
   } finally {
-    await close()
-    delete process.env.REPORTSTEST_MODEL
-    await rm(dir, { recursive: true, force: true })
+    await daemon.close()
   }
 }, 40_000)

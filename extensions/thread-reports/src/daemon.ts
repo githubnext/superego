@@ -8,11 +8,10 @@
 // Only while the child works for its parent: from its first message (thread_start's prompt), and from each the parent
 // sends it (thread_send), until the user writes to it themselves (from a window or the command line), which hands it to
 // them: their own conversation with it isn't reported. Runs in between (the child's own children reporting, say) are
-// reported, so a grandchild's result makes its way up. Kept with the child (this extension's state: false, the
-// user's), so it holds across restarts; a child from before this was kept is reported as before. It's quiet
-// (`ThreadInfo.quiet`), so a child working for its parent is unread and notifies only when it needs the user; but only
-// while its parent hears (it's there, not archived, and not without thread-reports): a child whose report would reach
-// no one is unread and notifies for itself.
+// reported, so a grandchild's result makes its way up. Kept with the child (this extension's state: true, its
+// parent's; false, the user's), so it holds across restarts. It's quiet (`ThreadInfo.quiet`), so a child working for
+// its parent is unread and notifies only when it needs the user; but only while its parent hears (it's there, not
+// archived, and not without thread-reports): a child whose report would reach no one is unread and notifies for itself.
 //
 // Reports are best-effort, a convenience, not delivery to rely on: which children their parents have read
 // (`threads.noteRead`), the reports waiting to go (however long the parent's run) and which runs answered the parent
@@ -174,7 +173,7 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
       }
     })
     const report = async (thread: ThreadInfo, replied = false) => {
-      if (thread.parent && await working.get(thread.id) !== false) await reports.report(thread, { replied })
+      if (thread.parent && await working.get(thread.id) === true) await reports.report(thread, { replied })
     }
     s.thread({
       started: (thread) => { if (thread.parent) fresh.add(thread.id) },
@@ -200,7 +199,7 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
         return [
           !self.without?.includes('thread-tools') && 'Threads you start usually report back on their own: a message from each when it ' +
             'finishes, fails or waits on a question. You needn\'t wait on them with thread_read: carry on, or end your turn.',
-          hears(parent) && await working.get(self.id) !== false && `When a turn of yours ` +
+          hears(parent) && await working.get(self.id) === true && `When a turn of yours ` +
             `ends, its answer (the first lines) is relayed to ${linkTo(parent)} for you: you needn't thread_send it your result. Put the outcome first.`,
         ].filter(Boolean).join('\n') || undefined
       })],
