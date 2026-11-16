@@ -470,7 +470,7 @@ it('says what archiving did, a line from each extension whose hooks said one', a
   const grab = defineDaemonExtension({ name: 'grab', setup(s) { api = s } })
   const { peer, close } = await open([noting('tickets', 'Closed #12.', 'Unassigned.'), noting('quiet', undefined, undefined), grab])
   const thread = await peer.call<ThreadInfo>('thread.create', {})
-  expect(await peer.call('thread.archive', { id: thread.id })).toEqual({ notes: { tickets: 'Closed #12. Unassigned.' }, worktree: null })
+  expect(await peer.call('thread.archive', { id: thread.id })).toEqual({ notes: { tickets: 'Closed #12. Unassigned.' } })
   await peer.call('thread.unarchive', { id: thread.id })
   // To an extension too; nothing to say of one already away.
   expect(await api.threads.archive(thread.id)).toEqual({ notes: { tickets: 'Closed #12. Unassigned.' } })
