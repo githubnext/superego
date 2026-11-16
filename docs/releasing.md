@@ -4,14 +4,18 @@ A release is a signed, notarized `Superego.app` for Apple Silicon, zipped and at
 `githubnext/superego`. The repository is private, so only people with access to it can download a release. There are no
 automatic updates: people download the zip and replace the app.
 
+Releasing is by hand, on a Mac that can sign and notarize (for now, the one that has the Developer ID and the
+`TunaNotary` profile): no CI builds it.
+
 ```sh
-pnpm bundle             # build, sign and notarize into app/dist; nothing leaves this Mac but the notary upload
-pnpm release 0.1.0      # the same, then commit the version, tag, push and publish it
+pnpm release 0.1.0               # main, built, notarized, tagged v0.1.0 and published
+pnpm release 0.1.0 --no-publish  # the same up to the notarized zip; nothing is tagged or leaves this Mac
+pnpm bundle                      # this checkout as it is, notarized into app/dist (the version in app/package.json)
 ```
 
 ## Once per Mac
 
-Signing and notarizing need three things in the keychain. `pnpm bundle` says which one is missing.
+Signing and notarizing need two things in the keychain. `pnpm bundle` says which one is missing.
 
 1. **A Developer ID Application certificate** for team `DDB8SQMXS9`, with its private key. Check with
    `security find-identity -v -p codesigning`. Bring it over as a `.p12` exported from Keychain Access on a Mac that
@@ -30,7 +34,6 @@ Signing and notarizing need three things in the keychain. `pnpm bundle` says whi
    in the environment or in `.env` (see [.env.example](../.env.example)), and
    [scripts/notarytool-setup.sh](../scripts/notarytool-setup.sh) to store them as a profile.
    `xcrun notarytool history --keychain-profile TunaNotary` checks it.
-3. **Your GPG key**, for the release commit and tag, as for any commit here.
 
 `pnpm release` also needs `gh` signed in (`gh auth status`) with push access to the repository.
 
@@ -51,15 +54,19 @@ Notarizing takes a few minutes. The version is `version` in [app/package.json](.
 
 ## What `pnpm release <version>` does
 
-[app/scripts/release.ts](../app/scripts/release.ts):
+[app/scripts/release.ts](../app/scripts/release.ts), from any checkout or worktree of the repository. It releases the
+local `main` as it is when it starts, so merge first.
 
-1. Checks first, before minutes of building: on `main`, a clean tree, the tag not taken, `origin/main` not ahead
-   (it fetches), `gh` signed in, a Developer ID and notary credentials.
-2. Writes the version into `app/package.json` and runs `pnpm bundle`'s steps. If any fails, the version change is
-   undone and nothing has left this Mac.
-3. Commits `Release v<version>`, makes an annotated tag `v<version>`, pushes `main` and the tag.
-4. `gh release create v<version>` with the zip, titled `Superego <version>`, its notes generated from the commits
-   since the last release. Edit them on GitHub afterwards if they need it.
+1. Checks first, before minutes of building: the tag not taken (here or on GitHub; it fetches), `origin/main` not
+   ahead of `main`, `gh` signed in, a Developer ID and notary credentials.
+2. Builds in a worktree of its own: `main`'s commit, detached, in a temporary folder, with a fresh `pnpm install`. The
+   main checkout, which every merge fast-forwards, is never touched, and what's built is exactly that commit.
+3. `pnpm bundle`'s steps there, with the version given: it goes into the app (`CFBundleShortVersionString`) and the
+   zip's name, not into `app/package.json`. Nothing is committed for a release; the tag says which commit it was.
+   If anything fails, nothing has left this Mac, and the worktree is kept to look at.
+4. An annotated tag `v<version>` on that commit, then pushes it and that commit to `main` on GitHub.
+5. `gh release create v<version>` with the zip, titled `Superego <version>`, its notes generated from the commits
+   since the last release. Edit them on GitHub afterwards if they need it. Then it removes the worktree.
 
 Before releasing, run the checks as before any merge: `pnpm test` and `pnpm smoke`.
 
@@ -91,11 +98,8 @@ sg extension new foo && sg extension test foo && sg extension new bar --ui && sg
 - **pnpm won't run** (`ERR_PNPM_PNPM_ENGINE_IDENTITY_UNVERIFIABLE`): where registry.npmjs.org is blocked, pnpm
   verifies the version `packageManager` pins against the registry in its own config, not `NPM_CONFIG_REGISTRY`. Set
   the mirror there once, from outside the repo: `cd ~ && pnpm config set --global registry "$NPM_CONFIG_REGISTRY"`.
-- **"The specified electronDist does not exist"**: Electron's binary wasn't downloaded on install. Run
-  `node install.js` in `node_modules/.pnpm/electron@*/node_modules/electron`.
 - **No Developer ID / no notarytool profile**: see [Once per Mac](#once-per-mac).
 - **Notarization Invalid**: the error prints Apple's log; it names each file and what was wrong with it (usually
   something unsigned, or signed without the hardened runtime or a timestamp).
-- **It failed after pushing** (at `gh release create`): the commit and tag are out. Run
-  `gh release create v<version> app/dist/Superego-<version>-arm64.zip --verify-tag --title "Superego <version>" --generate-notes`
-  by hand rather than releasing again.
+- **It failed publishing** (pushing, or at `gh release create`): the zip is notarized and the tag made. It prints the
+  commands that finish it by hand, with the zip's path; run those rather than releasing again.

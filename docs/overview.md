@@ -15,7 +15,7 @@ pnpm smoke              # e2e of the app, headless: nothing reaches the screen
 pnpm --filter superego showcase /tmp/shots   # scripted threads, screenshotted
 pnpm --filter superego package               # Superego.app in app/dist, signed ad hoc for this Mac
 pnpm bundle             # …signed with your Developer ID and notarized, for any Mac (see .env.example)
-pnpm release 0.1.0      # bundle, tag, push and publish it as a GitHub release
+pnpm release 0.1.0      # main, notarized, tagged and published as a GitHub release (--no-publish: just the zip)
 pnpm link:cli           # `superego` on your PATH (~/.local/bin/superego -> app/bin/superego.ts)
 ```
 

@@ -30,6 +30,8 @@ export type PackageOptions = {
   identity?: string | null
   /** Notarize and staple the signed app; needs `identity`. */
   notarize?: NotaryAuth | null
+  /** The version the app says it is (and its zip is named by); defaults to the package.json's. */
+  version?: string
 }
 
 const BUILDER = 'electron-builder@26'
@@ -47,7 +49,7 @@ export async function packageApp(root: string, app: AppConfig, options: PackageO
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version?: string; description?: string }
   if (!existsSync(join(root, 'out/main/main.js'))) throw new Error('Nothing built: run electron-vite build first')
   if (options.notarize && !options.identity) throw new Error('Notarizing needs a signing identity')
-  const version = pkg.version ?? '0.0.0'
+  const version = options.version ?? pkg.version ?? '0.0.0'
 
   // Stage: what the app is, and nothing else.
   const stage = join(root, 'dist/app')
@@ -73,6 +75,8 @@ export async function packageApp(root: string, app: AppConfig, options: PackageO
   // The Electron this app runs on, as installed: its version and its unpacked dist.
   const electron = dirname(createRequire(join(root, 'package.json')).resolve('electron/package.json'))
   const electronVersion = (JSON.parse(readFileSync(join(electron, 'package.json'), 'utf8')) as { version: string }).version
+  // Electron fetches its binary when first run, which a fresh install (a release's own worktree) hasn't been yet.
+  if (!existsSync(join(electron, 'dist'))) execFileSync('node', ['install.js'], { cwd: electron, stdio: 'inherit' })
   const config = {
     appId: options.bundleId ?? app.bundleId ?? `dev.superego.${app.id}`,
     productName: app.name,
