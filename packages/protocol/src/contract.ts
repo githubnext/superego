@@ -17,13 +17,22 @@ import type { ExtensionAbout } from './app.ts'
  * 2.3: daemon seams so extensions stop reaching into internals: `threads.send`'s `from` (and `OutgoingMessage.from`),
  * `threads.answering`, `threads.noteRead`/`parentRead`, `machines.add`/`update`/`remove`, `state({ publish })`,
  * `profileKey` (`ProfileInfo.brings`), and a settings section's `value`. Gone with it, without a major (generation 2
- * isn't released): the profile's `worktree` and `mcp`, `NewThread.worktree`, the `ProfileMcpServer` type (now the
- * mcp-servers extension's, whose `mcpServers` is one list), and `ProfileInfo.mcp`.
- * 2.4: `threads.idle` (wait until a thread isn't working).
+ * wasn't released before v0.1.0): the profile's `worktree` and `mcp`, `NewThread.worktree`, the `ProfileMcpServer` type
+ * (now the mcp-servers extension's, whose `mcpServers` is one list), and `ProfileInfo.mcp`.
+ * 2.4: `threads.idle` (wait until a thread isn't working). Gone by v0.1.0, without a major and unrecorded then: the
+ * daemon half's `pane(kind, about)` (an extension describes its pane kinds in `about.panes`); the UI half's
+ * `app.notify`, and `threadNotification`, `signInNotification` and `unreadCount` from 'superego/unstable' (the app
+ * notifies by itself); the protocol's `reportsToParent` (`ThreadInfo.quiet` instead).
+ * 2.5: `state({ publish })` takes `{ key, empty }`: a published scope reads null only until it's read, then `empty`
+ * for a thread without state (its `publish: key` went without a major: agent-ui was its only user); `threads.answering`
+ * passes over a user message nobody sent (a compaction's summary, a reset's handoff, a continuation); `threads.of`
+ * finds a subagent's thread; `ProfileSpec` is closed (the bundled extensions' keys come with 'superego''s
+ * `defineProfile`; `LoadedSpec` is a profile as loaded, extensions' keys and all), and `ProfileInfo.problems`.
  * Minor: something added (an extension that uses it asks for `^2.<minor>`); major: something an extension could rely
- * on changed or went. An extension whose `api` range this doesn't satisfy is refused when it's set up.
+ * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
+ * when it's set up.
  */
-export const EXTENSION_API = '2.4.0'
+export const EXTENSION_API = '2.5.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>
