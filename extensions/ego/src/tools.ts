@@ -11,7 +11,8 @@ import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { createReadTool } from '@earendil-works/pi-durable/tools'
 import { listTool, readTool, type ThreadsHost } from '@superego/thread-tools/tools'
 import type { DaemonApi } from '@superego/daemon'
-import { bool, linkTo, lit, obj, opt, str, union, unknown, type ActionInfo, type Exposure, type Json, type MachineEntry, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
+import { bool, lit, obj, opt, str, union, unknown } from '@earendil-works/pi-schema'
+import { linkTo, type ActionInfo, type Exposure, type Json, type MachineEntry, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 
 /** The machines this computer reaches, as the daemon has them (`superego.machines`): to list and change. */
 export type EgoMachines = Pick<DaemonApi['machines'], 'list' | 'add' | 'update' | 'remove'>

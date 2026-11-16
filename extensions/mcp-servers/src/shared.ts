@@ -2,8 +2,8 @@
 // `<dataDir>/mcp-servers.json` keeps it, what Settings → MCP servers draws (the live value `mcp-servers.servers`, the
 // section's data), what a thread says of its servers (`thread.facts['mcp-servers']`), and the actions
 // with their params. See docs/mcp.md.
-import { arr, bool, lit, num, obj, opt, str, union, type ExtensionAbout, type Json, type Static } from '@superego/protocol'
-import { map, oneOf } from '@earendil-works/pi-schema'
+import { arr, bool, lit, map, num, obj, oneOf, opt, str, union, type Static } from '@earendil-works/pi-schema'
+import type { ExtensionAbout, Json } from '@superego/protocol'
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
 export const about = {

@@ -441,7 +441,8 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .palette__list li.is-active :is(.palette__glyph, .palette__detail, kbd, .superego-status) { color: inherit; }
 .palette__glyph { width: 1em; color: var(--superego-muted); font-family: var(--superego-mono); text-align: center; }
 .palette__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.palette__detail { color: var(--superego-muted); font-size: var(--superego-text-sm); }
+/* More after the title (where a link goes, a file's folder): cut short before the title is. */
+.palette__detail { flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--superego-muted); font-size: var(--superego-text-sm); }
 .palette__list kbd { font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-muted); }
 .palette__none { color: var(--superego-muted); }
 
@@ -697,7 +698,6 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .md a.thread-ref:hover { text-decoration: none; }
 .thread-ref__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thread-ref .superego-status { width: auto; flex: none; }
-.row__thread { flex: 0 1 auto; align-items: center; }
 .thread__parent .thread-ref { color: inherit; }
 .md a.md__file:hover { text-decoration: underline; text-underline-offset: 2px; }
 .md a.md__file--code code { color: inherit; }

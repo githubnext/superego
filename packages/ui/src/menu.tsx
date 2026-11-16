@@ -22,7 +22,7 @@ function Popup({ children, side = 'bottom', align = 'start', className = '' }: {
 function RadioItem({ children, hint, ...props }: ComponentProps<typeof Base.RadioItem> & { hint?: ReactNode }) {
   return (
     <Base.RadioItem className="superego-menu__item" {...props}>
-      <span>{children as ReactNode}</span>
+      <span className="superego-menu__text">{children as ReactNode}</span>
       <span className="superego-menu__hint">{hint}<Base.RadioItemIndicator className="superego-menu__check">✓</Base.RadioItemIndicator></span>
     </Base.RadioItem>
   )
@@ -31,21 +31,21 @@ function RadioItem({ children, hint, ...props }: ComponentProps<typeof Base.Radi
 function CheckboxItem({ children, hint, ...props }: ComponentProps<typeof Base.CheckboxItem> & { hint?: ReactNode }) {
   return (
     <Base.CheckboxItem className="superego-menu__item" {...props}>
-      <span>{children as ReactNode}</span>
+      <span className="superego-menu__text">{children as ReactNode}</span>
       <span className="superego-menu__hint">{hint}<Base.CheckboxItemIndicator className="superego-menu__check">✓</Base.CheckboxItemIndicator></span>
     </Base.CheckboxItem>
   )
 }
 
 function Item({ children, hint, ...props }: ComponentProps<typeof Base.Item> & { hint?: ReactNode }) {
-  return <Base.Item className="superego-menu__item" {...props}><span>{children as ReactNode}</span>{hint && <span className="superego-menu__hint">{hint}</span>}</Base.Item>
+  return <Base.Item className="superego-menu__item" {...props}><span className="superego-menu__text">{children as ReactNode}</span>{hint && <span className="superego-menu__hint">{hint}</span>}</Base.Item>
 }
 
 /** An item that opens a menu of its own beside it (in a `SubmenuRoot`, with its `Popup` after). */
 function SubmenuTrigger({ children, ...props }: ComponentProps<typeof Base.SubmenuTrigger>) {
   return (
     <Base.SubmenuTrigger className="superego-menu__item" {...props}>
-      <span>{children as ReactNode}</span>
+      <span className="superego-menu__text">{children as ReactNode}</span>
       <CaretRightIcon className="superego-menu__hint" size={11} aria-hidden />
     </Base.SubmenuTrigger>
   )

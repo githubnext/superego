@@ -11,8 +11,8 @@ import { randomUUID } from 'node:crypto'
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { arr, obj, opt, str, union, unknown } from '@earendil-works/pi-schema'
 import { BLOCKS_GUIDE, blocksParameter, checkBlocks, type Reply, type Value } from '@superego/blocks'
-import { defineDaemonExtension } from '@superego/daemon'
-import { defineAction, RpcError } from '@superego/protocol'
+import { defineAction, defineDaemonExtension } from '@superego/daemon'
+import { RpcError } from '@superego/protocol'
 import {
   about, ANSWER, ASK, ASK_USER, GUIDE_SECTION, KIND, OPEN, PANES, SHOW, UPDATE, WAITING,
   type AskDetails, type Option, type PaneSpec, type QuestionDetails, type Spec, type ThreadPanes, type Waiting,

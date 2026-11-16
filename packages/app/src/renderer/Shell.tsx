@@ -14,6 +14,7 @@ import { useRegistry, whose } from './registry.tsx'
 import { shownPanes } from './lookups.ts'
 import { paneMenu, PlacedViews, Slot, useLayout, viewsIn } from './placement.tsx'
 import { Contained } from './contained.tsx'
+import { RailButton } from './marks.tsx'
 import { forgetWindows, useLocalState } from './local-state.ts'
 import { ServiceNotice } from './ServiceNotice.tsx'
 import { RevokedUiNotice } from './profile-ui-notice.tsx'
@@ -249,9 +250,9 @@ function SpaceButton({ view, open, sidebarHidden, show, narrow = false }: { view
   const Icon = view.icon
   const shown = open && !sidebarHidden
   return (
-    <IconButton label={view.title} title={keys ? `${view.title} (${keys})` : view.title} className={`app__rail-button ${shown ? 'is-on' : ''}`} onClick={() => show(!shown)}>
+    <RailButton label={view.title} title={keys ? `${view.title} (${keys})` : view.title} on={shown} onClick={() => show(!shown)}>
       {Icon ? <Icon size={18} aria-hidden /> : view.title.slice(0, 1)}
-    </IconButton>
+    </RailButton>
   )
 }
 

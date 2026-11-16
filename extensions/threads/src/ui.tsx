@@ -1,4 +1,3 @@
-/// <reference path="./env.d.ts" />
 // threads: the Threads space in the sidebar. Projects (a repository or folder on a machine) and the threads in each; the machine is said on the project,
 // where it isn't this computer. Its views:
 // - the list (`threads.list`), a space: sorted recently active, newest first, or needs you first (an app setting); with
@@ -10,7 +9,7 @@
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are thread-tools'.
 import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
-  call, defineAction, defineUiExtension, MachineDrift, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
+  call, defineAction, defineUiExtension, MachineDrift, RailButton, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
   type MachineEntry, type Project, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, STATUS_WORDS, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
@@ -217,10 +216,10 @@ function ThreadsRail({ open, sidebarHidden, show }: SpaceRailProps) {
   return (
     <TooltipProvider>
       <Tooltip content={!open ? `Show Threads${tabKeys ? ` (${tabKeys})` : ''}` : `${hidden ? 'Show sidebar' : 'Hide sidebar'}${toggleKeys ? ` (${toggleKeys})` : ''}`} side="right">
-        <IconButton label="Threads" className={`app__rail-button threads-rail__button ${open ? 'is-on' : ''}`} onClick={click}>
+        <RailButton label="Threads" className="threads-rail__button" on={open} onClick={click}>
           <ChatsIcon size={18} aria-hidden />
           {badge && <span className={`threads-rail__badge threads-rail__badge--${badge}`} />}
-        </IconButton>
+        </RailButton>
       </Tooltip>
       {hidden && (
         <nav className="threads-rail" aria-label="Threads">

@@ -5,8 +5,8 @@
 // that looks like one is refused, and the user is sent to Settings → MCP servers to sign in or set a key. A command it
 // adds or edits waits for the user's Allow (`allowed: false`). It refuses outside agents altogether.
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
-import { map, oneOf } from '@earendil-works/pi-schema'
-import { arr, bool, obj, opt, str, type AppConfig, type Json } from '@superego/protocol'
+import { arr, bool, map, obj, oneOf, opt, str } from '@earendil-works/pi-schema'
+import type { AppConfig, Json } from '@superego/protocol'
 import { CATALOG, fromCatalog } from './catalog.ts'
 import { configOf, formOf, quote } from './describe.ts'
 import { ACTIONS, type CheckResult, type SectionData, type ServerConfig, type ServerInfo } from './shared.ts'

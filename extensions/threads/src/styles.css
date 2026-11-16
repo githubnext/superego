@@ -67,3 +67,5 @@
 .thread__tools > .threads-model { flex: 0 1 auto; min-width: 48px; }
 .threads-model:hover { background: var(--superego-hover); color: var(--superego-text); }
 .threads-model.is-on { background: var(--superego-selected); color: var(--superego-text); }
+/* A thread a tool row names (the one started, read or messaged): it gives way when the row is tight, centred in it. */
+a.threads-row-ref { flex: 0 1 auto; align-items: center; }

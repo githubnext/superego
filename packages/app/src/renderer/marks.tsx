@@ -1,6 +1,8 @@
 // What an extension draws in the window's own places, in the window's look: a chip among a thread's header chips, a mark
-// on its row in the sidebar, a chip under a sent message. And what extensions say of a thread (its facts), read typed.
-import type { ReactNode } from 'react'
+// on its row in the sidebar, a chip under a sent message, a button in the rail. And what extensions say of a thread (its
+// facts), read typed.
+import type { ComponentProps, ReactNode } from 'react'
+import { IconButton } from '@superego/ui'
 import type { Json, ThreadInfo } from '@superego/protocol'
 
 /** In `header.chips`: a chip among those that say where a thread works (its branch, say), cut short to fit. */
@@ -20,6 +22,14 @@ export const Chip = ({ icon, children, title }: { icon: ReactNode; children: Rea
     <span className="attachment__icon">{icon}</span>
     <span className="attachment__name">{children}</span>
   </span>
+)
+
+/**
+ * In the rail (a space's own `railButton`, a `rail` view): a button as the rail draws its own, lit while `on`. On a
+ * phone's drawer too. Its other props are an `IconButton`'s; `className` adds the extension's own.
+ */
+export const RailButton = ({ on = false, className = '', ...props }: ComponentProps<typeof IconButton> & { on?: boolean }) => (
+  <IconButton className={`app__rail-button ${on ? 'is-on' : ''} ${className}`} {...props} />
 )
 
 /** What an extension says of a thread (its `facts`), by the extension's name or its `about`: `factsOf<Worktree>(thread, about)`. */

@@ -40,7 +40,7 @@ function UnreadButton({ place }: ViewProps<'window'>) {
   const label = `${list.length} unread`
   return (
     <Menu.Root>
-      <Menu.Trigger render={<Button className={`unread-button unread-button--${top.state}`} aria-label={label} title={label} />}>
+      <Menu.Trigger render={<Button className={`unread-button unread-button--${top.state} ${place === 'rail' ? 'unread-button--rail' : ''}`} aria-label={label} title={label} />}>
         <BellIcon size={15} aria-hidden />
         <span className="unread-button__count">{list.length}</span>
       </Menu.Trigger>

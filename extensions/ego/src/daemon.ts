@@ -9,8 +9,9 @@
 // window), and while `outside.startThreads` is off, thread_start refuses when the message its call answers came from one
 // (`threads.answering`). A turn the user asks for in the window, in the same conversation, still starts threads.
 import { hostname } from 'node:os'
-import { defineDaemonExtension, OUTSIDE_THREADS, type DaemonExtension } from '@superego/daemon'
-import { agentName, defineAction, obj, opt, RpcError, str, type ThreadInfo } from '@superego/protocol'
+import { obj, opt, str } from '@earendil-works/pi-schema'
+import { defineAction, defineDaemonExtension, OUTSIDE_THREADS, type DaemonExtension } from '@superego/daemon'
+import { agentName, RpcError, type ThreadInfo } from '@superego/protocol'
 import { about, ASK, CLEAR, OUTSIDE } from './shared.ts'
 import { egoPrompt, egoTools } from './tools.ts'
 

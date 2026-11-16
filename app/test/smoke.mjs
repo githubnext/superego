@@ -918,7 +918,7 @@ if (phase === 'first') {
   await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('what is a profile?'))`, 'asked Ego')
   // An outside agent's message shows as one; the user's doesn't.
   await run(`window.superego.call('local', 'action.run', { id: 'ego.ask', params: { prompt: 'and from an agent?' }, exposure: 'outside' })`)
-  await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('and from an agent?') && m.querySelector('.ego__outside') && !m.textContent.includes('<outside-agent>'))`, "an outside agent's message to Ego, marked")
+  await until(`[...document.querySelectorAll('.msg--user')].some((m) => m.textContent.includes('and from an agent?') && [...m.querySelectorAll('.attachment--chip')].some((c) => c.textContent === 'Outside agent') && !m.textContent.includes('<outside-agent>'))`, "an outside agent's message to Ego, marked")
   if (await run(`[...document.querySelectorAll('.msg--user')].find((m) => m.textContent.includes('what is a profile?')).querySelector('.ego__outside') !== null`)) { await fail("the user's message marked as an outside agent's"); throw new Error('failed') }
   await until(`(document.querySelector('.transcript')?.textContent.split('echo:').length ?? 0) > 2`, 'Ego answered both')
   await shot('ego-outside')

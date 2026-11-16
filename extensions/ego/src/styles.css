@@ -6,17 +6,14 @@
 /* Clear, in its title bar: flat, as the header's other icon buttons (the core's .thread__archive). */
 .ego__clear { width: 28px; height: 28px; min-height: 28px; border-radius: 6px; box-shadow: none; background: none; color: var(--superego-muted); }
 .ego__clear:hover { background: var(--superego-hover); color: var(--superego-text); }
-/* A message from an outside agent: a chip like a file's (the core's .attachment). */
-.ego__outside { padding-left: 8px; }
-.ego__outside .attachment__icon { width: auto; height: auto; }
 /* On the first-launch page: its button as the rail draws it, a line on what to ask, and a way in. Meanwhile the real
    one in the rail breathes, to be found. */
 .ego__welcome { display: flex; align-items: center; gap: var(--superego-space-3); }
 .ego__welcome p { flex: 1; margin: 0; }
 .ego__welcome-mark { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: var(--superego-rail-bg); color: var(--superego-text); }
-.app:has(.onboarding) .app__rail .ego__button .ego__dot { animation: ego-beckon 2.4s ease-in-out infinite; }
+.ego__button--beckon .ego__dot { animation: ego-beckon 2.4s ease-in-out infinite; }
 @keyframes ego-beckon {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--superego-accent) 0%, transparent); }
   50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--superego-accent) 30%, transparent); }
 }
-@media (prefers-reduced-motion: reduce) { .app:has(.onboarding) .app__rail .ego__button .ego__dot { animation: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--superego-accent) 30%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .ego__button--beckon .ego__dot { animation: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--superego-accent) 30%, transparent); } }

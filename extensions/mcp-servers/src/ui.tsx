@@ -1,4 +1,3 @@
-/// <reference path="./env.d.ts" />
 // mcp-servers, UI half: Settings → MCP servers (settings.tsx), and in threads:
 // - MCP calls as rows (`mcp__*`): the plug, Called / Calling / Failed (or "Interrupted: may have run"), the server and
 //   tool with the first short argument; open, the arguments (folded), then the result, its images inline
@@ -6,11 +5,11 @@
 // - a chip in the header (`mcp-servers.chip`): how many servers the thread has, opening to each with its state, and
 //   why any were left out; the same list in thread details (⌘I)
 // - a notice over the composer when one of its servers needs the user to sign in or set a key
-// It draws only what the daemon half says (`thread.facts['mcp-servers']`, the live value `mcp-servers.servers`), so a
+// It draws only what the daemon half says (the thread's facts, the live value `mcp-servers.servers`), so a
 // machine without the extension shows none of it.
 import { useState } from 'react'
 import {
-  defineUiExtension, Output, useLocalState, useValue,
+  defineUiExtension, factsOf, Output, useLocalState, useValue,
   type MachineEntry, type SlotProps, type ToolRowCall, type ViewProps,
 } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
@@ -45,7 +44,7 @@ export default defineUiExtension({
 })
 
 /** What a thread says of its servers, if it has any (or would have). */
-export const serversOf = (thread: ThreadInfo) => thread.facts?.[about.name] as ThreadServers | undefined
+export const serversOf = (thread: ThreadInfo) => factsOf<ThreadServers>(thread, about)
 
 // ── Rows ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -139,7 +138,7 @@ export function Chip({ thread }: ViewProps<'thread'>) {
   const label = count === 1 ? '1 server' : `${count} servers`
   return (
     <Popover tooltip="MCP servers" trigger={
-      <button type="button" className={`header__chip mcp-chip ${troubled(servers) ? 'is-troubled' : ''}`} aria-label={`MCP servers: ${count}`}>
+      <button type="button" className={`mcp-chip ${troubled(servers) ? 'is-troubled' : ''}`} aria-label={`MCP servers: ${count}`}>
         <PlugIcon size={12} aria-hidden /> {label}
       </button>
     }>

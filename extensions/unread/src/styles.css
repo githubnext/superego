@@ -4,8 +4,6 @@
 .unread-button--blocked { color: var(--superego-status-blocked); }
 .unread-button--error { color: var(--superego-status-error); }
 .unread-menu { max-width: 360px; }
-.unread-menu .superego-menu__item > span:first-child { min-width: 0; }
 .unread-menu__row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .unread-menu__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.superego-menu__item[data-highlighted] .unread-menu__row .superego-status { color: inherit; }
-.app__rail .unread-button { padding: 3px 5px; }
+.unread-button--rail { padding: 3px 5px; }

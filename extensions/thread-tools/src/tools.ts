@@ -6,7 +6,8 @@
 // its parent isn't in that machine's catalog.
 // Plain tools on a host, so Ego's own (`thread_read`, `thread_list`, its `thread_start`) are built from the same parts.
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
-import { bool, linkTo, obj, opt, str, type Json, type MachineEntry, type ThreadInfo } from '@superego/protocol'
+import { bool, obj, opt, str } from '@earendil-works/pi-schema'
+import { linkTo, type Json, type MachineEntry, type ThreadInfo } from '@superego/protocol'
 
 /** A thread to start, as `thread.start` takes it. */
 type NewChild = { prompt: string; title?: string; cwd?: string; profile?: string; options?: Record<string, Json> }

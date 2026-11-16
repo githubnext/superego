@@ -92,7 +92,8 @@ Bundled extensions get more than a profile's:
   `rail` is a button there that
   isn't a space (Ego's, `order: 10`); `drawer` the foot of a phone's drawer, beside Settings; `titlebar` the title
   bar's start. `default` is where it starts (none: offered, the user places it), `narrow` where it goes on a phone,
-  `withoutSpaces` where it goes while no view is in `space` (Unread's bell in the rail). The user's layout decides in
+  `withoutSpaces` where it goes while no view is in `space` (Unread's bell in the rail). A button of its own in the rail
+  is a `<RailButton label on>`, lit while `on`, as the rail's own are. The user's layout decides in
   the end: read where it is with `usePlacement(id, place)`, never keep a setting of your own for it. And
   **`superego.work(divide)`** to group a run of
   work in the transcript (as `tasks` does).
@@ -147,6 +148,6 @@ Pure logic (parsing, dividing work, a composer provider's `word`, a `sentWith` r
 - Comments explain why and what something is for, in plain words, at the top of each file.
 - Name things after what the user sees: thread, pane, project, machine.
 - Name your CSS classes after the extension (`.orders-list`, `.orders-list__row`). The window's own look comes through
-  its components (`PaneMessage`, `PaneNote`, `PaneButton`, `HeaderChip`, `ThreadBadge`, `Chip`, `DiffStat`), never its
+  its components (`PaneMessage`, `PaneNote`, `PaneButton`, `HeaderChip`, `ThreadBadge`, `Chip`, `RailButton`, `DiffStat`), never its
   class names, and a fact through `factsOf<T>(thread, about)`.
 - Keep this skill (`packages/cli/skill/`) and `docs/overview.md` in step when the extension API, profiles or commands change.
