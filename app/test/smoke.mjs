@@ -196,7 +196,7 @@ if (phase === 'first') {
   await run(`window.superego.call('local', 'thread.send', { thread: '${id}', text: 'see ${page}' })`)
   await until(`Boolean(document.querySelector('.md a[href="${page}"] + .md__pane-link'))`, 'pane button beside a web link')
   await run(`document.querySelector('.md a[href="${page}"] + .md__pane-link').click()`)
-  await until(`Boolean(document.querySelector('.frame-pane iframe[src="${page}"]'))`, 'link opened in a preview pane')
+  await until(`Boolean(document.querySelector('.web-panes-frame iframe[src="${page}"]'))`, 'link opened in a preview pane')
   const framed = async () => {
     const frame = BrowserWindow.getAllWindows()[0].webContents.mainFrame.framesInSubtree.find((f) => f.url === page)
     return frame ? frame.executeJavaScript('document.title').catch(() => '') : ''
@@ -523,7 +523,7 @@ if (phase === 'first') {
   // ⌘N: the New thread dialog refuses a folder that isn't there, then starts with the prompt on ⌘⏎.
   await key('n')
   await until(`Boolean(document.querySelector('.new-thread [aria-label="Prompt"]'))`, 'new thread dialog')
-  await until(`[...document.querySelectorAll('.new-thread__check')].some((l) => l.textContent.includes('worktree'))`, "the worktrees extension's field in it")
+  await until(`[...document.querySelectorAll('.worktrees-check')].some((l) => l.textContent.includes('worktree'))`, "the worktrees extension's field in it")
   await new Promise((resolve) => setTimeout(resolve, 400))
   await shot('new-thread')
   const setValue = (selector, value) => run(`(() => {
@@ -636,7 +636,7 @@ if (phase === 'first') {
   const emulated = BrowserWindow.getAllWindows()[0].webContents.debugger
   if (!emulated.isAttached()) emulated.attach()
   await emulated.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true })
-  await run(`document.querySelector('.frame-pane iframe').focus()`)
+  await run(`document.querySelector('.web-panes-frame iframe').focus()`)
   await until(`document.querySelector('.panes__tab.is-active')?.textContent.startsWith('page.html')`, 'focus into the page brings it forward')
   for (let left = 2; left >= 0; left--) {
     await key('w')
@@ -962,11 +962,11 @@ if (phase === 'first') {
   })()`, `only ${label} ringed`)
   const front = (label) => until(`(document.querySelector('.panes__tab.is-active .panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}`, `${label} brought forward`)
   await run(`window.superego.call('local', 'pane.open', { thread: '${shown}', kind: 'preview', params: { url: 'http://127.0.0.1:${another.address().port}/' } })`)
-  await until(`Boolean(document.querySelector('.frame-pane iframe'))`, 'a page beside the thread')
+  await until(`Boolean(document.querySelector('.web-panes-frame iframe'))`, 'a page beside the thread')
   await run(`document.querySelector('.composer textarea').focus()`)
   await ringed('thread')
   await key('Right', ['meta', 'alt'])
-  await until(`document.activeElement?.matches('.frame-pane iframe')`, 'cmd+alt+right into the page')
+  await until(`document.activeElement?.matches('.web-panes-frame iframe')`, 'cmd+alt+right into the page')
   await ringed('Preview')
   await front('Preview')
   // Out of it again: the page has the keyboard, so the window takes the key before it.
@@ -978,8 +978,8 @@ if (phase === 'first') {
     const box = JSON.parse(await run(`JSON.stringify(document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect())`))
     for (const type of ['mouseDown', 'mouseUp']) BrowserWindow.getAllWindows()[0].webContents.sendInputEvent({ type, x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2), button: 'left', clickCount: 1 })
   }
-  await click('.frame-pane iframe')
-  await until(`document.activeElement?.matches('.frame-pane iframe')`, 'a click into the page')
+  await click('.web-panes-frame iframe')
+  await until(`document.activeElement?.matches('.web-panes-frame iframe')`, 'a click into the page')
   await ringed('Preview')
   await front('Preview')
   await run(`window.superego.call('local', 'pane.close', { thread: '${shown}', pane: document.querySelector('[data-column]:not([data-column="thread"])').dataset.column })`)
