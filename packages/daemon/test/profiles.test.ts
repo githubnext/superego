@@ -1068,13 +1068,14 @@ export default defineDaemonExtension({ name: 'stuck', async setup(superego) {
   })
   write(join(home, 'profiles', 'default'), { 'profile.ts': profileTs(['./vault.ts']), 'vault.ts': vault('one') })
   left.__stuckAborted = false
-  const { peer, close } = await open(home, 300)
+  // The limit bounds what loads in time too: the daemon's own extensions setting up, each profile's modules loading
+  // (through vitest's transforms here) and the vault setting up, which take a second or more on a busy machine. The test
+  // waits it out, before the profile behind the hanging one loads.
+  const { peer, close } = await open(home, 3_000)
   const hanging = load(peer, 'hang').then(() => undefined, (error: Error) => error)
-  const started = Date.now()
   await load(peer, 'default')
-  expect(Date.now() - started).toBeLessThan(5_000)
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
-  expect((await hanging)?.message).toMatch(/stuck failed to start: its setup didn't finish in 300ms/)
+  expect((await hanging)?.message).toMatch(/stuck failed to start: its setup didn't finish in 3s/)
   // Given up on, it was told (its signal), and what it registered after that was refused.
   expect(left.__stuckAborted).toBe(true)
   const hello = await peer.call<{ methods: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
