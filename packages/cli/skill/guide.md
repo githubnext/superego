@@ -356,9 +356,10 @@ extension set up and switched on now, kept current; UI-only extensions never app
 a range, see [Versions and compatibility](#versions-and-compatibility)), `version(machine, 'x')`; in panes `<PaneHeader>` and
 `useTabNote`; in rows `<ThreadRef machine id>`; `transcriptLinks(machine, thread)`, the links a transcript shows; for a list to pick from (quick open, say), `<Picker label placeholder items filter row onPick onClose digits>`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](daemon.md), [ui.md](ui.md).
 
-Machines update at different times, so a window can meet an older or newer daemon: a UI half that calls its daemon
-half checks `has(machine, 'ext:x@<range>')` first, and says so, or offers nothing, when it's missing. See
-[Versions and compatibility](#versions-and-compatibility).
+Machines update at different times, so a window can meet an older or newer daemon. The window draws none of a UI half
+for threads on a machine that runs its extension at another major; one that calls its daemon half where there may be
+none (a window-level view, say) checks `has(machine, 'ext:x')` first, and says so, or offers nothing, when it's
+missing. See [Versions and compatibility](#versions-and-compatibility).
 
 ## Versions and compatibility
 
@@ -404,12 +405,16 @@ reads those manifests (the protocol's `offers()`):
 ```ts
 has(machine, 'ext:git')          // set up and on there, at any version
 has(machine, 'ext:git@^1.2')     // at 1.2 or later in 1.x
-has(machine, 'ext:git@<2')       // any version this UI half speaks
 version(machine, 'git')          // '1.3.0'; '0.0.0' when it says none; undefined when it isn't there or is off
 ```
 
-Ranges are the usual ones: `^1.2`, `~1.2`, `>=1.2 <3`, `1.2` (1.2.x), `*`, joined with `||`. A UI half checks the
-daemon half by the majors it speaks (`git` and `skills` ask for `@<2`); a shape that changed in a minor, by `@^1.<minor>`.
+Ranges are the usual ones: `^1.2`, `~1.2`, `>=1.2 <3`, `1.2` (1.2.x), `*`, joined with `||`.
+
+The major is the window's to check: it draws a UI half for a machine's threads (its slots, views, panes, tool rows,
+entries, links, completions; its window actions while one is shown) only where that machine runs the extension at the
+UI half's own major, as it draws none for a thread that goes without the extension. A machine that doesn't announce it
+(switched off there, or a UI-only extension) doesn't stop it. So a UI half asks `has` only for a minor it relies on
+(`@^1.<minor>`), or where it draws without a thread.
 
 Windows declare their extensions to each machine (`extension.declare`), so one with no daemon half is listed there.
 When two windows declare one differently, the newest version's word is taken, whatever order they connect in (at the
@@ -424,9 +429,9 @@ What a window and a daemon of different releases do with each other:
 - **The same generation:** they work together. The core's methods, actions, notifications and features only grow in
   a generation: `RELEASED` (`packages/protocol/src/released.ts`) lists what generation 2 released, and a test holds
   the daemon to answering all of it. Anything added later in the generation goes in `FEATURES` (empty so far), is
-  announced in `hello.features`, and is checked with `offers()` before it's used; a window checks an extension's daemon
-  half by its manifest in `hello.extensions` (`has(machine, 'ext:git@<2')`), and offers nothing, or says so, where it's
-  missing. An extension a major ahead of what the window's UI half speaks is left alone by it.
+  announced in `hello.features`, and is checked with `offers()` before it's used; a window reads an extension's daemon
+  half's manifest in `hello.extensions`. At another major than the window's UI half, the UI half draws nothing for that
+  machine's threads; a minor it relies on, it checks with `has(machine, 'ext:git@^1.2')`.
 - **Renaming something released** waits for the next generation.
 - **Stored data** isn't migrated: what an older release stored under an old name or in an old place isn't read.
 

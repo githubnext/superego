@@ -11,8 +11,8 @@
 // after is refused). What it draws is drawn apart (`Contained`): a component that throws takes only its own place. A profile's UI is owned by that profile on its machine too, and draws only in
 // that profile's threads there.
 import { createContext, Fragment, useContext, useEffect, useMemo, useState, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type ReactNode } from 'react'
-import { contractProblem } from '@superego/protocol'
-import type { AppConfig, DataViewInfo, DeclaredSection, ExtensionAbout, Json, Pane, ProfileRef, ProviderRejection, SectionInfo, SettingsSnapshot, Status, ThreadInfo } from '@superego/protocol'
+import { contractProblem, parseVersion, UNVERSIONED } from '@superego/protocol'
+import type { AppConfig, DataViewInfo, DeclaredSection, ExtensionAbout, ExtensionManifest, Json, Pane, ProfileRef, ProviderRejection, SectionInfo, SettingsSnapshot, Status, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useSelection, type Selection } from './state.tsx'
 import { createWindowRouter, type Dispatch, type WindowAction, type WindowContext, type WindowRouter } from './actions.tsx'
@@ -405,7 +405,8 @@ export type UiApi = {
 /**
  * A UI half: what the extension is (`ExtensionAbout`, the same as its daemon half's: spread one declaration into both),
  * and its setup. An optional extension's UI draws nothing for a thread that goes without it (`ThreadInfo.without`),
- * and its actions aren't offered while one is shown.
+ * and its actions aren't offered while one is shown. Nor does any UI half for a thread on a machine that runs its
+ * extension at another major than its own `version` (see `speaks`).
  */
 export type UiExtension = ExtensionAbout & {
   /** Set it up. May return a cleanup, run first at teardown: when its profile's UI reloads or is revoked. */
@@ -417,9 +418,18 @@ export const defineUiExtension = (extension: UiExtension) => extension
 
 /**
  * Who registered something: an extension, whether it's optional (a thread can go without it), and for a profile's UI,
- * that profile on its machine (`profileScope`).
+ * that profile on its machine (`profileScope`). `speaks` for an app's UI half: whether it draws for threads on
+ * `machine`, by the version that machine runs its extension at (see `speaks`).
  */
-type Owner = { extension: string; optional: boolean; profile?: string; data?: true }
+type Owner = { extension: string; optional: boolean; profile?: string; data?: true; speaks?(machine: string): boolean }
+
+/**
+ * Whether a UI half at `version` works with a machine whose manifest of its extension is `there`: at the same major.
+ * One the machine doesn't announce it does: its daemon half is off there (the thread goes without it), or it has none.
+ */
+export const speaks = (version: string | undefined, there: ExtensionManifest | undefined) =>
+  !there || major(version ?? UNVERSIONED) === major(there.version ?? UNVERSIONED)
+const major = (version: string) => parseVersion(version)?.[0] ?? 0
 type Owned<T> = T & { owner: Owner }
 
 /** A thread as lookups see it: on a machine, maybe with a profile. */
@@ -444,6 +454,10 @@ export type Registry = {
   dataViews: Record<string, DataViewInfo[]>
   /** Take the data views `machine` declares now (none: it's gone, or switched them off). */
   setDataViews(machine: string, views: DataViewInfo[]): void
+  /** The extensions each machine runs, as it announces them (`hello.extensions`): what the UI halves draw for its threads. */
+  machineExtensions: Record<string, ExtensionManifest[]>
+  /** Take what `machine` announces now (none: it's gone). */
+  setMachineExtensions(machine: string, extensions: ExtensionManifest[]): void
   /** Drawn by a `component`, or described by a `row`. `fold: false`: its calls show outside the fold of their run of work. */
   tools: Owned<{ name: string; component?: ComponentType<ToolCallProps>; row?: ToolRow; fold: boolean }>[]
   entries: Owned<{ kind: string; component: ComponentType<EntryProps> }>[]
@@ -488,7 +502,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       ...(version ? { version } : {}), ...(api ? { api } : {}),
     })),
     slots: { 'header.chips': [], 'thread.badge': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [], 'onboarding': [] },
-    views: [], dataViews: {}, tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
+    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
       visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
@@ -510,6 +524,12 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       if (JSON.stringify(registry.dataViews[machine] ?? []) === JSON.stringify(views)) return
       registry.dataViews = { ...registry.dataViews, [machine]: views }
       placeDataViews()
+      registry.version++
+      for (const listener of listeners) listener()
+    },
+    setMachineExtensions(machine, extensions) {
+      if (JSON.stringify(registry.machineExtensions[machine] ?? []) === JSON.stringify(extensions)) return
+      registry.machineExtensions = { ...registry.machineExtensions, [machine]: extensions }
       registry.version++
       for (const listener of listeners) listener()
     },
@@ -579,6 +599,11 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     if (problem) throw new Error(problem)
     // The core's and a profile's own aren't the machine's to turn off; a bundled extension is, unless it's required.
     const owner: Owner = { extension: extension.name, optional: !profile && extension.name !== 'core' && !extension.required, ...(profile ? { profile } : {}) }
+    // An app's UI half draws for a machine's threads only where it speaks with that machine's half (a profile's comes
+    // from the machine itself; the core is the app).
+    if (!profile && extension.name !== 'core') {
+      owner.speaks = (machine) => speaks(extension.version, registry.machineExtensions[machine]?.find((e) => e.name === extension.name))
+    }
     // A name is the extension's prefix: one of each among the app's, and a profile's can't take one of theirs.
     if (teardowns.has(ownerKey(owner)) || (profile && teardowns.has(`/${extension.name}`))) throw new Error(`An extension named ${extension.name} is already set up`)
     // Everything it registers goes through its lifetime: undone together at teardown, and refused after.
@@ -675,11 +700,11 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
           life.add(registerProfileAction(action, profile))
           return
         }
-        // Not offered while a thread that goes without this extension is shown.
+        // Not offered while a thread is shown that goes without this extension, or whose machine it doesn't speak with.
         const { when } = action
-        const has = (c: WindowContext) => !(owner.optional && c.selection && c.threadOf(c.selection)?.without?.includes(owner.extension))
+        const has = (c: WindowContext) => !c.selection || drawsFor(owner, { machine: c.selection.machine, thread: c.threadOf(c.selection) })
         life.live(`the action ${action.id}`)
-        life.add(registry.router.register(owner.optional ? { ...action, when: (c) => has(c) && (when?.(c) ?? true) } : action))
+        life.add(registry.router.register(owner.speaks ? { ...action, when: (c) => has(c) && (when?.(c) ?? true) } : action))
       },
       appSettings(section) {
         if (profile) return console.warn(`Profile extension ${extension.name}: app settings from a profile's UI aren't supported yet`)
@@ -780,9 +805,15 @@ export const useApp = () => useRegistry().app
  */
 export const seenIn = <T,>(list: Owned<T>[], where: Where | undefined) => {
   const scope = scopeOf(where)
-  const without = where?.thread.without
-  return list.filter(({ owner }) => owner.profile ? owner.profile === scope : !(owner.optional && without?.includes(owner.extension)))
+  return list.filter(({ owner }) => owner.profile ? owner.profile === scope : !where || drawsFor(owner, where))
 }
+
+/**
+ * Whether an app's extension draws for a thread on `machine` (unknown here: as far as the machine says): not when the
+ * thread goes without it, nor when the machine runs it at a major its UI half doesn't speak.
+ */
+const drawsFor = (owner: Owner, { machine, thread }: { machine: string; thread: ThreadInfo | undefined }) =>
+  !(owner.optional && thread?.without?.includes(owner.extension)) && owner.speaks?.(machine) !== false
 
 /** The composer's completion providers for `where`, in the order registered. */
 export const completionsIn = (registry: Registry, where: Where) => seenIn(registry.completions, where)
@@ -1031,11 +1062,11 @@ export function urlKind(registry: Registry, where: Where): string | undefined {
 }
 
 /**
- * The panes a thread shows: all it has open but those of a kind only an extension it goes without draws. They're kept
- * with the thread, and show again once it has that extension back.
+ * The panes a thread shows: all it has open but those of a kind only an extension that doesn't draw for it draws (it
+ * goes without it, or its machine runs another major). They're kept with the thread, and show again once it draws.
  */
 export function shownPanes(registry: Registry, where: Where): Pane[] {
-  const gone = (kind: string) => !paneKind(registry, kind, where) && registry.panes.some((p) => p.kind === kind && p.owner.optional && where.thread.without?.includes(p.owner.extension))
+  const gone = (kind: string) => !paneKind(registry, kind, where) && registry.panes.some((p) => p.kind === kind && !p.owner.profile && !drawsFor(p.owner, where))
   return (where.thread.panes ?? []).filter((pane) => !gone(pane.kind))
 }
 

@@ -246,6 +246,9 @@ function MachineThreads({ machine, onThreads, onHidden, onRejections }: {
   }, [views, offered])
   useEffect(() => { registry.setDataViews(machine.id, on) }, [JSON.stringify(on)])
   useEffect(() => () => registry.setDataViews(machine.id, []), [])
+  // Its extensions at their versions: the UI halves draw for its threads only where they speak with them.
+  useEffect(() => { registry.setMachineExtensions(machine.id, machine.extensions ?? []) }, [offered])
+  useEffect(() => () => registry.setMachineExtensions(machine.id, []), [])
   // Again when what it offers changes: a profile's extensions bring actions of their own.
   useEffect(() => { if (connected) void router.load(machine.id) }, [machine.state, machine.machine?.id, offered])
   useEffect(() => { if (threads) onThreads(machine.id, threads) }, [threads])

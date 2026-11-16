@@ -39,7 +39,7 @@ export type FakeMachineOptions = {
   label?: string
   /** Its protocol features (`FEATURES`): those its generation released unless given. */
   features?: string[]
-  /** The extensions set up there, each at its version (a name alone: at 1.0.0). */
+  /** The extensions set up there, each at its version (a name alone: at the version of the window's UI half of it, else 1.0.0). */
   extensions?: (ExtensionManifest | string)[]
   /** Its threads. */
   threads?: ThreadInfo[]
@@ -72,7 +72,8 @@ const CURRENT: string[] = [...RELEASED.features]
  */
 export function fakeMachine(options: FakeMachineOptions = {}): TestMachine & { calls: { method: string; params: any }[]; setValue(key: string, value: Json, scope?: string): void } {
   const id = options.id ?? 'local'
-  const extensions = (options.extensions ?? []).map((e): ExtensionManifest => typeof e === 'string' ? { name: e, version: '1.0.0' } : e)
+  // A name alone takes its version from the window it's mounted in (see `mountUi`).
+  const extensions = (options.extensions ?? []).map((e): ExtensionManifest => typeof e === 'string' ? { name: e } : e)
   const features = options.features ?? CURRENT
   const values = new Map(Object.entries(options.values ?? {}))
   const watches = new Map<string, { key: string; scope?: string; last: string }>()
@@ -257,7 +258,13 @@ const isDaemon = (m: TestMachine | TestDaemon): m is TestDaemon => 'peer' in m
 export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   const letGoOfDom = useDom()
   const app = options.app ?? defineApp({ name: 'Superego test', id: 'superego-test' })
-  const machines = (options.machines ?? [fakeMachine()]).map((m) => isDaemon(m) ? daemonMachine(m) : m)
+  // A fake's extension named alone is at the version of the UI half mounted here: the two speak.
+  const versioned = (m: TestMachine) => {
+    m.entry.extensions = m.entry.extensions?.map((e) => e.version !== undefined ? e
+      : { ...e, version: options.extensions?.find((x) => x.name === e.name)?.version ?? '1.0.0' })
+    return m
+  }
+  const machines = (options.machines ?? [fakeMachine()]).map((m) => isDaemon(m) ? daemonMachine(m) : versioned(m))
   const calls: TestWindow['calls'] = []
   const eventListeners = new Set<(event: SuperegoEvent) => void>()
   const emit = (event: SuperegoEvent) => { for (const l of eventListeners) l(event) }

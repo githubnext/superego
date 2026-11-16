@@ -47,6 +47,16 @@ describe('rendering a pane kind', () => {
     await expect(ui.render({ pane: { kind: 'board.card' }, thread: testThread({ without: ['board'] }) })).rejects.toThrow(/No pane kind board.card/)
   })
 
+  it('draws it only for machines that run the extension at the major its UI half speaks', async () => {
+    const v2 = { ...board, version: '2.0.0' }
+    // Named alone, a fake machine's extension is at the version mounted.
+    const same = keep(await mountUi({ extensions: [v2], machines: [fakeMachine({ extensions: ['board'] })] }))
+    expect((await same.render({ pane: { kind: 'board.card', params: { card: 'A' } } })).text()).toContain('A in')
+    await same.unmount(); open.pop()
+    const older = keep(await mountUi({ extensions: [v2], machines: [fakeMachine({ extensions: [{ name: 'board', version: '1.3.0' }] })] }))
+    await expect(older.render({ pane: { kind: 'board.card' } })).rejects.toThrow(/No pane kind board.card/)
+  })
+
   it("draws a profile's kind only in that profile's threads", async () => {
     const ref = { scope: 'user' as const, name: 'kanban', dir: '/profiles/kanban' }
     const ui = keep(await mountUi({ profile: { ref, extensions: [board] } }))

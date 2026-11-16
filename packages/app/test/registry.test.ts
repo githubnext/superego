@@ -145,6 +145,65 @@ describe('actions of optional extensions', () => {
   })
 })
 
+describe('versions', () => {
+  const Card = () => null
+  const Page = () => null
+  // A required extension's UI half at 2.x: one a thread can't go without, gated by its version alone.
+  const git = defineUiExtension({
+    name: 'git', version: '2.1.0', required: true,
+    setup(superego) {
+      superego.slot('composer.above', Card)
+      superego.tool('git_log', Card)
+      superego.pane('diff', { title: 'Changes', component: Page })
+      superego.action(defineWindowAction({ id: 'git.diff', title: 'Changes', run: () => null }))
+    },
+  })
+  const panes = [{ id: 'a', kind: 'diff' }]
+  const on = (machine: string) => ({ machine, thread: { ...thread(false), panes } })
+
+  it("draws a UI half only for threads on machines that run its extension at its major, as each machine says", () => {
+    const registry = createRegistry(app, [git], () => {})
+    registry.setMachineExtensions('new', [{ name: 'git', version: '2.0.0' }])
+    registry.setMachineExtensions('old', [{ name: 'git', version: '1.4.0' }])
+    registry.setMachineExtensions('bare', [{ name: 'git' }])
+    // Speaks: the same major, and a machine that doesn't announce it (switched off, or a UI-only extension's).
+    for (const machine of ['new', 'quiet']) {
+      expect(toolView(registry, 'git_log', on(machine))).toBe(Card)
+      expect(seenIn(registry.slots['composer.above'], on(machine))).toHaveLength(1)
+      expect(shownPanes(registry, on(machine)).map((p) => p.id)).toEqual(['a'])
+    }
+    // Another major (one that says none is 0.0.0): none of it, its open panes kept for when it speaks.
+    for (const machine of ['old', 'bare']) {
+      expect(toolView(registry, 'git_log', on(machine))).toBeUndefined()
+      expect(seenIn(registry.slots['composer.above'], on(machine))).toHaveLength(0)
+      expect(paneKind(registry, 'diff', on(machine))).toBeUndefined()
+      expect(shownPanes(registry, on(machine))).toEqual([])
+    }
+    // The machine updated: it draws there now, and the registry says it changed.
+    const before = registry.version
+    registry.setMachineExtensions('old', [{ name: 'git', version: '2.3.0' }])
+    expect(registry.version).toBeGreaterThan(before)
+    expect(toolView(registry, 'git_log', on('old'))).toBe(Card)
+  })
+
+  it("doesn't offer its actions while a thread on a machine it doesn't speak with is shown", () => {
+    const registry = createRegistry(app, [git], () => {})
+    registry.setMachineExtensions('old', [{ name: 'git', version: '1.0.0' }])
+    const shown = (machine: string) => registry.router.setContext({ selection: { machine, thread: '1' }, threadOf: () => thread(false) } as never)
+    shown('local')
+    expect(registry.router.offered('git.diff')).toBe(true)
+    shown('old')
+    expect(registry.router.offered('git.diff')).toBe(false)
+  })
+
+  it("leaves a profile's UI, from the machine itself, to that machine", () => {
+    const registry = createRegistry(app, [], () => {})
+    registry.installProfile('box', profile, [orders()])
+    registry.setMachineExtensions('box', [{ name: 'orders', version: '3.0.0' }])
+    expect(toolView(registry, 'find_order', { machine: 'box', thread: thread(true) })).toBe(Order)
+  })
+})
+
 describe("a profile's window actions", () => {
   it('are offered only while one of its threads is shown, and run as the shown thread\'s profile on its machine', async () => {
     const ran: string[] = []

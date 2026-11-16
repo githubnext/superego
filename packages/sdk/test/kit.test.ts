@@ -168,7 +168,7 @@ describe('a window for a UI half', () => {
 
   it('says a machine is away', async () => {
     const thread = testThread({ id: 't1' })
-    const machine = fakeMachine({ extensions: [{ name: 'queue', version: '0.9.0' }], threads: [thread], values: { 'queue.items': { t1: ['old'], t2: ['x'] } } })
+    const machine = fakeMachine({ extensions: ['queue'], threads: [thread], values: { 'queue.items': { t1: ['old'], t2: ['x'] } } })
     const ui = keep(await mountUi({ extensions: [queueUi], machines: [machine] }))
     const beside = await ui.render({ view: 'queue.list', place: 'beside', thread: 't1' })
     expect(beside.text()).toContain('old')
