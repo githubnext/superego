@@ -169,7 +169,8 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
           const title = server.config.title ? ` (${server.config.title})` : ''
           const why = runtime.whyNot(server)
           if (why) return `- ${server.name}${title}: unavailable. ${why}. Its tools fail until then.`
-          if (!server.listing) return `- ${server.name}${title}: still starting; its tools come with your next message.`
+          // Its tools are offered from the request after it's listed: later this turn if it goes on, else the next.
+          if (!server.listing) return `- ${server.name}${title}: still starting; its tools are offered as soon as it's up.`
           const count = `${server.offered.length} tool${server.offered.length === 1 ? '' : 's'}`
           return `- ${server.name}${title}: ${count}${runtime.isDeferred(server) ? ', not loaded yet: find the ones you need with tool_search' : ''}`
         })

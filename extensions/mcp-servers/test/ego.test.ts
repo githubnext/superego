@@ -16,7 +16,7 @@ import threadTools from '@superego/thread-tools/daemon'
 import { createRouter, defineAction, type Json, type ThreadInfo } from '@superego/protocol'
 import { CATALOG } from '../src/catalog.ts'
 import { mcpServersExtension } from '../src/daemon.ts'
-import { configFrom, egoPart, userStep } from '../src/ego.ts'
+import { brief, configFrom, egoPart, userStep } from '../src/ego.ts'
 import { ACTIONS, ADD_PARAMS, EDIT_PARAMS, NAME_PARAMS, SET_PARAMS, type SectionData, type ServerConfig, type ServerInfo } from '../src/shared.ts'
 
 type Tool = { name: string; parameters: { properties: Record<string, { description?: string }> }; execute(params: unknown, api: unknown, context?: unknown): Promise<{ output: { text: string }[] }> }
@@ -56,7 +56,7 @@ describe('superego_mcp_servers', () => {
   it('takes no secrets: nothing in its schema holds one', () => {
     const tool = toolOf(machine())
     const fields = Object.keys(tool.parameters.properties).sort()
-    expect(fields).toEqual(['args', 'auth', 'catalog', 'command', 'cwd', 'env', 'lifetime', 'name', 'on', 'op', 'secretEnv', 'title', 'tools', 'url'])
+    expect(fields).toEqual(['args', 'auth', 'catalog', 'command', 'cwd', 'env', 'lifetime', 'name', 'on', 'op', 'secretEnv', 'title', 'tools', 'unprofiled', 'url'])
     for (const field of ['key', 'apiKey', 'token', 'password', 'secret', 'secrets', 'value', 'values', 'headers']) expect(fields).not.toContain(field)
     // secretEnv is names only.
     expect(tool.parameters.properties.secretEnv!.description).toMatch(/Names/)
@@ -76,12 +76,28 @@ describe('superego_mcp_servers', () => {
     const tool = toolOf(at)
     const added = await call(tool, { op: 'add', name: 'docs', command: 'npx', args: ['-y', 'docs-mcp'], env: { MODE: 'ro' }, secretEnv: ['DOCS_TOKEN'] })
     expect(at.ran[0]).toEqual({ id: ACTIONS.add, params: { name: 'docs', server: { command: 'npx', args: ['-y', 'docs-mcp'], env: { MODE: 'ro' }, auth: { type: 'env', names: ['DOCS_TOKEN'] } }, allowed: false } })
-    expect(added).toMatchObject({ state: 'waiting', user: expect.stringContaining('→ Allow') })
+    // What the user does, what Ego does after (list until it's up), and how threads would get it.
+    expect(added).toMatchObject({
+      state: 'waiting', allowed: false, user: expect.stringContaining('→ Allow'),
+      next: expect.stringMatching(/^Once the user says they've allowed it, op list until it's ready or running/),
+      threads: expect.stringMatching(/unprofiled on, which is machine-wide: ask the user before switching it on/),
+    })
     // From the catalogue too, when it's a command.
     await call(tool, { op: 'add', name: 'browser', catalog: 'playwright' })
     expect(at.ran[1]).toMatchObject({ params: { name: 'browser', allowed: false, server: { command: 'npx', lifetime: 'thread' } } })
     await call(tool, { op: 'add', name: 'status', url: 'https://status.example.com/mcp', auth: 'oauth' })
     expect(at.ran[2]).toEqual({ id: ACTIONS.add, params: { name: 'status', server: { url: 'https://status.example.com/mcp', auth: { type: 'oauth' } } } })
+  })
+
+  it("adds one for threads without a profile in the same call, as the user chose; a checked server is ready", async () => {
+    const at = machine()
+    const tool = toolOf(at)
+    const added = await call(tool, { op: 'add', name: 'docs', url: 'https://docs.example.com/mcp', unprofiled: true })
+    expect(at.ran).toEqual([{ id: ACTIONS.add, params: { name: 'docs', server: { url: 'https://docs.example.com/mcp', unprofiled: true } } }])
+    expect(added).toMatchObject({ state: 'running', unprofiled: true, threads: expect.stringMatching(/^Threads without a profile have it/) })
+    expect(added.next).toBeUndefined()
+    expect(brief({ id: 'a', name: 'a', from: { type: 'machine' }, runs: 'x', config: { command: 'x' }, state: 'stopped', tools: 3, secrets: [] })).toMatchObject({ state: 'ready', tools: 3 })
+    expect(brief({ id: 'a', name: 'a', from: { type: 'machine' }, runs: 'x', config: { command: 'x' }, state: 'starting', secrets: [] }).next).toMatch(/Still starting: op list again/)
   })
 
   it('edits, switches and removes; an edited command waits for Allow again', async () => {
@@ -156,6 +172,9 @@ describe('superego_mcp_servers in Ego, against a daemon', () => {
     const transcript = await d.transcript(thread.id)
     expect(transcript).toContain('superego_mcp_servers')
     expect(transcript).toContain('never ask for a key, token or password in chat')
+    // How threads get a server, asked up front; and a server up before it's said to work.
+    expect(transcript).toContain("don't switch unprofiled on by")
+    expect(transcript).toContain('list until the server')
     const plain = await d.thread('hi')
     expect(await d.transcript(plain.id)).not.toContain('superego_mcp_servers')
   })

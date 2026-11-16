@@ -1,9 +1,11 @@
 // What an agent that sets the machine up (Ego's: `setup`) gets of this extension in its thread, and no other thread
 // does: superego_mcp_servers, to set up this machine's servers, and a word in its prompt on how. The tool lists the servers and the well-known ones,
 // adds one (from the catalogue by name, or a command or a URL), edits, removes, and switches "Use in threads without a
-// profile", all through this extension's actions. It never handles a secret: nothing in its schema takes one, a value
-// that looks like one is refused, and the user is sent to Settings → MCP servers to sign in or set a key. A command it
-// adds or edits waits for the user's Allow (`allowed: false`). It runs for the user's own message alone (`userAsked`).
+// profile" (on its own, or as add's `unprofiled`), all through this extension's actions. It never handles a secret:
+// nothing in its schema takes one, a value that looks like one is refused, and the user is sent to Settings → MCP servers
+// to sign in or set a key. A command it adds or edits waits for the user's Allow (`allowed: false`), which no agent can
+// give. What it reports says what Ego does next: wait for the user, then list until the server is ready or running
+// before saying it works. It runs for the user's own message alone (`userAsked`).
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { arr, bool, map, obj, oneOf, opt, str } from '@earendil-works/pi-schema'
 import type { AppConfig, Json, MessageOrigin } from '@superego/protocol'
@@ -26,6 +28,27 @@ const where = (name: string) => `Settings → MCP servers → ${name}`
 /** A name or flag that says it holds a secret. */
 const SECRETISH = /token|secret|passw|api[-_]?key|private[-_]?key|credential|auth/i
 
+/**
+ * A server's state as Ego is told it: `stopped` is a server checked and idle, which starts when a thread calls it, so
+ * it's `ready`; the rest as they are.
+ */
+export const egoState = (state: ServerInfo['state']) => state === 'stopped' ? 'ready' : state
+
+/** What Ego does next about a server, while it isn't usable yet: never say it works before it is. */
+export function nextStep(server: Pick<ServerInfo, 'state'>): string | undefined {
+  switch (server.state) {
+    case 'waiting': return "Once the user says they've allowed it, op list until it's ready or running (failed: tell them why) before you say it works or start a thread that uses it. Only the user can allow it."
+    case 'starting': return "Still starting: op list again until it's ready or running, or failed, before you say it works or start a thread that uses it."
+    case 'needs-sign-in': return "Once the user says they've done it, op list until it's ready or running before you say it works."
+    default: return undefined
+  }
+}
+
+/** How threads get a machine's server, as it is now: the profiles that name it, or the switch for threads without one. */
+export const threadsLine = (server: Pick<ServerInfo, 'name' | 'config' | 'from'>) => server.from.type !== 'machine' ? undefined : server.config.unprofiled
+  ? 'Threads without a profile have it (unprofiled), and threads whose profile names it.'
+  : `Only threads whose profile names it (mcpServers: ['${server.name}']) have it. Threads without a profile have it only with unprofiled on, which is machine-wide: ask the user before switching it on.`
+
 /** What the user has to do for a server, if anything, in a line for Ego to pass on. */
 export function userStep(server: Pick<ServerInfo, 'name' | 'state' | 'config' | 'error'>): string | undefined {
   switch (server.state) {
@@ -44,11 +67,13 @@ export function userStep(server: Pick<ServerInfo, 'name' | 'state' | 'config' | 
  * env or header values (a header may well hold a key): what Ego sees, an outside agent asking it may see too.
  */
 export const brief = (s: ServerInfo) => ({
-  name: s.name, ...(s.config.title ? { title: s.config.title } : {}), runs: s.runs, state: s.state,
+  name: s.name, ...(s.config.title ? { title: s.config.title } : {}), runs: s.runs, state: egoState(s.state),
+  ...(s.config.allowed === false && s.config.command ? { allowed: false } : {}),
   ...(s.tools !== undefined ? { tools: s.tools } : {}), ...(s.error ? { error: s.error } : {}),
   ...(s.from.type === 'profile' ? { profile: s.from.profile, project: s.from.project } : { unprofiled: s.config.unprofiled === true }),
   ...(s.config.auth ? { signsIn: s.config.auth.type === 'env' ? `secret env: ${s.config.auth.names.join(', ')}` : s.config.auth.type } : {}),
   ...(userStep(s) ? { user: userStep(s) } : {}),
+  ...(nextStep(s) ? { next: nextStep(s) } : {}),
 })
 
 /** The tool's fields that make a config. */
@@ -105,15 +130,22 @@ export function configFrom(name: string, fields: Fields, base: ServerConfig = {}
 
 /** What Ego is told of MCP servers, beside its tool. */
 export const egoSection = (app: Pick<AppConfig, 'id' | 'name'>) => `MCP servers are other people's tools for the agents in threads (Linear, GitHub, Sentry, a browser): a command a
-machine runs or a URL it reaches, set up per machine in Settings → MCP servers. A thread uses those its profile names
-(\`mcpServers: ['linear']\`, with servers of its own as objects there), or without a profile those switched to "Use in
-threads without a profile". "Outside agents" (\`${app.id} mcp\`) are the other way round: agents outside ${app.name}
-using this machine.
+machine runs or a URL it reaches, set up per machine in Settings → MCP servers. "Outside agents" (\`${app.id} mcp\`)
+are the other way round: agents outside ${app.name} using this machine.
+
+How a thread gets a server, which you settle with the user before adding one: a thread with a profile has those its
+profile names (\`mcpServers: ['linear']\`, with servers of its own as objects there); a thread without a profile has
+those switched to "Use in threads without a profile" (unprofiled), a machine-wide switch. superego_profiles lists the
+profiles. Ask which the user wants, unless they already said (say, "for all my threads"): don't switch unprofiled on by
+yourself. When it's unprofiled, add the server with unprofiled: true, in the one call; for a profile, a thread names it
+in that profile.ts.
 
 You set up this machine's MCP servers with superego_mcp_servers (they're kept in ${CONFIG_FILE} in the data folder:
 change them through the tool, not by hand): a well-known one by name (op catalog lists them), else a command or a URL. Say what you'll change first, ask before removing one, and afterwards say where the user sees
 it. A command you add doesn't run until the user allows it (Settings → MCP servers shows the whole command line, with
-Allow): say so. Signing in is the user's: never ask for a key, token or password in chat, where it would stay in the
+Allow), and only the user can allow it: say so. When they say they've allowed it (or signed in), list until the server
+is ready or running (or failed: say why) before you tell them it works or start a thread that uses it: "go ahead"
+isn't the server running. Signing in is the user's: never ask for a key, token or password in chat, where it would stay in the
 transcript, and never put one in a server's config. Send them to Settings → MCP servers → <name> → Sign in (OAuth, in
 the browser) or Set key; if they paste one anyway, don't use it, and tell them to set it there (and to revoke it, if it
 matters). Only the user sets up MCP servers: superego_mcp_servers refuses a message from an outside agent, and one
@@ -140,13 +172,18 @@ export function egoPart({ app, data, dispatch, refuse }: {
   /** What a save said: the server as it stands after its check, and what the user has to do. */
   const after = (result: unknown) => {
     const server = (result as CheckResult).server
-    return json({ ...brief(server), ...(server.state === 'running' || server.state === 'stopped' ? { checked: server.tools !== undefined ? `Connected: ${server.tools} tools` : 'Saved' } : {}) })
+    const threads = threadsLine(server)
+    return json({
+      ...brief(server), ...(server.state === 'running' || server.state === 'stopped' ? { checked: server.tools !== undefined ? `Connected: ${server.tools} tools` : 'Saved' } : {}),
+      ...(threads ? { threads } : {}),
+    })
   }
   const tool = defineTool({
     name: 'superego_mcp_servers',
     description: "This machine's MCP servers: other people's tools (Linear, GitHub, a browser) for the agents in its threads, as in Settings → MCP servers. " +
-      'op: list (its servers, and those of profiles); catalog (well-known servers to add by name); add (by catalog name, or a command or a URL); edit; remove; unprofiled (on: threads without a profile use it). ' +
-      "It takes no secrets: a server that needs a key or a sign-in tells you what the user does in Settings. A command you add runs only once the user allows it there.",
+      'op: list (its servers, and those of profiles); catalog (well-known servers to add by name); add (by catalog name, or a command or a URL; unprofiled: true as the user chose); edit; remove; unprofiled (on: threads without a profile use it, machine-wide). ' +
+      "It takes no secrets: a server that needs a key or a sign-in tells you what the user does in Settings. A command you add runs only once the user allows it there. " +
+      "state: ready or running is usable (ready starts when a thread calls it); waiting, starting and needs-sign-in aren't yet: next says what to do.",
     parameters: obj({
       op: oneOf(['list', 'catalog', 'add', 'edit', 'remove', 'unprofiled']),
       name: opt(str({ description: 'The server: add, its name (lower-case, digits, hyphens; a catalog name adds that one); the others, which' })),
@@ -162,8 +199,9 @@ export function egoPart({ app, data, dispatch, refuse }: {
       lifetime: opt(oneOf(['machine', 'thread'], { description: 'machine: one process for all threads (default); thread: one per thread, in its folder (a browser, say)' })),
       tools: opt(oneOf(['auto', 'all', 'search'], { description: 'How its tools reach the model: auto (default), all offered, or found by search' })),
       on: opt(bool({ description: 'unprofiled: whether threads without a profile use it' })),
+      unprofiled: opt(bool({ description: 'add: threads without a profile use it too (machine-wide), as the user chose' })),
     }),
-    async execute({ op, name, catalog, on, ...fields }, api) {
+    async execute({ op, name, catalog, on, unprofiled, ...fields }, api) {
       const refused = await refuse(Number(api.conversationId), api.callId)
       if (refused) throw new Error(refused)
       switch (op) {
@@ -174,7 +212,7 @@ export function egoPart({ app, data, dispatch, refuse }: {
           if (catalog !== undefined && !known) throw new Error(`No well-known server ${catalog}: ${CATALOG.map((e) => e.name).join(', ')}. Give a command or a URL instead.`)
           const as = name ?? known?.name
           if (!as) throw new Error('Give it a name.')
-          const config = configFrom(as, fields, known?.server)
+          const config = { ...configFrom(as, fields, known?.server), ...(unprofiled ? { unprofiled: true } : {}) }
           // A command is code: it waits for the user's Allow.
           return after(await dispatch(ACTIONS.add, { name: as, server: config as Json, ...(config.command ? { allowed: false } : {}) }))
         }
@@ -192,7 +230,7 @@ export function egoPart({ app, data, dispatch, refuse }: {
           const server = await own(name)
           if (on === undefined) throw new Error('Say on: true or false.')
           await dispatch(ACTIONS.set, { name: server.name, unprofiled: on })
-          return json({ name: server.name, unprofiled: on })
+          return json({ name: server.name, unprofiled: on, threads: threadsLine({ ...server, config: { ...server.config, unprofiled: on } }) })
         }
       }
     },
