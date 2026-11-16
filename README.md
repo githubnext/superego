@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/header.png" alt="Superego" width="800"></p>
+<p align="center"><img src="docs/header.webp" alt="Superego" width="800"></p>
 
 # Superego
 
