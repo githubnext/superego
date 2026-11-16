@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, renameSync, symlinkSync, writeFileSync } from 'n
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DATA_VIEWS, defineApp, PROTOCOL_VERSION, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, listen, openDaemon } from '../src/index.ts'
 import { loadProfile, Trust, type ProfileRef } from '../src/profiles.ts'
@@ -165,6 +165,16 @@ describe("the user's own profiles, in the default data dir under ~", () => {
     expect((await peer.call<ProfileInfo[]>('profile.list', { cwd: join(dataDir, 'work') })).map((p) => `${p.scope}:${p.name}`)).toEqual(['user:chief'])
     expect((await peer.call<ProfileInfo[]>('profile.list', { cwd: chief() })).map((p) => `${p.scope}:${p.name}`)).toEqual(['user:chief'])
     await close()
+  })
+
+  it("doesn't take ~/.superego/profiles for a project's under a data dir elsewhere (SUPEREGO_HOME, as smoke has)", async () => {
+    vi.stubEnv('HOME', fakeHome)
+    try {
+      const { peer, close } = await open(join(dir, 'elsewhere'))
+      expect(await peer.call<ProfileInfo[]>('profile.list', { cwd: fakeHome })).toEqual([])
+      expect(await peer.call<ProfileInfo[]>('profile.list', { cwd: join(fakeHome, 'notes') })).toEqual([])
+      await close()
+    } finally { vi.unstubAllEnvs() }
   })
 
   it("loads one taken for a project's (a thread started before they were told apart) as the user's, unallowed", async () => {

@@ -15,6 +15,7 @@
 // A project's profile replaces the user's of the same name, unless it `extends: 'user:<name>'`. A project's profile is
 // code from that repo, so it runs only once allowed (`superego profile allow`), and again after any of its files change.
 import { createHash } from 'node:crypto'
+import { homedir } from 'node:os'
 import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
@@ -166,12 +167,14 @@ const same = (a: string, b: string) => real(a) === real(b)
 
 /**
  * The folder holding a project's profiles: the nearest `.superego/profiles` at or above `cwd`, that isn't the user's
- * own (`~/.superego/profiles`, found walking up from any folder under `~`).
+ * own. Walking up from any folder under `~` finds `~/.superego/profiles`: the user's, never a project's, even for a
+ * daemon keeping its data elsewhere (`SUPEREGO_HOME`), as is `userRoot` wherever it is.
  */
 export function projectProfiles(cwd: string, userRoot: string): string | undefined {
   for (let dir = resolve(cwd); ; dir = dirname(dir)) {
     const candidate = join(dir, '.superego', 'profiles')
-    if (existsSync(candidate) && statSync(candidate).isDirectory() && !same(candidate, userRoot)) return candidate
+    const users = same(candidate, userRoot) || same(dir, homedir())
+    if (!users && existsSync(candidate) && statSync(candidate).isDirectory()) return candidate
     if (dirname(dir) === dir) return undefined
   }
 }
