@@ -219,6 +219,9 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .step__output.is-cut pre.is-overflowing { mask-image: linear-gradient(to top, transparent, #000 28px), linear-gradient(to left, transparent, #000 32px); mask-composite: intersect; }
 .step__output.is-error pre { white-space: pre-wrap; }
 .step__output.is-error { background: color-mix(in srgb, var(--superego-status-error) 7%, var(--superego-bg)); }
+.step__notes { margin: -2px 0 var(--superego-space-2); font-size: var(--superego-text-sm); line-height: 1.45; color: var(--superego-muted); }
+.step__notes p { margin: 0; }
+.steps:not(.steps--run) > .step > .step__notes { margin-left: 21px; }
 .step__more { display: block; width: 100%; text-align: left; font: inherit; font-size: var(--superego-text-sm); color: var(--superego-muted); background: none; border: 0; border-top: 1px solid color-mix(in srgb, var(--superego-border) 50%, transparent); padding: 5px var(--superego-space-3); cursor: default; }
 .step__more:hover { color: var(--superego-text); }
 .step__diff pre { padding: 8px 0; }

@@ -65,3 +65,26 @@ it("hands a failed call's row its error message alone, and a call's output as is
     socket.destroy(); server.close(); await daemon.close()
   }
 })
+
+it("keeps the harness's info and warnings apart from the output, as notes its row shows under it", () => {
+  const note = 'Showing lines 1-2000 of 5000. Use offset=2001 to continue.'
+  const entry = {
+    model: [{ role: 'toolResult', toolCallId: 'cut', isError: false, content: [
+      { type: 'text', text: 'line 2000' },
+      { type: 'text', text: `<harness>[info] ${note}\n[warn] Mind the gap.</harness>` },
+    ] }],
+    data: { diagnostics: [{ severity: 'info', message: note }, { severity: 'warn', message: 'Mind the gap.' }] },
+  }
+  const result = toolResults([entry as never]).get('cut')!
+  expect(result.text).toBe('line 2000')
+  expect(result.notes).toEqual([{ severity: 'info', message: note }, { severity: 'warn', message: 'Mind the gap.' }])
+
+  const registry = createRegistry(app, [], registerToolRows)
+  const thread = { id: 't', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'done' } } as ThreadInfo
+  const row = renderToStaticMarkup(createElement(DescribedCall, {
+    row: toolRow(registry, 'read', { machine: 'local', thread }),
+    call: { machine: { id: 'local', label: 'This Mac', state: 'connected' } as never, thread, call: { id: 'cut', name: 'read', arguments: { path: 'big.txt' } }, result, state: 'done' },
+  }))
+  expect(row).toContain('step__notes')
+  expect(row).toContain('Mind the gap.')
+})

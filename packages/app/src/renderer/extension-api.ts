@@ -143,16 +143,20 @@ export type NewThreadField = {
 
 /**
  * A tool call in the transcript. `result` is there once it finished: its text (the output's, then what went wrong, as
- * the user reads it: without the harness's `<harness>[error] …</harness>` the model is shown it in) and the images the
- * model was shown, as base64. `live` while it runs.
+ * the user reads it: without the harness's `<harness>[error] …</harness>` the model is shown it in), the harness's
+ * other notes on it apart (`notes`: "Showing lines 1-2000 of 5000…", info or a warning), and the images the model was
+ * shown, as base64. `live` while it runs.
  */
 export type ToolCallProps = {
   machine: MachineEntry
   thread: ThreadInfo
   call: { id: string; name: string; arguments: Record<string, unknown> }
-  result?: { text: string; isError: boolean; details?: unknown; images?: { data: string; mimeType: string }[] }
+  result?: { text: string; isError: boolean; details?: unknown; notes?: ToolNote[]; images?: { data: string; mimeType: string }[] }
   live?: { status: 'pending' | 'running' | 'done'; output?: string; details?: unknown }
 }
+
+/** What the harness said of a tool call besides its output and errors (it was cut short, say). */
+export type ToolNote = { severity: 'info' | 'warn'; message: string }
 
 /** How a tool call stands: not started, running, finished, or failed. */
 export type ToolState = 'idle' | 'working' | 'done' | 'error'

@@ -30,9 +30,9 @@ type Results = Map<string, ToolResult>
 
 /**
  * The tool results in `entries`, by call. Each reads as the user should see it: the output's text, then what went
- * wrong (an error's message comes as a diagnostic). The model is shown those diagnostics wrapped
- * (`<harness>[error] …</harness>`, the content's last text); the entry keeps them apart as its data, so here they're
- * their messages alone.
+ * wrong (an error's message comes as a diagnostic), and the harness's other notes apart. The model is shown those
+ * diagnostics wrapped (`<harness>[error] …</harness>`, the content's last text); the entry keeps them apart as its
+ * data, so here they're their messages alone.
  */
 export function toolResults(entries: readonly EntryRecord[]): Map<string, ToolResult> {
   const results = new Map<string, ToolResult>()
@@ -44,17 +44,22 @@ export function toolResults(entries: readonly EntryRecord[]): Map<string, ToolRe
     const wrapped = diagnostics.length ? content.findLastIndex((b) => b.type === 'text') : -1
     const text = [
       ...content.flatMap((b, index) => b.type === 'text' && index !== wrapped ? [b.text ?? ''] : []),
-      ...diagnostics,
+      ...diagnostics.flatMap((d) => d.severity === 'error' ? [d.message] : []),
     ].join('\n')
-    results.set(message.toolCallId, { text, isError: Boolean(message.isError), details: message.details, ...imagesOf(content) })
+    const notes = diagnostics.flatMap((d) => d.severity === 'error' ? [] : [{ severity: d.severity, message: d.message }])
+    results.set(message.toolCallId, { text, isError: Boolean(message.isError), details: message.details, ...notes.length ? { notes } : {}, ...imagesOf(content) })
   }
   return results
 }
 
-/** The messages of a tool result entry's diagnostics (`{ diagnostics: [{ severity, message }] }`). */
-const diagnosticsOf = (data: unknown): string[] => {
+/** A tool result entry's diagnostics (`{ diagnostics: [{ severity, message }] }`); one of no known severity is an error. */
+const diagnosticsOf = (data: unknown): { severity: 'info' | 'warn' | 'error'; message: string }[] => {
   const list = (data as { diagnostics?: unknown } | undefined)?.diagnostics
-  return Array.isArray(list) ? list.flatMap((d) => typeof (d as { message?: unknown })?.message === 'string' ? [(d as { message: string }).message] : []) : []
+  return Array.isArray(list) ? list.flatMap((d) => {
+    const { severity, message } = (d ?? {}) as { severity?: unknown; message?: unknown }
+    if (typeof message !== 'string') return []
+    return [{ severity: severity === 'info' || severity === 'warn' ? severity : 'error' as const, message }]
+  }) : []
 }
 
 /** A tool result's images, as the model was shown them: `{ images }`, or nothing when it has none. */

@@ -48,12 +48,18 @@ export function DescribedCall({ row, call }: { row: ToolRow; call: ToolRowCall }
   )
 }
 
-/** What a call opens to by default: the diff it reported, else its output (or its error). */
+/** What a call opens to by default: the diff it reported, else its output (or its error); the harness's notes under it, muted. */
 function DefaultBody({ call: { state, result, live } }: { call: ToolRowCall }) {
   const diff = state !== 'error' ? diffOf(result?.details) : undefined
-  if (diff) return <StepDiff diff={diff} />
   const output = result ? result.text : live?.output
-  return output ? <Output text={output} className={state === 'error' ? 'is-error' : ''} /> : null
+  const notes = result?.notes?.length ? <div className="step__notes">{result.notes.map((note, i) => <p key={i}>{note.message}</p>)}</div> : null
+  if (!diff && !output && !notes) return null
+  return (
+    <>
+      {diff ? <StepDiff diff={diff} /> : output && <Output text={output} className={state === 'error' ? 'is-error' : ''} />}
+      {notes}
+    </>
+  )
 }
 
 /** A row's lines added and removed: as it says, else the diff its result reported. */
