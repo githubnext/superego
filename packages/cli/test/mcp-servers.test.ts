@@ -1,6 +1,6 @@
 // `superego mcp-servers`, against a daemon started from this checkout (with the bundled mcp-servers): a server added
 // (through `do`, as Ego's tool or a script would), listed, its secret set from stdin, its log read, and restarted; and
-// a thread's servers in `superego extensions --thread`; and an OAuth sign-in (`login`, the address pasted), and `logout`.
+// a thread's servers in `superego extensions --thread`; and an OAuth sign-in (`sign-in`, the address pasted), and `sign-out`.
 import { execFile, spawn } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -68,7 +68,7 @@ it('signs in to an OAuth server, the address pasted, and signs out', { timeout: 
   try {
     await superego(['do', 'mcp-servers.add', '--params', JSON.stringify({ name: 'remote', server: { url: as.url, auth: { type: 'oauth' } } })])
     expect(await superego(['mcp-servers'])).toMatch(/remote: remote needs you to sign in/)
-    const child = spawn(process.execPath, [CLI, 'mcp-servers', 'login', 'remote'], { env: env(), stdio: ['pipe', 'pipe', 'pipe'] })
+    const child = spawn(process.execPath, [CLI, 'mcp-servers', 'sign-in', 'remote'], { env: env(), stdio: ['pipe', 'pipe', 'pipe'] })
     let out = ''
     let err = ''
     child.stdout.on('data', (chunk) => { out += chunk })
@@ -80,7 +80,7 @@ it('signs in to an OAuth server, the address pasted, and signs out', { timeout: 
     expect(await exited).toBe(0)
     expect(out).toMatch(/Signed in to remote on This computer\.\n^remote\s+127\.0\.0\.1:\d+\/mcp\s+(stopped|running) · 6 tools$/m)
     expect(as.seen.grants).toEqual([expect.objectContaining({ grant: 'code', resource: as.url })])
-    expect(await superego(['mcp-servers', 'logout', 'remote'])).toMatch(/Signed out of remote on This computer/)
+    expect(await superego(['mcp-servers', 'sign-out', 'remote'])).toMatch(/Signed out of remote on This computer/)
     expect(await json(['mcp-servers'])).toMatchObject({ servers: expect.arrayContaining([expect.objectContaining({ name: 'remote', state: 'needs-sign-in', oauth: { signedIn: false } })]) })
   } finally {
     await as.close()
