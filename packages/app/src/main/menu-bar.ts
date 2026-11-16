@@ -6,8 +6,9 @@ import { existsSync } from 'node:fs'
 import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
 import { unread, type AppConfig, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
+import type { ServiceState } from '../shared/service.ts'
 
-export type TrayModel = {
+export type MenuBarModel = {
   machines(): MachineEntry[]
   threads(machine: string): ThreadInfo[]
   open(): void
@@ -15,7 +16,7 @@ export type TrayModel = {
   openSettings(): void
   quit(): void
   quitAndStop(): void
-  service(): { phase: string; busy: boolean }
+  service(): ServiceState
   restart(): void
 }
 
@@ -23,14 +24,14 @@ const GLYPH: Record<string, string> = { working: '●', done: '*', blocked: '?',
 
 export class MenuBar {
   #tray: Tray | undefined
-  #model: TrayModel
+  #model: MenuBarModel
   #headless: boolean
 
   #app: AppConfig
 
   #icon: string | undefined
 
-  constructor(app: AppConfig, model: TrayModel, headless: boolean, icon?: string) {
+  constructor(app: AppConfig, model: MenuBarModel, headless: boolean, icon?: string) {
     this.#app = app
     this.#model = model
     this.#headless = headless

@@ -96,7 +96,7 @@ export class LayoutFile {
   missing: string[] | undefined
   #settings: SettingsRegistry
   /** The views each window declares (by its id), listed at the head together. */
-  #windows = new Map<number, LayoutView[]>()
+  #windows = new Map<string, LayoutView[]>()
   #views: LayoutView[] | undefined
   /** The file's text as last read or written, so our own writes aren't read back in. */
   #text: string | undefined
@@ -141,11 +141,11 @@ export class LayoutFile {
    * The views a window declares (`undefined`: it closed): every window's are listed at the file's head, and what
    * layouts in it are checked against.
    */
-  setViews(window: number, views: LayoutView[] | undefined): Promise<void> {
+  setViews(window: string, views: LayoutView[] | undefined): Promise<void> {
     return this.#serially(() => this.#setViews(window, views))
   }
 
-  async #setViews(window: number, views: LayoutView[] | undefined): Promise<void> {
+  async #setViews(window: string, views: LayoutView[] | undefined): Promise<void> {
     if (views) this.#windows.set(window, views)
     else this.#windows.delete(window)
     const all = new Map<string, LayoutView>()

@@ -1,34 +1,26 @@
-import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
-import { hostname } from 'node:os'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, protocol, screen, session, shell, type MenuItemConstructorOptions } from 'electron'
-import { appEnv, daemonStarting, defaultDataDir, pidPath, readBuild, socketPath, spawnDaemon } from '@superego/daemon/client'
-import {
-  arr, bool, compareVersions, defineAction, int, lit, nullable, obj, opt, Router, RpcError, str, union, unknown, waitingForSignIn,
-  type AppConfig, type Channel, type Json, type Notifications, type ProfileRef, type ThreadInfo,
-} from '@superego/protocol'
-import { declaredSpec, serveSettings, SettingsRegistry } from '@superego/settings'
-import { FileSettingsStore } from '@superego/settings/file'
-import { CHANNEL, type AppHandlers, type CallResult, type ChannelEvent, type MachineConfig, type MachineEntry, type MachineUpdate, type SuperegoEvent } from '../shared/bridge.ts'
-import { APP, HIDE_DOCK, MENU_BAR, registerAppSettings } from '../shared/app-settings.ts'
-import type { LayoutView } from '../shared/layout.ts'
-import { BADGE, desktopNotification, NOTIFY, signInNotification, threadNotification, unreadCount, type ThreadNotification } from '../shared/notifications.ts'
-import type { ServiceAction } from '../shared/service.ts'
-import { shortcutOf } from '../shared/shortcuts.ts'
-import { ARTIFACT_POLICY, ARTIFACT_TYPES } from './artifacts.ts'
-import { LayoutFile } from './layout-file.ts'
-import { Link, loginInTerminal, MachineLinks, MachineStore, openLocal as openLocalSocket, runUpdate, UiAllowStore } from '@superego/client'
+import { app } from 'electron'
+import { appEnv, defaultDataDir } from '@superego/daemon/client'
 import { installTypes } from '@superego/client/author-types'
-import { MenuBar } from './tray.ts'
-import { attachContextMenu } from './context-menu.ts'
+import { Router, type AppConfig } from '@superego/protocol'
+import { SettingsRegistry } from '@superego/settings'
+import { FileSettingsStore } from '@superego/settings/file'
+import { APP, registerAppSettings } from '../shared/app-settings.ts'
+import type { ThreadRef } from '../shared/bridge.ts'
+import { appMethods, callApp, registerAppActions, type AppActionContext } from './app-endpoint.ts'
+import { createWindows, setUpSession } from './app-windows.ts'
+import { registerArtifactScheme, serveArtifacts } from './artifacts.ts'
 import { commandLine } from './command-line.ts'
-import { ServiceRestart } from './restart.ts'
-import { createSignInCatcher } from './sign-in-callback.ts'
-import { placeOn, WindowList, type Bounds } from './windows.ts'
+import { createDesktop } from './desktop.ts'
+import { serveIpc } from './ipc.ts'
+import { LayoutFile } from './layout-file.ts'
+import { createMachines } from './machines.ts'
+import { createNotifier } from './notify.ts'
+import { createService } from './service.ts'
 
 /**
- * Run an app's main process: its window, the links to every machine (starting this computer's daemon, which outlives
+ * Run an app's main process: its windows, the links to every machine (starting this computer's daemon, which outlives
  * the app), the app's own settings, the menu bar item and Dock, notifications, and restarting the daemon onto new code.
  * The app's `src/main.ts` calls this with its config; the build puts `daemon.js`, the preload and the renderer next to it.
  */
@@ -38,26 +30,13 @@ export function startApp(appConfig: AppConfig) {
   // Before it finishes launching, so the Dock never shows it.
   if (headless) app.dock?.hide()
   const dataDir = defaultDataDir(appConfig)
-  const socket = socketPath(appConfig, dataDir)
-
-  /** Start the local daemon, detached (quitting the app leaves agents running), unless one is on its way. */
-  function startDaemon(): () => boolean {
-    const starting = () => daemonStarting(dataDir)
-    if (starting()) return starting
-    return spawnDaemon(dataDir, [process.execPath, join(import.meta.dirname, 'daemon.js')], { ...process.env, ELECTRON_RUN_AS_NODE: '1' })
-  }
-  const openLocal = () => openLocalSocket(socket, startDaemon)
-
-  const broadcast = (event: SuperegoEvent) => {
-    for (const window of BrowserWindow.getAllWindows()) window.webContents.send(CHANNEL.event, event)
-  }
 
   // The app's own settings, kept in its data dir; the windows' extensions declare theirs beside them.
-  const appSettings = new SettingsRegistry(new FileSettingsStore(join(dataDir, 'app-settings.json')))
-  registerAppSettings(appSettings, { app: appConfig, mac: process.platform === 'darwin' })
+  const settings = new SettingsRegistry(new FileSettingsStore(join(dataDir, 'app-settings.json')))
+  registerAppSettings(settings, { app: appConfig, mac: process.platform === 'darwin' })
   // The layout as text: layout.json, read in as it's saved, and what's wrong with it told to the windows.
-  const layoutFile = new LayoutFile(dataDir, appSettings, () => appSettings.invalidate())
-  appSettings.register({
+  const layoutFile = new LayoutFile(dataDir, settings, () => settings.invalidate())
+  settings.register({
     id: 'layout', title: 'Layout', order: 1000, settings: [],
     data: async () => ({ file: layoutFile.path, ...(layoutFile.problem ? { problem: layoutFile.problem } : {}), ...(layoutFile.missing ? { missing: layoutFile.missing } : {}) }),
   })
@@ -68,299 +47,57 @@ export function startApp(appConfig: AppConfig) {
     app: appConfig, appPath: join(import.meta.dirname, '..', '..'), packaged: app.isPackaged, executable: process.execPath,
     ...(headless ? {} : { shell: process.env.SHELL || '/bin/zsh' }),
   })
+  settings.register({
+    id: 'command-line', title: 'Command line', order: 80, ui: 'command-line', settings: [],
+    data: () => cli.info(),
+  })
   // Types for profile authors, from this build (out/types) to <dataDir>/types, where profiles link to them: an upgrade
   // brings its own without anyone asking. Not for tests.
   const types = join(import.meta.dirname, '..', 'types')
   if (!headless && existsSync(join(types, 'stamp.json'))) setImmediate(() => { installTypes(types, dataDir).catch((error) => console.error('author types:', error)) })
-  appSettings.register({
-    id: 'command-line', title: 'Command line', order: 80, ui: 'command-line', settings: [],
-    data: () => cli.info(),
-  })
 
-  /** The app's own endpoint: its settings, per window so a closed window's subscriptions go with it. */
-  const appSubs = new Map<number, Map<string, () => unknown>>()
-  /** Each window's bound shortcuts, as it last said (see `app.boundKeys`). */
-  const boundKeys = new Map<number, Set<string>>()
-  function appEndpoint(contents: Electron.WebContents) {
-    let subs = appSubs.get(contents.id)
-    if (!subs) {
-      const created = subs = new Map()
-      appSubs.set(contents.id, created)
-      contents.once('destroyed', () => { for (const stop of created.values()) stop(); appSubs.delete(contents.id) })
-    }
-    const send = (method: string, params: unknown) => { if (!contents.isDestroyed()) contents.send(CHANNEL.event, { machine: APP, method, params }) }
-    const methods: AppHandlers = {
-      'settings.watch': serveSettings(appSettings, (params) => send('settings.changed', params), subs)['settings.watch'],
-      async unwatch({ sub }) { subs.get(sub)?.(); subs.delete(sub); return null },
-      async 'settings.register'({ section }) {
-        if (!section?.id || !Array.isArray(section.settings)) throw new RpcError('invalid', 'A section needs an id and settings')
-        appSettings.upsert(declaredSpec(section))
-        return null
-      },
-      'action.list': async () => appRouter.list(),
-      'action.log': async () => appRouter.log(),
-      async 'service.get'() { return service.state },
-      async 'app.ready'() {
-        ready.add(contents.id)
-        contents.once('destroyed', () => ready.delete(contents.id))
-        const what = pending.get(contents.id)
-        pending.delete(contents.id)
-        return what ?? {}
-      },
-      async 'app.notify'(notice) { notify(notice); return null },
-      'profileUi.allowed': async () => uiAllowed.list(),
-      'profileUi.declined': async () => uiAllowed.declinedList(),
-      async 'app.pickFolder'({ defaultPath }) {
-        const window = BrowserWindow.fromWebContents(contents)
-        const options = { properties: ['openDirectory', 'createDirectory'] as ('openDirectory' | 'createDirectory')[], ...(defaultPath ? { defaultPath } : {}) }
-        const { canceled, filePaths } = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
-        return canceled ? null : filePaths[0] ?? null
-      },
-      async 'app.newWindow'({ state }) {
-        createWindow({ near: BrowserWindow.fromWebContents(contents) ?? undefined, seed: windowState(state) })
-        return null
-      },
-      async 'app.windows'() { return windows.ids() },
-      // Taken first, see createWindow.
-      async 'app.boundKeys'({ keys }) {
-        if (!boundKeys.has(contents.id)) contents.once('destroyed', () => boundKeys.delete(contents.id))
-        boundKeys.set(contents.id, new Set(keys))
-        return null
-      },
-      async 'app.shown'({ selection }) {
-        if (!shownIn.has(contents.id)) contents.once('destroyed', () => { shownIn.delete(contents.id); refreshBadge() })
-        shownIn.set(contents.id, selection ?? undefined)
-        refreshBadge()
-        return null
-      },
-      'app.updateMachine': async ({ machine }) => updateMachine(machine, BrowserWindow.fromWebContents(contents) ?? undefined),
-      async 'app.desktop'() { return { menuBar: menuBar.shown, dockHidden: mac && dockHidden() } },
-    }
-    const handlers: Record<string, (params: any) => Promise<unknown>> = { ...methods }
-    // The app's intents, served under their ids like a daemon's.
-    for (const action of appRouter.list()) handlers[action.id] = (params) => appRouter.dispatch(action.id, params, { window: contents }, { source: 'window' })
-    return handlers
-  }
-
-  /** This computer's daemon, and a link to every enabled machine in `machines.json` (see @superego/client's links.ts). */
-  let local: Link | undefined
-  const machineStore = new MachineStore(dataDir)
-  const remotes = new MachineLinks({
-    app: appConfig, dataDir, store: machineStore, client: `${appConfig.id}-app`, clientLabel: hostname(),
-    onEvent: (machine, method, params) => onMachineEvent(machine, method, params),
-    // The local daemon is a machine connected already: a configured one that turns out to be it is refused.
-    others: () => local?.state === 'connected' && local.hello ? [{ label: local.label, id: local.hello.machine.id }] : [],
-    onChange() {
-      broadcast({ machine: APP, method: '$machines', params: machineEntries() })
-      refreshDesktop()
+  const machines = createMachines({
+    app: appConfig, dataDir, headless,
+    broadcast: (event) => windows.broadcast(event),
+    onEvent(machine, method, params) {
+      // Another client asking the app to show something: one window does it, the one in front.
+      if (method === 'client.perform') return void (windows.focused() ?? windows.recent())?.send({ machine, method, params })
+      windows.broadcast({ machine, method, params })
+    },
+    changed() {
+      windows.broadcast({ machine: APP, method: '$machines', params: machines.entries() })
+      desktop.refresh()
+    },
+    // Restart required, now it's connected again or has refused (another generation)?
+    connection(machine) { if (machine === 'local') setTimeout(service.poll) },
+    threads(machine, threads, announce) {
+      desktop.refresh()
+      notifier.track(machine, threads, announce)
     },
   })
-  const linkOf = (id: string) => id === 'local' ? local : remotes.get(id)
-  const allLinks = () => [...(local ? [local] : []), ...remotes.list()]
-  /** Each machine's last Update: running, or how it ended, with what it printed. */
-  const updates = new Map<string, MachineUpdate>()
-
-  /** This computer, then every configured machine; disabled ones have no link. */
-  function machineEntries(): MachineEntry[] {
-    const here = local?.entry()
-    return [
-      ...(here ? [here] : []),
-      ...remotes.entries().map((entry): MachineEntry => {
-        // Said of a machine that answered once: one never reached runs nothing we know of.
-        const drift = entry.version && compareVersions(here?.version, entry.version)
-        const update = updates.get(entry.id)
-        return { ...entry, ...(drift ? { drift } : {}), ...(update ? { update } : {}) }
-      }),
-    ]
-  }
-  function restartLocal() {
-    local?.stop()
-    const link: Link = new Link({
-      id: 'local', label: 'This computer', client: `${appConfig.id}-app`, clientLabel: hostname(), open: openLocal,
-      onEvent: (method, params) => { if (local === link) onMachineEvent('local', method, params) },
-    })
-    local = link
-    link.start()
-  }
-  /** Reconnect a machine here, and the local daemon's own link there (it reaches the machines too), when it has one. */
-  function restartLink(id: string) {
-    remotes.restart(id)
-    if (local?.state === 'connected') void local.call('machine.reconnect', { id }).catch(() => {})
-  }
-
-  /**
-   * The profile UIs from other machines this computer lets run in its windows, for the exact sources allowed. The
-   * window hashes what a machine serves and asks; a machine has no say. The CLI allows too (`profile allow-ui`).
-   */
-  const uiAllowed = new UiAllowStore(dataDir)
-  uiAllowed.onChange(() => {
-    broadcast({ machine: APP, method: 'profileUi.allowed', params: uiAllowed.list() })
-    broadcast({ machine: APP, method: 'profileUi.declined', params: uiAllowed.declinedList() })
+  const service = createService({
+    app: appConfig, dataDir, headless, machines,
+    changed(state) {
+      windows.broadcast({ machine: APP, method: 'service.changed', params: state })
+      desktop.refresh()
+    },
   })
-  uiAllowed.watch()
+  const notifier = createNotifier({ headless, settings, machines, lookedAt: () => windows.focused()?.shown, open: (open) => windows.show({ open }) })
 
-  /**
-   * The app keeps its own subscription to each machine's threads, whatever the windows show: for the menu bar, and to
-   * notify when a thread starts wanting a look while no window is open (with one, the window's notifications extension
-   * decides, and asks through `app.notify`).
-   */
-  const lastStatus = new Map<string, ThreadInfo['status']['state']>()
-  const watchSubs = new Map<string, string>()
-  const signIns = createSignInCatcher((machine, params) => linkOf(machine)?.call('auth.respond', params) ?? Promise.resolve())
-  function onMachineEvent(machine: string, method: string, params: unknown) {
-    if (!linkOf(machine)) return
-    if (method === '$connection') {
-      broadcast({ machine: APP, method: '$machines', params: machineEntries() })
-      refreshDesktop()
-      // Restart required, now it's connected again or has refused (another generation)?
-      if (machine === 'local') setTimeout(pollService)
-      if ((params as { state: string }).state === 'connected') {
-        void (linkOf(machine)!.call('threads.watch', {}) as Promise<{ sub: string; value: ThreadInfo[] }>).then(({ sub, value }) => {
-          watchSubs.set(machine, sub)
-          track(machine, value, false)
-        }).catch(() => {})
-      }
-      return
-    }
-    if (method === 'threads.changed') {
-      const { sub, value } = params as Notifications['threads.changed']
-      if (watchSubs.get(machine) === sub) track(machine, value, true)
-    }
-    // Another computer's sign-in: its browser redirect comes back here (sign-in-callback.ts).
-    if (method === 'auth.event' && machine !== 'local') {
-      const { flow, event } = params as Notifications['auth.event']
-      signIns.heard(machine, flow, event)
-    }
-    // Another client asking the app to show something: one window does it, the one in front.
-    if (method === 'client.perform') {
-      const window = BrowserWindow.getFocusedWindow() ?? recentWindow()
-      if (window) window.webContents.send(CHANNEL.event, { machine, method, params })
-      return
-    }
-    broadcast({ machine, method, params })
-  }
-  const threadsOf = new Map<string, ThreadInfo[]>()
-  function track(machine: string, threads: ThreadInfo[], announce: boolean) {
-    const signingIn = (list: ThreadInfo[] | undefined) => (list ?? []).filter((t) => waitingForSignIn(t.status) && !t.without?.includes('notifications'))
-    // A provider rejecting the credentials: one notice when threads start waiting for sign-in, not one each.
-    const before = signingIn(threadsOf.get(machine)).length
-    const waiting = signingIn(threads)
-    threadsOf.set(machine, threads)
-    refreshDesktop()
-    if (announce && !before && waiting.length && !BrowserWindow.getAllWindows().length && appSettings.get(NOTIFY) === true) {
-      const notice = signInNotification(machine, { summary: waiting[0]!.status.msg ?? 'Sign in again', threads: waiting.map((t) => t.id) })
-      if (notice) notify(notice)
-    }
-    for (const thread of threads) {
-      const key = `${machine}/${thread.id}`
-      const before = lastStatus.get(key)
-      const now = thread.status.state
-      lastStatus.set(key, now)
-      if (!announce || before === now || BrowserWindow.getAllWindows().length) continue
-      // Only once a window has declared the setting: an app without the notifications extension never notifies.
-      const notice = threadNotification(machine, thread)
-      if (notice && appSettings.get(NOTIFY) === true && !thread.without?.includes('notifications')) notify(notice)
-    }
-  }
-  /** The thread each window shows, as it last said (`app.shown`). */
-  const shownIn = new Map<number, { machine: string; thread: string } | undefined>()
-  let badge = 0
-  /**
-   * The app icon's count (the Dock's on macOS): every machine's unread threads, but the one shown in the window with
-   * the focus (being looked at), while the notifications extension's setting is on. Only once a window has declared
-   * it, as for notifying. On macOS it shows only with the app allowed to notify. Headless (tests), nothing shows: a
-   * test may read it in `globalThis.superegoBadge`.
-   */
-  function refreshBadge() {
-    if (!app.isReady()) return
-    const focused = BrowserWindow.getFocusedWindow()
-    const shown = focused ? shownIn.get(focused.webContents.id) : undefined
-    const threads = [...threadsOf].flatMap(([machine, list]) => linkOf(machine) ? list.map((thread) => ({ machine, thread })) : [])
-    const count = appSettings.get(BADGE) === true ? unreadCount(threads, shown) : 0
-    if (count === badge) return
-    badge = count
-    if (headless) (globalThis as { superegoBadge?: number }).superegoBadge = count
-    else app.setBadgeCount(count)
-  }
-  /** When each notice was last shown: every window asks, and the first asking shows it. */
-  const noticed = new Map<string, number>()
-  /**
-   * Show a notification of a thread that wants a look, unless a window has the focus; clicking it shows the thread.
-   * Headless (tests), nothing shows: a test may collect them in `globalThis.superegoNotifications`.
-   */
-  function notify(notice: ThreadNotification) {
-    const key = JSON.stringify(notice)
-    for (const [old, at] of noticed) if (Date.now() - at >= 5_000) noticed.delete(old)
-    if (Date.now() - (noticed.get(key) ?? 0) < 5_000) return
-    noticed.set(key, Date.now())
-    if (headless) return void (globalThis as { superegoNotifications?: ThreadNotification[] }).superegoNotifications?.push(notice)
-    if (BrowserWindow.getFocusedWindow() || !Notification.isSupported()) return
-    const several = allLinks().filter((link) => link.state === 'connected').length > 1
-    const notification = new Notification(desktopNotification(notice, { label: linkOf(notice.machine)?.label ?? notice.machine, several }))
-    notification.on('click', () => show({ open: { machine: notice.machine, thread: notice.thread } }))
-    notification.show()
-  }
-
-  ipcMain.handle(CHANNEL.machines, () => machineEntries())
-  ipcMain.handle(CHANNEL.call, async (event, machine: string, method: string, params: unknown): Promise<CallResult> => {
-    try {
-      if (machine === APP) {
-        const handler = appEndpoint(event.sender)[method]
-        if (!handler) throw new RpcError('unknown_method', `Unknown method ${method}`)
-        return { ok: true, result: await handler(params ?? {}) }
-      }
-      const link = linkOf(machine)
-      if (!link) throw new RpcError('unknown_machine', `No machine ${machine}`)
-      return { ok: true, result: await link.call(method, params) }
-    } catch (error) {
-      return { ok: false, error: { kind: error instanceof RpcError ? error.kind : 'error', message: error instanceof Error ? error.message : String(error) } }
-    }
+  const router = new Router<AppActionContext>()
+  machines.registerActions(router)
+  registerAppActions(router, { app: appConfig, settings, cli, service, layoutFile, quit: () => app.quit() })
+  const windows = createWindows({
+    app: appConfig, dataDir, headless,
+    methods: (window) => appMethods(window, { settings, router, service, notifier, machines, windows, desktop }),
+    changed: () => desktop.refresh(),
+    focusChanged: () => notifier.refreshBadge(),
+    closed(window) {
+      if (window.declaredViews) void layoutFile.setViews(window.id, undefined).catch((error) => console.error('layout.json:', error))
+    },
   })
-
-  // Windows' channels (a terminal's bytes, say), held on their machine's link: each chunk passed to its window and read
-  // there before the next, and every one of a window's aborted when its page loads again or it goes.
-  type HeldChannel = { channel: Channel; contents: Electron.WebContents; reads: (() => void)[]; start(): void }
-  const held = new Map<string, HeldChannel>()
-  const watchedContents = new WeakSet<Electron.WebContents>()
-  const dropChannels = (contents: Electron.WebContents) => { for (const entry of held.values()) if (entry.contents === contents) entry.channel.abort('The window closed') }
-  ipcMain.handle(CHANNEL.open, async (event, machine: string, kind: string, params: unknown): Promise<CallResult> => {
-    try {
-      const link = machine === APP ? undefined : linkOf(machine)
-      if (!link) throw new RpcError('unknown_machine', `No machine ${machine}`)
-      const channel = await link.channel(kind, params)
-      const id = randomUUID()
-      const contents = event.sender
-      const entry: HeldChannel = { channel, contents, reads: [], start: () => {} }
-      held.set(id, entry)
-      const send = (message: ChannelEvent) => { if (!contents.isDestroyed()) contents.send(CHANNEL.data, message) }
-      // Read once the window is ready for it (`start`): it knows the channel's id only once this has answered.
-      entry.start = () => channel.onData((data) => new Promise<void>((read) => {
-        if (contents.isDestroyed()) return read()
-        entry.reads.push(read)
-        send({ id, data })
-      }))
-      const closed = (reason?: string) => {
-        if (!held.delete(id)) return
-        channel.end()
-        for (const read of entry.reads.splice(0)) read()
-        send({ id, closed: true, ...(reason ? { reason } : {}) })
-      }
-      channel.ended.then(() => closed(), (error: Error) => closed(error.message))
-      if (!watchedContents.has(contents)) {
-        watchedContents.add(contents)
-        contents.once('destroyed', () => dropChannels(contents))
-      }
-      return { ok: true, result: id }
-    } catch (error) {
-      return { ok: false, error: { kind: error instanceof RpcError ? error.kind : 'error', message: error instanceof Error ? error.message : String(error) } }
-    }
-  })
-  const heldBy = (event: Electron.IpcMainEvent, id: string) => { const entry = held.get(id); return entry?.contents === event.sender ? entry : undefined }
-  ipcMain.on(CHANNEL.write, (event, id: string, bytes: Uint8Array) => { heldBy(event, id)?.channel.write(bytes).catch(() => {}) })
-  ipcMain.on(CHANNEL.start, (event, id: string) => { heldBy(event, id)?.start() })
-  ipcMain.on(CHANNEL.ack, (event, id: string) => { heldBy(event, id)?.reads.shift()?.() })
-  ipcMain.on(CHANNEL.close, (event, id: string) => { heldBy(event, id)?.channel.abort('Closed') })
-  ipcMain.on(CHANNEL.reset, (event) => dropChannels(event.sender))
+  const desktop = createDesktop({ app: appConfig, headless, settings, machines, service, windows, refreshBadge: notifier.refreshBadge })
+  serveIpc({ machines: machines.entries, linkOf: machines.linkOf, windowOf: windows.of, callApp: (window, method, params) => callApp(router, window, method, params) })
 
   /**
    * One app per data dir: its Electron state lives in the data dir, so the lock that keeps a second launch from opening
@@ -370,557 +107,32 @@ export function startApp(appConfig: AppConfig) {
   app.setPath('userData', join(dataDir, 'app'))
   const primary = app.requestSingleInstanceLock()
   if (!primary) app.quit()
-
-  type Open = { machine: string; thread: string }
-  /** `--superego-open=<machine>/<thread>`, as `superego` passes it. */
-  function openArgument(argv: string[]): Open | undefined {
-    const value = argv.find((arg) => arg.startsWith('--superego-open='))?.slice('--superego-open='.length)
-    const slash = value?.lastIndexOf('/') ?? -1
-    return value && slash > 0 ? { machine: value.slice(0, slash), thread: value.slice(slash + 1) } : undefined
-  }
-
-  /** What a window should show: a thread, or Settings. */
-  type Show = { open?: Open; settings?: boolean }
-  /** Windows whose page is listening for app events; until then, what to show waits in `pending`. */
-  const ready = new Set<number>()
-  const pending = new Map<number, Show>()
-  /** The window that goes in front: the one with the focus, else the one last in front, else those put away, reopened. */
-  function show(what: Show = {}) {
-    const window = BrowserWindow.getFocusedWindow() ?? recentWindow() ?? reopen()
-    // Headless (tests), the window never comes forward: nothing on the screen, no focus taken from anyone.
-    if (!headless) {
-      if (window.isMinimized()) window.restore()
-      window.show()
-      window.focus()
-      app.focus({ steal: true })
-    }
-    if (!what.open && !what.settings) return
-    if (!ready.has(window.webContents.id)) return pending.set(window.webContents.id, what)
-    if (what.open) window.webContents.send(CHANNEL.event, { machine: APP, method: 'app.select', params: what.open })
-    if (what.settings) window.webContents.send(CHANNEL.event, { machine: APP, method: 'app.settings', params: null })
-  }
-
   app.on('second-instance', (_event, argv) => {
     const open = openArgument(argv)
-    show(open ? { open } : {})
+    windows.show(open ? { open } : {})
   })
 
-  // ── On the desktop: the menu bar item and the Dock icon ─────────────────────────────────────────────────────────────
-
-  const mac = process.platform === 'darwin'
-  const menuBarOn = () => appSettings.get<boolean>(MENU_BAR)
-  const dockHidden = () => menuBarOn() && appSettings.get<boolean>(HIDE_DOCK)
-
-  // The app's own files: `resources/` next to its package.json (the build puts main.js in out/main).
-  const resources = join(import.meta.dirname, '../../resources')
-  /**
-   * Run from source there's no bundle to carry the icon, so the Dock takes the app's own images: `icon.png`, and
-   * `icon-dark.png` while the system is dark. A packaged app's icon (`superego.icon`) does all of this, and more, itself.
-   * They must sit on macOS's icon grid like any app icon: the tile 824px inside a transparent 1024px canvas. Icon
-   * Composer exports fill the canvas, so pad them (magick in.png -resize 824 -background none -gravity center
-   * -extent 1024x1024 out.png) or the Dock shows them a quarter larger than every other icon.
-   */
-  function dockIcon() {
-    const pick = () => {
-      const dark = join(resources, 'icon-dark.png')
-      const icon = nativeTheme.shouldUseDarkColors && existsSync(dark) ? dark : join(resources, 'icon.png')
-      if (existsSync(icon)) app.dock?.setIcon(icon)
-    }
-    pick()
-    nativeTheme.on('updated', pick)
-  }
-  const menuBar = new MenuBar(appConfig, {
-    machines: () => machineEntries(),
-    threads: (machine) => threadsOf.get(machine) ?? [],
-    open: () => show(),
-    openThread: (machine, thread) => show({ open: { machine, thread } }),
-    openSettings: () => show({ settings: true }),
-    quit: () => app.quit(),
-    quitAndStop: () => void quitAndStop(),
-    service: () => service.state,
-    restart: () => void service.act('restart'),
-  }, headless, join(resources, 'trayTemplate.png'))
-
-  /** The Dock icon shows while a window is open, unless hidden in Settings; with no window it goes, if the menu bar has Superego. */
-  function refreshDesktop() {
-    // Settings announce changes from the start; the menu bar and the Dock exist only once the app is ready.
-    if (!app.isReady()) return
-    refreshBadge()
-    menuBar.update(menuBarOn())
-    if (!mac || headless) return
-    const windows = BrowserWindow.getAllWindows().length > 0
-    const visible = !(dockHidden() || (!windows && menuBarOn()))
-    // Only on a change: Electron's dock.show() briefly activates the Dock to redraw the menu bar, which flashes the app.
-    if (!app.dock || app.dock.isVisible() === visible) return
-    if (visible) void app.dock.show()
-    else app.dock.hide()
-  }
-  appSettings.onChange(refreshDesktop)
-
-  // ── The app's actions ──────────────────────────────────────────────────────────────────────────────────────────
-
-  /** The app's actions run for a window (its own, from its endpoint), or for none (the CLI's). */
-  const appRouter = new Router<{ window?: Electron.WebContents }>()
-  appRouter.register(defineAction({
-    id: 'app.settings.set', title: 'Change an app setting', runs: 'app', expose: ['ui', 'cli'],
-    params: obj({ key: str(), value: unknown() }),
-    async run({ key, value }) { await appSettings.set(key, value as Json); return null },
-  }))
-  appRouter.register(defineAction({
-    id: 'machine.add', title: 'Add a machine', runs: 'app', expose: ['ui', 'cli'],
-    params: obj({ label: opt(str()), target: opt(str()), command: opt(str()), via: opt(str()) }),
-    run: (params) => machineStore.add(params),
-  }))
-  appRouter.register(defineAction({
-    id: 'machine.edit', title: 'Change a machine', runs: 'app', expose: ['ui', 'cli'],
-    params: obj({ id: str(), label: opt(str()), target: opt(str()), command: opt(str()), via: opt(str()), enabled: opt(bool()) }),
-    async run({ id, ...patch }) { await machineStore.update(id, patch as Partial<MachineConfig>); return null },
-  }))
-  appRouter.register(defineAction({
-    id: 'machine.remove', title: 'Remove a machine', runs: 'app', expose: ['ui', 'cli'],
-    params: obj({ id: str() }),
-    async run({ id }) { await machineStore.remove(id); await uiAllowed.revoke(id); return null },
-  }))
-  appRouter.register(defineAction({
-    id: 'profile.allowUi', title: "Let a machine's profile UI run in this window", runs: 'app', expose: ['ui'],
-    params: obj({
-      machine: str(), profile: obj({ scope: union([lit('user'), lit('project')]), name: str(), dir: str() }), hash: str(),
-      files: arr(obj({ path: str(), size: int() })),
-    }),
-    async run({ machine, profile, hash, files }) {
-      // This computer's own profiles are its daemon's to allow.
-      if (!machineStore.get(machine)) throw new RpcError('not_found', `No machine ${machine}`)
-      await uiAllowed.allow({ machine, profile: profile as ProfileRef, hash, files })
-      return null
-    },
-  }))
-  appRouter.register(defineAction({
-    id: 'profile.declineUi', title: "Not now: don't ask about a machine's profile UI again until it changes", runs: 'app', expose: ['ui'],
-    params: obj({
-      machine: str(), profile: obj({ scope: union([lit('user'), lit('project')]), name: str(), dir: str() }), hash: str(),
-      files: arr(obj({ path: str(), size: int() })),
-    }),
-    async run({ machine, profile, hash, files }) {
-      if (!machineStore.get(machine)) throw new RpcError('not_found', `No machine ${machine}`)
-      await uiAllowed.decline({ machine, profile: profile as ProfileRef, hash, files })
-      return null
-    },
-  }))
-  appRouter.register(defineAction({
-    id: 'profile.revokeUi', title: "Revoke a machine's profile UI in this app's windows", runs: 'app', expose: ['ui'],
-    params: obj({ machine: str(), dir: str() }),
-    async run({ machine, dir }) { await uiAllowed.revoke(machine, dir); return null },
-  }))
-  appRouter.register(defineAction({
-    id: 'machine.trust', title: 'Trust the machine answering now', runs: 'app', expose: ['ui', 'cli'],
-    params: obj({ id: str() }),
-    async run({ id }) { await machineStore.forgetIdentity(id); restartLink(id); return null },
-  }))
-  appRouter.register(defineAction({
-    id: 'machine.reconnect', title: 'Reconnect a machine', runs: 'app', expose: ['ui', 'cli'],
-    params: obj({ id: str() }),
-    run({ id }) { if (id === 'local') restartLocal(); else restartLink(id); return null },
-  }))
-  appRouter.register(defineAction({
-    id: 'machine.login', title: 'Log in to a machine', runs: 'app', expose: ['ui', 'cli'],
-    params: obj({ id: str() }),
-    /** Opens a terminal where ssh may ask for what it needs, and reconnects once it has left a login behind. Headless: no terminal. */
-    run({ id }) {
-      const config = machineStore.get(id)
-      if (!config) throw new RpcError('not_found', `No machine ${id}`)
-      if (headless) throw new RpcError('headless', 'No terminal is opened in headless mode')
-      void loginInTerminal(config, { dataDir }).done.then((up) => { if (up) restartLink(id) })
-      return null
-    },
-  }))
-  appRouter.register(defineAction({
-    id: 'app.cli.install', title: `Install the ${appConfig.id} command`, runs: 'app', expose: ['ui'],
-    params: obj({}),
-    run() { cli.install(); appSettings.invalidate(); return null },
-  }))
-  appRouter.register(defineAction({
-    id: 'app.cli.uninstall', title: `Remove the ${appConfig.id} command`, runs: 'app', expose: ['ui'],
-    params: obj({}),
-    run() { cli.uninstall(); appSettings.invalidate(); return null },
-  }))
-  appRouter.register(defineAction({
-    id: 'service.act', title: 'Restart the daemon', runs: 'app', expose: ['ui'],
-    params: obj({ action: union([lit('restart'), lit('interrupt'), lit('later'), lit('review')]) }),
-    async run({ action }) { await service.act(action as ServiceAction); return service.state },
-  }))
-  /** Where a view goes, as a window tells the layout file. */
-  const placement = nullable(union([str(), arr(str()), lit(false)]))
-  const layoutWindows = new Set<number>()
-  appRouter.register(defineAction({
-    id: 'app.layout.views', title: 'Tell the layout file the views a window has', runs: 'app', expose: ['ui'],
-    params: obj({ views: arr(obj({ id: str(), title: str(), fits: arr(str()), default: opt(placement), narrow: opt(placement) })) }),
-    async run({ views }, { window }) {
-      if (!window) throw new RpcError('invalid', 'Only a window has views')
-      // Each window's, until it closes.
-      if (!layoutWindows.has(window.id)) {
-        layoutWindows.add(window.id)
-        window.once('destroyed', () => { layoutWindows.delete(window.id); void layoutFile.setViews(window.id, undefined).catch((error) => console.error('layout.json:', error)) })
-      }
-      await layoutFile.setViews(window.id, views as LayoutView[])
-      return null
-    },
-  }))
-  appRouter.register(defineAction({
-    id: 'app.layout.open', title: 'Open the layout file in its own app', runs: 'app', expose: ['ui'],
-    async run() { await layoutFile.read(); const error = await shell.openPath(layoutFile.path); if (error) throw new RpcError('failed', error); return null },
-  }))
-  appRouter.register(defineAction({ id: 'app.quit', title: `Quit ${appConfig.name}`, runs: 'app', run: () => app.quit() }))
-
-  // ── Updating another machine's Superego ─────────────────────────────────────────────────────────────────────────────
-
-  /** Tell windows how updates go, a few times a second at most: the install prints a lot. */
-  let updatesQueued = false
-  const publishUpdates = () => {
-    if (updatesQueued) return
-    updatesQueued = true
-    setTimeout(() => { updatesQueued = false; broadcast({ machine: APP, method: '$machines', params: machineEntries() }) }, 150)
-  }
-
-  /**
-   * Run a machine's own install script there (pull, install, build, restart its daemon), its output shown on the
-   * machine's row as it goes, then reconnect to the new daemon. The restart interrupts agents at work there: asked first.
-   */
-  async function updateMachine(id: string, window?: BrowserWindow): Promise<{ updated: boolean }> {
-    const config = machineStore.get(id)
-    if (!config) throw new RpcError(id === 'local' ? 'invalid' : 'not_found', id === 'local' ? `This computer's ${appConfig.name} is updated by hand.` : `No machine ${id}`)
-    if (updates.get(id)?.state === 'running') throw new RpcError('busy', `${config.label} is updating already.`)
-    const working = (threadsOf.get(id) ?? []).filter((t) => t.status.state === 'working')
-    if (working.length && !headless) {
-      const options = {
-        type: 'warning' as const, buttons: ['Update and Restart', 'Cancel'], defaultId: 1, cancelId: 1,
-        message: `${working.length === 1 ? 'An agent is' : `${working.length} agents are`} working on ${config.label}`,
-        detail: `Updating restarts ${appConfig.name} there: agents stop mid-turn and pick up again after. Threads and their history are kept.`,
-      }
-      // On the window that asked, as a sheet.
-      const { response } = window && !window.isDestroyed() ? await dialog.showMessageBox(window, options) : await dialog.showMessageBox(options)
-      if (response !== 0) return { updated: false }
-    }
-    const pid = linkOf(id)?.hello?.machine.pid
-    const update: MachineUpdate = { state: 'running', log: '' }
-    const set = (patch: Partial<MachineUpdate>) => { updates.set(id, Object.assign(update, patch)); publishUpdates() }
-    set({})
-    try {
-      await runUpdate(config, appConfig, { now: working.length > 0, onOutput: (text) => set({ log: (update.log + text).slice(-20_000) }) })
-      // The daemon there restarted: reach the new one now, rather than when the old link notices.
-      restartLink(id)
-      const deadline = Date.now() + 60_000
-      for (;;) {
-        const link = linkOf(id)
-        if (link?.state === 'connected' && link.hello && link.hello.machine.pid !== pid) break
-        if (Date.now() > deadline) throw new RpcError('update_failed', `Updated, but ${config.label} did not answer again.`)
-        await new Promise((resolve) => setTimeout(resolve, 200))
-      }
-      set({ state: 'done' })
-      return { updated: true }
-    } catch (error) {
-      set({ state: 'failed', error: error instanceof Error ? error.message : String(error) })
-      throw error
-    }
-  }
-
-  // ── Restarting this computer's daemon onto newer code ───────────────────────────────────────────────────────────────
-
-  /** The local link once it is connected with a new daemon (not `pid`), or a timeout. */
-  async function reconnected(pid: number | undefined) {
-    const deadline = Date.now() + 30_000
-    for (;;) {
-      const link = local
-      if (link?.state === 'connected' && link.hello && link.hello.machine.pid !== pid) return link.hello
-      if (Date.now() > deadline) throw new Error('The daemon did not come back. See daemon.log in the data dir.')
-      await new Promise((resolve) => setTimeout(resolve, 200))
-    }
-  }
-
-  /**
-   * Whether this computer's daemon refused the link for speaking another protocol generation. The link gives up on it
-   * for good, and it says nothing of itself (its build, its pid, whether agents are working), but it's restarted the
-   * same as any daemon out of date.
-   */
-  const refused = () => local?.error?.kind === 'version_mismatch'
-  /** The daemon's pid, as it names itself beside its data (and names its successor as it hands over). */
-  function daemonPid() {
-    try { return Number(readFileSync(pidPath(dataDir), 'utf8')) || undefined } catch { return undefined }
-  }
-  async function exited(pid: number) {
-    const deadline = Date.now() + 10_000
-    for (;;) {
-      try { process.kill(pid, 0) } catch { return }
-      if (Date.now() > deadline) throw new Error('The daemon did not stop. See daemon.log in the data dir.')
-      await new Promise((resolve) => setTimeout(resolve, 100))
-    }
-  }
-
-  const service = new ServiceRestart({
-    async inspect() {
-      const link = local
-      const hello = link?.state === 'connected' ? link.hello : undefined
-      if (!hello && !refused()) throw new Error('The daemon is not connected.')
-      return {
-        // The daemon the app would start now is the code next to it on disk.
-        installedBuild: readBuild(import.meta.dirname),
-        ...(hello ? { runningBuild: hello.machine.build } : {}),
-        refused: !hello,
-        // One that refused can't say whether agents are working: they're taken to be, so stopping it asks first.
-        busy: !hello || (threadsOf.get('local') ?? []).some((s) => s.status.state === 'working'),
-      }
-    },
-    async restart(snapshot, interrupt) {
-      if (!snapshot.refused) {
-        const pid = local?.hello?.machine.pid
-        const result = await local!.call('daemon.restart', { build: snapshot.runningBuild, interrupt }) as { restarted: boolean }
-        if (!result.restarted) return 'busy'
-        return (await reconnected(pid)).machine.build
-      }
-      // One of another generation can't be asked to restart itself: stop it, consented to, and link again,
-      // which starts the one installed here.
-      const pid = daemonPid()
-      if (!pid) throw new Error('Could not find the daemon. See daemon.pid in the data dir.')
-      try { process.kill(pid, 'SIGTERM') } catch {}
-      await exited(pid)
-      restartLocal()
-      return (await reconnected(pid)).machine.build
-    },
-    async confirmInterruption(snapshot) {
-      if (headless) return true
-      const { response } = await dialog.showMessageBox({
-        type: 'warning', buttons: ['Restart Now', 'Cancel'], defaultId: 1, cancelId: 1,
-        message: snapshot.refused ? 'Restart the daemon?' : 'Interrupt working agents?',
-        detail: 'Agents stop mid-turn and pick up again after the restart. Threads and their history are kept.',
-      })
-      return response === 0
-    },
-    changed(state) {
-      broadcast({ machine: APP, method: 'service.changed', params: state })
-      refreshDesktop()
-    },
-  })
-  const pollService = () => { if (local?.state === 'connected' || refused()) void service.poll() }
-  setInterval(pollService, 3000).unref()
-
-  /** Quit, and stop this computer's daemon and its agents too, asking first while any are working. */
-  async function quitAndStop() {
-    const working = (threadsOf.get('local') ?? []).filter((s) => s.status.state === 'working')
-    if (working.length && !headless) {
-      const { response } = await dialog.showMessageBox({
-        type: 'warning', buttons: ['Stop Agents and Quit', 'Cancel'], defaultId: 0, cancelId: 1,
-        message: `${working.length === 1 ? 'An agent is' : `${working.length} agents are`} still working`,
-        detail: `Stopping the daemon ends their work. Quitting ${appConfig.name} alone leaves them running.`,
-      })
-      if (response !== 0) return
-    }
-    const pid = daemonPid()
-    for (const link of allLinks()) link.stop()
-    if (pid) try { process.kill(pid, 'SIGTERM') } catch {}
-    app.quit()
-  }
-
-  // ── Windows ─────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-  /** Every window, open or put away, kept between launches (see windows.ts). */
-  const windows = new WindowList(join(dataDir, 'windows.json'))
-  /** The open ones, by their id. */
-  const windowById = new Map<string, BrowserWindow>()
-  /** The open window last in front. */
-  const recentWindow = () => windows.recent().map((id) => windowById.get(id)).find((w) => w && !w.isDestroyed())
-  /** A window's state as another passes it on (`app.newWindow`): its storage's keys and their values, as text. */
-  function windowState(state: unknown): Record<string, string> | undefined {
-    if (!state || typeof state !== 'object' || Array.isArray(state)) return undefined
-    const entries = Object.entries(state).filter(([key, value]) => key.length <= 200 && typeof value === 'string')
-    // It travels in the new window's address: a copy too big to be a window's state isn't one.
-    return entries.reduce((size, [key, value]) => size + key.length + (value as string).length, 0) > 200_000 ? undefined : Object.fromEntries(entries) as Record<string, string>
-  }
-  /**
-   * The windows put away (the last one closed, or every one open as the app quit), reopened where they were, the one
-   * last in front on top; none, a new one. Answers the one in front.
-   */
-  function reopen(): BrowserWindow {
-    const open = recentWindow()
-    if (open) return open
-    const closed = windows.closed()
-    if (!closed.length) return createWindow()
-    // The one last in front opens first (the app's first window), the others behind it.
-    const [front, ...others] = closed.map((entry) => createWindow({ id: entry.id, ...(entry.bounds ? { bounds: entry.bounds } : {}) }))
-    if (others.length && !headless) front!.focus()
-    return front!
-  }
-
-  /**
-   * A window: one put away (`id`, at its `bounds`), or a new one, beside `near` (down and right of it, as the system
-   * cascades) at its size, when given, starting with `seed` as its state.
-   */
-  function createWindow({ id, bounds, near, seed }: { id?: string; bounds?: Bounds; near?: BrowserWindow; seed?: Record<string, string> } = {}) {
-    const beside = near && !near.isDestroyed() ? near.getBounds() : undefined
-    const at: Partial<Bounds> = bounds ? placeOn(bounds, screen.getAllDisplays().map((d) => d.workArea))
-      : beside ? { x: beside.x + 24, y: beside.y + 24, width: beside.width, height: beside.height } : {}
-    const opened = windows.open(id)
-    const window = new BrowserWindow({
-      width: at.width ?? 1100, height: at.height ?? 760, minWidth: 600, minHeight: 400,
-      ...(at.x !== undefined && at.y !== undefined ? { x: at.x, y: at.y } : {}),
-      title: appConfig.name,
-      titleBarStyle: 'hiddenInset',
-      // Centred in the 48pt title bar (see --superego-titlebar).
-      trafficLightPosition: { x: 18, y: 18 },
-      backgroundColor: '#09090b',
-      show: !headless,
-      webPreferences: { preload: join(import.meta.dirname, '../preload/preload.cjs'), sandbox: true, contextIsolation: true },
-    })
-    attachContextMenu(window.webContents, { dev: !app.isPackaged })
-    // Links (sign-in pages, docs) open in the browser, never in the app.
-    window.webContents.setWindowOpenHandler(({ url }) => {
-      if (/^https?:/.test(url)) void shell.openExternal(url)
-      return { action: 'deny' }
-    })
-    // App-wide shortcuts work wherever the keyboard is. A page in a pane (Preview, an artifact) is a frame of its own,
-    // and its key presses never reach the window's page; so while one has the keyboard, a press that's one of the
-    // window's shortcuts is taken here, before any frame, and sent to the window to run.
-    const contents = window.webContents
-    contents.on('before-input-event', (event, input) => {
-      if (input.type !== 'keyDown' || !(input.meta || input.control || input.alt)) return
-      const frame = contents.focusedFrame
-      if (!frame || frame === contents.mainFrame) return
-      const keys = shortcutOf({ key: input.key, code: input.code, metaKey: input.meta, ctrlKey: input.control, altKey: input.alt, shiftKey: input.shift })
-      if (!keys || !boundKeys.get(contents.id)?.has(keys)) return
-      event.preventDefault()
-      contents.send(CHANNEL.event, { machine: APP, method: 'app.key', params: { keys } })
-    })
-    // Back and forward from outside the page: a mouse's buttons (Windows, Linux) and a swipe (macOS, as its trackpad
-    // setting lets one through). The window goes along its own history.
-    const go = (by: -1 | 1) => contents.send(CHANNEL.event, { machine: APP, method: 'app.go', params: { by } })
-    window.on('app-command', (_event, command) => {
-      if (command === 'browser-backward') go(-1)
-      if (command === 'browser-forward') go(1)
-    })
-    window.on('swipe', (_event, direction) => {
-      if (direction === 'left') go(-1)
-      if (direction === 'right') go(1)
-    })
-    windowById.set(opened.id, window)
-    const moved = () => { if (!window.isDestroyed()) windows.moved(opened.id, window.getNormalBounds()) }
-    window.on('moved', moved)
-    window.on('resized', moved)
-    window.on('closed', () => {
-      windowById.delete(opened.id)
-      windows.close(opened.id)
-      refreshDesktop()
-    })
-    window.on('focus', () => { windows.focused(opened.id); refreshBadge() })
-    window.on('blur', () => refreshBadge())
-    // The page learns which window it is (its storage is kept by that, see local-state.ts) from its address, which
-    // a reload keeps; whether it's the app's first; and once, what it starts with.
-    const query: Record<string, string> = { window: opened.id, ...(opened.first ? { first: '1' } : {}), ...(seed ? { seed: JSON.stringify(seed) } : {}) }
-    if (process.env.ELECTRON_RENDERER_URL) void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}?${new URLSearchParams(query)}`)
-    else void window.loadFile(join(import.meta.dirname, '../renderer/index.html'), { query })
-    if (!bounds) moved()
-    if (!headless && near) window.focus()
-    refreshDesktop()
-    return window
-  }
-
-  // Artifacts: HTML the agent wrote, served from the thread's machine on a scheme of their own, sandboxed.
-  protocol.registerSchemesAsPrivileged([{ scheme: 'superego-artifact', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
+  registerArtifactScheme()
   app.whenReady().then(() => {
-    protocol.handle('superego-artifact', async (request) => {
-      const url = new URL(request.url)
-      const [thread, ...rest] = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
-      const link = linkOf(decodeURIComponent(url.hostname))
-      if (!link || !thread || !rest.length) return new Response('Not found', { status: 404 })
-      try {
-        const path = rest.join('/')
-        const { content } = await link.call('file.read', { thread: thread, path, base64: true }) as { content: string }
-        return new Response(Buffer.from(content, 'base64'), { headers: {
-          'content-type': ARTIFACT_TYPES[path.split('.').at(-1)?.toLowerCase() ?? ''] ?? 'application/octet-stream',
-          'content-security-policy': ARTIFACT_POLICY,
-        } })
-      } catch (error) {
-        return new Response(error instanceof Error ? error.message : 'Not found', { status: 404 })
-      }
-    })
+    serveArtifacts(machines.linkOf)
     if (!primary) return
-    // From source on the stock Electron.app (tests), the Dock needs telling; the app's own dev bundle has the icon.
-    if (!headless && !app.isPackaged && process.execPath.includes('/Electron.app/')) dockIcon()
-    setMenu()
-    refreshDesktop()
-    // Font pickers list the installed fonts (the Local Font Access API); nothing else is granted.
-    session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(permission === 'local-fonts'))
-    session.defaultSession.setPermissionCheckHandler((_contents, permission) => permission === 'local-fonts')
-    // A page in a Preview pane is a frame in the window, and most sites refuse to be framed (X-Frame-Options, CSP
-    // frame-ancestors), there to stop other sites wrapping them. Here the frame is the user's own pane, so for frames
-    // only, those refusals are dropped; the frame stays sandboxed (no top navigation), and top-level loads are untouched.
-    session.defaultSession.webRequest.onHeadersReceived({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
-      if (details.resourceType !== 'subFrame' || !details.responseHeaders) return callback({})
-      const headers: Record<string, string[]> = {}
-      for (const [name, values] of Object.entries(details.responseHeaders)) {
-        const key = name.toLowerCase()
-        if (key === 'x-frame-options') continue
-        if (key === 'content-security-policy') {
-          const kept = values.map((policy) => policy.split(';').filter((d) => !/^\s*frame-ancestors\b/i.test(d)).join(';')).filter((p) => p.trim())
-          if (kept.length) headers[name] = kept
-          continue
-        }
-        headers[name] = values
-      }
-      callback({ responseHeaders: headers })
-    })
-    restartLocal()
-    remotes.follow()
-    const window = reopen()
+    desktop.start()
+    setUpSession()
+    machines.start()
+    const window = windows.reopen()
     const open = openArgument(process.argv)
-    if (open) pending.set(window.webContents.id, { open })
-    app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) reopen() })
+    if (open) window.pending = { open }
+    app.on('activate', () => { if (!windows.all().length) windows.reopen() })
   })
 
-  // With the menu bar on, Superego stays there without windows; without it, closing the last window quits (except on macOS).
-  app.on('window-all-closed', () => {
-    refreshDesktop()
-    if (!mac && !menuBarOn()) app.quit()
-  })
-  // Every quit quits: the menu bar's Quit, SIGTERM (Electron turns it into app.quit), logout. Only the ⌘Q menu item
-  // is softer: with the menu bar on, it closes the windows and leaves the app there.
+  app.on('window-all-closed', () => desktop.allClosed())
   // Every window open as it quits comes back at the next launch.
-  app.on('before-quit', () => { windows.quitting(); signIns.close(); for (const link of allLinks()) link.stop() })
-  const quitKey = () => {
-    if (!menuBarOn() || headless) return app.quit()
-    // Put away, all of them, to come back as they were.
-    windows.keep(windows.recent())
-    for (const window of BrowserWindow.getAllWindows()) window.close()
-  }
-  /** File → New Window: the window in front runs its own action (it starts the new one as a copy of itself). */
-  const newWindow = () => {
-    const front = BrowserWindow.getFocusedWindow() ?? recentWindow()
-    if (front) front.webContents.send(CHANNEL.event, { machine: APP, method: 'app.action', params: { action: 'app.newWindow' } })
-    else reopen()
-  }
-  const setMenu = () => Menu.setApplicationMenu(Menu.buildFromTemplate([
-    ...(mac ? [{
-      label: appConfig.name,
-      submenu: [
-        { role: 'about' }, { type: 'separator' }, { role: 'services' }, { type: 'separator' },
-        { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' },
-        { label: `Quit ${appConfig.name}`, accelerator: 'CommandOrControl+Q', click: quitKey },
-      ],
-    } satisfies MenuItemConstructorOptions] : []),
-    // The window's own action has the shortcut (Settings → Keyboard): the menu shows it without taking it first.
-    {
-      label: 'File',
-      submenu: [
-        { label: 'New Window', accelerator: 'CommandOrControl+Shift+N', registerAccelerator: false, click: newWindow },
-        ...(mac ? [] : [{ type: 'separator' as const }, { label: 'Quit', accelerator: 'CommandOrControl+Q', click: quitKey }]),
-      ],
-    },
-    { role: 'editMenu' }, { role: 'viewMenu' },
-    // ⌘W is the window's own (it closes the pane with the focus); closing the window is ⌘⇧W, and the app stays.
-    {
-      role: 'window',
-      submenu: [
-        { role: 'minimize' }, { role: 'zoom' }, { type: 'separator' },
-        { label: 'Close Window', accelerator: 'CommandOrControl+Shift+W', click: (_item, window) => window?.close() },
-        ...(mac ? [{ type: 'separator' as const }, { role: 'front' as const }] : []),
-      ],
-    },
-  ]))
+  app.on('before-quit', () => { windows.quitting(); layoutFile.stop(); machines.stop() })
+}
+
+/** `--superego-open=<machine>/<thread>`, as `superego` passes it. */
+function openArgument(argv: string[]): ThreadRef | undefined {
+  const value = argv.find((arg) => arg.startsWith('--superego-open='))?.slice('--superego-open='.length)
+  const slash = value?.lastIndexOf('/') ?? -1
+  return value && slash > 0 ? { machine: value.slice(0, slash), thread: value.slice(slash + 1) } : undefined
 }

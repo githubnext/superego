@@ -64,7 +64,7 @@ describe('the layout file', () => {
     settings.register({ id: 'appearance', title: 'Appearance', settings: [LAYOUT_SETTING] })
     file = new LayoutFile(dir, settings)
     await file.start()
-    await file.setViews(1, views)
+    await file.setViews('w1', views)
   })
   afterEach(() => { file.stop(); rmSync(dir, { recursive: true, force: true }) })
 
@@ -88,7 +88,7 @@ describe('the layout file', () => {
     await wait(() => layout() === '{"place":{"threads.detail":"beside"}}')
     expect(file.problem).toBeUndefined()
     expect(file.missing).toEqual(['threads.detail'])
-    await file.setViews(2, [{ id: 'threads.detail', title: 'Another window\'s', fits: ['beside'] }])
+    await file.setViews('w2', [{ id: 'threads.detail', title: 'Another window\'s', fits: ['beside'] }])
     expect(file.missing).toBeUndefined()
     writeFileSync(file.path, '{}')
     await wait(() => layout() === '{}')
@@ -113,7 +113,7 @@ describe('the layout file', () => {
   it("keeps the window's change made as the views change", async () => {
     // The views change (a window lays itself out anew) and, while the file is put right for them, the window moves a
     // view: the file as it was read then is older than that, and mustn't undo it.
-    const viewed = file.setViews(1, [...views, { id: 'files.folder', title: 'Files', fits: ['space', 'beside', 'pane'] }])
+    const viewed = file.setViews('w1', [...views, { id: 'files.folder', title: 'Files', fits: ['space', 'beside', 'pane'] }])
     await new Promise((resolve) => setImmediate(resolve))
     await Promise.all([viewed, settings.set('app.layout', { place: { 'threads.details': 'pane' } })])
     await wait(() => readFileSync(file.path, 'utf8').includes('"threads.details": "pane"'))
@@ -142,7 +142,7 @@ describe('the layout file', () => {
   it('keeps what was typed when the views change, putting only the head anew', async () => {
     writeFileSync(file.path, '// mine\n{ "place": { "threads.details": "beside" } }  ')
     await wait(() => layout() === '{"place":{"threads.details":"beside"}}')
-    await file.setViews(1, [...views, { id: 'files.folder', title: 'Files', fits: ['space', 'beside', 'pane'] }])
+    await file.setViews('w1', [...views, { id: 'files.folder', title: 'Files', fits: ['space', 'beside', 'pane'] }])
     const text = readFileSync(file.path, 'utf8')
     expect(text).toContain('//   files.folder')
     expect(text.endsWith('{ "place": { "threads.details": "beside" } }  ')).toBe(true)
