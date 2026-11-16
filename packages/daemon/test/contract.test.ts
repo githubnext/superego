@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { contractProblem, defineApp, EXTENSION_API, PROTOCOL_VERSION, RELEASED, type ExtensionAbout, type ExtensionManifest, type Hello, type RpcPeer } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonExtension } from '../src/index.ts'
+import { until } from './until.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
 const SUPEREGO = defineApp({ name: 'superego', id: 'superego' })
@@ -26,11 +27,6 @@ async function open(extensions: DaemonExtension[] = [], dataDir = dir) {
   }
   const first = await connect()
   return { ...first, connect, close: async () => { first.socket.destroy(); server.close(); await daemon.close() } }
-}
-
-const until = async (check: () => boolean | Promise<boolean>) => {
-  for (let i = 0; i < 100; i++) { if (await check()) return; await new Promise((r) => setTimeout(r, 30)) }
-  throw new Error('timed out')
 }
 
 it("refuses an extension that needs an extension API this host isn't, saying which", async () => {

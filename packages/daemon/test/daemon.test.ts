@@ -8,6 +8,7 @@ import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
 import { defineApp, PROTOCOL_VERSION, versionOf, type ActionInfo, type ActionLogEntry, type AuthEvent, type Hello, type ModelCatalog, type Notifications, type ProviderAuthInfo, type RpcPeer, type ThreadInfo, type SettingsSnapshot } from '@superego/protocol'
 import { connectSocket, listen, openDaemon, type Daemon } from '../src/index.ts'
+import { until } from './until.ts'
 
 // Only the scripted model, whatever keys the machine running the tests has.
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
@@ -23,14 +24,6 @@ const open = async ({ faux = true } = {}) => {
   const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
   await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
   return { daemon, peer, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
-}
-
-const until = async (check: () => boolean | Promise<boolean>, ms = 5000) => {
-  const end = Date.now() + ms
-  while (!(await check())) {
-    if (Date.now() > end) throw new Error('timed out')
-    await new Promise((resolve) => setTimeout(resolve, 20))
-  }
 }
 
 const threads = (peer: RpcPeer) => peer.call<ThreadInfo[]>('thread.list', {})
@@ -454,6 +447,5 @@ describe('record and replay', () => {
     await close()
   })
 })
-
 
 

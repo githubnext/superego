@@ -9,6 +9,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { defineApp, obj, PROTOCOL_VERSION, RpcError, str, type Json, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi, type DaemonExtension } from '../src/index.ts'
+import { until } from './until.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
 const SUPEREGO = defineApp({ name: 'superego', id: 'superego' })
@@ -23,10 +24,6 @@ async function open(extensions: DaemonExtension[] = [], dataDir = dir) {
   const { peer, socket } = await connectSocket(join(dataDir, 'superego.sock'))
   await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
   return { peer, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
-}
-const until = async (check: () => boolean | Promise<boolean>) => {
-  for (let i = 0; i < 200; i++) { if (await check()) return; await new Promise((r) => setTimeout(r, 25)) }
-  throw new Error('timed out')
 }
 const listed = async (peer: RpcPeer, archived = false) => peer.call<ThreadInfo[]>('thread.list', { archived })
 const find = async (peer: RpcPeer, id: string) => [...await listed(peer), ...await listed(peer, true)].find((t) => t.id === id)

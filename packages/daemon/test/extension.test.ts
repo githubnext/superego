@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { AUTH_REJECTED, DATA_VIEWS, defineAction, defineApp, obj, PROTOCOL_VERSION, str, type ActionInfo, type DataViewInfo, type Hello, type Notifications, type RpcPeer, type ThreadInfo, type ViewContent } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonExtension, type LiveValue, type ScopedValue } from '../src/index.ts'
+import { until } from './until.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
 const SUPEREGO = defineApp({ name: 'superego', id: 'superego' })
@@ -20,11 +21,6 @@ async function open(extensions: DaemonExtension[]) {
   const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
   const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
   return { peer, hello, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
-}
-
-const until = async (check: () => Promise<boolean>) => {
-  for (let i = 0; i < 100; i++) { if (await check()) return; await new Promise((r) => setTimeout(r, 30)) }
-  throw new Error('timed out')
 }
 
 it('serves an extension method as a plain read: called by name, checked, not an action', async () => {

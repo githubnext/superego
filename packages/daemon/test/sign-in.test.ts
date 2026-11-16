@@ -9,6 +9,7 @@ import type { ConversationView, LiveState } from '@earendil-works/pi-durable'
 import { AUTH_REJECTED, defineApp, PROTOCOL_VERSION, type Notifications, type ProviderRejection, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { heldRejections } from '../src/agent-settings.ts'
 import { connectSocket, listen, openDaemon } from '../src/index.ts'
+import { until } from './until.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
 
@@ -27,14 +28,6 @@ const open = async () => {
   const { peer, socket } = await connectSocket(join(dir, 'd.sock'))
   await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
   return { peer, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
-}
-
-const until = async (check: () => boolean | Promise<boolean>, ms = 8000) => {
-  const end = Date.now() + ms
-  while (!(await check())) {
-    if (Date.now() > end) throw new Error('timed out')
-    await new Promise((resolve) => setTimeout(resolve, 20))
-  }
 }
 
 const list = (peer: RpcPeer) => peer.call<ThreadInfo[]>('thread.list', {})

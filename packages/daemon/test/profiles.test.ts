@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DATA_VIEWS, defineApp, PROTOCOL_VERSION, type Hello, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '../src/index.ts'
+import { until } from './until.ts'
 import { hashProfile, loadProfile, Allowances, type ProfileRef } from '../src/profiles.ts'
 
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
@@ -38,10 +39,6 @@ async function agentOf(peer: RpcPeer, id: string) {
   return { extensions: agent?.extensions ?? [], instructions: agent?.instructions }
 }
 
-const until = async (check: () => Promise<boolean>) => {
-  for (let i = 0; i < 100; i++) { if (await check()) return; await new Promise((r) => setTimeout(r, 30)) }
-  throw new Error('timed out')
-}
 const done = (peer: RpcPeer, id: string) => until(async () => (await peer.call<ThreadInfo[]>('thread.list', {})).find((s) => s.id === id)?.status.state === 'done')
 
 beforeEach(async () => {
@@ -1049,9 +1046,9 @@ export default defineDaemonExtension({ name: 'notes', setup() { return () => { g
   // The old version's publisher, from work that outlived it: nothing changes.
   old.status.set('stale')
   old.status.update(() => 'stale')
-  await new Promise((r) => setTimeout(r, 50))
-  expect(status).toBe('two')
+  // A change would be told before this answer, on the same connection.
   expect((await peer.call<{ value: unknown }>('value.watch', { key: 'vault.status' })).value).toBe('two')
+  expect(status).toBe('two')
   // What it registers after its teardown is refused, not left behind.
   expect(() => old.api.method('vault.late', () => 1)).toThrow(/torn down/)
   expect(() => old.api.value('vault.late', 1)).toThrow(/torn down/)

@@ -11,6 +11,7 @@ import { MemorySettingsStore } from '@superego/settings'
 import { connectSocket, listen, openDaemon } from '../src/index.ts'
 import { serveWeb, type ServedByTailscale, type WebServer } from '../src/web.ts'
 import { DEVICE_TTL, FAILURES, TICKET_TTL, WebDevices, deviceName } from '../src/web-devices.ts'
+import { until } from './until.ts'
 
 type Client = { on(event: string, listener: (...args: unknown[]) => void): void; send(data: string): void; close(): void; readyState: number }
 const { WebSocket: WsClient } = await import('ws') as unknown as { WebSocket: new (url: string, options: { headers: Record<string, string> }) => Client }
@@ -249,8 +250,6 @@ describe('the daemon’s web access', () => {
     const section = async () => (await peer.call<{ value: SettingsSnapshot }>('settings.watch', {})).value.sections.find((s) => s.id === 'web')!
     return { daemon, peer, section, close: async () => { sock.destroy(); await new Promise((resolve) => server.close(resolve)); await daemon.close() } }
   }
-  const until = async (check: () => Promise<boolean>) => { for (let i = 0; i < 250 && !(await check()); i++) await new Promise((r) => setTimeout(r, 20)) }
-
   it('pairs a device, lets it speak the protocol, lists, renames and revokes it', async () => {
     const port = 20000 + Math.floor(Math.random() * 20000)
     const { peer, section, close } = await open({ 'web.access': 'local' as never, 'web.port': port as never })
