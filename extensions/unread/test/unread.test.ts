@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { groupProjects, type MachineEntry } from '@superego/app/ui'
 import type { Status, ThreadInfo } from '@superego/protocol'
-import { nextUnread, waiting } from '../src/unread.ts'
+import { nextUnread } from '../src/unread.ts'
 
 const machine = (id: string): MachineEntry => ({ id, label: id, state: 'connected' })
 const thread = (id: string, root: string, activeAt: number, state: Status['state']): ThreadInfo =>
@@ -13,11 +13,6 @@ const projects = groupProjects([machine('local'), machine('box')], {
   box: [thread('far', '/a', 60, 'done')],
 }, 'recent')
 const at = (machine: string, thread: string) => ({ machine, thread })
-
-it('lists what is unread but the thread shown, a question first, then failures, then results, newest first', () => {
-  expect(waiting(projects, at('local', 'b1')).map((w) => w.thread.id)).toEqual(['b2', 'far', 'a1'])
-  expect(waiting(projects, undefined).map((w) => w.thread.id)).toEqual(['b2', 'b1', 'far', 'a1'])
-})
 
 it('goes to the next unread thread in the sidebar\'s order, around to the start, never the one shown', () => {
   expect(projects.flatMap((s) => s.threads.map((t) => t.id))).toEqual(['far', 'a1', 'a2', 'b1', 'b2'])

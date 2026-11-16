@@ -27,6 +27,7 @@ import { registerToolRows } from './tool-rows.tsx'
 import { registerLinks } from './links.tsx'
 import { registerSeen } from './seen.ts'
 import { registerProfileUi } from './profile-ui-notice.tsx'
+import { registerNotifications } from './notifications.tsx'
 
 export function mountApp(app: AppConfig, { extensions = [], root = document.getElementById('root')! }: { extensions?: UiExtension[]; root?: HTMLElement } = {}) {
   // In a browser there is no preload: the bridge is a WebSocket to the daemon that served the page.
@@ -96,6 +97,7 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
     registerLinks(core)
     registerSeen(core)
     registerProfileUi(core)
+    registerNotifications(core)
     for (const action of coreActions(app)) core.action(action)
     // Every thread in a menu, and a new one: at the title bar's start while there's no space (no sidebar).
     core.view('core.picker', { title: 'Threads', context: 'window', fits: ['titlebar'], withoutSpaces: 'titlebar', component: ThreadPicker })

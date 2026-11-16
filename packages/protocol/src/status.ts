@@ -35,21 +35,26 @@ export function statusLabel(status: Status): string {
 
 /**
  * Whether a thread wants the user and they haven't looked: it finished, failed or asks something. Not one waiting for
- * sign-in (one notice for the machine says so), nor a child working for its parent (the parent hears how it ends;
- * it still counts when it needs you), nor one in no list (archived, Ego's). The one rule for the app's unread bell,
- * notifications, menu bar and icon count, and `<id> unread`.
+ * sign-in (one notice for the machine says so), nor a quiet one that finished or failed (someone else hears how its
+ * runs end; it still counts when it needs you), nor one in no list (archived, Ego's). The one rule for what's unread:
+ * see `unreadThreads`.
  */
 export function unread(thread: ThreadInfo) {
   const { state } = thread.status
   if (state !== 'done' && state !== 'error' && state !== 'blocked') return false
   if (waitingForSignIn(thread.status) || thread.archived || thread.hidden) return false
-  return state === 'blocked' || !reportsToParent(thread)
+  return state === 'blocked' || !thread.quiet
 }
 
-/** Whether a thread works for its parent, which hears how its runs end (the thread-reports extension says so). */
-export const reportsToParent = (thread: ThreadInfo) => {
-  const fact = thread.facts?.['thread-reports']
-  return Boolean(fact && typeof fact === 'object' && !Array.isArray(fact) && fact.toParent === true)
+/**
+ * Every unread thread but the one shown (`shown`: it's being seen), the most pressing first (a question, a failure, a
+ * result), then the most recently active. The one list for the app's unread bell, its threads rail, the app icon's
+ * count, notifications and `<id> unread`; each passes its threads with whatever it keeps beside them.
+ */
+export function unreadThreads<T extends { machine: string; thread: ThreadInfo }>(threads: Iterable<T>, shown?: { machine: string; thread: string }): T[] {
+  return [...threads]
+    .filter(({ machine, thread }) => unread(thread) && !(shown?.machine === machine && shown.thread === thread.id))
+    .sort((a, b) => PRIORITY[b.thread.status.state] - PRIORITY[a.thread.status.state] || b.thread.activeAt - a.thread.activeAt)
 }
 
 /** How pressing a status is, the higher the more. Waiting for sign-in ranks just above idle: the machine's notice speaks for it. */

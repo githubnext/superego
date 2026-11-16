@@ -7,7 +7,6 @@ import { declaredSpec, serveSettings, SettingsRegistry, type SettingsStore } fro
 import { carriesFiles, uploadAttachments } from '@superego/client/uploads'
 import type { BridgeChannel, BrowserAppHandlers, MachineEntry, SuperegoBridge, SuperegoEvent } from '../shared/bridge.ts'
 import { APP, registerAppSettings } from '../shared/app-settings.ts'
-import { browserNotification } from '../shared/notifications.ts'
 import { askPairing, LIMITED, type Pairing } from './pair-gate.ts'
 
 const SETTINGS = 'superego.appSettings'
@@ -191,28 +190,10 @@ export function webBridge(): SuperegoBridge {
     'action.list': async () => Object.values(actions).map((action) => action.info),
     'action.log': async () => [],
     'app.ready': async () => ({}),
-    // A thread wants a look: a Web Notification, once permission is granted (the notifications extension asks).
-    // One per thread (its tag), however many tabs show it; clicking it brings this one forward, showing the thread.
-    'app.notify': async (notice) => {
-      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return null
-      const { machine, thread } = notice
-      try {
-        const { title, body } = browserNotification(notice)
-        const notification = new Notification(title, { body, tag: `${machine}/${thread}` })
-        notification.onclick = () => {
-          window.focus()
-          notification.close()
-          emit({ machine: APP, method: 'app.select', params: { machine, thread } })
-        }
-      } catch { /* a phone's browser, which shows them only from a service worker */ }
-      return null
-    },
     'service.get': async () => ({ phase: 'current', busy: false, deferred: false }),
     // Another machine's profile UI (reached through this daemon) is allowed only on a desktop: none runs here.
     'profileUi.allowed': async () => [],
     'profileUi.declined': async () => [],
-    // No app icon to count on: nothing to leave out of it.
-    'app.shown': async () => null,
   } satisfies BrowserAppHandlers
   const answer = (method: string): ((params: never) => Promise<unknown>) | undefined =>
     method in app ? app[method as keyof typeof app] as (params: never) => Promise<unknown> : actions[method]?.run

@@ -3,11 +3,11 @@
 // many, coloured by the most pressing (as Fut shows its waiting agents), opening a list of them, the most pressing
 // first; picking one goes there. A view (`unread.bell`): in the rail while there's no space (a sidebar shows its own),
 // and beside Settings in a phone's drawer. ⌘. goes to the next one, in every project or the one you're in.
-import { defineAction, defineUiExtension, useSelection, useProjects, type ViewProps } from '@superego/app/ui'
+import { defineAction, defineUiExtension, unreadList, useSelection, useProjects, type ViewProps } from '@superego/app/ui'
 import { rollup } from '@superego/protocol'
 import { BellIcon, Button, Menu, StatusGlyph } from '@superego/ui'
 import { about } from './shared.ts'
-import { nextUnread, waiting, type Scope } from './unread.ts'
+import { nextUnread, type Scope } from './unread.ts'
 import './styles.css'
 
 /** App setting: where ⌘. looks for the next unread thread. */
@@ -38,7 +38,7 @@ export default defineUiExtension({
 function UnreadButton({ place }: ViewProps<'window'>) {
   const { projects } = useProjects()
   const { selection, select } = useSelection()
-  const list = waiting(projects, selection)
+  const list = unreadList(projects, selection)
   if (!list.length) return null
   const top = rollup(list.map((w) => w.thread.status))
   const label = `${list.length} unread`

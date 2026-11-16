@@ -1,8 +1,12 @@
-// What a notification of a thread says, and the count on the app's icon: pure, for the desktop's main process and the
-// window alike. The settings that switch them on (`NOTIFY`, `BADGE`) are declared by the notifications extension for
-// now; the main process reads them with no window open too.
+// Notifications, the app's own: when to notify and what a notification says, one rule for the desktop's main process
+// (main/notify.ts, deciding for every window, with none open too) and a browser's page (renderer/notifications.tsx).
+// A notification when a thread starts wanting a look (it finished, failed or needs you), and one when a provider rejects
+// a machine's credentials (not one per thread it stops), while no window is in front; clicking it shows the thread.
+// The count on the app's icon is `unreadThreads` (@superego/protocol). Both switch off in the app's settings.
 import { firstLine, lastParagraph, shorten, STATUS_WORDS, unread, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
+import type { SectionSpec } from '@superego/settings'
 import type { MachineId } from './bridge.ts'
+import { rejectionChanges, statusChanges, type Rejected, type Statuses } from './changes.ts'
 
 /** What happened to a thread, as its notification says first: the desktop's subtitle, the start of a browser's body. */
 export type NotificationStatus = (typeof STATUS_WORDS)['done' | 'blocked' | 'error']
@@ -10,8 +14,7 @@ export type NotificationStatus = (typeof STATUS_WORDS)['done' | 'blocked' | 'err
 /**
  * What a notification says of a thread that wants a look now (it finished, failed or needs you); nothing for any other
  * state. `title` is the thread's; `status` what happened; `text`, in a line, what it did (its recap), what it asks, or
- * why it failed, when that's known. `app.notify` shows one, each place laying it out its own way (`desktopNotification`,
- * `browserNotification`): in the desktop app once however many windows ask, in a browser with Web Notifications.
+ * why it failed, when that's known. Each place lays it out its own way (`desktopNotification`, `browserNotification`).
  */
 export type ThreadNotification = { machine: MachineId; thread: string; title: string; status?: NotificationStatus; text?: string }
 export function threadNotification(machine: MachineId, thread: ThreadInfo): ThreadNotification | undefined {
@@ -21,11 +24,6 @@ export function threadNotification(machine: MachineId, thread: ThreadInfo): Thre
   // Done, the daemon's recap; blocked, the question (its last paragraph, after any context); error, its first line.
   const text = msg ? state === 'done' ? shorten(msg) : state === 'error' ? firstLine(msg) : lastParagraph(msg) : undefined
   return { machine, thread: thread.id, title: thread.title, status, ...(text ? { text } : {}) }
-}
-
-/** How many threads are unread, but the one being looked at (`shown`): the count on the app's icon. */
-export function unreadCount(threads: { machine: MachineId; thread: ThreadInfo }[], shown?: { machine: MachineId; thread: string }) {
-  return threads.filter(({ machine, thread }) => unread(thread) && !(shown?.machine === machine && shown.thread === thread.id)).length
 }
 
 /**
@@ -56,8 +54,37 @@ export function signInNotification(machine: MachineId, rejection: Pick<ProviderR
   return first ? { machine, thread: first, title: rejection.summary, text: `${waitingPhrase(rejection.threads.length)} Sign in again to go on.` } : undefined
 }
 
-/** Whether to notify at all. */
+/**
+ * What to notify of as each machine's threads and rejected providers are heard: a thread changing to want a look (not
+ * one first heard), and a provider rejecting the credentials (again), once for every thread it stops. `announce` false
+ * as a machine (re)connects: what changed meanwhile isn't news. Whether to show them (the setting, a window in front)
+ * is the caller's.
+ */
+export function createNotices() {
+  const statuses: Statuses = new Map()
+  const rejected: Rejected = new Map()
+  return {
+    threads(machine: MachineId, threads: ThreadInfo[], announce = true): ThreadNotification[] {
+      const changes = statusChanges(statuses, { [machine]: threads })
+      return announce ? changes.flatMap(({ thread, before }) => before === undefined ? [] : threadNotification(machine, thread) ?? []) : []
+    },
+    rejections(machine: MachineId, rejections: ProviderRejection[], announce = true): ThreadNotification[] {
+      const changes = rejectionChanges(rejected, { [machine]: rejections })
+      return announce ? changes.flatMap(({ rejection }) => signInNotification(machine, rejection) ?? []) : []
+    },
+  }
+}
+
+/** App setting: whether to notify at all. */
 export const NOTIFY = 'notifications.enabled'
-/** Whether the app's icon shows how many threads are unread (the Dock's, an installed web app's). */
+/** App setting: whether the app's icon shows how many threads are unread (the Dock's, an installed web app's). */
 export const BADGE = 'notifications.badge'
 
+/** The app's Notifications settings, on the desktop and in a browser alike. */
+export const NOTIFICATION_SETTINGS: SectionSpec = {
+  id: 'notifications', title: 'Notifications', order: 62,
+  settings: [
+    { key: NOTIFY, title: 'Notify when a thread finishes, fails or needs you', default: true, description: 'While the window is in the background.', type: { type: 'boolean' } },
+    { key: BADGE, title: 'Show unread count on the app icon', default: true, type: { type: 'boolean' } },
+  ],
+}

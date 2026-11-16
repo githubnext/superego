@@ -8,8 +8,8 @@ import type { BrowserWindow } from 'electron'
 import { daemonStarting, socketPath, spawnDaemon } from '@superego/daemon/client'
 import { Link, loginInTerminal, MachineLinks, MachineStore, openLocal, runUpdate, UiAllowStore } from '@superego/client'
 import {
-  arr, compareVersions, defineAction, int, lit, obj, opt, RpcError, str, union, bool,
-  type AppConfig, type Notifications, type ProfileRef, type Router, type ThreadInfo,
+  arr, AUTH_REJECTED, compareVersions, defineAction, int, lit, obj, opt, RpcError, str, union, bool,
+  type AppConfig, type Notifications, type ProfileRef, type ProviderRejection, type Router, type ThreadInfo,
 } from '@superego/protocol'
 import type { MachineConfig, MachineEntry, MachineUpdate, SuperegoEvent } from '../shared/bridge.ts'
 import { APP } from '../shared/app-settings.ts'
@@ -33,11 +33,13 @@ export type MachinesOptions = {
   connection(machine: string): void
   /** A machine's threads, as the app now knows them: `announce` when they changed, not when first heard on connecting. */
   threads(machine: string, threads: ThreadInfo[], announce: boolean): void
+  /** A machine's providers that rejected its credentials (`auth.rejected`): `announce` as for `threads`. */
+  rejected(machine: string, rejections: ProviderRejection[], announce: boolean): void
 }
 
 export type Machines = ReturnType<typeof createMachines>
 
-export function createMachines({ app: appConfig, dataDir, headless, broadcast, onEvent, changed, connection, threads: tracked }: MachinesOptions) {
+export function createMachines({ app: appConfig, dataDir, headless, broadcast, onEvent, changed, connection, threads: tracked, rejected }: MachinesOptions) {
   const socket = socketPath(appConfig, dataDir)
   /** Start the local daemon, detached (quitting the app leaves agents running), unless one is on its way. */
   function startDaemon(): () => boolean {
@@ -100,9 +102,13 @@ export function createMachines({ app: appConfig, dataDir, headless, broadcast, o
   })
   uiAllowed.watch()
 
-  /** Each machine's threads, followed whatever the windows show: for the menu bar, the app icon and notifications. */
+  /**
+   * Each machine's threads, followed whatever the windows show: for the menu bar, the app icon and notifications; and
+   * its rejected providers, for notifications.
+   */
   const threadsOf = new Map<string, ThreadInfo[]>()
   const watchSubs = new Map<string, string>()
+  const rejectedSubs = new Map<string, string>()
   const track = (machine: string, threads: ThreadInfo[], announce: boolean) => {
     threadsOf.set(machine, threads)
     tracked(machine, threads, announce)
@@ -118,8 +124,16 @@ export function createMachines({ app: appConfig, dataDir, headless, broadcast, o
           watchSubs.set(machine, sub)
           track(machine, value, false)
         }).catch(() => {})
+        void (linkOf(machine)!.call('value.watch', { key: AUTH_REJECTED }) as Promise<{ sub: string; value: ProviderRejection[] | null }>).then(({ sub, value }) => {
+          rejectedSubs.set(machine, sub)
+          rejected(machine, value ?? [], false)
+        }).catch(() => {})
       }
       return
+    }
+    if (method === 'value.changed') {
+      const { sub, value } = params as Notifications['value.changed']
+      if (rejectedSubs.get(machine) === sub) rejected(machine, (value ?? []) as ProviderRejection[], true)
     }
     if (method === 'threads.changed') {
       const { sub, value } = params as Notifications['threads.changed']

@@ -1,4 +1,4 @@
-// thread-reports: what it is, and what it tells clients.
+// thread-reports: what it is.
 import type { ExtensionAbout } from '@superego/protocol'
 
 /**
@@ -7,8 +7,6 @@ import type { ExtensionAbout } from '@superego/protocol'
  * while keeping the tools, and a thread without the tools still reports.
  */
 export const about = {
-  name: 'thread-reports', version: '1.0.0', api: '^2', title: 'Thread reports', description: 'Tell the thread that started one when it finishes, fails or waits on a question.',
+  name: 'thread-reports', version: '1.0.0', api: '^2.2', title: 'Thread reports', description: 'Tell the thread that started one when it finishes, fails or waits on a question.',
 } satisfies ExtensionAbout
 
-/** What clients are told of a child working for its parent (`facts['thread-reports']`): its runs are reported to it. */
-export const REPORTED = { toParent: true }

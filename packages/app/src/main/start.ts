@@ -77,6 +77,7 @@ export function startApp(appConfig: AppConfig) {
       desktop.refresh()
       notifier.track(machine, threads, announce)
     },
+    rejected: (machine, rejections, announce) => notifier.rejected(machine, rejections, announce),
   })
   const service = createService({
     app: appConfig, dataDir, headless, machines,
@@ -87,7 +88,6 @@ export function startApp(appConfig: AppConfig) {
   })
   const notifier = createNotifier({
     headless, settings, machines,
-    windowOpen: () => windows.all().length > 0,
     windowFocused: () => Boolean(windows.focused()),
     lookedAt: () => windows.focused()?.shown,
     open: (open) => windows.show({ open }),

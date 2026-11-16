@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { defineApp, type Status, type ThreadInfo } from '@superego/protocol'
 import { createRegistry, defineUiExtension, type WindowEvents } from '../src/renderer/extension.tsx'
-import { rejectionChanges, statusChanges, type Statuses } from '../src/renderer/window-events.ts'
+import { rejectionChanges, statusChanges, type Statuses } from '../src/shared/changes.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
 const profile = { scope: 'user' as const, name: 'default', dir: '/home/me/.superego/profiles/default' }

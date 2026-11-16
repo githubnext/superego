@@ -13,10 +13,11 @@ import type { ExtensionAbout } from './app.ts'
  * major: the daemon half's unstable `harness` (pi-durable's own, never part of the stable API), and an extension's
  * `capabilities` with the `ext:<name>#<capability>` it answered in `has` (no extension declared any; ask for a
  * version instead).
+ * 2.2: the daemon half's `quiet` (a thread whose runs someone else hears: `ThreadInfo.quiet`).
  * Minor: something added (an extension that uses it asks for `^2.<minor>`); major: something an extension could rely
  * on changed or went. An extension whose `api` range this doesn't satisfy is refused when it's set up.
  */
-export const EXTENSION_API = '2.1.0'
+export const EXTENSION_API = '2.2.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>

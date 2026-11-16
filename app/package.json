@@ -20,7 +20,6 @@
     "@superego/images": "workspace:*",
     "@superego/links": "workspace:*",
     "@superego/mcp-servers": "workspace:*",
-    "@superego/notifications": "workspace:*",
     "@superego/pane-ui": "workspace:*",
     "@superego/answer-ui": "workspace:*",
     "@superego/skills": "workspace:*",

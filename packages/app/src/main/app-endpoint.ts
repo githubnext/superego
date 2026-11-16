@@ -22,7 +22,7 @@ export type EndpointOptions = {
   settings: SettingsRegistry
   router: Router<AppActionContext>
   service: Pick<Service, 'state'>
-  notifier: Pick<Notifier, 'notify' | 'refreshBadge'>
+  notifier: Pick<Notifier, 'refreshBadge'>
   machines: Pick<Machines, 'update' | 'uiAllowed'>
   windows: Pick<Windows, 'create' | 'ids'>
   desktop: Pick<Desktop, 'state'>
@@ -47,7 +47,6 @@ export function appMethods(window: AppWindow, { settings, router, service, notif
       window.pending = undefined
       return what ?? {}
     },
-    async 'app.notify'(notice) { notifier.notify(notice); return null },
     'profileUi.allowed': async () => machines.uiAllowed.list(),
     'profileUi.declined': async () => machines.uiAllowed.declinedList(),
     async 'app.pickFolder'({ defaultPath }) {

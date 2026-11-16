@@ -116,6 +116,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),
     project: { root: rootOf(m), name: basename(rootOf(m)) },
     ...extensions.factsOf(id, m.meta, without),
+    ...extensions.quietOf(id, m.meta, without),
     ...(m.meta.archived ? { archived: true } : {}),
     ...(m.meta.hidden ? { hidden: true, ...(m.meta.owner ? { owner: m.meta.owner } : {}) } : {}),
     ...(m.meta.parent ? { parent: m.meta.parent } : {}),

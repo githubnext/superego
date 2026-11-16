@@ -9,10 +9,10 @@
 // sends it (thread_send), until the user writes to it themselves (from a window or the command line), which hands it to
 // them: their own conversation with it isn't reported. Runs in between (the child's own children reporting, say) are
 // reported, so a grandchild's result makes its way up. Kept with the child (this extension's state: false, the
-// user's), so it holds across restarts; a child from before this was kept is reported as before. Clients are told
-// (`facts['thread-reports']`), so a child working for its parent notifies only when it needs the user; but only while
-// its parent hears (it's there, not archived, and not without thread-reports): a child whose report would reach no one
-// notifies for itself.
+// user's), so it holds across restarts; a child from before this was kept is reported as before. It's quiet
+// (`ThreadInfo.quiet`), so a child working for its parent is unread and notifies only when it needs the user; but only
+// while its parent hears (it's there, not archived, and not without thread-reports): a child whose report would reach
+// no one is unread and notifies for itself.
 //
 // Reports are best-effort, a convenience, not delivery to rely on: the read log (reads.ts), the reports waiting to go
 // (however long the parent's run) and which runs answered the parent are in memory, so after a restart a report that
@@ -24,7 +24,7 @@ import { waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { readsOf } from '@superego/thread-tools/reads'
 import { about as toolsAbout } from '@superego/thread-tools/shared'
 import { fromLine, linkTo, senderOf } from '@superego/thread-tools/tools'
-import { about as reportsAbout, REPORTED } from './shared.ts'
+import { about as reportsAbout } from './shared.ts'
 
 /** What reporting needs of the daemon. */
 export type ReportsHost = {
@@ -162,8 +162,8 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
     const check = async (thread: ThreadInfo) => { if (thread.parent) settle(thread.id, hears(await info(thread.parent))) }
     const childrenOf = async (id: string) => (await s.threads.list()).filter((t) => t.parent === id)
     s.threads.list().then((all) => Promise.all(all.map(check))).catch((error) => console.error('thread-reports: checking parents failed:', error))
-    // Said to clients, so a child's own finishing or failing doesn't notify too: its parent hears it (see REPORTED).
-    s.facts<boolean>(({ id, state }) => state === true && !unheard.has(id) ? REPORTED : undefined)
+    // Quiet, so a child's own finishing or failing isn't unread too: its parent hears it.
+    s.quiet<boolean>(({ id, state }) => state === true && !unheard.has(id))
     s.beforeSend(async ({ thread, text, by }) => {
       if (!thread.parent) return
       const sender = by === toolsAbout.name ? senderOf(text) : undefined

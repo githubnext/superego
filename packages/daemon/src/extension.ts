@@ -351,6 +351,14 @@ export type DaemonApi = {
    */
   facts<T extends Json = Json>(describe: (thread: { id: string; state: T | undefined }) => Json | undefined): void
   /**
+   * Say a thread is quiet (`ThreadInfo.quiet`): how its runs end isn't the user's to look at, as someone else hears it
+   * (thread-reports' child working for its parent). Its finishing or failing isn't unread then, nor notified; its
+   * needing the user still is. Worked out from the thread's state (this extension's) whenever its info is, as `facts`
+   * are (`invalidate()` when something else it reads changed). Not for threads that go without this extension. A throw
+   * is logged and counts as not quiet.
+   */
+  quiet<T extends Json = Json>(describe: (thread: { id: string; state: T | undefined }) => boolean): void
+  /**
    * Say in a line what a thread's run did, once it ends: its `done` status carries it (`msg`), and a notification says
    * it. Given the run's tool calls and its answer (see `RunRecord`); answer nothing to leave it to others. The first to
    * answer wins, in the order extensions were set up, as plain text cut to about 100 characters; with none, the answer's

@@ -14,6 +14,7 @@ import { emptyHistory, step, visit, type History, type Place } from './history.t
 import { setLocalState, useLocalState } from './local-state.ts'
 import { focusProvider } from './provider-focus.ts'
 import { useWindowEvents } from './window-events.ts'
+import { Notifications } from './notifications.tsx'
 import { freeze, projectKey, useProjectList, type Project } from './projects.ts'
 import { sidebarIsHidden, showSidebar, TIGHT, type SidebarMode } from './sidebar-mode.ts'
 import { APP } from '../shared/app-settings.ts'
@@ -215,6 +216,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onHidden={onHidden} onRejections={onRejections} />)}
+      <Notifications />
       {children}
     </Context.Provider>
   )

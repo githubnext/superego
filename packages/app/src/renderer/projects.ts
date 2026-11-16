@@ -4,7 +4,7 @@
 // shows, top to bottom, whether it's open or not. The sort (the window's own setting, `app.sort`, which the sidebar's
 // menu changes) sets it; a thread another started sits right under it.
 import { useMemo } from 'react'
-import { rollup, statusRank, type Status, type ThreadInfo } from '@superego/protocol'
+import { rollup, statusRank, unreadThreads, type Status, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useAppSetting } from './client.ts'
 
@@ -29,6 +29,15 @@ export type Project = {
 }
 
 export const projectKey = (machine: string, root: string) => `${machine}:${root}`
+
+/**
+ * Every unread thread in `projects` but the one shown (`selection`: it's being seen), the most pressing first, with
+ * its project: what the unread bell lists, ⌘. goes through and the threads rail marks, by the one rule the app
+ * icon's count and `<id> unread` use too (the protocol's `unreadThreads`).
+ */
+export function unreadList(projects: Project[], selection?: { machine: string; thread: string }) {
+  return unreadThreads(projects.flatMap((project) => project.threads.map((thread) => ({ machine: project.machine.id, project, thread }))), selection)
+}
 
 /** Every machine's threads, as projects, in `sort`'s order: projects and the threads in each. */
 export function groupProjects(machines: MachineEntry[], threads: Record<string, ThreadInfo[] | undefined>, sort: Sort = 'recent'): Project[] {

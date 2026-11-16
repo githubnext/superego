@@ -782,7 +782,8 @@ if (phase === 'first') {
   const { mkdirSync } = await import('node:fs')
   const elsewhere = `${process.env.SUPEREGO_HOME}/elsewhere`
   mkdirSync(elsewhere, { recursive: true })
-  // With the window in the background, a thread finishing is a notification (headless, collected here, not shown).
+  // With no window in front (headless, none ever is), a thread finishing is a notification from the app (collected
+  // here, not shown).
   globalThis.superegoNotifications = []
   await run(`window.dispatchEvent(new Event('blur'))`)
   const other = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(elsewhere)}, title: 'elsewhere', prompt: 'hi' }).then((t) => t.id)`)
@@ -794,7 +795,7 @@ if (phase === 'first') {
   for (let i = 0; i < 50 && !globalThis.superegoNotifications.some(finished); i++) await new Promise((r) => setTimeout(r, 100))
   if (!globalThis.superegoNotifications.some(finished)) { await fail(`no notification of the thread finishing: ${JSON.stringify(globalThis.superegoNotifications)}`); throw new Error('failed') }
   // The app icon counts it, as the main process sets it (headless, kept here, not shown).
-  const unreadNow = await run(`window.superego.call('local', 'thread.list', {}).then((ts) => ts.filter((t) => ['done', 'error', 'blocked'].includes(t.status.state) && t.status.kind !== 'auth' && !t.facts?.['thread-reports']?.toParent).length)`)
+  const unreadNow = await run(`window.superego.call('local', 'thread.list', {}).then((ts) => ts.filter((t) => ['done', 'error', 'blocked'].includes(t.status.state) && t.status.kind !== 'auth' && !t.quiet).length)`)
   for (let i = 0; i < 50 && globalThis.superegoBadge !== unreadNow; i++) await new Promise((r) => setTimeout(r, 100))
   if (!(unreadNow >= 1) || globalThis.superegoBadge !== unreadNow) { await fail(`the app icon says ${globalThis.superegoBadge} unread, not ${unreadNow}`); throw new Error('failed') }
   await run(`window.dispatchEvent(new Event('focus'))`)
@@ -856,6 +857,14 @@ if (phase === 'first') {
     await untilIn(second, titled(nextTitle), 'its own thread after a reload')
     const kept = () => JSON.parse(readFileSync(`${process.env.SUPEREGO_HOME}/windows.json`, 'utf8')).windows.map((w) => w.id)
     if (kept().length !== 2) { await fail(`not two windows kept: ${kept()}`); throw new Error('failed') }
+    // Two windows open, a thread finishing is one notification: the app decides, not each window.
+    globalThis.superegoNotifications = []
+    const twice = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(elsewhere)}, title: 'twice', prompt: 'hi' }).then((t) => t.id)`)
+    const ofTwice = () => globalThis.superegoNotifications.filter((n) => n.thread === twice)
+    for (let i = 0; i < 50 && !ofTwice().length; i++) await new Promise((r) => setTimeout(r, 100))
+    await new Promise((r) => setTimeout(r, 500))
+    if (ofTwice().length !== 1) { await fail(`not one notification with two windows open: ${JSON.stringify(globalThis.superegoNotifications)}`); throw new Error('failed') }
+    await run(`window.superego.call('local', 'thread.archive', { thread: '${twice}' })`)
     second.close()
     for (let i = 0; i < 50 && !second.isDestroyed(); i++) await new Promise((r) => setTimeout(r, 100))
     if (!second.isDestroyed() || main.isDestroyed() || BrowserWindow.getAllWindows().length !== 1) { await fail('closing one window closed another'); throw new Error('failed') }

@@ -27,7 +27,7 @@ import {
 // The daemon itself only for `daemon run`: loading it costs every other command most of its start.
 import { appEnv, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
 import {
-  AUTH_REJECTED, compareVersions, driftPhrase, PROTOCOL_VERSION, RpcError, unread, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Notifications, type Params, type ProviderAuthInfo, type Result,
+  AUTH_REJECTED, compareVersions, driftPhrase, PROTOCOL_VERSION, RpcError, unreadThreads, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Notifications, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ProfileRef, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
@@ -206,16 +206,16 @@ async function threads(machineName?: string, archived = false) {
 }
 
 /**
- * The unread threads (protocol's `unread`, the app icon's count): this computer's, and those of every machine its
- * daemon reaches and is connected to. Only a running daemon is asked: none is started, so a status bar polling this
- * gets nothing (0) while there's none. `-m`, one machine's only.
+ * The unread threads, the most pressing first (protocol's `unreadThreads`, the app icon's count): this computer's,
+ * and those of every machine its daemon reaches and is connected to. Only a running daemon is asked: none is started,
+ * so a status bar polling this gets nothing (0) while there's none. `-m`, one machine's only.
  */
 async function unreadCommand(machineName: string | undefined, countOnly: boolean) {
-  const found: { machine: string; label: string; thread: ThreadInfo }[] = []
+  const heard: { machine: string; label: string; thread: ThreadInfo }[] = []
   const machine = resolveMachine(machineName)
   if (machine.config || await isListening(socket)) {
     await on(machine, async (call, hello) => {
-      const add = (id: string, label: string, list: ThreadInfo[]) => { for (const thread of list) if (unread(thread)) found.push({ machine: id, label, thread }) }
+      const add = (id: string, label: string, list: ThreadInfo[]) => { for (const thread of list) heard.push({ machine: id, label, thread }) }
       add(machine.id, machine.label, await call('thread.list', {}))
       if (machine.config) return
       const { value } = await call('machines.watch', {})
@@ -225,6 +225,7 @@ async function unreadCommand(machineName: string | undefined, countOnly: boolean
       }))
     }, { start: false })
   }
+  const found = unreadThreads(heard)
   const threads = found.map(({ machine, thread }) => ({ machine, id: thread.id, title: thread.title, state: thread.status.state }))
   if (countOnly && !json) return void console.log(String(threads.length))
   print({ count: threads.length, threads }, () => {

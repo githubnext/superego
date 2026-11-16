@@ -1,9 +1,9 @@
 // The app's own settings, the ones about this client rather than any machine: how it looks, its shortcuts and layout,
 // and on the desktop, how it sits there. Declared here once, for the desktop's main process (main/start.ts) and a
-// browser's page (renderer/web-bridge.ts) alike; the window's extensions declare theirs (whether to notify, say) beside
-// them. They are served under the reserved machine id `APP` with the same settings methods a daemon answers.
+// browser's page (renderer/web-bridge.ts) alike; the window's extensions declare theirs beside them. They are served under the reserved machine id `APP` with the same settings methods a daemon answers.
 import type { AppConfig } from '@superego/protocol'
 import type { SettingSpec, SettingsRegistry } from '@superego/settings'
+import { NOTIFICATION_SETTINGS } from './notifications.ts'
 
 /** The machine id the app's own endpoint answers under: its settings, its actions, the desktop's methods. */
 export const APP = 'app'
@@ -49,7 +49,7 @@ export const PANE_LAYOUT_SETTING: SettingSpec = {
 }
 
 /**
- * Register the app's own sections in `settings`: Appearance and Keyboard everywhere; on the desktop (`desktop`, with
+ * Register the app's own sections in `settings`: Appearance, Keyboard and Notifications everywhere; on the desktop (`desktop`, with
  * whether it's macOS), Menu bar too.
  */
 export function registerAppSettings(settings: SettingsRegistry, desktop?: { app: AppConfig; mac: boolean }) {
@@ -81,6 +81,7 @@ export function registerAppSettings(settings: SettingsRegistry, desktop?: { app:
       type: { type: 'keymap' },
     }],
   })
+  settings.register(NOTIFICATION_SETTINGS)
   if (!desktop) return
   const { app, mac } = desktop
   settings.register({

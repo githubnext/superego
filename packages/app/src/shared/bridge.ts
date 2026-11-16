@@ -2,7 +2,6 @@
 import type { ConnectionState, MachineConfig, MachineEntry as Base, MachineId } from '@superego/client/shared'
 import type { AllowedUi } from '@superego/client'
 import type { ActionInfo, ActionLogEntry, DeclaredSection, Methods, VersionDrift } from '@superego/protocol'
-import type { ThreadNotification } from './notifications.ts'
 import type { ServiceState } from './service.ts'
 
 export type { ConnectionState, MachineConfig, MachineId }
@@ -92,8 +91,6 @@ export type AppHandlers = {
   'service.get'(): Promise<ServiceState>
   /** The page is listening for app events: answer with what it was asked to show before it was. */
   'app.ready'(): Promise<{ open?: ThreadRef; settings?: boolean }>
-  /** A thread wants a look: a notification. */
-  'app.notify'(notice: ThreadNotification): Promise<null>
   /** The profile UIs from other machines allowed to run in this computer's windows (see profile-ui.ts). */
   'profileUi.allowed'(): Promise<AllowedUi[]>
   /** The ones put off ("Not now"), for the sources they were then: the window doesn't ask about those again. */
@@ -112,7 +109,10 @@ export type AppHandlers = {
    * key presses and the window never sees them: these are taken first and sent on (`app.key`).
    */
   'app.boundKeys'(params: { keys: string[] }): Promise<null>
-  /** The thread the window shows now (none: null): while the window has the focus, the app icon's count leaves it out. */
+  /**
+   * The thread the window shows now (none: null): while the window has the focus, the app icon's count leaves it out.
+   * A browser's page counts for itself (renderer/notifications.tsx).
+   */
   'app.shown'(params: { selection: ThreadRef | null }): Promise<null>
   /** Update another machine's Superego (the window's `machine.update` action): its output shows on the machine's row in Settings. */
   'app.updateMachine'(params: { machine: string }): Promise<{ updated: boolean }>
@@ -124,5 +124,5 @@ export type AppHandlers = {
  * shortcuts over a pane's page, the Dock), and answer `unsupported` there.
  */
 export type BrowserAppHandlers = Pick<AppHandlers,
-  'settings.watch' | 'unwatch' | 'settings.register' | 'action.list' | 'action.log' | 'service.get' | 'app.ready' | 'app.notify' |
-  'app.shown' | 'profileUi.allowed' | 'profileUi.declined'>
+  'settings.watch' | 'unwatch' | 'settings.register' | 'action.list' | 'action.log' | 'service.get' | 'app.ready' |
+  'profileUi.allowed' | 'profileUi.declined'>

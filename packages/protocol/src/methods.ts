@@ -72,6 +72,12 @@ export type ThreadInfo = {
   owner?: string
   /** What extensions say about it (their facts), by extension name: `facts.worktrees`, say. Absent: nothing. */
   facts?: Record<string, Json>
+  /**
+   * How its runs end isn't the user's to look at: someone else hears it (a child working for its parent, which gets
+   * its report). It's never unread for finishing or failing; it still is when it needs the user. An extension says so
+   * (`superego.quiet`).
+   */
+  quiet?: true
   /** What it's doing: `idle`, `working`, `done`, `blocked` (on the user) or `error`, with a line saying more. */
   status: Status
 }

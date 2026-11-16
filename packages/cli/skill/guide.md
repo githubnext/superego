@@ -315,6 +315,7 @@ place, and the window's console has why.
 | `thread({ starting, abandoned, started, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchiveAbandoned, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
 | `state()` → `get(id)`, `set(id, next)`, `update(id, edit)` | state of its own kept with each thread, across restarts; `starting` gives a new one its first |
 | `facts(({ id, state }) => …)` | what clients are told of a thread, as `thread.facts.<name>`: worked out from its state |
+| `quiet(({ id, state }) => boolean)` | say how a thread's runs end isn't the user's to look at (someone else hears it): `thread.quiet`, so its finishing or failing isn't unread nor notified; needing you still is |
 | `recap(({ thread, answer, calls }) => …)` | say in a line what a run did, once it ends: the thread's `done` status carries it (`msg`), and its notification says it. The first to answer wins; with none, the answer's first sentence. |
 | `toolCalls(({ thread, call, result }) => …)` | hear each tool call a thread's agent makes, once it ends; read-only ([Watching tool calls](daemon.md#watching-tool-calls)). |
 | `agentFor(({ id, state, profile }) => ({ instructions, model, extensions, without }))` | choose a thread's agent; the first to answer wins. `agent(part, { always: false })` gives a part only through this, or `agentParts` |
@@ -368,7 +369,7 @@ Three versions, each for its own question:
 | Version | What it versions | Where it's said | Who checks it |
 |---|---|---|---|
 | **The release** | the code a machine runs: its git commit (the packages are `0.0.0`) | `hello.machine.commit`, Settings → Machines ("an older Superego") | the user, who updates |
-| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`2.1.0`; a minor version adds, a major one renames or removes) | `hello.api` | the host, setting an extension up |
+| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`2.2.0`; a minor version adds, a major one renames or removes) | `hello.api` | the host, setting an extension up |
 | **The protocol** | the wire: a generation, `PROTOCOL_VERSION` (`2`), and in it the features each side announces | `hello.version`, `hello.features` | both ends, at `hello` |
 
 And each extension's own **version**, semver, which its other half, profiles and scripts rely on.
@@ -597,23 +598,24 @@ drawer: `titlebar` views (the thread picker) and Settings are in the bar at the 
 `on` tells a UI half what happens in the window, whatever it draws. Listening is owned like everything else, and stops
 at teardown. A thread that goes without the extension isn't heard of; a profile hears only its own threads.
 
-<!-- check: ui; import { threadNotification } from 'superego/unstable' -->
+<!-- check: ui; import { unread } from 'superego/unstable' -->
 ```ts
-// notifications: a thread wants a look while the window is in the background.
-superego.on('thread.status', ({ machine, thread, before }) => {
+// A thread wants a look while the window is in the background: say so in the window's title.
+superego.on('thread.status', ({ thread, before }) => {
   if (before === undefined || (superego.window.focused && superego.window.visible)) return
-  const notification = threadNotification(machine, thread)    // finished, failed or needs you; else nothing
-  if (notification) void call('app', 'app.notify', notification)    // the desktop's notification, or the browser's
+  if (unread(thread)) document.title = `• ${thread.title}`    // finished, failed or needs you
 })
 ```
+
+Notifications and the app icon's count are the app's own (Settings → Notifications): an extension needn't notify.
 
 `window` is how things are as the event arrives: `focused`, `visible`, the `selection` and the `thread` it shows. The
 core marks a finished thread seen the same way, on `select`, `focus` and `thread.status`.
 
 `auth.rejected` is a machine's provider rejecting its credentials (`{ machine, rejection }`, a `ProviderRejection`):
 once, however many threads it stops. Those threads are `blocked` with kind `auth` (`waitingForSignIn`), quiet on their
-own, and go on by themselves once the machine is signed in again; `threadNotification` says nothing of them, `signInNotification`
-says it once for all.
+own, and go on by themselves once the machine is signed in again; `unread` says nothing of them, and the app notifies
+once for all.
 
 ## Lifecycle and ownership
 
@@ -774,10 +776,9 @@ source, at `extensions/<name>/src`, so only a checkout has them.
 | `files` | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | `links` | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
 | `unread` | UI only: a view in the rail `withoutSpaces` and in a phone's `drawer`, an action with keys reading projects, an app setting |
-| `notifications` | UI only: `on('thread.status')`, `on('auth.rejected')` and `window`, `app.notify` (desktop and browser alike), a `composer.above` offer |
 | `threads` | the required one, UI only: views (the list a `space` with a `rail` of its own, details in the `beside` with ⌘I, the model in the `header`), app settings, tool rows and a `link` |
 | `thread-tools` | daemon only: the agent's thread tools, on `superego.threads` |
-| `thread-reports` | daemon only: report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by `beforeSend`'s `by`) |
+| `thread-reports` | daemon only: report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by `beforeSend`'s `by`); `quiet` for a child whose parent hears it |
 | `worktrees` | `thread` hooks (`starting` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `header.chips` chip, a `thread.badge` mark and a `newThreadField` |
 | `mcp-servers` | a settings section drawn by a component of its own (`settings(ui, …)`) from a live value, with dialogs and `SignInFlow`; tool rows by prefix (`mcp__*`) with a call's own `verb` and images; a `header` view, a `details.section` slot and a `composer.above` notice, all from the thread's facts |
 | `ego` | an agent of its own: a `hidden` thread, `agentFor` with `agent(part, { always: false })`, an `archiving` refusal, a `beforeSend` transform marking an outside agent's message; a view in the `rail`, and in a phone's `drawer`; an `onboarding` slot |

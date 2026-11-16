@@ -93,6 +93,8 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
 
   const threadHooks: Owned<ThreadHooks>[] = []
   const factSources: Owned<(thread: { id: string; state: Json | undefined }) => Json | undefined>[] = []
+  /** Extensions saying which threads are quiet (`quiet`). */
+  const quietSources: Owned<(thread: { id: string; state: Json | undefined }) => boolean>[] = []
   const recaps: Owned<(run: RunRecord) => string | undefined>[] = []
   const toolWatchers: Owned<(record: ToolCallRecord) => void | Promise<void>>[] = []
   const choosers: Owned<(thread: { id?: string; state: Json | undefined; profile?: ProfileRef }) => AgentChoice | undefined>[] = []
@@ -193,6 +195,18 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       }
     }
     return Object.keys(facts).length ? { facts } : {}
+  }
+  /** Whether an extension it doesn't go without says a thread is quiet (`quiet`). */
+  function quietOf(id: string, meta: ThreadMeta, without: Set<string>): Pick<ThreadInfo, 'quiet'> {
+    for (const source of quietSources) {
+      if (!appliesTo(source, without, meta)) continue
+      try {
+        if (source.value({ id, state: stateOf(meta, source.owner) })) return { quiet: true }
+      } catch (error) {
+        console.error(`Extension ${source.owner}: whether thread ${id} is quiet failed:`, error)
+      }
+    }
+    return {}
   }
   /** Status contributors that threw once: logged then, not on every thread's info after. */
   const failedContributors = new WeakSet<object>()
@@ -524,6 +538,11 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         note('facts', 'facts')
         changed()
       },
+      quiet(describe) {
+        own(quietSources, describe as (typeof quietSources)[number]['value'], 'quiet')
+        note('quiet', 'quiet')
+        changed()
+      },
       recap(describe) { own(recaps, describe, 'a recap'); note('recap', 'a recap') },
       toolCalls(watch) { own(toolWatchers, watch, 'a toolCalls watcher'); note('toolCalls', 'a toolCalls watcher') },
       agentFor(choose) { own(choosers, choose as (typeof choosers)[number]['value'], 'an agentFor'); note('agentFor', 'an agentFor'); changed() },
@@ -678,7 +697,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
 
   return {
     setUp, setUpBuiltin, registerSwitches, declare, inspect, known, offer, offered: (name: string) => offered().some((e) => e.name === name),
-    publishViews, agentOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, blockedOf, appliesTo,
+    publishViews, agentOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
     /** The daemon closing: switches turned meanwhile change nothing. */
     close: () => unlisten(),
     /** The hooks that are for a thread, in order. */
