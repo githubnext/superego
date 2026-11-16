@@ -16,7 +16,7 @@ import {
 import { rollup, statusLabel, STATUS_WORDS, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, ChatsIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
-import { ago } from './groups.ts'
+import { ago } from './ago.ts'
 import { registerLinks, registerRows } from './rows.tsx'
 import { about } from './shared.ts'
 

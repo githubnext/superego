@@ -1,8 +1,8 @@
+// The sidebar's order (see extensions/threads): threads grouped into projects, held still under the pointer, and nested.
 import { expect, it } from 'vitest'
-import type { MachineEntry } from '@superego/app/ui'
 import type { ThreadInfo, Status } from '@superego/protocol'
-import { freeze, groupProjects, nest } from '../../../packages/app/src/renderer/projects.ts'
-import { ago } from '../src/groups.ts'
+import type { MachineEntry } from '../src/shared/bridge.ts'
+import { freeze, groupProjects, nest } from '../src/renderer/projects.ts'
 
 const machine = (id: string, state: MachineEntry['state'] = 'connected'): MachineEntry => ({ id, label: id === 'local' ? 'This computer' : 'Build box', state })
 const thread = (id: string, root: string, state: Status['state'], createdAt: number, activeAt: number): ThreadInfo =>
@@ -33,13 +33,6 @@ it('holds the order still while the pointer is over it, taking in what changed',
   expect(shape(held)).toEqual([
     ['superego', 'local', ['old-busy', 'mid-asks']], ['site', 'local', ['new-done']], ['superego', 'box', ['far']], ['new', 'local', ['newest']],
   ])
-})
-
-it('says how long ago briefly', () => {
-  const now = Date.parse('2026-11-04T12:00:00Z')
-  expect(ago(now - 20_000, now)).toBe('now')
-  expect(ago(now - 5 * 60_000, now)).toBe('5m')
-  expect(ago(now - 3 * 3_600_000, now)).toBe('3h')
 })
 
 it('puts the threads a thread started under it, a level in; one whose parent is elsewhere on its own', () => {

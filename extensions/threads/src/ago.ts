@@ -1,4 +1,4 @@
-// How the sidebar reads times, without React. Its order is the app's (projects.ts in @superego/app).
+// How the sidebar says when a thread was last active, without React.
 import type { ThreadInfo } from '@superego/protocol'
 
 /** How long ago, briefly: now, 5m, 2h, then the weekday, then the date. */

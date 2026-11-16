@@ -10,5 +10,5 @@
     "@superego/ui": "workspace:*"
   },
   "peerDependencies": { "react": "^19" },
-  "devDependencies": { "@types/react": "^19", "@types/react-dom": "^19", "react": "^19", "react-dom": "^19.2.0" }
+  "devDependencies": { "@superego/sdk": "workspace:*", "@types/react": "^19", "@types/react-dom": "^19", "react": "^19", "react-dom": "^19.2.0" }
 }
