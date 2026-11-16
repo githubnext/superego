@@ -51,7 +51,12 @@ const specOf = ({ title, blocks, submit }: { title?: string | undefined; blocks:
 export default defineDaemonExtension({
   ...about,
   setup(superego) {
-    const threadOf = (conversationId: number) => superego.threads.of(conversationId) ?? String(conversationId)
+    /** The thread a call is in (a subagent's, its top thread's): where what it asks or draws is published. */
+    const threadOf = (conversationId: number) => {
+      const thread = superego.threads.of(conversationId)
+      if (thread === undefined) throw new Error('Only a thread can ask the user or draw UI: this conversation is none.')
+      return thread
+    }
 
     // ── Waiting on the user: one queue for both asking tools, oldest first ────────────────────────────────────────
     const waiting = superego.scopedValue<Waiting[]>(WAITING, [])

@@ -1,6 +1,6 @@
 // agent-ui, UI half: what the agent waits on, above the composer (waiting.tsx); its UI in the transcript
 // (transcript.tsx); and the `ui` pane, drawing the blocks it keeps for it (see daemon.ts), redrawn as it updates them.
-import { defineUiExtension, PaneMessage, useValue, type PaneProps } from '@superego/app/ui'
+import { defineUiExtension, has, PaneMessage, useValue, type PaneProps } from '@superego/app/ui'
 import { Blocks } from '@superego/blocks/ui'
 import { useReplyToThread } from './reply.ts'
 import { about, ASK, ASK_USER, KIND, OPEN, PANES, SHOW, UPDATE, type ThreadPanes } from './shared.ts'
@@ -24,9 +24,11 @@ export default defineUiExtension({
 
 function UiPane({ machine, thread, pane }: PaneProps) {
   const reply = useReplyToThread(machine, thread)
-  // The thread's own scope: null until the daemon half has read it from the thread (or when it keeps none).
+  // The thread's own scope: null until the daemon half has read it from the thread ({} when it keeps none), and
+  // where nobody publishes it (agent-ui off on that machine).
   const specs = useValue<ThreadPanes>(machine, PANES, { scope: thread.id })
   const { id } = (pane.params ?? {}) as { id?: string }
+  if (!has(machine, `ext:${about.name}`)) return <PaneMessage>{about.title} is off on {machine.label}.</PaneMessage>
   if (!specs) return <PaneMessage>Loading…</PaneMessage>
   const spec = id ? specs[id] : undefined
   if (!spec) return <PaneMessage>This pane’s UI is gone.</PaneMessage>
