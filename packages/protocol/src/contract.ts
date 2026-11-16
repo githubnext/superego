@@ -19,10 +19,11 @@ import type { ExtensionAbout } from './app.ts'
  * `profileKey` (`ProfileInfo.brings`), and a settings section's `value`. Gone with it, without a major (generation 2
  * isn't released): the profile's `worktree` and `mcp`, `NewThread.worktree`, the `ProfileMcpServer` type (now the
  * mcp-servers extension's, whose `mcpServers` is one list), and `ProfileInfo.mcp`.
+ * 2.4: `threads.idle` (wait until a thread isn't working).
  * Minor: something added (an extension that uses it asks for `^2.<minor>`); major: something an extension could rely
  * on changed or went. An extension whose `api` range this doesn't satisfy is refused when it's set up.
  */
-export const EXTENSION_API = '2.3.0'
+export const EXTENSION_API = '2.4.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>

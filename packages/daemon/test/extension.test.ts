@@ -1,9 +1,10 @@
 // The daemon half of the extension API, as an extension sees it: methods (reads) apart from actions, threads by id,
 // pane kinds told to the agent, and send transforms.
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
+import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { AUTH_REJECTED, DATA_VIEWS, defineAction, defineApp, MESSAGE_ENTRY, obj, PROTOCOL_VERSION, str, type ActionInfo, type MessageOrigin, type SettingsSnapshot, type DataViewInfo, type Hello, type Notifications, type ThreadInfo, type ViewContent } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi, type DaemonExtension, type LiveValue, type ScopedValue, type ThreadState } from '../src/index.ts'
 import { answeredBy } from '../src/threads.ts'
@@ -13,10 +14,11 @@ for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY
 const SUPEREGO = defineApp({ name: 'superego', id: 'superego' })
 let dir: string
 beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-extension-')) })
-afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+afterEach(async () => { await rm(dir, { recursive: true, force: true }); delete process.env.SUPEREGO_REPLAY_SPEED })
 
-async function open(extensions: DaemonExtension[]) {
-  process.env.SUPEREGO_MODEL = 'faux'
+async function open(extensions: DaemonExtension[], model = 'faux') {
+  process.env.SUPEREGO_MODEL = model
+  process.env.SUPEREGO_REPLAY_SPEED = '0'
   const daemon = await openDaemon({ app: SUPEREGO, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions })
   const server = await listen(daemon, join(dir, 'superego.sock'))
   const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
@@ -307,6 +309,43 @@ it('keeps how a message came with it: who sent it, from which thread, for whom; 
   await api!.threads.noteRead(parent.id, child.id)
   expect(api!.threads.parentRead(now)).toBe(true)
   expect(api!.threads.parentRead({ ...now, activeAt: now.activeAt + 1 })).toBe(false)
+  await close()
+})
+
+it("waits until a thread isn't working (threads.idle), and tells its last answer (thread.lastAnswer)", async () => {
+  // The run holds in a tool until the test lets it go, then answers.
+  const turn = (content: unknown[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
+  await writeFile(join(dir, 'turns.jsonl'), [turn([{ type: 'toolCall', id: 'c1', name: 'hold', arguments: {} }], 'toolUse'), turn([{ type: 'text', text: 'Let go.' }], 'stop')].join('\n') + '\n')
+  let api: DaemonApi | undefined
+  let release!: () => void
+  const held = new Promise<void>((resolve) => { release = resolve })
+  const holder = defineDaemonExtension({
+    name: 'holder',
+    setup(superego) {
+      api = superego
+      superego.agent(defineExtension({ name: 'holder', tools: [defineTool({ name: 'hold', description: 'Hold.', parameters: obj({}), execute: async () => { await held; return { output: [{ type: 'text', text: 'held' }] } } })] }))
+    },
+  })
+  const { peer, close } = await open([holder], `replay:${join(dir, 'turns.jsonl')}`)
+  const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'go' })
+  await until(async () => (await api!.threads.get(thread.id)).status.state === 'working')
+  expect(await peer.call('thread.lastAnswer', { thread: thread.id })).toEqual({ text: null })
+  // Given up on: as it is, still working.
+  const stop = new AbortController()
+  const given = api!.threads.idle(thread.id, { signal: stop.signal })
+  stop.abort()
+  expect((await given).status.state).toBe('working')
+  const waited = api!.threads.idle(thread.id)
+  let ended = false
+  void waited.then(() => { ended = true })
+  await new Promise((r) => setTimeout(r, 50))
+  expect(ended).toBe(false)
+  release()
+  expect((await waited).status.state).toBe('done')
+  expect(await peer.call('thread.lastAnswer', { thread: thread.id })).toEqual({ text: 'Let go.' })
+  // Not working: at once.
+  expect((await api!.threads.idle(thread.id)).status.state).toBe('done')
+  await expect(api!.threads.idle('999')).rejects.toMatchObject({ kind: 'not_found' })
   await close()
 })
 

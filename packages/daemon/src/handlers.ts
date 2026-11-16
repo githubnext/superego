@@ -36,6 +36,7 @@ const PARAMS: Record<string, JsonSchema> = {
   'profile.ui': params(PROFILE_REF),
   'profile.module': params({ ...PROFILE_REF, path: str() }),
   'thread.history': params({ thread, before: num(), limit: opt(num()) }),
+  'thread.lastAnswer': params({ thread }),
   'thread.watch': params({ thread }),
   'threads.watch': params({ hidden: opt(bool()) }),
   'value.watch': params({ key: str(), scope: opt(str()) }),
@@ -112,6 +113,7 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
     'profile.ui': (ref: Methods['profile.ui']['params']) => profiles.ui(ref),
     'profile.module': ({ path, ...ref }: Methods['profile.module']['params']) => profiles.module(ref, path),
     'thread.history': ({ thread: id, before, limit }: Methods['thread.history']['params']) => threads.history(id, before, limit),
+    'thread.lastAnswer': async ({ thread: id }: Methods['thread.lastAnswer']['params']) => ({ text: (await threads.lastAnswer(id)) ?? null }),
     async 'thread.watch'({ thread: id }: Methods['thread.watch']['params']) {
       const watching = sub()
       // Held before the watch starts, so one that ends at once (its thread cleared meanwhile) still says so. Its end

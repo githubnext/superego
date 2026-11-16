@@ -442,6 +442,11 @@ export type DaemonApi = {
     /** Its last answer, as text, if it has one. */
     lastAnswer(id: string): Promise<string | undefined>
     /**
+     * Wait until it isn't working: its run ended, or it needs the user (`blocked`), whatever extensions it goes without.
+     * At once if it isn't working now. Its info then; with `signal` aborted, as it is then.
+     */
+    idle(id: string, options?: { signal?: AbortSignal }): Promise<ThreadInfo>
+    /**
      * Its newest transcript entries, newest first (`limit`, default 20), none from before it was cleared: what it's doing
      * now, say. pi-durable's `EntryRecord`, which isn't part of the stable API: its shape may change with pi-durable.
      */

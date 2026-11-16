@@ -9,5 +9,5 @@
     "@superego/daemon": "workspace:*",
     "@superego/protocol": "workspace:*"
   },
-  "devDependencies": { "@superego/settings": "workspace:*" }
+  "devDependencies": { "@superego/sdk": "workspace:*" }
 }

@@ -28,6 +28,7 @@ describe("Ego's tools", () => {
     list: async () => [thread('1', 'Fix login'), thread('2', 'Notes', { project: { root: '/q', name: 'q' } })],
     start: async (params) => { started.push(params); return thread('3', params.title ?? 'New', { cwd: params.cwd }) },
     answer: async () => undefined,
+    idle: async (id) => thread(id, 'Idle'),
   })
 
   it('reads settings, actions, profiles, machines, threads and files, and changes settings and machines; nothing else', async () => {

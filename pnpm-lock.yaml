@@ -641,9 +641,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/protocol
     devDependencies:
-      '@superego/settings':
+      '@superego/sdk':
         specifier: workspace:*
-        version: link:../../packages/settings
+        version: link:../../packages/sdk
 
   extensions/threads:
     dependencies:

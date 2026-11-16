@@ -432,6 +432,25 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     readAt.set(id, Math.max(readAt.get(id) ?? 0, thread.activeAt))
   }
 
+  /** Once a thread isn't working (its run ended, or it needs the user), or `signal` aborts: its info then. */
+  async function idle(id: string, signal?: AbortSignal) {
+    await get(id)
+    return new Promise<ThreadInfo>((resolve, reject) => {
+      const check = () => {
+        get(id).then((m) => {
+          const now = info(id, m)
+          if (now.status.state === 'working' && !signal?.aborted) return
+          stop()
+          resolve(now)
+        }, (error) => { stop(); reject(error) })
+      }
+      const off = host.onChanged(check)
+      const stop = () => { off(); signal?.removeEventListener('abort', check) }
+      signal?.addEventListener('abort', check)
+      check()
+    })
+  }
+
   /**
    * A message's content as extensions' send transforms leave it (a skill it names brought along, say): each in turn,
    * those of extensions the thread goes without skipped, and a profile's for its own threads only. Untouched, it's sent
@@ -672,6 +691,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
       noteRead: (reader, id) => noteRead(reader, id),
       parentRead: (thread) => (readAt.get(thread.id) ?? -1) >= thread.activeAt,
       lastAnswer: (id) => answerOf(id),
+      idle: (id, { signal } = {}) => idle(id, signal),
       entries: (id, limit = 20) => newest(id, limit),
       async archive(id, { whenIdle = false } = {}) {
         if (!whenIdle) return archive(id)
@@ -684,7 +704,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   }
 
   return {
-    list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, tellPaneClosed, submit, startThread, archive, unarchive, openPane, history,
+    list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, tellPaneClosed, submit, startThread, archive, unarchive, openPane, history, lastAnswer: answerOf,
     watchTranscript, apiFor, retrySignIn, rejectedNow,
   }
 }

@@ -14,6 +14,7 @@ export default defineDaemonExtension({
       start: (parent, params) => s.threads.start({ ...params, parent }),
       send: (id, text, from) => s.threads.send(id, text, { from }),
       answer: (id) => s.threads.lastAnswer(id),
+      idle: (id, signal) => s.threads.idle(id, { signal }),
       archive: (id) => s.threads.archive(id),
       archiveWhenDone: async (id) => { await s.threads.archive(id, { whenIdle: true }) },
       read: (reader, id) => s.threads.noteRead(reader, id),

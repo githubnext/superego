@@ -36,6 +36,7 @@ export type EgoThreads = {
   /** A new, ordinary thread: top-level in its project, never Ego's child. */
   start(params: { prompt: string; cwd: string; title?: string; profile?: string; options?: Record<string, Json> }): Promise<ThreadInfo>
   answer(id: string): Promise<string | undefined>
+  idle(id: string, signal?: AbortSignal): Promise<ThreadInfo>
 }
 
 /** What Ego is told, before the tools' own descriptions. */

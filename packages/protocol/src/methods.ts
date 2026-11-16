@@ -259,6 +259,8 @@ export type Methods = {
   'thread.seen': { params: { thread: ThreadId }; result: null }
   /** Entries older than `before` (an entry id), oldest first: scrolling back past a watch's window. */
   'thread.history': { params: { thread: ThreadId; before: number; limit?: number }; result: { entries: unknown[]; more: boolean } }
+  /** Its last answer, as text (the newest assistant message that says something), if it has one. */
+  'thread.lastAnswer': { params: { thread: ThreadId }; result: { text: string | null } }
   /** Snapshot of the conversation view, then `watch.ops` notifications with Chord delta ops against it. */
   'thread.watch': { params: { thread: ThreadId }; result: { sub: string; value: ConversationView } }
   /**

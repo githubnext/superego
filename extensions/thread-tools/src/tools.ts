@@ -21,6 +21,8 @@ export type ThreadsHost = {
   send(id: string, text: string, from: string): Promise<void>
   /** Its last answer, as text, if it has one. */
   answer(id: string): Promise<string | undefined>
+  /** Once it isn't working (its run ended, or it needs the user), or `signal` aborts: its info then (`threads.idle`). */
+  idle(id: string, signal?: AbortSignal): Promise<ThreadInfo>
   /** Put it away now, and say what that did: each extension's line (its worktree removed, say), by extension. */
   archive(id: string): Promise<{ notes: Record<string, string> }>
   /** Put it away once its run ends: how a thread archives itself, mid-turn. */
@@ -32,17 +34,6 @@ export type ThreadsHost = {
   /** The other machines this daemon reaches, and a call to one; absent, the tools stay on this machine. */
   machines?(): MachineEntry[]
   remote?(machine: string, method: string, params: unknown): Promise<unknown>
-}
-
-/** The text of the newest assistant answer among `entries` (a conversation's, oldest first). */
-export function lastAnswer(entries: { model?: unknown[] }[]): string | undefined {
-  for (const entry of [...entries].reverse()) {
-    const message = entry.model?.[0] as { role?: string; content?: unknown } | undefined
-    if (message?.role !== 'assistant' || !Array.isArray(message.content)) continue
-    const said = (message.content as { type: string; text?: string }[]).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim()
-    if (said) return said
-  }
-  return undefined
 }
 
 /** A message from another thread, as thread_send sends it: from whom, for the agent reading it. */
@@ -87,17 +78,14 @@ function placeOf(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'hostname'
     start: (params) => call<ThreadInfo>('thread.start', params),
     list,
     info: async (id) => (await list()).find((t) => t.id === id),
-    async answer(id) {
-      const { entries } = await call<{ entries: { model?: unknown[] }[] }>('thread.history', { thread: id, before: Number.MAX_SAFE_INTEGER, limit: 50 })
-      return lastAnswer(entries)
-    },
+    answer: async (id) => (await call<{ text: string | null }>('thread.lastAnswer', { thread: id })).text ?? undefined,
     send: async (id, message) => { await call('thread.send', { thread: id, text: message, whenBusy: 'followUp' }) },
     name: (thread) => `"${thread.title}" (thread ${thread.id} on ${found.label})`,
   }
 }
 
 /** `thread_read`: where a thread stands, who started it, its threads and its last answer, waiting for it if asked. */
-export function readTool(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'read' | 'hostname' | 'machines' | 'remote'>) {
+export function readTool(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'idle' | 'read' | 'hostname' | 'machines' | 'remote'>) {
   return defineTool({
     name: 'thread_read',
     description: 'Read another thread: where it stands, its parent and children, and its last answer. wait: true waits until it is ' +
@@ -108,10 +96,12 @@ export function readTool(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'r
       if (wait && !place.away && id === String(api.conversationId)) throw new Error('A thread can\'t wait on itself')
       let thread = await place.info(id)
       if (!thread) throw new Error(`No thread ${id}${place.away ? ` on ${place.away}` : ''}`)
+      // Here, the daemon says when its run ends; elsewhere, it's asked every second.
       while (wait && thread.status.state === 'working') {
+        if (place.away) await new Promise((resolve) => setTimeout(resolve, 1000))
+        else thread = await host.idle(id, context.abortSignal)
         if (context.abortSignal?.aborted) throw new Error('Stopped waiting')
-        await new Promise((resolve) => setTimeout(resolve, place.away ? 1000 : 500))
-        thread = (await place.info(id)) ?? thread
+        if (place.away) thread = (await place.info(id)) ?? thread
       }
       const all = await place.list()
       const parent = thread.parent ? all.find((t) => t.id === thread!.parent) : undefined

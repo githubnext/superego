@@ -133,7 +133,7 @@ describe("Ego's read tool", () => {
     await writeFile(join(dir, 'auth.json'), '{"anthropic":"sk-x"}')
     await writeFile(join(dir, 'mcp-servers.json'), '{"servers":{}}')
     const at = machine()
-    const { tools = [] } = egoTools({ dir, dispatch: at.dispatch, actions: () => [], snapshot: at.snapshot, threads: { info: async () => undefined, list: async () => [], start: async () => { throw new Error('no') }, answer: async () => undefined } })
+    const { tools = [] } = egoTools({ dir, dispatch: at.dispatch, actions: () => [], snapshot: at.snapshot, threads: { info: async () => undefined, list: async () => [], start: async () => { throw new Error('no') }, answer: async () => undefined, idle: async () => { throw new Error('no') } } })
     const read = (tools as unknown as Tool[]).find((t) => t.name === 'read')!
     const api = { conversationId: 1, cwd: dir, env: process.env }
     for (const path of ['mcp-auth.json', './auth.json', join(dir, 'sub', '..', 'mcp-auth.json'), 'mcp-servers.json']) {

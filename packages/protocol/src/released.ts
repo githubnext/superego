@@ -12,7 +12,7 @@ export const RELEASED = {
     'auth.respond', 'auth.retry', 'daemon.restart', 'extension.declare', 'extension.inspect', 'file.find', 'file.read', 'file.stat',
     'file.watch', 'file.write', 'hello', 'pane.close', 'pane.focus', 'pane.open', 'pane.update', 'profile.allow',
     'profile.list', 'profile.module', 'profile.reload', 'profile.ui', 'settings.set', 'settings.watch', 'thread.stop',
-    'thread.archive', 'thread.start', 'thread.history', 'thread.list', 'thread.rename', 'thread.seen', 'thread.setProfile',
+    'thread.archive', 'thread.start', 'thread.history', 'thread.lastAnswer', 'thread.list', 'thread.rename', 'thread.seen', 'thread.setProfile',
     'thread.steer', 'thread.send', 'thread.unarchive', 'thread.watch', 'thread.withdraw', 'threads.watch', 'unwatch', 'value.watch',
     'web.devices', 'web.pair', 'web.rename', 'web.revoke',
     'ping', 'ch.open', 'clients.watch', 'client.perform', 'machines.watch', 'machine.reconnect', 'relay.call',
