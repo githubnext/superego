@@ -7,6 +7,6 @@ export const defineProfile = get('defineProfile'), defineExtension = get('define
 export const section = get('section'), hook = get('hook'), wrapTool = get('wrapTool'), wrapSection = get('wrapSection')
 export const defineDaemonExtension = get('defineDaemonExtension'), defineAction = get('defineAction'), spawnGroup = get('spawnGroup')
 export const RpcError = (sdk as Record<string, unknown>).RpcError
-export const arr = get('arr'), bool = get('bool'), int = get('int'), lit = get('lit'), nullable = get('nullable'), num = get('num')
+export const arr = get('arr'), blockErrors = get('blockErrors'), bool = get('bool'), int = get('int'), lit = get('lit'), nullable = get('nullable'), num = get('num')
 export const obj = get('obj'), opt = get('opt'), str = get('str'), union = get('union'), unknown = get('unknown')
 export default sdk

@@ -1,24 +1,23 @@
 // Data views: views a machine's daemon halves declare as data (`superego.view` there), drawn here with the core's
-// own components. Their content (`ViewContent`: a note, facts, a list, a table, Markdown, buttons) comes from a live
-// value or a method of the extension's; a button runs one of the extension's own actions, there, as the window may.
-// Nothing of the extension's runs in the window, so a remote machine's, or a project profile's, needs no consent to run
-// code here; its buttons still have that machine's authority. What a machine sends is checked as it lands
-// (data-view-check.ts), and a view that fails to draw says so in its place, not in the shell's. The registry makes each
-// a view (see `setDataViews`), and the layout places it as any other.
-import { useEffect, useMemo, useState, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
-import type { DataIcon, DataViewInfo, Json, Status, ThreadInfo, ViewAction } from '@superego/protocol'
+// own components. What one shows is blocks (`Block[]`, the schema agents draw with), from a live value or a method of
+// the extension's; its buttons run the extension's own actions, there, as the window may. Nothing of the extension's
+// runs in the window, so a remote machine's, or a project profile's, needs no consent to run code here; its buttons
+// still have that machine's authority. What a machine sends is checked as it lands (declarations: data-view-check.ts;
+// blocks: `<Blocks>`, which draws blocks that fail as their first error), and a view that fails to draw says so in its
+// place, not in the shell's. The registry makes each a view (see `setDataViews`), and the layout places it as any other.
+import type { ComponentType, ReactNode } from 'react'
+import { useSyncExternalStore } from 'react'
+import type { Block, DataIcon, DataViewInfo, Json, ThreadInfo } from '@superego/protocol'
 import {
-  ArchiveIcon, BellIcon, Button, ChatsIcon, CheckIcon, ColumnsIcon, FileTextIcon, FolderSimpleIcon, GearSixIcon, GlobeIcon, IconButton, ListIcon, Panel,
-  SparkleIcon, StatusGlyph, TableIcon, TerminalIcon, WrenchIcon,
+  ArchiveIcon, BellIcon, ChatsIcon, CheckIcon, ColumnsIcon, FileTextIcon, FolderSimpleIcon, GearSixIcon, GlobeIcon, ListIcon, Panel,
+  SparkleIcon, TableIcon, TerminalIcon, WrenchIcon,
 } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
+import { Blocks, type BlocksHost } from './blocks/blocks.tsx'
 import { call, useMethod, useValue } from './client.ts'
-import { checkContent, warnDropped } from './data-view-check.ts'
 import { useRegistry, type Registry } from './registry.tsx'
 import type { Place } from '../shared/layout.ts'
-import { Markdown } from './Markdown.tsx'
 import { useAllThreads, useMachines } from './state.tsx'
-import { ThreadRef } from './thread-ref.tsx'
 
 type IconComponent = ComponentType<{ size?: number; 'aria-hidden'?: boolean }>
 const ICONS: Record<DataIcon, IconComponent> = {
@@ -75,7 +74,7 @@ function FromValue({ info, value, machine, thread }: { info: DataViewInfo; value
   // A thread view with no thread (a space with none shown) has nothing to show.
   const scope = info.context === 'thread' ? thread?.id ?? '' : undefined
   const live = useValue<Json>(machine, value, scope === undefined ? {} : { scope })
-  return <DataContent content={scope === '' && live !== undefined ? null : live} extension={info.extension} machine={machine} />
+  return <ViewBlocks blocks={scope === '' && live !== undefined ? null : live} info={info} machine={machine} thread={thread} />
 }
 
 /** Fed by a method: read again as the thread moves on (a window view: any thread on the machine), and after a button ran. */
@@ -85,57 +84,35 @@ function FromMethod({ info, method, machine, thread }: { info: DataViewInfo; met
   const moved = info.context === 'thread' ? `${thread?.id}:${thread?.activeAt}:${thread?.status.state}` : (threads ?? []).map((t) => `${t.id}:${t.activeAt}:${t.status.state}`).join()
   const { data, error, refetch } = useMethod<Json>(machine.id, method, info.context === 'thread' ? { thread: thread?.id } : {}, { enabled: connected, refresh: moved })
   // Answered, it's read: null (or nothing) is none.
-  return <DataContent content={data === undefined ? undefined : data ?? null} error={error?.message} extension={info.extension} machine={machine} ran={refetch} />
+  return <ViewBlocks blocks={data === undefined ? undefined : data ?? null} error={error?.message} info={info} machine={machine} thread={thread} ran={refetch} />
 }
 
 /**
- * `extension`'s content, drawn top to bottom: its note, facts, list, table, Markdown and buttons; what it says when
- * there's none. `content` undefined: not read yet.
+ * A view's blocks, drawn for its extension: its buttons run that extension's actions (`runViewAction`), and the method
+ * is read again after one ran. `blocks` undefined: not read yet; null or none: nothing to show. What isn't blocks the
+ * extension may draw is refused whole, in place (`<Blocks>`).
  */
-export function DataContent({ content: raw, error, extension, machine, ran }: { content: unknown; error?: string | undefined; extension: string; machine: MachineEntry; ran?: () => void }) {
-  const { content, dropped } = useMemo(() => checkContent(raw, extension), [raw, extension])
-  useEffect(() => { warnDropped(machine.id, extension, dropped) }, [dropped])
+export function ViewBlocks({ blocks, error, info, machine, thread, ran }: {
+  blocks: unknown; error?: string | undefined; info: Pick<DataViewInfo, 'extension' | 'context'>; machine: MachineEntry; thread?: ThreadInfo | undefined; ran?: () => void
+}) {
   const registry = useRegistry()
-  const [failed, setFailed] = useState<string>()
-  const run = (action: ViewAction) => {
-    setFailed(undefined)
-    void runViewAction(registry, machine.id, extension, action).then(() => ran?.(), (e: Error) => setFailed(e.message))
+  const { extension } = info
+  const host: BlocksHost = {
+    by: 'extension', extension,
+    run: async (action, params) => {
+      const result = await runViewAction(registry, machine.id, extension, action, params)
+      ran?.()
+      return result
+    },
   }
-  const c = content ?? {}
-  const nothing = !c.note && !c.facts?.length && !c.items?.length && !c.table?.rows.length && !c.markdown && !c.actions?.length
-  const problem = failed ?? error
+  const none = blocks === null || (Array.isArray(blocks) && !blocks.length)
   return (
     <>
-      {problem && <div className="data-view__error">{problem}</div>}
-      {dropped.length > 0 && <div className="data-view__dropped" title={dropped.join('\n')}>Left out some of what {machine.label} sent that this view can’t show.</div>}
-      {nothing && !(raw === undefined && error) && <div className="data-view__empty">{raw === undefined ? 'Loading…' : c.empty ?? 'Nothing here yet.'}</div>}
-      {c.note && <div className="data-view__note">{c.note}</div>}
-      {!!c.facts?.length && <dl className="data-view__facts">{c.facts.map((f, i) => <div key={i}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
-      {!!c.items?.length && (
-        <ul className="data-view__items">
-          {c.items.map((item, i) => (
-            <li key={item.id ?? i} className="data-view__item">
-              <div className="data-view__line">
-                {item.status && !item.thread && <StatusGlyph status={{ state: item.status } as Status} />}
-                {item.thread ? <ThreadRef machine={machine.id} id={item.thread} className="data-view__title">{item.title}</ThreadRef> : <span className="data-view__title">{item.title}</span>}
-                {item.detail && <span className="data-view__detail">{item.detail}</span>}
-                {item.actions?.map((action, j) => <ActionButton key={j} action={action} run={run} small />)}
-              </div>
-              {item.subtitle && <div className="data-view__subtitle">{item.subtitle}</div>}
-            </li>
-          ))}
-        </ul>
-      )}
-      {c.table && c.table.rows.length > 0 && (
-        <div className="data-view__table-wrap">
-          <table className="data-view__table">
-            <thead><tr>{c.table.columns.map((col, i) => <th key={i}>{col}</th>)}</tr></thead>
-            <tbody>{c.table.rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}>{cell ?? ''}</td>)}</tr>)}</tbody>
-          </table>
-        </div>
-      )}
-      {c.markdown && <div className="data-view__markdown"><Markdown text={c.markdown} /></div>}
-      {!!c.actions?.length && <div className="data-view__actions">{c.actions.map((action, i) => <ActionButton key={i} action={action} run={run} />)}</div>}
+      {error && <div className="data-view__error">{error}</div>}
+      {blocks === undefined ? !error && <div className="data-view__empty">Loading…</div>
+        : none ? <div className="data-view__empty">Nothing here yet.</div>
+        // A window view has no thread, even drawn beside one: no panes to open, no folder to read images from.
+        : <Blocks machine={machine} thread={info.context === 'thread' ? thread : undefined} blocks={blocks as Block[]} host={host} />}
     </>
   )
 }
@@ -145,14 +122,7 @@ export function DataContent({ content: raw, error, extension, machine, ran }: { 
  * the window's, another extension's, or another machine's), as the window may run it (exposed to the UI), logged as
  * this window's are.
  */
-export function runViewAction(registry: Pick<Registry, 'router'>, machine: string, extension: string, action: ViewAction): Promise<unknown> {
-  if (!action.action.startsWith(`${extension}.`)) return Promise.reject(new Error(`${action.action} isn’t one of ${extension}’s actions`))
-  const params = action.params ?? {}
-  return registry.router.router.track(action.action, params, `view → ${machine}`, () => call(machine, 'action.run', { id: action.action, params, exposure: 'ui' }))
-}
-
-function ActionButton({ action, run, small = false }: { action: ViewAction; run(action: ViewAction): void; small?: boolean }) {
-  const Icon = dataIcon(action.icon)
-  if (small && Icon) return <IconButton label={action.title} className="data-view__icon-button" onClick={() => run(action)}><Icon size={14} aria-hidden /></IconButton>
-  return <Button variant={small ? 'ghost' : 'default'} className="data-view__button" onClick={() => run(action)}>{Icon && <Icon size={14} aria-hidden />}{action.title}</Button>
+export function runViewAction(registry: Pick<Registry, 'router'>, machine: string, extension: string, action: string, params: Json = {}): Promise<unknown> {
+  if (!action.startsWith(`${extension}.`)) return Promise.reject(new Error(`${action} isn’t one of ${extension}’s actions`))
+  return registry.router.router.track(action, params, `view → ${machine}`, () => call(machine, 'action.run', { id: action, params, exposure: 'ui' }))
 }

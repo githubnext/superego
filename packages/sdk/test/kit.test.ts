@@ -20,15 +20,15 @@ const PROFILE = {
   'queue.ts': `import { defineDaemonExtension, defineExtension, defineTool, obj, str } from 'superego'
 import { label } from './label.ts'
 export default defineDaemonExtension({
-  name: 'queue', version: '1.0.0', api: '^2',
+  name: 'queue', version: '1.0.0', api: '^3',
   setup(superego) {
-    const queue = superego.scopedValue('queue.items', { items: [], empty: 'Nothing queued.' })
+    const queue = superego.scopedValue('queue.items', [])
     superego.method('queue.label', () => label)
     superego.agent(defineExtension({ name: 'queue', tools: [defineTool({
       name: 'enqueue', description: 'Queue work.', parameters: obj({ what: str() }),
       async execute({ what }, api) {
         const thread = superego.threads.of(api.conversationId)
-        queue.update(thread, (view) => ({ ...view, items: [...view.items, { title: what }] }))
+        queue.update(thread, (view) => [{ type: 'list', items: [...(view[0]?.items ?? []), { title: what }] }])
         return { output: [{ type: 'text', text: 'Queued ' + what }] }
       },
     })] }))
@@ -46,8 +46,8 @@ describe('a daemon with a scripted model', () => {
     const daemon = keep(await testDaemon({ profile: PROFILE, model: [callTool('enqueue', { what: 'lint' }), say('Queued it.')] }))
     const thread = await daemon.thread('Queue a lint')
     expect(await daemon.transcript(thread.id)).toContain('Queued it.')
-    const queue = await daemon.watch<{ items: { title: string }[] }>('queue.items', { scope: thread.id })
-    expect(queue.value.items).toEqual([{ title: 'lint' }])
+    const queue = await daemon.watch<{ type: 'list'; items: { title: string }[] }[]>('queue.items', { scope: thread.id })
+    expect(queue.value).toEqual([{ type: 'list', items: [{ title: 'lint' }] }])
     expect(await daemon.call('queue.label')).toBe('first')
     expect(daemon.extensions.map((e) => e.name)).toContain('queue')
     // A helper edited alone: the profile loads again, its extension torn down and set up anew with the new code.
@@ -58,7 +58,7 @@ describe('a daemon with a scripted model', () => {
     expect(g.__queueTornDown).toBe(before.torn + 1)
     expect(g.__queueSetUps).toBe(before.setUps + 1)
     // The value is the new set-up's: it starts empty.
-    await queue.until((view) => view.items.length === 0, 'the queue to start over')
+    await queue.until((view) => view.length === 0, 'the queue to start over')
   })
 
   it('refuses a second extension of the same name, and keeps the first', async () => {
@@ -97,7 +97,7 @@ describe('a daemon with a scripted model', () => {
 const cleared: string[] = []
 let tornDown = 0
 const queueUi = defineUiExtension({
-  name: 'queue', version: '1.0.0', api: '^2',
+  name: 'queue', version: '1.0.0', api: '^3',
   setup(superego) {
     superego.view('queue.list', {
       title: 'Queue', context: 'thread', fits: ['beside', 'pane'], default: 'beside',

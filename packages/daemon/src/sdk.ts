@@ -15,10 +15,10 @@ export { defineProfile } from './profiles.ts'
 export type { LoadedSpec, ProfileSpec, ProfileRef, ProfileKey } from './profiles.ts'
 export { defineExtension, defineTool, hook, section, wrapSection, wrapTool } from '@earendil-works/pi-durable'
 export type { Extension as AgentExtension } from '@earendil-works/pi-durable'
-export { arr, bool, int, lit, nullable, num, obj, opt, RpcError, str, union, unknown } from '@superego/protocol'
+export { arr, blockErrors, bool, int, lit, nullable, num, obj, opt, RpcError, str, union, unknown } from '@superego/protocol'
 export { spawnGroup } from './process-group.ts'
 export type { GroupExit, SpawnedGroup, SpawnGroupOptions } from './process-group.ts'
 export type {
   ActionDef, ActionInfo, AuthEvent, AuthPrompt, DataIcon, DataPlace, DataView, ExtensionAbout, Exposure, Json, JsonSchema, MachineEntry, MessageOrigin, Static, ThreadInfo,
-  ViewAction, ViewContent, ViewItem,
+  Block, BlocksUse, Button, ListItem, Value,
 } from '@superego/protocol'

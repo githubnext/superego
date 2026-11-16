@@ -8,4 +8,4 @@ export const FINISH = 'task_finish'
 export const ENDINGS = ['success', 'failure', 'inconclusive'] as const
 export type Ending = (typeof ENDINGS)[number]
 
-export const about = { name: 'tasks', version: '1.0.0', api: '^2', title: 'Task reporting', description: 'Report work as a few titled tasks, each with how it went.' } satisfies ExtensionAbout
+export const about = { name: 'tasks', version: '1.0.0', api: '^3', title: 'Task reporting', description: 'Report work as a few titled tasks, each with how it went.' } satisfies ExtensionAbout

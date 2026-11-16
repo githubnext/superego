@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
-import { AUTH_REJECTED, DATA_VIEWS, defineAction, defineApp, MESSAGE_ENTRY, obj, PROTOCOL_VERSION, str, type ActionInfo, type MessageOrigin, type SettingsSnapshot, type DataViewInfo, type Hello, type Notifications, type ThreadInfo, type ViewContent } from '@superego/protocol'
+import { AUTH_REJECTED, DATA_VIEWS, defineAction, defineApp, MESSAGE_ENTRY, obj, PROTOCOL_VERSION, str, type ActionInfo, type MessageOrigin, type SettingsSnapshot, type DataViewInfo, type Hello, type Notifications, type ThreadInfo, type Block } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi, type DaemonExtension, type LiveValue, type ScopedValue, type ThreadState } from '../src/index.ts'
 import { answeredBy } from '../src/threads.ts'
 import { until } from './until.ts'
@@ -220,14 +220,20 @@ it('announces data views, fed by a value, whose buttons run its actions: a round
   const orders = defineDaemonExtension({
     name: 'orders',
     setup(superego) {
-      const list = superego.value<ViewContent>('orders.recent', { items: [{ id: '1', title: 'No. 1', subtitle: 'Ada', status: 'working', actions: [{ title: 'Ship', action: 'orders.ship', params: { id: '1' } }] }] })
+      type Order = { id: string; who: string; shipped: boolean }
+      const blocks = (orders: Order[]): Block[] => [{ type: 'list', items: orders.map((o) => ({
+        title: `No. ${o.id}`, subtitle: o.shipped ? `${o.who} · shipped` : o.who, status: o.shipped ? 'done' : 'working',
+        ...(o.shipped ? {} : { buttons: [{ id: `ship-${o.id}`, label: 'Ship', action: 'orders.ship', params: { id: o.id } }] }),
+      })) }]
+      let orders: Order[] = [{ id: '1', who: 'Ada', shipped: false }]
+      const list = superego.value<Block[]>('orders.recent', blocks(orders))
       superego.action(defineAction({
         id: 'orders.ship', title: 'Ship an order', runs: 'machine', params: obj({ id: str() }),
-        run: ({ id }) => { list.update((c) => ({ ...c, items: c.items!.map((i) => i.id === id ? { ...i, status: 'done', subtitle: 'Ada · shipped', actions: [] } : i) })) },
+        run: ({ id }) => { orders = orders.map((o) => o.id === id ? { ...o, shipped: true } : o); list.set(blocks(orders)) },
       }))
       superego.view('orders.recent', { title: 'Recent orders', icon: 'list', context: 'window', fits: ['space', 'beside'], default: 'space', value: 'orders.recent' })
       superego.view('orders.notes', { title: 'Notes', context: 'thread', fits: ['beside', 'pane'], method: 'orders.notes', about: "the thread's order notes; no params" })
-      superego.method('orders.notes', ({ id }) => ({ markdown: `Notes for ${String(id)}` }))
+      superego.method('orders.notes', ({ id }): Block[] => [{ type: 'markdown', text: `Notes for ${String(id)}` }])
       // Checked: a source of another's, two sources, a place a window view can't go.
       expect(() => superego.view('orders.bad', { title: 'Bad', context: 'window', fits: ['space'], value: 'other.x' })).toThrow(/orders's/)
       expect(() => superego.view('orders.bad', { title: 'Bad', context: 'window', fits: ['space'], value: 'orders.a', method: 'orders.b' })).toThrow(/one source/)
@@ -238,17 +244,18 @@ it('announces data views, fed by a value, whose buttons run its actions: a round
   const views = await peer.call<{ value: DataViewInfo[] }>('value.watch', { key: DATA_VIEWS })
   expect(views.value.map((v) => [v.id, v.extension])).toEqual([['orders.recent', 'orders'], ['orders.notes', 'orders']])
   expect(views.value[0]).toMatchObject({ title: 'Recent orders', icon: 'list', fits: ['space', 'beside'], default: 'space', value: 'orders.recent' })
-  // The window reads the content as any value, and a button runs the action it names on this machine.
-  const watched = await peer.call<{ sub: string; value: ViewContent }>('value.watch', { key: 'orders.recent' })
+  // The window reads the blocks as any value, and a button runs the action it names on this machine.
+  type List = Extract<Block, { type: 'list' }>
+  const watched = await peer.call<{ sub: string; value: List[] }>('value.watch', { key: 'orders.recent' })
   let content = watched.value
-  peer.on('value.changed', (p: { sub: string; value: ViewContent }) => { if (p.sub === watched.sub) content = p.value })
-  const button = content.items![0]!.actions![0]!
+  peer.on('value.changed', (p: { sub: string; value: List[] }) => { if (p.sub === watched.sub) content = p.value })
+  const button = content[0]!.items[0]!.buttons![0]!
   await peer.call('action.run', { id: button.action, params: button.params })
-  await until(async () => content.items![0]!.status === 'done')
-  expect(content.items![0]).toMatchObject({ subtitle: 'Ada · shipped', actions: [] })
+  await until(async () => content[0]!.items[0]!.status === 'done')
+  expect(content[0]!.items[0]).toEqual({ title: 'No. 1', subtitle: 'Ada · shipped', status: 'done' })
   // A thread view's method is called with the thread; told to the agent as a pane it can open, by what it shows.
   const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'hi' })
-  expect(await peer.call('orders.notes', { id: thread.id })).toEqual({ markdown: `Notes for ${thread.id}` })
+  expect(await peer.call('orders.notes', { id: thread.id })).toEqual([{ type: 'markdown', text: `Notes for ${thread.id}` }])
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
   const { value } = await peer.call<{ value: unknown }>('thread.watch', { thread: thread.id })
   expect(JSON.stringify(value)).toContain(`\\"orders.notes\\": the thread's order notes; no params`)

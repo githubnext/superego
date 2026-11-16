@@ -7,6 +7,6 @@ import type { ExtensionAbout } from '@superego/protocol'
  * while keeping the tools, and a thread without the tools still reports.
  */
 export const about = {
-  name: 'thread-reports', version: '1.0.0', api: '^2.3', title: 'Thread reports', description: 'Tell the thread that started one when it finishes, fails or waits on a question.',
+  name: 'thread-reports', version: '1.0.0', api: '^3', title: 'Thread reports', description: 'Tell the thread that started one when it finishes, fails or waits on a question.',
 } satisfies ExtensionAbout
 

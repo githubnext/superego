@@ -9,6 +9,6 @@ export type Changes = { diff: string; untracked: string[]; repo: boolean }
 export const CHANGES = 'diff'
 
 export const about = {
-  name: 'git', version: '1.0.0', api: '^2', title: 'Git', description: 'Changes (⌘⇧D): what changed in a thread\'s folder, beside it.',
+  name: 'git', version: '1.0.0', api: '^3', title: 'Git', description: 'Changes (⌘⇧D): what changed in a thread\'s folder, beside it.',
   panes: { [CHANGES]: 'the changes in the working folder; no params' },
 } satisfies ExtensionAbout

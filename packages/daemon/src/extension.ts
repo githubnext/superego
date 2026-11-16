@@ -364,10 +364,12 @@ export type DaemonApi = {
    */
   channel(kind: string, accept: ChannelAcceptor): void
   /**
-   * A view drawn from data, named `<name>.<view>`: the window draws its content (facts, a list, a table, Markdown, buttons
-   * that run this machine's actions) with its own components, so no UI code ships, and a remote machine's or a
-   * project profile's needs no allowing. Its content comes from a live value of this extension's or a method of its (see
-   * `DataView`). A profile's fit only the places that show a thread, and only its own threads.
+   * A view drawn from data, named `<name>.<view>`: the window draws its blocks (`Block[]`, the schema agents draw with:
+   * text, a list, a table, inputs, buttons that run this extension's actions on this machine) with its own components,
+   * so no UI code ships, and a remote machine's or a project profile's needs no allowing. Its blocks come from a live
+   * value of this extension's or a method of its (see `DataView`); every window checks them as they land and draws a
+   * view that fails the check as its first error (`blockErrors(blocks, { by: 'extension', extension, thread })` says
+   * what, for a test). A profile's fit only the places that show a thread, and only its own threads.
    */
   view(id: string, view: DataView): void
   /** Take part in threads' lives: see ThreadHooks. `S`: the state its `starting` gives a thread (`state<S>()`). */

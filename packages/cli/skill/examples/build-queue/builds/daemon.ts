@@ -1,34 +1,37 @@
 // builds, daemon half: a build queue per thread. The agent queues commands with `enqueue_build`; they run one at a
 // time in the thread's folder. Each thread's queue is a scoped value, so a window showing a thread hears only its own,
-// and its view (beside the thread, or a pane: ⌘⇧B) is drawn by the window from data, with a Cancel button on each.
-import { defineAction, defineDaemonExtension, defineExtension, defineTool, obj, RpcError, spawnGroup, str, type SpawnedGroup, type ViewContent } from 'superego'
+// and its view (beside the thread, or a pane: ⌘⇧B) is blocks the window draws, with a Cancel button on each.
+import { defineAction, defineDaemonExtension, defineExtension, defineTool, obj, RpcError, spawnGroup, str, type Block, type SpawnedGroup } from 'superego'
 import { about, QUEUE, VIEW, type Build } from './shared.ts'
 
 const STATUS = { queued: 'idle', running: 'working', done: 'done', failed: 'error', cancelled: 'idle' } as const
 
-/** What the view shows of a queue: what's waiting and running, then the last few finished. */
-const contentOf = (thread: string, builds: Build[]): ViewContent => {
+/** What the view shows of a queue, as blocks: what's waiting and running, each with a Cancel button, then the last few finished. */
+const blocksOf = (thread: string, builds: Build[]): Block[] => {
+  if (!builds.length) return [{ type: 'markdown', text: 'No builds queued.' }]
   const open = builds.filter((b) => b.state === 'queued' || b.state === 'running')
-  return {
-    note: `${open.length} queued or running`,
-    items: [...open, ...builds.filter((b) => !open.includes(b)).slice(-5)].map((b) => ({
-      id: b.id, title: b.command, subtitle: b.state, status: STATUS[b.state],
-      ...(open.includes(b) ? { actions: [{ title: 'Cancel', action: 'builds.cancel', params: { thread, id: b.id } }] } : {}),
-    })),
-    empty: 'No builds queued.',
-  }
+  return [
+    { type: 'markdown', text: `${open.length} queued or running` },
+    {
+      type: 'list',
+      items: [...open, ...builds.filter((b) => !open.includes(b)).slice(-5)].map((b) => ({
+        title: b.command, subtitle: b.state, status: STATUS[b.state],
+        ...(open.includes(b) ? { buttons: [{ id: `cancel-${b.id}`, label: 'Cancel', action: 'builds.cancel', params: { thread, id: b.id } }] } : {}),
+      })),
+    },
+  ]
 }
 
 export default defineDaemonExtension({
   ...about,
   setup(superego) {
     const queue = superego.scopedValue<Build[]>(QUEUE, [])
-    const view = superego.scopedValue<ViewContent>(VIEW, contentOf('', []))
+    const view = superego.scopedValue<Block[]>(VIEW, blocksOf('', []))
     /** The build running now, by its id: to stop it. */
     const running = new Map<string, SpawnedGroup>()
     const change = (thread: string, edit: (builds: Build[]) => Build[]) => {
       queue.update(thread, edit)
-      view.set(thread, contentOf(thread, queue.get(thread)))
+      view.set(thread, blocksOf(thread, queue.get(thread)))
     }
     const setState = (thread: string, id: string, state: Build['state'], from?: Build['state']) =>
       change(thread, (builds) => builds.map((b) => b.id === id && (!from || b.state === from) ? { ...b, state } : b))

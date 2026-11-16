@@ -23,7 +23,7 @@ const SKILL = fileURLToPath(new URL('../skill/', import.meta.url))
 const PRELUDES = {
   daemon: [
     `import { arr, bool, defineAction, defineDaemonExtension, defineExtension, defineTool, hook, int, lit, nullable, num, obj, opt, RpcError, section, spawnGroup, str, union, unknown } from 'superego'`,
-    `import type { DaemonApi, ExtensionAbout, Json, SpawnedGroup, ThreadInfo, ViewContent } from 'superego'`,
+    `import type { Block, DaemonApi, ExtensionAbout, Json, SpawnedGroup, ThreadInfo } from 'superego'`,
     `declare const superego: DaemonApi`,
     `type Build = { id: string; command: string; state: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'; at: number }`,
   ],

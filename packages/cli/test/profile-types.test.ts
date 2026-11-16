@@ -53,10 +53,10 @@ it("gives a new profile types: 'superego', 'superego/ui', React and JSX check, a
 export default defineProfile({ description: 'A desk', thinking: 'low', extensions: ['./desk.ts'], ui: ['./board.tsx'], panes: { board: 'the board' } })
 `)
   await writeFile(join(dir, 'desk.ts'), `import { readFile } from 'node:fs/promises'
-import { defineAction, defineDaemonExtension, defineExtension, defineTool, obj, str, type ViewContent } from 'superego'
+import { defineAction, defineDaemonExtension, defineExtension, defineTool, obj, str, type Block } from 'superego'
 
 export default defineDaemonExtension({
-  name: 'desk', version: '0.1.0', api: '^2.0',
+  name: 'desk', version: '0.1.0', api: '^3.0',
   setup(superego) {
     const notes = superego.scopedValue<string[]>('desk.notes', [])
     superego.agent(defineExtension({
@@ -71,7 +71,7 @@ export default defineDaemonExtension({
       })],
     }))
     superego.action(defineAction({ id: 'desk.clear', title: 'Clear', runs: 'machine', expose: ['ui', 'cli'], params: obj({ thread: str() }), run: ({ thread }) => { notes.delete(thread); return null } }))
-    const view: ViewContent = { empty: 'Nothing yet.' }
+    const view: Block[] = [{ type: 'list', items: [{ title: 'A note', buttons: [{ id: 'clear', label: 'Clear', action: 'desk.clear' }] }] }]
     void view
   },
 })
@@ -91,7 +91,7 @@ function Board({ machine, thread }: PaneProps) {
   )
 }
 
-export default defineUiExtension({ name: 'desk', version: '0.1.0', api: '^2.0', setup: (superego) => superego.pane('board', { title: 'Board', component: Board }) })
+export default defineUiExtension({ name: 'desk', version: '0.1.0', api: '^3.0', setup: (superego) => superego.pane('board', { title: 'Board', component: Board }) })
 `)
   expect(check(dir)).toEqual({ ok: true, output: '' })
 

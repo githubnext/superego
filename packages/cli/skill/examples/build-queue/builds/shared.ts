@@ -1,7 +1,7 @@
 // What builds is, and the names its parts share.
-export const about = { name: 'builds', version: '1.0.0', api: '^2', title: 'Build queue' }
+export const about = { name: 'builds', version: '1.0.0', api: '^3', title: 'Build queue' }
 
-/** Each thread's queue (`Build[]`), and what its view shows (`ViewContent`): scoped values, one scope per thread. */
+/** Each thread's queue (`Build[]`), and what its view shows (`Block[]`): scoped values, one scope per thread. */
 export const QUEUE = 'builds.queue'
 export const VIEW = 'builds.view'
 

@@ -5,7 +5,7 @@
 import { defineExtension, section } from '@earendil-works/pi-durable'
 import { defineDaemonExtension, type DaemonExtension } from '@superego/daemon'
 import { join } from 'node:path'
-import type { ViewContent } from '@superego/protocol'
+import { BLOCK_LIMITS, type Block, type ListItem } from '@superego/protocol'
 import { about, LIST, VIEW, type SkillInfo } from './shared.ts'
 import { listSkills, mentionedSkills, skillBlock, skillsPrompt } from './skills.ts'
 
@@ -33,10 +33,16 @@ export function skillsExtension({ own = [] }: SkillsOptions = {}): DaemonExtensi
       })
       superego.method(LIST, async (): Promise<SkillInfo[]> => (await skills()).map(({ name, description }) => ({ name, description })))
       // The skills to browse, drawn by the window from data: offered for a space or beside the thread, placed by the user.
-      superego.method(VIEW, async (): Promise<ViewContent> => ({
-        items: (await skills()).map(({ name, description, manual }) => ({ id: name, title: `$${name}`, subtitle: description, ...(manual ? { detail: 'by name' } : {}) })),
-        empty: `No skills in ${dir} yet.`,
-      }))
+      superego.method(VIEW, async (): Promise<Block[]> => {
+        const all = await skills()
+        if (!all.length) return [{ type: 'markdown', text: `No skills in ${dir} yet.` }]
+        // Within what a view may hold, which the window refuses whole past it.
+        const rows = all.slice(0, BLOCK_LIMITS.items).map(({ name, description, manual }): ListItem => ({
+          title: `$${name}`.slice(0, BLOCK_LIMITS.text), subtitle: description.slice(0, BLOCK_LIMITS.text), ...(manual ? { detail: 'by name' } : {}),
+        }))
+        const more = all.length - rows.length
+        return [{ type: 'list', items: rows }, ...more > 0 ? [{ type: 'markdown' as const, text: `And ${more} more.` }] : []]
+      })
       superego.view(VIEW, { title: 'Skills', icon: 'sparkle', context: 'window', fits: ['space', 'beside'], method: VIEW })
     },
   })

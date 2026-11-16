@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import type { DaemonExtension } from '@superego/daemon'
-import { DATA_VIEWS, MESSAGE_ENTRY, type DataViewInfo } from '@superego/protocol'
+import { blockErrors, DATA_VIEWS, MESSAGE_ENTRY, type DataViewInfo } from '@superego/protocol'
 import { testDaemon, type TestDaemon } from '@superego/sdk/testing'
 import skills, { skillsExtension } from '../src/daemon.ts'
 
@@ -40,9 +40,10 @@ it('offers the skills to the agent, sends one a message names, and lists them fo
   // To browse, as a data view the window draws: offered for a space or beside the thread, not placed.
   const views = await daemon.watch<DataViewInfo[]>(DATA_VIEWS)
   expect(views.value).toEqual([{ id: 'skills.view', extension: 'skills', title: 'Skills', icon: 'sparkle', context: 'window', fits: ['space', 'beside'], method: 'skills.view' }])
-  expect(await daemon.call('skills.view', {})).toMatchObject({ items: [
-    { id: 'commit', title: '$commit', subtitle: 'Write commit messages.' }, { id: 'secret', title: '$secret', subtitle: 'Only by name.', detail: 'by name' },
-  ] })
+  expect(await daemon.call('skills.view', {})).toEqual([{ type: 'list', items: [
+    { title: '$commit', subtitle: 'Write commit messages.' }, { title: '$secret', subtitle: 'Only by name.', detail: 'by name' },
+  ] }])
+  expect(blockErrors(await daemon.call('skills.view', {}), { by: 'extension', extension: 'skills', thread: false })).toEqual([])
   const { all, content } = await send(daemon, 'do $commit and /skill:secret, not $HOME')
   // The agent is told what each skill is for and where it is, but not about one kept to being named.
   expect(all).toContain(`<skill name=\\"commit\\" location=\\"${join(dir, 'agents', 'skills', 'commit', 'SKILL.md')}\\">Write commit messages.</skill>`)

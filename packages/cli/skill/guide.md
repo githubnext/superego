@@ -24,7 +24,7 @@ A profile's halves import `'superego'` and `'superego/ui'`. A bundled extension'
 
 | Import | What | Stability |
 |---|---|---|
-| `'superego'` | the daemon half and a profile: `defineDaemonExtension`, `defineProfile`, `defineExtension`, `defineTool`, `defineAction`, the schema helpers (`obj`, `str`, …), `RpcError`, `spawnGroup` (a command run as a process tree that stops as one), and their types (`DaemonApi`, `ScopedValue`, `ViewContent`, …) | stable: follows the extension API's version |
+| `'superego'` | the daemon half and a profile: `defineDaemonExtension`, `defineProfile`, `defineExtension`, `defineTool`, `defineAction`, the schema helpers (`obj`, `str`, …), `RpcError`, `spawnGroup` (a command run as a process tree that stops as one), and their types (`DaemonApi`, `ScopedValue`, `Block`, …) | stable: follows the extension API's version |
 | `'superego/ui'` | the UI half: `defineUiExtension`, `defineAction`, hooks (`useMethod`, `useValue`, `useDispatch`, `useSelection`, …), `call`, `has`, `version`, components to build from (`Markdown`, `PaneHeader`, `Picker`, `Diff`, `FileEditor`, `Button`, the icons), and their types | stable |
 | `'superego/testing'` | test helpers: a daemon with a scripted model, a window with a fake bridge, `isRunning(pid)` (see [Testing](#testing)) | stable |
 | `'superego/unstable'` | the window's workings the bundled extensions build on: `useRegistry`, `useShell`, `fileKind`, `Slot`, the project list, `useThreadView`, `channel`, `MONO_FONT`, … | none: changes with the window |
@@ -72,7 +72,7 @@ import { join } from 'node:path'
 import { defineDaemonExtension, defineExtension, defineTool, obj, str } from 'superego'
 
 export default defineDaemonExtension({
-  name: 'notes', version: '1.0.0', api: '^2',
+  name: 'notes', version: '1.0.0', api: '^3',
   panes: { notes: "the thread's NOTES.md; no params" },
   setup(superego) {
     const fileOf = async (id: string) => join((await superego.threads.get(id)).cwd, 'NOTES.md')
@@ -106,7 +106,7 @@ function Notes({ machine, thread }: PaneProps) {
   return <pre className="pane-scroll">{data?.text || 'No notes yet.'}</pre>
 }
 
-export default defineUiExtension({ name: 'notes', version: '1.0.0', api: '^2', setup: (superego) => superego.pane('notes', { title: 'Notes', component: Notes, menu: true }) })
+export default defineUiExtension({ name: 'notes', version: '1.0.0', api: '^3', setup: (superego) => superego.pane('notes', { title: 'Notes', component: Notes, menu: true }) })
 ```
 
 Send a thread a message: the daemon loads the profile and the agent has `add_note`. The window loads its UI as soon as it
@@ -170,18 +170,18 @@ superego.action(defineAction({
 ```
 
 **Data-only** ([`build-queue`](examples/build-queue/builds/daemon.ts)): no UI code. The daemon half keeps a second
-scoped value, what the view shows, with a Cancel button on each build; the view reads it, each thread its own scope.
-The shortcut is a machine action with `keys`, offered while one of that machine's threads is shown (`thread: true`
-fills in its `thread`); it opens the view as a pane, which a `thread` view that fits `pane` is.
+scoped value, what the view shows as blocks, with a Cancel button on each build; the view reads it, each thread its
+own scope. The shortcut is a machine action with `keys`, offered while one of that machine's threads is shown
+(`thread: true` fills in its `thread`); it opens the view as a pane, which a `thread` view that fits `pane` is.
 
 <!-- check: daemon; declare const queue: import('superego').ScopedValue<Build[]> -->
 ```ts
-const view = superego.scopedValue<ViewContent>('builds.view', { empty: 'No builds queued.' })
-const show = (thread: string) => view.set(thread, {
-  empty: 'No builds queued.',
-  items: queue.get(thread).map((b) => ({ id: b.id, title: b.command, subtitle: b.state,
-    actions: [{ title: 'Cancel', action: 'builds.cancel', params: { thread, id: b.id } }] })),
-})
+const view = superego.scopedValue<Block[]>('builds.view', [])
+const show = (thread: string) => view.set(thread, [{
+  type: 'list',
+  items: queue.get(thread).map((b) => ({ title: b.command, subtitle: b.state,
+    buttons: [{ id: `cancel-${b.id}`, label: 'Cancel', action: 'builds.cancel', params: { thread, id: b.id } }] })),
+}])
 superego.view('builds.view', { title: 'Builds', icon: 'terminal', context: 'thread', fits: ['beside', 'pane'], default: 'beside', value: 'builds.view' })
 superego.action(defineAction({
   id: 'builds.open', title: 'Show the build queue', runs: 'machine', keys: 'mod+shift+b', thread: true, params: obj({ thread: str() }),
@@ -389,7 +389,7 @@ An extension says its version and the extension API it needs in `about` (bundled
 
 <!-- check: daemon -->
 ```ts
-export const about = { name: 'orders', version: '1.2.0', api: '^2', title: 'Orders' } satisfies ExtensionAbout
+export const about = { name: 'orders', version: '1.2.0', api: '^3', title: 'Orders' } satisfies ExtensionAbout
 ```
 
 - `version`: a **major** when something relying on its methods, actions, values or data views could no longer follow
@@ -561,38 +561,43 @@ for. They get `{ machine, thread }`; the editor's also `path` and `open(path)`.
 
 A daemon half can declare a view as data, and the window draws it with its own components: no UI code ships, so a
 remote machine's, or a project profile's, needs no consent to run code in the window, as its UI code would. That's
-not no authority: its buttons run that machine's actions. The content is a few fixed parts,
-any of them, top to bottom: a `note`, `facts` (label and value), `items` (a list: `title`, `subtitle`, `detail`,
-`status`, a `thread` to link, `actions`), a `table` (`columns`, `rows`), `markdown`, and `actions` (buttons), with
-`empty` for when there's none. A button runs one of the extension's own actions (`<extension>.<name>`) on that
-machine, as the window may (one exposed to `ui`); a button naming any other is left out.
+not no authority: its buttons run that machine's actions. What a view shows is blocks (`Block[]` from `'superego'`),
+the schema agents draw with: `markdown`, `callout`, `code`, `table`, `image`, `kv`, `list` (rows: `title`, `subtitle`,
+`detail`, `status`, a `thread` to link, `buttons`), layout (`stack`, `row`, `card`, `divider`), inputs, `buttons`, and
+`html` (a sandboxed page, display only). A button runs one of the extension's own actions (`action`:
+`<extension>.<name>`) on that machine with its `params`, as the window may (one exposed to `ui`); the inputs' values go
+into the params by input id. `[]` or null shows "Nothing here yet."; say more with a `markdown` block.
 
 <!-- check: daemon; type Order = { id: string; customer: string; late: boolean }; declare function ship(id: string): Promise<Order[]> -->
 ```ts
 // orders.ts, a daemon half: the open orders, as a space, with a button on each
-const open = superego.value<ViewContent>('orders.open', { items: [], empty: 'No open orders.' })
-const show = (orders: Order[]) => open.set({
-  note: `${orders.length} open`,
-  items: orders.map((o) => ({ id: o.id, title: `No. ${o.id}`, subtitle: o.customer, status: o.late ? 'blocked' : 'idle',
-    actions: [{ title: 'Ship', action: 'orders.ship', params: { id: o.id } }] })),
-})
+const open = superego.value<Block[]>('orders.open', [{ type: 'markdown', text: 'No open orders.' }])
+const show = (orders: Order[]) => open.set([
+  { type: 'markdown', text: `${orders.length} open` },
+  { type: 'list', items: orders.map((o) => ({ title: `No. ${o.id}`, subtitle: o.customer, status: o.late ? 'blocked' : 'idle',
+    buttons: [{ id: `ship-${o.id}`, label: 'Ship', action: 'orders.ship', params: { id: o.id } }] })) },
+])
 superego.action(defineAction({ id: 'orders.ship', title: 'Ship an order', params: obj({ id: str() }), run: async ({ id }) => show(await ship(id)) }))
 superego.view('orders.open', { title: 'Orders', icon: 'list', context: 'window', fits: ['space', 'beside'], default: 'space', value: 'orders.open' })
 ```
 
 - The source is a live value of the extension's (`value`), or a method of its (`method`), read again as the thread
-  moves on and after a button ran. A `thread` view's value is a `scopedValue`, each thread's content in its scope (or a plain value holding each thread's by its id: the window watches only that entry), and its method is
-  called with `{ thread }`.
+  moves on and after a button ran. A `thread` view's value is a `scopedValue`, each thread's blocks in its scope (or a
+  plain value holding each thread's by its id: the window watches only that entry), and its method is called with
+  `{ thread }`. A thread view's buttons say their thread in `params`.
+- Blocks bind to nothing: to change what a view shows, set its value again. The inputs keep what the user typed, by id.
 - Data views fit `space`, `beside` and `pane` (a `window` view: `space` and `beside`), and the layout places them as any
   other. A `thread` view in `pane` is a pane kind of its id; with `about`, the agent is told it can open it.
 - The window hears of them as every daemon's live value `view.list`. A view a machine's extension declares shows a
   thread only from that machine, and a `window` view gathers every machine's, each under its name. A profile's fit only
   `beside` and `pane`, in its own threads. An extension's UI half that declares a view of the same id draws it instead.
-- The window checks what it's sent as it lands, not on the machine's word: a declaration must be of one of that
+- The window checks what it's sent as it lands, not on the machine's word. A declaration must be of one of that
   machine's extensions that's on, named for it (its id and its source `<extension>.<name>`), in places there are (a
-  profile's never a space), and within bounds (how many views, items, rows and columns, how long a string, how deep
-  and big a button's params). Content is held to the same. What isn't is left out, with a warning on the console and,
-  for content, a quiet word in the view; a view that throws as it draws says so in its place, with Try again.
+  profile's never a space), and within bounds; one that isn't is left out, with a warning on the console. Blocks are
+  checked whole (`blockErrors(blocks, { by: 'extension', extension, thread })`, from `'superego'`, says what a window
+  would): a button that runs another's action or none, a params key that's also an input's id, inputs with no button,
+  a `window` view's `open` link or image by path, or more than the limits allow refuses the view, which shows its first
+  error in its place.
 - The `skills` extension's *Skills* is one (`extensions/skills/src/daemon.ts`).
 
 ### On a phone

@@ -1,6 +1,7 @@
 # Blocks: one JSON UI for agents and extensions
 
-**Status:** Lane 1 (blocks into the core) is done; Lanes 2 and 3 are to come. Merges data views' content (`ViewContent`) into
+**Status:** Lanes 1 (blocks into the core) and 2 (data views draw blocks, extension API 3.0) are done; Lane 3 is to
+come, and most of it went with Lane 2 (see its notes). Merges data views' content (`ViewContent`) into
 blocks.
 
 Superego has two JSON schemas for "UI as data, drawn by the window's own components":
@@ -365,7 +366,7 @@ The work splits into three lanes, run one after another. Each lane passes `pnpm 
 - **Classes.** The list's classes are `.blocks-list*`. The `.data-view__*` content classes in `app.css` are still
   there for Lane 2 to delete.
 
-### Lane 2: data views draw blocks
+### Lane 2: data views draw blocks (done)
 
 **Needs:** Lane 1. **Covers:** §2's extension column, §4's refusal, §5's deletions in the core, and §6.
 
@@ -387,6 +388,22 @@ The work splits into three lanes, run one after another. Each lane passes `pnpm 
    - `packages/daemon/test/{extension,profiles}.test.ts`
    - `packages/sdk/test/kit.test.ts`
    - with the user's go-ahead, `~/.superego/profiles/*/shared.ts`
+
+**Notes for Lane 3, from Lane 2:**
+- **Most of Lane 3 landed with Lane 2,** because `pnpm test` type-checks the guide's snippets, the starter and the
+  examples, so they had to move with the types: `guide.md` (its table, the data-only snippet, the data-view section),
+  `daemon.md`'s `superego.view` row, `bundled.md`'s `api`, the build-queue example and its test, the starter's
+  data-only kind and its test, `docs.test`'s prelude and `profile-types.test`. What's left is a read-through of those
+  for tone, and anything prose-only. `docs/overview.md` names no content type and needed nothing.
+- **Inputs with no button are refused** in an extension's view (`blockErrors`), rather than drawn with nothing to send
+  them.
+- **`ViewBlocks`** (`data-views.tsx`) is the window's piece between a source and `<Blocks>`: "Loading…", "Nothing here
+  yet." for `[]` or null, the method's error, and the extension host. A `window` view is checked as having no thread
+  even where it's drawn beside one.
+- **skills** shows at most `BLOCK_LIMITS.items` rows and cuts a description at `BLOCK_LIMITS.text`, so a big skills
+  folder can't get its view refused.
+- **`Panel` stays** in `superego/ui`: it's in the stable surface, and removing it was no part of 3.0.
+- **`blockErrors`** is a value export of `'superego'` (in `SDK_EXPORTS` and the shim), for extensions' tests.
 
 ### Lane 3: docs, starter, example
 

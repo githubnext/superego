@@ -24,23 +24,22 @@ export type Item = { id: string; text: string }
 `
 
 const daemon = (name: string, kind: StarterKind) => `// ${name}, daemon half: a tool the agent adds items with, each thread's items as a live value of its own (a scoped
-// value: a window showing a thread hears only that thread's), an action to clear them${kind === 'data-only' ? ', and a view of them the window\n// draws from data: no UI code' : ''}.
-import { defineAction, defineDaemonExtension, defineExtension, defineTool, obj, str${kind === 'data-only' ? ', type ViewContent' : ''} } from 'superego'
+// value: a window showing a thread hears only that thread's), an action to clear them${kind === 'data-only' ? ', and a view of them the window\n// draws from blocks: no UI code' : ''}.
+import { defineAction, defineDaemonExtension, defineExtension, defineTool, obj, str${kind === 'data-only' ? ', type Block' : ''} } from 'superego'
 import { about, ITEMS, type Item } from './shared.ts'
 
 export default defineDaemonExtension({
   ...about,
   setup(superego) {
     const items = superego.scopedValue<Item[]>(ITEMS, [])
-${kind === 'data-only' ? `    // What the view shows: the thread's items, each with a button to take it out.
-    const view = superego.scopedValue<ViewContent>('${name}.view', { empty: 'Nothing yet.' })
+${kind === 'data-only' ? `    // What the view shows, as blocks: the thread's items, each with a button to take it out, and one to clear them.
+    const view = superego.scopedValue<Block[]>('${name}.view', [])
     const show = (thread: string) => {
       const list = items.get(thread)
-      view.set(thread, {
-        empty: 'Nothing yet.',
-        items: list.map((item) => ({ id: item.id, title: item.text, actions: [{ title: 'Remove', action: '${name}.remove', params: { thread, id: item.id } }] })),
-        ...(list.length ? { actions: [{ title: 'Clear', action: '${name}.clear', params: { thread } }] } : {}),
-      })
+      view.set(thread, list.length ? [
+        { type: 'list', items: list.map((item) => ({ title: item.text, buttons: [{ id: \`remove-\${item.id}\`, label: 'Remove', action: '${name}.remove', params: { thread, id: item.id } }] })) },
+        { type: 'buttons', buttons: [{ id: 'clear', label: 'Clear', action: '${name}.clear', params: { thread } }] },
+      ] : [])
     }
 ` : `    const show = (_thread: string) => {}
 `}
@@ -152,8 +151,8 @@ it('draws the thread\\'s items beside it, and removes one', async () => {
 it('shows the items in a view the window draws from data', async () => {
   daemon = await testDaemon({ profile, model: [callTool('${tool(name)}', { text: 'first' }), say('Added it.')] })
   const thread = await daemon.thread('Add one')
-  const view = await daemon.watch<{ items?: { title: string }[] }>('${name}.view', { scope: thread.id })
-  expect(view.value.items?.map((item) => item.title)).toEqual(['first'])
+  const view = await daemon.watch<{ type: string; items?: { title: string }[] }[]>('${name}.view', { scope: thread.id })
+  expect(view.value[0]?.items?.map((item) => item.title)).toEqual(['first'])
 })
 `}`
 

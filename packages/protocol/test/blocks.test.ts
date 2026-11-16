@@ -82,6 +82,13 @@ it("lets an extension's buttons run only its own actions, with params that don't
     .toEqual(['blocks[1].items[0].buttons[0].params.reason: "reason" is an input\'s id too; inputs go into the params by id'])
 })
 
+it("refuses an extension's inputs with no button to send them, which an agent's submit", () => {
+  const form: Block[] = [{ type: 'text', id: 'name' }, { type: 'list', items: [{ title: 'a' }] }]
+  expect(blockErrors(form, agent)).toEqual([])
+  expect(blockErrors(form, builds(false))).toEqual(["blocks: an extension's inputs need a button to send them (a buttons block, or a list row's)"])
+  expect(blockErrors([...form, { type: 'buttons', buttons: [{ id: 'add', label: 'Add', action: 'builds.add' }] }], builds(false))).toEqual([])
+})
+
 it('keeps a window view to what has no thread: no pane links, images only by address', () => {
   const blocks: Block[] = [{ type: 'open', label: 'Log', kind: 'editor', params: { path: 'log' } }, { type: 'image', src: 'chart.png' }, { type: 'image', src: 'https://x.test/a.png' }]
   expect(blockErrors(blocks, builds(true))).toEqual([])

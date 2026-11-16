@@ -9,7 +9,7 @@ export const PREVIEW = 'preview'
 export const ARTIFACT = 'artifact'
 
 export const about = {
-  name: 'web-panes', version: '1.0.0', api: '^2', title: 'Web panes', description: 'Web pages and HTML files the agent wrote, shown beside a thread.',
+  name: 'web-panes', version: '1.0.0', api: '^3', title: 'Web panes', description: 'Web pages and HTML files the agent wrote, shown beside a thread.',
   panes: {
     [PREVIEW]: '{ url }: a web page, such as a local dev server',
     [ARTIFACT]: '{ path }: an HTML file in the working folder, shown as a page; write it first',

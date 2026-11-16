@@ -33,6 +33,11 @@ export type ListItem = {
   buttons?: Button[]
 }
 
+/**
+ * A block of UI as JSON, drawn by the window's own components: what an agent draws (`show_ui` and its kin) and what a
+ * data view shows (`superego.view`). Checked strictly where it lands (`blockErrors`); who drew it decides what it may
+ * hold (`BlocksUse`).
+ */
 export type Block =
   | { type: 'markdown'; text: string }
   | { type: 'callout'; tone?: Tone; title?: string; text: string }
@@ -226,7 +231,10 @@ export function blockErrors(blocks: unknown, use: BlocksUse): string[] {
       if (block.type === 'image' && !/^(https|data):/.test(block.src)) errors.push(`${path}.src: a window view's image must be an https: or data: address`)
     }
   })
-  for (const { button, path } of buttonsOf(all)) {
+  const pressable = buttonsOf(all)
+  // An extension's view has nothing to submit to: inputs go with a button's action, so inputs with none go nowhere.
+  if (use.by === 'extension' && inputs.size && !pressable.length) errors.push(`blocks: an extension's inputs need a button to send them (a buttons block, or a list row's)`)
+  for (const { button, path } of pressable) {
     unique(button.id, `${path}.id`)
     if (use.by === 'agent') {
       if (button.action !== undefined || button.params !== undefined) errors.push(`${path}: an agent's buttons answer; they can't run actions (no action or params)`)

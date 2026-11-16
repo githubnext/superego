@@ -1,11 +1,14 @@
+// @vitest-environment happy-dom
 // Data views: what a machine's daemon halves declare as data becomes views the layout places, a thread's only from
-// its machine (a profile's only in its threads), and the core draws their content.
-import { createElement } from 'react'
+// its machine (a profile's only in its threads), and the core draws their blocks, whose buttons run the extension's
+// own actions there.
+import { act, createElement } from 'react'
+import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { defineApp, type DataViewInfo, type ThreadInfo } from '@superego/protocol'
-import { checkContent, checkDataViews, contentOf, LIMITS } from '../src/renderer/data-view-check.ts'
-import { DataContent, runViewAction } from '../src/renderer/data-views.tsx'
+import { checkDataViews, LIMITS } from '../src/renderer/data-view-check.ts'
+import { runViewAction, ViewBlocks } from '../src/renderer/data-views.tsx'
 import { defineUiExtension } from '../src/renderer/extension-api.ts'
 import { createRegistry, RegistryProvider } from '../src/renderer/registry.tsx'
 import { paneKind } from '../src/renderer/lookups.ts'
@@ -67,40 +70,54 @@ describe('data views in the registry', () => {
   })
 })
 
-describe('data view content', () => {
-  it('keeps only what is shaped as content', () => {
-    expect(contentOf(null, 'x')).toBeUndefined()
-    expect(contentOf([1], 'x')).toBeUndefined()
-    expect(contentOf({
-      note: 'two', items: [{ title: 'A', status: 'working', actions: [{ title: 'Go', action: 'x.go' }, { title: 'No action' }] }, { subtitle: 'no title' }, 'junk'],
-      facts: [{ label: 'Branch', value: 'main' }, { label: 'x' }], table: { columns: ['a'], rows: [[1, 'b', { no: 1 }], 'junk'] }, markdown: false, actions: 'nope',
-    }, 'x')).toEqual({
-      note: 'two', items: [{ title: 'A', status: 'working', actions: [{ title: 'Go', action: 'x.go' }] }],
-      facts: [{ label: 'Branch', value: 'main' }], table: { columns: ['a'], rows: [['1', 'b', null]] }, actions: [],
-    })
+describe("a data view's blocks", () => {
+  const machine = { id: 'box', label: 'Box', state: 'connected' } as never
+  const ofWindow = { extension: 'orders', context: 'window' } as const
+  const draw = (blocks: unknown, info: { extension: string; context: 'window' | 'thread' } = ofWindow, more: { thread?: ThreadInfo } = {}) =>
+    renderToStaticMarkup(createElement(RegistryProvider, { registry: createRegistry(app, [], () => {}), children: createElement(ViewBlocks, { machine, blocks, info, ...more }) }))
+
+  it('draws its blocks: a list with its buttons, a table, Markdown', () => {
+    const html = draw([
+      { type: 'kv', items: [{ label: 'Branch', value: 'main' }] },
+      { type: 'list', items: [{ title: 'No. 1', subtitle: 'Ada', detail: '5m', status: 'working', buttons: [{ id: 'ship-1', label: 'Ship', action: 'orders.ship', params: { id: '1' } }] }] },
+      { type: 'table', columns: ['Day', 'Orders'], rows: [['Mon', 3]] }, { type: 'markdown', text: '**Bold**' },
+    ])
+    for (const part of ['Branch', 'main', 'No. 1', 'Ada', '5m', 'superego-status--working', '>Ship<', '>Day<', '>3<', '<strong>Bold</strong>']) expect(html).toContain(part)
   })
 
-  it("keeps only buttons that run the extension's own actions", () => {
-    const content = contentOf({ actions: [{ title: 'Ship', action: 'orders.ship' }, { title: 'Archive', action: 'thread.archive' }, { title: 'Sneaky', action: 'ordersx.go' }, { title: 'Bare', action: 'orders' }] }, 'orders')
-    expect(content?.actions).toEqual([{ title: 'Ship', action: 'orders.ship' }])
-  })
-
-  it('draws a note, facts, a list with its buttons, a table and Markdown', () => {
-    const registry = createRegistry(app, [], () => {})
-    const machine = { id: 'local', label: 'This Mac', state: 'connected' } as never
-    const draw = (content: unknown) => renderToStaticMarkup(createElement(RegistryProvider, { registry, children: createElement(DataContent, { machine, content, extension: 'orders' }) }))
-    const html = draw({
-        note: '1 running', facts: [{ label: 'Branch', value: 'main' }],
-        items: [{ title: 'No. 1', subtitle: 'Ada', detail: '5m', status: 'working', actions: [{ title: 'Ship', action: 'orders.ship', params: { id: '1' } }, { title: 'Archive', action: 'orders.archive', icon: 'archive' }] }],
-        table: { columns: ['Day', 'Orders'], rows: [['Mon', 3]] }, markdown: '**Bold**', actions: [{ title: 'Refresh', action: 'orders.refresh' }],
-    })
-    for (const part of ['1 running', '<dt>Branch</dt><dd>main</dd>', 'No. 1', 'Ada', '5m', 'superego-status--working', '>Ship<', 'aria-label="Archive"', '<th>Day</th>', '<td>3</td>', '<strong>Bold</strong>', '>Refresh<']) {
-      expect(html).toContain(part)
-    }
-    expect(draw({ empty: 'No orders yet.' })).toContain('No orders yet.')
-    // Read, with nothing: none, not loading.
+  it('says nothing is there for none, and that it is loading before it is read', () => {
     expect(draw(null)).toContain('Nothing here yet.')
+    expect(draw([])).toContain('Nothing here yet.')
     expect(draw(undefined)).toContain('Loading…')
+  })
+
+  it('refuses whole what its extension may not draw, saying why in place', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    // Another's action; what views showed before blocks; a pane link from a window view, even drawn beside a thread.
+    expect(draw([{ type: 'markdown', text: 'ok' }, { type: 'buttons', buttons: [{ id: 'x', label: 'X', action: 'thread.archive' }] }]))
+      .toContain('This UI can’t be drawn: blocks[1].buttons[0].action: &quot;thread.archive&quot; isn&#x27;t one of orders&#x27;s actions')
+    expect(draw({ note: 'ok', items: [] })).toContain('This UI can’t be drawn')
+    const open = [{ type: 'open', label: 'Log', kind: 'editor', params: { path: 'log' } }]
+    expect(draw(open, ofWindow, { thread: thread() })).toContain('a window view has no thread')
+    expect(draw(open, { extension: 'orders', context: 'thread' }, { thread: thread() })).not.toContain('can’t be drawn')
+    expect(draw([{ type: 'text', id: 'note' }])).toContain('need a button to send them')
+    errors.mockRestore()
+  })
+
+  it("runs its extension's action on its machine with the inputs' values, then reads the view again", async () => {
+    const calls: unknown[][] = []
+    ;(globalThis as { window: { superego?: unknown } }).window.superego = { call: async (...args: unknown[]) => { calls.push(args); return null } }
+    const ran = vi.fn()
+    const container = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(container)
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const blocks = [{ type: 'text', id: 'note', default: 'fragile' }, { type: 'buttons', buttons: [{ id: 'ship', label: 'Ship', action: 'orders.ship', params: { id: '1' } }] }]
+    await act(async () => root.render(createElement(RegistryProvider, { registry: createRegistry(app, [], () => {}), children: createElement(ViewBlocks, { machine, blocks, info: ofWindow, ran }) })))
+    await act(async () => { [...container.querySelectorAll('button')].find((b) => b.textContent === 'Ship')!.click() })
+    expect(calls).toEqual([['box', 'action.run', { id: 'orders.ship', params: { id: '1', note: 'fragile' }, exposure: 'ui' }]])
+    expect(ran).toHaveBeenCalledOnce()
+    await act(async () => root.unmount())
+    container.remove()
   })
 })
 
@@ -165,48 +182,17 @@ describe('what a machine sends, checked where it lands', () => {
       expect(checkDataViews([view], on('orders')).views).toEqual([])
     }
   })
-
-  it('leaves out content of the wrong shape or too big, and says so', () => {
-    for (const raw of ['text', 5, true, [1, 2]]) expect(checkContent(raw, 'x')).toEqual({ dropped: ['isn’t view content'] })
-    expect(checkContent(null, 'x')).toEqual({ dropped: [] })
-    const huge = 'x'.repeat(LIMITS.text + 1)
-    const deep = Array.from({ length: LIMITS.depth + 2 }).reduce<unknown>((inner) => ({ inner }), 1)
-    const { content, dropped } = checkContent({
-      note: huge, markdown: 'x'.repeat(LIMITS.markdown + 1), facts: { label: 'a' }, items: Array.from({ length: LIMITS.items + 3 }, (_, i) => ({ title: `r${i}` })),
-      table: { columns: Array(LIMITS.columns + 5).fill('c'), rows: [Array(LIMITS.columns + 5).fill(1), 'row'] },
-      actions: [{ title: 'Deep', action: 'x.deep', params: deep }, { title: 'Big', action: 'x.big', params: { s: 'x'.repeat(LIMITS.params) } },
-        { title: 'Odd', action: 'x.odd', params: { n: NaN } }, { title: 'Fine', action: 'x.fine', params: { id: 1 }, icon: 'skull' }],
-    }, 'x')
-    expect(content).toMatchObject({ actions: [{ title: 'Fine', action: 'x.fine', params: { id: 1 } }] })
-    expect(content?.note).toBeUndefined()
-    expect(content?.markdown).toBeUndefined()
-    expect(content?.facts).toEqual([])
-    expect(content?.items).toHaveLength(LIMITS.items)
-    expect(content?.table?.columns).toHaveLength(LIMITS.columns)
-    expect(content?.table?.rows).toHaveLength(1)
-    expect(content?.table?.rows[0]).toHaveLength(LIMITS.columns)
-    expect(dropped.length).toBeGreaterThanOrEqual(8)
-  })
-
-  it('draws a quiet word where content was left out', () => {
-    const registry = createRegistry(app, [], () => {})
-    const machine = { id: 'box', label: 'Box', state: 'connected' } as never
-    const html = renderToStaticMarkup(createElement(RegistryProvider, { registry, children: createElement(DataContent, { machine, content: { note: 'ok', actions: [{ title: 'X', action: 'thread.archive' }] }, extension: 'orders' }) }))
-    expect(html).toContain('ok')
-    expect(html).toContain('Left out some of what Box sent')
-    expect(html).not.toContain('>X<')
-  })
 })
 
 describe("a data view's buttons", () => {
   it("run only that extension's actions, on the machine that declared it", async () => {
     const calls: unknown[][] = []
-    ;(globalThis as { window?: unknown }).window = { superego: { call: async (...args: unknown[]) => { calls.push(args); return null } } }
+    ;(globalThis as { window: { superego?: unknown } }).window.superego = { call: async (...args: unknown[]) => { calls.push(args); return null } }
     const registry = createRegistry(app, [], () => {})
-    await runViewAction(registry, 'box', 'orders', { title: 'Ship', action: 'orders.ship', params: { id: '1' } })
+    await runViewAction(registry, 'box', 'orders', 'orders.ship', { id: '1' })
     expect(calls).toEqual([['box', 'action.run', { id: 'orders.ship', params: { id: '1' }, exposure: 'ui' }]])
     for (const action of ['thread.archive', 'git.push', 'ordersx.go', 'orders']) {
-      await expect(runViewAction(registry, 'box', 'orders', { title: 'Sneaky', action })).rejects.toThrow()
+      await expect(runViewAction(registry, 'box', 'orders', action)).rejects.toThrow()
     }
     expect(calls).toHaveLength(1)
   })

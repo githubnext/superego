@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { callTools, daemonMachine, isRunning, mountUi, say, testDaemon, type TestDaemon } from 'superego/testing'
-import type { ViewContent } from 'superego'
+import type { Block } from 'superego'
 import { QUEUE, VIEW, type Build } from './shared.ts'
 
 const profile = new URL('..', import.meta.url).pathname
@@ -23,12 +23,13 @@ it("queues builds, runs them one at a time, and shows each thread only its own q
   const other = await daemon.thread()
   const queue = await daemon.watch<Build[]>(QUEUE, { scope: thread.id })
   await queue.until((builds) => builds.map((b) => b.state).join() === 'running,queued')
-  const view = await daemon.watch<ViewContent>(VIEW, { scope: thread.id })
-  expect(view.value.items?.map((i) => [i.title, i.subtitle])).toEqual([['sleep 30', 'running'], ['echo ok > built.txt', 'queued']])
+  const view = await daemon.watch<Block[]>(VIEW, { scope: thread.id })
+  const list = () => view.value.find((b) => b.type === 'list')!
+  expect(list().items.map((i) => [i.title, i.subtitle])).toEqual([['sleep 30', 'running'], ['echo ok > built.txt', 'queued']])
   expect((await daemon.watch<Build[]>(QUEUE, { scope: other.id })).value).toEqual([])
   // Its Cancel button runs builds.cancel: the running one stops, and the next runs, and is done.
-  const cancel = view.value.items![0]!.actions![0]!
-  await daemon.dispatch(cancel.action, cancel.params as Record<string, unknown>)
+  const cancel = list().items[0]!.buttons![0]!
+  await daemon.dispatch(cancel.action!, cancel.params!)
   await queue.until((builds) => builds.map((b) => b.state).join() === 'cancelled,done')
 })
 
