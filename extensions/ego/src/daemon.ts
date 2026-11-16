@@ -113,9 +113,10 @@ export function ego(): DaemonExtension {
         id: ASK, title: `Ask ${name} about ${superego.app.name} and how it's set up`, runs: 'machine', expose: ['ui', 'cli', 'outside'],
         description: `Send \`prompt\` to ${name}, this machine's own agent, in its one thread (made the first time). That thread comes back; read its answer as any thread's.`,
         params: obj({ prompt: opt(str()) }),
-        async run({ prompt }, { exposure }) {
+        async run({ prompt }, { exposure, from }) {
           const at = await thread()
-          if (prompt?.trim()) await threads.send(at, prompt, { whenBusy: 'followUp', ...(exposure ? { exposure } : {}) })
+          // From a thread's shell (its agent's command line), it's that thread's word, not the user's.
+          if (prompt?.trim()) await threads.send(at, prompt, { whenBusy: 'followUp', ...(exposure ? { exposure } : {}), ...(from ? { from } : {}) })
           return threads.get(at)
         },
       }))

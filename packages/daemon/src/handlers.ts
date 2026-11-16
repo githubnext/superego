@@ -74,16 +74,19 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
   let client = 'client'
   const self = clients.add(peer, via)
   /** Who dispatched, for the action log. */
-  const by = () => { const info = clients.get(self); return info && { id: info.id, kind: info.kind, label: info.label } }
+  const by = () => { const info = clients.get(self); return info && { id: info.id, kind: info.kind, label: info.label, ...(info.from ? { from: info.from } : {}) } }
+  /** The thread whose agent's shell this client runs in, as its hello said: what it does is that agent's, not the user's. */
+  let from: string | undefined
   const relayed = relay.connect((machine, method, params) => notify('relay.event', { machine, method, params }))
   /** A new watch's id: it lasts until unwatched, or the connection ends. */
   const sub = () => randomUUID()
   // Reads and watches; every intent is an action, served below under its id.
   const handlers: Record<string, (params: any) => unknown> = {
-    async hello({ version, client: name, label }: Methods['hello']['params']) {
+    async hello({ version, client: name, label, from: thread }: Methods['hello']['params']) {
       if (version !== PROTOCOL_VERSION) throw versionMismatch(options.app, machine.hostname, version)
       if (typeof name === 'string') client = name
-      clients.hello(self, client, typeof label === 'string' ? label : undefined)
+      from = typeof thread === 'string' && thread ? thread : undefined
+      clients.hello(self, client, typeof label === 'string' ? label : undefined, from)
       return {
         version: PROTOCOL_VERSION, ...extensions.offer(), api: EXTENSION_API, machine: { ...machine, keepsRunning: served.keepsRunning() }, client: self,
         methods: [...new Set([...peer.methods, ...router.list().map((a) => a.id), ...extensions.methodIds()])],
@@ -181,7 +184,7 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
     'action.list': async ({ exposure }: Methods['action.list']['params']) => router.list(exposure).filter((a) => exposure !== 'outside' || a.id !== 'thread.start' || served.outsideMayStart()),
     /** Run an action by id, as `exposure` (the command line passes `cli`); params may be strings to coerce. */
     'action.run': ({ id, params, exposure }: Methods['action.run']['params']) =>
-      router.dispatch(id, params, { notify, source: client, ...(exposure ? { exposure } : {}) }, { source: exposure ?? client, client: by(), ...(exposure ? { exposure } : {}) }),
+      router.dispatch(id, params, { ...ctx(), ...(exposure ? { exposure } : {}) }, { source: exposure ?? client, client: by(), ...(exposure ? { exposure } : {}), ...(from ? { from } : {}) }),
     /** The newest dispatches on this machine, oldest first. */
     'action.log': async () => router.log(),
     /** The window's extensions, as each declares itself: those without a daemon half become known here (see declare). */
@@ -189,7 +192,7 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
     'extension.inspect': ({ thread }: Methods['extension.inspect']['params']) => extensions.inspect(thread),
     ...connection.handlers,
   }
-  const ctx = (): DaemonContext => ({ notify: (event, params) => notify(event as keyof Notifications, params as never), source: client })
+  const ctx = (): DaemonContext => ({ notify: (event, params) => notify(event as keyof Notifications, params as never), source: client, ...(from ? { from } : {}) })
   const open = (method: string, handler: (params: unknown) => unknown) => {
     const parse = parsers.get(method)
     return (params: unknown) => {
@@ -204,7 +207,7 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
   // Actions under their ids, and extensions' methods: looked up as they're called, so a profile's registered since
   // this connection opened are there too.
   peer.handleOthers((method) => {
-    if (router.has(method)) return open(method, (params) => router.dispatch(method, params, ctx(), { source: client, client: by() }))
+    if (router.has(method)) return open(method, (params) => router.dispatch(method, params, ctx(), { source: client, client: by(), ...(from ? { from } : {}) }))
     const read = extensions.method(method)
     return read && open(method, read)
   })

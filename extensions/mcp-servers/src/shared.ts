@@ -257,7 +257,9 @@ export type CallDetails = {
 export const INTERRUPTED = 'interrupted'
 
 // ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────────────
-// None is exposed to outside agents (`outside`): only the window and the command line.
+// None is exposed to outside agents (`outside`): only the window and the command line. Allow is the window's alone: it's
+// the user's consent to run a command (`consent`), and a command an agent adds or edits, through Ego's tool
+// (`allowed: false`) or from a thread's shell, waits for it.
 
 export const ACTIONS = {
   add: 'mcp-servers.add',
@@ -281,7 +283,7 @@ export const ACTIONS = {
 export const ADD_PARAMS = obj({
   name: str({ pattern: SERVER_NAME.source }),
   server: SERVER_CONFIG,
-  /** `false`: a command someone other than the user adds (Ego's tool): it waits for the user's Allow. */
+  /** `false`: a command an agent adds (Ego's tool): it waits for the user's Allow. One from a thread's shell always does. */
   allowed: opt(lit(false)),
 })
 /** Replaces a machine server's config whole; `rename` gives it a new name. `allowed: false` as for add. */

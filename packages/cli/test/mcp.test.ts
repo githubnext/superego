@@ -32,7 +32,7 @@ const direct = async <T,>(method: string, params: unknown): Promise<T> => {
 
 beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), 'superego-mcp-'))
-  const env = { ...process.env, SUPEREGO_HOME: home, SUPEREGO_APP: home, SUPEREGO_HEADLESS: '1', SUPEREGO_MODEL: 'faux', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '' } as Record<string, string>
+  const env = { ...process.env, SUPEREGO_HOME: home, SUPEREGO_APP: home, SUPEREGO_HEADLESS: '1', SUPEREGO_MODEL: 'faux', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '', SUPEREGO_THREAD: '' } as Record<string, string>
   client = new Client({ name: 'mcp-test', version: '1' })
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [CLI, 'mcp'], env, stderr: 'inherit' }))
 }, 30_000)

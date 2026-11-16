@@ -84,9 +84,9 @@ export async function openWebAccess({ options, settings, router, clients, relay,
     settings: [
       { key: 'web.access', title: 'Serve the app', default: 'off', type: { type: 'choice', options: [
         { value: 'off', label: 'Off' }, { value: 'local', label: 'To this computer' }, { value: 'tailscale', label: 'Over Tailscale' },
-      ] }, disabled: () => options.webRoot ? undefined : 'This daemon has no web app to serve.' },
+      ] }, consent: true, disabled: () => options.webRoot ? undefined : 'This daemon has no web app to serve.' },
       { key: 'web.port', title: 'Port', default: 7777, type: { type: 'number', min: 1024, max: 65535, step: 1 } },
-      { key: 'web.tailscale.pairing', title: 'Require pairing for my Tailscale login too', default: false, type: { type: 'boolean' },
+      { key: 'web.tailscale.pairing', title: 'Require pairing for my Tailscale login too', default: false, type: { type: 'boolean' }, consent: true,
         description: 'Otherwise your own devices on the tailnet get in without pairing.', hidden: () => settings.get('web.access') !== 'tailscale' },
     ],
     data: () => ({
@@ -102,7 +102,7 @@ export async function openWebAccess({ options, settings, router, clients, relay,
   }))
   const webOn = () => { if (!web) throw new RpcError('web_off', 'Web access is off: turn it on in Settings → Web access.') }
   router.register(defineAction({
-    id: 'web.pair', title: 'Pair a device for web access', expose: ['ui', 'cli'], params: obj({}),
+    id: 'web.pair', title: 'Pair a device for web access', expose: ['ui', 'cli'], consent: true, params: obj({}),
     async run() {
       webOn()
       const { ticket, code, expires } = webDevices.pair()

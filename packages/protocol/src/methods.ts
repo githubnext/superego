@@ -193,6 +193,8 @@ export type ClientInfo = {
   via: 'socket' | 'web' | 'tailscale'
   /** The paired browser it is, for `web`. */
   device?: string
+  /** The thread whose agent's shell it runs in, as it said in `hello`: an agent's command line, not the user's. */
+  from?: ThreadId
 }
 
 /**
@@ -219,8 +221,12 @@ export type MachineEntry = {
 }
 
 export type Methods = {
-  /** `label` names this client in others' client lists: the app and CLI send their computer's hostname. */
-  hello: { params: { client: string; version: number; label?: string }; result: Hello }
+  /**
+   * `label` names this client in others' client lists: the app and CLI send their computer's hostname. `from`: the thread
+   * whose agent's shell it runs in (the command line sees `<ID>_THREAD`): what it dispatches is that agent's, so actions
+   * that record the user's consent refuse it, and what it sends a thread comes from that thread.
+   */
+  hello: { params: { client: string; version: number; label?: string; from?: ThreadId }; result: Hello }
   /** Nothing, answered at once: a client pinging every few seconds notices a dead link in seconds. */
   ping: { params: {}; result: null }
   /** Open a channel (a byte stream). The daemon accepts `upload` {name, mimeType, size}; its id names the upload. */

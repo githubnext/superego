@@ -18,7 +18,7 @@ let home: string
 
 function superego(args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(process.execPath, [CLI, ...args], { env: { ...process.env, SUPEREGO_HOME: home, SUPEREGO_APP: home }, timeout: 120_000 }, (error, stdout, stderr) => {
+    execFile(process.execPath, [CLI, ...args], { env: { ...process.env, SUPEREGO_HOME: home, SUPEREGO_APP: home, SUPEREGO_THREAD: '' }, timeout: 120_000 }, (error, stdout, stderr) => {
       if (error) reject(new Error(stderr || error.message))
       else resolve(stdout)
     })

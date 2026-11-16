@@ -26,7 +26,7 @@ import {
 // The daemon itself only for `daemon run`: loading it costs every other command most of its start.
 import { appEnv, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
 import {
-  AUTH_REJECTED, compareVersions, driftPhrase, PROTOCOL_VERSION, RpcError, unreadThreads, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
+  AUTH_REJECTED, compareVersions, consentRefused, driftPhrase, PROTOCOL_VERSION, RpcError, threadEnv, unreadThreads, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ProfileRef, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
@@ -132,11 +132,24 @@ function resolveMachine(name: string | undefined): Machine {
   return { id: config.id, label: config.label, config }
 }
 
+/**
+ * The thread whose agent's shell this command runs in (`<ID>_THREAD`, which the daemon sets there): an agent's command
+ * line, not the user's. It says so in hello, so the daemon refuses it the user's consent; what only this command line
+ * does (allow a machine's profile UI, trust a machine), it refuses itself.
+ */
+const agentThread = () => process.env[threadEnv(app)] || undefined
+
+/** Refuse `what` when an agent runs this: it records the user's consent (see `ActionInfo.consent`). */
+function userOnly(what: string) {
+  if (agentThread()) throw consentRefused(what)
+}
+
 /** Connect to a machine, say hello, and check it is who it should be. */
 async function connect(machine: Machine, as: { client: string; label: string } = { client: `${app.id}-cli`, label: hostname() }, { start = true }: { start?: boolean } = {}): Promise<{ transport: Transport; hello: Hello }> {
   const transport = machine.config ? await openMachine(machine.config, app, dataDir) : await openLocal(socket, start ? startDaemon : undefined)
   try {
-    const hello = await transport.peer.call<Hello>('hello', { ...as, version: PROTOCOL_VERSION })
+    const from = agentThread()
+    const hello = await transport.peer.call<Hello>('hello', { ...as, version: PROTOCOL_VERSION, ...(from ? { from } : {}) })
     if (machine.config) checkIdentity(hello, { target: routeOf(machine.config, app), ...(machine.config.daemonId ? { expected: machine.config.daemonId } : {}) }, [])
     return { transport, hello }
   } catch (error) {
@@ -319,7 +332,7 @@ async function machinesCommand(sub: string | undefined, rest: string[], options:
   // Its profiles' UI allowed here goes with it: a machine added again is asked again.
   if (sub === 'rm') { await machines.remove(machine.id); await new UiAllowStore(dataDir).revoke(machine.id) }
   else if (sub === 'enable' || sub === 'disable') await machines.update(machine.id, { enabled: sub === 'enable' })
-  else if (sub === 'trust') await machines.forgetIdentity(machine.id)
+  else if (sub === 'trust') { userOnly(`Trust whoever answers at ${machine.label}`); await machines.forgetIdentity(machine.id) }
   else throw new RpcError('usage', `Unknown: ${app.id} machines ${sub}`)
   print({ ok: true }, () => console.log(`${sub === 'rm' ? 'Removed' : sub === 'trust' ? 'Will trust whoever answers at' : `${sub[0]!.toUpperCase()}${sub.slice(1)}d`} ${machine.label}.`))
 }
@@ -557,7 +570,7 @@ async function profileTypesCommand(name: string | undefined, values: { machine?:
   const done: (ProfileTypes & { name: string; dir: string })[] = []
   for (const profile of list) {
     const types = setUpProfileTypes(profile.dir, typesDir)
-    if (profile.scope === 'project' && profile.allowed && types.written.some((file) => file.endsWith('tsconfig.json'))) await run('profile.allow', { cwd: process.cwd(), name: profile.name })
+    if (profile.scope === 'project' && profile.allowed && !agentThread() && types.written.some((file) => file.endsWith('tsconfig.json'))) await run('profile.allow', { cwd: process.cwd(), name: profile.name })
     done.push({ name: profile.name, dir: profile.dir, ...types })
   }
   return print(done, () => {
@@ -589,11 +602,13 @@ async function profileCommand(sub: string | undefined, rest: string[], values: {
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'profile.ts'), PROFILE_TEMPLATE(name))
     const types = setUpProfileTypes(dir, await authorTypes(dataDir, options.types))
-    // You wrote it, so it may run.
-    if (!values.user) await run('profile.allow', { cwd: process.cwd(), name })
+    // You wrote it, so it may run; an agent's waits for the user's Allow.
+    const allowed = !values.user && !agentThread()
+    if (allowed) await run('profile.allow', { cwd: process.cwd(), name })
     return print({ name, dir, ...types }, () => {
       console.log(`Made ${join(dir, 'profile.ts')}, with types for an editor (tsconfig.json; node_modules links to ${join(dataDir, 'types')})`)
       for (const note of types.notes) console.log(`  ${note}`)
+      if (!values.user && !allowed) console.log(waitsForUser(name))
     })
   }
   if (sub === 'types') return profileTypesCommand(rest[0], values, run)
@@ -604,6 +619,10 @@ async function profileCommand(sub: string | undefined, rest: string[], values: {
   if (sub === 'allow-ui' || sub === 'revoke-ui') return profileUiCommand(sub, machine, rest[0])
   throw new RpcError('usage', `Unknown: ${app.id} profile ${sub}`)
 }
+
+/** What an agent that made or changed a project's profile tells the user: it runs once they allow it. */
+const waitsForUser = (name: string) =>
+  `${name} is a project's profile, so it runs only once the user allows it, as it is then: in the window (Settings → Profiles, or Allow where a thread asks), or with ${app.id} profile allow ${name} in their own terminal. Allowing is theirs to do, not an agent's.`
 
 /** A profile `extension …` acts on, and why that one: named with -P, the one whose folder you're in, or the folder's default. */
 type Chosen = ProfileRef & { by: 'name' | 'folder' | 'default' }
@@ -674,9 +693,9 @@ async function extensionCommand(sub: string | undefined, rest: string[], values:
     const { dir } = profile
     const kind = values.ui ? 'ui' : 'data-only'
     const { written, madeProfile, missing, notes } = newExtension(dir, name, kind, await authorTypes(dataDir, options.types))
-    // You wrote it, so it may run: a project's profile is allowed as it is now.
+    // You wrote it, so it may run: a project's profile is allowed as it is now. An agent's waits for the user's Allow.
     const project = profile.scope === 'project'
-    if (project) await on(resolveMachine(undefined), (call) => call('action.run', { id: 'profile.allow', params: { cwd: dir, name: profile.name }, exposure: 'cli' }))
+    if (project && !agentThread()) await on(resolveMachine(undefined), (call) => call('action.run', { id: 'profile.allow', params: { cwd: dir, name: profile.name }, exposure: 'cli' }))
     return print({ dir, written, madeProfile, missing }, () => {
       console.log(`Made ${name} (${kind === 'ui' ? 'a daemon half and a UI half' : 'data-only'}) in ${dir}${madeProfile ? ', a new profile' : ''}:`)
       for (const file of written) console.log(`  ${file}`)
@@ -684,7 +703,8 @@ async function extensionCommand(sub: string | undefined, rest: string[], values:
       for (const note of notes) console.log(note)
       const pick = `${profile.by === 'name' || profile.name !== 'default' ? ` -P ${profile.name}` : ''}${project ? '' : ' --user'}`
       console.log(`\nNext: ${app.id} extension test ${name}${pick}, then send one of the profile's threads a message.`)
-      if (project) console.log(`After you edit it: ${app.id} profile allow ${profile.name} (a project's profile runs as it was allowed).`)
+      if (project && agentThread()) console.log(waitsForUser(profile.name))
+      else if (project) console.log(`After you edit it: ${app.id} profile allow ${profile.name} (a project's profile runs as it was allowed).`)
     })
   }
   if (sub === 'test') {
@@ -715,6 +735,7 @@ async function extensionCommand(sub: string | undefined, rest: string[], values:
  * sources fetched here now, as the app does (ui-allowed.json, shared with it). This computer's own run on its daemon's say.
  */
 async function profileUiCommand(sub: 'allow-ui' | 'revoke-ui', machine: Machine, which: string | undefined) {
+  if (sub === 'allow-ui') userOnly(`Let a profile's UI from ${machine.label} run in this window`)
   if (!machine.config) throw new RpcError('usage', `This computer's profiles run on its daemon's say: ${app.id} profile allow. Name another machine: -m <machine>`)
   if (!which) throw new RpcError('usage', `${app.id} profile ${sub} <name|dir> -m <machine>`)
   const store = new UiAllowStore(dataDir)

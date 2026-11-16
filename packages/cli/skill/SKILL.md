@@ -45,8 +45,9 @@ Each says which profile it uses. `superego <command> --help` gives any command's
 - **A thread keeps the profile it started with.** A profile made after a thread started doesn't reach it: not your own
   thread, nor the user's open ones. Start a new thread to use it (`superego -p "…"`), and tell the user to.
 - Edits reach the profile's threads on their next turn; `superego extension reload` loads them now.
-- A project's profile runs only once allowed: `superego profile allow <name>`, again after any of its files change.
-  Your own (`~/.superego/profiles`) need no allowing.
+- A project's profile runs only once the user allows it (`superego profile allow <name>`, or in the window), again
+  after any of its files change. That's their consent: from your shell it's refused, so tell them. Your own
+  (`~/.superego/profiles`) need no allowing.
 - Read the `guide` topic next: the big picture, a first extension end to end, the build-queue examples, a cheat sheet.
 
 ## Quick reference

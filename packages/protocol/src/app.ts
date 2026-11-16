@@ -32,6 +32,13 @@ export function defineApp(config: AppConfig): AppConfig {
 /** The environment variable for `key` in this app: `SUPEREGO_HOME` for Superego, `MY_AGENT_HOME` for my-agent. */
 export const envName = (app: AppConfig, key: string) => `${app.id.toUpperCase().replace(/-/g, '_')}_${key}`
 
+/**
+ * What tells a command it runs in a thread's shell, and whose (`SUPEREGO_THREAD=<thread id>`): set in the shell of every
+ * agent's command, so the command line says so in `hello` (`from`) and the user's consent isn't an agent's to give.
+ * It marks; it doesn't wall off: an agent runs as the user, and could run anything the user can.
+ */
+export const threadEnv = (app: AppConfig) => envName(app, 'THREAD')
+
 /** The name of the app's own agent. */
 export const agentName = (app: AppConfig) => app.agent ?? app.name
 

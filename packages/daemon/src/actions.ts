@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import type { ConversationId, Harness, SubmissionId } from '@earendil-works/pi-durable'
 import { InboxDoc } from '@earendil-works/pi-durable'
-import { arr, bool, lit, obj, opt, RpcError, str, union, unknown, type Json, type MachineInfo, type Pane } from '@superego/protocol'
+import { arr, bool, consentRefused, lit, obj, opt, RpcError, str, union, unknown, type Json, type MachineInfo, type Pane } from '@superego/protocol'
 import { ATTACHMENT } from './attachments.ts'
 import { defineAction } from './extension.ts'
 import type { threadFiles } from './files.ts'
@@ -28,7 +28,7 @@ export function registerCoreActions(host: Host, { harness, machine, threads, pro
     id: 'outside', title: 'Outside agents', order: 82,
     description: `Agents using this machine through ${options.app.id} mcp.`,
     settings: [{
-      key: OUTSIDE_THREADS, title: 'Can start threads', default: false, type: { type: 'boolean' },
+      key: OUTSIDE_THREADS, title: 'Can start threads', default: false, type: { type: 'boolean' }, consent: true,
       description: "A thread one starts is like any other here: it has its profile's MCP servers, or those for threads without a profile.",
     }],
   })
@@ -41,18 +41,20 @@ export function registerCoreActions(host: Host, { harness, machine, threads, pro
       cwd: opt(str()), title: opt(str()), model: opt(str()), thinking: opt(str()), prompt: opt(str()), attachments: opt(arr(ATTACHMENT)), profile: opt(str()),
       parent: opt(str()), options: opt(obj({}, { open: true })),
     }),
-    run(params, { exposure }) {
+    run(params, { exposure, from }) {
       if (exposure === 'outside' && !outsideMayStart()) {
         throw new RpcError('not_allowed', "Outside agents can't start threads on this machine", { hint: 'Turn on Settings → Outside agents → Can start threads.' })
       }
-      return threads.startThread({ ...params as ThreadStart, ...(exposure ? { exposure } : {}) })
+      return threads.startThread({ ...params as ThreadStart, ...(exposure ? { exposure } : {}), ...(from ? { from } : {}) })
     },
   }))
   router.register(defineAction({
     id: 'thread.send', title: 'Send a message', expose: ['ui', 'cli', 'outside'], ...thread,
     description: 'Send a thread a message. While it works, `whenBusy` says how: `steer` (now) or `followUp` (after this turn).',
     params: obj({ thread: str(), text: str(), attachments: opt(arr(ATTACHMENT)), requestId: opt(str()), whenBusy: opt(union([lit('steer'), lit('followUp')])) }),
-    run: async ({ thread: id, text, attachments, requestId, whenBusy }, { exposure }) => ({ submission: await threads.submit(id, text, requestId ?? randomUUID(), whenBusy, attachments, exposure ? { exposure } : {}) }),
+    run: async ({ thread: id, text, attachments, requestId, whenBusy }, { exposure, from }) => ({
+      submission: await threads.submit(id, text, requestId ?? randomUUID(), whenBusy, attachments, { ...(exposure ? { exposure } : {}), ...(from ? { from } : {}) }),
+    }),
   }))
   router.register(defineAction({
     id: 'thread.stop', title: 'Stop the agent', expose: ['ui', 'cli', 'outside'], ...thread,
@@ -201,7 +203,12 @@ export function registerCoreActions(host: Host, { harness, machine, threads, pro
   router.register(defineAction({
     id: 'settings.set', title: 'Change a setting', expose: ['ui', 'cli'],
     params: obj({ key: str(), value: unknown() }),
-    async run({ key, value }) { await settings.set(key, value as Json); return null },
+    async run({ key, value }, { from }) {
+      const spec = settings.spec(key)
+      if (from && spec?.consent) throw consentRefused(spec.title)
+      await settings.set(key, value as Json)
+      return null
+    },
   }))
   router.register(defineAction({
     id: 'auth.signIn', title: 'Sign in to a provider', expose: ['ui', 'cli'],

@@ -16,8 +16,9 @@ With `SUPEREGO_MODEL=faux` in the daemon's environment, turns echo instead of ca
 
 ## Common causes
 
-- **"allow it first"**: a project's profile changed since it was allowed (any file in its folder). Look it over, then
-  `superego profile allow <name>` in the project.
+- **"allow it first"**: a project's profile changed since it was allowed (any file in its folder). The user looks it
+  over and allows it: in the window (where the thread asks, or Settings → Profiles), or `superego profile allow <name>`
+  in the project, in their own terminal. An agent can't: tell them.
 - **"No profile …"**: profiles are found from the thread's folder upward (`.superego/profiles/<name>/profile.ts`), then
   in `~/.superego/profiles`. Check with `superego profile` in that folder.
 - **"must export default …"**: `profile.ts` exports `defineProfile({ … })`; each `extensions` module exports an

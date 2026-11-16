@@ -12,6 +12,8 @@ export type SettingSpec = {
   /** Why it can't be changed right now, if it can't. */
   disabled?: () => string | undefined
   hidden?: () => boolean
+  /** It records the user's consent: only the user changes it, never an agent (see `SettingInfo.consent`). */
+  consent?: true
 }
 
 export type SectionSpec = {
@@ -132,6 +134,9 @@ export class SettingsRegistry {
     return (key in this.#values ? this.#values[key] : spec?.default) as T
   }
 
+  /** The setting `key`, as registered. */
+  spec(key: string): SettingSpec | undefined { return this.#settings.get(key) }
+
   /** Whether a value was chosen, rather than the default applying. */
   isSet(key: string) { return key in this.#values }
 
@@ -165,6 +170,7 @@ export class SettingsRegistry {
           ...(spec.description ? { description: spec.description } : {}),
           ...(disabled ? { disabled } : {}),
           ...(spec.hidden?.() ? { hidden: true } : {}),
+          ...(spec.consent ? { consent: true as const } : {}),
         }
       })
       const data = await section.data?.()

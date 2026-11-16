@@ -17,9 +17,10 @@ export const context = BACKGROUND_CONTEXT
 
 /**
  * What a daemon action gets besides its params: who called, and a way to tell that connection something; `exposure`,
- * when a client ran it as the command line or an outside agent (`action.run`).
+ * when a client ran it as the command line or an outside agent (`action.run`); `from`, when that client runs in a
+ * thread's shell (its hello said so): an agent asked, not the user.
  */
-export type DaemonContext = { source: string; notify(event: string, params: unknown): void; exposure?: Exposure }
+export type DaemonContext = { source: string; notify(event: string, params: unknown): void; exposure?: Exposure; from?: string }
 
 /** Which conversations are threads, oldest first; child conversations (subagents) aren't. */
 export const Catalog = defineDoc<{ ids: number[] }>({

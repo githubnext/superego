@@ -11,7 +11,7 @@ import { linkAuthorTypes } from './author-types.ts'
 const CLI = fileURLToPath(new URL('../../../app/bin/superego.ts', import.meta.url))
 let home: string
 // SUPEREGO_APP: no app here, so daemons run from this checkout's source, never from whatever app/out last built.
-const env = () => ({ ...process.env, SUPEREGO_HOME: home, SUPEREGO_APP: home, SUPEREGO_HEADLESS: '1', SUPEREGO_MODEL: 'faux', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '' })
+const env = () => ({ ...process.env, SUPEREGO_HOME: home, SUPEREGO_APP: home, SUPEREGO_HEADLESS: '1', SUPEREGO_MODEL: 'faux', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '', SUPEREGO_THREAD: '' })
 
 /** Run `superego` with `args`; resolves with stdout, rejects with stderr. */
 function superego(args: string[], input?: string, cwd?: string, extraEnv: Record<string, string> = {}): Promise<string> {
@@ -140,6 +140,29 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     expect(existsSync(join(made.dir, 'tsconfig.json'))).toBe(true)
     expect(await superegoJson(['profile'], undefined, project)).toMatchObject([{ name: 'support', allowed: true }])
   })
+
+  it("never gives the user's consent for an agent: run from a thread's shell, it's refused", async () => {
+    mkdirSync(join(home, 'agent-made'), { recursive: true })
+    const project = realpathSync(join(home, 'agent-made'))
+    const agent = (args: string[]) => superego(args, undefined, project, { SUPEREGO_THREAD: 'agent-thread' })
+    // Made, but not allowed: that waits for the user.
+    expect(await agent(['profile', 'new', 'helper'])).toMatch(/runs only once the user allows it/)
+    expect(await superegoJson(['profile'], undefined, project)).toMatchObject([{ name: 'helper', allowed: false }])
+    await expect(agent(['profile', 'allow', 'helper'])).rejects.toThrow(/Allow a project profile to run: that's the user's consent to give, not an agent's/)
+    await expect(agent(['do', 'profile.allow', '--cwd', project, '--name', 'helper'])).rejects.toThrow(/the user's consent/)
+    await expect(agent(['profile', 'allow-ui', 'helper'])).rejects.toThrow(/the user's consent/)
+    await expect(agent(['do', 'web.pair'])).rejects.toThrow(/the user's consent/)
+    await expect(agent(['do', 'settings.set', '--key', 'outside.startThreads', '--value', 'true'])).rejects.toThrow(/Can start threads: that's the user's consent/)
+    // The window's alone, from any command line.
+    await expect(agent(['do', 'mcp-servers.allow', '--name', 'any'])).rejects.toThrow(/mcp-servers\.allow can't be run from cli/)
+    await expect(superego(['do', 'mcp-servers.allow', '--name', 'any'])).rejects.toThrow(/mcp-servers\.allow can't be run from cli/)
+    // What isn't consent, it does.
+    await agent(['do', 'settings.set', '--params', JSON.stringify({ key: 'web.port', value: 7778 })])
+    expect((await superegoJson(['actions', 'log'])).findLast((e: any) => e.id === 'profile.allow')).toMatchObject({ ok: false, client: { from: 'agent-thread' } })
+    // The user, in their own terminal.
+    await superego(['profile', 'allow', 'helper'], undefined, project)
+    expect(await superegoJson(['profile'], undefined, project)).toMatchObject([{ name: 'helper', allowed: true }])
+  }, starting(1))
 
   it('manages machines and works on them with -m', async () => {
     const via = `SUPEREGO_HOME='${join(home, 'second')}' SUPEREGO_MODEL=faux '${process.execPath}' '${CLI}' connect --start`

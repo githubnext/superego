@@ -180,7 +180,7 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
     },
   }))
   router.register(defineAction({
-    id: 'profile.allow', title: 'Allow a project profile to run', expose: ['ui', 'cli'],
+    id: 'profile.allow', title: 'Allow a project profile to run', expose: ['ui', 'cli'], consent: true,
     params: obj({ cwd: opt(str()), name: opt(str()) }),
     async run({ cwd, name }) {
       const dir = folderOf(cwd)

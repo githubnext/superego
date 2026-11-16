@@ -34,6 +34,8 @@ export type SettingInfo = SettingType & {
   /** Shown but not editable, with why. */
   disabled?: string
   hidden?: boolean
+  /** It records the user's consent (lets devices or outside agents in): only the user changes it, never an agent. */
+  consent?: true
 }
 
 export type SectionInfo = {

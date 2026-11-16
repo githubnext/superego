@@ -345,13 +345,14 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
 
       superego.action(defineAction({
         id: ACTIONS.add, title: 'Add an MCP server', expose: ['ui', 'cli'],
-        description: 'Add a server to this machine (a command, or a URL), then start it once to check it. A command added with allowed: false waits for the user to allow it.',
+        description: "Add a server to this machine (a command, or a URL), then start it once to check it. A command an agent adds (allowed: false, or from a thread's shell) waits for the user to allow it.",
         params: ADD_PARAMS,
-        async run({ name, server, allowed }) {
+        async run({ name, server, allowed }, { from }) {
           checkConfig(name, server as ServerConfig)
           await save(async (servers) => {
             if (servers[name]) throw new RpcError('exists', `There's already an MCP server ${name}`)
-            servers[name] = clean(server as ServerConfig, allowed)
+            // An agent's command (from a thread's shell) is no more the user's say than Ego's: it waits for their Allow.
+            servers[name] = clean(server as ServerConfig, from ? false : allowed)
             // A new server starts with no secrets, whatever was left under its name.
             await store.delete(serverKey(name))
           })
@@ -362,14 +363,14 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         id: ACTIONS.edit, title: 'Edit an MCP server', expose: ['ui', 'cli'],
         description: "Replace a server's config (rename: give it a new name), then check it. It restarts once its calls finish.",
         params: EDIT_PARAMS,
-        async run({ name, server, rename, allowed }) {
+        async run({ name, server, rename, allowed }, { from }) {
           const next = rename ?? name
           checkConfig(next, server as ServerConfig)
           await save(async (servers) => {
             const before = servers[name]
             if (!before) throw new RpcError('not_found', `No MCP server ${name} on this machine`)
             if (next !== name && servers[next]) throw new RpcError('exists', `There's already an MCP server ${next}`)
-            const config = clean(server as ServerConfig, allowed ?? before.allowed)
+            const config = clean(server as ServerConfig, from ? false : allowed ?? before.allowed)
             // In its place, under its new name.
             const entries = Object.entries(servers).map(([key, value]) => key === name ? [next, config] as const : [key, value] as const)
             for (const key of Object.keys(servers)) delete servers[key]
@@ -413,8 +414,10 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         },
       }))
       superego.action(defineAction({
-        id: ACTIONS.allow, title: 'Allow an MCP server to run', expose: ['ui', 'cli'],
-        description: 'Let a command that someone other than the user added (Ego) run, then check it.',
+        // The user's consent to run a command: theirs to give, in the window, never an agent's (`superego do` from a
+        // thread's shell included).
+        id: ACTIONS.allow, title: 'Allow an MCP server to run', expose: ['ui'], consent: true,
+        description: 'Let a command that an agent added (Ego, or a thread) run, then check it.',
         params: NAME_PARAMS,
         async run({ name }) {
           machineServer(name)

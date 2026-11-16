@@ -21,11 +21,16 @@ export class Clients {
     return id
   }
 
-  /** What `hello` said. A label the transport gave (a device's name, a login) is kept over the client's own. */
-  hello(id: string, kind: string, label: string | undefined) {
+  /**
+   * What `hello` said. A label the transport gave (a device's name, a login) is kept over the client's own. `from`: the
+   * thread whose agent's shell it runs in.
+   */
+  hello(id: string, kind: string, label: string | undefined, from?: string) {
     const entry = this.#entries.get(id)
     if (!entry) return
     entry.info.kind = kind
+    if (from) entry.info.from = from
+    else delete entry.info.from
     if (entry.info.via === 'socket' || entry.info.label === 'client') entry.info.label = label?.trim() || kind
     this.#changed(true)
   }

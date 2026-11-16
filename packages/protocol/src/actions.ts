@@ -27,6 +27,12 @@ export type ActionInfo = {
   keys?: string
   /** It acts on a thread: `machine` and `thread` come from the selected one when not given. */
   thread?: boolean
+  /**
+   * It records the user's consent: to run a command or a project's code, to let a device or outside agents in. Only the
+   * user gives it, in a window or in their own terminal, never an agent: it's refused for a client that said it runs in
+   * a thread's shell (`hello`'s `from`), and it can't be exposed to `outside`.
+   */
+  consent?: true
 }
 
 /** An action with what it does: `run`, given its params and what it runs for. Made with `defineAction`. */
@@ -40,7 +46,7 @@ export function defineAction<S extends JsonSchema | undefined, R, C = any>(
 }
 
 /** One dispatch, as the log keeps it. `client` names the connection that dispatched it, on a daemon: who, not only how (`source`). */
-export type ActionLogEntry = { at: number; id: string; source: string; ms: number; ok: boolean; params?: Json; error?: string; client?: { id: string; kind: string; label: string } }
+export type ActionLogEntry = { at: number; id: string; source: string; ms: number; ok: boolean; params?: Json; error?: string; client?: { id: string; kind: string; label: string; from?: string } }
 
 /**
  * Check parameters against `schema` (coercing strings, as the command line sends them): the parsed parameters, or an
@@ -71,7 +77,11 @@ export type Router<C = unknown> = {
   has(id: string): boolean
   get(id: string): ActionInfo | undefined
   list(exposure?: Exposure): ActionInfo[]
-  dispatch(id: string, params: unknown, context: C, options?: { source?: string; exposure?: Exposure; client?: ActionLogEntry['client'] }): Promise<unknown>
+  /**
+   * Run `id`. `exposure`: who is asking, refused if the action isn't exposed to it. `from`: the thread whose agent's shell
+   * is asking (its command line), refused for an action that records the user's `consent`.
+   */
+  dispatch(id: string, params: unknown, context: C, options?: { source?: string; exposure?: Exposure; from?: string; client?: ActionLogEntry['client'] }): Promise<unknown>
   /** Time and log work done elsewhere for an action this router doesn't hold (a window forwarding to a daemon). */
   track<R>(id: string, params: unknown, source: string, run: () => Promise<R>, client?: ActionLogEntry['client']): Promise<R>
   /** The newest dispatches, oldest first. */
@@ -89,17 +99,19 @@ export function createRouter<C = unknown>({ logSize = 500 }: { logSize?: number 
     register(def) {
       if (actions.has(def.id)) throw new Error(`Action ${def.id} is already defined`)
       if (!/^[a-z][a-z0-9-]*(\.[a-z][a-zA-Z0-9-]*)+$/.test(def.id)) throw new Error(`Action id "${def.id}" must be dotted lowercase, like thread.start`)
+      if (def.consent && def.expose.includes('outside')) throw new Error(`Action ${def.id} records the user's consent: it can't be exposed to outside agents`)
       actions.set(def.id, { def, parse: paramsParser(def.id, def.params) })
       return () => { if (actions.get(def.id)?.def === def) actions.delete(def.id) }
     },
     has: (id) => actions.has(id),
     get: (id) => actions.get(id) && info(actions.get(id)!.def),
     list: (exposure) => [...actions.values()].map(({ def }) => info(def)).filter((a) => !exposure || a.expose.includes(exposure)),
-    dispatch(id, params, context, { source = 'ui', exposure, client } = {}) {
+    dispatch(id, params, context, { source = 'ui', exposure, from, client } = {}) {
       return router.track(id, params, source, async () => {
         const action = actions.get(id)
         if (!action) throw new RpcError('unknown_action', `No action ${id}`)
         if (exposure && !action.def.expose.includes(exposure)) throw new RpcError('not_exposed', `${id} can't be run from ${exposure}`)
+        if (from && action.def.consent) throw consentRefused(action.def.title)
         return action.def.run(action.parse(params), context)
       }, client)
     },
@@ -128,6 +140,14 @@ export function createRouter<C = unknown>({ logSize = 500 }: { logSize?: number 
   }
   return router
 }
+
+/**
+ * Why an agent can't give the user's consent (`ActionInfo.consent`, a setting's `consent`): `what` is the action's title
+ * or the setting's.
+ */
+export const consentRefused = (what: string) => new RpcError('consent', `${what}: that's the user's consent to give, not an agent's`, {
+  hint: 'Ask the user to do it themselves: in the window (Settings), or in their own terminal.',
+})
 
 const info = ({ run: _run, ...rest }: ActionDef<any, unknown, any>): ActionInfo => rest
 

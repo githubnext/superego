@@ -347,6 +347,24 @@ it('keeps how a message came with it: who sent it, from which thread, for whom; 
   await close()
 })
 
+it("takes what a thread's shell sends (its command line said whose it is) as that thread's, not the user's", async () => {
+  const seen: unknown[] = []
+  const watcher = defineDaemonExtension({ name: 'watcher', setup(superego) { superego.beforeSend(({ by, from, exposure }) => { seen.push({ by, from, exposure }) }) } })
+  const { peer, close } = await open([watcher])
+  const target = await peer.call<ThreadInfo>('thread.start', {})
+  const { peer: shell, socket } = await connectSocket(join(dir, 'superego.sock'))
+  await shell.call('hello', { client: 'superego-cli', version: PROTOCOL_VERSION, from: 'agent-1' })
+  await shell.call('action.run', { id: 'thread.send', params: { thread: target.id, text: 'from the shell' }, exposure: 'cli' })
+  const started = await shell.call<ThreadInfo>('action.run', { id: 'thread.start', params: { prompt: 'started from the shell' }, exposure: 'cli' })
+  const done = async (id: string) => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === id)?.status.state === 'done'
+  await until(async () => await done(target.id) && await done(started.id))
+  expect(seen).toEqual([{ by: undefined, from: 'agent-1', exposure: 'cli' }, { by: undefined, from: 'agent-1', exposure: 'cli' }])
+  // Listed as that thread's, and logged so.
+  expect((await peer.call<{ value: { from?: string; kind: string }[] }>('clients.watch', {})).value.find((c) => c.kind === 'superego-cli')).toMatchObject({ from: 'agent-1' })
+  socket.destroy()
+  await close()
+})
+
 it("waits until a thread isn't working (threads.idle, thread.read), and tells its last answer (thread.lastAnswer, thread.read)", async () => {
   // The run holds in a tool until the test lets it go, then answers.
   const turn = (content: unknown[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })

@@ -62,8 +62,11 @@ export function answeredBy(entries: readonly Pick<EntryRecord, 'kind' | 'data' |
   return undefined
 }
 
-/** A new thread as `startThread` takes it: an extension's attachments are inline (it has no connection to upload on). */
-export type ThreadStart = Omit<NewThread, 'attachments'> & { attachments?: Attachment[]; hidden?: string; by?: string; exposure?: Exposure }
+/**
+ * A new thread as `startThread` takes it: an extension's attachments are inline (it has no connection to upload on).
+ * `from`: the thread whose agent asked, through its shell's command line, when that isn't its parent.
+ */
+export type ThreadStart = Omit<NewThread, 'attachments'> & { attachments?: Attachment[]; hidden?: string; by?: string; exposure?: Exposure; from?: string }
 
 export function createThreads(host: Host, { harness, extensions, profiles }: { harness: Harness; extensions: ExtensionHost; profiles: ProfileHost }) {
   const { options, agent, mounted, changed, defaultCwd, userProfiles, folderOf } = host
@@ -553,7 +556,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
    * hidden, an extension's own); `hidden`, in no list and the extension's of that name. Extensions' `starting` hooks
    * may move it (a worktree) and give it state.
    */
-  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, parent, options: asked, hidden, by, exposure }: ThreadStart) {
+  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, parent, options: asked, hidden, by, exposure, from }: ThreadStart) {
     // Uploads are inline again by now (see connection.ts).
     const dir = folderOf(cwd)
     if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${hostname()}`)
@@ -606,8 +609,9 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
       throw error
     }
     // Made: a first message that fails (no model yet) leaves it made, and says why.
-    // From its parent, when one starts it.
-    if (prompt?.trim() || attachments?.length) await submit(id, prompt ?? '', randomUUID(), undefined, attachments, { by, exposure, from: parent })
+    // From its parent, when one starts it, or the thread whose agent's shell asked.
+    const sender = parent ?? from
+    if (prompt?.trim() || attachments?.length) await submit(id, prompt ?? '', randomUUID(), undefined, attachments, { by, exposure, ...(sender ? { from: sender } : {}) })
     return info(id, await get(id))
   }
   /** A new thread with `meta`: its id, once extensions were told it's there (`started`). */
@@ -762,7 +766,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
 
   return {
     list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, tellPaneClosed, submit, startThread, archive, unarchive, openPane, history, lastAnswer: answerOf, read,
-    watchTranscript, apiFor, retrySignIn, rejectedNow, learnConversations,
+    watchTranscript, apiFor, retrySignIn, rejectedNow, learnConversations, threadOf,
   }
 }
 

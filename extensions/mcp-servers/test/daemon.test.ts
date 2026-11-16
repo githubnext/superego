@@ -16,6 +16,7 @@ import { SERVERS_VALUE, type CallDetails, type CheckResult, type LogResult, type
 import { serveHttp } from './fixture.ts'
 
 const FIXTURE = join(import.meta.dirname, 'fixture.ts')
+const CLI = join(import.meta.dirname, '../../../app/bin/superego.ts')
 let dir: string
 let calls: string
 let daemon: TestDaemon | undefined
@@ -29,15 +30,19 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true })
 })
 
-/** A daemon with mcp-servers (and `more`), in `dir`, answering as `model` says: a model's turns, one per request. */
-async function open(model: Turn[] = [], options: McpServersOptions = {}, more: DaemonExtension[] = []) {
+/**
+ * A daemon with mcp-servers (and `more`), in `dir`, answering as `model` says: a model's turns, one per request. `appId`:
+ * the app it runs as, `superego` for one the command line (`superego …`) reaches by its environment.
+ */
+async function open(model: Turn[] = [], options: McpServersOptions = {}, more: DaemonExtension[] = [], appId?: string) {
   // A thread's first turn waits for its servers' tools a few seconds (`firstListing`, within the core's `agentPartsLimit`)
   // before going on without them; the fixture is Node loading the MCP SDK, which on a busy machine takes longer. Here the
   // tools are wanted on the first turn, so it gets the time that takes.
   return daemon = await testDaemon({
     dataDir: dir, model, agentPartsLimit: 65_000,
     extensions: [mcpServersExtension({ checkWait: 15_000, firstListing: 60_000, ...options }), ...more],
-  })
+    ...(appId ? { appId } : {}),
+  } as Parameters<typeof testDaemon>[0])
 }
 
 /**
@@ -288,10 +293,10 @@ it('gives a thread the servers its profile names, unprofiled ones to threads wit
   expect(await partsOf(d, hidden.id)).not.toContain('mcp:fx')
   expect(await partsOf(d, hidden.id)).not.toContain('mcp-servers')
 
-  // Outside agents can't reach any of it.
+  // Outside agents can't reach any of it; and Allow, the user's consent, is the window's alone.
   expect(api.actions('outside').filter((a: ActionInfo) => a.id.startsWith('mcp-servers.'))).toEqual([])
   expect(api.actions('cli').filter((a: ActionInfo) => a.id.startsWith('mcp-servers.')).map((a) => a.id).sort()).toEqual([
-    'mcp-servers.add', 'mcp-servers.allow', 'mcp-servers.edit', 'mcp-servers.log', 'mcp-servers.remove', 'mcp-servers.restart', 'mcp-servers.set', 'mcp-servers.set-secret', 'mcp-servers.signIn', 'mcp-servers.signOut',
+    'mcp-servers.add', 'mcp-servers.edit', 'mcp-servers.log', 'mcp-servers.remove', 'mcp-servers.restart', 'mcp-servers.set', 'mcp-servers.set-secret', 'mcp-servers.signIn', 'mcp-servers.signOut',
   ])
 }, starting(2))
 
@@ -331,6 +336,43 @@ it("keeps a command someone other than the user added waiting until it's allowed
   expect(allowed.server.state).not.toBe('waiting')
   await d.send(thread.id, 'again')
   expect(await serversOf(d, thread.id)).toMatchObject({ servers: [{ name: 'fx' }] })
+})
+
+it("never lets an agent allow a command: superego do from its thread's shell is refused, and one it adds waits", { timeout: starting(1) + 60_000 }, async () => {
+  // The command line in the thread's shell, reaching this daemon: what an agent would type.
+  const superego = (args: string) => `SUPEREGO_HOME='${dir}' SUPEREGO_SOCKET="$(ls '${dir}'/d*.sock)" '${process.execPath}' '${CLI}' ${args} 2>&1`
+  const mine = { name: 'mine', server: fixture() }
+  const d = await open([
+    callTool('bash', { command: 'echo "marked $SUPEREGO_THREAD"' }),
+    callTool('bash', { command: superego('do mcp-servers.allow --name fx') }),
+    callTool('bash', { command: superego(`do mcp-servers.add --params '${JSON.stringify(mine)}' --json`) }),
+    callTool('bash', { command: superego(`do mcp-servers.edit --params '${JSON.stringify({ name: 'web', server: { command: 'true' } })}' --json`) }),
+    say('Done.'),
+  ], {}, [], 'superego')
+  // Ego's: it waits for the user. And the user's own URL, which the agent makes a command.
+  await act(d, 'add', { name: 'fx', server: fixture(), allowed: false })
+  await act(d, 'add', { name: 'web', server: { url: 'https://example.invalid/mcp' } })
+  const thread = await d.thread('allow fx')
+  const [marked, allow, add, edit] = await results(d, thread.id)
+  // Its shell says whose it is, and its command line says so to the daemon.
+  expect(marked).toBe(`marked ${thread.id}\n`)
+  expect(allow).toMatch(/mcp-servers\.allow can't be run from cli/)
+  expect(add).toContain('"state": "waiting"')
+  expect(edit).toContain('"state": "waiting"')
+  const { servers } = JSON.parse(await readFile(join(dir, 'mcp-servers.json'), 'utf8')) as { servers: Record<string, ServerConfig> }
+  expect(servers.fx!.allowed).toBe(false)
+  expect(servers.mine!.allowed).toBe(false)
+  expect(servers.web).toEqual({ command: 'true', allowed: false })
+  // No exposure claimed, but from a thread's shell: still the user's to give.
+  const { peer, close } = await d.connect()
+  try {
+    await peer.call('hello', { client: 'superego-cli', version: (await import('@superego/protocol')).PROTOCOL_VERSION, from: thread.id })
+    await expect(peer.call('action.run', { id: 'mcp-servers.allow', params: { name: 'fx' } })).rejects.toMatchObject({ kind: 'consent' })
+    await expect(peer.call('mcp-servers.allow', { name: 'fx' })).rejects.toMatchObject({ kind: 'consent' })
+  } finally { close() }
+  expect(await callsMade()).toEqual([])
+  // The window's Allow.
+  expect((await act(d, 'allow', { name: 'fx' })).server.state).not.toBe('waiting')
 })
 
 it("gives a command its secret env values from the store, hides them in its log, and stops idle sessions", async () => {

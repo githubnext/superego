@@ -11,7 +11,7 @@ import { join, resolve as resolvePath } from 'node:path'
 import { createRegistry, Harness, type Storage } from '@earendil-works/pi-durable'
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
-import { AUTH_REJECTED, Lifetime, ONBOARDED, createRouter, type AppConfig, type MachineInfo, type RpcPeer } from '@superego/protocol'
+import { AUTH_REJECTED, Lifetime, ONBOARDED, createRouter, threadEnv, type AppConfig, type MachineInfo, type RpcPeer } from '@superego/protocol'
 import { SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import { registerCoreActions } from './actions.ts'
@@ -97,6 +97,9 @@ async function machineId(dataDir: string) {
 }
 
 export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
+  // Started from an agent's shell (a command line there started it), it isn't that agent's: nothing it runs (a terminal
+  // pane, an MCP server) carries that thread's mark, and its threads' shells get their own.
+  delete process.env[threadEnv(options.app)]
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
   const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')))
   const flows = createAuthFlows()
@@ -144,7 +147,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     registry: host.registry,
     // Attribution names the app to providers that show it; without a url there is nothing to show.
     identity: { attribution: options.app.url ? { name: options.app.name, url: options.app.url } : null },
-    env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? defaultCwd }),
+    // An agent's commands run marked with its thread (<ID>_THREAD): the command line, run there, says so (see threadEnv).
+    env: ({ cwd, conversationId }) => new NodeExecutionEnv({ cwd: cwd ?? defaultCwd, shellEnv: { [threadEnv(options.app)]: threads.threadOf(conversationId) ?? `conversation-${conversationId}` } }),
     // A thread without a profile selects the built-ins only: profiles' extensions are installed too, but are theirs.
     settings: () => ({ extensions: extensions.partsFor(extensions.withoutFor()) }),
   }, context)

@@ -13,7 +13,7 @@ import { serveOAuth } from './auth-server.ts'
 const CLI = fileURLToPath(new URL('../../../app/bin/superego.ts', import.meta.url))
 const FIXTURE = fileURLToPath(new URL('./fixture.ts', import.meta.url))
 let home: string
-const env = () => ({ ...process.env, SUPEREGO_HOME: home, SUPEREGO_APP: home, SUPEREGO_HEADLESS: '1', SUPEREGO_MODEL: 'faux', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '' })
+const env = () => ({ ...process.env, SUPEREGO_HOME: home, SUPEREGO_APP: home, SUPEREGO_HEADLESS: '1', SUPEREGO_MODEL: 'faux', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '', SUPEREGO_THREAD: '' })
 
 function superego(args: string[], input?: string): Promise<string> {
   return new Promise((resolve, reject) => {

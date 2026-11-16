@@ -48,8 +48,8 @@ needs; a test on [`superego/testing`](#testing); a README; and the profile's typ
 gives them: a `tsconfig.json`, and `node_modules` linked to `~/.superego/types`, the declarations of `'superego'`,
 `'superego/ui'`, `'superego/testing'`, React and vitest built from this Superego's own source, so `test` (and an editor)
 checks the types. Send one of the profile's threads a message and it's there; after an edit, the next turn loads it
-again (`superego extension reload` loads it now). A project's profile runs as it was allowed: allow it again after
-editing (`superego profile allow`).
+again (`superego extension reload` loads it now). A project's profile runs as it was allowed: the user allows it again
+after an edit (`superego profile allow`, or in the window). That's their consent: an agent's is refused, so ask them.
 
 A thread keeps the profile it started with, so a profile made after it started (the first `default`, made by `new`)
 doesn't reach it: not the thread that made it, nor the user's other open threads. Start a new thread to use it, or move
@@ -662,7 +662,7 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
 - A name is claimed while set up: a second extension of the same name is refused. The core's namespaces (`thread`,
   `value`, `settings`, …) are never free.
 - A profile's daemon half loads with its first turn, when a window lists one of its threads, or before an interrupted
-  run of it resumes. A project's profile runs only once allowed (`superego profile allow`), as its files and those it
+  run of it resumes. A project's profile runs only once the user allows it (`superego profile allow`), as its files and those it
   lists from outside its folder are then. Profiles load one at a time: keep `setup` quick, and never await work that
   loads a profile (starting or reading a thread) in it.
 - Profiles that name the same file (one `extends` another, or both list it) share one set-up of it, torn down after

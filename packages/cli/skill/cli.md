@@ -110,7 +110,7 @@ profile, writes files or restarts the daemon is a tool; an extension's action be
 
 ```sh
 superego profile                    # the profiles a thread here could start with
-superego profile new [name]         # .superego/profiles/<name>/profile.ts in this project, allowed
+superego profile new [name]         # .superego/profiles/<name>/profile.ts in this project, allowed (an agent's waits for the user)
 superego profile new [name] --user  # ~/.superego/profiles/<name>: yours, everywhere
 superego profile types [name]       # types for an editor: tsconfig.json, node_modules → ~/.superego/types (--user: yours)
 superego profile allow [name]       # let this project's profile run (again, after it changed)
@@ -119,6 +119,10 @@ superego profile revoke-ui <name> -m <machine>
 ```
 
 `name` defaults to `default`. See `superego --skill profiles`.
+
+Allowing records the user's consent, so only the user does it: an agent's command line (run in a thread's shell,
+which `SUPEREGO_THREAD` marks) is refused `profile allow`, `profile allow-ui`, `machines trust`, `web pair` and every
+action marked `consent`. As an agent, tell the user what to allow and where.
 
 ## Machines
 

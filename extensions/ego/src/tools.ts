@@ -97,8 +97,9 @@ What ${name} is:
       options: { worktrees: true },                  // what its threads ask extensions for: worktrees of their own
       extends: 'user:default',                       // a project's profile building on the user's
     })
-  A project's profile is code from that repo: it runs only once allowed (the profile.allow action, or \`${id} profile
-  allow\` there), and again after its files change. \`${id} extension new\` adds an extension, making the profile if
+  A project's profile is code from that repo: it runs only once the user allows it, and again after its files change.
+  Allowing is the user's alone, never an agent's (yours or a thread's): in the window (Settings → Profiles, or Allow
+  where a thread with it asks), or \`${id} profile allow\` in their own terminal. Tell them when one needs it. \`${id} extension new\` adds an extension, making the profile if
   needed; \`${id} profile new [name]\` makes a bare one.
 - Skills live in ${agentsDir}/skills/<name>/SKILL.md: front matter with name and description (and
   disable-model-invocation: true to offer it only when named), then the instructions. Every agent is told about them; a
@@ -114,8 +115,9 @@ What ${name} is:
 
 Data folder layout (${dataDir}): settings.json (this machine's settings), app-settings.json (the app's), machines.json
 (the machines this computer reaches), profiles/, worktrees/, attachments/, allowed-profiles.json, and extensions'
-files. Settings and machines change through your tools, the rest through actions (profile.allow, …) a thread runs, not
-by hand. ${[AUTH, ...secrets].join(', ')} hold sign-ins and keys, or may: you don't read them.`
+files. Settings and machines change through your tools, the rest through actions a thread runs, not by hand. What
+records the user's consent (allowing a profile or an MCP server's command, pairing a device, letting outside agents or
+devices in) is theirs to do: no agent can, so point them to where they do it. ${[AUTH, ...secrets].join(', ')} hold sign-ins and keys, or may: you don't read them.`
 }
 
 /**
@@ -163,7 +165,7 @@ export function egoTools({ dir, secrets = () => [], dispatch, actions, snapshot,
     }),
     defineTool({
       name: 'superego_settings',
-      description: "This machine's settings: each section with its settings (key, title, type, choices) and their values, and what sections report (providers and how they're signed in, web access).",
+      description: "This machine's settings: each section with its settings (key, title, type, choices) and their values, and what sections report (providers and how they're signed in, web access). userOnly: the user's consent, which only they change.",
       parameters: obj({}),
       async execute() {
         const { sections, values } = await snapshot()
@@ -171,8 +173,10 @@ export function egoTools({ dir, secrets = () => [], dispatch, actions, snapshot,
         // transcripts (an outside agent may be asking). Its extension's tools say what's in it.
         return json(sections.map((section) => ({
           id: section.id, title: section.title, ...(section.data !== undefined && section.value === undefined ? { data: section.data } : {}),
-          settings: section.settings.filter((s) => !s.hidden).map(({ key, title, description, default: initial, disabled, ...type }) => ({
+          settings: section.settings.filter((s) => !s.hidden).map(({ key, title, description, default: initial, disabled, consent, hidden: _hidden, ...type }) => ({
             key, title, ...(description ? { description } : {}), type, default: initial, value: values[key] ?? initial, ...(disabled ? { disabled } : {}),
+            // The user's to change, not yours.
+            ...(consent ? { userOnly: true } : {}),
           })),
         })))
       },
@@ -182,8 +186,11 @@ export function egoTools({ dir, secrets = () => [], dispatch, actions, snapshot,
       description: "Change one of this machine's settings, by its key (superego_settings lists them, with their types and choices).",
       parameters: obj({ key: str({ minLength: 1 }), value: unknown() }),
       async execute({ key, value }) {
-        // What outside agents may do here is the user's to say: one could be asking.
-        if (key.startsWith('outside.')) throw new Error(`Only the user changes ${key}, in Settings → Outside agents.`)
+        // What lets outside agents or devices in is the user's consent to give (one could be asking): theirs to change.
+        const { sections } = await snapshot()
+        const section = sections.find((s) => s.settings.some((setting) => setting.key === key))
+        const setting = section?.settings.find((s) => s.key === key)
+        if (setting?.consent) throw new Error(`Only the user changes ${key}, in Settings → ${section!.title}: it's their consent to give.`)
         await dispatch('settings.set', { key, value: (value ?? null) as Json })
         return text(`Set ${key} to ${JSON.stringify(value ?? null)}.`)
       },

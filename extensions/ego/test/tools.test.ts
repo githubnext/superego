@@ -20,7 +20,11 @@ const on = (router: Router) => ({ dispatch: (id: string, params: unknown) => rou
 
 describe("Ego's tools", () => {
   const snapshot = async (): Promise<SettingsSnapshot> => ({
-    sections: [{ id: 'agent', title: 'Agent', order: 1, settings: [{ key: 'agent.model', title: 'Model', default: null, type: 'string' }] }],
+    sections: [
+      { id: 'agent', title: 'Agent', order: 1, settings: [{ key: 'agent.model', title: 'Model', default: null, type: 'string' }] },
+      { id: 'web', title: 'Web access', order: 80, settings: [{ key: 'web.access', title: 'Serve the app', default: 'off', type: 'string', consent: true }] },
+      { id: 'outside', title: 'Outside agents', order: 82, settings: [{ key: 'outside.startThreads', title: 'Can start threads', default: false, type: 'boolean', consent: true }] },
+    ],
     values: { 'agent.model': 'faux/faux-1' },
   })
   const threads = (started: Parameters<EgoThreads['start']>[0][] = []): EgoThreads => ({
@@ -47,14 +51,16 @@ describe("Ego's tools", () => {
       // Setup (settings, machines) is what it changes itself; files, profiles, skills and code go to threads, so it has
       // no tool that writes or runs anything.
       for (const mutating of ['write', 'edit', 'bash', 'superego_run', 'thread_send']) expect(names).not.toContain(mutating)
-      expect(await text(tools, 'superego_set_setting', { key: 'web.access', value: 'local' })).toBe('Set web.access to "local".')
-      expect(set).toEqual([{ key: 'web.access', value: 'local' }])
-      // Not what outside agents may do: one of them could be asking.
-      await expect(run(tools, 'superego_set_setting', { key: 'outside.startThreads', value: true })).rejects.toThrow(/Only the user/)
+      expect(await text(tools, 'superego_set_setting', { key: 'agent.model', value: 'faux/faux-2' })).toBe('Set agent.model to "faux/faux-2".')
+      expect(set).toEqual([{ key: 'agent.model', value: 'faux/faux-2' }])
+      // Not what records the user's consent (letting outside agents or devices in): an agent may be asking.
+      await expect(run(tools, 'superego_set_setting', { key: 'outside.startThreads', value: true })).rejects.toThrow(/Only the user changes outside.startThreads, in Settings → Outside agents/)
+      await expect(run(tools, 'superego_set_setting', { key: 'web.access', value: 'local' })).rejects.toThrow(/Only the user changes web.access, in Settings → Web access/)
       expect(set).toHaveLength(1)
       // What it reads.
       expect((await run(tools, 'superego_actions', {}) as { id: string }[]).map((a) => a.id)).toEqual(['echo.say', 'settings.set', 'profile.list'])
-      expect(await run(tools, 'superego_settings', {})).toEqual([{ id: 'agent', title: 'Agent', settings: [{ key: 'agent.model', title: 'Model', type: { type: 'string' }, default: null, value: 'faux/faux-1' }] }])
+      expect((await run(tools, 'superego_settings', {}) as unknown[])[0]).toEqual({ id: 'agent', title: 'Agent', settings: [{ key: 'agent.model', title: 'Model', type: { type: 'string' }, default: null, value: 'faux/faux-1' }] })
+      expect((await run(tools, 'superego_settings', {}) as { settings: unknown[] }[])[1]!.settings[0]).toMatchObject({ key: 'web.access', userOnly: true })
       expect(await run(tools, 'superego_machines', { op: 'list' })).toEqual([{ id: 'm1', label: 'box', state: 'connected', route: 'ssh me@box superego connect --start', enabled: true }])
       expect(await run(tools, 'superego_profiles', { cwd: 'proj' })).toEqual([{ name: 'default', dir: join(dir, 'proj') }])
       await mkdir(join(dir, 'profiles'))

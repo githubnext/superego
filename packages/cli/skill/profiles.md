@@ -123,6 +123,10 @@ superego profile allow support     # in the project
 `superego profile new` allows what it scaffolds; after you edit a project's profile yourself, allow it again. Your own
 profiles in `~/.superego/profiles` are never asked about.
 
+Allowing is the user's consent, never an agent's: run in a thread's shell, `profile allow` (and `allow-ui`) is refused,
+and `profile new` and `extension new` leave a project's profile waiting. An agent that made or changed one tells the
+user to allow it: in the window (where its thread asks, or Settings → Profiles), or in their own terminal.
+
 A profile's UI from another machine is asked about on this computer too, since it runs in the window with reach to
 every machine: once for exactly the sources the window received, again after any change. Allow it from the notice in
 one of its threads, or:
