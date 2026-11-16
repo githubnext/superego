@@ -263,6 +263,12 @@ A profile's UI is TSX or TS, compiled when the daemon serves it; it imports `rea
 hooks and components, the file editor among them). An example is the `obsidian` profile in `~/.superego/profiles`: a vault's
 notes as a graph and as notes edited in place, with search and backlink tools for the agent.
 
+The window loads a profile's UI as soon as it lists one of that profile's threads (in the sidebar or the navigator; not
+archived ones), once per profile however many threads share it, so its sidebar badges, slots, tool rows and pane kinds
+are there before any of its threads is opened. Another machine's profile is loaded that way only if its UI was allowed
+here before (below); one never allowed waits until a thread of it is opened, which asks. A profile whose last listed
+thread goes keeps its UI loaded until the window reloads; it shows only on that profile's threads.
+
 Adding a machine gives it no say over this computer: a profile's UI from another machine runs in the window only once
 allowed here, for the exact sources the window received (it hashes them itself; any change asks again). Until then its
 threads work without it, and a notice over the composer offers Allow, with its files to read. Not now is remembered

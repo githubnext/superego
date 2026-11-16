@@ -43,6 +43,19 @@ export default defineUiExtension({
 })
 UI
 printf "export const label: string = 'profile ui'\n" > "$SUPEREGO_HOME/profiles/default/ui/label.ts"
+# Another user profile whose UI marks its threads' rows in the sidebar: shown after a reopen without opening one.
+mkdir -p "$SUPEREGO_HOME/profiles/marked/ui"
+cat > "$SUPEREGO_HOME/profiles/marked/profile.ts" <<'PROFILE'
+import { defineProfile } from 'superego'
+export default defineProfile({ description: 'marked', ui: ['./ui/mark.ts'] })
+PROFILE
+cat > "$SUPEREGO_HOME/profiles/marked/ui/mark.ts" <<'UI'
+import { defineUiExtension, h } from 'superego/ui'
+export default defineUiExtension({
+  name: 'mark',
+  setup(superego) { superego.slot('thread.badge', ({ thread }) => h('span', { className: 'smoke-mark' }, `marked: ${thread.title}`)) },
+})
+UI
 # The second machine's own default profile, with UI too: it runs in this window only once allowed here.
 mkdir -p "$SUPEREGO_HOME/second/profiles/default/ui"
 cat > "$SUPEREGO_HOME/second/profiles/default/profile.ts" <<'PROFILE'

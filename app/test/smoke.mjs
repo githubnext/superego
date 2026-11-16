@@ -97,6 +97,9 @@ if (phase === 'first') {
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: hello from smoke')`, 'answer rendered')
   await until(`document.querySelector('.thread__profile')?.textContent === 'default'`, "the user's default profile, shown in the header")
   await until(`document.querySelector('.smoke-badge')?.textContent === 'profile ui: hello from smoke'`, "the profile's own UI, loaded at runtime")
+  // A thread of another profile, never shown: its profile's UI marks its row in the sidebar all the same.
+  await run(`window.superego.call('local', 'thread.create', { title: 'marked thread', profile: 'marked' })`)
+  await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.querySelector('.smoke-mark')?.textContent === 'marked: marked thread')`, "a listed thread's profile UI, loaded without opening it")
   await until(`[...document.querySelectorAll('.extension-failed')].some((e) => e.textContent.includes('badge failed to draw') && e.textContent.includes('smoke crash'))`, 'a view that throws, contained in its place')
   await run(`globalThis.__smokeFixed = true; [...document.querySelectorAll('.extension-failed')].find((e) => e.textContent.includes('badge failed')).querySelector('button').click()`)
   await until(`document.querySelector('.smoke-fixed') && !document.querySelector('.extension-failed')`, 'drawn again on Retry')
@@ -1242,6 +1245,9 @@ if (phase === 'first') {
   console.log('smoke(first): ok')
 } else {
   await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('hello from smoke'))`, 'thread after reopen')
+  // Right after start, the listed thread of the marked profile is marked, though none of its threads was shown.
+  await until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.querySelector('.smoke-mark')?.textContent === 'marked: marked thread')`, "a listed thread's profile UI after reopen, without opening it")
+  if (await run(`document.querySelector('.thread__profile')?.textContent === 'marked'`)) { await fail('a thread of the marked profile was shown'); throw new Error('failed') }
   await until(`window.superego.machines().then((list) => list.filter((m) => m.state === 'connected').length === 2)`, 'second machine reconnected after reopen', 30_000)
   await run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('hello from smoke')).click()`)
   await until(`document.querySelector('.transcript')?.textContent.includes('echo: typed message')`, 'transcript after reopen')

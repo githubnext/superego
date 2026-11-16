@@ -8,6 +8,7 @@ import { has, machine as client, useHiddenThreads, useMachineList, useThreads as
 import { checkDataViews, warnDropped } from './data-view-check.ts'
 import { useRegistry } from './extension.tsx'
 import { useImageRechecks } from './images.tsx'
+import { useListedProfileUis } from './profile-ui.ts'
 import { emptyHistory, step, visit, type History, type Place } from './history.ts'
 import { setLocalState, useLocalState } from './local-state.ts'
 import { focusProvider } from './provider-focus.ts'
@@ -244,6 +245,8 @@ function MachineThreads({ machine, onThreads, onHidden, onRejections }: {
   // Again when what it offers changes: a profile's extensions bring actions of their own.
   useEffect(() => { if (machine.state === 'connected' && has(machine, 'actions')) void router.load(machine.id) }, [machine.state, machine.machine?.id, machine.features?.join()])
   useEffect(() => { if (threads) onThreads(machine.id, threads) }, [threads])
+  // Its listed threads' profiles' UI, loaded before any of them is shown: their marks in the sidebar, say.
+  useListedProfileUis(machine.id, machine.state === 'connected', threads)
   // The window's extensions, told to the machine: one whose work is all here is known there too (Settings, `without`).
   useEffect(() => {
     if (machine.state === 'connected') void client(machine.id).call('extensions.declare', { extensions }).catch(() => { /* an older daemon */ })

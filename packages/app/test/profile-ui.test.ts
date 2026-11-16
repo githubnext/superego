@@ -5,7 +5,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { RpcError } from '@superego/protocol'
 import { collectProfileUi, hashProfileUi, type AllowedUi } from '@superego/client/profile-ui'
 import type { SuperegoBridge, SuperegoEvent } from '../src/shared.ts'
-import { declineUi, dismissRevokedUi, ensureProfileUi, pendingUi, reopenUi, resetProfileUi, revokedUi, setLoader } from '../src/renderer/profile-ui.ts'
+import { declineUi, dismissRevokedUi, ensureProfileUi, loadListedProfileUis, pendingUi, reopenUi, resetProfileUi, revokedUi, setLoader } from '../src/renderer/profile-ui.ts'
 
 let answer: () => unknown
 let files: Record<string, string>
@@ -181,4 +181,38 @@ it('remembers "Not now" for those sources: asks again when they change, when rev
   answer = () => ({ hash: 'v2', entries: ['./a.ts'] })
   await ensureProfileUi(registry, 'remote', p)
   expect(pendingUi('remote', p.dir)).toMatchObject({ hash: await hashOf(['./a.ts']), declined: false })
+})
+
+it("loads listed threads' profile UIs once per profile; another machine's only if allowed there before", async () => {
+  const registry = { installProfile: vi.fn() }
+  let asked = 0
+  files = { 'ui/a.ts': 'listed code' }
+  answer = () => { asked++; return { hash: 'v1', entries: ['./ui/a.ts'] } }
+  const [p, q] = [profile(), profile()]
+  // Two asking at once for one profile: fetched once.
+  await Promise.all([loadListedProfileUis(registry, 'local', [p, q]), loadListedProfileUis(registry, 'local', [p])])
+  expect(asked).toBe(2)
+  expect(registry.installProfile.mock.calls.map(([m, ref]) => [m, ref.dir]).sort()).toEqual([['local', p.dir], ['local', q.dir]].sort())
+
+  // Another machine's, never allowed here: not even fetched (a thread of it shown asks).
+  registry.installProfile.mockClear(); asked = 0
+  const r = profile()
+  await loadListedProfileUis(registry, 'remote', [r])
+  expect(asked).toBe(0)
+  expect(pendingUi('remote', r.dir)).toBeUndefined()
+  // Allowed before, for these sources: runs at once. For other sources: fetched, and waits to be allowed again.
+  const s = profile()
+  const hash = await hashOf(['./ui/a.ts'])
+  await allowList([{ machine: 'remote', profile: r, hash, files: [], at: 1 }, { machine: 'remote', profile: s, hash: 'old', files: [], at: 1 }])
+  await loadListedProfileUis(registry, 'remote', [r, s])
+  expect(registry.installProfile).toHaveBeenCalledTimes(1)
+  expect(registry.installProfile.mock.calls[0]![1]).toBe(r)
+  expect(pendingUi('remote', s.dir)?.hash).toBe(hash)
+
+  // A profile gone from under a listed thread: let be, without a word.
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  answer = () => { throw new RpcError('not_found', 'gone') }
+  await loadListedProfileUis(registry, 'local', [profile()])
+  expect(error).not.toHaveBeenCalled()
+  error.mockRestore()
 })

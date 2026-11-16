@@ -83,10 +83,13 @@ function allowedList() {
       if (event.method === 'profileUi.allowed') { allowed = event.params as AllowedUi[]; void settle() }
       if (event.method === 'profileUi.declined') { declined = event.params as AllowedUi[]; changed() }
     })
-    ;[allowed, declined] = await Promise.all([
-      window.superego.call('app', 'profileUi.allowed', {}) as Promise<AllowedUi[]>,
-      window.superego.call('app', 'profileUi.declined', {}) as Promise<AllowedUi[]>,
+    // A window with no say of its own (superego/testing's) answers none.
+    const [yes, no] = await Promise.all([
+      window.superego.call('app', 'profileUi.allowed', {}) as Promise<AllowedUi[] | null>,
+      window.superego.call('app', 'profileUi.declined', {}) as Promise<AllowedUi[] | null>,
     ])
+    allowed = yes ?? []
+    declined = no ?? []
     changed()
     return allowed
   })()
@@ -222,19 +225,53 @@ export async function ensureProfileUi(registry: Pick<Registry, 'installProfile'>
   }
 }
 
+/** `ensureProfileUi`, unless it's under way for that profile already: one at a time per profile, however many ask. */
+function ensureOnce(registry: Pick<Registry, 'installProfile'>, machine: string, profile: ProfileRef, quiet = false) {
+  const key = keyOf(machine, profile.dir)
+  const under = loading.get(key)
+  if (under) return under
+  const done = ensureProfileUi(registry, machine, profile)
+    .catch((error: Error & { kind?: string }) => {
+      if (!quiet || !GONE.has(error.kind ?? '')) console.error(`The ${profile.name} profile's UI didn't load`, error)
+    })
+    .finally(() => loading.delete(key))
+  loading.set(key, done)
+  return done
+}
+
 /** Load the UI of `thread`'s profile into the registry (once per version of its files), and redraw when it lands. */
 export function useProfileUi(machine: string, thread: ThreadInfo) {
   const registry = useRegistry()
   useSyncExternalStore(registry.subscribe, () => registry.version)
   const profile = thread.profile
   useEffect(() => {
-    if (!profile) return
-    const key = keyOf(machine, profile.dir)
-    if (loading.has(key)) return
-    const done = ensureProfileUi(registry, machine, profile).catch((error) => console.error(`The ${profile.name} profile's UI didn't load`, error))
-      .finally(() => loading.delete(key))
-    loading.set(key, done)
+    if (profile) void ensureOnce(registry, machine, profile)
   }, [machine, profile?.dir, thread.activeAt])
+}
+
+/**
+ * Load the UIs of the profiles of a machine's listed threads (the sidebar's and the navigator's; archived ones aren't
+ * listed), so their badges, slots, tool rows and pane kinds are there before any of those threads is shown. Once per
+ * profile, not per thread: asked again only when the set of profiles listed changes or the machine connects again.
+ * Another machine's profile is fetched only when this computer allowed a UI of it before: one never allowed waits for
+ * a thread of it to be shown, which asks (ProfileUiNotice). A profile whose last listed thread goes stays loaded until
+ * the window reloads: what it registered shows only on its own threads, so it shows nowhere.
+ */
+export function useListedProfileUis(machine: string, connected: boolean, threads: ThreadInfo[] | undefined) {
+  const registry = useRegistry()
+  const profiles = new Map<string, ProfileRef>()
+  for (const thread of threads ?? []) if (thread.profile) profiles.set(thread.profile.dir, thread.profile)
+  const dirs = [...profiles.keys()].sort().join('\n')
+  useEffect(() => {
+    if (connected && profiles.size) void loadListedProfileUis(registry, machine, [...profiles.values()])
+  }, [machine, connected, dirs])
+}
+
+/** What `useListedProfileUis` does once the profiles listed change: done when each of them is (or waits to be allowed). */
+export async function loadListedProfileUis(registry: Pick<Registry, 'installProfile'>, machine: string, profiles: ProfileRef[]) {
+  if (machine !== 'local') await allowedList().catch(() => undefined)
+  const remoteAllowed = (dir: string) => allowed.some((a) => a.machine === machine && a.profile.dir === dir)
+  await Promise.all(profiles.filter((p) => machine === 'local' || remoteAllowed(p.dir)).map((p) => ensureOnce(registry, machine, p, true)))
 }
 
 // ── Waiting for this computer's say ─────────────────────────────────────────────────────────────────────────────────
@@ -294,5 +331,5 @@ export function reopenUi(pending: PendingUi, open: boolean) {
 
 /** Tests: forget every profile's UI. */
 export function resetProfileUi() {
-  known.clear(); reopened.clear(); revokedRan.clear(); revokedList = []; allowed = []; declined = []; allowedLoad = undefined; load = loadProfileUi
+  known.clear(); loading.clear(); reopened.clear(); revokedRan.clear(); revokedList = []; allowed = []; declined = []; allowedLoad = undefined; load = loadProfileUi
 }
