@@ -18,10 +18,10 @@ export const STATUS = 'terminal.status'
 export type TerminalStatus = Status & { app?: string }
 export type TerminalStatuses = Record<string, TerminalStatus>
 
-/** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
 export const about = {
   name: 'terminal', version: '1.0.0', api: '^2', title: 'Terminal',
   description: 'A shell beside a thread (⌃`), run by the machine so it outlives the window.',
+  panes: { [TERMINAL]: '{}: a shell in the working folder, for the user (another one beside it: { n: 2 })' },
 } satisfies ExtensionAbout
 
 /** A window's reading of a terminal's channel: its header, then what's replayed, then what's live. */

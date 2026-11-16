@@ -5,7 +5,7 @@ import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { obj, str } from '@earendil-works/pi-schema'
 import { defineDaemonExtension } from '@superego/daemon'
-import { about, FOLDER, LIST, type FileList } from './shared.ts'
+import { about, LIST, type FileList } from './shared.ts'
 
 /** Past this many, the list stops: a folder that big (a home directory) isn't browsed file by file. */
 export const LIMIT = 20_000
@@ -51,6 +51,5 @@ export default defineDaemonExtension({
       cache.set(cwd, { at: Date.now(), list })
       return list
     }, { params: obj({ thread: str() }) })
-    superego.pane(FOLDER, '{ path }: a folder in the working folder ("" for the folder itself), as a tree to open its files from')
   },
 })

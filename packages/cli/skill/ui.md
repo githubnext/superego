@@ -49,8 +49,8 @@ export default defineUiExtension({
 })
 ```
 
-Then, in `profile.ts`: `ui: ['./ui/order.tsx'], panes: { order: 'an order, with its lines. Params: { id }' }` (or, from
-a daemon half, `superego.pane('order', '…')`). The agent opens it with `pane_open({ kind: 'order', params: { id: '1234' } })`; so can you, with
+Then, in `profile.ts`: `ui: ['./ui/order.tsx'], panes: { order: 'an order, with its lines. Params: { id }' }` (or, in
+a daemon half's `defineDaemonExtension`, `panes: { order: '…' }`). The agent opens it with `pane_open({ kind: 'order', params: { id: '1234' } })`; so can you, with
 `superego do pane.open --params '{"thread":"<thread>","kind":"order","params":{"id":"1234"}}'`.
 
 ## What a module can import

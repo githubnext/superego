@@ -43,16 +43,21 @@ extensions/orders/
   test/daemon.test.ts
 ```
 
-Bundled code imports packages directly, not `'superego'`: `defineExtension`, `defineTool`, `section` from
-`@earendil-works/pi-durable`; schemas from `@earendil-works/pi-schema`; `defineAction` (machine actions), `RpcError`
-from `@superego/protocol`; `defineAction` for window actions from `@superego/app/ui`; components from `@superego/ui`.
-Copy `extensions/agent-ui/package.json` for dependencies.
+Bundled code imports packages directly, not `'superego'`. A daemon half takes the daemon's side from `@superego/daemon`
+(`defineDaemonExtension`, `defineAction` for machine actions, `RunRecord` and the other daemon types), and what both
+sides speak from `@superego/protocol` (`RpcError`, `ExtensionAbout`, `ThreadInfo`); `defineExtension`, `defineTool`,
+`section` from `@earendil-works/pi-durable`; schemas from `@earendil-works/pi-schema`. A UI half takes everything of
+the window from `@superego/app/ui` (`defineAction` for window actions, hooks, components), and icons from
+`@superego/ui`. Copy `extensions/tasks/package.json` for dependencies, and list only what `src` imports.
 
 **Required or optional.** An extension says what it is once, in `src/shared.ts`, and spreads that into both halves:
 
 <!-- check: module; import type { ExtensionAbout } from 'superego' -->
 ```ts
-export const about = { name: 'orders', version: '1.0.0', api: '^2', title: 'Orders', description: 'Look orders up.' } satisfies ExtensionAbout
+export const about = {
+  name: 'orders', version: '1.0.0', api: '^2', title: 'Orders', description: 'Look orders up.',
+  panes: { order: 'an order, with its lines and status. Params: { id }' },   // the kinds its UI half draws, for pane_open
+} satisfies ExtensionAbout
 // daemon.ts: defineDaemonExtension({ ...about, setup(superego) { … } })
 // ui.tsx:    defineUiExtension({ ...about, setup(superego) { … } })
 ```
@@ -61,8 +66,9 @@ Optional is the default, and almost always right: a machine can turn it off (Set
 `title` and `description`), a profile can leave it out (`without: ['orders']`), and the app works without it. A thread
 that goes without it gets none of its agent parts or pane kinds, and the window draws none of its UI for that thread
 (`ThreadInfo.without`): its panes already open are kept with the thread but not shown, its actions not offered. `required: true` is for what the app is (the sidebar): never listed, never left out. Nothing
-else decides this. An extension whose work is all in the window needs no daemon half (`links` has none): the window
-declares its `about` to every machine it connects to, so each lists it in Settings and profiles can do without it.
+else decides this. An extension whose work is all in the window needs no daemon half (`links` and `web-panes` have none):
+the window declares its `about` to every machine it connects to, so each lists it in Settings, tells the agent of its
+`panes`, and lets profiles do without it.
 Where a window part and a machine part should differ, make them two extensions, a folder and an `about` each:
 `threads` is the required sidebar (UI only), and `thread-tools`, the agent's thread tools, is optional (daemon only).
 

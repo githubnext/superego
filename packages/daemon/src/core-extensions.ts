@@ -49,12 +49,9 @@ export function coreExtensions({ agentsDir, panesOf, openPane }: {
     },
     {
       name: 'panes', version: '1.0.0', api: '^2', title: 'Panes', description: 'Open panes beside a thread: files, other threads, and the kinds extensions add.',
-      setup(s) {
-        s.agent(panesPart)
-        // The window's built-in kinds (its panes.tsx); extensions describe their own (git's Changes, web-panes').
-        s.pane('editor', '{ path }: a file, for the user to read and edit')
-        s.pane('thread', '{ thread }: another conversation')
-      },
+      // The window's built-in kinds (its panes.tsx); extensions describe their own (git's Changes, web-panes').
+      panes: { editor: '{ path }: a file, for the user to read and edit', thread: '{ thread }: another conversation' },
+      setup: (s) => s.agent(panesPart),
     },
     {
       name: 'agents-md', version: '1.0.0', api: '^2', title: 'AGENTS.md', description: 'Follow the standing instructions in AGENTS.md files.',

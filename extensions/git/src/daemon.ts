@@ -1,9 +1,8 @@
-// git, daemon half: what changed in a thread's folder, by git, for the Changes pane; and the pane described to the
-// agent, so pane_open can show the user its changes.
+// git, daemon half: what changed in a thread's folder, by git, for the Changes pane.
 import { execFile } from 'node:child_process'
 import { obj, str } from '@earendil-works/pi-schema'
 import { defineDaemonExtension } from '@superego/daemon'
-import { about, CHANGES, DIFF, type Changes } from './shared.ts'
+import { about, DIFF, type Changes } from './shared.ts'
 
 /** The changes in `cwd`: against HEAD (or the index, before a first commit), and the files not tracked yet. */
 export async function changesIn(cwd: string): Promise<Changes> {
@@ -19,6 +18,5 @@ export default defineDaemonExtension({
   ...about,
   setup(superego) {
     superego.method(DIFF, async ({ thread }) => changesIn((await superego.threads.get(thread)).cwd), { params: obj({ thread: str() }) })
-    superego.pane(CHANGES, 'the changes in the working folder; no params')
   },
 })

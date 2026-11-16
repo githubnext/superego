@@ -1,4 +1,6 @@
-// What both halves of web-panes agree on: what it is, and its two kinds of pane.
+// What web-panes is, and its two kinds of pane. All its work is in the window, so it has a UI half only: the window
+// declares it to each machine, which tells the agent of its panes (`panes`). An artifact's files are served by the core
+// (the app's artifact origin, or Web access's /artifact/).
 import type { ExtensionAbout } from '@superego/protocol'
 
 /** A web page, given `{ url }`: a local dev server, docs. */
@@ -6,5 +8,10 @@ export const PREVIEW = 'preview'
 /** An HTML file in the thread's folder, given `{ path }`, shown as a page: sandboxed, from an origin of its own. */
 export const ARTIFACT = 'artifact'
 
-/** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
-export const about = { name: 'web-panes', version: '1.0.0', api: '^2', title: 'Web panes', description: 'Web pages and HTML files the agent wrote, shown beside a thread.' } satisfies ExtensionAbout
+export const about = {
+  name: 'web-panes', version: '1.0.0', api: '^2', title: 'Web panes', description: 'Web pages and HTML files the agent wrote, shown beside a thread.',
+  panes: {
+    [PREVIEW]: '{ url }: a web page, such as a local dev server',
+    [ARTIFACT]: '{ path }: an HTML file in the working folder, shown as a page; write it first',
+  },
+} satisfies ExtensionAbout

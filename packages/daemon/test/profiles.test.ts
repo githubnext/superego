@@ -753,11 +753,11 @@ it("tears down every part of a profile's daemon half on reload: actions, methods
 let blocked = ''
 export default defineDaemonExtension({
   name: 'vault',
+  panes: { 'vault-pane': 'the vault; no params' },
   setup(superego) {
     superego.action(defineAction({ id: 'vault.block', title: 'Block', params: obj({ id: str() }), async run({ id }) { blocked = id; superego.invalidate(); return null } }))
     superego.method('vault.read', async () => 'read')
     superego.status((id) => id === blocked ? { kind: 'question' } : undefined)
-    superego.pane('vault-pane', 'the vault; no params')
     superego.agent(defineExtension({ name: 'notes', sections: [section('notes', () => 'notes')] }))
   },
 })

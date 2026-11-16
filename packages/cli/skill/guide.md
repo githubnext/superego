@@ -73,6 +73,7 @@ import { defineDaemonExtension, defineExtension, defineTool, obj, str } from 'su
 
 export default defineDaemonExtension({
   name: 'notes', version: '1.0.0', api: '^2',
+  panes: { notes: "the thread's NOTES.md; no params" },
   setup(superego) {
     const fileOf = async (id: string) => join((await superego.threads.get(id)).cwd, 'NOTES.md')
     const read = async (id: string) => readFile(await fileOf(id), 'utf8').catch(() => '')
@@ -88,7 +89,6 @@ export default defineDaemonExtension({
       })],
     }))
     superego.method('notes.read', async ({ id }) => ({ text: await read(id) }), { params: obj({ id: str() }) })
-    superego.pane('notes', "the thread's NOTES.md; no params")
   },
 })
 ```
@@ -306,7 +306,6 @@ place, and the window's console has why.
 | `value('x.y', initial)` → `get`, `set`, `update` | live state the UI watches; in memory |
 | `scopedValue('x.y', initial)` → `get(scope)`, `set(scope, next)`, `update(scope, edit)`, `delete(scope)`, `scopes()` | live state kept per scope (a thread's id): a window watching one scope hears only its changes, never another thread's; in memory, so `delete` a thread's when it's done |
 | `signal` | aborted at teardown: for its own timers, watchers and fetches (below) |
-| `pane(kind, about)` | tell the agent about a pane kind, for `pane_open` |
 | `view('x.y', { title, icon, context, fits, default, value \| method })` | a view drawn from data (below): no UI code, so a remote machine's or a project profile's runs no code in the window; its buttons still have that machine's authority |
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
 | `beforeSend(({ thread, text, attachments, content, by, exposure }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it. `by`: the extension that sent it (`threads.send`, `threads.start`'s prompt), absent for the user's; `exposure`: `outside` when an outside agent sent it, `cli` the command line |

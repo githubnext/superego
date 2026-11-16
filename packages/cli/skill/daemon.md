@@ -14,6 +14,8 @@ import { defineDaemonExtension, defineAction, defineExtension, defineTool, obj, 
 
 export default defineDaemonExtension({
   name: 'orders',                       // lowercase; prefixes its actions and values: orders.<something>
+  // The pane kinds its UI draws, told to the agent so pane_open can open them.
+  panes: { order: 'an order, with its lines and status. Params: { id }' },
   setup(superego) {
     // Tools for the agent, with access to everything in this closure.
     superego.agent(defineExtension({ name: 'orders', tools: [/* defineTool(…) */] }))
@@ -32,9 +34,6 @@ export default defineDaemonExtension({
       async run({ number }) { await refund(number); return null },
     }))
 
-    // A pane kind its UI draws, told to the agent so pane_open can open it.
-    superego.pane('order', 'an order, with its lines and status. Params: { id }')
-
     // A live value: clients watch orders.recent and get every change.
     const recent = superego.value<string[]>('orders.recent', [])
     recent.update((list) => ['1234', ...list].slice(0, 10))
@@ -46,7 +45,7 @@ export default defineDaemonExtension({
 
 `setup` runs when the profile first loads (the first turn of a thread with it, a window listing one of its threads
 ([ui.md](ui.md#when-the-ui-loads)), or the daemon starting while one of its threads was working) and again after its files change, with the previous setup's
-cleanup run first. Everything it registered (tools, actions, methods, values, settings, pane kinds, status) is its own
+cleanup run first. Everything it registered (tools, actions, methods, values, settings, status) is its own, as are the pane kinds it describes,
 and removed on reload, so register freely. Its name is the prefix of everything it registers; a second extension of
 the same name is refused. Profiles load one at a time, so keep `setup` quick, and don't await anything that loads a
 profile in it (starting a thread, reading one): that waits on the load in progress, which is waiting on `setup`. Start
@@ -71,7 +70,6 @@ once.
 | `superego.method(name, run, { params? })` | a read named `<name>.<method>`: clients `call` it; params checked against the schema first. Not logged, not in the palette or the command line |
 | `superego.value(key, initial)` | a live value named `<name>.<key>`: `get()`, `set(next)`, `update(fn)`. In memory only; a UI reads it with `useValue(machine, key)` (null until it's published) |
 | `superego.scopedValue(key, initial)` | a live value kept per scope (a thread's id): `get(scope)`, `set(scope, next)`, `update(scope, fn)`, `delete(scope)`, `scopes()`. A UI watching one scope (`useValue(machine, key, { scope: thread.id })`) hears only its changes, never another thread's. For anything per thread |
-| `superego.pane(kind, about)` | tell the agent about a pane kind the UI draws, and its params: pane_open lists it |
 | `superego.view(id, { title, icon?, context, fits, default?, narrow?, order?, value \| method, about? })` | a view drawn from data, with no UI code: the window draws its content (`{ note, facts, items, table, markdown, actions, empty }`; an item `{ title, subtitle, detail, status, thread, actions }`; a button `{ title, action, params }` runs that action on this machine). Fed by a value of the extension's (a `thread` view's: by thread id) or a method of its (called with `{ thread }` for a `thread` view). `fits`: `space`, `beside`, `pane`. `about`: tell the agent it can open it as a pane. A remote machine's or a project profile's runs no code in the window, so needs no allowing there; its buttons still have this machine's authority |
 | `superego.settings.register({ id, title, settings, ui?, data? \| value? })` | a settings section of its own: id `<name>`, keys `<name>.<key>`. `ui` names a component the UI half registers for it, given the section; its `data` is read with each snapshot, or, with `value: '<name>.<key>'`, it's one of the extension's live values, which the window gives the component as `section.data`, kept current, instead of sending it again with every snapshot. `settings.get(key)` reads any setting, `settings.snapshot()` all of them with their sections (a `value` section's value as its `data`), `settings.onChange(fn)` hears changes |
 | `superego.profileKey(key, { check?, merge?, brings?, title? })` | a key of the extension's own in profiles (`mcpServers` is mcp-servers'): a camelCase word, not one of the core's. As a profile loads, `check(value)` says why its value won't do, if it won't (the profile then fails to load); with `extends`, `merge(base, own)` puts the two together (unset, a profile's own replaces the other's); `brings(value)` names what it brings, shown with the profile (`profile.list`'s `brings`, by `title`). Read it from the thread's profile: `agentParts`' `profile.spec[key]`, a `starting` hook's `draft.profile.spec[key]`. A bundled extension's only |

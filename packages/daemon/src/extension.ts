@@ -30,8 +30,8 @@ export type ToolCallRecord = {
 export type { AuthFlowEvent } from './auth-flows.ts'
 
 /**
- * A daemon half: what the extension is (`ExtensionAbout`: its name, title, description, and whether it's required),
- * and its setup. An extension whose work is all in the window has none: the window declares it to the machine
+ * A daemon half: what the extension is (`ExtensionAbout`: its name, title, description, whether it's required, and the
+ * panes its UI half draws), and its setup. An extension whose work is all in the window has none: the window declares it to the machine
  * (`extension.declare`), which then lists it in Settings and lets a profile do without it.
  */
 export type DaemonExtension = ExtensionAbout & {
@@ -342,11 +342,6 @@ export type DaemonApi = {
    * 'superego/unstable'.
    */
   channel(kind: string, accept: ChannelAcceptor): void
-  /**
-   * Tell the agent about a kind of pane its UI half draws (`superego.pane(kind, …)` there), and the params it takes:
-   * pane_open can open it from then on. A profile's extension's are for that profile's threads.
-   */
-  pane(kind: string, about: string): void
   /**
    * A view drawn from data, named `<name>.<view>`: the window draws its content (facts, a list, a table, Markdown, buttons
    * that run this machine's actions) with its own components, so no UI code ships, and a remote machine's or a

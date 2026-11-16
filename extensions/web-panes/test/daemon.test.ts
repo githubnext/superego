@@ -1,12 +1,12 @@
-// web-panes' daemon half against a real daemon: Preview and Artifact told to the agent while the machine has it on,
-// and opened for it; neither once it's off.
+// web-panes against a real daemon: declared by the window, Preview and Artifact are told to the agent while the machine
+// has it on, and opened for it; neither once it's off.
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
 import { defineApp, PROTOCOL_VERSION, type Hello, type ThreadInfo } from '@superego/protocol'
-import webPanes from '../src/daemon.ts'
+import { about } from '../src/shared.ts'
 
 const app = defineApp({ name: 'test', id: 'webpanestest' })
 let dir: string
@@ -28,11 +28,11 @@ it('tells the agent of Preview and Artifact and opens them, unless the machine h
   process.env.WEBPANESTEST_REPLAY_SPEED = '0'
   const data = join(dir, 'data')
   await mkdir(data)
-  const daemon = await openDaemon({ app, dataDir: data, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [webPanes] })
+  const daemon = await openDaemon({ app, dataDir: data, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [] })
   const server = await listen(daemon, join(data, 's.sock'))
   const { peer, socket } = await connectSocket(join(data, 's.sock'))
-  const hello = await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
-  expect(hello.extensions.map((e) => e.name)).toContain('web-panes')
+  await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
+  await peer.call('extension.declare', { extensions: [about] })
   const run = async () => {
     const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'show me' })
     await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === thread.id)!.status.state === 'done')

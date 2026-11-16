@@ -59,4 +59,10 @@ export type ExtensionAbout = {
   version?: string
   /** The extension API it needs of the host, a semver range (`^1`, `^1.2`): a host it doesn't satisfy refuses it. Unset: any. */
   api?: string
+  /**
+   * The kinds of pane its UI half draws (`superego.pane(kind, …)` there), each with what it shows and the params it
+   * takes: told to the agent, so pane_open can open them. Declared here, the window tells each machine, so an
+   * extension whose work is all in the window needs no daemon half for its panes. A profile's are for its threads.
+   */
+  panes?: Record<string, string>
 }

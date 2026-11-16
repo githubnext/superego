@@ -19,7 +19,6 @@ import tasks from '@superego/tasks/daemon'
 import terminal from '@superego/terminal/daemon'
 import threadReports from '@superego/thread-reports/daemon'
 import threadTools from '@superego/thread-tools/daemon'
-import webPanes from '@superego/web-panes/daemon'
 import worktrees from '@superego/worktrees/daemon'
 import app from '../superego.config.ts'
 
@@ -32,7 +31,7 @@ const skills = skillsExtension({ own: [SKILL_DIR] })
 // The daemon links to the machines this computer reaches (the same list the app and `superego machines` keep), to serve
 // them to browsers and agents (see the daemon's relay.ts).
 serveDaemon({
-  app, defaultCwd: homedir(), extensions: [worktrees, agentUi, ego, files, git, images, mcpServers, skills, suggestions, tasks, terminal, threadTools, threadReports, webPanes], ...(webRoot ? { webRoot } : {}),
+  app, defaultCwd: homedir(), extensions: [worktrees, agentUi, ego, files, git, images, mcpServers, skills, suggestions, tasks, terminal, threadTools, threadReports], ...(webRoot ? { webRoot } : {}),
   reach: (dataDir, self) => machineHub({ app, dataDir, self }),
 }).catch((error) => {
   console.error(error)

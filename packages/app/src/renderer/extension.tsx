@@ -497,9 +497,9 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   const teardowns = new Map<string, () => void>()
   const ownerKey = (owner: Owner) => `${owner.profile ?? ''}/${owner.extension}`
   const registry: Registry = {
-    app, extensions: extensions.map(({ name, title, description, required, version, api }) => ({
+    app, extensions: extensions.map(({ name, title, description, required, version, api, panes }) => ({
       name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}),
-      ...(version ? { version } : {}), ...(api ? { api } : {}),
+      ...(version ? { version } : {}), ...(api ? { api } : {}), ...(panes ? { panes } : {}),
     })),
     slots: { 'header.chips': [], 'thread.badge': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [], 'onboarding': [] },
     views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],

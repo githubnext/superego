@@ -60,10 +60,11 @@ type Owned<T> = { value: T; owner: string; profiles?: Set<string> }
 
 /** What an extension says of itself, and only that: the fields `ExtensionAbout` has, each of its type (a window's declaration is anyone's JSON). */
 function aboutOf(about: ExtensionAbout): ExtensionAbout {
-  const { name, title, description, required, version, api } = about
+  const { name, title, description, required, version, api, panes } = about
+  const kinds = panes && typeof panes === 'object' && !Array.isArray(panes) ? Object.entries(panes).filter(([, about]) => typeof about === 'string' && about) : []
   return {
     name, ...(typeof title === 'string' && title ? { title } : {}), ...(typeof description === 'string' && description ? { description } : {}), ...(required === true ? { required } : {}),
-    ...(typeof version === 'string' ? { version } : {}), ...(typeof api === 'string' ? { api } : {}),
+    ...(typeof version === 'string' ? { version } : {}), ...(typeof api === 'string' ? { api } : {}), ...(kinds.length ? { panes: Object.fromEntries(kinds) } : {}),
   }
 }
 
@@ -109,10 +110,10 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
    */
   const chosenParts = new Map<string, Map<string, Extension>>()
   /**
-   * The kinds of pane the agent can open, and what each shows, as extensions describe them (`superego.pane`; the window
-   * draws them, the extension's UI half registering the same kind): the core's own `panes`, and any other's.
+   * The kinds of pane the agent can open from extensions' data views (a thread view that fits a pane and says what it
+   * shows). The others are in what each extension is (`about.panes`).
    */
-  const paneKinds: Owned<{ kind: string; about: string }>[] = []
+  const viewPanes: Owned<{ kind: string; about: string }>[] = []
   const contributors: Owned<(threadId: string) => StatusContribution | undefined>[] = []
   /** Extensions' send transforms, in the order registered. */
   const transforms: Owned<SendTransform>[] = []
@@ -175,9 +176,14 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     const meta = host.mounted.get(id)?.meta
     const profile = meta && later.profiles().loaded(meta)
     const without = withoutFor(id, meta)
+    const described: Owned<{ kind: string; about: string }>[] = [
+      ...[...records.values()].filter((r) => r.ready).flatMap((r) => Object.entries(r.about.panes ?? {})
+        .map(([kind, about]) => ({ value: { kind, about }, owner: r.about.name, ...(r.profiles ? { profiles: r.profiles } : {}) }))),
+      ...viewPanes,
+    ].filter((p) => appliesTo(p, without, meta))
     const kinds = new Map<string, string>()
-    for (const { value, profiles } of paneKinds.filter((p) => appliesTo(p, without, meta))) if (!profiles) kinds.set(value.kind, value.about)
-    for (const { value, profiles } of paneKinds.filter((p) => appliesTo(p, without, meta))) if (profiles) kinds.set(value.kind, value.about)
+    for (const { value, profiles } of described) if (!profiles) kinds.set(value.kind, value.about)
+    for (const { value, profiles } of described) if (profiles) kinds.set(value.kind, value.about)
     for (const [kind, about] of Object.entries(profile?.spec.panes ?? {})) kinds.set(kind, about)
     return [...kinds].map(([kind, about]) => ({ kind, about }))
   }
@@ -388,9 +394,15 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     const problem = contractProblem(extension)
     if (problem) throw refuse(problem)
     // What it registers, for the inspector: kept while it's set up.
+    // A pane kind is described once among the app's extensions, and once among a profile's.
+    const described = (kind: string) => [...records.values()].some((r) => r.profiles === profiles && r.about.panes?.[kind] !== undefined)
+      || viewPanes.some((p) => p.value.kind === kind && p.profiles === profiles)
+    const taken = Object.keys(extension.panes ?? {}).find(described)
+    if (taken) throw refuse(`Pane kind ${taken} is already described`)
     const registered = new Map<string, string[]>()
     const note = (kind: string, what: string) => { registered.set(kind, [...registered.get(kind) ?? [], what]) }
     const record: ExtensionRecord = { about: aboutOf(extension), ...from, ...(profiles ? { profiles } : {}), ready: false, registered }
+    for (const kind of Object.keys(record.about.panes ?? {})) note('pane kinds', kind)
     records.set(extension.name, record)
     // Everything it registers goes through its lifetime: undone together at teardown, and refused after.
     const life = new Lifetime(`Extension ${extension.name}`)
@@ -405,6 +417,12 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       const entry: Owned<T> = { value, owner: extension.name, ...(profiles ? { profiles } : {}) }
       list.push(entry)
       undo(() => { list.splice(list.indexOf(entry), 1); changed() }, what)
+    }
+    /** A data view's pane kind, told to the agent as this extension's. */
+    function describePane(kind: string, about: string) {
+      if (described(kind)) throw new Error(`Pane kind ${kind} is already described`)
+      own(viewPanes, { kind, about }, `the pane kind ${kind}`)
+      note('pane kinds', kind)
     }
     const threads = later.threads()
     const api: DaemonApi = {
@@ -487,11 +505,6 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         undo(() => { channelKinds.delete(id) }, 'a channel')
         note('channels', id)
       },
-      pane(kind, about) {
-        if (paneKinds.some((p) => p.value.kind === kind && p.profiles === profiles)) throw new Error(`Pane kind ${kind} is already described`)
-        own(paneKinds, { kind, about }, `the pane kind ${kind}`)
-        note('pane kinds', kind)
-      },
       view(id, view) {
         const name = named(extension.name, id)
         life.live(`the view ${name}`)
@@ -509,7 +522,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         note('views', `${name} (${fits.join(', ')}; from ${source})`)
         undo(() => { dataViews.splice(dataViews.indexOf(entry), 1); publishViews() }, 'a view')
         // Told to the agent as a pane kind it can open, when it says what it shows.
-        if (view.about && view.context === 'thread' && fits.includes('pane')) api.pane(name, view.about)
+        if (view.about && view.context === 'thread' && fits.includes('pane')) describePane(name, view.about)
       },
       value<T extends Json>(key: string, initial: T): LiveValue<T> {
         const name = named(extension.name, key)

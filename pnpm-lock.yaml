@@ -700,9 +700,6 @@ importers:
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
-      '@superego/daemon':
-        specifier: workspace:*
-        version: link:../../packages/daemon
       '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -710,6 +707,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
+      '@superego/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
       '@types/react':
         specifier: ^19
         version: 19.3.0

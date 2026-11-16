@@ -65,18 +65,28 @@ it('blocks a thread only by the status of an extension it has: not one switched 
   await close()
 })
 
-it("tells the agent the pane kinds extensions describe, beside the core's", async () => {
-  const notes = defineDaemonExtension({ name: 'notes', setup(superego) { superego.pane('graph', 'the notes as a graph; no params') } })
+it("tells the agent the pane kinds extensions describe, beside the core's: a daemon half's, and a window's", async () => {
+  const notes = defineDaemonExtension({ name: 'notes', panes: { graph: 'the notes as a graph; no params' } })
   const { peer, close } = await open([notes])
+  // One whose work is all in the window describes its panes as the window declares it.
+  await peer.call('extension.declare', { extensions: [{ name: 'web-panes', panes: { preview: '{ url }: a web page', bad: 3 } }] })
   const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'hi' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
   const { value } = await peer.call<{ value: { entries: { model?: { role?: string; content?: unknown }[] }[]; docs: Record<string, unknown> } }>('thread.watch', { thread: thread.id })
   const prompt = JSON.stringify(value)
   expect(prompt).toContain('\\"graph\\": the notes as a graph; no params')
+  expect(prompt).toContain('\\"preview\\": { url }: a web page')
+  expect(prompt).not.toContain('\\"bad\\"')
   expect(prompt).toContain('\\"editor\\": { path }: a file')
   // Changes is git's to describe: without it, no "diff".
   expect(prompt).not.toContain('\\"diff\\"')
   await close()
+})
+
+it('refuses an extension describing a pane kind another already does', async () => {
+  const one = defineDaemonExtension({ name: 'one', panes: { board: 'a board' } })
+  const two = defineDaemonExtension({ name: 'two', panes: { board: 'another board' } })
+  await expect(open([one, two])).rejects.toThrow('Pane kind board is already described')
 })
 
 it('lists optional extensions in Settings, and tells clients what each thread goes without', async () => {

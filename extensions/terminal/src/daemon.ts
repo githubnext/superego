@@ -29,7 +29,6 @@ export function terminalExtension({ spawn = spawnPty, shell = userShell }: { spa
   return defineDaemonExtension({
     ...about,
     setup(superego) {
-      superego.pane(TERMINAL, '{}: a shell in the working folder, for the user (another one beside it: { n: 2 })')
       const statuses = superego.scopedValue<TerminalStatuses>(STATUS, {})
       /** Every terminal, by `<thread>/<pane>`. */
       const terminals = new Map<string, Terminal>()
