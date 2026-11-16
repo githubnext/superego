@@ -1,4 +1,3 @@
-/// <reference path="./env.d.ts" />
 // unread, UI half: what agents have for you that you haven't seen (a result, a failure, a question). A bell and how
 // many, coloured by the most pressing (as Fut shows its waiting agents), opening a list of them, the most pressing
 // first; picking one goes there. A view (`unread.bell`): in the rail while there's no space (a sidebar shows its own),
@@ -6,12 +5,9 @@
 import { defineAction, defineUiExtension, unreadList, useSelection, useProjects, type ViewProps } from '@superego/app/ui'
 import { rollup } from '@superego/protocol'
 import { BellIcon, Button, Menu, StatusGlyph } from '@superego/ui'
-import { about } from './shared.ts'
-import { nextUnread, type Scope } from './unread.ts'
+import { about, SCOPE, type Scope } from './shared.ts'
+import { nextUnread } from './unread.ts'
 import './styles.css'
-
-/** App setting: where ⌘. looks for the next unread thread. */
-export const SCOPE = 'unread.scope'
 
 export default defineUiExtension({
   ...about,

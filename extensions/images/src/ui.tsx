@@ -1,4 +1,3 @@
-/// <reference path="./env.d.ts" />
 // images, UI half: a show_images call drawn as the images themselves, where the call is in the thread and outside the
 // fold of its run of work. One image fits the column; a few sit in a grid; more go one at a time in a carousel (‹ ›,
 // ←/→ when focused, a swipe on touch). Any opens in the lightbox. Each is read only as it nears the screen, holding its

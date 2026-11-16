@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react'
 import { CaretRightIcon, FilePlusIcon, FileTextIcon, PencilSimpleIcon, SparkleIcon, StatusGlyph, TerminalIcon, WrenchIcon } from '@superego/ui'
 import type { ToolRow, ToolRowCall, UiApi, WorkBlock } from './extension.tsx'
 import { Scroll } from './Markdown.tsx'
+import { DiffStat } from './diff.tsx'
 
 /** The coding tools' rows. */
 export function registerToolRows(core: UiApi) {
@@ -39,7 +40,7 @@ export function DescribedCall({ row, call }: { row: ToolRow; call: ToolRowCall }
         {state === 'working' ? <StatusGlyph status={{ state }} /> : <RowIcon row={row} />}
         <span className="row__label">{verb}</span>
         {typeof subject === 'string' ? <span className="row__arg" title={subject}>{subject}</span> : subject}
-        {stat && <span className="row__meta"><Stat {...stat} /></span>}
+        {stat && <span className="row__meta"><DiffStat {...stat} /></span>}
         {meta !== undefined && meta !== null && <span className="row__meta">{meta}</span>}
       </summary>
       {body !== undefined ? body : <DefaultBody call={call} />}
@@ -122,9 +123,6 @@ export function Output({ text, className = '' }: { text: string; className?: str
 }
 const CAP = 12
 
-export const Stat = ({ added, removed }: { added: number; removed: number }) => (
-  <>{added > 0 && <span className="stat--add">+{added}</span>}{added > 0 && removed > 0 && ' '}{removed > 0 && <span className="stat--del">−{removed}</span>}</>
-)
 
 /** What a call is about, in a line: the command, the path, else its arguments. */
 function summaryOf(name: string, args: Record<string, unknown>): string {

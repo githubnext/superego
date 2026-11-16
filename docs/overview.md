@@ -129,7 +129,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `extensions/ego` | Ego, Superego's own agent: one hidden thread per machine, its prompt and tools that read and set up; the rail's lifebuoy (a phone's drawer's too), *Ask Ego* in ⌘K, *Clear* (daemon + UI) |
 | `extensions/agent-ui` | the agent's ways to ask and show: `ask_user` (a question, with options) and `ask_ui` (blocks) wait above the composer, one at a time, oldest first, the thread blocked meanwhile; `show_ui` (blocks in the transcript, out of the run's fold, pressed later as a message); `open_ui`/`update_ui` (blocks in a `ui` pane beside the thread, kept with the thread across restarts). The blocks guide is one prompt section (daemon + UI) |
 | `extensions/git` | Changes (`⌘⇧D`): the thread's folder's changes by git, file by file, +N −N on its tab; the agent opens it too (daemon + UI) |
-| `extensions/web-panes` | Preview, a web page beside the thread (a link it names, opened beside), and Artifact, an HTML file the agent wrote, sandboxed (daemon + UI) |
+| `extensions/web-panes` | Preview, a web page beside the thread (a link it names, opened beside), and Artifact, an HTML file the agent wrote, sandboxed (UI only; the window tells each machine its panes) |
 | `extensions/files` | the file tree beside the editor and quick open (`⌘P`) (daemon + UI) |
 | `extensions/images` | a `show_images` tool; the images in the thread, as one, a grid or a carousel, and a lightbox to zoom (daemon + UI) |
 | `extensions/unread` | the bell with what agents have for you that you haven't seen (in the rail when the sidebar isn't there, beside Settings on a phone), most pressing first; `⌘.` to the next, everywhere or in this project (UI only) |

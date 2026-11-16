@@ -67,7 +67,7 @@ void (async () => {
   await until(`document.activeElement?.closest('.terminal-pane') !== null`, 'the focus in the terminal')
   await typeIn(win().webContents, `printf '\\033]7501;state=working:app=demo\\007'; git log --oneline --color=always | head -3; ls -G; echo "ok-$((6*7))"\n`)
   await until(`${text}.includes('ok-42')`, 'the command\'s output')
-  await until(`Boolean(document.querySelector('.terminal-note .superego-status--working'))`, 'its status on its tab')
+  await until(`Boolean(document.querySelector('.strip__note .superego-status--working'))`, 'its status on its tab')
   for (const theme of ['light', 'dark']) {
     nativeTheme.themeSource = theme
     await sleep(600)

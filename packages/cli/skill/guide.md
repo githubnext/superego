@@ -95,14 +95,14 @@ export default defineDaemonExtension({
 
 ```tsx
 // ui.tsx: the UI half. A pane, offered in the thread's pane menu.
-import { defineUiExtension, has, useMethod, type PaneProps } from 'superego/ui'
+import { defineUiExtension, has, PaneMessage, useMethod, type PaneProps } from 'superego/ui'
 
 function Notes({ machine, thread }: PaneProps) {
   // Read again as the thread moves on; nothing until the machine has the daemon half (its profile loads with the
   // thread's first turn), then at once.
   const { data, error } = useMethod<{ text: string }>(machine.id, 'notes.read', { id: thread.id },
     { enabled: has(machine, 'ext:notes@^1'), refresh: thread.activeAt })
-  if (error) return <div className="pane-empty">{error.message}</div>
+  if (error) return <PaneMessage>{error.message}</PaneMessage>
   return <pre className="pane-scroll">{data?.text || 'No notes yet.'}</pre>
 }
 
@@ -198,7 +198,7 @@ its own threads, that shows or hides the view beside the thread.
 function Queue({ machine, thread }: ViewProps<'thread'>) {
   const builds = useValue<Build[]>(machine, 'builds.queue', { scope: thread.id }) ?? []
   const dispatch = useDispatch()
-  if (!has(machine, 'ext:builds@^1')) return <p className="pane-empty">No build queue on {machine.label}.</p>
+  if (!has(machine, 'ext:builds@^1')) return <PaneMessage>No build queue on {machine.label}.</PaneMessage>
   return <ul>{builds.map((b) => (
     <li key={b.id}>{b.command} {b.state}
       <button type="button" onClick={() => void dispatch('builds.cancel', { thread: thread.id, id: b.id }, { machine: machine.id })}>Cancel</button></li>
@@ -328,7 +328,7 @@ place, and the window's console has why.
 | UI half (`superego.` in `setup`) | For |
 |---|---|
 | `view('x.y', { title, icon, context, fits, default, narrow, withoutSpaces, order, component, railButton, width })` | UI the layout puts in places (below): a space, a rail button, beside the thread, the pane menu, the title bar; `default` where it goes unless the user moves it |
-| `slot(name, Component, { order })` | a component in a slot whose place behaviour decides (below): `header.chips` for a chip where the title bar says where a thread works, `thread.badge` for a small mark after its title in the sidebar (a `thread-badge`: a 12px icon with a `title`), `composer.above`, `details.section` (in thread details, ⌘I: an `<h5>` and what you know of the thread), `editor.side`, `editor.bar`, `overlay`, `onboarding` (on the first-launch page) |
+| `slot(name, Component, { order })` | a component in a slot whose place behaviour decides (below): `header.chips` for a chip where the title bar says where a thread works, `thread.badge` for a small mark after its title in the sidebar (a `<ThreadBadge label>` around a 12px icon), `composer.above`, `details.section` (in thread details, ⌘I: an `<h5>` and what you know of the thread), `editor.side`, `editor.bar`, `overlay`, `onboarding` (on the first-launch page) |
 | `newThreadField({ component, from })` | a field in the New thread dialog: its value goes to `thread.start` as `options.<name>`, for the daemon half's `starting`; `from(thread)` its value for one started like `thread`; bundled only |
 | `signal` | aborted at teardown (its profile's UI reloaded or revoked): for its own timers, listeners and fetches (below) |
 | `on(event, listener)` → off; `window` | hear the window: `thread.status` (`{ machine, thread, before }`; `before` undefined the first time it's seen), `select` (`{ selection, before }`), `focus` (`{ focused }`), `visibility` (`{ visible }`); `window` is `{ focused, visible, selection, thread }` now. In Electron and browsers alike |
@@ -354,7 +354,7 @@ Names: everything is `<extension>.<something>`, except tool and pane kind names.
 [ui.md](ui.md)), `useValue(machine, key, { scope })`, `useMethod(machine.id, method, params, { enabled, refresh })` (a method's answer, with `error`, `loading` and `refetch`; called again as `params` or `refresh` change, answers to stale calls dropped), `useDispatch`, `call`, `has(machine, 'ext:x')` (whether a machine has an
 extension set up and switched on now, kept current; UI-only extensions never appear; `'ext:x@^1.2'` at a version in
 a range, see [Versions and compatibility](#versions-and-compatibility)), `version(machine, 'x')`; in panes `<PaneHeader>` and
-`useTabNote`; in rows `<ThreadRef machine id>`; `transcriptLinks(machine, thread)`, the links a transcript shows; for a list to pick from (quick open, say), `<Picker label placeholder items filter row onPick onClose digits>`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](daemon.md), [ui.md](ui.md).
+`<PaneNote>`, `<PaneButton>`, `<PaneMessage>` and `useTabNote`; for slots `<HeaderChip>`, `<ThreadBadge>`, `<Chip>` and `factsOf(thread, name)`; in rows `<ThreadRef machine id>`; `transcriptLinks(machine, thread)`, the links a transcript shows; for a list to pick from (quick open, say), `<Picker label placeholder items filter row onPick onClose digits>`; to build from, `FileEditor`, `Markdown` and `Diff`. Full tables: [daemon.md](daemon.md), [ui.md](ui.md).
 
 Machines update at different times, so a window can meet an older or newer daemon. The window draws none of a UI half
 for threads on a machine that runs its extension at another major; one that calls its daemon half where there may be
@@ -770,7 +770,7 @@ source, at `extensions/<name>/src`, so only a checkout has them.
 | `agent-ui` | tools that wait on you (one queue, a `scopedValue` per thread, `status` while it asks, an action to answer, one `composer.above` card claiming the composer), tools that draw blocks (`tool` views, some `{ fold: false }`), a pane kind drawn from its `state` with each thread, published per thread (`state({ publish })`), and a prompt section the tools' descriptions point to |
 | `images` | a tool with `{ fold: false }`, files kept with `threads.attachments` |
 | `git` | Changes: a `method` (a read), a `pane` the agent is told of, built on the kit's `Diff`, an `action` with keys |
-| `web-panes` | two pane kinds and nothing else; `urls: true` makes web links open in one |
+| `web-panes` | two pane kinds and nothing else, described in `about.panes` (so no daemon half); `urls: true` makes web links open in one |
 | `skills` | a prompt section, a `beforeSend` transform, a `method`; `composer.complete` and `composer.sentWith` |
 | `files` | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | `links` | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |

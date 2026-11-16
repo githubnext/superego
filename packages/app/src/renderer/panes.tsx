@@ -13,7 +13,7 @@
 // maximized.ts). ⌃Tab moves the focus along. On a phone each column is the screen's width, and a swipe moves between them.
 // Built in: editor and thread. Extensions and profiles add kinds with superego.pane(kind, …) (Changes is git's; a web
 // page and an artifact, web-panes'). A pane of a kind only an extension the thread goes without draws isn't shown.
-import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type RefObject } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
 import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, CornersInIcon, CornersOutIcon, DotsThreeIcon, FileTextIcon, IconButton, Menu, SegmentedControl, XIcon, type SegmentedOption } from '@superego/ui'
@@ -308,7 +308,7 @@ function PaneStrip({ tabs, current, stacked, narrow, onShow }: { tabs: StripTab[
               onClick={() => onShow(tab.pane)}>
               {Icon && <Icon size={14} aria-hidden />}
               <span className={`strip__label ${tab.kind?.file ? 'strip__label--file' : ''}`}>{tab.label}</span>
-              {tab.id && tab.note}
+              {tab.id && tab.note && <span className="strip__note">{tab.note}</span>}
               {tab.away === 'right' && <ArrowRightIcon className="strip__away" size={11} aria-hidden />}
             </button>
           )
@@ -348,6 +348,21 @@ export function PaneHeader({ children }: { children: ReactNode }) {
   const at = useContext(HeaderSlot)
   return at ? createPortal(children, at) : <div className="pane-bar">{children}</div>
 }
+
+/**
+ * In a `PaneHeader`: a note that takes the room left, cut short to fit (a count, a path). `code`: in the monospace face;
+ * `href`: a link, opened outside the app.
+ */
+export function PaneNote({ children, title, code, href }: { children: ReactNode; title?: string; code?: boolean; href?: string }) {
+  if (href) return <a className="pane-header__note pane-header__url" title={title} href={href} target="_blank" rel="noreferrer">{children}</a>
+  return code ? <code className="pane-header__note" title={title}>{children}</code> : <span className="pane-header__note" title={title}>{children}</span>
+}
+
+/** In a `PaneHeader`: a small button (Refresh, Reload). */
+export const PaneButton = (props: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'type'>) => <button type="button" className="pane-header__button" {...props} />
+
+/** What a pane says in place of what it shows: Loading…, nothing here, or what went wrong. Centred in the pane. */
+export const PaneMessage = ({ children }: { children: ReactNode }) => <div className="pane-empty">{children}</div>
 
 function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, onClick, onClose, onMaximize, view, children }: {
   pane: Pane; title: string; focused: boolean; width: number; behind: boolean

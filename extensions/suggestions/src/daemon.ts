@@ -54,7 +54,7 @@ export default defineDaemonExtension({
           }, { maxTokens: 300, signal: AbortSignal.any([superego.signal, AbortSignal.timeout(30_000)]) }).then((reply) => {
             if (superego.signal.aborted || asks.get(thread) !== ask || reply.stopReason === 'error' || reply.stopReason === 'aborted') return
             const prompts = promptsOf(reply.content.map((b) => b.type === 'text' ? b.text : '').join(''))
-            if (prompts.length) next.set(thread, { after: run.answer, prompts })
+            if (prompts.length) next.set(thread, { prompts })
           }, () => {})
           return undefined
         },

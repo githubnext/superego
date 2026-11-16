@@ -1,4 +1,3 @@
-/// <reference path="./env.d.ts" />
 // files, UI half: a file tree beside every file editor (its bar's button, or ⌘⇧T, shows and hides it), and quick open
 // (⌘P): any file in the selected thread's folder by a few letters of its name, opened beside the thread in the pane
 // kind that takes it. Clicking a file in the tree shows it in that editor; ⌘-click opens it beside. A folder a thread

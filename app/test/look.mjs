@@ -115,7 +115,7 @@ void (async () => {
   await sleep(300)
   console.log('reset:', await run(`document.querySelector('.panes__column--thread').offsetWidth`))
   console.log('open:', await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'diff' }).then((r) => JSON.stringify(r), (e) => 'ERR ' + e.message)`))
-  await until(`!!document.querySelector('.diff-pane, .diff-file')`, 'changes')
+  await until(`!!document.querySelector('.git-changes, .diff-file')`, 'changes')
   console.log('pane:', await run(`document.querySelector('.panes__column:last-child')?.innerText.slice(0, 200)`))
   await sleep(500)
   await both('open-changes')

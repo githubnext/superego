@@ -183,7 +183,7 @@ if (phase === 'first') {
   await run(`document.querySelector('.composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))`)
   await until(`document.querySelector('.composer textarea').value === 'try $smoke-skill ' && !document.querySelector('.completions')`, 'skill taken')
   await run(`document.querySelector('.composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`)
-  await until(`[...document.querySelectorAll('.attachment--skill')].some((chip) => chip.textContent.includes('smoke-skill'))`, 'skill sent with the message')
+  await until(`[...document.querySelectorAll('.attachment--chip')].some((chip) => chip.textContent.includes('smoke-skill'))`, 'skill sent with the message')
   // A web link in the thread: the button beside it opens the page in a pane, not the browser, even a page that refuses
   // to be framed (as most sites do).
   const { createServer } = await import('node:http')

@@ -28,7 +28,7 @@ const PRELUDES = {
     `type Build = { id: string; command: string; state: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'; at: number }`,
   ],
   ui: [
-    `import { call, defineAction, defineUiExtension, has, Markdown, parseWikilink, useDispatch, useMethod, usePlacement, useSelection, useValue, version } from 'superego/ui'`,
+    `import { call, defineAction, defineUiExtension, has, Markdown, PaneMessage, parseWikilink, useDispatch, useMethod, usePlacement, useSelection, useValue, version } from 'superego/ui'`,
     `import type { MachineEntry, PaneProps, ThreadInfo, UiApi, ViewProps } from 'superego/ui'`,
     `declare const superego: UiApi`,
     `declare const machine: MachineEntry`,

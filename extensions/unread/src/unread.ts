@@ -1,8 +1,6 @@
 // Where ⌘. goes: the next thread in the unread list (the window's `unreadList`, the one rule), in the sidebar's order.
 import { unreadList, type Selection, type Project } from '@superego/app/ui'
-
-/** Whether ⌘. looks for the next unread thread in every project, or only in the one you're in. */
-export type Scope = 'all' | 'project'
+import type { Scope } from './shared.ts'
 
 /**
  * The next unread thread after the one shown, in the sidebar's order (in its project only, for `project`), around to

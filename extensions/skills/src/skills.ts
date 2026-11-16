@@ -55,8 +55,6 @@ export async function listSkills(dir: string, own: string[] = []): Promise<Skill
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
-const escape = (value: string) => value.replace(/[&<>]/g, (c) => `&#${c.charCodeAt(0)};`)
-
 /** What the agent is told about the skills it may use: each one's name, what it's for, and where to read it. */
 export function skillsPrompt(skills: Skill[]): string | undefined {
   const offered = skills.filter((skill) => !skill.manual)
@@ -64,7 +62,7 @@ export function skillsPrompt(skills: Skill[]): string | undefined {
   return [
     'Skills are instructions for particular tasks. When a task matches a skill\'s description, read its file with the read tool before you start, and follow it. A skill\'s file may name other files next to it; paths in it are relative to its folder.',
     '',
-    ...offered.map((skill) => `<skill name="${quote(skill.name)}" location="${quote(skill.path)}">${escape(skill.description.replace(/\s+/g, ' ').trim())}</skill>`),
+    ...offered.map((skill) => `<skill name="${quote(skill.name)}" location="${quote(skill.path)}">${quote(skill.description.replace(/\s+/g, ' ').trim())}</skill>`),
   ].join('\n')
 }
 

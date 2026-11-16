@@ -74,7 +74,7 @@ ${kind === 'data-only' ? `
 `
 
 const ui = (name: string) => `// ${name}, UI half: the thread's items beside it, with a button to remove each, and a shortcut to show or hide them.
-import { defineAction, defineUiExtension, has, useDispatch, useValue, type ViewProps } from 'superego/ui'
+import { defineAction, defineUiExtension, has, PaneMessage, useDispatch, useValue, type ViewProps } from 'superego/ui'
 import { about, ITEMS, type Item } from './shared.ts'
 
 const VIEW = '${name}.list'
@@ -83,8 +83,8 @@ function Items({ machine, thread }: ViewProps<'thread'>) {
   const items = useValue<Item[]>(machine, ITEMS, { scope: thread.id })
   const dispatch = useDispatch()
   // The daemon half may not be there: on another machine, an older version of this profile.
-  if (!has(machine, 'ext:${name}')) return <p className="pane-empty">${title(name)} isn't set up on {machine.label}.</p>
-  if (machine.state !== 'connected') return <p className="pane-empty">{machine.label} is offline.</p>
+  if (!has(machine, 'ext:${name}')) return <PaneMessage>${title(name)} isn't set up on {machine.label}.</PaneMessage>
+  if (machine.state !== 'connected') return <PaneMessage>{machine.label} is offline.</PaneMessage>
   const run = (id: string, params: Record<string, unknown>) => void dispatch(id, params, { machine: machine.id }).catch((error: Error) => console.error(error))
   return (
     <div className="${name}">
@@ -94,7 +94,7 @@ function Items({ machine, thread }: ViewProps<'thread'>) {
             <li key={item.id}>{item.text} <button type="button" onClick={() => run('${name}.remove', { thread: thread.id, id: item.id })}>Remove</button></li>
           ))}
         </ul>
-      ) : <p className="pane-empty">Nothing yet.</p>}
+      ) : <PaneMessage>Nothing yet.</PaneMessage>}
     </div>
   )
 }

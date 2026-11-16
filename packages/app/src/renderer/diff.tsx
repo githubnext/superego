@@ -39,6 +39,11 @@ export function numbered(lines: string[]) {
   })
 }
 
+/** How many lines were added and removed, +3 −1 in their colours; a side that's 0 left out. */
+export const DiffStat = ({ added, removed }: { added: number; removed: number }) => (
+  <>{added > 0 && <span className="stat--add">+{added}</span>}{added > 0 && removed > 0 && ' '}{removed > 0 && <span className="stat--del">−{removed}</span>}</>
+)
+
 /** A diff's files, given as its text or already parsed. */
 export function Diff({ diff }: { diff: string | DiffFile[] }) {
   const files = typeof diff === 'string' ? parseDiff(diff) : diff

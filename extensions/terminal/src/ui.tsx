@@ -1,10 +1,9 @@
-/// <reference path="./env.d.ts" />
 // terminal, UI half: the Terminal pane (from the pane menu, ⌃`, or the agent's pane_open "terminal"), drawn by
 // ghostty-web: Ghostty's terminal emulator compiled to WebAssembly, behind xterm.js's API, the same in the desktop app
 // and a browser. The shell is the machine's (the daemon half): this attaches to it on the pane's channel, replays what
 // it printed, and passes keys and sizes back. Native libghostty on the desktop is a later step (docs/design.md, Next).
 import { useEffect, useRef, useState } from 'react'
-import { call, channel as openChannel, defineAction, defineUiExtension, has, StatusGlyph, useAppSetting, useTabNote, useValue, type BridgeChannel, type PaneProps } from '@superego/app/ui'
+import { call, channel as openChannel, defineAction, defineUiExtension, PaneButton, StatusGlyph, useAppSetting, useTabNote, useValue, type BridgeChannel, type PaneProps } from '@superego/app/ui'
 import { MONO_FONT } from '@superego/app/app-settings'
 import type { Pane } from '@superego/protocol'
 import { TerminalIcon } from '@superego/ui'
@@ -12,8 +11,6 @@ import './styles.css'
 import { about, Framing, IO, RESIZE, STATUS, TERMINAL, type TerminalStatuses } from './shared.ts'
 import { lookOf } from './theme.ts'
 
-/** The terminal daemon halves this one speaks. */
-const SPEAKS = 'ext:terminal@^1'
 const numberOf = (pane: Pane) => Number((pane.params as { n?: unknown } | undefined)?.n) || 1
 /** ⌃`, the terminal's own shortcut: the window takes it even from inside a terminal. */
 const KEYS = 'ctrl+`'
@@ -27,12 +24,12 @@ export default defineUiExtension({
     })
     superego.action(defineAction({
       id: 'terminal.open', title: 'Open a terminal', keys: KEYS,
-      when: (c) => Boolean(c.selection) && has(c.machines.find((m) => m.id === c.selection!.machine), SPEAKS),
+      when: (c) => Boolean(c.selection),
       run: async (_p, c) => { if (c.selection) await c.dispatch('pane.open', { thread: c.selection.thread, kind: TERMINAL }, { machine: c.selection.machine, source: 'terminal' }) },
     }))
     superego.action(defineAction({
       id: 'terminal.new', title: 'New terminal',
-      when: (c) => Boolean(c.selection) && has(c.machines.find((m) => m.id === c.selection!.machine), SPEAKS),
+      when: (c) => Boolean(c.selection),
       run: async (_p, c) => {
         if (!c.selection) return
         const panes = c.threadOf(c.selection)?.panes ?? []
@@ -75,13 +72,12 @@ function TerminalPane({ machine, thread, pane }: PaneProps) {
   const [problem, setProblem] = useState<string>()
   const [attempt, setAttempt] = useState(0)
   const connected = machine.state === 'connected'
-  const able = has(machine, SPEAKS)
   const status = (useValue<TerminalStatuses>(machine, STATUS, { scope: thread.id }) ?? {})[pane.id]
-  useTabNote(status ? <span className="terminal-note"><StatusGlyph status={status} /></span> : null, status ? JSON.stringify(status) : '')
+  useTabNote(status ? <StatusGlyph status={status} /> : null, status ? JSON.stringify(status) : '')
 
   useEffect(() => {
     const element = host.current
-    if (!element || !connected || !able) return
+    if (!element || !connected) return
     setProblem(undefined)
     let disposed = false
     let channel: BridgeChannel | undefined
@@ -143,16 +139,15 @@ function TerminalPane({ machine, thread, pane }: PaneProps) {
       for (const cleanup of cleanups.reverse()) cleanup()
       element.replaceChildren()
     }
-  }, [machine.id, connected, able, thread.id, pane.id, dark, font, attempt])
+  }, [machine.id, connected, thread.id, pane.id, dark, font, attempt])
 
-  if (!able) return <div className="pane-empty">Superego on {machine.label} has no terminals.</div>
   return (
     <div className="terminal-pane">
       <div ref={host} className="terminal-pane__screen" data-focus />
       {problem && connected && (
         <div className="terminal-pane__problem">
           <span>{problem}</span>
-          <button type="button" className="pane-header__button" onClick={() => setAttempt((n) => n + 1)}>Reconnect</button>
+          <PaneButton onClick={() => setAttempt((n) => n + 1)}>Reconnect</PaneButton>
         </div>
       )}
     </div>

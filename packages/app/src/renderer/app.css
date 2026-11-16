@@ -731,8 +731,6 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .navigator__row.is-current .palette__title::after { content: ' ·'; color: var(--superego-accent); }
 .navigator__crumb { color: var(--superego-faint); font-size: var(--superego-text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
 .navigator__keys { padding: 8px 14px; border-top: 1px solid var(--superego-border); font-size: var(--superego-text-xs); color: var(--superego-faint); }
-.new-thread__check { display: flex; gap: 8px; align-items: baseline; font-size: var(--superego-text-sm); }
-.new-thread__check em { font-style: normal; color: var(--superego-muted); }
 
 .palette__input:focus { outline: 2px solid var(--superego-ring); outline-offset: -2px; }
 
@@ -749,6 +747,9 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .attachment__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment__remove { border: 0; background: none; color: var(--superego-faint); font: inherit; padding: 0 2px; cursor: default; }
 .attachment__remove:hover { color: var(--superego-text); }
+/* An extension's chip like a file's (Chip): its glyph at its own size. */
+.attachment--chip { padding-left: 8px; }
+.attachment--chip .attachment__icon { width: auto; height: auto; }
 /* What an extension offers for the word being typed (skills, say), floating above the composer. */
 .completions { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); max-height: 50vh; overflow: auto; padding: 4px; background: var(--superego-raised); border-radius: var(--superego-radius-lg); box-shadow: var(--superego-shadow-float); font-size: var(--superego-text-ui); }
 .dock:not(:focus-within) .completions { display: none; }
@@ -788,7 +789,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .strip__tab.is-focused svg { color: var(--superego-accent); }
 .strip__tab.is-away { color: var(--superego-faint); }
 .strip__label { overflow: hidden; text-overflow: ellipsis; }
-.strip__note { font: var(--superego-text-xs) var(--superego-mono); white-space: nowrap; }
+.strip__note { display: inline-flex; align-items: center; font: var(--superego-text-xs) var(--superego-mono); white-space: nowrap; }
 .strip__tab.is-away .strip__note { opacity: .6; }
 .strip__label--file { font: var(--superego-text-xs) var(--superego-mono); }
 .strip__map { flex: none; display: flex; align-items: center; gap: 2px; padding: 0 6px; }

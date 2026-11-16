@@ -28,7 +28,7 @@ export { useDispatch } from './Shell.tsx'
 export { usePlacement, useApp, useNarrow } from './extension.tsx'
 export { useShortcut, useRailShortcut, keyLabel } from './keys.ts'
 export { useComposer, useComposerClaim, type Composer, type ComposerClaim } from './composer-view.tsx'
-export { EXTENSION_API } from '@superego/protocol'
+export { EXTENSION_API, statusLabel } from '@superego/protocol'
 export type { Json, Status, StatusState, ThreadInfo } from '@superego/protocol'
 export type { MachineEntry } from '../shared/bridge.ts'
 
@@ -39,12 +39,13 @@ export { ThreadRef } from './thread-ref.tsx'
 export { transcriptLinks, type TranscriptLink } from './links.tsx'
 export { parseWikilink, WIKILINK, wikilinkHref, type Wikilink } from './wikilinks.ts'
 export { Picker, type PickerProps, type PickerRow } from './picker.tsx'
-export { PaneHeader, useTabNote } from './panes.tsx'
-export { Diff, parseDiff, type DiffFile } from './diff.tsx'
+export { PaneHeader, PaneNote, PaneButton, PaneMessage, useTabNote } from './panes.tsx'
+export { HeaderChip, ThreadBadge, Chip, factsOf } from './marks.tsx'
+export { Diff, DiffStat, parseDiff, type DiffFile } from './diff.tsx'
 export { FileEditor, type FileEditorProps } from './file-editor.tsx'
 export { SignInFlow, type SignInFlowProps } from './sign-in-flow.tsx'
 export {
-  Button, ContextMenu, Dialog, IconButton, List, ListItem, Menu, Panel, Popover, Select, StatusGlyph, statusLabel, Switch, TextArea,
+  Button, ContextMenu, Dialog, IconButton, List, ListItem, Menu, Panel, Popover, Select, StatusGlyph, Switch, TextArea,
   TextField, Tooltip, type SelectOption,
 } from '@superego/ui'
 export * from '@superego/ui/icons'

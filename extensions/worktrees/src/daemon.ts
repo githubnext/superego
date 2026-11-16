@@ -194,8 +194,8 @@ export default defineDaemonExtension({
     }
 
     /**
-     * As the daemon starts: what archiving left half done, finished. Leftover folders deleted, and the merged branches
-     * of archived threads whose worktree is removed deleted (archived before branches were, or the daemon ended between).
+     * As the daemon starts: what archiving left half done (the daemon ended mid-way), finished. Leftover folders
+     * deleted, and the merged branches of archived threads whose worktree is removed deleted.
      */
     async function sweep() {
       await sweepAll(folder)

@@ -36,8 +36,8 @@ A package in `extensions/<name>` with up to two halves, imported by the app at b
 ```text
 extensions/orders/
   package.json        "name": "@superego/orders", "exports": { "./daemon": "./src/daemon.ts", "./ui": "./src/ui.tsx" }
-  tsconfig.json       copy extensions/tasks/tsconfig.json
-  src/shared.ts       what both halves agree on: `about` (what it is), tool names, value keys, action ids, types
+  tsconfig.json       { "extends": "../tsconfig.json", "include": ["src", "test"] }
+  src/shared.ts       what both halves agree on: `about` (what it is), tool names, value keys, setting keys, action ids, types
   src/daemon.ts       export default defineDaemonExtension({ … })   from '@superego/daemon'
   src/ui.tsx          export default defineUiExtension({ … })       from '@superego/app/ui'
   test/daemon.test.ts
@@ -80,6 +80,10 @@ Then wire it in:
 4. Root `tsconfig.json`: add `{ "path": "extensions/orders" }` to `references`, or `pnpm typecheck` skips it.
 5. `docs/overview.md`'s Layout table: a line for it.
 
+A daemon half the app or a test configures is a factory named after it, `ordersExtension({ … })`, with the module's
+default export the one most hosts want (`export default ordersExtension()`); one nothing configures is just the default
+export.
+
 Bundled extensions get more than a profile's:
 
 - **Views in the window's places**, not only a thread's: `superego.view(id, { title, icon, context, fits, default,
@@ -93,7 +97,7 @@ Bundled extensions get more than a profile's:
   **`superego.work(divide)`** to group a run of
   work in the transcript (as `tasks` does).
 - **New thread fields**: `superego.newThreadField({ component, from })`. `component` gets `{ machine, cwd, value,
-  onChange }` and draws a field in the dialog (a checkbox: `<label className="new-thread__check">`); its value goes to
+  onChange }` and draws a field in the dialog (a checkbox, say); its value goes to
   `thread.start` as `options.<name>`, for the daemon half's `starting` hook. `from(thread)` is its value for a thread
   started like that one (⌘N). Shown while the machine picked has the extension. `worktrees` has one.
 - **Window actions** with keys: `superego.action(defineAction({ id: 'orders.open', title, keys: 'mod+shift+o', when, run(params, context) { … } }))`;
@@ -139,4 +143,7 @@ Pure logic (parsing, dividing work, a composer provider's `word`, a `sentWith` r
 
 - Comments explain why and what something is for, in plain words, at the top of each file.
 - Name things after what the user sees: thread, pane, project, machine.
+- Name your CSS classes after the extension (`.orders-list`, `.orders-list__row`). The window's own look comes through
+  its components (`PaneMessage`, `PaneNote`, `PaneButton`, `HeaderChip`, `ThreadBadge`, `Chip`, `DiffStat`), never its
+  class names, and a fact through `factsOf<T>(thread, about)`.
 - Keep this skill (`packages/cli/skill/`) and `docs/overview.md` in step when the extension API, profiles or commands change.

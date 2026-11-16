@@ -23,15 +23,15 @@ doesn't wait for one to be opened, so its badges, slots, tool rows and pane kind
 
 ```tsx
 // .superego/profiles/support/ui/order.tsx
-import { defineUiExtension, PaneHeader, FileTextIcon, useMethod, type PaneProps } from 'superego/ui'
+import { defineUiExtension, PaneHeader, PaneMessage, PaneNote, FileTextIcon, useMethod, type PaneProps } from 'superego/ui'
 
 function OrderPane({ machine, thread, pane }: PaneProps) {
   const { id } = (pane.params ?? {}) as { id?: string }
   // A read: the daemon half's method (superego.method), not an action; again as the thread moves on.
   const { data: order, error } = useMethod<any>(machine.id, 'orders.find', { number: id }, { enabled: Boolean(id), refresh: thread.activeAt })
-  if (error) return <div className="pane-empty">{error.message}</div>
-  if (!order) return <div className="pane-empty">Loading…</div>
-  return <div className="order-pane"><PaneHeader><span>{order.status}</span></PaneHeader><h2>Order {id}</h2>…</div>
+  if (error) return <PaneMessage>{error.message}</PaneMessage>
+  if (!order) return <PaneMessage>Loading…</PaneMessage>
+  return <div className="order-pane"><PaneHeader><PaneNote>{order.status}</PaneNote></PaneHeader><h2>Order {id}</h2>…</div>
 }
 
 export default defineUiExtension({
@@ -80,7 +80,7 @@ which doesn't type-check them: `superego extension test` does.
 | `superego.entry(kind, component)` | draw transcript entries of a kind an extension writes |
 | `superego.settings(ui, component)` | draw below the settings section (of its daemon half) that names `ui` |
 | `superego.composer.complete({ title, word, items })` | complete a word as it's typed. `word(text, caret)` returns the word at the caret it completes, `{ start, query }` (and anything of its own), or nothing; the first provider to find one wins. `items(word, { machine, thread })` returns (or resolves to) `{ label, detail?, insert }[]`, best first; taken, `insert` replaces the word (end it with a space to go on typing). The composer draws the menu: ↑↓ pick, ⇥ or ⏎ take, esc leaves the word |
-| `superego.composer.sentWith({ read, component })` | draw what the daemon half's `beforeSend` put in sent messages. `read(blocks)` returns `{ items, blocks }`: what to draw and the indexes of the blocks it found them in, which the message's text then leaves out; `component` gets `{ machine, thread, items }` and draws under the message (chips: `className="attachment"`). Drawn for threads that go without the extension now too |
+| `superego.composer.sentWith({ read, component })` | draw what the daemon half's `beforeSend` put in sent messages. `read(blocks)` returns `{ items, blocks }`: what to draw and the indexes of the blocks it found them in, which the message's text then leaves out; `component` gets `{ machine, thread, items }` and draws under the message (a `<Chip icon title>` each, like a file's). Drawn for threads that go without the extension now too |
 | `superego.store(key, initial, { persist?, shared? })` | state of the extension kept in the window: `get()`, `set(next)`, `subscribe`, and `use()` in a component. Give the bare key (`superego.store('columns', [])`): it's kept as `<name>.columns`, and `'<name>.columns'` is the same store. `persist` keeps it across reloads, for this window alone (each desktop window has its own), or for all of them with `shared` |
 | `superego.dispatch(id, params, { machine })` | run an action outside React |
 
@@ -91,8 +91,8 @@ Slots a profile can fill, each given `{ machine, thread }` (and for the editor o
 
 | Slot | |
 |---|---|
-| `header.chips` | among the chips that say where a thread works (a branch): draw a `<span className="header__chip">` |
-| `thread.badge` | after a thread's title in the sidebar: a small mark of something about it. Draw a `<span className="thread-badge" title="…">` around a 12px icon, or nothing ([below](#a-mark-in-the-sidebar)) |
+| `header.chips` | among the chips that say where a thread works (a branch): draw a `<HeaderChip title>` |
+| `thread.badge` | after a thread's title in the sidebar: a small mark of something about it. Draw a `<ThreadBadge label>` around a 12px icon, or nothing ([below](#a-mark-in-the-sidebar)) |
 | `composer.above` | above the message box: something waiting on the user |
 | `details.section` | in thread details (⌘I), after what the core says: an `<h5>` and what you know of the thread. |
 | `editor.side`, `editor.bar` | beside a file in the editor, and in its bar |
@@ -102,17 +102,17 @@ Slots a profile can fill, each given `{ machine, thread }` (and for the editor o
 ### A mark in the sidebar
 
 A mark on some threads' rows goes from the daemon half to the window in four steps: the daemon half keeps what it found
-in the thread's `state`, publishes it with `facts`, each `ThreadInfo` carries it as `thread.facts.<name>`, and a
-`thread.badge` slot draws it. The daemon half for this one is in [Watching tool calls](daemon.md#watching-tool-calls):
+in the thread's `state`, publishes it with `facts`, each `ThreadInfo` carries it as `thread.facts.<name>` (read it with
+`factsOf<T>(thread, name)`), and a `thread.badge` slot draws it. The daemon half for this one is in [Watching tool calls](daemon.md#watching-tool-calls):
 
 ```tsx
 // ui/db.tsx; in profile.ts: extensions: ['./db.ts'], ui: ['./ui/db.tsx']
-import { defineUiExtension, TableIcon, type SlotProps } from 'superego/ui'
+import { defineUiExtension, factsOf, TableIcon, ThreadBadge, type SlotProps } from 'superego/ui'
 
 function DbMark({ thread }: SlotProps['thread.badge']) {
-  const db = thread.facts?.db as { why: string } | undefined
+  const db = factsOf<{ why: string }>(thread, 'db')
   if (!db) return null
-  return <span className="thread-badge" title={db.why} role="img" aria-label="touched the database"><TableIcon size={12} aria-hidden /></span>
+  return <ThreadBadge label="touched the database" title={db.why}><TableIcon size={12} aria-hidden /></ThreadBadge>
 }
 
 export default defineUiExtension({ name: 'db', setup: (superego) => superego.slot('thread.badge', DbMark) })
@@ -123,8 +123,10 @@ The mark shows before the thread is opened: [the UI loads](#when-the-ui-loads) a
 Spaces (the sidebar), the rail, work dividers, window actions, app settings and New thread fields are for bundled extensions
 (`superego --skill bundled`).
 
-Inside a pane: `<PaneHeader>` puts small things (a count, Refresh) in the pane's header beside its title, and
-`useTabNote(note, key)` shows a note on its tab in the strip (Changes shows +3 −1).
+Inside a pane: `<PaneHeader>` puts small things in the pane's header beside its title: a `<PaneNote>` (a count, a path;
+`code`, `href`) and `<PaneButton>`s (Refresh). `<PaneMessage>` stands in for what the pane shows while there's nothing
+(Loading…, an error). `useTabNote(note, key)` shows a note on its tab in the strip (Changes shows
+`<DiffStat added removed />`, +3 −1).
 
 ## From 'superego/ui'
 
@@ -205,7 +207,7 @@ A board of one machine's threads, a column per state:
 
 ```tsx
 // ui/board.tsx; in profile.ts: ui: ['./ui/board.tsx'], panes: { board: "every thread on this machine, by status; no params" }
-import { defineUiExtension, StatusGlyph, useSelection, useThreads, type PaneProps, type Status } from 'superego/ui'
+import { defineUiExtension, PaneMessage, StatusGlyph, useSelection, useThreads, type PaneProps, type Status } from 'superego/ui'
 
 const LANES: { state: Status['state']; title: string }[] = [
   { state: 'blocked', title: 'Needs you' }, { state: 'error', title: 'Failed' }, { state: 'working', title: 'Working' },
@@ -215,7 +217,7 @@ const LANES: { state: Status['state']; title: string }[] = [
 function Board({ machine }: PaneProps) {
   const threads = useThreads(machine.id)
   const { select } = useSelection()
-  if (!threads) return <div className="pane-empty">Loading…</div>
+  if (!threads) return <PaneMessage>Loading…</PaneMessage>
   return <div className="board">{LANES.map(({ state, title }) => (
     <section key={state}>
       <h3>{title}</h3>
@@ -248,8 +250,9 @@ return () => style.remove()   // setup's cleanup: gone with the UI, reloaded or 
 
 Useful variables: `--superego-bg`, `--superego-raised`, `--superego-border`, `--superego-muted`, `--superego-faint`,
 `--superego-accent`, `--superego-hover`, `--superego-selected`, `--superego-font`, `--superego-mono`,
-`--superego-radius`, `--superego-radius-lg`, `--superego-space-1` … `--superego-space-7`. `pane-empty` is the class for a
-pane's empty and loading states.
+`--superego-radius`, `--superego-radius-lg`, `--superego-space-1` … `--superego-space-7`. Name your own classes after
+your extension (`board-lane`); the window's own look comes through its components (`PaneMessage`, `HeaderChip`, …), not
+its class names.
 
 A pane is a column that can be narrow (and a whole screen on a phone): lay it out to fill its parent with flex, and
 let it scroll.

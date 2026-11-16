@@ -31,4 +31,3 @@
   font-size: var(--superego-text-sm);
 }
 .terminal-pane__problem span { flex: 1; }
-.terminal-note { display: inline-flex; align-items: center; margin-left: 4px; }

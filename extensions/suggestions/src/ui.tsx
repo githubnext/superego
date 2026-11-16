@@ -1,4 +1,3 @@
-/// <reference path="./env.d.ts" />
 // suggestions, UI half: what you might send next, numbered, over the composer once the agent has answered. Picking one
 // puts it in the composer to change; in the empty composer ←/→ pick one, ⏎ sends it and ⇥ puts it in the box. ⌃1–⌃9
 // send the one with that number, wherever the focus is in the thread.

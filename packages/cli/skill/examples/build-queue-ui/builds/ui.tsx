@@ -1,6 +1,6 @@
 // builds, UI half: the thread's queue beside it, each build with Cancel while it's queued or running; ⌘⇧B shows or
 // hides it there.
-import { defineAction, defineUiExtension, has, StatusGlyph, useDispatch, useValue, type ViewProps } from 'superego/ui'
+import { defineAction, defineUiExtension, has, PaneMessage, StatusGlyph, useDispatch, useValue, type ViewProps } from 'superego/ui'
 import { about, QUEUE, VIEW, type Build } from './shared.ts'
 
 const STATUS = { queued: 'idle', running: 'working', done: 'done', failed: 'error', cancelled: 'idle' } as const
@@ -9,8 +9,8 @@ function Queue({ machine, thread }: ViewProps<'thread'>) {
   // This thread's queue only: its scope of the value.
   const builds = useValue<Build[]>(machine, QUEUE, { scope: thread.id }) ?? []
   const dispatch = useDispatch()
-  if (!has(machine, 'ext:builds@^1')) return <p className="pane-empty">No build queue on {machine.label}.</p>
-  if (!builds.length) return <p className="pane-empty">No builds queued.</p>
+  if (!has(machine, 'ext:builds@^1')) return <PaneMessage>No build queue on {machine.label}.</PaneMessage>
+  if (!builds.length) return <PaneMessage>No builds queued.</PaneMessage>
   const cancel = (id: string) => void dispatch('builds.cancel', { thread: thread.id, id }, { machine: machine.id }).catch((error: Error) => console.error(error))
   return (
     <ul className="builds">

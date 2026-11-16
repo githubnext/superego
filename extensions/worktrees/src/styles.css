@@ -1,0 +1,3 @@
+/* New thread's "In a worktree of its own", a checkbox and its line, the aside quieter. */
+.worktrees-check { display: flex; gap: 8px; align-items: baseline; font-size: var(--superego-text-sm); }
+.worktrees-check em { font-style: normal; color: var(--superego-muted); }

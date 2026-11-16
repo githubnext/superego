@@ -1,4 +1,3 @@
-/// <reference path="./env.d.ts" />
 // links, UI half: ⌃O lists the links in the selected thread's transcript, newest first; typing narrows them. ⏎ follows
 // one as a click would, ⌘⏎ opens it in a pane where it can be. The first nine take ⌃1–⌃9 (⌃⌘ for the pane).
 import { useState } from 'react'

@@ -8,7 +8,8 @@ import type { MachineEntry } from '../shared/bridge.ts'
 import { divideWork, entryOwner, entryView, sentWithIn, toolOwner, toolRow, toolView, unfoldedTool, useRegistry, type ToolRowCall, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useRejections, useShell } from './state.tsx'
 import { Markdown } from './Markdown.tsx'
-import { Chevron, DescribedCall, describeRun, mainKind, RowIcon, Stat, statOf } from './tool-rows.tsx'
+import { Chevron, DescribedCall, describeRun, mainKind, RowIcon, statOf } from './tool-rows.tsx'
+import { DiffStat } from './diff.tsx'
 import { splitMessage } from './attachments.ts'
 import { readSent, type SentBlock } from './composer.ts'
 import { Contained } from './contained.tsx'
@@ -242,7 +243,7 @@ function TurnEnd({ blocks, results }: { blocks: Block[]; results: Results }) {
   return (
     <div className="turn-end">
       <span>{calls.length === 1 ? '1 step' : `${calls.length} steps`}</span>
-      {(stats.added > 0 || stats.removed > 0) && <span><Stat {...stats} /></span>}
+      {(stats.added > 0 || stats.removed > 0) && <span><DiffStat {...stats} /></span>}
       {failed > 0 && <span>{failed} failed</span>}
     </div>
   )
@@ -312,7 +313,7 @@ function Work({ blocks: all, results, running, active }: { blocks: Block[]; resu
           <Chevron />
           {active ? <StatusGlyph status={{ state: 'working' }} /> : <RowIcon row={rowOf(main)} thinking={!calls.length} />}
           <span className="row__label row__summary" title={said.join('')}>{said.map((part, i) => i % 2 ? <code key={i} className="row__path">{part}</code> : part)}</span>
-          {(stats.added > 0 || stats.removed > 0) && <span className="row__meta"><Stat {...stats} /></span>}
+          {(stats.added > 0 || stats.removed > 0) && <span className="row__meta"><DiffStat {...stats} /></span>}
           {failed > 0 && <span className="row__failed">{failed} failed</span>}
         </summary>
         <div className="run__steps">{rows}</div>
@@ -353,7 +354,7 @@ function Task({ part, results, running }: { part: WorkPart; results: Results; ru
       <span className="task__body">
         <span className="task__head">
           <span className="row__label row__summary task__title" title={part.title}>{part.title}</span>
-          {(stats.added > 0 || stats.removed > 0) && <span className="row__meta"><Stat {...stats} /></span>}
+          {(stats.added > 0 || stats.removed > 0) && <span className="row__meta"><DiffStat {...stats} /></span>}
         </span>
         {part.outcome && <span className="task__outcome">{part.outcome}</span>}
       </span>
