@@ -109,6 +109,16 @@ describe('the layout file', () => {
     expect(readFileSync(file.path, 'utf8')).toContain('"threads.details": "pane"')
   })
 
+  it("keeps the window's change made as the views change", async () => {
+    // The views change (a window lays itself out anew) and, while the file is put right for them, the window moves a
+    // view: the file as it was read then is older than that, and mustn't undo it.
+    const viewed = file.setViews(1, [...views, { id: 'files.folder', title: 'Files', fits: ['space', 'beside', 'pane'] }])
+    await new Promise((resolve) => setImmediate(resolve))
+    await Promise.all([viewed, settings.set('app.layout', { place: { 'threads.details': 'pane' } })])
+    await wait(() => readFileSync(file.path, 'utf8').includes('"threads.details": "pane"'))
+    expect(layout()).toBe('{"place":{"threads.details":"pane"}}')
+  })
+
   it('leaves a file that does not read as typed when the window changes the layout', async () => {
     writeFileSync(file.path, '{ "place": { "threads.details": "asi')
     await wait(() => file.problem?.startsWith('Not JSON') ?? false)

@@ -191,8 +191,9 @@ export class LayoutFile {
     const current = await readFile(this.path, 'utf8').catch(() => undefined)
     if (current === undefined) return this.#write()
     await this.#save(layoutHead(union) + '\n' + bodyOf(current))
-    // Checked again: a view that's come may fit where the file puts it, one that's gone is noted.
-    await this.#apply(current)
+    // Checked again: a view that's come may fit where the file puts it, one that's gone is noted. Unless the window
+    // changed the layout since the file was read: that's newer, and is written out next.
+    if (text(this.#settings.get(LAYOUT)) === this.#applied) await this.#apply(current)
   }
 
   /** The file as saved now: applied when it reads as a layout, noted when not. */
