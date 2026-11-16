@@ -6,6 +6,11 @@ Many agents work on this repo at once, each in a git worktree of its own, all on
 
 The app is in its infancy and under heavy development. This means, we barely have users but ourselves. It is therefore important and timely that we always opt for the proper fixes and implementations. Rather going one step back and getting it right at the cost of compatibility than patching on patches.
 
+## Errors
+
+Surface every failure: to the console and somewhere in the UI the user can see (a notice, the row it belongs to, the
+pane). No silent `catch(() => {})`: swallowing an error needs a comment saying why that failure is expected and harmless.
+
 ## House rules
 
 - Work in your own worktree. Never reset, stash or overwrite anything in the main checkout.
