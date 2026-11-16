@@ -2,10 +2,12 @@
 // script Settings → Command line installs. From a checkout, bin/superego.ts runs instead.
 import { join } from 'node:path'
 import { runCli } from '@superego/cli'
+import { mcpServersCommand } from '@superego/mcp-servers/cli'
 import app from '../superego.config.ts'
 
 const appDir = join(import.meta.dirname, '..', '..')
 runCli(app, {
   appDir, bin: join(import.meta.dirname, 'cli.js'), daemon: join(import.meta.dirname, 'daemon.js'), executable: process.execPath,
   types: join(import.meta.dirname, '..', 'types'), authorTest: join(import.meta.dirname, 'author-test.js'),
+  commands: [mcpServersCommand],
 })

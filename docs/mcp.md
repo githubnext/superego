@@ -160,7 +160,7 @@ export default defineProfile({
 - An object holds servers of the profile's own by name, each the same shape as a Settings entry, minus `unprofiled`, `enabled` and `allowed`, which don't
   apply. Its `cwd` defaults to the project's root, which is the folder holding `.superego`.
 - If a profile's server has the same name as one of the machine's, the profile's wins in that profile's threads,
-  just as a project's profile replaces yours. `superego extensions --thread` says so.
+  just as a project's profile replaces yours. `superego mcp-servers --thread` says so.
 - `extends: 'user:<name>'` puts the two lists together: names as a union, and servers of its own by name, with the
   project's winning.
 - `without: ['mcp-servers']` drops every server, the same as switching the extension off.
@@ -459,8 +459,8 @@ committed.
 - A server that needs sign-in, in a thread that has it, puts a notice over the composer with *Sign in*, as
   `AuthNotice` does for providers.
 
-`superego extensions --thread <id>` (the `extension.inspect` report) lists the servers too, each with where it's
-from and its state. The extension adds them to the report's `thread` section, using the same reasons.
+`superego mcp-servers --thread <id>` lists them too, each with where it's from and its state, and those left out, with
+the same reasons. It's a command of the extension's own (`src/cli.ts`), which the app adds to its command line.
 
 ### Ego
 

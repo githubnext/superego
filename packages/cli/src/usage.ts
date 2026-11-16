@@ -1,19 +1,9 @@
 // What the command line takes, as one table: `superego --help` prints all of it, and `superego <command> --help` (or
 // `superego help <command>`) the entries of that command, with their options and examples. Both come from here, so
 // they say the same.
+// Commands an app adds (command.ts) have their entries here too, a group of their own each.
 import type { AppConfig } from '@superego/protocol'
-
-/** An option: its flags, and what it does. */
-type Option = [flags: string, does: string]
-
-type Entry = {
-  /** What follows the command's name: its words, then its arguments and options. */
-  use: string
-  /** What it does; more lines for more. */
-  does: string
-  options?: Option[]
-  examples?: string[]
-}
+import type { CliCommand, HelpEntry as Entry, HelpOption as Option } from './command.ts'
 
 /** Options that work on every command that talks to a machine. */
 const GLOBAL: Option[] = [
@@ -22,8 +12,11 @@ const GLOBAL: Option[] = [
   ['-h, --help', 'This help; after a command, that command\'s'],
 ]
 
-/** The table, in groups (a blank line apart in the full help). `id` is the command's name, `name` the app's. */
-function groups(id: string, name: string): Entry[][] {
+/**
+ * The table, in groups (a blank line apart in the full help), with the app's own commands' before the daemon's. `id`
+ * is the command's name, `name` the app's.
+ */
+function groups(id: string, name: string, added: CliCommand[]): Entry[][] {
   const threadProfile: Option = ['-P, --profile <name>', "Start with this profile (default: the folder's default, the project's before yours)"]
   const worktree: Option = ['-w, --worktree', `In a git repository, work in a worktree of its own (~/.${id}/worktrees) instead of the checkout`]
   const prompt: Option = ['-p, --prompt <text>', 'Its first message']
@@ -114,13 +107,8 @@ function groups(id: string, name: string): Entry[][] {
       },
       { use: 'actions log', does: 'Its newest dispatches, from anywhere' },
       { use: 'mcp', does: "Serve a machine's actions exposed to outside agents as MCP tools, over stdio" },
-      { use: 'mcp-servers', does: "The MCP servers a machine's agents use (Settings → MCP servers): how each stands" },
-      { use: 'mcp-servers logs <name> [--lines N]', does: 'Its log: stderr, log messages, connection errors (secrets hidden)' },
-      { use: 'mcp-servers restart <name>', does: 'Stop it, forget that it failed, and start it again to check it' },
-      { use: 'mcp-servers set-secret <name> [VAR]', does: 'Store its API key, or the value of a secret env var (prompted, or read from stdin)' },
-      { use: 'mcp-servers sign-in <name>', does: 'Sign in to it with OAuth: open the page it prints, or paste where the browser ends up' },
-      { use: 'mcp-servers sign-out <name>', does: 'Forget its secrets and its sign-in' },
     ],
+    ...added.map((command) => command.help),
     [
       { use: 'daemon [status|stop]', does: "Run this computer's daemon in the foreground, or check on it" },
       { use: 'daemon restart [--now]', does: 'Restart it onto the installed code; --now interrupts working agents' },
@@ -147,8 +135,8 @@ const wordsOf = (entry: Entry) => {
 const ALIASES: Record<string, string> = { ls: 'threads', new: 'start' }
 
 /** The commands the table names, first words: what `superego <word>` runs rather than taking as a folder. */
-export function commandNames(): Set<string> {
-  const names = new Set(groups('', '').flat().map((entry) => wordsOf(entry)[0]).filter((word): word is string => Boolean(word) && !word!.startsWith('-')))
+export function commandNames(added: CliCommand[]): Set<string> {
+  const names = new Set(groups('', '', added).flat().map((entry) => wordsOf(entry)[0]).filter((word): word is string => Boolean(word) && !word!.startsWith('-')))
   for (const alias of Object.keys(ALIASES)) names.add(alias)
   return names
 }
@@ -168,8 +156,8 @@ const optionLines = (options: Option[]) => options.map(([flags, does]) => `  ${f
 const distinct = (options: Option[]) => [...new Map(options.map((o) => [o[0], o])).values()]
 
 /** The whole command line. */
-export function help(app: AppConfig): string {
-  const all = groups(app.id, app.name)
+export function help(app: AppConfig, added: CliCommand[]): string {
+  const all = groups(app.id, app.name, added)
   const body = all.map((group) => {
     const shared = distinct(group.flatMap((entry) => entry.options ?? []))
     return [...group.flatMap((entry) => lines(app.id, entry)), ...(shared.length ? optionLines(shared) : [])].join('\n')
@@ -181,8 +169,8 @@ export function help(app: AppConfig): string {
  * The help of the command `words` name (`['extension', 'test']`; arguments after them are left off), or undefined for
  * no command (a folder to start a thread in).
  */
-export function commandHelp(app: AppConfig, given: string[]): string | undefined {
-  const entries = groups(app.id, app.name).flat()
+export function commandHelp(app: AppConfig, given: string[], added: CliCommand[]): string | undefined {
+  const entries = groups(app.id, app.name, added).flat()
   const words = given.map((word, i) => i === 0 ? ALIASES[word] ?? word : word)
   const matches = (entry: Entry, count: number) => {
     const own = wordsOf(entry)

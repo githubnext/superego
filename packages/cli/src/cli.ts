@@ -18,8 +18,7 @@ import { formatReport } from './inspect.ts'
 import { readThread } from './read.ts'
 import { skill } from './skill.ts'
 import { commandHelp, commandNames, help } from './usage.ts'
-import { catchRedirect } from '@superego/mcp-servers/loopback'
-import { ACTIONS as MCP_ACTIONS, SERVERS_VALUE as MCP_SERVERS, type CheckResult as McpCheck, type LogResult as McpLog, type SectionData as McpServers, type ServerInfo as McpServer, type ThreadServers } from '@superego/mcp-servers/shared'
+import type { CliCommand, CliContext } from './command.ts'
 import {
   checkIdentity, collectProfileUi, controlPath, filesOf, hashProfileUi, loginArgs, machineHub, MachineStore, masterAlive, openLocal, openMachine, routeOf, runUpdate, UiAllowStore, updateScript,
   type MachineConfig, type Transport,
@@ -50,6 +49,8 @@ export type CliOptions = {
   types?: string
   /** What `<id> extension test` checks and tests with (a packaged app's out/main/author-test.js); without, the checkout's. */
   authorTest?: string
+  /** Commands of the app's own (its bundled extensions'), beside the core's: see command.ts. */
+  commands?: CliCommand[]
 }
 
 // One CLI run serves one app; `runCli` sets these before anything else runs.
@@ -661,12 +662,8 @@ async function profileHere(values: { profile?: string; user?: boolean }, command
 /** `extensions`: what each extension on a machine is and does (inspect.ts), with `--thread`, what that thread goes without. */
 async function extensionsCommand(values: { machine?: string; thread?: string }) {
   const machine = resolveMachine(values.machine)
-  const { report, servers } = await on(machine, async (call) => {
-    const report = await call('extension.inspect', values.thread ? { thread: values.thread } : {})
-    const thread = values.thread ? (await call('thread.list', {})).find((t) => t.id === values.thread) : undefined
-    return { report, servers: thread?.facts?.['mcp-servers'] as ThreadServers | undefined }
-  })
-  return print(servers ? { ...report, mcpServers: servers } : report, () => console.log(formatReport(report, machine.label, app.id, servers)))
+  const report = await on(machine, (call) => call('extension.inspect', values.thread ? { thread: values.thread } : {}))
+  return print(report, () => console.log(formatReport(report, machine.label, app.id)))
 }
 
 async function extensionCommand(sub: string | undefined, rest: string[], values: { profile?: string; user?: boolean; ui?: boolean; machine?: string; timeout?: string }) {
@@ -862,132 +859,6 @@ async function mcpCommand(name: string | undefined) {
   process.exit(0)
 }
 
-// ── MCP servers ─────────────────────────────────────────────────────────────────────────────────────────────────────
-
-/** `mcp-servers`: a machine's MCP servers (the extension's settings section), their logs, a restart, a secret set. */
-async function mcpServersCommand(sub: string | undefined, rest: string[], values: { machine?: string; lines?: string }) {
-  const machine = resolveMachine(values.machine)
-  const run = <T>(id: string, params: object) => on(machine, (call) => call('action.run', { id, params, exposure: 'cli' })) as Promise<T>
-  const line = (s: McpServer) => [
-    s.from.type === 'machine' ? s.name : `${s.name} (${s.from.scope}:${s.from.profile})`,
-    s.runs,
-    s.state + (s.tools !== undefined ? ` · ${s.tools} tool${s.tools === 1 ? '' : 's'}${s.deferred ? ', by search' : ''}` : '') + (s.config.unprofiled ? ' · without a profile too' : ''),
-  ]
-  /** The machine's servers, as Settings → MCP servers draws them (the extension's live value): null while it's off. */
-  const listed = () => on(machine, (call) => call('value.watch', { key: MCP_SERVERS }).then((r) => r.value as McpServers | null))
-  if (!sub) {
-    const data = await listed()
-    if (!data) throw new RpcError('not_found', `${machine.label} has no MCP servers: the extension is off (Settings → Extensions)`)
-    return print(data, () => {
-      if (!data.servers.length && !data.profiles.length) return console.log(`No MCP servers on ${machine.label} yet. Add one in the app's Settings → MCP servers.`)
-      table([...data.servers, ...data.profiles].map(line))
-      for (const s of [...data.servers, ...data.profiles]) if (s.error && (s.state === 'failed' || s.state === 'needs-sign-in' || s.state === 'waiting')) console.log(`\n${s.name}: ${s.error}`)
-    })
-  }
-  const name = rest[0]
-  if (!name) throw new RpcError('usage', `${app.id} mcp-servers ${sub} <name>`)
-  /** A profile's server goes by its id; a name finds it when it's the only one of that name. */
-  const idOf = async (given: string) => {
-    if (given.includes('#')) return given
-    const data = await listed()
-    const found = [...data?.servers ?? [], ...data?.profiles ?? []].filter((s) => s.name === given)
-    if (found.length > 1 && !found.some((s) => s.id === given)) throw new RpcError('usage', `More than one server is called ${given}: name one by its id (${found.map((s) => s.id).join(', ')})`)
-    return found[0]?.id ?? given
-  }
-  if (sub === 'logs') {
-    const lines = values.lines ? Number(values.lines) : 100
-    const log = await run<McpLog>(MCP_ACTIONS.log, { server: await idOf(name), lines })
-    return print(log, () => console.log(log.text || `Nothing in ${log.path} yet.`))
-  }
-  if (sub === 'restart') {
-    const { server } = await run<McpCheck>(MCP_ACTIONS.restart, { server: await idOf(name) })
-    return print(server, () => { table([line(server)]); if (server.error) console.log(server.error) })
-  }
-  if (sub === 'set-secret') {
-    const id = await idOf(name)
-    const data = await listed()
-    const server = [...data?.servers ?? [], ...data?.profiles ?? []].find((s) => s.id === id)
-    if (!server) throw new RpcError('not_found', `No MCP server ${name} on ${machine.label}`)
-    const names = server.secrets.map((s) => s.name)
-    if (!names.length) throw new RpcError('usage', `${name} takes no secrets: its auth is ${server.config.auth?.type ?? 'none'}`)
-    const which = rest[1] ?? (names.length === 1 ? names[0]! : undefined)
-    if (!which || !names.includes(which)) throw new RpcError('usage', `Which? ${app.id} mcp-servers set-secret ${name} <${names.join('|')}>`)
-    const value = await readSecret(which === 'key' ? `API key for ${name}: ` : `${which} for ${name}: `)
-    if (!value) throw new RpcError('usage', 'Nothing given')
-    const checked = await run<McpCheck>(MCP_ACTIONS.setSecret, { server: id, values: { [which]: value } })
-    return print(checked.server, () => { table([line(checked.server)]); if (checked.server.error) console.log(checked.server.error) })
-  }
-  if (sub === 'sign-in') {
-    const id = await idOf(name)
-    const { transport } = await connect(machine)
-    try { await mcpSignIn(transport, machine, id, name) } finally { transport.close() }
-    const data = await listed()
-    const server = [...data?.servers ?? [], ...data?.profiles ?? []].find((s) => s.id === id)
-    return print(server ?? { id }, () => { console.log(`Signed in to ${name} on ${machine.label}.`); if (server) table([line(server)]) })
-  }
-  if (sub === 'sign-out') {
-    const { server } = await run<McpCheck>(MCP_ACTIONS.signOut, { server: await idOf(name) })
-    return print(server, () => console.log(`Signed out of ${name} on ${machine.label}.`))
-  }
-  throw new RpcError('usage', `Unknown: ${app.id} mcp-servers ${sub}`)
-}
-
-/**
- * Sign in to a server with OAuth from here (`mcp-servers.signIn`): the page to open is printed, and the address the
- * browser ends up on is caught by the machine's daemon (this computer's), by this command (another machine's: it
- * listens where the browser is sent, as the desktop app does), or pasted.
- */
-async function mcpSignIn(transport: Transport, machine: Machine, server: string, name: string) {
-  let flow: string | undefined
-  const early: Notifications['auth.event'][] = []
-  let hear = (_event: AuthEvent) => {}
-  transport.peer.on('auth.event', (params: Notifications['auth.event']) => {
-    if (flow === undefined) early.push(params)
-    else if (params.flow === flow) hear(params.event)
-  })
-  const stop = new AbortController()
-  let rl: ReturnType<typeof createInterface> | undefined
-  /** The prompt waiting for the address, and the address once this command caught it. */
-  let waiting: { id: string; asked: AbortController } | undefined
-  let caught: string | undefined
-  const respond = (prompt: string, value: string) => transport.peer.call('auth.respond', { flow: flow!, prompt, value }).catch((error: Error) => console.error(error.message))
-  const ended = new Promise<AuthEvent>((resolve) => {
-    hear = (event) => {
-      if (event.type === 'auth_url') {
-        console.error(`Open this page to sign in to ${name}:\n\n  ${event.url}\n`)
-        if (machine.config && event.callback) {
-          void catchRedirect(event.callback, stop.signal, event.url).then((url) => {
-            caught = url
-            if (waiting) respond(waiting.id, url)
-          }, () => {})
-        }
-      } else if (event.type === 'prompt' && event.prompt.type === 'manual_code') {
-        if (caught) return void respond(event.id, caught)
-        waiting = { id: event.id, asked: new AbortController() }
-        const { id, asked } = waiting
-        rl ??= createInterface({ input: process.stdin, output: process.stderr })
-        rl.question(`${event.prompt.message}\n> `, { signal: asked.signal }, (value) => { if (value.trim()) respond(id, value.trim()) })
-      } else if (event.type === 'prompt_closed') {
-        if (waiting?.id === event.id) { waiting.asked.abort(); waiting = undefined }
-      } else if (event.type === 'progress' || event.type === 'info') {
-        console.error(event.message)
-      } else if (event.type === 'done' || event.type === 'failed') {
-        resolve(event)
-      }
-    }
-  })
-  try {
-    ({ flow } = await transport.peer.call('action.run', { id: MCP_ACTIONS.signIn, params: { server }, exposure: 'cli' }) as { flow: string })
-    for (const params of early.splice(0)) if (params.flow === flow) hear(params.event)
-    const end = await ended
-    if (end.type === 'failed') throw new RpcError('auth_failed', end.message)
-  } finally {
-    stop.abort()
-    waiting?.asked.abort()
-    rl?.close()
-  }
-}
-
 /**
  * The app's layout as text (`layout.json`, which the desktop app keeps beside its settings): its path, then the file,
  * whose head lists the views the window declared and the places each fits.
@@ -1001,31 +872,32 @@ function layoutCommand() {
 
 // ── Dispatch ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const COMMANDS = new Set([...commandNames(), 'help'])
+/** The commands by name, the app's own with the core's (and `help`): set up by `runCli`. */
+let COMMANDS: Set<string>
+const added = () => options.commands ?? []
 
 async function main() {
   // `do` takes the action's own --params, which parseArgs would refuse.
   const at = process.argv.indexOf('do', 2)
   if (at >= 0 && process.argv.slice(2, at).every((a, i, all) => a === '--json' || a === '-m' || a === '--machine' || all[i - 1] === '-m' || all[i - 1] === '--machine')) {
-    if (process.argv.slice(at + 1).some((a) => a === '--help' || a === '-h')) return void process.stdout.write(commandHelp(app, ['do'])!)
+    if (process.argv.slice(at + 1).some((a) => a === '--help' || a === '-h')) return void process.stdout.write(commandHelp(app, ['do'], added())!)
     return doCommand([...process.argv.slice(2, at), ...process.argv.slice(at + 1)])
   }
-  const { values, positionals } = parseArgs({
-    allowPositionals: true,
-    options: {
-      machine: { type: 'string', short: 'm' }, prompt: { type: 'string', short: 'p' }, json: { type: 'boolean' }, profile: { type: 'string', short: 'P' }, worktree: { type: 'boolean', short: 'w' },
-      user: { type: 'boolean' }, archived: { type: 'boolean' }, ui: { type: 'boolean' }, thread: { type: 'string' },
-      all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
-      start: { type: 'boolean' }, update: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, skill: { type: 'boolean' },
-      lines: { type: 'string' }, wait: { type: 'boolean' }, timeout: { type: 'string' }, count: { type: 'boolean' },
-    },
-  })
+  // The core's options, and the app's commands' own (typed as Record: the core's code reads only its own).
+  const core = {
+    machine: { type: 'string', short: 'm' }, prompt: { type: 'string', short: 'p' }, json: { type: 'boolean' }, profile: { type: 'string', short: 'P' }, worktree: { type: 'boolean', short: 'w' },
+    user: { type: 'boolean' }, archived: { type: 'boolean' }, ui: { type: 'boolean' }, thread: { type: 'string' },
+    all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
+    start: { type: 'boolean' }, update: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, skill: { type: 'boolean' },
+    wait: { type: 'boolean' }, timeout: { type: 'string' }, count: { type: 'boolean' },
+  } as const
+  const { values, positionals } = parseArgs({ allowPositionals: true, options: Object.assign({}, ...added().map((command) => command.options ?? {}), core) as typeof core })
   json = Boolean(values.json)
   const [first, ...rest] = positionals
   // `<command> --help` and `help <command>`: that command's usage; else all of it.
   if (values.help || first === 'help') {
     const words = first === 'help' ? rest : positionals
-    return void process.stdout.write((words[0] && COMMANDS.has(words[0]) && commandHelp(app, words)) || help(app))
+    return void process.stdout.write((words[0] && COMMANDS.has(words[0]) && commandHelp(app, words, added())) || help(app, added()))
   }
   if (values.skill) return void process.stdout.write(skill(first))
   // No command, or a directory: start a thread there and open it.
@@ -1061,7 +933,16 @@ async function main() {
     case 'web': return webCommand(rest[0], rest.slice(1), values)
     case 'layout': return layoutCommand()
     case 'mcp': return mcpCommand(values.machine)
-    case 'mcp-servers': return mcpServersCommand(rest[0], rest.slice(1), values)
+  }
+  const command = added().find((c) => c.name === first)
+  if (command) return command.run(contextFor(resolveMachine(values.machine)), rest[0], rest.slice(1), values as Record<string, string | boolean | undefined>)
+}
+
+/** What an app's own command works with (command.ts): the machine, and the ways the core's commands reach and print. */
+function contextFor(machine: Machine): CliContext {
+  return {
+    app, machine: { id: machine.id, label: machine.label, remote: Boolean(machine.config) },
+    on: (work) => on(machine, work), connect: () => connect(machine), print, table, readSecret,
   }
 }
 
@@ -1072,6 +953,9 @@ export function runCli(config: AppConfig, cliOptions: CliOptions) {
   dataDir = defaultDataDir(app)
   socket = socketPath(app, dataDir)
   machines = new MachineStore(dataDir)
+  const core = commandNames([])
+  for (const command of added()) if (core.has(command.name) || command.name === 'help') throw new Error(`${command.name} is a command of ${app.id}'s own`)
+  COMMANDS = new Set([...commandNames(added()), 'help'])
   main().catch((error: unknown) => {
     // A command used wrong: where its usage is.
     const misused = (error instanceof RpcError && error.kind === 'usage') || String((error as { code?: unknown }).code).startsWith('ERR_PARSE_ARGS')

@@ -2,12 +2,11 @@
 // finding out why theirs doesn't show: where it's from, how it stands (and why not), what it registered, who watches
 // its values, each profile's load, and with `--thread`, what that thread goes without and why.
 import type { ExtensionReport, ExtensionsReport } from '@superego/protocol'
-import { LEFT_OUT, type ThreadServers } from '@superego/mcp-servers/shared'
 
 const from = (e: ExtensionReport) => e.source === 'profile' ? `profile ${e.profiles?.join(', ') || '(none now)'}${e.file ? ` · ${e.file}` : ''}` : e.source === 'window' ? 'a window (no daemon half)' : e.source
 
 /** The report, as lines to read. */
-export function formatReport(report: ExtensionsReport, machine: string, id: string, servers?: ThreadServers): string {
+export function formatReport(report: ExtensionsReport, machine: string, id: string): string {
   const lines = [`Extensions on ${machine} (extension API ${report.api})`, '']
   const order = { failed: 0, refused: 0, 'timed out': 0, off: 1, 'set up': 2 } as const
   for (const e of [...report.extensions].sort((a, b) => order[a.state] - order[b.state] || a.name.localeCompare(b.name))) {
@@ -26,13 +25,6 @@ export function formatReport(report: ExtensionsReport, machine: string, id: stri
     lines.push('', `Thread ${report.thread.id}${report.thread.profile ? `, profile ${report.thread.profile}` : ', no profile'}`)
     if (!report.thread.without.length) lines.push('  goes without nothing: every extension here takes part')
     for (const w of report.thread.without) lines.push(`  without ${w.extension}: ${w.why}`)
-    // What mcp-servers says of it (its facts): the servers its last turn had, and those left out.
-    if (servers) {
-      lines.push('  MCP servers (as of its last turn):')
-      for (const s of servers.servers) lines.push(`    ${s.name}: ${s.from === 'profile' ? "its profile's" : "this machine's"}, ${s.state}, ${s.tools} tool${s.tools === 1 ? '' : 's'}${s.deferred ? ' (by search)' : ''}${s.error ? `: ${s.error}` : ''}`)
-      for (const l of servers.left ?? []) lines.push(`    without ${l.name}: ${LEFT_OUT[l.why]}`)
-      if (!servers.servers.length && !servers.left?.length) lines.push('    none')
-    }
   }
   lines.push('', `The window draws what the UI halves register; a UI half that throws says so in its place. Reload a profile: ${id} extension reload [-P name]`)
   return lines.join('\n')

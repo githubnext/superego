@@ -152,6 +152,20 @@ superego providers retry [provider]   # retry the threads waiting for sign-in no
 Each machine has its own settings (models, providers, which extensions are on). OAuth sign-in happens in the app's
 Settings.
 
+## MCP servers
+
+The MCP servers a machine's agents use (Settings → MCP servers), from the bundled `mcp-servers` extension:
+
+```sh
+superego mcp-servers                         # each, and how it stands
+superego mcp-servers --thread <thread>       # the servers its last turn had, and those it went without, and why
+superego mcp-servers logs <name> [--lines N] # its log (secrets hidden)
+superego mcp-servers restart <name>
+superego mcp-servers set-secret <name> [VAR] # its API key or a secret env var (prompted, or from stdin)
+superego mcp-servers sign-in <name>          # OAuth: open the page it prints, or paste where the browser ends up
+superego mcp-servers sign-out <name>
+```
+
 ## Web access
 
 ```sh

@@ -1,16 +1,17 @@
-// `superego mcp-servers`, against a daemon started from this checkout (with the bundled mcp-servers): a server added
-// (through `do`, as Ego's tool or a script would), listed, its secret set from stdin, its log read, and restarted; and
-// a thread's servers in `superego extensions --thread`; and an OAuth sign-in (`sign-in`, the address pasted), and `sign-out`.
+// `superego mcp-servers` (cli.ts, a command of the app's own), against a daemon started from this checkout (with the
+// bundled mcp-servers): a server added (through `do`, as Ego's tool or a script would), listed, its secret set from
+// stdin, its log read, and restarted; a thread's servers (`--thread`); and an OAuth sign-in (`sign-in`, the address
+// pasted), and `sign-out`.
 import { execFile, spawn } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, expect, it } from 'vitest'
-import { serveOAuth } from '../../../extensions/mcp-servers/test/auth-server.ts'
+import { serveOAuth } from './auth-server.ts'
 
 const CLI = fileURLToPath(new URL('../../../app/bin/superego.ts', import.meta.url))
-const FIXTURE = fileURLToPath(new URL('../../../extensions/mcp-servers/test/fixture.ts', import.meta.url))
+const FIXTURE = fileURLToPath(new URL('./fixture.ts', import.meta.url))
 let home: string
 const env = () => ({ ...process.env, SUPEREGO_HOME: home, SUPEREGO_APP: home, SUPEREGO_HEADLESS: '1', SUPEREGO_MODEL: 'faux', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '' })
 
@@ -60,7 +61,8 @@ it('lists, keys, logs and restarts MCP servers, and says which a thread has', { 
 
   const thread = await json(['start', home, '-p', 'hi'])
   await until(async () => (await json(['threads']))[0]?.status.state === 'done')
-  expect(await superego(['extensions', '--thread', thread.id])).toMatch(/MCP servers \(as of its last turn\):\n\s+fx: this machine's, \w+, 6 tools/)
+  expect(await superego(['mcp-servers', '--thread', thread.id])).toMatch(/^fx: this machine's, \w+, 6 tools$/m)
+  expect(await superego(['--help'])).toContain('superego mcp-servers logs <name> [--lines N]')
 })
 
 it('signs in to an OAuth server, the address pasted, and signs out', { timeout: 120_000 }, async () => {

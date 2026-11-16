@@ -76,7 +76,7 @@ that loads with one anyway (a key no extension here reads, a `without` naming no
   the profile again. Their secrets (`auth.names`' values, an API key) are set in Settings → MCP servers → From
   profiles, or `superego mcp-servers set-secret`; OAuth signs in there too, or with `superego mcp-servers sign-in`. A
   server of its own named as one of the machine's replaces it in this profile's threads. The thread's header says
-  which servers it has (`3 servers`), and why any it names were left out; `superego extensions --thread <id>` too.
+  which servers it has (`3 servers`), and why any it names were left out; `superego mcp-servers --thread <id>` too.
 
 Profile files are TypeScript (the daemon strips the types as it loads them) or JavaScript. They may import each other
 and Node's built-ins (`node:fs/promises`, …). `'superego'` is the only package they get (and `'superego/ui'` and

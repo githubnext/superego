@@ -486,6 +486,9 @@ importers:
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
+      '@superego/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@superego/daemon':
         specifier: workspace:*
         version: link:../../packages/daemon
@@ -910,9 +913,6 @@ importers:
       '@superego/daemon':
         specifier: workspace:*
         version: link:../daemon
-      '@superego/mcp-servers':
-        specifier: workspace:*
-        version: link:../../extensions/mcp-servers
       '@superego/protocol':
         specifier: workspace:*
         version: link:../protocol
