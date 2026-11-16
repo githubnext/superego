@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/header.png" alt="Superego" width="800"></p>
+
 # Superego
 
 One app for running agents: a desktop app, a daemon per machine that keeps agents running when the app is closed, and
