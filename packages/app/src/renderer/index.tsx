@@ -7,7 +7,7 @@ import '@superego/ui/styles.css'
 import './app.css'
 import { bool, obj, opt, str, type AppConfig, type SettingsSnapshot } from '@superego/protocol'
 import { watched } from './client.ts'
-import { createRegistry, layoutOf, placeScope, RegistryProvider, scopedViews, type UiExtension } from './extension.tsx'
+import { createRegistry, layoutOf, placeScope, RegistryProvider, scopedViews, type Registry, type UiExtension } from './extension.tsx'
 import { LAYOUT, placeView, type Place } from './layout.ts'
 import { registerLayoutText } from './layout-text.tsx'
 import { Profiles, Providers } from './SettingsView.tsx'
@@ -30,6 +30,7 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
   // In a browser there is no preload: the bridge is a WebSocket to the daemon that served the page.
   if (!window.superego) window.superego = webBridge()
   const registry = windowRegistry(app, extensions)
+  window.superegoRegistered = () => registeredIn(registry)
   void registry.router.load('app')
   // Declared before anything renders, so a component reading or setting them finds them registered.
   for (const { owner: _owner, ...section } of registry.appSettings) void window.superego.call('app', 'settings.register', { section }).catch((error) => console.error(error))
@@ -40,6 +41,30 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
       </RegistryProvider>
     </StrictMode>,
   )
+}
+
+declare global {
+  interface Window {
+    /** What the window's extensions registered now, by owner: for checks from outside (the evals, a debugging session). */
+    superegoRegistered?: () => Registered
+  }
+}
+
+/** Who registered something: an extension, of a profile (its key) or the app's. */
+type RegisteredOwner = { extension: string; profile?: string }
+export type Registered = {
+  panes: (RegisteredOwner & { kind: string })[]
+  slots: Record<string, RegisteredOwner[]>
+  views: (RegisteredOwner & { id: string })[]
+}
+
+function registeredIn(registry: Registry): Registered {
+  const owner = ({ extension, profile }: { extension: string; profile?: string }): RegisteredOwner => ({ extension, ...(profile ? { profile } : {}) })
+  return {
+    panes: registry.panes.map((p) => ({ kind: p.kind, ...owner(p.owner) })),
+    slots: Object.fromEntries(Object.entries(registry.slots).map(([name, list]) => [name, list.map((s) => owner(s.owner))])),
+    views: registry.views.map((v) => ({ id: v.id, ...owner(v.owner) })),
+  }
 }
 
 /** The window's registry: the core's own (its panes, rows, links, actions, the thread picker), then `extensions`. */
