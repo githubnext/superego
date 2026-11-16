@@ -3,7 +3,7 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { Menu as Base } from '@base-ui/react/menu'
 import { ContextMenu as BaseContext } from '@base-ui/react/context-menu'
-import { CaretRightIcon } from '@phosphor-icons/react'
+import { CaretRightIcon } from '@phosphor-icons/react/dist/csr/CaretRight'
 
 /** The menu's surface: portal, positioner and popup in one. */
 function Popup({ children, side = 'bottom', align = 'start', className = '' }: {

@@ -3,74 +3,73 @@
 // extensions use, by Phosphor's own names (ArchiveIcon); add one here, and to phosphor.d.ts, to use it. A few Phosphor
 // lacks are drawn on its grid below.
 import { forwardRef } from 'react'
-import { IconBase, type Icon as PhosphorIcon, type IconWeight as Weight } from '@phosphor-icons/react'
+import type { Icon as PhosphorIcon, IconWeight as Weight } from '@phosphor-icons/react'
+import IconBase from '@phosphor-icons/react/dist/lib/IconBase'
 
-export {
-  ArchiveIcon,
-  ArrowsLeftRightIcon,
-  ArrowUpIcon,
-  CardsIcon,
-  ChatsIcon,
-  ColumnsIcon,
-  ColumnsPlusRightIcon,
-  GlobeIcon,
-  IdentificationBadgeIcon,
-  KeyIcon,
-  ShieldWarningIcon,
-  WarningIcon,
-  ChatTextIcon,
-  ArrowClockwiseIcon,
-  ArrowCounterClockwiseIcon,
-  ArrowDownIcon,
-  ArrowElbowDownRightIcon,
-  ArrowElbowRightIcon,
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  BellIcon,
-  BroomIcon,
-  PlugsConnectedIcon,
-  PlugIcon,
-  CaretDownIcon,
-  CaretLeftIcon,
-  CaretRightIcon,
-  ChatCircleIcon,
-  ChatsCircleIcon,
-  CheckIcon,
-  CommandIcon,
-  CornersInIcon,
-  CornersOutIcon,
-  CopyIcon,
-  DotsThreeIcon,
-  ExclamationMarkIcon,
-  FileIcon,
-  ImageBrokenIcon,
-  FilePlusIcon,
-  FileTextIcon,
-  FolderSimpleIcon,
-  GearSixIcon,
-  GitBranchIcon,
-  LifebuoyIcon,
-  ListIcon,
-  MagnifyingGlassIcon,
-  MagnifyingGlassMinusIcon,
-  MagnifyingGlassPlusIcon,
-  MinusIcon,
-  NotePencilIcon,
-  PaperclipIcon,
-  PauseIcon,
-  PencilSimpleIcon,
-  PlusIcon,
-  QuestionMarkIcon,
-  SidebarSimpleIcon,
-  SparkleIcon,
-  SquareSplitHorizontalIcon,
-  TableIcon,
-  StopIcon,
-  TerminalIcon,
-  WrenchIcon,
-  XIcon,
-  type Icon, type IconProps, type IconWeight,
-} from '@phosphor-icons/react'
+export { ArchiveIcon } from '@phosphor-icons/react/dist/csr/Archive'
+export { ArrowsLeftRightIcon } from '@phosphor-icons/react/dist/csr/ArrowsLeftRight'
+export { ArrowUpIcon } from '@phosphor-icons/react/dist/csr/ArrowUp'
+export { CardsIcon } from '@phosphor-icons/react/dist/csr/Cards'
+export { ChatsIcon } from '@phosphor-icons/react/dist/csr/Chats'
+export { ColumnsIcon } from '@phosphor-icons/react/dist/csr/Columns'
+export { ColumnsPlusRightIcon } from '@phosphor-icons/react/dist/csr/ColumnsPlusRight'
+export { GlobeIcon } from '@phosphor-icons/react/dist/csr/Globe'
+export { IdentificationBadgeIcon } from '@phosphor-icons/react/dist/csr/IdentificationBadge'
+export { KeyIcon } from '@phosphor-icons/react/dist/csr/Key'
+export { ShieldWarningIcon } from '@phosphor-icons/react/dist/csr/ShieldWarning'
+export { WarningIcon } from '@phosphor-icons/react/dist/csr/Warning'
+export { ChatTextIcon } from '@phosphor-icons/react/dist/csr/ChatText'
+export { ArrowClockwiseIcon } from '@phosphor-icons/react/dist/csr/ArrowClockwise'
+export { ArrowCounterClockwiseIcon } from '@phosphor-icons/react/dist/csr/ArrowCounterClockwise'
+export { ArrowDownIcon } from '@phosphor-icons/react/dist/csr/ArrowDown'
+export { ArrowElbowDownRightIcon } from '@phosphor-icons/react/dist/csr/ArrowElbowDownRight'
+export { ArrowElbowRightIcon } from '@phosphor-icons/react/dist/csr/ArrowElbowRight'
+export { ArrowLeftIcon } from '@phosphor-icons/react/dist/csr/ArrowLeft'
+export { ArrowRightIcon } from '@phosphor-icons/react/dist/csr/ArrowRight'
+export { BellIcon } from '@phosphor-icons/react/dist/csr/Bell'
+export { BroomIcon } from '@phosphor-icons/react/dist/csr/Broom'
+export { PlugsConnectedIcon } from '@phosphor-icons/react/dist/csr/PlugsConnected'
+export { PlugIcon } from '@phosphor-icons/react/dist/csr/Plug'
+export { CaretDownIcon } from '@phosphor-icons/react/dist/csr/CaretDown'
+export { CaretLeftIcon } from '@phosphor-icons/react/dist/csr/CaretLeft'
+export { CaretRightIcon } from '@phosphor-icons/react/dist/csr/CaretRight'
+export { ChatCircleIcon } from '@phosphor-icons/react/dist/csr/ChatCircle'
+export { ChatsCircleIcon } from '@phosphor-icons/react/dist/csr/ChatsCircle'
+export { CheckIcon } from '@phosphor-icons/react/dist/csr/Check'
+export { CommandIcon } from '@phosphor-icons/react/dist/csr/Command'
+export { CornersInIcon } from '@phosphor-icons/react/dist/csr/CornersIn'
+export { CornersOutIcon } from '@phosphor-icons/react/dist/csr/CornersOut'
+export { CopyIcon } from '@phosphor-icons/react/dist/csr/Copy'
+export { DotsThreeIcon } from '@phosphor-icons/react/dist/csr/DotsThree'
+export { ExclamationMarkIcon } from '@phosphor-icons/react/dist/csr/ExclamationMark'
+export { FileIcon } from '@phosphor-icons/react/dist/csr/File'
+export { ImageBrokenIcon } from '@phosphor-icons/react/dist/csr/ImageBroken'
+export { FilePlusIcon } from '@phosphor-icons/react/dist/csr/FilePlus'
+export { FileTextIcon } from '@phosphor-icons/react/dist/csr/FileText'
+export { FolderSimpleIcon } from '@phosphor-icons/react/dist/csr/FolderSimple'
+export { GearSixIcon } from '@phosphor-icons/react/dist/csr/GearSix'
+export { GitBranchIcon } from '@phosphor-icons/react/dist/csr/GitBranch'
+export { LifebuoyIcon } from '@phosphor-icons/react/dist/csr/Lifebuoy'
+export { ListIcon } from '@phosphor-icons/react/dist/csr/List'
+export { MagnifyingGlassIcon } from '@phosphor-icons/react/dist/csr/MagnifyingGlass'
+export { MagnifyingGlassMinusIcon } from '@phosphor-icons/react/dist/csr/MagnifyingGlassMinus'
+export { MagnifyingGlassPlusIcon } from '@phosphor-icons/react/dist/csr/MagnifyingGlassPlus'
+export { MinusIcon } from '@phosphor-icons/react/dist/csr/Minus'
+export { NotePencilIcon } from '@phosphor-icons/react/dist/csr/NotePencil'
+export { PaperclipIcon } from '@phosphor-icons/react/dist/csr/Paperclip'
+export { PauseIcon } from '@phosphor-icons/react/dist/csr/Pause'
+export { PencilSimpleIcon } from '@phosphor-icons/react/dist/csr/PencilSimple'
+export { PlusIcon } from '@phosphor-icons/react/dist/csr/Plus'
+export { QuestionMarkIcon } from '@phosphor-icons/react/dist/csr/QuestionMark'
+export { SidebarSimpleIcon } from '@phosphor-icons/react/dist/csr/SidebarSimple'
+export { SparkleIcon } from '@phosphor-icons/react/dist/csr/Sparkle'
+export { SquareSplitHorizontalIcon } from '@phosphor-icons/react/dist/csr/SquareSplitHorizontal'
+export { TableIcon } from '@phosphor-icons/react/dist/csr/Table'
+export { StopIcon } from '@phosphor-icons/react/dist/csr/Stop'
+export { TerminalIcon } from '@phosphor-icons/react/dist/csr/Terminal'
+export { WrenchIcon } from '@phosphor-icons/react/dist/csr/Wrench'
+export { XIcon } from '@phosphor-icons/react/dist/csr/X'
+export type { Icon, IconProps, IconWeight } from '@phosphor-icons/react'
 
 /**
  * Open a pane beside: a window split in two, a plus in the new half. Phosphor's ColumnsPlusRight is the layout switch's,

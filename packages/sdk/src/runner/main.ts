@@ -7,7 +7,7 @@
 // The tests run in a worker process of their own (this file again, with --worker), which this one stops when a file
 // runs longer than the time limit (a loop that never ends: no test's own timeout fires through one), saying which test
 // it was in, and goes on with the files after it in another. Exits 0 when the types check and every test passes.
-import { fork } from 'node:child_process'
+import { fork, type ChildProcess } from 'node:child_process'
 import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
@@ -71,6 +71,11 @@ async function main(): Promise<number> {
  * process ended before it did (a test calling process.exit, say).
  */
 async function supervise(files: string[]): Promise<Tally & { errors: number }> {
+  // Stopped itself (an agent's command timing out, say): the worker too, which may be in a loop that never ends.
+  let worker: ChildProcess | undefined
+  for (const name of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
+    process.once(name, () => { worker?.kill('SIGKILL'); process.kill(process.pid, name) })
+  }
   const total = { passed: 0, failed: 0, skipped: 0, todo: 0, errors: 0 }
   const add = (tally: Tally & { errors: number }) => { for (const key of Object.keys(total) as (keyof typeof total)[]) total[key] += tally[key] }
   let next = 0
@@ -81,7 +86,7 @@ async function supervise(files: string[]): Promise<Tally & { errors: number }> {
     let sofar: (Tally & { errors: number }) | undefined
     const { code, signal } = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((done) => {
       // This file again, as the worker: the app's bundle (author-test.js) or main.ts, on this runtime and its flags.
-      const child = fork(process.argv[1]!, ['--worker', dir, ...files.slice(next)], { stdio: 'inherit' })
+      const child = worker = fork(process.argv[1]!, ['--worker', dir, ...files.slice(next)], { stdio: 'inherit' })
       let timer: NodeJS.Timeout | undefined
       child.on('message', (message: Message) => {
         if (message.type === 'file') {
@@ -126,6 +131,8 @@ async function supervise(files: string[]): Promise<Tally & { errors: number }> {
 async function work(files: string[]): Promise<number> {
   // Written as it's printed, not when the event loop next turns: a loop that never ends would keep it.
   for (const stream of [process.stdout, process.stderr]) (stream as unknown as { _handle?: { setBlocking?: (on: boolean) => void } })._handle?.setBlocking?.(true)
+  // The process that started it gone (killed outright): nothing to tell, and no one to stop it.
+  process.on('disconnect', () => process.exit(1))
   const send = (message: Message) => new Promise<void>((done) => { process.send!(message, () => done()) })
   hook()
   provide((await import('./modules.ts')).modules)

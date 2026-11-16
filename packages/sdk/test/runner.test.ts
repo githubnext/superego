@@ -1,8 +1,8 @@
 // `superego extension test`'s runner, as the command line runs it: each test named as it starts, and a test file that
 // never ends (a synchronous loop, which no test's own timeout can stop) stopped after the time limit, naming the test,
 // with the files after it still run.
-import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { execFile, spawn } from 'node:child_process'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -13,13 +13,16 @@ let dir: string
 beforeAll(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-runner-')) })
 afterAll(async () => { await rm(dir, { recursive: true, force: true }) })
 
-/** Run the runner on `files` (written to a profile folder of their own, with no tsconfig: no type check). */
+/**
+ * Run the runner on `files` (written to a profile folder of their own, with no tsconfig: no type check). Stopped short
+ * of the test's own timeout, so a runner that never ends fails with what it printed.
+ */
 async function run(name: string, files: Record<string, string>, args: string[] = []): Promise<{ code: number; out: string }> {
   const profile = join(dir, name)
   await mkdir(profile, { recursive: true })
   for (const [file, source] of Object.entries(files)) await writeFile(join(profile, file), source)
   return new Promise((resolve) => {
-    execFile(process.execPath, [MAIN, '--types', join(dir, 'none'), ...args, profile], { timeout: 60_000, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '' } }, (error, stdout, stderr) => {
+    execFile(process.execPath, [MAIN, '--types', join(dir, 'none'), ...args, profile], { timeout: 50_000, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '' } }, (error, stdout, stderr) => {
       resolve({ code: error ? (typeof error.code === 'number' ? error.code : 1) : 0, out: stdout + stderr })
     })
   })
@@ -68,4 +71,27 @@ it('stops a file that never finishes loading', async () => {
   expect(code).toBe(1)
   expect(out).toContain('✗ a.test.ts: still running after 1s, so it was stopped while loading.')
   expect(out).toContain('1 error')
+}, 60_000)
+
+it('stops its worker when it is stopped itself, even in a loop that never ends', async () => {
+  const profile = join(dir, 'stopped')
+  const pidFile = join(profile, 'worker.pid')
+  await mkdir(profile, { recursive: true })
+  await writeFile(join(profile, 'a.test.ts'), `import { writeFileSync } from 'node:fs'
+import { it } from 'vitest'
+it('spins', () => { writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); for (;;) {} })
+`)
+  const runner = spawn(process.execPath, [MAIN, '--types', join(dir, 'none'), profile], { stdio: 'ignore' })
+  const exited = new Promise((done) => runner.on('exit', done))
+  // The worker's pid, once its test has started.
+  let pid = 0
+  while (!pid) {
+    pid = Number(await readFile(pidFile, 'utf8').catch(() => '0'))
+    if (!pid) await new Promise((done) => setTimeout(done, 50))
+  }
+  runner.kill('SIGTERM')
+  await exited
+  // Killed with the runner, and gone once reaped, a moment after.
+  const alive = () => { try { process.kill(pid, 0); return true } catch { return false } }
+  await expect.poll(alive, { timeout: 5_000 }).toBe(false)
 }, 60_000)
