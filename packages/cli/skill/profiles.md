@@ -101,8 +101,7 @@ checks types with the same tsconfig before it runs the tests.
 import {
   defineProfile,                                     // profile.ts
   defineExtension, defineTool, section,              // agent extensions
-  wrapTool, wrapSection,                             // decorating other extensions' tools and sections
-  hook, ToolTask,                                    // watching tool calls: hook(ToolTask, { afterTool })
+  wrapTool, wrapSection, hook,                       // decorating other extensions' tools and sections
   defineDaemonExtension, defineAction, RpcError, spawnGroup,   // daemon extensions (`runs: 'machine'` is implied)
   obj, str, num, int, bool, arr, opt, lit, union, nullable, unknown,   // JSON Schema for parameters
 } from 'superego'

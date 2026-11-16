@@ -18,6 +18,14 @@ import type { ProfileRef, ProfileSpec } from './profiles.ts'
 import type { RunRecord } from './recap.ts'
 
 export type { AuthFlow, RunRecord }
+
+/** A tool call that ended, as `toolCalls` hears it: its thread, what the agent asked, and how it went. 1.8. */
+export type ToolCallRecord = {
+  thread: string
+  call: { id: string; name: string; args: Json }
+  /** `text`: what the model was told, an error's message included. */
+  result: { isError: boolean; text?: string }
+}
 export type { AuthFlowEvent } from './auth-flows.ts'
 
 /**
@@ -351,6 +359,12 @@ export type DaemonApi = {
    * first sentence. Not for threads that go without this extension. Quick, without side effects. 1.6.
    */
   recap(describe: (run: RunRecord) => string | undefined): void
+  /**
+   * Hear each tool call a thread's agent makes, once it ends (errors too: a refused or interrupted call). Read-only:
+   * the run doesn't wait for it, and it can't change the result. A throw (or a rejection) is logged. Not for threads
+   * that go without this extension; a profile's only for its own threads. 1.8.
+   */
+  toolCalls(watch: (record: ToolCallRecord) => void | Promise<void>): void
   /**
    * Choose a thread's agent, from this extension's state with it (no `id` yet while it's made; the state its `creating`
    * gave). Its instructions hold only while it answers. The first chooser to answer wins, in the order extensions were

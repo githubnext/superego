@@ -7,7 +7,7 @@ import { homedir, hostname, platform } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
 import {
-  type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, defineExtension, defineTool, type EntryId, type Extension, Harness, hook, InboxDoc, type SubmissionId,
+  type Conversation, type ConversationId, type ConversationView, createRegistry, defineDoc, defineExtension, defineTool, type EntryId, type Extension, Harness, hook, InboxDoc, type SubmissionId, ToolTask,
   type LiveState, section, type Storage, wrapSection, wrapTool,
 } from '@earendil-works/pi-durable'
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
@@ -23,7 +23,7 @@ import { createAuthFlows } from './auth-flows.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import {
   defineDaemonExtension, type AgentChoice, type AgentPartsThread, type ArchiveNote, type ArchiveNotes, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type OutgoingMessage, type ScopedValue, type StatusContribution, type SubmitTransform,
-  type ThreadCreating, type ThreadDraft, type ThreadHooks,
+  type ThreadCreating, type ThreadDraft, type ThreadHooks, type ToolCallRecord,
 } from './extension.ts'
 import { titleOf } from './names.ts'
 import { lastRun, recapOf, type RunRecord } from './recap.ts'
@@ -377,6 +377,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const threadHooks: Owned<ThreadHooks>[] = []
   const factSources: Owned<(thread: { id: string; state: Json | undefined }) => Json | undefined>[] = []
   const recaps: Owned<(run: RunRecord) => string | undefined>[] = []
+  const toolWatchers: Owned<(record: ToolCallRecord) => void | Promise<void>>[] = []
   const choosers: Owned<(thread: { id?: string; state: Json | undefined; profile?: ProfileRef }) => AgentChoice | undefined>[] = []
   /**
    * An extension's `agentParts`: what it adds to each thread's agent at submit, from parts it gives with `always:
@@ -511,7 +512,37 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       setup: (s) => s.agent(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] })),
     },
   ]
-  /** A thread's last answer, as text. */
+  /**
+   * Every thread's agent has this: it tells extensions' `toolCalls` of each call that ended, without waiting for them
+   * or letting them change the result. Not an extension of its own, so nothing goes without it.
+   */
+  const toolCallsPart = defineExtension({
+    name: 'tool-calls',
+    hooks: [hook(ToolTask, {
+      afterTool(call, result, api) {
+        const id = String(api.conversationId)
+        const m = mounted.get(id)
+        if (!m || !toolWatchers.length) return undefined
+        const without = withoutOf(id, m.meta, loadedProfile(m.meta))
+        // What the model is told: the output's text, then what went wrong (an error's message comes as a diagnostic).
+        const text = [
+          ...(result.output ?? []).flatMap((block) => block.type === 'text' ? [block.text] : []),
+          ...(result.diagnostics ?? []).map((d) => d.message),
+        ].join('\n')
+        const record: ToolCallRecord = {
+          thread: id,
+          call: { id: call.id, name: call.name, args: call.arguments as Json },
+          result: { isError: Boolean(result.isError), ...(text ? { text } : {}) },
+        }
+        for (const watcher of toolWatchers) {
+          if (!appliesTo(watcher, without, m.meta)) continue
+          void Promise.resolve().then(() => watcher.value(record)).catch((error: unknown) => console.error(`Extension ${watcher.owner}: toolCalls failed:`, error))
+        }
+        return undefined
+      },
+    })],
+  })
+  registry.install(toolCallsPart)
   /** A thread's newest transcript entries, newest first: none from before it was last cleared. */
   async function newest(id: string, limit: number) {
     const m = await get(id)
@@ -1218,6 +1249,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         changed()
       },
       recap(describe) { own(recaps, describe, 'a recap'); note('recap', 'a recap') },
+      toolCalls(watch) { own(toolWatchers, watch, 'a toolCalls watcher'); note('toolCalls', 'a toolCalls watcher') },
       agentFor(choose) { own(choosers, choose as (typeof choosers)[number]['value'], 'an agentFor'); note('agentFor', 'an agentFor'); changed() },
       threads: {
         list: (options) => list(options),
@@ -1606,7 +1638,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const chosen = (choice?.extensions ?? []).map((part) => chosenParts.get(choice!.by)?.get(part.name) ?? console.warn(`agentFor of ${choice!.by} chose ${part.name}, which it doesn't give with agent(part, { always: false })`)).filter((part) => part !== undefined)
     const added = id === undefined ? [] : await partsAdded(id, meta, without, profile)
     // Each part once: one a chooser and an adder both give, where the chooser put it.
-    const extensions = [...new Set([...partsFor(without), ...chosen, ...added, ...(profile ? partsOf(profile) : [])])]
+    const extensions = [...new Set([...partsFor(without), ...chosen, ...added, ...(profile ? partsOf(profile) : []), toolCallsPart])]
     // Always said, never left as it was: instructions a chooser gave go when it no longer answers.
     const instructions = choice?.instructions ?? (profile?.spec.prompt || null)
     return { model, thinkingLevel, extensions, instructions, without }

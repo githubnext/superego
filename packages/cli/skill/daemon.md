@@ -90,6 +90,7 @@ once.
 | `superego.state<T>()` | its own state with each thread, kept in the thread (across restarts): `get(id)`, `set(id, next \| undefined)`, `update(id, edit)` |
 | `superego.facts(({ id, state }) => …)` | what clients see of each thread as `thread.ext.<name>`, worked out from its state; nothing for undefined |
 | `superego.recap(({ thread, answer, calls }) => …)` | say in a line what a run did, once it ends (`calls`: its tool calls, oldest first, each `{ name, arguments, failed }`): the thread's `done` status carries it, and its notification says it. The first to answer wins; with none, the answer's first sentence. Quick, no side effects. 1.6 |
+| `superego.toolCalls(({ thread, call, result }) => …)` | hear each tool call a thread's agent makes, once it ends: `call` is `{ id, name, args }`, `result` `{ isError, text? }` (`text`: what the model was told). Read-only: the run doesn't wait for it, and a throw is only logged. Not for threads that go without the extension, a profile's only for its own. See [Watching tool calls](#watching-tool-calls). 1.8 |
 | `superego.agentFor(({ id, state, profile }) => …)` | choose a thread's agent: `{ instructions?, model?, thinking?, extensions?, without? }`, or nothing. The first answer wins; quick, no side effects. Parts it names are given with `superego.agent(part, { always: false })`, which gives them to no other thread |
 | `superego.agentParts(({ id, hidden, owner, profile }) => …)` | add parts to whatever agent a thread has: asked at every submit, every extension's adding up (after `agentFor`'s parts, before the profile's). `profile` is `{ ref, spec }` as loaded now, so a profile's edit counts from the next turn. Answers parts it gave with `agent(part, { always: false })`, or nothing; may be async, up to 5s (a throw, or later, adds nothing that turn). 1.7 |
 | `superego.auth.flow(context, async (flow) => …)` | run a sign-in flow of its own from an action (`context`: the action's, so the client that asked hears it as `auth.event`, answers with `auth.respond`, stops it with `auth.cancel`). Answers `{ flow }`, for the action to return. `flow.emit(event)` (`auth_url` with an optional loopback `callback`, `device_code`, `info`, `progress`), `await flow.prompt({ type, message })` (`text`, `secret`, `select`, `manual_code`), `flow.signal` (cancelled, or the extension torn down). Ends `done` when it resolves, `failed` with the error when it throws. The window draws it with `SignInFlow` (`superego --skill ui`). 1.7 |
@@ -124,38 +125,26 @@ tool `replay: 'safe'` so a restart asks again.
 
 ## Watching tool calls
 
-To see every tool call an agent makes, give the agent a hook on `ToolTask`. `afterTool(call, result, api)` runs as
-each call settles, before the model sees the result: return `result` to leave it as it is, or another result to
-replace it. `beforeTool(call, api)` runs first: return `{ block: 'why' }` to refuse the call, `{ arguments }` to change
-them, or nothing. `call` is `{ id, name, arguments }`; `api.conversationId` finds the thread. 1.8.
-
-This one marks threads that ran `sqlite3`, for the [sidebar mark in ui.md](ui.md#a-mark-in-the-sidebar):
+`superego.toolCalls(fn)` calls `fn({ thread, call: { id, name, args }, result: { isError, text? } })` after each tool
+call a thread's agent makes, errors too. It only watches: the run doesn't wait for it, and it can't change the result.
+A throw is logged. This one marks threads that ran `sqlite3`, for the [sidebar mark in ui.md](ui.md#a-mark-in-the-sidebar):
 
 ```ts
 // db.ts; in profile.ts: extensions: ['./db.ts']
-import { defineDaemonExtension, defineExtension, hook, ToolTask } from 'superego'
+import { defineDaemonExtension } from 'superego'
 
 export default defineDaemonExtension({
   name: 'db',
   setup(superego) {
     const touched = superego.state<{ why: string }>()
     superego.facts(({ state }) => state)              // clients see it as thread.ext.db
-    superego.agent(defineExtension({
-      name: 'db',
-      hooks: [hook(ToolTask, {
-        async afterTool(call, result, api) {
-          const command = String(call.arguments.command ?? '')
-          const thread = superego.threads.of(api.conversationId)
-          if (thread && /\bsqlite3\b/.test(command)) await touched.set(thread, { why: command.slice(0, 80) })
-          return result
-        },
-      })],
-    }))
+    superego.toolCalls(async ({ thread, call }) => {
+      const command = String((call.args as { command?: unknown }).command ?? '')
+      if (call.name === 'bash' && /\bsqlite3\b/.test(command)) await touched.set(thread, { why: command.slice(0, 80) })
+    })
   },
 })
 ```
-
-Keep hooks quick: the agent waits on them. A hook that throws is logged and skipped (`beforeTool`'s blocks the call).
 
 ## Trying it
 
