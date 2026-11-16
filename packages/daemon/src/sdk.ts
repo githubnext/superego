@@ -7,7 +7,7 @@
 // what its setup is given, a profile, the agent's tools and schemas, then the shapes these use.
 export { defineDaemonExtension, defineAction } from './extension.ts'
 export type {
-  DaemonExtension, DaemonApi, AgentChoice, AgentPart, AgentPartsAnswer, AgentPartsThread, LiveValue, ScopedValue, ThreadState, ThreadHooks, ThreadStarting,
+  DaemonExtension, DaemonApi, AgentChoice, AgentPart, AgentPartsAnswer, AgentPartsThread, ExtensionEntry, LiveValue, ScopedValue, ThreadState, ThreadHooks, ThreadStarting,
   ThreadDraft, OutgoingMessage, MessageBlock, SendTransform, StatusContribution, ArchiveNote, ArchiveNotes, AuthFlow, AuthFlowEvent, RunRecord, ToolCallRecord, MachineDraft, MachinePatch,
 } from './extension.ts'
 export type { DaemonContext } from './host.ts'

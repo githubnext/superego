@@ -211,6 +211,11 @@ export type AgentChoice = {
   extensions?: Extension[]
   /** Optional extensions it goes without besides (its tools, panes, UI): `['coding-tools']`. */
   without?: string[]
+  /**
+   * An agent that sets this machine up (Ego): other extensions' `agentParts` see `setup` on its threads, and may add
+   * their own setup tools there.
+   */
+  setup?: boolean
 }
 
 /**
@@ -237,6 +242,19 @@ export type AgentPartsThread = {
   owner?: string
   /** Its profile, as loaded now (`extends` merged): an edit to it shows from the next turn. */
   profile?: { ref: ProfileRef; spec: LoadedSpec }
+  /** Its agent sets this machine up: an `agentFor` chose it with `setup` (Ego's). */
+  setup: boolean
+}
+
+/** An extension of the app's here (the core's, a bundled one or a window's; not a profile's), as `extensions()` lists it. */
+export type ExtensionEntry = {
+  name: string; title?: string; description?: string; version?: string
+  /** It has a switch in Settings → Extensions, and a profile can go without it. */
+  optional: boolean
+  /** Not switched off on this machine. */
+  on: boolean
+  /** Its files in the data folder that hold keys (`about.secrets`). */
+  secrets?: string[]
 }
 
 /** What an `agentParts` answers: parts its extension gave with `agent(part, { always: false })`, or nothing. */
@@ -401,6 +419,8 @@ export type DaemonApi = {
    * (once) and counts as no answer.
    */
   agentFor<T extends Json = Json>(choose: (thread: { id?: string; state: T | undefined; profile?: ProfileRef }) => AgentChoice | undefined): void
+  /** The app's extensions on this machine (not profiles'), as Settings → Extensions has them: switched on or off, now. */
+  extensions(): ExtensionEntry[]
   threads: {
     /** The threads in use, newest first; `archived`: those put away instead; `hidden`: those no list shows instead. */
     list(options?: { archived?: boolean; hidden?: boolean }): Promise<ThreadInfo[]>

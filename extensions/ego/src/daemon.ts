@@ -17,9 +17,6 @@ import { agentName, RpcError, type MessageOrigin, type ThreadInfo } from '@super
 import { about, ASK, CLEAR, OUTSIDE } from './shared.ts'
 import { egoPrompt, egoTools } from './tools.ts'
 
-/** Settings' section of switches for optional extensions, one `extensions.<name>` each. */
-const EXTENSIONS = 'extensions'
-
 /**
  * Whether a message Ego answers is the user's own: a window's or the command line's, straight to its thread (no `by`,
  * no `from`), or passed on by `ego.ask` for one (`by` Ego, with the client's exposure). Not an outside agent's, and not
@@ -40,8 +37,10 @@ export function ego(): DaemonExtension {
       const name = agentName(superego.app)
       const { dataDir, threads } = superego
       const isEgo = (thread: ThreadInfo) => thread.owner === about.name
+      /** The files extensions say hold keys, whether they're on or not: what's in them is there all the same. */
+      const secrets = () => superego.extensions().flatMap((e) => e.secrets ?? [])
       const tools = egoTools({
-        dir: dataDir,
+        dir: dataDir, secrets,
         dispatch: (id, params) => superego.dispatch(id, params),
         actions: (exposure) => superego.actions(exposure),
         snapshot: () => superego.settings.snapshot(),
@@ -65,17 +64,14 @@ export function ego(): DaemonExtension {
       superego.agent(tools, { always: false })
       const state = superego.state<true>()
       superego.facts<true>(({ state }) => state === true ? true : undefined)
-      // The optional extensions it tells of: this machine's switches in Settings → Extensions, as they come and go.
-      let optional: string[] = []
-      const extensions = () => superego.settings.snapshot().then(({ sections }) => {
-        const switches = sections.find((s) => s.id === EXTENSIONS)?.settings ?? []
-        optional = switches.map((s) => s.key.slice(`${EXTENSIONS}.`.length))
-      }, (error: unknown) => console.error('Ego: reading the extensions failed:', error))
-      void extensions()
-      superego.settings.onChange(() => void extensions())
+      // Its agent sets this machine up: other extensions add their setup tools (mcp-servers', say). It tells of this
+      // machine's optional extensions (its switches in Settings → Extensions), as they are at each send.
       superego.agentFor<true>(({ state }) => state === true ? {
-        instructions: egoPrompt({ name: superego.app.name, ...(superego.app.agent ? { agent: superego.app.agent } : {}), id: superego.app.id, dataDir, agentsDir: superego.agentsDir, hostname: hostname(), optional }),
-        extensions: [tools], without: WITHOUT,
+        instructions: egoPrompt({
+          name: superego.app.name, ...(superego.app.agent ? { agent: superego.app.agent } : {}), id: superego.app.id, dataDir, agentsDir: superego.agentsDir, hostname: hostname(),
+          optional: superego.extensions().filter((e) => e.optional).map((e) => e.name), secrets: secrets(),
+        }),
+        extensions: [tools], without: WITHOUT, setup: true,
       } : undefined)
 
       // Its thread: among the hidden ones it owns (`owner`, which, unlike its facts, is there while it's off), the one

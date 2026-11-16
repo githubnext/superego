@@ -53,7 +53,8 @@ it("adds every extension's parts to whatever agent a thread has: after the choos
   const late = defineExtension({ name: 'late' })
   const asked: AgentPartsThread[] = []
   let api!: DaemonApi
-  const picker = defineDaemonExtension({ name: 'picker', setup(s) { s.agent(picked, { always: false }); s.agentFor(() => ({ extensions: [picked] })) } })
+  const picker = defineDaemonExtension({ name: 'picker', setup(s) { s.agent(picked, { always: false }); s.agentFor((t) => ({ extensions: [picked], ...(t.id === setupThread ? { setup: true } : {}) })) } })
+  let setupThread: string | undefined
   const adder = defineDaemonExtension({
     name: 'adder',
     setup(s) {
@@ -74,17 +75,22 @@ it("adds every extension's parts to whatever agent a thread has: after the choos
   const parts = await partsOf(peer, thread.id)
   expect(parts.filter((name) => ['picked', 'extra', 'late'].includes(name))).toEqual(['picked', 'extra'])
   expect(parts).toContain('coding-tools')
-  expect(asked).toEqual([{ id: thread.id, hidden: false }])
-  // An extension's own thread says so.
-  const own = await api.threads.start({ hidden: true, prompt: 'mine' })
+  expect(asked).toEqual([{ id: thread.id, hidden: false, setup: false }])
+  // An extension's own thread says so; a thread whose agent sets the machine up (an agentFor's `setup`) too.
+  const own = await api.threads.start({ hidden: true })
+  setupThread = own.id
+  await api.threads.send(own.id, 'mine')
   await until(() => asked.length === 2)
-  expect(asked[1]).toEqual({ id: own.id, hidden: true, owner: 'adder' })
+  expect(asked[1]).toEqual({ id: own.id, hidden: true, owner: 'adder', setup: true })
+  // The app's extensions here, each switch as it stands.
+  expect(api.extensions().find((e) => e.name === 'adder')).toEqual({ name: 'adder', optional: true, on: true })
   // Switched off, it isn't asked, and adds nothing.
   await peer.call('settings.set', { key: 'extensions.adder', value: false })
   await peer.call('thread.send', { thread: thread.id, text: 'again' })
   await done(peer, thread.id)
   expect(asked).toHaveLength(2)
   expect(await partsOf(peer, thread.id)).not.toContain('extra')
+  expect(api.extensions().find((e) => e.name === 'adder')?.on).toBe(false)
   await close()
 })
 

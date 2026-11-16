@@ -104,7 +104,8 @@ describe("Ego's tools", () => {
       await writeFile(join(dir, 'mcp-auth.json'), '{"server:linear":"lin_api_x"}')
       await writeFile(join(dir, 'auth.json'), '{"anthropic":"sk-x"}')
       await writeFile(join(dir, 'mcp-servers.json'), '{"servers":{}}')
-      const { tools = [] } = egoTools({ dir, ...on(createRouter()), snapshot, threads: threads() })
+      // Its own credential store, and the files extensions name (`about.secrets`).
+      const { tools = [] } = egoTools({ dir, secrets: () => ['mcp-auth.json', 'mcp-servers.json'], ...on(createRouter()), snapshot, threads: threads() })
       const read = (tools as unknown as Tool[]).find((t) => t.name === 'read')!
       const api = { conversationId: 1, cwd: dir, env: process.env }
       for (const path of ['mcp-auth.json', './auth.json', join(dir, 'sub', '..', 'mcp-auth.json'), 'mcp-servers.json']) {
@@ -145,7 +146,7 @@ describe("Ego's tools", () => {
 })
 
 describe('egoPrompt', () => {
-  const prompt = egoPrompt({ name: 'Superego', id: 'superego', dataDir: '/data', agentsDir: '/agents', hostname: 'here', optional: ['coding-tools', 'ego', 'agent-ui'] })
+  const prompt = egoPrompt({ name: 'Superego', id: 'superego', dataDir: '/data', agentsDir: '/agents', hostname: 'here', optional: ['coding-tools', 'ego', 'agent-ui'], secrets: ['mcp-auth.json'] })
 
   it('briefs builders with the extension commands, without Node', () => {
     expect(prompt).toContain('`superego extension\n  new <name> --user [--ui]`')
@@ -157,7 +158,7 @@ describe('egoPrompt', () => {
 
   it("names this machine's optional extensions, as they are", () => {
     expect(prompt).toContain('optional extensions it does without: coding-tools, ego, agent-ui\n')
-    expect(egoPrompt({ name: 'Superego', id: 'superego', dataDir: '/data', agentsDir: '/agents', hostname: 'here', optional: [] })).toContain('superego_settings lists them')
+    expect(egoPrompt({ name: 'Superego', id: 'superego', dataDir: '/data', agentsDir: '/agents', hostname: 'here', optional: [], secrets: [] })).toContain('superego_settings lists them')
   })
 
   it('takes the obvious default rather than asking', () => {

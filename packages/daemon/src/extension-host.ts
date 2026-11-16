@@ -60,11 +60,13 @@ type Owned<T> = { value: T; owner: string; profiles?: Set<string> }
 
 /** What an extension says of itself, and only that: the fields `ExtensionAbout` has, each of its type (a window's declaration is anyone's JSON). */
 function aboutOf(about: ExtensionAbout): ExtensionAbout {
-  const { name, title, description, required, version, api, panes } = about
+  const { name, title, description, required, version, api, panes, secrets } = about
   const kinds = panes && typeof panes === 'object' && !Array.isArray(panes) ? Object.entries(panes).filter(([, about]) => typeof about === 'string' && about) : []
+  const files = Array.isArray(secrets) ? secrets.filter((file) => typeof file === 'string' && file && !/[\\/]/.test(file)) : []
   return {
     name, ...(typeof title === 'string' && title ? { title } : {}), ...(typeof description === 'string' && description ? { description } : {}), ...(required === true ? { required } : {}),
     ...(typeof version === 'string' ? { version } : {}), ...(typeof api === 'string' ? { api } : {}), ...(kinds.length ? { panes: Object.fromEntries(kinds) } : {}),
+    ...(files.length ? { secrets: files } : {}),
   }
 }
 
@@ -252,11 +254,11 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
    * once, each given `agentPartsLimit` to answer. One that throws or takes longer adds nothing to this turn (logged).
    * Only parts the extension gave with `always: false`, by the name it gave them.
    */
-  async function partsAdded(id: string, meta: ThreadMeta, without: Set<string>, profile: LoadedProfile | undefined): Promise<Extension[]> {
+  async function partsAdded(id: string, meta: ThreadMeta, without: Set<string>, profile: LoadedProfile | undefined, choice: AgentChoice | undefined): Promise<Extension[]> {
     const applying = adders.filter((adder) => appliesTo(adder, without, meta))
     if (!applying.length) return []
     const thread: AgentPartsThread = {
-      id, hidden: Boolean(meta.hidden), ...(meta.owner ? { owner: meta.owner } : {}),
+      id, hidden: Boolean(meta.hidden), ...(meta.owner ? { owner: meta.owner } : {}), setup: choice?.setup === true,
       ...(meta.profile && profile ? { profile: { ref: meta.profile, spec: clone(profile.spec) } } : {}),
     }
     const answers = await Promise.all(applying.map(async (adder) => {
@@ -293,7 +295,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     })
     // Only parts its own extension gave with `always: false`.
     const chosen = (choice?.extensions ?? []).map((part) => chosenParts.get(choice!.by)?.get(part.name) ?? console.warn(`agentFor of ${choice!.by} chose ${part.name}, which it doesn't give with agent(part, { always: false })`)).filter((part) => part !== undefined)
-    const added = id === undefined ? [] : await partsAdded(id, meta, without, profile)
+    const added = id === undefined ? [] : await partsAdded(id, meta, without, profile, choice)
     // Each part once: one a chooser and an adder both give, where the chooser put it.
     const extensions = [...new Set([...partsFor(without), ...chosen, ...added, ...(profile ? profiles.partsOf(profile) : []), toolCallsPart])]
     // Always said, never left as it was: instructions a chooser gave go when it no longer answers.
@@ -596,6 +598,11 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       recap(describe) { own(recaps, describe, 'a recap'); note('recap', 'a recap') },
       toolCalls(watch) { own(toolWatchers, watch, 'a toolCalls watcher'); note('toolCalls', 'a toolCalls watcher') },
       agentFor(choose) { own(choosers, choose as (typeof choosers)[number]['value'], 'an agentFor'); note('agentFor', 'an agentFor'); changed() },
+      extensions: () => switchable().map((about) => ({
+        name: about.name, ...(about.title ? { title: about.title } : {}), ...(about.description ? { description: about.description } : {}),
+        ...(about.version !== undefined ? { version: about.version } : {}), optional: !about.required,
+        on: Boolean(about.required) || settings.get(`extensions.${about.name}`) !== false, ...(about.secrets ? { secrets: [...about.secrets] } : {}),
+      })),
       threads: threads.apiFor(extension.name),
       machines: {
         list: () => later.relay().entries().slice(1),

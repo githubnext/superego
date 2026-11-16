@@ -15,12 +15,12 @@ import type { DaemonContext } from '@superego/daemon/sdk'
 import { RpcError, type Json } from '@superego/protocol'
 import { checkConfig, ConfigFile, optionalSecretNames, profileServerNames, profileServers, profileServersProblem, secretNames } from './config.ts'
 import { Callbacks, DEFAULT_CALLBACK_PORT, redirectOf } from './loopback.ts'
-import { EGO, egoPart, userAsked } from './ego.ts'
+import { egoPart, userAsked } from './ego.ts'
 import { signIn } from './oauth.ts'
 import { mayHaveRun } from './results.ts'
 import { oauthResource, Runtime, type RuntimeOptions, type Server } from './servers.ts'
 import {
-  about, ACTIONS, ADD_PARAMS, CLIENT_SECRET, DEFAULTS, EDIT_PARAMS, INTERRUPTED, LOG_PARAMS, NAME_PARAMS, PROFILE_KEY, SECTION, SERVER_PARAMS, SERVERS_VALUE, SET_PARAMS, SET_SECRET_PARAMS, splitToolName, TOOL_PREFIX,
+  about, ACTIONS, ADD_PARAMS, CLIENT_SECRET, CONFIG_FILE, DEFAULTS, EDIT_PARAMS, INTERRUPTED, LOG_PARAMS, NAME_PARAMS, PROFILE_KEY, SECTION, SERVER_PARAMS, SERVERS_VALUE, SECRETS_FILE, SET_PARAMS, SET_SECRET_PARAMS, splitToolName, TOOL_PREFIX,
   type CallDetails, type CheckResult, type LeftOutReason, type LogResult, type ProfileServers, type SectionData, type ServerConfig, type ServerInfo, type ThreadServers,
 } from './shared.ts'
 import { SecretStore, serverKey, type ServerSecrets } from './store.ts'
@@ -63,8 +63,8 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
   return defineDaemonExtension({
     ...about,
     async setup(superego) {
-      const file = new ConfigFile(join(superego.dataDir, 'mcp-servers.json'))
-      const store = new SecretStore(join(superego.dataDir, 'mcp-auth.json'))
+      const file = new ConfigFile(join(superego.dataDir, CONFIG_FILE))
+      const store = new SecretStore(join(superego.dataDir, SECRETS_FILE))
       const memos = superego.state<Memo>()
       const live = superego.value<SectionData>(SERVERS_VALUE, { servers: [], profiles: [] })
 
@@ -146,7 +146,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
       let reloading: ReturnType<typeof setTimeout> | undefined
       try {
         watch(superego.dataDir, { signal: superego.signal }, (_event, name) => {
-          if (name !== 'mcp-servers.json') return
+          if (name !== CONFIG_FILE) return
           clearTimeout(reloading)
           reloading = setTimeout(() => void reload(), 100)
         }).on('error', () => {})
@@ -227,14 +227,17 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         return { chosen, left }
       }
 
-      // Ego sets servers up for the user alone, whatever outside agents may do otherwise: only when the message its call
-      // answers is the user's own (`userAsked`). One from another thread, an extension or an outside agent, or one not
-      // to be found, is refused: a thread may be passing on what an outside agent told it.
+      // An agent that sets this machine up (Ego's: `setup`) sets servers up for the user alone, whatever outside agents
+      // may do otherwise: only when the message its call answers is the user's own (`userAsked`). One from another
+      // thread, an extension or an outside agent, or one not to be found, is refused: a thread may be passing on what
+      // an outside agent told it.
       const ego = egoPart({
         app: superego.app, data: sectionData,
         dispatch: (id, params) => superego.dispatch(id, params),
         async refuse(conversation, callId) {
-          if (userAsked(await superego.threads.answering(conversation, callId))) return undefined
+          const id = superego.threads.of(conversation)
+          const owner = id === undefined ? undefined : (await superego.threads.get(id).catch(() => undefined))?.owner
+          if (userAsked(await superego.threads.answering(conversation, callId), owner)) return undefined
           return "This message isn't the user's own: it's from an outside agent, another thread or an extension. Only the user sets up MCP servers, in Settings → MCP servers (or by asking here in the window)."
         },
       })
@@ -247,7 +250,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         remembering.add(done)
       }
       superego.agentParts(async (thread) => {
-        if (thread.owner === EGO) return [ego]
+        if (thread.setup) return [ego]
         // Another extension's own thread has none: it isn't the user's agent.
         if (thread.hidden || thread.owner) return []
         const { chosen, left } = await selection(thread)

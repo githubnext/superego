@@ -5,10 +5,17 @@
 import { arr, bool, lit, map, num, obj, oneOf, opt, str, union, type Static } from '@earendil-works/pi-schema'
 import type { ExtensionAbout, Json } from '@superego/protocol'
 
+/** The machine's servers, in the data folder. */
+export const CONFIG_FILE = 'mcp-servers.json'
+/** Their secrets (keys, OAuth tokens), in the data folder. */
+export const SECRETS_FILE = 'mcp-auth.json'
+
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
 export const about = {
-  name: 'mcp-servers', version: '1.0.0', api: '^2.3', title: 'MCP servers',
+  name: 'mcp-servers', version: '1.0.0', api: '^2.5', title: 'MCP servers',
   description: "Give agents other people's tools: the MCP servers this machine runs or reaches, signed in to once.",
+  // The servers' secrets, and their configs, whose env and header values may hold keys too.
+  secrets: [SECRETS_FILE, CONFIG_FILE],
 } satisfies ExtensionAbout
 
 // ── Config ──────────────────────────────────────────────────────────────────────────────────────────────────────────

@@ -29,7 +29,8 @@ import type { ExtensionAbout } from './app.ts'
  * finds a subagent's thread; `ProfileSpec` is closed (the bundled extensions' keys come with 'superego''s
  * `defineProfile`; `LoadedSpec` is a profile as loaded, extensions' keys and all), and `ProfileInfo.problems`;
  * `threads.noteRead(reader, read)` takes the thread as it was read (its `ThreadInfo`), not its id (thread-tools was its
- * only user). 'superego/testing''s window draws a tool call's row (`render({ tool })`) and answers `toolRow`,
+ * only user); `superego.extensions()`, `about.secrets`, `AgentChoice.setup` and `AgentPartsThread.setup` (an agent
+ * that sets the machine up, offered setup tools by capability rather than by its extension's name). 'superego/testing''s window draws a tool call's row (`render({ tool })`) and answers `toolRow`,
  * `describeRun`, `mainKind`, `linkHandler` and `urlKind`.
  * Minor: something added (an extension that uses it asks for `^2.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused

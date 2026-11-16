@@ -65,4 +65,9 @@ export type ExtensionAbout = {
    * extension whose work is all in the window needs no daemon half for its panes. A profile's are for its threads.
    */
   panes?: Record<string, string>
+  /**
+   * Files of its own in the data folder that hold keys, or values that may be (`mcp-auth.json`), by name: an agent that
+   * reads the data folder (Ego) never reads them.
+   */
+  secrets?: string[]
 }

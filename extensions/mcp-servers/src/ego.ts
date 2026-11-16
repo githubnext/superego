@@ -1,5 +1,5 @@
-// What Ego, Superego's own agent, gets of this extension in its thread (and no other thread does): superego_mcp_servers,
-// to set up this machine's servers, and a word in its prompt on how. The tool lists the servers and the well-known ones,
+// What an agent that sets the machine up (Ego's: `setup`) gets of this extension in its thread, and no other thread
+// does: superego_mcp_servers, to set up this machine's servers, and a word in its prompt on how. The tool lists the servers and the well-known ones,
 // adds one (from the catalogue by name, or a command or a URL), edits, removes, and switches "Use in threads without a
 // profile", all through this extension's actions. It never handles a secret: nothing in its schema takes one, a value
 // that looks like one is refused, and the user is sent to Settings → MCP servers to sign in or set a key. A command it
@@ -9,19 +9,16 @@ import { arr, bool, map, obj, oneOf, opt, str } from '@earendil-works/pi-schema'
 import type { AppConfig, Json, MessageOrigin } from '@superego/protocol'
 import { CATALOG, fromCatalog } from './catalog.ts'
 import { configOf, formOf, quote } from './describe.ts'
-import { ACTIONS, type CheckResult, type SectionData, type ServerConfig, type ServerInfo } from './shared.ts'
-
-/** Ego's extension: its thread is the one it owns. */
-export const EGO = 'ego'
+import { ACTIONS, CONFIG_FILE, type CheckResult, type SectionData, type ServerConfig, type ServerInfo } from './shared.ts'
 
 /**
- * Whether a message Ego answers is the user's own: a window's or the command line's, straight to its thread (no `by`,
- * no `from`), or passed on by Ego's own `ego.ask` for one (`by` Ego, with the client's exposure). Not an outside
- * agent's, and not one another thread (`from`) or another extension (`by`) sent: those may carry an outside agent's
- * words. Unknown (undefined) isn't the user's either.
+ * Whether a message a setup agent answers is the user's own: a window's or the command line's, straight to its thread
+ * (no `by`, no `from`), or passed on for one by the extension whose thread it is (`owner`: Ego's `ego.ask`, with the
+ * client's exposure). Not an outside agent's, and not one another thread (`from`) or another extension (`by`) sent:
+ * those may carry an outside agent's words. Unknown (undefined) isn't the user's either.
  */
-export const userAsked = (origin: MessageOrigin | undefined) =>
-  !!origin && !origin.from && origin.exposure !== 'outside' && (!origin.by || origin.by === EGO)
+export const userAsked = (origin: MessageOrigin | undefined, owner: string | undefined) =>
+  !!origin && !origin.from && origin.exposure !== 'outside' && (!origin.by || origin.by === owner)
 
 /** Where the user does what Ego doesn't. */
 const where = (name: string) => `Settings → MCP servers → ${name}`
@@ -113,8 +110,8 @@ machine runs or a URL it reaches, set up per machine in Settings → MCP servers
 threads without a profile". "Outside agents" (\`${app.id} mcp\`) are the other way round: agents outside ${app.name}
 using this machine.
 
-You set up this machine's MCP servers with superego_mcp_servers: a well-known one by name (op catalog lists them),
-else a command or a URL. Say what you'll change first, ask before removing one, and afterwards say where the user sees
+You set up this machine's MCP servers with superego_mcp_servers (they're kept in ${CONFIG_FILE} in the data folder:
+change them through the tool, not by hand): a well-known one by name (op catalog lists them), else a command or a URL. Say what you'll change first, ask before removing one, and afterwards say where the user sees
 it. A command you add doesn't run until the user allows it (Settings → MCP servers shows the whole command line, with
 Allow): say so. Signing in is the user's: never ask for a key, token or password in chat, where it would stay in the
 transcript, and never put one in a server's config. Send them to Settings → MCP servers → <name> → Sign in (OAuth, in

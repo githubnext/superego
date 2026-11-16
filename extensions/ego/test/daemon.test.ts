@@ -51,6 +51,9 @@ it("keeps its own agent as one hidden thread per machine, in its data folder, kn
   const optional = /optional extensions it does without: ([^\\]*)/.exec(transcript)![1]!.split(', ')
   expect(optional).toEqual(expect.arrayContaining(['coding-tools', 'ego']))
   expect(optional).not.toContain('web-panes')
+  // No extension here keeps keys in the data folder but the core: the prompt names no other's files.
+  expect(transcript).toContain('auth.json hold sign-ins and keys')
+  expect(transcript).not.toContain('mcp-servers.json')
   // Tools that read, and thread_start; settings and machines it changes itself; nothing that writes files or runs commands.
   const tools = await toolsOf(d, thread.id)
   expect(tools).toEqual(['ls', 'pane_open', 'read', 'superego_actions', 'superego_machines', 'superego_profiles', 'superego_set_setting', 'superego_settings', 'thread_list', 'thread_read', 'thread_start'])
