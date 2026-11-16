@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { connectSocket, listen, openDaemon, type MachineReach } from '@superego/daemon'
-import threadTools from '../../../extensions/threads/src/daemon.ts'
+import threadTools from '../../../extensions/thread-tools/src/daemon.ts'
 import { defineApp, PROTOCOL_VERSION, type Json, type MachineEntry, type Notifications, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { machineHub, MachineStore, upload } from '../src/index.ts'
 
