@@ -157,6 +157,13 @@ export type LoadedProfile = ProfileRef & {
   versions: Record<string, string>
 }
 
+/** What a loaded profile brings, as profile.list tells it: its extensions by name, and the MCP servers its threads use. */
+export function broughtBy(profile: LoadedProfile): { extensions?: string[]; mcp?: string[] } {
+  const extensions = [...new Set([...profile.daemon.map((d) => d.extension.name), ...profile.extensions.map((e) => e.name.split('/').at(-1)!)])]
+  const mcp = [...new Set([...profile.spec.mcp ?? [], ...Object.keys(profile.spec.mcpServers ?? {})])]
+  return { ...(extensions.length ? { extensions } : {}), ...(mcp.length ? { mcp } : {}) }
+}
+
 export const DEFAULT_PROFILE = 'default'
 
 /** A path as it really is: symlinks followed, where it exists. */

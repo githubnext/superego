@@ -35,7 +35,7 @@ import { serveWeb, type ServedByTailscale, type WebServer } from './web.ts'
 import { WebDevices } from './web-devices.ts'
 import { startServe, stopServe, tailnetNames, type TailscaleState } from './tailscale.ts'
 import { agentsInstructions } from './agents-md.ts'
-import { defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, profileThere, provideSdk, relocated, Allowances, type LoadedProfile, type ProfileDaemonExtension, type ProfileRef } from './profiles.ts'
+import { broughtBy, defineProfile, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, profileThere, provideSdk, relocated, Allowances, type LoadedProfile, type ProfileDaemonExtension, type ProfileRef } from './profiles.ts'
 import { serveConnection, versionMismatch } from './connection.ts'
 import { Clients, type Via } from './clients.ts'
 import { keepsRunning } from './service.ts'
@@ -1869,10 +1869,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     async run({ cwd }) {
       const dir = cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd
       return Promise.all(listProfiles(dir, userProfiles).map(async (ref) => {
-        const description = profiles.get(ref.dir)?.spec.description
+        const loaded = profiles.get(ref.dir)
+        const description = loaded?.spec.description
         // One whose imports can't be told can't be allowed as it is: loading it says why.
         const allowed = await Promise.resolve().then(() => allowances.allowed(ref, hashProfile(ref.dir))).catch(() => false)
-        return { ...ref, ...(description ? { description } : {}), allowed }
+        return { ...ref, ...(description ? { description } : {}), allowed, ...(loaded ? broughtBy(loaded) : {}) }
       }))
     },
   }))

@@ -17,7 +17,7 @@ import { LayoutEditor, LayoutNotice, LayoutViews } from './layout-text.tsx'
 import { ViewContextMenu, withContextMenu, withMenuButton } from './view-menu.tsx'
 import { refreshFontsSoon } from './fonts.ts'
 import { AuthNotice } from './AuthNotice.tsx'
-import { ThreadTitle, ThreadTools, ThreadView } from './ThreadView.tsx'
+import { ArchiveButton, ThreadTitle, ThreadTools, ThreadView, UnarchiveButton } from './ThreadView.tsx'
 import { StripSlot } from './panes.tsx'
 import { useSidebarEdge } from './sidebar-edge.tsx'
 import { SettingsView } from './SettingsView.tsx'
@@ -260,7 +260,10 @@ function ThreadSheet({ machine, thread, onClose }: { machine: MachineEntry; thre
           <span className="thread-sheet__project">{machine.id !== 'local' && `${machine.label} · `}{thread.project?.name}</span>
           <span className="thread-sheet__title"><StatusGlyph status={thread.status} />{thread.title}</span>
         </div>
-        <div className="thread-sheet__tools"><ThreadTools machine={machine} thread={thread} panes={false} /></div>
+        <div className="thread-sheet__tools">
+          <ThreadTools machine={machine} thread={thread} panes={false} />
+          {thread.hidden ? null : thread.archived ? <UnarchiveButton machine={machine} thread={thread} /> : <ArchiveButton machine={machine} thread={thread} />}
+        </div>
         {kinds.length > 0 && (
           <div className="thread-sheet__panes">
             <h5>Open beside</h5>

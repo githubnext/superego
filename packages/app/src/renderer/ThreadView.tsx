@@ -1,12 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react'
 import type { ConversationView, EntryRecord, InboxState, LiveState } from '@earendil-works/pi-durable'
 import { NOTE_ENTRY, waitingForSignIn, type Attachment, type ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CheckIcon, FileIcon, type Icon as PhosphorIcon, IconButton, ListIcon, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, ColumnsIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TextArea, XIcon } from '@superego/ui'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowDownIcon, ArrowElbowRightIcon, ArrowRightIcon, ArrowUpIcon, Button, CheckIcon, FileIcon, type Icon as PhosphorIcon, IconButton, ListIcon, Menu, MinusIcon, PauseIcon, PaperclipIcon, PencilSimpleIcon, PanePlusIcon, PlusIcon, StatusGlyph, statusLabel, StopIcon, TextArea, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared.ts'
 import { call, machine as client, useThreadView } from './client.ts'
 import { completionsIn, divideWork, entryOwner, entryView, fileKind, folderKind, paneMenu, PlacedViews, sentWithIn, Slot, shownPanes, toolOwner, toolRow, toolView, unfoldedTool, urlKind, useLayout, useRegistry, type ToolRowCall, type WorkBlock as Block, type WorkPart, type WorkStatus } from './extension.tsx'
 import { useRejections, useShell } from './state.tsx'
-import { useActions, useShortcut } from './keys.ts'
+import { useActions } from './keys.ts'
 import { ViewContextMenu, withContextMenu } from './view-menu.tsx'
 import { ctrlDigit } from './shortcuts.ts'
 import { Images, imagesIn, Markdown } from './Markdown.tsx'
@@ -18,6 +18,7 @@ import { readAttachment, splitMessage } from './attachments.ts'
 import { askFor, complete, completing, menuFor, readSent, type Completion, type Offered, type SentBlock } from './composer.ts'
 import { useProfileUi } from './profile-ui.ts'
 import { ProfileSwitch } from './profile-pick.tsx'
+import { ProfileChip } from './profile-card.tsx'
 import { ThreadPanes } from './panes.tsx'
 import { Contained } from './contained.tsx'
 import { startRename, stopRename, useRenaming } from './rename.ts'
@@ -89,13 +90,11 @@ export function ThreadView({ machine, thread }: { machine: MachineEntry; thread:
 
 /**
  * Where you are, in the window's title bar: the thread's project (and machine, where it isn't this one), then its status
- * and title, with a button to rename it (or the name being edited), and the key that goes anywhere else.
+ * and title, with buttons to rename it (or the name being edited) and to archive it (not an extension's own hidden
+ * thread, which that extension looks after), or, archived, to bring it back.
  */
 export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const editing = useRenaming() === `${machine.id}/${thread.id}`
-  const dispatch = useRegistry().router.dispatch
-  const goKeys = useShortcut('app.navigator')
-  const navigate = () => void dispatch('app.navigator', {}, { source: 'titlebar' }).catch((error) => console.error(error))
   return (
     <span className="titlebar__crumb">
       <span className="titlebar__seg titlebar__project" title={`${thread.project?.name ?? folderName(thread.cwd)}\n${thread.cwd}`}>
@@ -108,17 +107,27 @@ export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread
         {editing ? <TitleField machine={machine} thread={thread} /> : (
           <>
             <span className="thread__title" title={thread.title} onDoubleClick={() => startRename(machine.id, thread.id)}>{thread.title.replace(/\.$/, '')}</span>
-            <IconButton label="Rename" className="titlebar__rename" onClick={() => startRename(machine.id, thread.id)}>
+            <IconButton label="Rename" className="titlebar__action" onClick={() => startRename(machine.id, thread.id)}>
               <PencilSimpleIcon size={13} aria-hidden />
             </IconButton>
+            {!thread.archived && <ArchiveButton machine={machine} thread={thread} className="titlebar__action" />}
           </>
         )}
       </span>
       {thread.archived && <span className="titlebar__archived">Archived</span>}
-      {goKeys && !editing && (
-        <button type="button" className="titlebar__go" title="Go to a project, thread or pane" onClick={navigate}>{goKeys}</button>
-      )}
+      {thread.archived && !thread.hidden && <UnarchiveButton machine={machine} thread={thread} />}
     </span>
+  )
+}
+
+/** Puts the thread away (⌘⇧E): out of its project, its worktree kept. Not an extension's own hidden thread. */
+export function ArchiveButton({ machine, thread, className = '' }: { machine: MachineEntry; thread: ThreadInfo; className?: string }) {
+  const dispatch = useRegistry().router.dispatch
+  if (thread.hidden) return null
+  return (
+    <IconButton label="Archive (⌘⇧E)" className={`thread__archive ${className}`} onClick={() => void dispatch('thread.archive', { thread: thread.id }, { machine: machine.id, source: 'header' }).catch((error) => console.error(error))}>
+      <ArchiveIcon size={14} aria-hidden />
+    </IconButton>
   )
 }
 
@@ -145,39 +154,27 @@ function TitleField({ machine, thread }: { machine: MachineEntry; thread: Thread
 
 /**
  * What the title bar says about the thread, at its right: where it runs (the thread that started it, extensions' chips
- * like its worktree's branch, its profile), what extensions add to the header, panes to open, and archiving it (not an
- * extension's own hidden thread, which that extension looks after). `panes: false` leaves the pane menu to the caller
- * (a phone's thread sheet lists the panes itself).
+ * like its worktree's branch, its profile), what extensions add to the header, and panes to open. `panes: false` leaves
+ * the pane menu to the caller (a phone's thread sheet lists the panes itself).
  */
 export function ThreadTools({ machine, thread, panes = true }: { machine: MachineEntry; thread: ThreadInfo; panes?: boolean }) {
   const registry = useRegistry()
-  const dispatch = registry.router.dispatch
   return (
     <span className="thread__tools">
       <span className="thread__chips">
         {thread.parent && <span className="header__chip thread__parent">from <ThreadRef machine={machine.id} id={thread.parent} /></span>}
         <Slot name="header.chips" props={{ machine, thread }} />
-        {thread.profile && <span className="header__chip thread__profile" title={thread.profile.scope === 'project' ? "This project's profile" : 'Your profile'}>{thread.profile.name}</span>}
+        {thread.profile && <ProfileChip machine={machine} thread={{ ...thread, profile: thread.profile }} />}
       </span>
       <PlacedViews place="header" machine={machine} thread={thread} frame={withContextMenu('header', { machine: machine.id, thread })} />
-      {thread.cost !== undefined && thread.cost > 0 && <span className="thread__cost" title="Spent on this thread">${thread.cost.toFixed(2)}</span>}
       {/* Without a pane shown, there's no strip to open one from: here instead. */}
       {panes && !shownPanes(registry, { machine: machine.id, thread }).length && <PaneMenu machine={machine} thread={thread} />}
-      {thread.hidden
-        ? null
-        : thread.archived
-        ? <UnarchiveButton machine={machine} thread={thread} />
-        : (
-          <IconButton label="Archive (⌘⇧E)" className="thread__archive" onClick={() => void dispatch('thread.archive', { thread: thread.id }, { machine: machine.id, source: 'header' })}>
-            <ArchiveIcon size={15} aria-hidden />
-          </IconButton>
-        )}
     </span>
   )
 }
 
 /** Brings an archived thread back: into its project, with its worktree, taking messages again. */
-function UnarchiveButton({ machine, thread, className = '' }: { machine: MachineEntry; thread: ThreadInfo; className?: string }) {
+export function UnarchiveButton({ machine, thread, className = '' }: { machine: MachineEntry; thread: ThreadInfo; className?: string }) {
   const dispatch = useRegistry().router.dispatch
   return (
     <Button className={`thread__unarchive ${className}`} onClick={() => void dispatch('thread.unarchive', { thread: thread.id }, { machine: machine.id, source: 'header' }).catch((error) => console.error(error))}>
@@ -1000,7 +997,7 @@ export function PaneMenu({ machine, thread, add = false }: { machine: MachineEnt
   return (
     <Menu.Root>
       <Menu.Trigger render={<IconButton label="Open a pane beside" className="thread__panes" />}>
-        {add ? <PlusIcon size={14} aria-hidden /> : <ColumnsIcon size={18} aria-hidden />}
+        {add ? <PlusIcon size={14} aria-hidden /> : <PanePlusIcon size={18} aria-hidden />}
       </Menu.Trigger>
       <Menu.Popup align="end">
         {kinds.map(({ kind, title }) => (

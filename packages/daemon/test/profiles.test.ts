@@ -102,6 +102,8 @@ export default defineExtension({
   expect(agent.extensions).toContain('coding-tools')
   expect(agent.extensions).not.toContain('ask-user')
   expect(agent.instructions).toBe('You answer customer email.')
+  // Loaded, it says what it brings.
+  expect(await peer.call<ProfileInfo[]>('profile.list', { cwd: project })).toMatchObject([{ name: 'support', allowed: true, extensions: ['orders'] }])
 
   // An edit is new code: the next turn waits for it to be allowed.
   write(profile, { 'orders.ts': `export default { name: 'orders' }\n` })

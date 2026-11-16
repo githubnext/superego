@@ -1,6 +1,10 @@
 /* The list: "Threads" and +, then each project's threads under its name, quiet, on the window's colour. */
 .threads { display: flex; flex-direction: column; }
 .threads__head { display: flex; justify-content: space-between; align-items: center; height: 28px; padding: 0 2px 0 8px; font-size: var(--superego-text-sm); font-weight: 600; color: var(--superego-muted); }
+/* The key to go anywhere, beside the heading: a faint keycap while the heading is pointed at (or it has the keyboard). */
+.threads__go { margin-left: 6px; margin-right: auto; font: var(--superego-text-xs) var(--superego-font); color: var(--superego-faint); background: none; border: 0; padding: 1px 5px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--superego-line); cursor: default; opacity: 0; transition: opacity .12s; }
+.threads__head:hover .threads__go, .threads__go:focus-visible { opacity: 1; }
+.threads__go:hover { color: var(--superego-muted); }
 .threads__actions { display: flex; align-items: center; gap: 2px; }
 .threads__actions .superego-icon-button { width: 22px; height: 22px; min-height: 22px; box-shadow: none; background: none; color: var(--superego-muted); }
 .threads__actions .superego-icon-button:hover { background: var(--superego-hover); color: var(--superego-text); }

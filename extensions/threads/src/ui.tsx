@@ -2,7 +2,7 @@
 // threads: the Threads space in the sidebar. Projects (a repository or folder on a machine) and the threads in each; the machine is said on the project,
 // where it isn't this computer. Its views:
 // - the list (`threads.list`), a space: sorted recently active, newest first, or needs you first (an app setting); with
-//   the sidebar hidden, a rail of status glyphs. A row's title is followed by other extensions' marks (the
+//   the sidebar hidden, a rail of status glyphs; the key to go anywhere (⌘L) beside its heading, while pointed at. A row's title is followed by other extensions' marks (the
 //   `thread.badge` slot: a worktree's branch, say)
 // - details (`threads.details`): what the thread runs with, spent and touched, then what other extensions say of it (the
 //   `details.section` slot: its MCP servers, say); beside it or not, ⌘I
@@ -70,6 +70,7 @@ function Threads() {
     <div className={`threads ${ready ? 'is-ready' : ''}`} data-focus-scope onPointerEnter={() => hold(true)} onPointerLeave={() => hold(false)}>
       <div className="threads__head">
         <span>Threads</span>
+        <GoKeys />
         <span className="threads__actions">
           <Options />
           <NewThreadButton label="New thread…" />
@@ -103,6 +104,17 @@ function Threads() {
       ))}
       <Archived machines={machines} live={projects} />
     </div>
+  )
+}
+
+/** The key that goes to any project, thread or pane (the shell's navigator): a faint keycap, shown while pointed at. */
+function GoKeys() {
+  const dispatch = useDispatch()
+  const keys = useShortcut('app.navigator')
+  if (!keys) return null
+  return (
+    <button type="button" className="threads__go" title="Go to a project, thread or pane"
+      onClick={() => void dispatch('app.navigator', {}, { source: 'threads' }).catch((error) => console.error(error))}>{keys}</button>
   )
 }
 

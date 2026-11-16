@@ -91,8 +91,11 @@ export type Pane = { id: string; kind: string; title?: string; params?: Json }
 
 /** A profile: the user's (`~/.superego/profiles/<name>`) or a project's (`.superego/profiles/<name>`), and its folder. */
 export type ProfileRef = { name: string; scope: 'user' | 'project'; dir: string }
-/** A profile a thread in some folder could start with (see the daemon's profiles.ts). */
-export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean }
+/**
+ * A profile a thread in some folder could start with (see the daemon's profiles.ts). Once loaded, what it brings: its
+ * extensions (by name, with those of the profile it extends) and the MCP servers its threads use (by name).
+ */
+export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean; extensions?: string[]; mcp?: string[] }
 
 /** A file sent with a message: images go to the model as images; any file is saved on the thread's machine. */
 export type Attachment = { name: string; mimeType: string; /** Base64. */ data: string }

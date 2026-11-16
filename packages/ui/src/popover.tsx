@@ -4,13 +4,14 @@ import { Tooltip } from '@base-ui/react/tooltip'
 
 /**
  * A popover (Base UI) anchored to `trigger`, portalled above everything, closing on Escape or a click outside. With
- * `tooltip`, the trigger says that while pointed at.
+ * `tooltip`, the trigger says that while pointed at. With `hover`, it opens while the trigger is pointed at too (a card
+ * of what it is), as well as on a click.
  */
-export function Popover({ trigger, children, open, onOpenChange, side = 'bottom', align = 'end', tooltip, className = '' }: {
+export function Popover({ trigger, children, open, onOpenChange, side = 'bottom', align = 'end', tooltip, hover = false, className = '' }: {
   trigger: ReactElement; children: ReactNode; open?: boolean; onOpenChange?(open: boolean): void
-  side?: 'top' | 'bottom' | 'left' | 'right'; align?: 'start' | 'center' | 'end'; tooltip?: ReactNode; className?: string
+  side?: 'top' | 'bottom' | 'left' | 'right'; align?: 'start' | 'center' | 'end'; tooltip?: ReactNode; hover?: boolean; className?: string
 }) {
-  const opener = <Base.Trigger render={trigger} />
+  const opener = <Base.Trigger render={trigger} {...(hover ? { openOnHover: true, delay: 400 } : {})} />
   return (
     <Base.Root {...(open !== undefined ? { open } : {})} onOpenChange={(next) => onOpenChange?.(next)}>
       {tooltip === undefined ? opener : (

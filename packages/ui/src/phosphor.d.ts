@@ -40,6 +40,7 @@ declare module '@phosphor-icons/react' {
   export const ChatsIcon: Icon
   export const ColumnsIcon: Icon
   export const GlobeIcon: Icon
+  export const IdentificationBadgeIcon: Icon
   export const ChatTextIcon: Icon
   export const ChatsCircleIcon: Icon
   export const CheckIcon: Icon
@@ -76,4 +77,6 @@ declare module '@phosphor-icons/react' {
   export const XIcon: Icon
   export const CornersInIcon: Icon
   export const CornersOutIcon: Icon
+  /** What every icon draws with: its glyph at each weight (`weights`), sized and coloured as the props say. */
+  export const IconBase: ForwardRefExoticComponent<Omit<IconProps, 'ref'> & { weights: Map<IconWeight, import('react').ReactElement> } & RefAttributes<SVGSVGElement>>
 }
