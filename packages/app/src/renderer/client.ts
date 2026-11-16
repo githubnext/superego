@@ -8,6 +8,7 @@ import type { Client, ClientInfo, Feature, Json, MethodName, Notifications, Para
 import type { BridgeChannel, MachineEntry, MachineId, SuperegoBridge } from '../shared/bridge.ts'
 import { useRegistry } from './extension.tsx'
 import { fonts } from './fonts.ts'
+import { APP } from '../shared/app-settings.ts'
 
 declare global {
   interface Window { superego: SuperegoBridge }
@@ -54,7 +55,9 @@ export const loadFonts = (): Promise<string[]> => fonts.load()
  * a failed call, once something changes (a subscriber, the connection).
  */
 export class SharedWatch<T> {
-  value: T | undefined
+  /** The value and why the last call failed, replaced (not changed) as either changes. */
+  state: WatchState<T> = NO_WATCH
+  get value() { return this.state.value }
   readonly listeners = new Set<() => void>()
   /** Whether each of its users wants it running now (connected, say): it runs while any of them does. */
   readonly #wanted = new Map<object, boolean>()
@@ -108,8 +111,8 @@ export class SharedWatch<T> {
     else this.#stop?.()
   }
 
-  #set(value: T | undefined) {
-    this.value = value
+  #set(state: WatchState<T>) {
+    this.state = state
     for (const listener of this.listeners) listener()
   }
 
@@ -121,7 +124,7 @@ export class SharedWatch<T> {
     const early: { method: string; params: any }[] = []
     const offs = this.events.map((event) => client.on(event, (params: any) => {
       if (sub === undefined) early.push({ method: event, params })
-      else if (params.sub === sub && this.value !== undefined) this.#set(this.fold(this.value, event, params))
+      else if (params.sub === sub && this.value !== undefined) this.#set({ value: this.fold(this.value, event, params) })
     }))
     offs.push(client.on('watch.end', (params) => {
       if (sub === undefined || params.sub !== sub || params.reason !== 'stopped' || stopped) return
@@ -141,11 +144,12 @@ export class SharedWatch<T> {
       sub = result.sub
       let next = result.value
       for (const { method, params } of early) if (params.sub === sub) next = this.fold(next, method, params)
-      this.#set(next)
-    }).catch((error) => {
-      // Not watching: the next change (a subscriber, the connection) tries again.
+      this.#set({ value: next })
+    }).catch((error: unknown) => {
+      // Not watching: the next change (a subscriber, the connection) tries again. What it had stays, with why.
       stop()
       console.error(`${this.method} failed`, error)
+      this.#set({ value: this.value, error: error instanceof Error ? error : new Error(String(error)) })
     })
   }
 
@@ -156,6 +160,10 @@ export class SharedWatch<T> {
     if (watches.get(this.id) === this) watches.delete(this.id)
   }
 }
+
+/** A watch as a component has it: its value (undefined until the first answer), and why the last call failed, if it did. */
+export type WatchState<T> = { value: T | undefined; error?: Error }
+const NO_WATCH: WatchState<never> = { value: undefined }
 
 const watches = new Map<string, SharedWatch<any>>()
 const watchKey = (machineId: MachineId, method: string, params: unknown) => `${machineId}\u0000${method}\u0000${JSON.stringify(params)}`
@@ -177,6 +185,15 @@ export function useWatch<T>(
   fold: (value: T, method: string, params: any) => T,
   events: (keyof Notifications)[],
 ): T | undefined {
+  return useWatchState(machineId, connected, method, params, fold, events).value
+}
+
+/** `useWatch`, with why its last call failed: for a component that says so rather than wait for good. */
+export function useWatchState<T>(
+  machineId: MachineId, connected: boolean, method: string, params: object | undefined,
+  fold: (value: T, method: string, params: any) => T,
+  events: (keyof Notifications)[],
+): WatchState<T> {
   const watch = params === undefined ? undefined : sharedWatch(machineId, method, params, fold, events)
   const user = useRef({}).current
   useEffect(() => {
@@ -184,7 +201,7 @@ export function useWatch<T>(
     watch.want(user, connected)
     return () => watch.unwant(user)
   }, [watch, connected])
-  return useSyncExternalStore(watch?.subscribe ?? noSubscription, () => watch?.value)
+  return useSyncExternalStore(watch?.subscribe ?? noSubscription, () => watch?.state ?? NO_WATCH)
 }
 const noSubscription = () => () => {}
 
@@ -279,9 +296,9 @@ export const useThreadView = (machineId: MachineId, connected: boolean, id: stri
     (value, method, params: Notifications['watch.ops']) => method === 'watch.ops' ? applyImmutable(value, params.ops as Op[]) : value,
     ['watch.ops'])
 
-/** Who is using a machine now: its daemon's clients. */
+/** Who is using a machine now: its daemon's clients, and why asking failed. */
 export const useClients = (machineId: MachineId, connected: boolean) =>
-  useWatch<ClientInfo[]>(machineId, connected, 'clients.watch', {}, replace, ['clients.changed'])
+  useWatchState<ClientInfo[]>(machineId, connected, 'clients.watch', {}, replace, ['clients.changed'])
 
 export const useSettings = (machineId: MachineId, connected: boolean) =>
   useWatch<SettingsSnapshot>(machineId, connected, 'settings.watch', {}, replace, ['settings.changed'])
@@ -291,7 +308,7 @@ export const useSettings = (machineId: MachineId, connected: boolean) =>
  * Undefined until the app's settings have loaded.
  */
 export function useAppSetting<T extends Json>(key: string): [T | undefined, (value: T) => Promise<unknown>] {
-  const snapshot = useSettings('app', true)
+  const snapshot = useSettings(APP, true)
   const dispatch = useRegistry().router.dispatch
-  return [snapshot?.values[key] as T | undefined, (value: T) => dispatch('app.settings.set', { key, value }, { machine: 'app' })]
+  return [snapshot?.values[key] as T | undefined, (value: T) => dispatch('app.settings.set', { key, value }, { machine: APP })]
 }

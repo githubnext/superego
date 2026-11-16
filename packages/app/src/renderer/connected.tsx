@@ -9,14 +9,14 @@ const KINDS: Record<string, string> = { 'superego-app': 'the app', web: 'a brows
 
 export function ConnectedClients({ target }: { target: string; section: SectionInfo }) {
   const connected = useMachines().find((m) => m.id === target)?.state === 'connected'
-  const list = useClients(target, connected)
+  const { value: list, error } = useClients(target, connected)
   // What "active 2 minutes ago" says, kept current.
   const [, tick] = useState(0)
   useEffect(() => {
     const timer = setInterval(() => tick((n) => n + 1), 30_000)
     return () => clearInterval(timer)
   }, [])
-  if (!list) return null
+  if (!list) return <p className="settings__note">{error ? `Couldn't list them: ${error.message}` : 'Loading…'}</p>
   if (!list.length) return <p className="settings__note">Nobody.</p>
   return (
     <div className="clients">

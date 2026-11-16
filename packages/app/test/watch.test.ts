@@ -136,3 +136,19 @@ it("doesn't let a watch that ended before it was subscribed take its successor's
   await vi.advanceTimersByTimeAsync(1500)
   expect(watch()).toBe(successor)
 })
+
+it('keeps why its last call failed, until an answer comes', async () => {
+  const { watch } = fresh()
+  const w = watch()
+  const user = {}
+  fail = 1
+  const off = w.subscribe(() => {})
+  w.want(user, true)
+  await settle()
+  expect(w.state).toEqual({ value: undefined, error: new Error('nope') })
+  w.want(user, false)
+  w.want(user, true)
+  await settle()
+  expect(w.state).toEqual({ value: 0 })
+  off()
+})
