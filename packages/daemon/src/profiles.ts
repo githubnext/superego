@@ -228,7 +228,7 @@ export function relocated(ref: ProfileRef, cwds: string[], userRoot: string): Pr
  * file (one a profile lists from outside its folder), it and the local files it imports (`versionOf`). Packages it
  * imports by name aren't in it. Throws for a module whose imports can't be told.
  */
-export function hashProfile(dir: string): string {
+export async function hashProfile(dir: string): Promise<string> {
   if (statSync(dir).isFile()) return versionOf(dir)
   const root = real(dir)
   const hash = createHash('sha256')
@@ -253,7 +253,7 @@ export function hashProfile(dir: string): string {
   }
   walk(dir, false, new Set([root]))
   // What its code imports and the walk left out: a hidden file, or one outside its folder (a helper shared between profiles).
-  for (const file of graphOf(code)) if (!hashed.has(file)) add(within(root, file) ? relative(root, file) : file, file)
+  for (const file of await graphOf(code)) if (!hashed.has(file)) add(within(root, file) ? relative(root, file) : file, file)
   return hash.digest('hex').slice(0, 16)
 }
 
@@ -270,12 +270,12 @@ export class Allowances {
   async #of(ref: ProfileRef) { const at = (await this.#load())[ref.dir]; return typeof at === 'string' ? { hash: at, files: {} } : at }
   async allowed(ref: ProfileRef, hash: string) { return ref.scope === 'user' || (await this.#of(ref))?.hash === hash }
   /** Whether `file`, listed from outside the profile's folder, is as it was when the profile was allowed. */
-  async allowedFile(ref: ProfileRef, file: string) { return ref.scope === 'user' || (await this.#of(ref))?.files[file] === hashProfile(file) }
+  async allowedFile(ref: ProfileRef, file: string) { return ref.scope === 'user' || (await this.#of(ref))?.files[file] === await hashProfile(file) }
   /** Allow it as it is now: its folder, and the files it lists from outside it (reading its profile.ts to know them). */
   async allow(ref: ProfileRef) {
     const all = await this.#load()
-    const files = Object.fromEntries((await outsideFiles(ref)).map((file) => [file, hashProfile(file)]))
-    const hash = hashProfile(ref.dir)
+    const files = Object.fromEntries(await Promise.all((await outsideFiles(ref)).map(async (file) => [file, await hashProfile(file)])))
+    const hash = await hashProfile(ref.dir)
     all[ref.dir] = Object.keys(files).length ? { hash, files } : hash
     await mkdir(dirname(this.#path), { recursive: true })
     await writeFile(this.#path, JSON.stringify(all, null, 2) + '\n', { mode: 0o600 })
@@ -372,7 +372,7 @@ export function scoped(ref: ProfileRef, userRoot: string): ProfileRef {
 /** Load a profile (and what it extends) fresh from disk; refuses a project's profile that isn't allowed as it is now. */
 export async function loadProfile(given: ProfileRef, userRoot: string, allowances: Allowances): Promise<LoadedProfile> {
   const ref = scoped(given, userRoot)
-  const hash = hashProfile(ref.dir)
+  const hash = await hashProfile(ref.dir)
   if (!(await allowances.allowed(ref, hash))) {
     throw new RpcError('profile_not_allowed', `The profile ${ref.name} in ${dirname(dirname(dirname(ref.dir)))} runs that project's code: allow it first (again, if it changed since)`, {
       hint: `Look it over, then: superego profile allow ${ref.name}`,
@@ -401,7 +401,7 @@ export async function loadProfile(given: ProfileRef, userRoot: string, allowance
       })
     }
     // A file from outside its folder is part of what it's made of too: a change in it loads the profile again.
-    if (outside) versions[file] = hashProfile(file)
+    if (outside) versions[file] = await hashProfile(file)
     const key = fresh(file)
     const module = await load(key) as { default?: Extension | DaemonExtension }
     const extension = module.default
@@ -461,7 +461,7 @@ export async function profileModule(dir: string, path: string): Promise<{ path: 
   const source = await readFile(found, 'utf8')
   const typed = /\.[cm]?tsx?$/.test(found)
   const jsx = /x$/.test(found)
-  // Loaded only now: some 60 modules, a second of every daemon's start on a busy machine.
+  // Loaded only now, not with the daemon: some 60 modules, a second of its start on a busy machine.
   const { transform } = await import('sucrase')
   try {
     const { code } = transform(source, {

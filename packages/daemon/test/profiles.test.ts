@@ -961,10 +961,13 @@ console.log(JSON.stringify([first.daemon[0].key === second.daemon[0].key, first.
   expect(JSON.parse(out.trim().split('\n').at(-1)!)).toEqual([true, 'before', 'after'])
 })
 
-it("vouches, in allowing a project's profile, for every file its code can run: hidden ones and symlinked ones too", async () => {
+it("vouches, in allowing a project's profile, for every file its code can run: hidden ones and symlinked ones too, and its UI's", async () => {
   const profile = join(project, '.superego', 'profiles', 'support')
   write(profile, {
     'profile.ts': profileTs(['./vault.ts', './.listed.ts']),
+    // JSX (read by sucrase, loaded only now), its text not taken for code: the apostrophe opens no string.
+    'ui/badge.tsx': `import { theme } from '../.theme.ts'\nconst label: string = 'Acme'\nexport default () => <span className={theme}>Don't {label}</span>\n`,
+    '.theme.ts': `export const theme = 'dark'\n`,
     'vault.ts': `import { defineDaemonExtension } from 'superego'\nimport { a } from './.helper.ts'\nimport { b } from './.lib/b.ts'\nimport { c } from './linked.ts'\nexport default defineDaemonExtension({ name: 'vault', setup() { return a + b + c } })\n`,
     '.listed.ts': `import { defineDaemonExtension } from 'superego'\nexport default defineDaemonExtension({ name: 'listed', setup() {} })\n`,
     '.helper.ts': `export const a = 'a'\n`,
@@ -974,7 +977,7 @@ it("vouches, in allowing a project's profile, for every file its code can run: h
   symlinkSync(join(project, 'tools', 'c.ts'), join(profile, 'linked.ts'))
   const ref: ProfileRef = { scope: 'project', name: 'support', dir: profile }
   const allowances = new Allowances(home)
-  for (const [file, content] of [['.helper.ts', `export const a = 'A'\n`], ['.lib/b.ts', `export const b = 'B'\n`], ['../../../tools/c.ts', `export const c = 'C'\n`], ['.listed.ts', `export default { name: 'listed' }\n`]] as const) {
+  for (const [file, content] of [['.helper.ts', `export const a = 'A'\n`], ['.lib/b.ts', `export const b = 'B'\n`], ['../../../tools/c.ts', `export const c = 'C'\n`], ['.listed.ts', `export default { name: 'listed' }\n`], ['.theme.ts', `export const theme = 'light'\n`]] as const) {
     await allowances.allow(ref)
     await loadProfile(ref, join(home, 'profiles'), allowances)
     write(profile, { [file]: content })

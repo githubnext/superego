@@ -6,9 +6,11 @@
 // imports it, so the next load runs the new code rather than Node's cached copy; a helper two extensions share, at one
 // version, is one module, as it would be without versions.
 //
-// Imports are read as Node runs the module: types stripped as Node strips them (`import type` loads nothing), then its
-// imports parsed (@superego/protocol's importsOf), so comments and strings are just that. Read are static imports,
-// re-exports and `import()` of a literal path; an `import()` of a path worked out as it runs is refused (importsOf).
+// Imports are read as the module runs: TypeScript's types stripped as Node strips them (its own stripTypeScriptTypes:
+// `import type` loads nothing), then its imports parsed (@superego/protocol's importsOf), so comments and strings are
+// just that. A JSX module (a profile's UI, which the window runs) is read as profileModule compiles it for the window,
+// by sucrase: loaded the first time a graph meets JSX, not with the daemon. Read are static imports, re-exports and
+// `import()` of a literal path; an `import()` of a path worked out as it runs is refused (importsOf).
 // A path resolves as Node resolves it (relative, absolute or file:, symlinks followed to the file itself); were that no
 // file, as a runtime guessing extensions would (`./helper` → helper.ts, helper/index.ts), so that whatever loads is in
 // it. Packages (bare names, `#imports`, anything under node_modules) aren't in it: they load once, and aren't vouched
@@ -18,9 +20,9 @@
 // costs a stat per file.
 import { createHash } from 'node:crypto'
 import { readFileSync, realpathSync, statSync } from 'node:fs'
+import { stripTypeScriptTypes } from 'node:module'
 import { isAbsolute, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { transform } from 'sucrase'
 import { importsOf, RpcError } from '@superego/protocol'
 
 /** The query parameter a module's version goes in. */
@@ -36,21 +38,30 @@ const isPackage = (path: string) => /[\\/]node_modules[\\/]/.test(path)
 /** Whether `file` is inside `dir`. */
 export const within = (dir: string, file: string) => { const path = relative(resolve(dir), file); return Boolean(path) && !path.startsWith('..') && !isAbsolute(path) }
 
-/** A file as read: a digest of its bytes, and the specifiers it imports (a module's), for the version of it on disk `stamp` names. */
-type Read = { stamp: string; digest: string; imports: string[] }
+/** A file as read, for the version of it on disk `stamp` names: a digest of its bytes, and (a module's, once asked) the specifiers it imports. */
+type Read = { stamp: string; digest: string; imports?: string[] }
 const reads = new Map<string, Read>()
 
-/** A module as Node runs it: TypeScript's types stripped (type-only imports with them), JSX turned into calls. */
+/** Sucrase, for JSX: loaded by the first graph that meets a JSX module (readingJsx). */
+let sucrase: typeof import('sucrase') | undefined
+/** Met a JSX module before sucrase is loaded: readingJsx loads it and reads again. */
+class JsxUnloaded extends RpcError {
+  constructor(file: string) { super('invalid', `${file} is JSX, which Node doesn't run`) }
+}
+
+/** A module as it runs: TypeScript's types stripped as Node strips them; JSX (the window's) as profileModule compiles it. */
 function javascriptOf(file: string, source: string) {
-  const typed = /\.[cm]?tsx?$/.test(file)
-  const jsx = /x$/.test(file)
-  if (!typed && !jsx) return source
+  const jsx = /\.[jt]sx$/.test(file)
+  if (jsx && !sucrase) throw new JsxUnloaded(file)
   try {
-    return transform(source, {
-      transforms: [...(typed ? ['typescript' as const] : []), ...(jsx ? ['jsx' as const] : [])],
-      // An import of values never used still loads, as Node's own type stripping keeps it.
-      keepUnusedImports: true, jsxRuntime: 'automatic', production: true, filePath: file, disableESTransforms: true,
-    }).code
+    if (jsx) {
+      return sucrase!.transform(source, {
+        transforms: [...(file.endsWith('.tsx') ? ['typescript' as const] : []), 'jsx'],
+        // An import of values never used still loads, as Node's own type stripping keeps it.
+        keepUnusedImports: true, jsxRuntime: 'automatic', production: true, filePath: file, disableESTransforms: true,
+      }).code
+    }
+    return /\.[cm]?ts$/.test(file) ? stripTypeScriptTypes(source) : source
   } catch (error) {
     throw new RpcError('invalid', `${file}: can't read its imports: ${(error as Error).message}`)
   }
@@ -62,12 +73,15 @@ function read(file: string): Read {
   const stamp = `${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}:${stat.ino}`
   const known = reads.get(file)
   if (known?.stamp === stamp) return known
-  const bytes = readFileSync(file)
-  const digest = createHash('sha256').update(bytes).digest('hex')
-  const imports = CODE.test(file) && !isPackage(file) ? importsOf(javascriptOf(file, bytes.toString('utf8')), file).map((i) => i.specifier) : []
-  const done = { stamp, digest, imports }
+  const done = { stamp, digest: createHash('sha256').update(readFileSync(file)).digest('hex') }
   reads.set(file, done)
   return done
+}
+
+/** The specifiers `file` imports, as it is now: none but a module's (and not a package's). */
+function importsIn(file: string): string[] {
+  const at = read(file)
+  return at.imports ??= CODE.test(file) && !isPackage(file) ? importsOf(javascriptOf(file, readFileSync(file, 'utf8')), file).map((i) => i.specifier) : []
 }
 
 /** A digest of `file`'s bytes as they are now. */
@@ -91,12 +105,12 @@ export function resolveLocal(from: string, specifier: string): string | undefine
  * The local files `entries` run: they, and every file they import, and those import, … each once (by its real path),
  * in the order first met. Throws where a module's imports can't be told (importsOf).
  */
-export function graphOf(entries: string[]): string[] {
+function graphNow(entries: string[]): string[] {
   const seen = new Set<string>()
   const visit = (file: string) => {
     if (seen.has(file)) return
     seen.add(file)
-    for (const specifier of read(file).imports) {
+    for (const specifier of importsIn(file)) {
       const imported = resolveLocal(file, specifier)
       if (imported) visit(imported)
     }
@@ -106,14 +120,34 @@ export function graphOf(entries: string[]): string[] {
 }
 
 /** A module's version: a hash of it and every local file it imports, by path and contents. */
-export function versionOf(file: string): string {
+function versionNow(file: string): string {
   const hash = createHash('sha256')
-  for (const path of graphOf([file])) hash.update(path).update('\0').update(digestOf(path)).update('\0')
+  for (const path of graphNow([file])) hash.update(path).update('\0').update(digestOf(path)).update('\0')
   return hash.digest('hex').slice(0, 16)
 }
 
-/** A module's URL at its version now. */
-export const versionedUrl = (file: string) => `${pathToFileURL(file).href}?${VERSION_PARAM}=${versionOf(file)}`
+/** What `read` gives, loading sucrase first should it meet JSX. */
+async function readingJsx<T>(read: () => T): Promise<T> {
+  try {
+    return read()
+  } catch (error) {
+    if (!(error instanceof JsxUnloaded)) throw error
+    sucrase ??= await import('sucrase')
+    return read()
+  }
+}
+
+/**
+ * The local files `entries` run: they, and every file they import, and those import, … each once (by its real path),
+ * in the order first met. Throws where a module's imports can't be told (importsOf).
+ */
+export const graphOf = (entries: string[]) => readingJsx(() => graphNow(entries))
+
+/** A module's version: a hash of it and every local file it imports, by path and contents. */
+export const versionOf = (file: string) => readingJsx(() => versionNow(file))
+
+/** A module's URL at its version now, for Node to load: its graph is what Node runs, so no JSX. */
+export const versionedUrl = (file: string) => `${pathToFileURL(file).href}?${VERSION_PARAM}=${versionNow(file)}`
 
 /**
  * The URL a module loads by, imported by `parent`: a versioned module's local imports (those of its graph) versioned
@@ -125,5 +159,5 @@ export function versionedImport(url: string, parent: string | undefined): string
   if (isPackage(path) || !isFile(path)) return url
   const from = realpathSync(fileURLToPath(parent.replace(/[?#].*$/, '')))
   const file = realpathSync(path)
-  return read(from).imports.some((specifier) => resolveLocal(from, specifier) === file) ? versionedUrl(file) : url
+  return importsIn(from).some((specifier) => resolveLocal(from, specifier) === file) ? versionedUrl(file) : url
 }

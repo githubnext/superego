@@ -1426,8 +1426,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   /** A profile's agent parts: its own, and those its daemon halves give. */
   const partsOf = (profile: LoadedProfile) => [...profile.extensions, ...(holds.get(profile.dir)?.uses.flatMap((use) => use.parts) ?? [])]
   /** Whether a profile is still as it was loaded: its files, and those of the one it extends, unchanged. */
-  const current = (profile: LoadedProfile) =>
-    Object.entries(profile.versions).every(([dir, hash]) => { try { return hashProfile(dir) === hash } catch { return false } })
+  const current = async (profile: LoadedProfile) =>
+    (await Promise.all(Object.entries(profile.versions).map(([dir, hash]) => hashProfile(dir).then((now) => now === hash, () => false)))).every(Boolean)
   /** Whether a thread of one of these profiles is mid-run: its profile isn't loaded again under it. */
   const running = (dirs: Set<string>) => [...mounted.values()].some((m) => m.live?.run && m.meta.profile && dirs.has(m.meta.profile.dir))
   /** Let go of everything a profile set up: what it shares stays for the other profiles that have it. */
@@ -1443,16 +1443,16 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
    * nothing of it left set up when it's gone, no longer allowed, or broken. Not under a run, though: a thread mid-run
    * keeps the profile it started with, and the change is loaded for its next turn.
    */
-  function profileOf(ref: ProfileRef): Promise<LoadedProfile> {
+  async function profileOf(ref: ProfileRef): Promise<LoadedProfile> {
     const cached = profiles.get(ref.dir)
-    if (cached && current(cached)) return Promise.resolve(cached)
+    if (cached && await current(cached)) return cached
     const next = loads.then(() => reload(ref))
     loads = next.catch(() => {})
     return next
   }
   async function reload(ref: ProfileRef): Promise<LoadedProfile> {
     const cached = profiles.get(ref.dir)
-    if (cached && (current(cached) || running(new Set([ref.dir])))) return cached
+    if (cached && (await current(cached) || running(new Set([ref.dir])))) return cached
     let loaded: LoadedProfile
     try {
       if (!existsSync(join(ref.dir, 'profile.ts'))) throw new RpcError('not_found', `No profile ${ref.name} at ${ref.dir}`)
@@ -1876,7 +1876,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         const loaded = profiles.get(ref.dir)
         const description = loaded?.spec.description
         // One whose imports can't be told can't be allowed as it is: loading it says why.
-        const allowed = await Promise.resolve().then(() => allowances.allowed(ref, hashProfile(ref.dir))).catch(() => false)
+        const allowed = await Promise.resolve().then(async () => allowances.allowed(ref, await hashProfile(ref.dir))).catch(() => false)
         return { ...ref, ...(description ? { description } : {}), allowed, ...(loaded ? broughtBy(loaded) : {}) }
       }))
     },

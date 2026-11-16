@@ -19,7 +19,7 @@ export function registerExtensionSettings(settings: SettingsRegistry, extensions
 /** A profile as Settings lists it. Only one that may run is loaded (its code runs), to tell what it changes. */
 export async function describeProfile(ref: ProfileRef, userRoot: string, allowances: Allowances): Promise<Json> {
   let allowed: boolean
-  try { allowed = await allowances.allowed(ref, hashProfile(ref.dir)) } catch (error) { return { ...ref, allowed: false, error: (error as Error).message } }
+  try { allowed = await allowances.allowed(ref, await hashProfile(ref.dir)) } catch (error) { return { ...ref, allowed: false, error: (error as Error).message } }
   if (!allowed) return { ...ref, allowed }
   try {
     const { spec } = await loadProfile(ref, userRoot, allowances)
