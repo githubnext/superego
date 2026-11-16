@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { AUTH_REJECTED, DATA_VIEWS, defineAction, defineApp, MESSAGE_ENTRY, obj, PROTOCOL_VERSION, str, type ActionInfo, type MessageOrigin, type DataViewInfo, type Hello, type Notifications, type ThreadInfo, type ViewContent } from '@superego/protocol'
-import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi, type DaemonExtension, type LiveValue, type ScopedValue } from '../src/index.ts'
+import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi, type DaemonExtension, type LiveValue, type ScopedValue, type ThreadState } from '../src/index.ts'
 import { answeredBy } from '../src/threads.ts'
 import { until } from './until.ts'
 
@@ -322,4 +322,35 @@ it('tells the message a tool call answers: the user message before the call, not
   // Several calls in one message; and the user's message placed after the model's, before its calls ran.
   expect(answeredBy([user('mine'), calls('a', 'b'), user('theirs', { from: '7' })], 'b')).toEqual({ from: '7' })
   expect(answeredBy(entries, 'nope')).toBeUndefined()
+})
+
+it("publishes an extension's state with each thread, if asked: read in as a thread's scope is watched, told every change, let go of after", async () => {
+  let state!: ThreadState<{ n: number }>
+  const counter = defineDaemonExtension({ name: 'counter', setup(superego) { state = superego.state<{ n: number }>({ publish: 'counter.counts' }) } })
+  const { peer, close } = await open([counter])
+  const thread = await peer.call<ThreadInfo>('thread.start', {})
+  // Set while nobody watches: kept with the thread only.
+  await state.set(thread.id, { n: 1 })
+  const heard: { sub: string; value: unknown }[] = []
+  peer.on('value.changed', (p: { sub: string; value: unknown }) => { heard.push(p) })
+  const of = (sub: string) => heard.filter((h) => h.sub === sub).map((h) => h.value)
+  const watched = await peer.call<{ sub: string; value: unknown }>('value.watch', { key: 'counter.counts', scope: thread.id })
+  expect(watched.value).toBeNull()
+  await until(async () => of(watched.sub).length === 1)
+  expect(of(watched.sub)).toEqual([{ n: 1 }])
+  await state.update(thread.id, (now) => ({ n: (now?.n ?? 0) + 1 }))
+  await until(async () => of(watched.sub).length === 2)
+  expect(of(watched.sub).at(-1)).toEqual({ n: 2 })
+  // Whole: the scopes watched now. None kept: null.
+  expect((await peer.call<{ value: unknown }>('value.watch', { key: 'counter.counts' })).value).toEqual({ [thread.id]: { n: 2 } })
+  await state.set(thread.id, undefined)
+  await until(async () => of(watched.sub).length === 3)
+  expect(of(watched.sub).at(-1)).toBeNull()
+  // Unwatched, let go of; watched again, read in again.
+  await peer.call('unwatch', { sub: watched.sub })
+  await state.set(thread.id, { n: 5 })
+  const again = await peer.call<{ sub: string; value: unknown }>('value.watch', { key: 'counter.counts', scope: thread.id })
+  await until(async () => of(again.sub).length === 1)
+  expect(of(again.sub)).toEqual([{ n: 5 }])
+  await close()
 })

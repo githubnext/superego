@@ -1,14 +1,14 @@
 // pane-ui, daemon half: UI an agent keeps in a pane beside its thread. `open_ui` draws blocks in a `ui` pane and
 // `update_ui` redraws them; neither waits, and what the user presses there is sent to the thread as a message. Each
 // pane's UI is kept with its thread (this extension's state in the thread's document, so it survives a restart and goes
-// with the thread when it's forked or archived), and published in the thread's scope of a live value for the pane to draw.
+// with the thread when it's forked or archived), published from there in the thread's scope of a live value
+// (`state({ publish })`) for the pane to draw.
 import { randomUUID } from 'node:crypto'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { obj, opt, str } from '@earendil-works/pi-schema'
 import { BLOCKS_GUIDE, blocksParameter, checkBlocks } from '@superego/blocks'
 import { defineDaemonExtension } from '@superego/daemon'
-import type { Json } from '@superego/protocol'
-import { about, KIND, LOAD, OPEN, SPECS, UPDATE, type PaneSpec, type ThreadSpecs } from './shared.ts'
+import { about, KIND, OPEN, SPECS, UPDATE, type PaneSpec, type ThreadSpecs } from './shared.ts'
 
 /** The panes' UI a thread keeps: the newest this many, so its state (and the value sent to its windows) stays small. */
 const KEPT = 20
@@ -23,30 +23,17 @@ const UPDATE_DESCRIPTION = `Redraw the UI of a pane you opened with ${OPEN}, by 
 export default defineDaemonExtension({
   ...about,
   setup(superego) {
-    const specs = superego.scopedValue<ThreadSpecs | null>(SPECS, null)
-    const state = superego.state<ThreadSpecs>()
-
-    /** A thread's panes' UI: published already, or read from the thread and published now. */
-    const load = async (thread: string): Promise<ThreadSpecs> => {
-      if (specs.scopes().includes(thread)) return specs.get(thread) ?? {}
-      const kept = await state.get(thread) ?? {}
-      // Something published it while the state was read: that's newer.
-      if (!specs.scopes().includes(thread) && !superego.signal.aborted) specs.set(thread, kept)
-      return specs.get(thread) ?? kept
-    }
+    // Kept with each thread, and published in its scope for its panes.
+    const state = superego.state<ThreadSpecs>({ publish: SPECS })
+    const load = async (thread: string): Promise<ThreadSpecs> => await state.get(thread) ?? {}
     const keep = async (thread: string, spec: PaneSpec) => {
-      const all: ThreadSpecs = { ...await load(thread), [spec.id]: spec }
-      for (const id of Object.keys(all).sort((a, b) => all[a]!.at - all[b]!.at).slice(0, Math.max(0, Object.keys(all).length - KEPT))) delete all[id]
-      specs.set(thread, all)
-      await state.set(thread, all)
+      await state.update(thread, (current) => {
+        const all: ThreadSpecs = { ...current, [spec.id]: spec }
+        for (const id of Object.keys(all).sort((a, b) => all[a]!.at - all[b]!.at).slice(0, Math.max(0, Object.keys(all).length - KEPT))) delete all[id]
+        return all
+      })
     }
     const threadOf = (conversationId: number) => superego.threads.of(conversationId) ?? String(conversationId)
-
-    // A pane whose thread isn't published yet (after a restart, say) asks for it: read back from the thread then.
-    superego.method(LOAD, async ({ thread }) => await load(thread) as Json, { params: obj({ thread: str() }) })
-
-    // An archived thread's panes don't show: forget them here. They stay with the thread, read back when next asked for.
-    superego.thread({ archived(thread) { specs.delete(thread.id) } })
 
     superego.agent(defineExtension({
       name: 'pane-ui',

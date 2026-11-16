@@ -524,12 +524,26 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       beforeSend(transform) { own(transforms, transform, 'a send transform'); note('beforeSend', 'a send transform') },
       invalidate() { changed(); later.threads().heedStatus() },
       thread(hooks) { own(threadHooks, hooks as ThreadHooks, 'thread hooks'); note('thread hooks', Object.keys(hooks).join(', ')) },
-      state<T extends Json>() {
+      state<T extends Json>(options: { publish?: string } = {}) {
         const name = extension.name
+        const get = async (id: string) => stateOf((await threads.get(id)).meta, name) as T | undefined
+        // Published: each thread's, as a scope of a live value, read in when it's first watched.
+        let published: { changed(scope: string, value: Json | undefined): void } | undefined
+        if (options.publish !== undefined) {
+          const value = named(extension.name, options.publish)
+          life.live(`the value ${value}`)
+          published = values.publishBacked(value, (id) => get(id).catch(() => undefined), life)
+          note('values', `${value} (scoped, from its state)`)
+        }
+        const edit = async (id: string, change: (current: T | undefined) => T | undefined) => {
+          let now: T | undefined
+          await threads.editState(id, name, (current) => now = change(current as T | undefined))
+          published?.changed(id, clone(now))
+        }
         return {
-          get: async (id: string) => stateOf((await threads.get(id)).meta, name) as T | undefined,
-          set: (id: string, next: T | undefined) => threads.editState(id, name, () => next),
-          update: (id: string, edit: (current: T | undefined) => T | undefined) => threads.editState(id, name, (current) => edit(current as T | undefined)),
+          get,
+          set: (id: string, next: T | undefined) => edit(id, () => next),
+          update: (id: string, change: (current: T | undefined) => T | undefined) => edit(id, change),
         }
       },
       facts(describe) {

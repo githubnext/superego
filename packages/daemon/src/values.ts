@@ -15,6 +15,8 @@ type ValueEntry = {
   listeners: Set<(value: Json) => void>
   watchers: Map<string, Set<(value: Json) => void>>
   scopes?: { values: Map<string, Json>; initial: Json }
+  /** A scoped value kept elsewhere (a thread's state): a scope is read in when first watched, and let go when no longer. */
+  backing?: { watched(scope: string): void; unwatched(scope: string): void }
 }
 /** A value whole: a scoped one's, every scope's by scope. */
 const wholeOf = (entry: ValueEntry): Json => entry.scopes ? Object.fromEntries(entry.scopes.values) : entry.value
@@ -116,6 +118,46 @@ export class Values {
   }
 
   /**
+   * A scoped value backed by something kept elsewhere (an extension's state with each thread), published for `life`:
+   * a scope reads null until it's watched, then what `load` reads for it (null for nothing); `changed` tells its
+   * watchers what it is now, and a scope nobody watches is let go of, so only watched ones are held. Watched whole, it's
+   * the scopes held now.
+   */
+  publishBacked(name: string, load: (scope: string) => Promise<Json | undefined>, life: Lifetime): { changed(scope: string, value: Json | undefined): void } {
+    const entry = this.#own(name)
+    const held = new Map<string, Json>()
+    entry.scopes = { values: held, initial: null }
+    const watched = (scope: string) => {
+      if (held.has(scope)) return
+      void load(scope).then((value) => {
+        // Changed while it was read (that's newer), or no longer watched, or gone: left be.
+        if (held.has(scope) || !entry.watchers.has(scope) || entry.backing !== backing) return
+        held.set(scope, value ?? null)
+        tellScope(entry, scope)
+      }, (error: unknown) => console.error(`Value ${name}: reading ${scope} failed:`, error))
+    }
+    const backing = { watched, unwatched: (scope: string) => { held.delete(scope) } }
+    entry.backing = backing
+    for (const scope of entry.watchers.keys()) watched(scope)
+    tellAll(entry)
+    life.add(() => {
+      entry.owned = false
+      delete entry.scopes
+      delete entry.backing
+      entry.value = null
+      tellAll(entry)
+      this.#prune(name)
+    }, 'a value')
+    return {
+      changed: life.guard(`a change to ${name}`, (scope: string, value: Json | undefined) => {
+        if (!entry.watchers.has(scope) && !held.has(scope)) return
+        held.set(scope, value ?? null)
+        tellScope(entry, scope)
+      }),
+    }
+  }
+
+  /**
    * A value (or its part in `scope`) now, then `tell` with each new one until `stop`. Watching one scope, it's told
    * only when its part changes.
    */
@@ -136,11 +178,15 @@ export class Values {
     }
     const watchers = entry.watchers.get(scope) ?? new Set()
     entry.watchers.set(scope, watchers.add(listener))
+    entry.backing?.watched(scope)
     return {
       value,
       stop: () => {
         watchers.delete(listener)
-        if (!watchers.size && entry.watchers.get(scope) === watchers) entry.watchers.delete(scope)
+        if (!watchers.size && entry.watchers.get(scope) === watchers) {
+          entry.watchers.delete(scope)
+          entry.backing?.unwatched(scope)
+        }
         this.#prune(name)
       },
     }

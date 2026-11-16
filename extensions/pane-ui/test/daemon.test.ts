@@ -6,7 +6,7 @@ import type { ConversationView } from '@earendil-works/pi-durable'
 import { connectSocket, listen, openDaemon } from '@superego/daemon'
 import { defineApp, PROTOCOL_VERSION, type Hello, type Json, type Notifications, type ThreadInfo } from '@superego/protocol'
 import paneUi from '../src/daemon.ts'
-import { LOAD, SPECS, type ThreadSpecs } from '../src/shared.ts'
+import { SPECS, type ThreadSpecs } from '../src/shared.ts'
 
 const app = defineApp({ name: 'test', id: 'paneuitest' })
 let dir: string
@@ -18,6 +18,15 @@ const until = async (check: () => boolean | Promise<boolean>) => {
 }
 const turn = (content: Json[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
 const call = (id: string, name: string, args: Json) => turn([{ type: 'toolCall', id, name, arguments: args }], 'toolUse')
+
+/** A thread's scope of the panes' UI, as a pane watches it: what it is now, as told. */
+async function watch(peer: Awaited<ReturnType<typeof open>>['peer'], scope: string) {
+  // Heard from before the watch answers: what it says may come with the answer.
+  const told: Notifications['value.changed'][] = []
+  peer.on('value.changed', (params: Notifications['value.changed']) => { told.push(params) })
+  const watched = await peer.call<{ sub: string; value: ThreadSpecs | null }>('value.watch', { key: SPECS, scope })
+  return { get now() { return (told.filter((t) => t.sub === watched.sub).at(-1)?.value ?? watched.value) as ThreadSpecs | null } }
+}
 
 async function open() {
   const daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, extensions: [paneUi] })
@@ -48,10 +57,13 @@ it('opens a ui pane with { id }, updates its UI by id, and keeps it across a res
 
   const [info] = await peer.call<ThreadInfo[]>('thread.list', {})
   expect(info!.panes).toEqual([{ id: expect.any(String), kind: 'ui', title: 'Build: green', params: { id: 'status' } }])
-  // In the thread's own scope; another's has none.
-  const { value: specs } = await peer.call<{ value: ThreadSpecs }>('value.watch', { key: SPECS, scope: thread.id })
-  expect(specs.status).toMatchObject({ id: 'status', title: 'Build: green', blocks: second })
-  expect((await peer.call<{ value: ThreadSpecs | null }>('value.watch', { key: SPECS, scope: 'another' })).value).toBeNull()
+  // In the thread's own scope, read from the thread as it's watched; another's has none.
+  const specs = await watch(peer, thread.id)
+  await until(() => specs.now !== null)
+  expect(specs.now!.status).toMatchObject({ id: 'status', title: 'Build: green', blocks: second })
+  const another = await watch(peer, 'another')
+  await new Promise((r) => setTimeout(r, 100))
+  expect(another.now).toBeNull()
 
   const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: thread.id })
   const results = value.entries.map((e) => e.model?.[0] as { role?: string; isError?: boolean; content?: { text?: string }[] } | undefined).filter((m) => m?.role === 'toolResult')
@@ -61,14 +73,10 @@ it('opens a ui pane with { id }, updates its UI by id, and keeps it across a res
   // The pane's UI is still there after the daemon restarts.
   await close()
   ;({ peer, close } = await open())
-  // Kept with the thread: published once a pane asks for it.
-  const watched = await peer.call<{ sub: string; value: ThreadSpecs | null }>('value.watch', { key: SPECS, scope: thread.id })
-  expect(watched.value).toBeNull()
-  let kept: ThreadSpecs | null = null
-  peer.on('value.changed', ({ sub, value }: Notifications['value.changed']) => { if (sub === watched.sub) kept = value as ThreadSpecs })
-  expect((await peer.call<ThreadSpecs>(LOAD, { thread: thread.id })).status?.blocks).toEqual(second)
-  await until(() => kept !== null)
-  expect(kept!.status?.blocks).toEqual(second)
+  // Kept with the thread: read again as a pane watches it.
+  const kept = await watch(peer, thread.id)
+  await until(() => kept.now !== null)
+  expect(kept.now!.status?.blocks).toEqual(second)
   await close()
   delete process.env.PANEUITEST_MODEL
 })

@@ -348,8 +348,13 @@ export type DaemonApi = {
   view(id: string, view: DataView): void
   /** Take part in threads' lives: see ThreadHooks. `S`: the state its `starting` gives a thread (`state<S>()`). */
   thread<S extends Json = Json>(hooks: ThreadHooks<S>): void
-  /** This extension's state with each thread, kept under its name (`starting` can give a new thread its first). */
-  state<T extends Json = Json>(): ThreadState<T>
+  /**
+   * This extension's state with each thread, kept under its name (`starting` can give a new thread its first).
+   * `publish`: also a scoped live value of that name (`<name>.<something>`), each thread's state in its scope (null for none), for
+   * the UI to watch (`useValue(machine, key, { scope: thread.id })`): read from the thread when a scope is first
+   * watched, told every change made through this state, and let go of once nobody watches it. Asked for once.
+   */
+  state<T extends Json = Json>(options?: { publish?: string }): ThreadState<T>
   /**
    * What clients are told about each thread, as `ThreadInfo.facts[<name>]`: small, and worked out from the thread's
    * state (this extension's) whenever its info is (`invalidate()` when something else it reads changed). Not for
