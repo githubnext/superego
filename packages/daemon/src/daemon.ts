@@ -185,7 +185,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   for (const extension of options.extensions ?? []) daemonLife.add(await extensions.setUpBuiltin(extension, 'bundled'))
   extensions.registerSwitches()
 
-  // Mount everything once so statuses (and anything a previous process left running) are live from the start.
+  // Mount everything once so statuses (and anything a previous process left running) are live from the start; and
+  // learn which thread each subagent's conversation is of, before any resumed run asks.
+  await threads.learnConversations()
   await threads.list()
   await threads.list({ hidden: true })
   // A run cut off by the last stop resumes where it was, maybe inside a profile's tool: its profile is loaded first, so

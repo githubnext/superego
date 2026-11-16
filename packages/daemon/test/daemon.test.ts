@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
-import { defineApp, PROTOCOL_VERSION, versionOf, type ActionInfo, type ActionLogEntry, type AuthEvent, type Hello, type ModelCatalog, type Notifications, type ProviderAuthInfo, type RpcPeer, type ThreadInfo, type SettingsSnapshot } from '@superego/protocol'
+import { defineApp, MESSAGE_ENTRY, PROTOCOL_VERSION, versionOf, type ActionInfo, type ActionLogEntry, type AuthEvent, type Hello, type ModelCatalog, type Notifications, type ProviderAuthInfo, type RpcPeer, type ThreadInfo, type SettingsSnapshot } from '@superego/protocol'
 import { MemorySettingsStore } from '@superego/settings'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '../src/index.ts'
 import { until } from './until.ts'
@@ -399,7 +399,7 @@ describe('record and replay', () => {
     ] })
     await until(async () => (await threads(peer)).find((t) => t.id === thread.id)!.status.state === 'done')
     const { value } = await peer.call<{ value: ConversationView }>('thread.watch', { thread: thread.id })
-    const user = value.entries.find((e) => e.kind === 'pi.user')!.model![0] as { content: { type: string; text?: string; mimeType?: string }[] }
+    const user = value.entries.find((e) => e.kind === MESSAGE_ENTRY)!.model![0] as { content: { type: string; text?: string; mimeType?: string }[] }
     expect(user.content.map((b) => b.type)).toEqual(['text', 'text', 'image', 'text', 'text'])
     expect(user.content[0]!.text).toBe('look')
     expect(user.content[2]!.mimeType).toBe('image/png')

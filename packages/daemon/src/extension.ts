@@ -424,9 +424,11 @@ export type DaemonApi = {
     send(id: string, text: string, options?: { whenBusy?: 'steer' | 'followUp'; exposure?: Exposure; from?: string }): Promise<void>
     /**
      * How the message a tool call answers came (`MessageOrigin`: `{}` for a window's user's), by the call's
-     * conversation and id, as a tool's `execute` has them: the user message before the model's message that made the
-     * call, not whichever is newest (the user may write while another's turn runs). Undefined when the call isn't found
-     * in the thread's newest few hundred entries, or the conversation isn't a thread's own (a subagent's).
+     * conversation and id, as a tool's `execute` has them: the input before the model's message that made the call,
+     * not whichever is newest (the user may write while another's turn runs). A user-role message nobody sent (a
+     * compaction's summary, a reset's handoff, a continuation) is passed over. Undefined when the call or an input
+     * before it isn't found in the thread's newest few hundred entries, or the conversation isn't a thread's own (a
+     * subagent's): a guard refuses then.
      */
     answering(conversationId: number, callId: string): Promise<MessageOrigin | undefined>
     /**

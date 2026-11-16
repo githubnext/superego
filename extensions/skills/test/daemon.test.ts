@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import type { DaemonExtension } from '@superego/daemon'
-import { DATA_VIEWS, type DataViewInfo } from '@superego/protocol'
+import { DATA_VIEWS, MESSAGE_ENTRY, type DataViewInfo } from '@superego/protocol'
 import { testDaemon, type TestDaemon } from '@superego/sdk/testing'
 import skills, { skillsExtension } from '../src/daemon.ts'
 
@@ -28,7 +28,7 @@ const open = (extension: DaemonExtension = skills) => testDaemon({ extensions: [
 async function send(daemon: TestDaemon, text: string) {
   const thread = await daemon.thread(text, { cwd: dir })
   const all = await daemon.transcript(thread.id)
-  const user = (JSON.parse(all) as { kind: string; model?: { content: string | { type: string; text?: string }[] }[] }[]).find((e) => e.kind === 'pi.user')!.model![0]!
+  const user = (JSON.parse(all) as { kind: string; model?: { content: string | { type: string; text?: string }[] }[] }[]).find((e) => e.kind === MESSAGE_ENTRY)!.model![0]!
   return { all, content: user.content }
 }
 

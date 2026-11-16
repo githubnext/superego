@@ -123,7 +123,7 @@ it('transforms what a message gives the agent, in order, but not for a thread th
   const thread = await peer.call<ThreadInfo>('thread.start', {})
   const users = async () => {
     const { value } = await peer.call<{ value: { entries: { kind: string; model?: { content: unknown }[] }[] } }>('thread.watch', { thread: thread.id })
-    return value.entries.filter((e) => e.kind === 'pi.user').map((e) => e.model![0]!.content)
+    return value.entries.filter((e) => e.kind === MESSAGE_ENTRY).map((e) => e.model![0]!.content)
   }
   const send = async (text: string) => {
     const before = (await users()).length
@@ -150,7 +150,7 @@ it("counts only what a transform returns, not what it changes in place, with att
   await peer.call('thread.send', { thread: thread.id, text: 'look', attachments: [{ name: 'a.txt', mimeType: 'text/plain', data: Buffer.from('a').toString('base64') }] })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
   const { value } = await peer.call<{ value: { entries: { kind: string; model?: { content: unknown }[] }[] } }>('thread.watch', { thread: thread.id })
-  expect(JSON.stringify(value.entries.find((e) => e.kind === 'pi.user')!.model![0]!.content)).not.toContain('meddled')
+  expect(JSON.stringify(value.entries.find((e) => e.kind === MESSAGE_ENTRY)!.model![0]!.content)).not.toContain('meddled')
   await close()
 })
 
@@ -359,8 +359,34 @@ it("waits until a thread isn't working (threads.idle), and tells its last answer
   await close()
 })
 
+it("maps a subagent's conversation to the thread at the top of what made it (threads.of)", async () => {
+  const turn = (content: unknown[], stopReason: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', message: { role: 'assistant', content, stopReason } })
+  await writeFile(join(dir, 'turns.jsonl'), [turn([{ type: 'toolCall', id: 'c1', name: 'spawn', arguments: {} }], 'toolUse'), turn([{ type: 'text', text: 'Done.' }], 'stop')].join('\n') + '\n')
+  let api: DaemonApi | undefined
+  const found: (string | undefined)[] = []
+  const spawner = defineDaemonExtension({
+    name: 'spawner',
+    setup(superego) {
+      api = superego
+      superego.agent(defineExtension({ name: 'spawner', tools: [defineTool({ name: 'spawn', description: 'Spawn.', parameters: obj({}), execute: async (_, tool, context) => {
+        // A subagent's conversation, made by this call, and one made by that.
+        const own = await superego.threads.conversation(superego.threads.of(tool.conversationId)!)
+        const sub = await own.commit((tx) => tx.createConversation({ ownership: { kind: 'task', taskId: tool.taskId } }), context)
+        found.push(superego.threads.of(Number(sub.id)))
+        return { output: [{ type: 'text', text: 'spawned' }] }
+      } })] }))
+    },
+  })
+  const { peer, close } = await open([spawner], `replay:${join(dir, 'turns.jsonl')}`)
+  const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'go' })
+  await until(async () => found.length === 1)
+  expect(found).toEqual([thread.id])
+  expect(api!.threads.of(987654)).toBeUndefined()
+  await close()
+})
+
 it('tells the message a tool call answers: the user message before the call, not the newest', () => {
-  const user = (text: string, data?: MessageOrigin) => ({ kind: data ? MESSAGE_ENTRY : 'pi.user', ...(data ? { data } : {}), model: [{ role: 'user', content: [{ type: 'text', text }] }] }) as never
+  const user = (text: string, data: MessageOrigin = {}) => ({ kind: MESSAGE_ENTRY, data, model: [{ role: 'user', content: [{ type: 'text', text }] }] }) as never
   const calls = (...ids: string[]) => ({ kind: 'pi.assistant', model: [{ role: 'assistant', content: ids.map((id) => ({ type: 'toolCall', id, name: 'x', arguments: {} })) }] }) as never
   const result = (id: string) => ({ kind: 'pi.toolResult', model: [{ role: 'toolResult', toolCallId: id, content: [] }] }) as never
   // Newest first: an outside agent asked, the model called c1; the user typed in the window meanwhile; then c2.
@@ -371,6 +397,16 @@ it('tells the message a tool call answers: the user message before the call, not
   // Several calls in one message; and the user's message placed after the model's, before its calls ran.
   expect(answeredBy([user('mine'), calls('a', 'b'), user('theirs', { from: '7' })], 'b')).toEqual({ from: '7' })
   expect(answeredBy(entries, 'nope')).toBeUndefined()
+})
+
+it("doesn't take a user message nobody sent for the input a call answers: walks back past it, else refuses", () => {
+  const said = (kind: string, text: string, data?: MessageOrigin) => ({ kind, ...(data ? { data } : {}), model: [{ role: 'user', content: [{ type: 'text', text }] }] }) as never
+  const calls = (id: string) => ({ kind: 'pi.assistant', model: [{ role: 'assistant', content: [{ type: 'toolCall', id, name: 'x', arguments: {} }] }] }) as never
+  // Newest first: an outside agent asked; the run compacted, reset and was continued before the model called c1.
+  const entries = [calls('c1'), said('pi.user', 'continue'), said('pi.reset', 'handoff'), said('pi.compaction', 'summary'), said(MESSAGE_ENTRY, 'set up my servers', { exposure: 'outside' })]
+  expect(answeredBy(entries, 'c1')).toEqual({ exposure: 'outside' })
+  // No input before the call at all: not the user's.
+  expect(answeredBy([calls('c1'), said('pi.compaction', 'summary')], 'c1')).toBeUndefined()
 })
 
 it("publishes an extension's state with each thread, if asked: read in as a thread's scope is watched, told every change, let go of after", async () => {

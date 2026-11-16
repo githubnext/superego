@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { basename, dirname } from 'node:path'
-import type { ConversationId, ConversationView, EntryId, EntryRecord, Harness, LiveState } from '@earendil-works/pi-durable'
+import type { ConversationId, ConversationRecord, ConversationView, Cursor, EntryId, EntryRecord, Harness, LiveState } from '@earendil-works/pi-durable'
 import { deriveStatus, MESSAGE_ENTRY, NOTE_ENTRY, RpcError, type Attachment, type Exposure, type Json, type MessageOrigin, type NewThread, type Pane, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
 import { attachmentsDir, contentOf } from './attachments.ts'
 import type { ExtensionHost } from './extension-host.ts'
@@ -40,9 +40,10 @@ export function paneParams(params: unknown): Json {
 const originOf = ({ by, from, exposure }: MessageOrigin): MessageOrigin => ({ ...(by ? { by } : {}), ...(from ? { from } : {}), ...(exposure ? { exposure } : {}) })
 
 /**
- * How the message tool call `callId` answers came, by a thread's transcript, newest entry first: the user message
- * before the model's message that made the call (a `MESSAGE_ENTRY`'s origin, else a window's user's, `{}`). Undefined
- * when the call isn't among them.
+ * How the message tool call `callId` answers came, by a thread's transcript, newest entry first: the input before the
+ * model's message that made the call, a `MESSAGE_ENTRY`'s origin (`{}` for a window's user's). Every input is one; any
+ * other user-role message (a compaction's summary, a reset's handoff, a hook's continuation) isn't an input, and the
+ * walk goes on past it. Undefined when the call isn't among them, or no input is before it: refused, for a guard.
  */
 export function answeredBy(entries: readonly Pick<EntryRecord, 'kind' | 'data' | 'model'>[], callId: string): MessageOrigin | undefined {
   let found = false
@@ -52,7 +53,7 @@ export function answeredBy(entries: readonly Pick<EntryRecord, 'kind' | 'data' |
         found = message.role === 'assistant' && Array.isArray(message.content) && message.content.some((c: { type?: string; id?: string }) => c.type === 'toolCall' && c.id === callId)
         continue
       }
-      if (message.role === 'user') return entry.kind === MESSAGE_ENTRY ? originOf((entry.data ?? {}) as MessageOrigin) : {}
+      if (message.role === 'user' && entry.kind === MESSAGE_ENTRY) return originOf((entry.data ?? {}) as MessageOrigin)
     }
   }
   return undefined
@@ -67,6 +68,29 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   const archiving = new Set<string>()
   /** The transcript watches open on each thread, to end when it's cleared (clients then watch again). */
   const transcriptWatches = new Map<string, Set<() => unknown>>()
+
+  /**
+   * The conversations a task made (a subagent's), each by the conversation it was made in: how `threadOf` finds the
+   * thread one belongs to. Heard as they're made; the ones made before this process, read at start (`learnConversations`).
+   */
+  const madeIn = new Map<number, number>()
+  const learn = ({ id, owner }: ConversationRecord) => { if (owner) madeIn.set(Number(id), Number(owner.conversationId)) }
+  harness.observeCommits({ advance: ({ changes }) => { for (const c of changes) if (c.type === 'conversation') learn(c.value) }, end: () => {} })
+  async function learnConversations() {
+    let cursor: Cursor | undefined
+    do {
+      const page = await harness.commit((tx) => tx.scanConversations({}, 500, cursor), context)
+      page.items.forEach(learn)
+      cursor = page.next
+    } while (cursor !== undefined)
+  }
+  /** The thread a conversation belongs to: its own, or, a subagent's, the thread at the top of what made it. */
+  function threadOf(conversationId: number): string | undefined {
+    for (let id: number | undefined = conversationId, hops = 0; id !== undefined && hops <= madeIn.size; id = madeIn.get(id), hops++) {
+      if (mounted.has(String(id))) return String(id)
+    }
+    return undefined
+  }
 
   /** Threads being mounted: two asking at once get the one, watched once (else each run is told twice). */
   const mounting = new Map<string, Promise<Mounted>>()
@@ -395,7 +419,8 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
    * Send `text` to a thread, with the model and thinking it chose, else what this machine's settings say now. `origin`,
    * how it came (`MessageOrigin`): `by` the extension sending it (`threads.send`, `threads.start`'s prompt), none for a
    * client's (a window, the command line); `exposure`, whom for, when a client ran it as the command line or an outside
-   * agent (`DaemonContext.exposure`); `from`, the thread it's from. Kept with it, as a `MESSAGE_ENTRY` (`answering`).
+   * agent (`DaemonContext.exposure`); `from`, the thread it's from. Kept with it, as a `MESSAGE_ENTRY` (`answering`): every
+   * input is one, a window's user's too (`{}`), so nothing else in a transcript passes for an input.
    */
   async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp', attachments: Attachment[] = [], origin: MessageOrigin = {}) {
     if (!text.trim() && !attachments.length) throw new RpcError('invalid', 'Nothing to send')
@@ -413,8 +438,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
     const said = originOf(origin)
     const content = await transformed(id, m, { text, attachments, ...said }, await contentOf(attachmentsDir(options.dataDir, id), text, attachments))
-    const entry = Object.keys(said).length ? { entry: { kind: MESSAGE_ENTRY, data: said } } : {}
-    const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}), ...entry }, context)
+    const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}), entry: { kind: MESSAGE_ENTRY, data: said } }, context)
     return String(submission.id)
   }
 
@@ -682,7 +706,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
       list: (options) => list(options),
       get: async (id) => info(id, await get(id)),
       conversation: async (id) => (await get(id)).conversation,
-      of: (conversationId) => mounted.has(String(conversationId)) ? String(conversationId) : undefined,
+      of: (conversationId) => threadOf(conversationId),
       attachments: (id) => attachmentsDir(options.dataDir, id),
       // An extension's attachments are inline: it has no connection to upload on.
       start: ({ hidden, ...params }) => startThread({ ...params as ThreadStart, ...(hidden ? { hidden: owner } : {}), by: owner }),
@@ -705,7 +729,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
 
   return {
     list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, tellPaneClosed, submit, startThread, archive, unarchive, openPane, history, lastAnswer: answerOf,
-    watchTranscript, apiFor, retrySignIn, rejectedNow,
+    watchTranscript, apiFor, retrySignIn, rejectedNow, learnConversations,
   }
 }
 

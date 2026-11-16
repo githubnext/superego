@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DATA_VIEWS, defineApp, PROTOCOL_VERSION, type Hello, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { DATA_VIEWS, defineApp, MESSAGE_ENTRY, PROTOCOL_VERSION, type Hello, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '../src/index.ts'
 import { until } from './until.ts'
 import { hashProfile, loadProfile, Allowances, type ProfileRef } from '../src/profiles.ts'
@@ -581,7 +581,7 @@ export default defineDaemonExtension({ name: 'stamp', setup(superego) { superego
     const thread = await peer.call<ThreadInfo>('thread.start', { cwd: project, profile, prompt: 'hi' })
     await done(peer, thread.id)
     const { value } = await peer.call<{ value: { entries: { kind: string; model?: { content: unknown }[] }[] } }>('thread.watch', { thread: thread.id })
-    return value.entries.find((e) => e.kind === 'pi.user')!.model![0]!.content
+    return value.entries.find((e) => e.kind === MESSAGE_ENTRY)!.model![0]!.content
   }
   const stamped = [{ type: 'text', text: 'hi' }, { type: 'text', text: 'stamped' }]
   expect(await sent('default')).toEqual(stamped)

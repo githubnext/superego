@@ -21,9 +21,9 @@ export const PROTOCOL_VERSION = 2
 export const NOTE_ENTRY = 'superego.note'
 
 /**
- * A message to a thread's agent that someone other than a window's user sent: an entry of this kind, with the model's
- * user message as a plain one has it and `data` saying how it came (`MessageOrigin`). A window's user's is pi-durable's
- * own `pi.user`.
+ * An input to a thread's agent: an entry of this kind, with the model's user message as a plain one has it and `data`
+ * saying how it came (`MessageOrigin`; `{}` for a window's user's). Every input is one: a user-role message of any
+ * other kind (a compaction's summary, a reset's handoff, a continuation) wasn't sent by anyone.
  */
 export const MESSAGE_ENTRY = 'superego.message'
 
