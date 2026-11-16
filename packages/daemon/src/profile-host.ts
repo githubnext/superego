@@ -158,8 +158,8 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
     changed()
     for (const name of loaded.spec.without ?? []) {
       const known = extensions.known(name)
-      if (!known) console.warn(`Profile ${ref.name}: without ${name}, which isn't an extension here`)
-      else if (known.required) console.warn(`Profile ${ref.name}: ${name} is required, and can't be done without`)
+      if (!known) loaded.problems.push(`without: ${name} isn't an extension here`)
+      else if (known.required) loaded.problems.push(`without: ${name} is required, and can't be done without`)
     }
     return loaded
   }

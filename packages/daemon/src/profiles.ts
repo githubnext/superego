@@ -29,7 +29,11 @@ import { RpcError, type Json } from '@superego/protocol'
 import { CODE, digestOf, graphOf, versionedImport, versionedUrl, versionOf, within } from './module-graph.ts'
 import { writeAtomic } from './write-atomic.ts'
 
-/** A profile, as its profile.ts default-exports it (`defineProfile`): its agent's model, prompt and extensions, its UI. */
+/**
+ * A profile, as its profile.ts default-exports it (`defineProfile`): its agent's model, prompt and extensions, its UI.
+ * The core's keys only: closed, so a typo or a key that's gone fails the type check. Bundled extensions' own keys
+ * (`superego.profileKey`) are added where they're known, by the SDK's `defineProfile` ('superego').
+ */
 export type ProfileSpec = {
   /** What it's for, in a line: shown where it's picked. */
   description?: string
@@ -64,13 +68,15 @@ export type ProfileSpec = {
   without?: string[]
   /** Start from another profile and add to it: 'user:<name>' (a project's profile on the user's). */
   extends?: string
-  /**
-   * An extension's own keys (`mcpServers: ['linear']`, the mcp-servers extension's), checked when the profile loads and
-   * merged over `extends` by the extension that registered them (`superego.profileKey`); a key no extension here
-   * registered is carried as it is, its `extends` the profile's own replacing the other's.
-   */
-  [key: string]: Json | undefined
 }
+
+/**
+ * A profile as loaded: the core's keys, and extensions' own (`mcpServers: ['linear']`, the mcp-servers extension's),
+ * read by key. Those are checked when the profile loads and merged over `extends` by the extension that registered them
+ * (`superego.profileKey`); a key no extension here registered is the profile's problem (`LoadedProfile.problems`),
+ * carried as it is, its `extends` the profile's own replacing the other's.
+ */
+export type LoadedSpec = ProfileSpec & { [key: string]: Json | undefined }
 
 /** The profile keys that are the core's own: an extension can't register them (`profileKey`). */
 export const CORE_KEYS = new Set(['description', 'model', 'thinking', 'prompt', 'extensions', 'ui', 'panes', 'options', 'without', 'extends'])
@@ -107,7 +113,9 @@ export type ProfileRef = { scope: 'user' | 'project'; name: string; dir: string 
 export type ProfileDaemonExtension = { extension: DaemonExtension; key: string; file: string; prefix: string }
 
 export type LoadedProfile = ProfileRef & {
-  spec: ProfileSpec
+  spec: LoadedSpec
+  /** What's wrong with it that doesn't stop it loading (a key nothing here reads), for where it's told of (`ProfileInfo.problems`). */
+  problems: string[]
   /** Its agent parts, installed under names of their own: `<scope>:<name>/<extension>`. */
   extensions: Extension[]
   /** Its daemon halves, for the daemon to set up (or share with another profile that has them set up already). */
@@ -122,7 +130,7 @@ export type LoadedProfile = ProfileRef & {
  * What a loaded profile brings, as profile.list tells it: its extensions by name, and what extensions' keys bring, by
  * their titles (`{ 'MCP servers': ['linear'] }`).
  */
-export function broughtBy(profile: LoadedProfile, keys: ProfileKeys): { extensions?: string[]; brings?: Record<string, string[]> } {
+export function broughtBy(profile: LoadedProfile, keys: ProfileKeys): { extensions?: string[]; brings?: Record<string, string[]>; problems?: string[] } {
   const extensions = [...new Set([...profile.daemon.map((d) => d.extension.name), ...profile.extensions.map((e) => e.name.split('/').at(-1)!)])]
   const brings: Record<string, string[]> = {}
   for (const [key, spec] of keys) {
@@ -132,7 +140,7 @@ export function broughtBy(profile: LoadedProfile, keys: ProfileKeys): { extensio
     try { items = spec.brings(value) } catch (error) { console.error(`Profile key ${key} (${spec.owner}): brings failed:`, error); continue }
     if (items.length) brings[spec.title ?? key] = items
   }
-  return { ...(extensions.length ? { extensions } : {}), ...(Object.keys(brings).length ? { brings } : {}) }
+  return { ...(extensions.length ? { extensions } : {}), ...(Object.keys(brings).length ? { brings } : {}), ...(profile.problems.length ? { problems: profile.problems } : {}) }
 }
 
 export const DEFAULT_PROFILE = 'default'
@@ -318,8 +326,8 @@ export function provideSdk(sdk: ProfileSdk) {
 const fresh = versionedUrl
 
 /** What a profile's profile.ts says, as it is now. */
-async function specOf(ref: ProfileRef): Promise<ProfileSpec> {
-  const spec = (await load(fresh(join(ref.dir, 'profile.ts'))) as { default?: ProfileSpec }).default
+async function specOf(ref: ProfileRef): Promise<LoadedSpec> {
+  const spec = (await load(fresh(join(ref.dir, 'profile.ts'))) as { default?: LoadedSpec }).default
   if (!spec || typeof spec !== 'object') throw new RpcError('invalid', `${join(ref.dir, 'profile.ts')} must export default defineProfile({ … })`)
   return spec
 }
@@ -340,10 +348,11 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, allowances:
     })
   }
   const spec = await specOf(ref)
+  const problems: string[] = []
   for (const [key, value] of Object.entries(spec)) {
     if (value === undefined || CORE_KEYS.has(key)) continue
     const owned = keys.get(key)
-    if (!owned) { console.warn(`Profile ${ref.name}: ${key} isn't a key of any extension here; it's carried as it is`); continue }
+    if (!owned) { problems.push(`${key} isn't a key of any extension here`); continue }
     let problem: string | undefined
     try { problem = owned.check?.(value) } catch (error) { problem = `${key}: ${(error as Error).message}` }
     if (problem) throw new RpcError('invalid', `Profile ${ref.name}: ${problem}`)
@@ -389,7 +398,7 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, allowances:
     if (CORE_KEYS.has(key) || own === undefined || below === undefined || !merge) continue
     try { theirs[key] = merge(below, own) } catch (error) { throw new RpcError('invalid', `Profile ${ref.name}: ${key} doesn't go with ${spec.extends}'s: ${(error as Error).message}`) }
   }
-  const merged: ProfileSpec = {
+  const merged: LoadedSpec = {
     ...base?.spec, ...spec, ...theirs,
     prompt: [base?.spec.prompt, spec.prompt].filter(Boolean).join('\n\n') || undefined,
     without: [...new Set([...(base?.spec.without ?? []), ...(spec.without ?? [])])],
@@ -397,7 +406,7 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, allowances:
     // UI paths are relative to their own profile's folder: only this profile's are served from here.
     ui: spec.ui,
   }
-  return { ...ref, spec: merged, extensions, daemon, hash, versions }
+  return { ...ref, spec: merged, problems: [...base?.problems.map((p) => `${spec.extends}: ${p}`) ?? [], ...problems], extensions, daemon, hash, versions }
 }
 
 /**

@@ -43,7 +43,9 @@ export default defineProfile({
 })
 ```
 
-Every field is optional.
+Every field is optional, and no other is taken: a misspelt key, or one that's gone, fails the type check. A profile
+that loads with one anyway (a key no extension here reads, a `without` naming no extension) is told so on its card
+(the profile's name in the title bar) and in `profile.list`'s `problems`.
 
 - **`prompt`** is the agent's instructions, after the prompt sections of its extensions. With `extends`, the two
   prompts are joined.
@@ -61,8 +63,8 @@ Every field is optional.
   sidebar) can't be left out.
 - **`options`** is what its threads ask extensions for, by name, as `thread.start`'s `options` (a thread's own win):
   `{ worktrees: true }` gives each a git worktree of its own, in a git repository.
-- **Extensions' keys.** Besides these, a profile takes keys an extension registers (`superego.profileKey`,
-  [daemon.md](daemon.md)); that extension checks them as the profile loads (a problem fails it) and merges them over
+- **Extensions' keys.** Besides these, a profile takes keys a bundled extension registers (`superego.profileKey`,
+  [daemon.md](daemon.md); `defineProfile`'s type lists them); that extension checks them as the profile loads (a problem fails it) and merges them over
   `extends`. The one bundled: **`mcpServers`**, the `mcp-servers` extension's, a list of the MCP servers its threads
   use: a string names one the machine has (Settings → MCP servers; a name it has none of is left out), and an object
   defines servers of the profile's own, by name, each a `command` (with `args`, `cwd`, plain `env`) or a `url` (with

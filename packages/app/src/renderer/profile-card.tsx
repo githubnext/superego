@@ -7,9 +7,9 @@ import { useRegistry } from './registry.tsx'
 import { shortPath } from './short-path.ts'
 
 /**
- * The profile's name, opening a card: what it's for, where it lives, and what it brings (its extensions, and what
- * extensions' keys in it bring: its MCP servers, say), as profile.list tells them for the thread's folder once the
- * card first opens.
+ * The profile's name, opening a card: what it's for, where it lives, what it brings (its extensions, and what
+ * extensions' keys in it bring: its MCP servers, say), and what's wrong with it (a key nothing reads), as profile.list
+ * tells them for the thread's folder once the card first opens.
  */
 export function ProfileChip({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo & { profile: NonNullable<ThreadInfo['profile']> } }) {
   const dispatch = useRegistry().router.dispatch
@@ -29,6 +29,7 @@ export function ProfileChip({ machine, thread }: { machine: MachineEntry; thread
         <dt>{ref.scope === 'project' ? 'Project' : 'User'}</dt><dd className="profile-card__path">{shortPath(ref.dir)}</dd>
         {info?.extensions && <><dt>Extensions</dt><dd>{info.extensions.join(', ')}</dd></>}
         {Object.entries(info?.brings ?? {}).map(([what, items]) => <Fragment key={what}><dt>{what}</dt><dd>{items.join(', ')}</dd></Fragment>)}
+        {info?.problems && <><dt>Problems</dt><dd className="profile-card__problems">{info.problems.map((problem) => <div key={problem}>{problem}</div>)}</dd></>}
       </dl>
     </Popover>
   )

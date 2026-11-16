@@ -14,7 +14,7 @@ import type { ActionDef, ActionInfo, AppConfig, Attachment, ChannelAcceptor, Blo
 import type { SectionSpec } from '@superego/settings'
 import type { AuthFlow } from './auth-flows.ts'
 import type { DaemonContext } from './host.ts'
-import type { ProfileKey, ProfileRef, ProfileSpec } from './profiles.ts'
+import type { LoadedSpec, ProfileKey, ProfileRef } from './profiles.ts'
 import type { RunRecord } from './recap.ts'
 import type { MachineDraft, MachinePatch } from './relay.ts'
 
@@ -125,7 +125,7 @@ export type ThreadDraft = {
   /** The thread starting it. */
   parent?: string
   /** The profile it starts with, as loaded. */
-  profile?: { ref: ProfileRef; spec: ProfileSpec }
+  profile?: { ref: ProfileRef; spec: LoadedSpec }
   /** What extensions were asked for, by name: its profile's `options`, then `NewThread.options` over them. */
   options: Record<string, Json>
 }
@@ -236,7 +236,7 @@ export type AgentPartsThread = {
   /** The extension whose thread it is, for a hidden one. */
   owner?: string
   /** Its profile, as loaded now (`extends` merged): an edit to it shows from the next turn. */
-  profile?: { ref: ProfileRef; spec: ProfileSpec }
+  profile?: { ref: ProfileRef; spec: LoadedSpec }
 }
 
 /** What an `agentParts` answers: parts its extension gave with `agent(part, { always: false })`, or nothing. */

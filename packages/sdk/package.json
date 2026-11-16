@@ -17,6 +17,7 @@
     "@superego/app": "workspace:*",
     "@superego/client": "workspace:*",
     "@superego/daemon": "workspace:*",
+    "@superego/mcp-servers": "workspace:*",
     "@superego/protocol": "workspace:*",
     "happy-dom": "^21.0.4",
     "sucrase": "^3.35.1",

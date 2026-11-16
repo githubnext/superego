@@ -971,6 +971,9 @@ importers:
       '@superego/daemon':
         specifier: workspace:*
         version: link:../daemon
+      '@superego/mcp-servers':
+        specifier: workspace:*
+        version: link:../../extensions/mcp-servers
       '@superego/protocol':
         specifier: workspace:*
         version: link:../protocol

@@ -183,7 +183,7 @@ it("gives agentParts the profile as loaded now: an extension's keys checked and 
   const project = join(dir, 'acme')
   const projectProfile = join(project, '.superego', 'profiles', 'default')
   write(home, { 'profile.ts': profileTs({ colors: ['red', 'blue'], shade: 'dark', loose: 1 }) })
-  write(projectProfile, { 'profile.ts': profileTs({ extends: 'user:default', colors: ['blue', 'green'], shade: 'light' }) })
+  write(projectProfile, { 'profile.ts': profileTs({ extends: 'user:default', colors: ['blue', 'green'], shade: 'light', without: ['nothing-here'] }) })
   const specs: unknown[] = []
   const reader = defineDaemonExtension({
     name: 'reader',
@@ -206,9 +206,12 @@ it("gives agentParts the profile as loaded now: an extension's keys checked and 
   await done(peer, thread.id)
   // A key no extension here has is carried as it is.
   expect(specs.at(-1)).toEqual({ ref: 'project', colors: ['red', 'blue', 'green'], shade: 'light', loose: 1 })
-  // What it brings, by what the extension calls it.
+  // What it brings, by what the extension calls it; and its problems, a stray key (its base's) and a stray `without`.
   const listed = await peer.call<ProfileInfo[]>('profile.list', { cwd: project })
-  expect(listed.find((p) => p.scope === 'project')).toMatchObject({ brings: { Colours: ['red', 'blue', 'green'] } })
+  expect(listed.find((p) => p.scope === 'project')).toMatchObject({
+    brings: { Colours: ['red', 'blue', 'green'] },
+    problems: ["user:default: loose isn't a key of any extension here", "without: nothing-here isn't an extension here"],
+  })
   // Edited (and allowed again), the next turn has it.
   write(projectProfile, { 'profile.ts': profileTs({ extends: 'user:default', colors: [] }) })
   await peer.call('profile.allow', { cwd: project })

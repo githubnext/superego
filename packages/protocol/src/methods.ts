@@ -118,7 +118,11 @@ export type ProfileRef = { name: string; scope: 'user' | 'project'; dir: string 
  * extensions (by name, with those of the profile it extends), and what extensions' keys in it bring, by what they are
  * (`{ 'MCP servers': ['linear'] }`: see `profileKey`).
  */
-export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean; extensions?: string[]; brings?: Record<string, string[]> }
+/**
+ * A profile as `profile.list` tells it: once loaded, what it brings (its extensions, and what extensions' keys in it
+ * bring, by their titles) and its problems: what's wrong with it that doesn't stop it loading (a key nothing reads).
+ */
+export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean; extensions?: string[]; brings?: Record<string, string[]>; problems?: string[] }
 
 /** A file sent with a message: images go to the model as images; any file is saved on the thread's machine. */
 export type Attachment = { name: string; mimeType: string; /** Base64. */ data: string }

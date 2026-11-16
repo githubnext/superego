@@ -113,6 +113,7 @@
 .profile-card dt { color: var(--superego-faint); }
 .profile-card dd { margin: 0; overflow-wrap: anywhere; }
 .profile-card__path { font-family: var(--superego-mono); font-size: var(--superego-text-xs); line-height: inherit; }
+.profile-card__problems { color: var(--superego-warning, #b45309); }
 .app__beside { width: 280px; flex: none; min-height: 0; overflow: auto; background: var(--superego-bg); box-shadow: inset 1px 0 0 var(--superego-line); }
 /* Hidden while every view in it draws nothing: then each holds only its ···. */
 .app__beside:empty, .app__beside:not(:has(> .placed-view > :not(.view-menu__button))) { display: none; }
