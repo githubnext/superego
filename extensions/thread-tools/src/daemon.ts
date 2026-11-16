@@ -16,7 +16,7 @@ export default defineDaemonExtension({
     answer: (id) => s.threads.lastAnswer(id),
     archive: (id) => s.threads.archive(id),
     archiveWhenDone: async (id) => { await s.threads.archive(id, { whenIdle: true }) },
-    read: (reader, thread) => readsOf(s.harness).note(reader, thread),
+    read: (reader, thread) => readsOf(s.dataDir).note(reader, thread),
     hostname: () => hostname(),
     machines: () => s.machines.list(),
     remote: (machine, method, params) => s.machines.call(machine, method, params),

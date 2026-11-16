@@ -23,7 +23,7 @@ import { createAuthFlows } from './auth-flows.ts'
 import { describeProfile, registerExtensionSettings } from './extension-settings.ts'
 import {
   defineDaemonExtension, type AgentChoice, type AgentPartsThread, type ArchiveNote, type ArchiveNotes, type DaemonApi, type DaemonExtension, type LiveValue, type MessageBlock, type OutgoingMessage, type ScopedValue, type StatusContribution, type SendTransform,
-  type ThreadStarting, type ThreadDraft, type ThreadHooks, type ToolCallRecord,
+  type ThreadStarting, type ThreadDraft, type ThreadHooks,
 } from './extension.ts'
 import { titleOf } from './names.ts'
 import { lastRun, recapOf, type RunRecord } from './recap.ts'
@@ -342,7 +342,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const threadHooks: Owned<ThreadHooks>[] = []
   const factSources: Owned<(thread: { id: string; state: Json | undefined }) => Json | undefined>[] = []
   const recaps: Owned<(run: RunRecord) => string | undefined>[] = []
-  const toolWatchers: Owned<(record: ToolCallRecord) => void | Promise<void>>[] = []
   const choosers: Owned<(thread: { id?: string; state: Json | undefined; profile?: ProfileRef }) => AgentChoice | undefined>[] = []
   /**
    * An extension's `agentParts`: what it adds to each thread's agent at submit, from parts it gives with `always:
@@ -482,37 +481,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       setup: (s) => s.agent(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] })),
     },
   ]
-  /**
-   * Every thread's agent has this: it tells extensions' `toolCalls` of each call that ended, without waiting for them
-   * or letting them change the result. Not an extension of its own, so nothing goes without it.
-   */
-  const toolCallsPart = defineExtension({
-    name: 'tool-calls',
-    hooks: [hook(ToolTask, {
-      afterTool(call, result, api) {
-        const id = String(api.conversationId)
-        const m = mounted.get(id)
-        if (!m || !toolWatchers.length) return undefined
-        const without = withoutOf(id, m.meta, loadedProfile(m.meta))
-        // What the model is told: the output's text, then what went wrong (an error's message comes as a diagnostic).
-        const text = [
-          ...(result.output ?? []).flatMap((block) => block.type === 'text' ? [block.text] : []),
-          ...(result.diagnostics ?? []).map((d) => d.message),
-        ].join('\n')
-        const record: ToolCallRecord = {
-          thread: id,
-          call: { id: call.id, name: call.name, args: call.arguments as Json },
-          result: { isError: Boolean(result.isError), ...(text ? { text } : {}) },
-        }
-        for (const watcher of toolWatchers) {
-          if (!appliesTo(watcher, without, m.meta)) continue
-          void Promise.resolve().then(() => watcher.value(record)).catch((error: unknown) => console.error(`Extension ${watcher.owner}: toolCalls failed:`, error))
-        }
-        return undefined
-      },
-    })],
-  })
-  registry.install(toolCallsPart)
   /** A thread's newest transcript entries, newest first: none from before it was last cleared. */
   async function newest(id: string, limit: number) {
     const m = await get(id)
@@ -808,33 +776,14 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     return ref
   }
-  /**
-   * Ask the hooks that may refuse (`archiving`, `unarchiving`): the first to throw stops it, with its error. Those whose
-   * hook ran already, for `unarchiving`, are returned, to be told if it doesn't happen after all (`unarchiveAbandoned`);
-   * a refusal tells them itself.
-   */
+  /** Ask the hooks that may refuse (`archiving`, `unarchiving`): the first to throw stops it, with its error. */
   async function ask(hook: 'archiving' | 'unarchiving', id: string, notes: ArchiveNotes = {}) {
     const m = await get(id)
-    const asked: Owned<ThreadHooks>[] = []
-    for (const owned of hooksOf(id, m)) {
+    for (const { value, owner } of hooksOf(id, m)) {
       try {
-        noted(notes, owned.owner, await owned.value[hook]?.(info(id, m)))
-        if (owned.value[hook]) asked.push(owned)
+        noted(notes, owner, await value[hook]?.(info(id, m)))
       } catch (error) {
-        if (hook === 'unarchiving') await abandonUnarchive(id, asked)
-        throw refusal(owned.owner, error)
-      }
-    }
-    return asked
-  }
-  /** Tell the hooks whose `unarchiving` ran that the thread stays archived, in reverse: each undoes what it put back. */
-  async function abandonUnarchive(id: string, asked: Owned<ThreadHooks>[]) {
-    const m = await get(id)
-    for (const { value, owner } of [...asked].reverse()) {
-      try {
-        await value.unarchiveAbandoned?.(info(id, m))
-      } catch (error) {
-        console.error(`Extension ${owner}: unarchiveAbandoned of thread ${id} failed:`, error)
+        throw refusal(owner, error)
       }
     }
   }
@@ -1033,7 +982,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
       app: options.app,
       dataDir: options.dataDir,
       agentsDir,
-      harness,
       signal: life.signal,
       agent(agentPart, { always = true } = {}) {
         life.live(`the agent part ${agentPart.name}`)
@@ -1082,7 +1030,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         },
         get: (key) => settings.get(key),
         snapshot: () => settings.snapshot(),
-        onChange: (listener) => { life.live('a settings listener'); undo(settings.onChange(listener), 'a settings listener') },
       },
       action: (action) => { life.live(`the action ${action.id}`); undo(router.register({ ...action, id: named(extension.name, action.id), runs: 'machine' }), 'an action'); note('actions', action.keys ? `${action.id} (${action.keys})` : action.id) },
       dispatch: (id, params) => router.dispatch(id, params ?? {}, { source: extension.name, notify: () => {} }, { source: extension.name }),
@@ -1219,7 +1166,6 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
         changed()
       },
       recap(describe) { own(recaps, describe, 'a recap'); note('recap', 'a recap') },
-      toolCalls(watch) { own(toolWatchers, watch, 'a toolCalls watcher'); note('toolCalls', 'a toolCalls watcher') },
       agentFor(choose) { own(choosers, choose as (typeof choosers)[number]['value'], 'an agentFor'); note('agentFor', 'an agentFor'); changed() },
       threads: {
         list: (options) => list(options),
@@ -1605,7 +1551,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     const chosen = (choice?.extensions ?? []).map((part) => chosenParts.get(choice!.by)?.get(part.name) ?? console.warn(`agentFor of ${choice!.by} chose ${part.name}, which it doesn't give with agent(part, { always: false })`)).filter((part) => part !== undefined)
     const added = id === undefined ? [] : await partsAdded(id, meta, without, profile)
     // Each part once: one a chooser and an adder both give, where the chooser put it.
-    const extensions = [...new Set([...partsFor(without), ...chosen, ...added, ...(profile ? partsOf(profile) : []), toolCallsPart])]
+    const extensions = [...new Set([...partsFor(without), ...chosen, ...added, ...(profile ? partsOf(profile) : [])])]
     // Always said, never left as it was: instructions a chooser gave go when it no longer answers.
     const instructions = choice?.instructions ?? (profile?.spec.prompt || null)
     return { model, thinkingLevel, extensions, instructions, without }
@@ -1969,13 +1915,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   async function unarchive(id: string) {
     if (!(await get(id)).meta.archived) return
     await withProfile(id)
-    const asked = await ask('unarchiving', id)
-    try {
-      await updateMeta(id, (m) => { delete m.archived; delete m.archiveWhenDone })
-    } catch (error) {
-      await abandonUnarchive(id, asked)
-      throw error
-    }
+    await ask('unarchiving', id)
+    await updateMeta(id, (m) => { delete m.archived; delete m.archiveWhenDone })
     await tell('unarchived', id)
   }
   /**

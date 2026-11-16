@@ -103,7 +103,25 @@ Slots a profile can fill, each given `{ machine, thread }` (and for the editor o
 
 A mark on some threads' rows goes from the daemon half to the window in four steps: the daemon half keeps what it found
 in the thread's `state`, publishes it with `facts`, each `ThreadInfo` carries it as `thread.facts.<name>`, and a
-`thread.badge` slot draws it. The daemon half for this one is in [Watching tool calls](daemon.md#watching-tool-calls):
+`thread.badge` slot draws it. The daemon half marks the threads asked about the database:
+
+```ts
+// db.ts
+import { defineDaemonExtension } from 'superego'
+
+export default defineDaemonExtension({
+  name: 'db',
+  setup(superego) {
+    const touched = superego.state<{ why: string }>()
+    superego.facts(({ state }) => state)              // clients see it as thread.facts.db
+    superego.beforeSend(async ({ thread, text }) => {
+      if (/\bsqlite3?\b/i.test(text)) await touched.set(thread.id, { why: text.slice(0, 80) })
+    })
+  },
+})
+```
+
+And the UI half draws it:
 
 ```tsx
 // ui/db.tsx; in profile.ts: extensions: ['./db.ts'], ui: ['./ui/db.tsx']

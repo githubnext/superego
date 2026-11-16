@@ -1,5 +1,5 @@
 // What parents have read of their children: the thread tools' thread_read notes it, and thread-reports doesn't relay an
-// answer the parent has read already (by waiting on it, say). One log per daemon (per harness), shared by the two.
+// answer the parent has read already (by waiting on it, say). One log per daemon (by its data folder), shared by the two.
 import type { ThreadInfo } from '@superego/protocol'
 
 export type ReadLog = {
@@ -20,13 +20,13 @@ export function readLog(): ReadLog {
   }
 }
 
-const logs = new WeakMap<object, ReadLog>()
+const logs = new Map<string, ReadLog>()
 /**
- * The log of the daemon whose harness this is: keyed by `superego.harness` (pi-durable's, not part of the stable API),
- * which is fine between two extensions of one package, set up by the same daemon. Nothing else should share it.
+ * The log of the daemon whose data folder this is (`superego.dataDir`): one daemon runs on a data folder, so its two
+ * extensions of this package find the same log. Nothing else should share it.
  */
-export const readsOf = (harness: object) => {
-  let log = logs.get(harness)
-  if (!log) logs.set(harness, log = readLog())
+export const readsOf = (dataDir: string) => {
+  let log = logs.get(dataDir)
+  if (!log) logs.set(dataDir, log = readLog())
   return log
 }

@@ -1,14 +1,14 @@
 // What `import … from 'superego'` gives a profile's daemon modules: the stable author surface of the daemon half. The
 // daemon hands profiles exactly these values at run time (profiles.ts, `provideSdk`), and an author's types are this
 // file's, flattened (packages/sdk/types.ts). What's here follows the extension API's semver (`EXTENSION_API`); what
-// isn't (the pi-durable harness, entry records) is unstable, and says so.
+// isn't (pi-durable's entry records) is unstable, and says so.
 //
 // In the order an author meets them (the order of the flattened 'superego' they read): an extension's daemon half and
 // what its setup is given, a profile, the agent's tools and schemas, then the shapes these use.
 export { defineDaemonExtension, defineAction } from './extension.ts'
 export type {
   DaemonExtension, DaemonApi, AgentChoice, AgentPart, AgentPartsAnswer, AgentPartsThread, LiveValue, ScopedValue, ThreadState, ThreadHooks, ThreadStarting,
-  ThreadDraft, OutgoingMessage, MessageBlock, SendTransform, StatusContribution, ArchiveNote, ArchiveNotes, AuthFlow, AuthFlowEvent, RunRecord, ToolCallRecord,
+  ThreadDraft, OutgoingMessage, MessageBlock, SendTransform, StatusContribution, ArchiveNote, ArchiveNotes, AuthFlow, AuthFlowEvent, RunRecord,
 } from './extension.ts'
 export type { DaemonContext } from './daemon.ts'
 export { defineProfile } from './profiles.ts'

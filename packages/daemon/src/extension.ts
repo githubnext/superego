@@ -9,7 +9,7 @@
 // Everything it registers is its own, named `<name>.<something>`, and undone when it's torn down: when the daemon
 // stops, or (a profile's) when the profile's files change. Torn down, its `signal` aborts, what it registers after is
 // refused, and its live values' `set` and `update` do nothing.
-import type { Conversation, EntryRecord, Extension, Harness } from '@earendil-works/pi-durable'
+import type { Conversation, EntryRecord, Extension } from '@earendil-works/pi-durable'
 import type { ActionDef, ActionInfo, AppConfig, Attachment, ChannelAcceptor, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, MachineEntry, NewThread, Pane, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
 import type { AuthFlow } from './auth-flows.ts'
@@ -19,13 +19,6 @@ import type { RunRecord } from './recap.ts'
 
 export type { AuthFlow, RunRecord }
 
-/** A tool call that ended, as `toolCalls` hears it: its thread, what the agent asked, and how it went. */
-export type ToolCallRecord = {
-  thread: string
-  call: { id: string; name: string; args: Json }
-  /** `text`: what the model was told, an error's message included. */
-  result: { isError: boolean; text?: string }
-}
 export type { AuthFlowEvent } from './auth-flows.ts'
 
 /**
@@ -93,8 +86,8 @@ export type OutgoingMessage = {
   /** The extension that sent it (`threads.send`, or `threads.start`'s prompt): absent for a client's, the user's. */
   by?: string
   /**
-   * Whom it was sent for, when that's said: a client running as the command line (`cli`) or an outside agent (`mcp`,
-   * through `superego mcp`), as `DaemonContext.exposure`; or what an extension's `threads.send` passed on. Absent
+   * Whom it was sent for, when that's said: a client running as the command line (`cli`) or an outside agent
+   * (`outside`, through `superego mcp`), as `DaemonContext.exposure`; or what an extension's `threads.send` passed on. Absent
    * for a window's.
    */
   exposure?: Exposure
@@ -167,11 +160,6 @@ export type ThreadHooks<S extends Json = Json> = {
   archived?(thread: ThreadInfo): ArchiveNote | void | Promise<ArchiveNote | void>
   /** About to be brought back: may refuse, or put back what `archived` took away (a worktree). */
   unarchiving?(thread: ThreadInfo): void | Promise<void>
-  /**
-   * The unarchiving its `unarchiving` took part in isn't happening after all: a later hook refused, or bringing it back
-   * failed. Undo what `unarchiving` put back. Told in reverse order; the thread stays archived.
-   */
-  unarchiveAbandoned?(thread: ThreadInfo): void | Promise<void>
   /** Brought back, taking messages again. */
   unarchived?(thread: ThreadInfo): void | Promise<void>
   /** A pane beside it closed: closed by someone, or gone as the thread was cleared. What the pane held can go. */
@@ -244,8 +232,6 @@ export type DaemonApi = {
   dataDir: string
   /** The folder agents share on this machine (`~/.agents`, or `<APPID>_AGENTS`): skills, `AGENTS.md`. */
   agentsDir: string
-  /** The pi-durable harness, for anything the API below doesn't cover. Unstable: it's pi-durable's, not Superego's. */
-  harness: Harness
   /**
    * Aborted when this extension is torn down, before its registrations go: for its own timers, watchers and fetches
    * (`fetch(url, { signal })`, `watch(path, { signal })`, `signal.addEventListener('abort', …)`; one that throws is logged, not fatal).
@@ -284,8 +270,6 @@ export type DaemonApi = {
     get<T extends Json>(key: string): T
     /** Every section with its settings and values, as clients see them. */
     snapshot(): Promise<SettingsSnapshot>
-    /** Something in the settings changed. */
-    onChange(listener: () => void): void
   }
   /**
    * An action of this extension, named `<name>.<action>`: an intent clients dispatch by id, logged, offered in the
@@ -359,12 +343,6 @@ export type DaemonApi = {
    * first sentence. Not for threads that go without this extension. Quick, without side effects.
    */
   recap(describe: (run: RunRecord) => string | undefined): void
-  /**
-   * Hear each tool call a thread's agent makes, once it ends (errors too: a refused or interrupted call). Read-only:
-   * the run doesn't wait for it, and it can't change the result. A throw (or a rejection) is logged. Not for threads
-   * that go without this extension; a profile's only for its own threads.
-   */
-  toolCalls(watch: (record: ToolCallRecord) => void | Promise<void>): void
   /**
    * Choose a thread's agent, from this extension's state with it (no `id` yet while it's made; the state its `starting`
    * gave). Its instructions hold only while it answers. The first chooser to answer wins, in the order extensions were

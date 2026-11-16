@@ -133,23 +133,19 @@ it('tells blocked once each time a thread comes to need the user, as the status 
   await close()
 })
 
-it("tells those whose unarchiving ran, in reverse, when a later one refuses: what they put back is undone", async () => {
+it('stops at the first unarchiving that refuses: those after it are not asked, and the thread stays archived', async () => {
   const heard: string[] = []
   const part = (name: string, refuse = false) => defineDaemonExtension({
     name,
     setup(superego) {
-      superego.thread({
-        unarchiving() { if (refuse) throw new Error('nope'); heard.push(`${name} put back`) },
-        unarchiveAbandoned() { heard.push(`${name} undone`) },
-      })
+      superego.thread({ unarchiving() { heard.push(`${name} asked`); if (refuse) throw new Error('nope') } })
     },
   })
-  const { peer, close } = await open([part('first'), part('second'), part('third', true)])
+  const { peer, close } = await open([part('first'), part('second', true), part('third')])
   const thread = await peer.call<ThreadInfo>('thread.start', {})
   await peer.call('thread.archive', { thread: thread.id })
-  await expect(peer.call('thread.unarchive', { thread: thread.id })).rejects.toMatchObject({ kind: 'refused', message: 'third: nope' })
-  // The refusing hook did nothing to undo; the others undo in reverse, and it stays archived.
-  expect(heard).toEqual(['first put back', 'second put back', 'second undone', 'first undone'])
+  await expect(peer.call('thread.unarchive', { thread: thread.id })).rejects.toMatchObject({ kind: 'refused', message: 'second: nope' })
+  expect(heard).toEqual(['first asked', 'second asked'])
   expect((await find(peer, thread.id))!.archived).toBe(true)
   await close()
 })
@@ -255,48 +251,6 @@ it("says what a run did in its done status, as clients first hear it's done: an 
   await peer.call('thread.seen', { thread: plain.id })
   expect((await find(peer, plain.id))!.status).toEqual({ state: 'idle' })
   await close()
-})
-
-it("tells an extension of each tool call a thread's agent makes, once it ends, without waiting on it or letting it fail the run", async () => {
-  const heard: Json[] = []
-  const watcher = defineDaemonExtension({
-    name: 'watcher',
-    setup(superego) {
-      superego.agent(defineExtension({ name: 'watcher', tools: [
-        defineTool({ name: 'query', description: 'Query.', parameters: obj({ sql: str() }), async execute({ sql }) { return { output: [{ type: 'text', text: `rows for ${sql}` }] } } }),
-        defineTool({ name: 'broken', description: 'Fails.', parameters: obj({}), async execute() { throw new Error('no database') } }),
-      ] }))
-      // A watcher that throws is logged; the run goes on, and the others still hear.
-      superego.toolCalls(() => { throw new Error('watcher failed') })
-      superego.toolCalls(async (record) => { heard.push(record as unknown as Json) })
-    },
-  })
-  const turns = join(dir, 'turns.jsonl')
-  const turn = (content: unknown[], stopReason: string) => JSON.stringify({ at: 0, provider: 'test', model: 'test', message: { role: 'assistant', content, stopReason } })
-  writeFileSync(turns, [
-    turn([{ type: 'toolCall', id: 'c1', name: 'query', arguments: { sql: 'select 1' } }], 'toolUse'),
-    turn([{ type: 'toolCall', id: 'c2', name: 'broken', arguments: {} }], 'toolUse'),
-    turn([{ type: 'text', text: 'Done.' }], 'stop'),
-  ].join('\n') + '\n')
-  process.env.SUPEREGO_MODEL = `replay:${turns}`
-  process.env.SUPEREGO_REPLAY_SPEED = '0'
-  const daemon = await openDaemon({ app: SUPEREGO, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [watcher] })
-  try {
-    const server = await listen(daemon, join(dir, 'superego.sock'))
-    const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
-    await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
-    const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'Look at the database' })
-    await done(peer, thread.id)
-    await until(() => heard.length === 2)
-    expect(heard).toEqual([
-      { thread: thread.id, call: { id: 'c1', name: 'query', args: { sql: 'select 1' } }, result: { isError: false, text: 'rows for select 1' } },
-      { thread: thread.id, call: { id: 'c2', name: 'broken', args: {} }, result: expect.objectContaining({ isError: true, text: expect.stringContaining('no database') }) },
-    ])
-    socket.destroy(); server.close()
-  } finally {
-    delete process.env.SUPEREGO_REPLAY_SPEED
-    await daemon.close()
-  }
 })
 
 it("lets an extension choose a thread's agent: instructions, tools and what it goes without; the first to answer wins", async () => {

@@ -29,7 +29,7 @@ A profile's halves import `'superego'` and `'superego/ui'`. A bundled extension'
 | `'superego/testing'` | test helpers: a daemon with a scripted model, a window with a fake bridge, `isRunning(pid)` (see [Testing](#testing)) | stable |
 | `'superego/unstable'` | the window's workings the bundled extensions build on: `useRegistry`, `useShell`, `useSidebar`, `fileKind`, the project list, `useWatch`, `useThreadView`, … | none: changes with the window |
 
-On a `DaemonApi`, `harness` (pi-durable itself) and `threads.entries`' records are pi-durable's shapes, unstable too.
+On a `DaemonApi`, `threads.conversation` and `threads.entries`' records are pi-durable's shapes, unstable too.
 Everything else in the tables below is stable.
 
 ## Starting one
@@ -309,13 +309,12 @@ place, and the window's console has why.
 | `view('x.y', { title, icon, context, fits, default, value \| method })` | a view drawn from data (below): no UI code, so a remote machine's or a project profile's runs no code in the window; its buttons still have that machine's authority |
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
 | `beforeSend(({ thread, text, attachments, content, by, exposure }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it. `by`: the extension that sent it (`threads.send`, `threads.start`'s prompt), absent for the user's; `exposure`: `outside` when an outside agent sent it, `cli` the command line |
-| `settings.register({ id: 'x', settings })`, `settings.get`, `settings.snapshot`, `settings.onChange` | machine settings of its own (`x.…`); read any |
+| `settings.register({ id: 'x', settings })`, `settings.get`, `settings.snapshot` | machine settings of its own (`x.…`); read any |
 | `dispatch(id, params)`, `actions(exposure)` | run any action on the machine as this extension (`settings.set`); list them |
-| `thread({ starting, abandoned, started, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchiveAbandoned, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
+| `thread({ starting, abandoned, started, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchived })` | take part in a thread's life (below): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run or come to need the user |
 | `state()` → `get(id)`, `set(id, next)`, `update(id, edit)` | state of its own kept with each thread, across restarts; `starting` gives a new one its first |
 | `facts(({ id, state }) => …)` | what clients are told of a thread, as `thread.facts.<name>`: worked out from its state |
 | `recap(({ thread, answer, calls }) => …)` | say in a line what a run did, once it ends: the thread's `done` status carries it (`msg`), and its notification says it. The first to answer wins; with none, the answer's first sentence. |
-| `toolCalls(({ thread, call, result }) => …)` | hear each tool call a thread's agent makes, once it ends; read-only ([Watching tool calls](daemon.md#watching-tool-calls)). |
 | `agentFor(({ id, state, profile }) => ({ instructions, model, extensions, without }))` | choose a thread's agent; the first to answer wins. `agent(part, { always: false })` gives a part only through this, or `agentParts` |
 | `agentParts(({ id, hidden, owner, profile }) => [part])` | add to whatever agent a thread has: asked at every send, with its profile as loaded now (`profile.spec`); answers with parts given with `agent(part, { always: false })`. They add up: every extension's, after the chooser's and before the profile's. May be async, up to 5s; later, or a throw, adds nothing to that turn. |
 | `auth.flow(context, async (flow) => …)` → `{ flow }` | a sign-in flow of its own, for the client an action runs for (its context), carried as a provider's is: `flow.emit({ type: 'auth_url', url, callback })`, `await flow.prompt({ type: 'manual_code', message })`, `flow.signal`. It ends `done` when the function resolves, `failed` when it throws. The window draws it with `SignInFlow` (`superego/ui`). |
@@ -323,7 +322,6 @@ place, and the window's console has why.
 | `threads.start({ …, parent, hidden, options })`, `send(id, text)`, `lastAnswer(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)`, `clear(id)` | start and run threads as the thread tools do; `hidden`: in no list, an agent of its own with no profile, that takes no messages while the extension is off (find it by its `owner` in `list({ hidden: true })`, not by its facts, which are gone while the extension is off); `entries`: the newest since it was last cleared, as pi-durable's entry records (not a stable shape); `clear`: start it over |
 | `machines.list()`, `machines.call(machine, method, params)` | the other machines this daemon reaches (its `machines.json`) and a call to one, as a client calls it (`thread.list`, `thread.start`); none when it reaches no others. |
 | `agentsDir`, `dataDir` | the folder agents share (`~/.agents`): skills, `AGENTS.md`; this machine's data folder (`~/.superego`) |
-| `harness` | pi-durable itself; unstable |
 
 | UI half (`superego.` in `setup`) | For |
 |---|---|
@@ -388,23 +386,21 @@ export const about = { name: 'orders', version: '1.2.0', api: '^2', title: 'Orde
   outside the range refuses it before `setup` runs, with why: *Extension orders needs extension API ^3, and this
   Superego has 2.0.0: update Superego*. A bundled one fails the build's tests; a profile's fails its profile's load
   (the thread says so); a profile UI's is left out, the rest of the profile set up. Unset: any.
-- `capabilities`: optional, finer than a version: things it can do that a client may ask about (`['stat']`).
 
 The host's `EXTENSION_API` goes up a minor when the API grows, and a major when something an extension could rely on
 changes or goes, which also moves every bundled extension's `api`.
 
 ### Checking them
 
-Each daemon announces, for every extension set up and on there, `ext:<name>` in `features` (as before) and its
-manifest (`{ name, version, api, capabilities }`) in `hello.extensions`, both kept current by `features.changed`. In
-the window:
+Each daemon announces its manifest (`{ name, version, api }`) for every extension set up and on there in
+`hello.extensions`, kept current by `features.changed`; `features` holds protocol features only. In the window, `has`
+reads those manifests (the protocol's `offers()`):
 
 <!-- check: ui -->
 ```ts
 has(machine, 'ext:git')          // set up and on there, at any version
 has(machine, 'ext:git@^1.2')     // at 1.2 or later in 1.x
 has(machine, 'ext:git@<2')       // any version this UI half speaks
-has(machine, 'ext:git#stat')     // one that declares the capability
 version(machine, 'git')          // '1.3.0'; '0.0.0' when it says none; undefined when it isn't there or is off
 ```
 
@@ -423,9 +419,10 @@ What a window and a daemon of different releases do with each other:
   A generation changes for a break nothing can bridge, and starts clean: no old names, no read-throughs of old data.
 - **The same generation:** they work together. The core's methods, actions, notifications and features only grow in
   a generation: `RELEASED` (`packages/protocol/src/released.ts`) lists what generation 2 released, and a test holds
-  the daemon to answering all of it. Anything newer is announced in `FEATURES` and checked with `has` before it's
-  used; a window checks an extension's daemon half the same way (`has(machine, 'ext:git@<2')`), and offers nothing,
-  or says so, where it's missing. An extension a major ahead of what the window's UI half speaks is left alone by it.
+  the daemon to answering all of it. Anything added later in the generation goes in `FEATURES` (empty so far), is
+  announced in `hello.features`, and is checked with `offers()` before it's used; a window checks an extension's daemon
+  half by its manifest in `hello.extensions` (`has(machine, 'ext:git@<2')`), and offers nothing, or says so, where it's
+  missing. An extension a major ahead of what the window's UI half speaks is left alone by it.
 - **Renaming something released** waits for the next generation.
 - **Stored data** isn't migrated: what an older release stored under an old name or in an old place isn't read.
 
@@ -706,8 +703,6 @@ superego.thread<{ path: string; branch: string }>({   // the state its starting 
   happens, and the hooks after don't run. `starting` may also move where the thread works and give it state, each
   hook seeing the draft as the one before left it. When a later hook refuses (or making the thread fails), those
   whose `starting` already ran are told `abandoned(draft, state)`, in reverse, to undo it: a worktree goes again.
-  Likewise, when a later `unarchiving` refuses (or bringing the thread back fails), those whose `unarchiving` already
-  ran are told `unarchiveAbandoned(thread)`, in reverse, to undo what they put back; the thread stays archived.
   `draft.options` is what the thread was asked for by extension: its profile's `options`, then `thread.start`'s.
 - The others are told, and awaited in turn. A throw there is logged, and the thread carries on. `archived` runs
   before clients see the thread archived, so it's where cleanup goes. Hooks aren't a transaction: archiving goes on

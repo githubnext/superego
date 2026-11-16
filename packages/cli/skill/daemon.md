@@ -73,7 +73,7 @@ once.
 | `superego.scopedValue(key, initial)` | a live value kept per scope (a thread's id): `get(scope)`, `set(scope, next)`, `update(scope, fn)`, `delete(scope)`, `scopes()`. A UI watching one scope (`useValue(machine, key, { scope: thread.id })`) hears only its changes, never another thread's. For anything per thread |
 | `superego.pane(kind, about)` | tell the agent about a pane kind the UI draws, and its params: pane_open lists it |
 | `superego.view(id, { title, icon?, context, fits, default?, narrow?, order?, value \| method, about? })` | a view drawn from data, with no UI code: the window draws its content (`{ note, facts, items, table, markdown, actions, empty }`; an item `{ title, subtitle, detail, status, thread, actions }`; a button `{ title, action, params }` runs that action on this machine). Fed by a value of the extension's (a `thread` view's: by thread id) or a method of its (called with `{ thread }` for a `thread` view). `fits`: `space`, `beside`, `pane`. `about`: tell the agent it can open it as a pane. A remote machine's or a project profile's runs no code in the window, so needs no allowing there; its buttons still have this machine's authority |
-| `superego.settings.register({ id, title, settings })` | a settings section of its own: id `<name>`, keys `<name>.<key>`. `settings.get(key)` reads any setting, `settings.snapshot()` all of them with their sections, `settings.onChange(fn)` hears changes |
+| `superego.settings.register({ id, title, settings })` | a settings section of its own: id `<name>`, keys `<name>.<key>`. `settings.get(key)` reads any setting, `settings.snapshot()` all of them with their sections |
 | `superego.beforeSend(({ thread, text, attachments, content, by, exposure }) => …)` | change what each message sent to a thread gives its agent, before the turn starts (`by`: the extension that sent it, absent for the user's, from a window or the command line; `exposure`: `outside` when an outside agent sent it, `cli` the command line, else what `threads.send` passed on): `content` is its blocks so far (`{ type: 'text', text }`, `{ type: 'image', data, mimeType }`), the text first; return the blocks to send instead, or nothing. Transforms run in order, each given the last one's; not for threads that go without the extension, a profile's only for its own threads. A throw fails the send |
 | `superego.status((threadId) => …)` | return `{ kind: 'question' \| 'permission' \| 'auth', msg? }` while a thread needs the user; it shows as blocked. Call `superego.invalidate()` when what it depends on changes |
 | `superego.threads.list({ archived?, hidden? })` | every thread: `{ id, title, cwd, status, profile, facts, … }`; `archived` or `hidden` lists those instead |
@@ -86,11 +86,10 @@ once.
 | `superego.threads.archive(id, { whenIdle? })`, `unarchive(id)` | put a thread away and back; `archive` resolves to `{ notes }`, what each extension's hooks said they did, by name (none for `whenIdle`, which waits for its run to end: a thread archiving itself, across restarts too; its notes are then said in the thread, as Superego's own note) |
 | `superego.threads.clear(id)` | start a thread over: its run stopped, a new context, its transcript starting after this (windows showing it watch again), its panes closed |
 | `superego.machines.list()`, `superego.machines.call(machine, method, params)` | the other machines this daemon reaches (its `machines.json`, with their links' states) and a call to one, as a client calls it (`thread.list`, `thread.start`, …); none when it reaches no others. |
-| `superego.thread({ starting, started, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchived })` | take part in a thread's life. `blocked`: it came to need the user mid-run (a question), once each time. `starting(draft)` may return `{ cwd, state }` (work elsewhere: a worktree); `draft.options` is what its profile's `options` and `thread.start` asked of extensions, by name. `starting`, `archiving` and `unarchiving` refuse by throwing; the rest are told, a throw only logged. `abandoned(draft, state)`: a later `starting` refused after this one ran, so undo it; `unarchiveAbandoned(thread)`, the same for `unarchiving`. `archived` runs before clients see it archived: clean up there, idempotently (archiving goes on past a failed cleanup, and may be tried again); `archiving` and `archived` may return `{ note }`, what they did in a line (`threads.archive` and `thread.archive` answer `{ notes }`, by extension). In set-up order; not for threads that go without the extension, a profile's only for its own |
+| `superego.thread({ starting, started, turnStart, turnEnd, blocked, archiving, archived, unarchiving, unarchived })` | take part in a thread's life. `blocked`: it came to need the user mid-run (a question), once each time. `starting(draft)` may return `{ cwd, state }` (work elsewhere: a worktree); `draft.options` is what its profile's `options` and `thread.start` asked of extensions, by name. `starting`, `archiving` and `unarchiving` refuse by throwing; the rest are told, a throw only logged. `abandoned(draft, state)`: a later `starting` refused after this one ran, so undo it. `archived` runs before clients see it archived: clean up there, idempotently (archiving goes on past a failed cleanup, and may be tried again); `archiving` and `archived` may return `{ note }`, what they did in a line (`threads.archive` and `thread.archive` answer `{ notes }`, by extension). In set-up order; not for threads that go without the extension, a profile's only for its own |
 | `superego.state<T>()` | its own state with each thread, kept in the thread (across restarts): `get(id)`, `set(id, next \| undefined)`, `update(id, edit)` |
 | `superego.facts(({ id, state }) => …)` | what clients see of each thread as `thread.facts.<name>`, worked out from its state; nothing for undefined |
 | `superego.recap(({ thread, answer, calls }) => …)` | say in a line what a run did, once it ends (`calls`: its tool calls, oldest first, each `{ name, arguments, failed }`): the thread's `done` status carries it, and its notification says it. The first to answer wins; with none, the answer's first sentence. Quick, no side effects. |
-| `superego.toolCalls(({ thread, call, result }) => …)` | hear each tool call a thread's agent makes, once it ends: `call` is `{ id, name, args }`, `result` `{ isError, text? }` (`text`: what the model was told). Read-only: the run doesn't wait for it, and a throw is only logged. Not for threads that go without the extension, a profile's only for its own. See [Watching tool calls](#watching-tool-calls). |
 | `superego.agentFor(({ id, state, profile }) => …)` | choose a thread's agent: `{ instructions?, model?, thinking?, extensions?, without? }`, or nothing. The first answer wins; quick, no side effects. Parts it names are given with `superego.agent(part, { always: false })`, which gives them to no other thread |
 | `superego.agentParts(({ id, hidden, owner, profile }) => …)` | add parts to whatever agent a thread has: asked at every send, every extension's adding up (after `agentFor`'s parts, before the profile's). `profile` is `{ ref, spec }` as loaded now, so a profile's edit counts from the next turn. Answers parts it gave with `agent(part, { always: false })`, or nothing; may be async, up to 5s (a throw, or later, adds nothing that turn). |
 | `superego.auth.flow(context, async (flow) => …)` | run a sign-in flow of its own from an action (`context`: the action's, so the client that asked hears it as `auth.event`, answers with `auth.respond`, stops it with `auth.cancel`). Answers `{ flow }`, for the action to return. `flow.emit(event)` (`auth_url` with an optional loopback `callback`, `device_code`, `info`, `progress`), `await flow.prompt({ type, message })` (`text`, `secret`, `select`, `manual_code`), `flow.signal` (cancelled, or the extension torn down). Ends `done` when it resolves, `failed` with the error when it throws. The window draws it with `SignInFlow` (`superego --skill ui`). |
@@ -122,29 +121,6 @@ returns JSON. Keep actions for what changes something. See `superego --skill ui`
 **Waiting on the user** (as `ask-user` does): a tool stores a resolver in a `Map`, publishes the pending question as a
 live value, contributes `status` so the thread shows blocked, and an action (`<name>.answer`) resolves it. Mark the
 tool `replay: 'safe'` so a restart asks again.
-
-## Watching tool calls
-
-`superego.toolCalls(fn)` calls `fn({ thread, call: { id, name, args }, result: { isError, text? } })` after each tool
-call a thread's agent makes, errors too. It only watches: the run doesn't wait for it, and it can't change the result.
-A throw is logged. This one marks threads that ran `sqlite3`, for the [sidebar mark in ui.md](ui.md#a-mark-in-the-sidebar):
-
-```ts
-// db.ts; in profile.ts: extensions: ['./db.ts']
-import { defineDaemonExtension } from 'superego'
-
-export default defineDaemonExtension({
-  name: 'db',
-  setup(superego) {
-    const touched = superego.state<{ why: string }>()
-    superego.facts(({ state }) => state)              // clients see it as thread.facts.db
-    superego.toolCalls(async ({ thread, call }) => {
-      const command = String((call.args as { command?: unknown }).command ?? '')
-      if (call.name === 'bash' && /\bsqlite3\b/.test(command)) await touched.set(thread, { why: command.slice(0, 80) })
-    })
-  },
-})
-```
 
 ## Trying it
 
