@@ -40,6 +40,13 @@ export type ThreadsHost = {
 /** A message from another thread, as thread_send sends it: from whom, for the agent reading it. */
 const fromLine = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `From ${linkTo(thread)}:`
 
+/** `ms` from now, or as soon as `signal` aborts. */
+const pause = (ms: number, signal: AbortSignal | undefined) => new Promise<void>((resolve) => {
+  const timer = setTimeout(done, ms)
+  signal?.addEventListener('abort', done, { once: true })
+  function done() { clearTimeout(timer); signal?.removeEventListener('abort', done); resolve() }
+})
+
 const text = (value: string) => ({ output: [{ type: 'text' as const, text: value }] })
 const LIMIT = 6_000
 const clip = (value: string) => value.length > LIMIT ? `${value.slice(0, LIMIT)}\n… (${value.length - LIMIT} more characters)` : value
@@ -97,12 +104,16 @@ export function readTool(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'i
       if (wait && !place.away && id === String(api.conversationId)) throw new Error('A thread can\'t wait on itself')
       let thread = await place.info(id)
       if (!thread) throw new Error(`No thread ${id}${place.away ? ` on ${place.away}` : ''}`)
-      // Here, the daemon says when its run ends; elsewhere, it's asked every second.
+      // Here, the daemon says when its run ends; elsewhere, it's asked every second, until it's gone from its list (archived).
       while (wait && thread.status.state === 'working') {
-        if (place.away) await new Promise((resolve) => setTimeout(resolve, 1000))
+        if (place.away) await pause(1000, context.abortSignal)
         else thread = await host.idle(id, context.abortSignal)
         if (context.abortSignal?.aborted) throw new Error('Stopped waiting')
-        if (place.away) thread = (await place.info(id)) ?? thread
+        if (place.away) {
+          const now = await place.info(id)
+          if (!now) throw new Error(`No thread ${id} on ${place.away} any more (archived, or gone)`)
+          thread = now
+        }
       }
       const all = await place.list()
       const parent = thread.parent ? all.find((t) => t.id === thread!.parent) : undefined

@@ -2,7 +2,7 @@
 import { expect, it } from 'vitest'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { defineDaemonExtension } from '@superego/daemon'
-import { linkTo, NOTE_ENTRY, obj, type ThreadInfo, type SettingsSnapshot } from '@superego/protocol'
+import { linkTo, NOTE_ENTRY, obj, type MachineEntry, type ThreadInfo, type SettingsSnapshot } from '@superego/protocol'
 import { callTool, say, testDaemon, type TestDaemon } from '@superego/sdk/testing'
 import threadTools from '../src/daemon.ts'
 import { listTool, threadTools as tools, type ThreadsHost } from '../src/tools.ts'
@@ -174,6 +174,26 @@ it('reads a thread: where it stands, who started it, and its last answer, waitin
   const stopped = run(h, 'thread_read', { thread: '2', wait: true }, 1, stop.signal)
   stop.abort()
   await expect(stopped).rejects.toThrow('Stopped waiting')
+})
+
+it("waits on a thread elsewhere by asking every second: ends when it's gone from the list, and at once on Stop", async () => {
+  const h = host()
+  const box: MachineEntry = { id: 'm1', label: 'box', state: 'connected' }
+  let remote = [{ ...h.threads[1]!, id: '7' }]
+  const away = { ...h, machines: () => [box], remote: async (_machine: string, method: string) => method === 'thread.list' ? remote : null }
+  const archived = run(away, 'thread_read', { thread: '7', wait: true, machine: 'box' })
+  await new Promise((r) => setTimeout(r, 50))
+  remote = []
+  await expect(archived).rejects.toThrow('No thread 7 on box any more')
+  // Stopped mid-pause: not a second later.
+  remote = [{ ...h.threads[1]!, id: '7' }]
+  const stop = new AbortController()
+  const started = Date.now()
+  const stopped = run(away, 'thread_read', { thread: '7', wait: true, machine: 'box' }, 1, stop.signal)
+  await new Promise((r) => setTimeout(r, 50))
+  stop.abort()
+  await expect(stopped).rejects.toThrow('Stopped waiting')
+  expect(Date.now() - started).toBeLessThan(900)
 })
 
 it('notes what a thread read, for its reports (threads.noteRead)', async () => {
