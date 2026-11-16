@@ -4,7 +4,7 @@
 // With `machine`, the same on another machine this daemon reaches (see the daemon's relay.ts): there a thread is named
 // in words, since a link names a thread on the reader's machine, and a thread started there isn't anyone's child, since
 // its parent isn't in that machine's catalog.
-// Plain tools on a host, so Ego's own (`thread_read`, its `thread_start`) are built from the same parts.
+// Plain tools on a host, so Ego's own (`thread_read`, `thread_list`, its `thread_start`) are built from the same parts.
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { bool, linkTo, obj, opt, str, type Json, type MachineEntry, type ThreadInfo } from '@superego/protocol'
 
@@ -128,6 +128,37 @@ export function readTool(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'r
   })
 }
 
+/**
+ * `thread_list`: `around` the calling thread (its parent, its children and the others in its project), or `all` of the
+ * machine's, by project (for an agent that isn't one of them, as Ego). With `machine`, another machine's: its newest
+ * threads around, or all of them by project.
+ */
+export function listTool(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'hostname' | 'machines' | 'remote'>, scope: 'around' | 'all') {
+  return defineTool({
+    name: 'thread_list',
+    description: scope === 'around'
+      ? 'The threads around this one: its parent, its children, and the others in its project. With `machine`, the newest threads there.'
+      : 'The threads, by project: each as a link, with where it stands and where it works. With `machine`, another machine\'s.',
+    parameters: obj({ machine: MACHINE }),
+    async execute({ machine }, api) {
+      const place = placeOf(host, machine)
+      const all = await place.list()
+      const parentOf = (t: ThreadInfo) => all.find((p) => p.id === t.parent)
+      const line = (t: ThreadInfo) => `- ${lineOf(t, place.name)}${parentOf(t) ? `, started by ${place.name(parentOf(t)!)}` : ''}`
+      if (scope === 'all') {
+        if (!all.length) return text(`No threads ${place.away ? `on ${place.away}` : 'yet'}.`)
+        const projects = new Map<string, ThreadInfo[]>()
+        for (const t of all) projects.set(t.project.root, [...projects.get(t.project.root) ?? [], t])
+        return text([...projects].map(([root, list]) => `${list[0]!.project.name} (${root}):\n${list.map(line).join('\n')}`).join('\n\n'))
+      }
+      const self = await host.info(String(api.conversationId))
+      if (!self) throw new Error('Only a thread can do this')
+      const others = place.away ? all.slice(0, 30) : all.filter((t) => t.project.root === self.project.root && t.id !== self.id)
+      return text(others.length ? others.map(line).join('\n') : `No other threads ${place.away ? `on ${place.away}` : 'here'}.`)
+    },
+  })
+}
+
 export function threadTools(host: ThreadsHost) {
   const here = async (conversationId: number) => {
     const thread = await host.info(String(conversationId))
@@ -181,19 +212,7 @@ export function threadTools(host: ThreadsHost) {
           return text(`Sent to ${place.name(to)}.`)
         },
       }),
-      defineTool({
-        name: 'thread_list',
-        description: 'The threads around this one: its parent, its children, and the others in its project. With `machine`, the newest threads there.',
-        parameters: obj({ machine: MACHINE }),
-        async execute({ machine }, api) {
-          const self = await here(api.conversationId)
-          const place = placeOf(host, machine)
-          const all = await place.list()
-          const others = place.away ? all.slice(0, 30) : all.filter((t) => t.project.root === self.project.root && t.id !== self.id)
-          const parentOf = (t: ThreadInfo) => all.find((p) => p.id === t.parent)
-          return text(others.length ? others.map((t) => `- ${lineOf(t, place.name)}${parentOf(t) ? `, started by ${place.name(parentOf(t)!)}` : ''}`).join('\n') : `No other threads ${place.away ? `on ${place.away}` : 'here'}.`)
-        },
-      }),
+      listTool(host, 'around'),
       defineTool({
         name: 'thread_machines',
         description: 'The other machines this one reaches, for the thread tools\' `machine`: name, id, host and whether it is connected.',

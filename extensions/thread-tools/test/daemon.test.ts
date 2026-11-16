@@ -7,7 +7,7 @@ import { MemorySettingsStore } from '@superego/settings'
 import { defineApp, linkTo, NOTE_ENTRY, PROTOCOL_VERSION, type Json, type RpcPeer, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '@superego/daemon'
 import threadTools from '../src/daemon.ts'
-import { threadTools as tools, type ThreadsHost } from '../src/tools.ts'
+import { listTool, threadTools as tools, type ThreadsHost } from '../src/tools.ts'
 
 const app = defineApp({ name: 'test', id: 'threadstest' })
 let dir: string
@@ -210,6 +210,15 @@ it('messages a thread from this one, and lists the threads in its project', asyn
   const listed = await run(h, 'thread_list', {})
   expect(listed).toContain('[Child one](thread:2)')
   expect(listed).not.toContain('Elsewhere')
+})
+
+it("lists all of a machine's threads by project, for an agent that isn't one of them (listTool)", async () => {
+  const h = host()
+  const result = await listTool(h, 'all').execute({} as never, { conversationId: 99 } as never, {} as never)
+  expect((result.output as { text: string }[])[0]!.text).toBe([
+    'p (/p):\n- [Parent](thread:1): idle, in /p\n- [Child one](thread:2): working, in /p, started by [Parent](thread:1)',
+    'q (/q):\n- [Elsewhere](thread:3): idle, in /p',
+  ].join('\n\n'))
 })
 
 it("archives a thread that isn't working, and this one only when its turn ends", async () => {
