@@ -1,7 +1,5 @@
 import { statusLabel, waitingForSignIn, type Status } from '@superego/protocol'
 
-export { statusLabel }
-
 /**
  * One dot per OSC 7501 state, styled by `--superego-status-*`: a quiet grey one when idle, a ring while working, filled
  * in the accent when done (finished, not yet seen), orange when it needs you, red when it failed. Waiting for sign-in

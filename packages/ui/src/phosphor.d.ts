@@ -48,12 +48,10 @@ declare module '@phosphor-icons/react/dist/csr/Chats' { export const ChatsIcon: 
 declare module '@phosphor-icons/react/dist/csr/Check' { export const CheckIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Columns' { export const ColumnsIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/ColumnsPlusRight' { export const ColumnsPlusRightIcon: import('@phosphor-icons/react').Icon }
-declare module '@phosphor-icons/react/dist/csr/Command' { export const CommandIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Copy' { export const CopyIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/CornersIn' { export const CornersInIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/CornersOut' { export const CornersOutIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/DotsThree' { export const DotsThreeIcon: import('@phosphor-icons/react').Icon }
-declare module '@phosphor-icons/react/dist/csr/ExclamationMark' { export const ExclamationMarkIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/File' { export const FileIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/FilePlus' { export const FilePlusIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/FileText' { export const FileTextIcon: import('@phosphor-icons/react').Icon }
@@ -77,9 +75,7 @@ declare module '@phosphor-icons/react/dist/csr/PencilSimple' { export const Penc
 declare module '@phosphor-icons/react/dist/csr/Plug' { export const PlugIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/PlugsConnected' { export const PlugsConnectedIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Plus' { export const PlusIcon: import('@phosphor-icons/react').Icon }
-declare module '@phosphor-icons/react/dist/csr/QuestionMark' { export const QuestionMarkIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/ShieldWarning' { export const ShieldWarningIcon: import('@phosphor-icons/react').Icon }
-declare module '@phosphor-icons/react/dist/csr/SidebarSimple' { export const SidebarSimpleIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Sparkle' { export const SparkleIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/SquareSplitHorizontal' { export const SquareSplitHorizontalIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Stop' { export const StopIcon: import('@phosphor-icons/react').Icon }
