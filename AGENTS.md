@@ -12,6 +12,8 @@ The app is in its infancy and under heavy development. This means, we barely hav
 - Merge to `main` by rebasing onto the local `main`, then `git -C <main checkout> merge --ff-only <your branch>` (the main
   checkout is the first in `git worktree list`). If that fails, rebase again and retry.
 - Don't push.
+- Don't use `git stash`: it's shared by every worktree of the repo, so a pop can take another agent's changes. Use a
+  WIP commit instead.
 
 ## Checks
 
