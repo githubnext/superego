@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -9,13 +9,22 @@ import { runUpdate, updateCommand, updateScript, wrapperOf } from '../src/update
 
 const app = defineApp({ name: 'Superego', id: 'superego' })
 const machine = (patch: Partial<MachineConfig>): MachineConfig => ({ id: 'm', label: 'mbp', target: 'mbp', enabled: true, ...patch })
-const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf8' })
+// Git as a machine with no config of its own runs it: not the user's (which may sign each commit with gpg, or pull by
+// rebasing).
+const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
+const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf8', env: gitEnv })
+/**
+ * What the tests running the update script may take. The script runs git status and a pull (git starts half a dozen
+ * processes for one) and the install script; on a busy machine each process takes a second or more to start.
+ */
+const SCRIPTED = 60_000
 
 describe('updating a machine', () => {
   let origin: string
+  let clone: string
   let home: string
-  // An origin that has moved on since the machine cloned it (at the tag one); its install script says what it got. Made
-  // once: each git run takes a second or more on a busy machine.
+  // An origin that has moved on since the machine cloned it (at the tag one), and that clone; its install script says
+  // what it got. Made once, and the clone copied for each test: each git run takes a second or more on a busy machine.
   beforeAll(() => {
     origin = mkdtempSync(join(tmpdir(), 'superego-update-origin-'))
     mkdirSync(join(origin, 'scripts'), { recursive: true })
@@ -29,16 +38,18 @@ describe('updating a machine', () => {
     writeFileSync(join(origin, 'NEW'), 'x')
     git(origin, 'add', '-A')
     git(origin, 'commit', '-qm', 'two')
+    clone = mkdtempSync(join(tmpdir(), 'superego-update-clone-'))
+    git(clone, 'clone', '-q', origin, 'superego')
+    git(join(clone, 'superego'), 'reset', '-q', '--hard', 'one')
   }, 60_000)
-  afterAll(() => rmSync(origin, { recursive: true, force: true }))
+  afterAll(() => { for (const dir of [origin, clone]) rmSync(dir, { recursive: true, force: true }) })
   beforeEach(() => { home = mkdtempSync(join(tmpdir(), 'superego-update-')) })
   afterEach(() => rmSync(home, { recursive: true, force: true }))
 
   /** The machine's checkout, cloned at one, and the wrapper install-machine.sh writes, naming it. */
   const cloned = () => {
     const checkout = join(home, 'dev/superego')
-    git(home, 'clone', '-q', origin, checkout)
-    git(checkout, 'reset', '-q', '--hard', 'one')
+    cpSync(join(clone, 'superego'), checkout, { recursive: true })
     mkdirSync(join(home, '.local/bin'), { recursive: true })
     writeFileSync(join(home, '.local/bin/superego'), `#!/bin/sh\n# Written by ${checkout}/scripts/install-machine.sh\nexec node "${checkout}/app/bin/superego.ts" "$@"\n`)
     return checkout
@@ -56,7 +67,7 @@ describe('updating a machine', () => {
     expect(out).toContain(`Updating ${checkout}`)
     expect(out).toContain(`installed ${git(checkout, 'rev-parse', '--short', 'HEAD').trim()} now=1`)
     expect(readFileSync(join(checkout, 'NEW'), 'utf8')).toBe('x')
-  })
+  }, SCRIPTED)
 
   it('refuses a checkout with changes, a pull that fails, and a wrapper it did not write', () => {
     const checkout = cloned()
@@ -67,7 +78,7 @@ describe('updating a machine', () => {
     expect(run(updateScript({ dir: checkout }))).toMatchObject({ ok: false, out: expect.stringContaining('git pull failed') })
     writeFileSync(join(home, '.local/bin/superego'), '#!/bin/sh\nexec superego "$@"\n')
     expect(run(updateScript({ wrapper: wrapperOf('~/.local/bin/superego') }))).toMatchObject({ ok: false, out: expect.stringContaining('was not written by scripts/install-machine.sh') })
-  })
+  }, SCRIPTED)
 
   it('reaches the machine as it is reached: ssh with sh, or its via command asking connect for --update', () => {
     const ssh = updateCommand(machine({ command: '~/.local/bin/superego connect --start' }), app)
