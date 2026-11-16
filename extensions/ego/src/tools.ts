@@ -9,7 +9,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, resolve } from 'node:path'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { createReadTool } from '@earendil-works/pi-durable/tools'
-import { lineOf, readTool } from '@superego/thread-tools/tools'
+import { listTool, readTool, type ThreadsHost } from '@superego/thread-tools/tools'
 import type { DaemonApi } from '@superego/daemon'
 import { bool, linkTo, lit, obj, opt, str, union, unknown, type ActionInfo, type Exposure, type Json, type MachineEntry, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 
@@ -28,14 +28,13 @@ const briefMachine = (m: MachineEntry) => ({
  */
 const SECRET_FILES = ['auth.json', 'mcp-auth.json', 'mcp-servers.json']
 
-/** What Ego needs of the daemon's threads: the listed ones (never Ego itself), and starting a top-level one. */
-export type EgoThreads = {
-  info(id: string): Promise<ThreadInfo | undefined>
-  list(): Promise<ThreadInfo[]>
+/**
+ * What Ego needs of the daemon's threads: the listed ones (never Ego itself), on this machine and those it reaches, as
+ * thread_list and thread_read read them; and starting a top-level one.
+ */
+export type EgoThreads = Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'idle' | 'hostname' | 'machines' | 'remote'> & {
   /** A new, ordinary thread: top-level in its project, never Ego's child. */
   start(params: { prompt: string; cwd: string; title?: string; profile?: string; options?: Record<string, Json> }): Promise<ThreadInfo>
-  answer(id: string): Promise<string | undefined>
-  idle(id: string, signal?: AbortSignal): Promise<ThreadInfo>
 }
 
 /** What Ego is told, before the tools' own descriptions. */
@@ -196,18 +195,7 @@ export function egoTools({ dir, dispatch, actions, snapshot, machines, threads, 
       parameters: obj({ cwd: opt(str({ description: 'The project folder; else your own' })) }),
       async execute({ cwd }) { return json(await dispatch('profile.list', { cwd: folder(cwd ?? '.') })) },
     }),
-    defineTool({
-      name: 'thread_list',
-      description: "This machine's threads, by project: each as a link, with where it stands and where it works.",
-      parameters: obj({}),
-      async execute() {
-        const all = await threads.list()
-        if (!all.length) return text('No threads yet.')
-        const projects = new Map<string, ThreadInfo[]>()
-        for (const thread of all) projects.set(thread.project.root, [...(projects.get(thread.project.root) ?? []), thread])
-        return text([...projects].map(([root, list]) => `${list[0]!.project.name} (${root}):\n${list.map((t) => `- ${lineOf(t)}${t.parent ? `, started by thread ${t.parent}` : ''}`).join('\n')}`).join('\n\n'))
-      },
-    }),
+    listTool(threads, 'all'),
     readTool(threads),
     defineTool({
       name: 'thread_start',

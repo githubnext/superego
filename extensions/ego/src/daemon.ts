@@ -35,7 +35,11 @@ export function ego(): DaemonExtension {
         snapshot: () => superego.settings.snapshot(),
         machines: superego.machines,
         // The threads it starts are ordinary ones, top-level in their projects.
-        threads: { info: (id) => threads.get(id).catch(() => undefined), list: () => threads.list(), answer: (id) => threads.lastAnswer(id), idle: (id, signal) => threads.idle(id, { signal }), start: (params) => threads.start(params) },
+        threads: {
+          info: (id) => threads.get(id).catch(() => undefined), list: () => threads.list(), answer: (id) => threads.lastAnswer(id), idle: (id, signal) => threads.idle(id, { signal }),
+          start: (params) => threads.start(params),
+          hostname, machines: () => superego.machines.list(), remote: (machine, method, params) => superego.machines.call(machine, method, params),
+        },
         // Read as it's called: the setting may have changed since the message came.
         async refuseStart(conversation, callId) {
           if (superego.settings.get(OUTSIDE_THREADS) === true) return undefined
