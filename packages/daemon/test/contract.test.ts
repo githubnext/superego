@@ -136,14 +136,16 @@ it("never lets an older window's declaration take back what a newer one said", a
 })
 
 it('has every bundled extension say its version and the API it needs, which this host gives', async () => {
-  const { readdirSync } = await import('node:fs')
+  const { existsSync, readdirSync } = await import('node:fs')
   const root = join(import.meta.dirname, '../../../extensions')
+  // Every extension that's here: a folder with a package (a renamed one leaves its ignored node_modules behind).
+  const names = readdirSync(root).filter((name) => existsSync(join(root, name, 'package.json')))
   const abouts: ExtensionAbout[] = []
-  for (const name of readdirSync(root)) {
+  for (const name of names) {
     const shared = await import(join(root, name, 'src/shared.ts')) as Record<string, unknown>
     abouts.push(...Object.values(shared).filter((v): v is ExtensionAbout => Boolean(v && typeof v === 'object' && 'name' in v && ('title' in v || 'required' in v))))
   }
-  expect(abouts.length).toBeGreaterThanOrEqual(readdirSync(root).length)
+  expect(abouts.length).toBeGreaterThanOrEqual(names.length)
   for (const about of abouts) {
     expect(about.version, about.name).toMatch(/^\d+\.\d+\.\d+$/)
     expect(about.api, about.name).toBeDefined()
