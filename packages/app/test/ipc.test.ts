@@ -37,7 +37,7 @@ beforeEach(() => {
   link = fakeLink()
   serveIpc({
     machines: () => [], linkOf: (machine) => machine === 'local' ? link.link as never : undefined,
-    windowOf: (of) => of === window.contents ? window : undefined, callApp: async () => null,
+    windowOf: (of) => of === window.contents ? window : undefined, callApp: async () => null, forwardUrl: async (_machine, url) => url,
   })
 })
 const open = () => handlers.get(CHANNEL.open)!({ sender: window.contents }, ...['local', 'terminal', {}] as never[]) as Promise<CallResult>

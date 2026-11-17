@@ -5,18 +5,39 @@
 import { randomBytes } from 'node:crypto'
 import { PERFORMABLE, RpcError, type ClientInfo, type Json, type RpcPeer } from '@superego/protocol'
 
-/** What the transport knows about a connection before it says hello: a browser's device, a Tailscale login. */
-export type Via = { via: ClientInfo['via']; label?: string; device?: string }
+/**
+ * What the transport knows about a connection before it says hello: a browser's device, a Tailscale login, and whether
+ * it's on another computer (`elsewhere`: a browser through Tailscale; the socket's clients are told by their hello).
+ */
+export type Via = { via: ClientInfo['via']; label?: string; device?: string; elsewhere?: boolean }
+
+/**
+ * Where the user's windows are, as this machine sees them: whether one is on this computer, the other computers the app
+ * is on (by hostname), and whether a browser on another computer is one.
+ */
+export type Windows = { here: boolean; elsewhere: string[]; browser: boolean }
 
 export class Clients {
   #entries = new Map<string, { info: ClientInfo; peer: RpcPeer }>()
   #listeners = new Set<(list: ClientInfo[]) => void>()
   #timer: ReturnType<typeof setTimeout> | undefined
+  #hostname: string
+  #windowKinds: Set<string>
+  #windows: Windows = { here: false, elsewhere: [], browser: false }
+
+  /** `hostname`: this machine's, to tell a client on another computer by its hello. `windowKinds`: the kinds that are a window (the app's, a browser's). */
+  constructor({ hostname = '', windowKinds = [] }: { hostname?: string; windowKinds?: string[] } = {}) {
+    this.#hostname = hostname.toLowerCase()
+    this.#windowKinds = new Set(windowKinds)
+  }
 
   add(peer: RpcPeer, via: Via = { via: 'socket' }): string {
     const id = `c${randomBytes(4).toString('hex')}`
     const now = Date.now()
-    this.#entries.set(id, { peer, info: { id, kind: 'client', label: via.label ?? 'client', connectedAt: now, activeAt: now, via: via.via, ...(via.device ? { device: via.device } : {}) } })
+    this.#entries.set(id, { peer, info: {
+      id, kind: 'client', label: via.label ?? 'client', connectedAt: now, activeAt: now, via: via.via,
+      ...(via.device ? { device: via.device } : {}), ...(via.elsewhere ? { elsewhere: true } : {}),
+    } })
     this.#changed(true)
     return id
   }
@@ -32,7 +53,29 @@ export class Clients {
     if (from) entry.info.from = from
     else delete entry.info.from
     if (entry.info.via === 'socket' || entry.info.label === 'client') entry.info.label = label?.trim() || kind
+    // Over the socket, a client names its computer in hello (the app and the command line send its hostname): another
+    // computer's came over ssh.
+    if (entry.info.via === 'socket') {
+      if (label?.trim() && this.#hostname && label.trim().toLowerCase() !== this.#hostname) entry.info.elsewhere = true
+      else delete entry.info.elsewhere
+    }
     this.#changed(true)
+  }
+
+  /**
+   * Where the user's windows are: the app's and browsers', not an agent's command line, nor another daemon reaching this
+   * one. With none connected, where they last were: a window that went to sleep hasn't moved.
+   */
+  windows(): Windows {
+    const windows = [...this.#entries.values()].map((e) => e.info).filter((info) => !info.from && this.#windowKinds.has(info.kind))
+    if (windows.length) {
+      this.#windows = {
+        here: windows.some((w) => !w.elsewhere),
+        elsewhere: [...new Set(windows.filter((w) => w.elsewhere && w.via === 'socket').map((w) => w.label))],
+        browser: windows.some((w) => w.elsewhere && w.via !== 'socket'),
+      }
+    }
+    return { ...this.#windows, elsewhere: [...this.#windows.elsewhere] }
   }
 
   /** It called something. Told to watchers at most once a second: activity alone isn't worth a stream of updates. */

@@ -15,6 +15,7 @@ import { registerArtifactScheme, serveArtifacts } from './artifacts.ts'
 import { commandLine } from './command-line.ts'
 import { createDesktop } from './desktop.ts'
 import { serveIpc } from './ipc.ts'
+import { createForwards } from './forwards.ts'
 import { LayoutFile } from './layout-file.ts'
 import { createMachines } from './machines.ts'
 import { createNotifier } from './notify.ts'
@@ -113,7 +114,11 @@ export function startApp(appConfig: AppConfig) {
     },
   })
   const desktop = createDesktop({ app: appConfig, headless, settings, machines, service, windows, refreshBadge: notifier.refreshBadge })
-  serveIpc({ machines: machines.entries, linkOf: machines.linkOf, windowOf: windows.of, callApp: (window, method, params) => callApp(router, window, method, params) })
+  const forwards = createForwards({ machines: machines.entries, linkOf: machines.linkOf })
+  serveIpc({
+    machines: machines.entries, linkOf: machines.linkOf, windowOf: windows.of, callApp: (window, method, params) => callApp(router, window, method, params),
+    forwardUrl: forwards.urlFor,
+  })
 
   /**
    * One app per data dir: its Electron state lives in the data dir, so the lock that keeps a second launch from opening
@@ -143,7 +148,7 @@ export function startApp(appConfig: AppConfig) {
 
   app.on('window-all-closed', () => desktop.allClosed())
   // Every window open as it quits comes back at the next launch.
-  app.on('before-quit', () => { windows.quitting(); layoutFile.stop(); machines.stop() })
+  app.on('before-quit', () => { windows.quitting(); layoutFile.stop(); forwards.close(); machines.stop() })
 }
 
 /**

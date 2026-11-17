@@ -3,7 +3,7 @@ import { createConnection, createServer, type Server, type Socket } from 'node:n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { lineSplitter, RpcPeer } from '@superego/protocol'
+import { Channels, FORWARD, lineSplitter, RpcPeer } from '@superego/protocol'
 import { serveConnection } from '../src/connection.ts'
 
 let dir: string
@@ -20,6 +20,7 @@ async function connect(silence: number) {
     const connection = serveConnection(peer, { hangUp: () => socket.destroy(), silence })
     for (const [method, handler] of Object.entries(connection.handlers)) peer.handle(method, handler)
     socket.on('data', lineSplitter((line) => peer.receive(line)))
+    socket.on('drain', () => peer.drain())
     socket.on('close', () => { peer.close(); connection.close() })
   })
   await new Promise<void>((resolve) => server.listen(path, resolve))
@@ -27,6 +28,7 @@ async function connect(silence: number) {
   socket.setEncoding('utf8')
   const peer = new RpcPeer((line) => socket.destroyed || socket.write(line))
   socket.on('data', lineSplitter((line) => peer.receive(line)))
+  socket.on('drain', () => peer.drain())
   const closed = new Promise<boolean>((resolve) => socket.on('close', () => resolve(true)))
   return { peer, socket, closed }
 }
@@ -65,4 +67,35 @@ it('refuses an upload id still held, so a reused id cannot upset the accounting'
   await ended
   await expect(upload('other')).rejects.toMatchObject({ kind: 'invalid' })
   socket.destroy()
+})
+
+it('forwards a channel to a port on its loopback, both ways and each half-close, and refuses anything else', async () => {
+  const { peer, socket } = await connect(10_000)
+  // An echo server that answers once the client has ended its half, as an HTTP/1.0 server might.
+  const echo = createServer({ allowHalfOpen: true }, (conn) => {
+    const got: Buffer[] = []
+    conn.on('data', (b) => got.push(b))
+    conn.on('end', () => conn.end(Buffer.concat(got).toString().toUpperCase()))
+  })
+  await new Promise<void>((resolve) => echo.listen(0, '127.0.0.1', resolve))
+  const port = (echo.address() as { port: number }).port
+  try {
+    const channel = await Channels.of(peer).open(FORWARD, { port })
+    const got: Uint8Array[] = []
+    channel.onData((bytes) => { got.push(bytes) })
+    await channel.write(new TextEncoder().encode('hello '))
+    await channel.write(new Uint8Array(200_000).fill(97))
+    channel.end()
+    await channel.ended
+    const text = Buffer.concat(got).toString()
+    expect(text.slice(0, 6)).toBe('HELLO ')
+    expect(text.length).toBe(200_006)
+
+    await expect(Channels.of(peer).open(FORWARD, { port, host: 'example.com' })).rejects.toThrow(/loopback only/)
+    echo.close()
+    await expect(Channels.of(peer).open(FORWARD, { port })).rejects.toThrow(/Nothing answers/)
+  } finally {
+    echo.close()
+    socket.destroy()
+  }
 })

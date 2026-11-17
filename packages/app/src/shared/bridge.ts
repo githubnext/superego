@@ -42,6 +42,12 @@ export type SuperegoBridge = {
   /** Where an artifact (an HTML file in a thread's folder) is served from, sandboxed, with its relative files beside it. */
   artifactUrl?(machine: MachineId, thread: string, path: string): string
   /**
+   * Where a web page on `machine` loads from on this computer: a `localhost` address on another machine is forwarded
+   * from there (main/forwards.ts), at the same port when it's free here; anything else is as it is. Absent where it
+   * can't (a browser).
+   */
+  forward?(machine: MachineId, url: string): Promise<string>
+  /**
    * Open a channel of `kind` on a machine's daemon: a byte stream both ways (a terminal's). Absent from a bridge
    * that can't; in a browser, only to the daemon that served the page.
    */
@@ -65,7 +71,7 @@ export const artifactUrl = (machine: MachineId, thread: string, path: string) =>
   `superego-artifact://${encodeURIComponent(machine)}/${encodeURIComponent(thread)}/${path.split('/').map(encodeURIComponent).join('/')}`
 
 export const CHANNEL = {
-  call: 'superego:call', machines: 'superego:machines', event: 'superego:event',
+  call: 'superego:call', machines: 'superego:machines', event: 'superego:event', forward: 'superego:forward',
   // A window's protocol channels, held for it by the main process: opened, ready for data (once the window knows its
   // id), their data, written, read and closed; the main process drops all of a window's as its page (re)loads.
   open: 'superego:ch-open', start: 'superego:ch-start', data: 'superego:ch-data', write: 'superego:ch-write', ack: 'superego:ch-ack', close: 'superego:ch-close',

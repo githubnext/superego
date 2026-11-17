@@ -40,9 +40,10 @@ export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.t
 /**
  * What a daemon of this build offers beyond what its generation began with, announced in `hello`. Clients check a
  * feature before using it, so an older daemon of the generation keeps working with a newer app (and the other way
- * round) for whatever both know. `thread-read`: the `thread.read` method.
+ * round) for whatever both know. `thread-read`: the `thread.read` method. `forward`: `forward` channels, a TCP
+ * connection to a port on its loopback (forward.ts).
  */
-export const FEATURES = ['thread-read'] as const
+export const FEATURES = ['thread-read', 'forward'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -198,6 +199,11 @@ export type ClientInfo = {
   device?: string
   /** The thread whose agent's shell it runs in, as it said in `hello`: an agent's command line, not the user's. */
   from?: ThreadId
+  /**
+   * On another computer than this machine, so its `localhost` isn't this one's: a browser through Tailscale, or over the
+   * socket (ssh to it), a client whose hello named a computer (its hostname) other than this one.
+   */
+  elsewhere?: boolean
 }
 
 /**
@@ -232,7 +238,10 @@ export type Methods = {
   hello: { params: { client: string; version: number; label?: string; from?: ThreadId }; result: Hello }
   /** Nothing, answered at once: a client pinging every few seconds notices a dead link in seconds. */
   ping: { params: {}; result: null }
-  /** Open a channel (a byte stream). The daemon accepts `upload` {name, mimeType, size}; its id names the upload. */
+  /**
+   * Open a channel (a byte stream). The daemon accepts `upload` {name, mimeType, size}, its id naming the upload; and
+   * `forward` {port, host?}, a TCP connection to that port on its loopback (forward.ts).
+   */
   'ch.open': { params: { ch: string; kind: string; params?: unknown; window: number }; result: { window: number } }
   /** The threads, newest first; `archived` lists the ones put away instead, `hidden` those in no list (extensions' own). */
   'thread.list': { params: { archived?: boolean; hidden?: boolean }; result: ThreadInfo[] }

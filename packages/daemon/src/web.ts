@@ -214,10 +214,12 @@ export async function serveWeb({ root, port, devices, tailscale, serve, artifact
     const who = await identify(caller, cookieOf(request))
     if (who === 'limited') return deny('429 Too Many Requests')
     if (!who) return deny('401 Unauthorized')
-    // For the client list: a paired device by its name, the owner by their login.
+    // For the client list: a paired device by its name, the owner by their login. Through serve, it's on another
+    // computer of the tailnet; otherwise on this one (Web access listens on loopback).
+    const elsewhere = Boolean(caller.serve)
     const via: Via = who.startsWith('tailscale:')
-      ? { via: 'tailscale', label: caller.login ?? who.slice('tailscale:'.length) }
-      : { via: 'web', device: who, label: devices.list().find((d) => d.id === who)?.name ?? 'A browser' }
+      ? { via: 'tailscale', label: caller.login ?? who.slice('tailscale:'.length), elsewhere }
+      : { via: 'web', device: who, label: devices.list().find((d) => d.id === who)?.name ?? 'A browser', elsewhere }
     sockets.handleUpgrade(request, socket, head, (ws) => {
       live.set(ws, who)
       // Full past 1 MiB unsent, as a socket's write says; each sent message checks whether there's room again.

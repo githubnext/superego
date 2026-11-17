@@ -1,6 +1,7 @@
 // web-panes, UI half: Preview, a web page beside the thread (a link it names, opened beside; the agent's pane_open
 // "preview"), and Artifact, an HTML file the agent wrote, shown as a page. Both reload from their header; an artifact
-// also whenever the thread moves on, as it may have rewritten it.
+// also whenever the thread moves on, as it may have rewritten it. A preview of `localhost` on another machine than this
+// computer loads from that machine's, forwarded here by the app (the bridge's `forward`).
 import { useEffect, useState } from 'react'
 import { defineUiExtension, PaneButton, PaneHeader, PaneMessage, PaneNote, type PaneProps } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'
@@ -20,15 +21,37 @@ export default defineUiExtension({
   },
 })
 
-/** A web page: a local dev server, docs. */
-function PreviewPane({ pane }: PaneProps) {
+/** A web page: a dev server (the thread's machine's `localhost`, forwarded here when that's another computer), docs. */
+function PreviewPane({ machine, pane }: PaneProps) {
   const { url } = params<{ url?: string }>(pane)
   const [key, setKey] = useState(0)
-  if (!url || !/^https?:\/\//.test(url)) return <PaneMessage>No address (an http or https URL) given.</PaneMessage>
+  const valid = Boolean(url && /^https?:\/\//.test(url))
+  const [shown, setShown] = useState<{ for: string; url?: string; error?: string }>()
+  useEffect(() => {
+    if (!url || !valid) return
+    const forward = window.superego.forward
+    if (!forward) {
+      setShown({ for: url, url })
+      return
+    }
+    let current = true
+    forward(machine.id, url).then((at) => { if (current) setShown({ for: url, url: at }) }, (error: Error) => {
+      console.error(`Preview of ${url} on ${machine.label}:`, error)
+      if (current) setShown({ for: url, error: error.message })
+    })
+    return () => { current = false }
+  }, [machine.id, machine.label, url, valid])
+  if (!url || !valid) return <PaneMessage>No address (an http or https URL) given.</PaneMessage>
+  if (shown?.for !== url) return <PaneMessage>Loading…</PaneMessage>
+  if (shown.error) return <PaneMessage>{shown.error}</PaneMessage>
+  const at = shown.url!
+  // Forwarded at another port (the machine's is taken here): said, as its own links to that port lead elsewhere.
+  const moved = at !== url && new URL(at).port !== new URL(url).port
+  const note = moved ? `${url} (${machine.label}), here at ${new URL(at).host}` : url
   return (
     <div className="web-panes-frame">
-      <PaneHeader><PaneNote title={url} href={url}>{url}</PaneNote><PaneButton onClick={() => setKey((k) => k + 1)}>Reload</PaneButton></PaneHeader>
-      <iframe key={key} src={url} title={url} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
+      <PaneHeader><PaneNote title={note} href={at}>{note}</PaneNote><PaneButton onClick={() => setKey((k) => k + 1)}>Reload</PaneButton></PaneHeader>
+      <iframe key={key} src={at} title={url} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
     </div>
   )
 }

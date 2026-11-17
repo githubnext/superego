@@ -3,7 +3,9 @@
 // peer behind a dead link doesn't keep its watches. One that never pings (the CLI, a script) is never hung up on.
 // Uploads come on channels (see @superego/protocol's channels.ts), are held in memory for this connection only, and are
 // put back into a message's attachments as inline data when one names them; anything left goes when the connection does.
-import { attachmentsIn, Channels, PROTOCOL_VERSION, RpcError, withAttachments, type AppConfig, type AttachmentRef, type RpcPeer } from '@superego/protocol'
+// A `forward` channel is a TCP connection to a port on this machine's loopback (a window previewing a dev server here).
+import { connect } from 'node:net'
+import { attachmentsIn, Channels, FORWARD, isLoopback, pipeForward, PROTOCOL_VERSION, RpcError, withAttachments, type AppConfig, type AttachmentRef, type RpcPeer } from '@superego/protocol'
 
 /**
  * A client of another protocol generation, refused in words that say which side to update. Generations change only for
@@ -61,6 +63,18 @@ export function serveConnection(peer: RpcPeer, { hangUp, silence = 30_000 }: Con
       uploads.set(channel.id, { name, mimeType, bytes, timer: setTimeout(() => drop(channel.id), KEEP) })
       channel.end()
     }, () => { held -= size })
+  })
+
+  Channels.of(peer).accept(FORWARD, async (channel, { port, host = 'localhost' }: { port?: unknown; host?: unknown }) => {
+    if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) throw new RpcError('invalid', 'A forward needs a port')
+    if (typeof host !== 'string' || !isLoopback(host)) throw new RpcError('invalid', 'A forward reaches this machine\'s loopback only')
+    // `localhost` tries each of its addresses (::1, 127.0.0.1): a dev server may listen on either.
+    const socket = connect({ host: host.replace(/^\[|\]$/g, ''), port, allowHalfOpen: true, autoSelectFamily: true })
+    await new Promise<void>((resolve, reject) => {
+      socket.once('connect', resolve)
+      socket.once('error', (error) => reject(new RpcError('refused', `Nothing answers at ${host}:${port} here (${error.message})`)))
+    })
+    pipeForward(channel, socket)
   })
 
   let pinged = false

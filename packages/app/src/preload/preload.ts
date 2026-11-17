@@ -11,6 +11,7 @@ const bridge = {
   call: (machine: string, method: string, params: unknown) => ipcRenderer.invoke(CHANNEL.call, machine, method, params) as Promise<CallResult>,
   machines: () => ipcRenderer.invoke(CHANNEL.machines),
   artifactUrl,
+  forward: (machine: string, url: string) => ipcRenderer.invoke(CHANNEL.forward, machine, url) as Promise<CallResult>,
   onEvent(listener) {
     listeners.add(listener)
     return () => { listeners.delete(listener) }
@@ -19,7 +20,7 @@ const bridge = {
     const response = await ipcRenderer.invoke(CHANNEL.open, machine, kind, params) as CallResult
     return response.ok ? { ok: true, result: held(response.result as string) } : response
   },
-} satisfies Omit<SuperegoBridge, 'call' | 'channel'> & Record<'call' | 'channel', (machine: string, method: string, params: unknown) => Promise<CallResult>>
+} satisfies Omit<SuperegoBridge, 'call' | 'channel' | 'forward'> & Record<'call' | 'channel', (machine: string, method: string, params: unknown) => Promise<CallResult>> & { forward(machine: string, url: string): Promise<CallResult> }
 
 // One IPC listener for the window; every watch subscribes here instead.
 const listeners = new Set<(event: SuperegoEvent) => void>()
@@ -74,6 +75,7 @@ contextBridge.executeInMainWorld({
       ...raw,
       call: async (machine, method, params) => answer(await raw.call(machine, method, params)),
       channel: async (machine, kind, params) => answer(await raw.channel(machine, kind, params)) as BridgeChannel,
+      forward: async (machine, url) => answer(await raw.forward(machine, url)) as string,
     }
     Object.defineProperty(globalThis, 'superego', { value: Object.freeze(superego), enumerable: true })
   },

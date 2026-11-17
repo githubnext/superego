@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A thread on a remote machine knows when your window is on another computer: it no longer hands you a `localhost`
+  address that only works over there, or takes a `curl` on the machine as proof it works for you.
+- Preview shows a remote machine's `localhost` pages: the app forwards the port to this computer, at the same port when
+  it's free, so your browser here can open it too.
+
 ## 0.1.3
 
 ### Fixes

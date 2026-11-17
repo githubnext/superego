@@ -20,6 +20,7 @@ import { createAuthFlows } from './auth-flows.ts'
 import { readCommit } from './build.ts'
 import { Clients, type Via } from './clients.ts'
 import { coreExtensions } from './core-extensions.ts'
+import { whereYouRun } from './where.ts'
 import { createExtensionHost } from './extension-host.ts'
 import type { DaemonExtension } from './extension.ts'
 import { threadFiles } from './files.ts'
@@ -171,7 +172,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     return keeps.value
   }
   /** Who is connected, for `clients.watch` and the action log (see clients.ts). */
-  const clients = new Clients()
+  const clients = new Clients({ hostname: machine.hostname, windowKinds: [`${options.app.id}-app`, 'web'] })
   /** The daemon's own: what it set up for its life (the bundled extensions), undone as it closes. */
   const daemonLife = new Lifetime('The daemon')
   // The other machines, reached through links this daemon keeps (see relay.ts); this one first, as 'local'.
@@ -184,7 +185,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   // The core's own, then the bundled ones: for the daemon's life, each giving every thread its agent parts unless the
   // thread goes without it.
-  const core = coreExtensions({ agentsDir: host.agentsDir, panesOf: extensions.panesOf, openPane: threads.openPane })
+  const core = coreExtensions({ agentsDir: host.agentsDir, where: () => whereYouRun(machine.hostname, clients.windows()), panesOf: extensions.panesOf, openPane: threads.openPane })
   for (const extension of core) daemonLife.add(await extensions.setUpBuiltin(extension, 'core'))
   for (const extension of options.extensions ?? []) daemonLife.add(await extensions.setUpBuiltin(extension, 'bundled'))
   extensions.registerSwitches()

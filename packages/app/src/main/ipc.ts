@@ -22,9 +22,11 @@ export type IpcOptions = {
   windowOf(contents: WebContents): AppWindow | undefined
   /** A call on the app's own endpoint, from `window`. */
   callApp(window: AppWindow, method: string, params: unknown): Promise<unknown>
+  /** Where a machine's web page loads from here (forwards.ts). */
+  forwardUrl(machine: string, url: string): Promise<string>
 }
 
-export function serveIpc({ machines, linkOf, windowOf, callApp }: IpcOptions) {
+export function serveIpc({ machines, linkOf, windowOf, callApp, forwardUrl }: IpcOptions) {
   const windowFor = (event: IpcMainInvokeEvent | IpcMainEvent) => {
     const window = windowOf(event.sender)
     if (!window) throw new RpcError('unknown_window', 'Not one of the app\'s windows')
@@ -35,6 +37,7 @@ export function serveIpc({ machines, linkOf, windowOf, callApp }: IpcOptions) {
   }
 
   ipcMain.handle(CHANNEL.machines, () => machines())
+  ipcMain.handle(CHANNEL.forward, (_event, machine: string, url: string) => answer(() => forwardUrl(machine, url)))
   ipcMain.handle(CHANNEL.call, (event, machine: string, method: string, params: unknown) => answer(() => {
     if (machine === APP) return callApp(windowFor(event), method, params ?? {})
     const link = linkOf(machine)

@@ -12,9 +12,11 @@ const MARKDOWN_PROMPT = [
   'Fenced code blocks are syntax-highlighted by their language tag (```ts, ```bash, ```diff, …), so always tag the language.',
 ].join('\n')
 
-export function coreExtensions({ agentsDir, panesOf, openPane }: {
+export function coreExtensions({ agentsDir, where, panesOf, openPane }: {
   /** The folder agents share: standing instructions in its AGENTS.md (see agents-md.ts). */
   agentsDir: string
+  /** Where the agent runs, when the user's window is on another computer (see where.ts); nothing on one computer. */
+  where(): string | undefined
   /** The pane kinds a thread's agent is told of, and what each shows. */
   panesOf(thread: string): { kind: string; about: string }[]
   openPane(thread: string, pane: Omit<Pane, 'id'>): Promise<Pane>
@@ -46,6 +48,11 @@ export function coreExtensions({ agentsDir, panesOf, openPane }: {
       // How messages show is the window's, not something to turn off.
       name: 'markdown', version: '1.0.0', api: '^3', title: 'Markdown', description: 'Know how the thread shows messages, and write for it.', required: true,
       setup: (s) => s.agent(defineExtension({ name: 'markdown', sections: [section('markdown', () => MARKDOWN_PROMPT)] })),
+    },
+    {
+      // Which computer the agent is on, next to the user's, is a fact of its world, not something to turn off.
+      name: 'where', version: '1.0.0', api: '^3', title: 'Where it runs', description: 'Know when the user\'s window is on another computer than the agent.', required: true,
+      setup: (s) => s.agent(defineExtension({ name: 'where', sections: [section('where', () => where())] })),
     },
     {
       name: 'panes', version: '1.0.0', api: '^3', title: 'Panes', description: 'Open panes beside a thread: files, other threads, and the kinds extensions add.',

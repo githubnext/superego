@@ -50,7 +50,7 @@ project    a git repository (its worktrees too) or a folder, on a machine
   them too (`pane_open`). One can be maximized for a while (its tab's button, a double click on its title, `⌘⇧↩`):
   over the thread and the rest, in this window only, until Esc, Restore, or another pane or thread.
   Built in: the file editor (Markdown rendered, in live preview as Obsidian shows it, or as source) and another thread.
-  Bundled extensions add Changes (git's diff, `git`), Preview (a web page) and Artifact (an HTML file the agent wrote,
+  Bundled extensions add Changes (git's diff, `git`), Preview (a web page; another machine's `localhost` forwarded here) and Artifact (an HTML file the agent wrote,
   sandboxed) (`web-panes`); a pane of an extension a thread goes without isn't shown.
 - **Files** named in a thread (`[[Note]]`, a relative link, `` `src/app.ts` ``) open beside it; the `files` extension
   adds a tree beside the editor and quick open.
@@ -222,6 +222,21 @@ on that computer.
 Each computer's daemon links to the machines in its `machines.json` too (the list the app and `superego machines` keep),
 with the same identity checks, so a browser or an agent there reaches them through it. It never links to itself. After
 Log in or Trust this machine, the app tells its daemon to reconnect as well.
+
+An agent on a machine whose window is on another computer is told so (the core's `where` section): `localhost` there
+isn't the user's, and `curl` there proves only what that machine reaches. The daemon tells from its client list: the app
+over ssh names another computer in its `hello`, a browser through Tailscale is elsewhere; with no window connected, it
+keeps what it last saw. On one computer, nothing is said.
+
+A Preview of `localhost:<port>` on another machine loads from that machine's: the app listens on this computer's
+loopback, at the same port when it's free here (else another, which the pane's header says), and carries each
+connection over the machine's link on a `forward` channel to that port on its loopback (`main/forwards.ts`,
+`@superego/protocol`'s `forward.ts`). Cookies and redirects to `localhost:<port>` work as they would there, and the
+user's browser on this computer reaches the forward too, while the app runs. What doesn't: the page calling another of
+the machine's ports (an API on `:3000` behind a page on `:5173`: preview that one too, so it's forwarded), absolute
+links to the machine's port when it was taken here, anything that must reach the machine from outside (a third party's
+webhook or OAuth callback to a public address), and a browser on Web access, which can't listen: there the agent asks
+how the user reaches the machine.
 
 The daemon takes model keys from the providers' own variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) when none is
 stored in Settings. A restart keeps the environment it was started with and adds that of the shell asking for it. Where
