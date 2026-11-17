@@ -5,6 +5,8 @@
 - Collapse parts of the sidebar: Pinned, a project, or the threads another thread started, from the caret beside its
   name (or ← and →). Collapsed, it shows how many threads it holds and whether any needs you. ⌘⌥↑ and ⌘⌥↓ skip what's
   collapsed, and going to a thread inside opens the way to it. ⌘K has Collapse all threads and Expand all threads.
+- Hide the sidebar's Pinned section from its ··· menu (Show pinned). Pinned threads stay pinned, at the top of their
+  projects.
 - Preview shows a page as your browser does, not framed in the window: signing in, redirects to another port or site,
   and cookies work there, and pages that refuse to be framed load. It has back and forward (also ⌘[ and ⌘]), ⌘R
   reloads the page, and the header shows where the page is now. Links that open a new window open in your browser;

@@ -6,6 +6,8 @@ import type { MachineEntry } from '../shared/bridge.ts'
 
 /** The app setting the pins are kept in: `Pin[]`, first pinned first. */
 export const PINS = 'app.pins'
+/** App setting: whether the sidebar shows the Pinned section (on, unless turned off). Off, pinned threads still top their projects. */
+export const SHOW_PINNED = 'app.pins.shown'
 
 export type Pin = { machine: string; thread: string }
 

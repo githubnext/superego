@@ -37,7 +37,7 @@ const KINDS: Record<string, Kind> = { p: 'project', t: 'thread', g: 'pane' }
 export function Navigator({ onClose }: { onClose(): void }) {
   const registry = useRegistry()
   const machines = useMachines()
-  const { sidebar, lastThread } = useProjects()
+  const { sidebar, pins: pinList, lastThread } = useProjects()
   const { selection, select } = useSelection()
   const [query, setQuery] = useState('')
   const [only, setOnly] = useState<Kind>()
@@ -47,14 +47,15 @@ export function Navigator({ onClose }: { onClose(): void }) {
     const several = machines.filter((m) => m.state !== 'disabled').length > 1
     const where = (project: Project) => several || project.machine.id !== 'local' ? project.machine.label : undefined
     const go = (fn: () => void) => () => { onClose(); fn() }
-    const pins = new Set(sidebar.pinned.map(({ project, thread }) => `${project.machine.id}/${thread.id}`))
+    const pins = new Set(pinList.map(({ machine, thread }) => `${machine}/${thread}`))
+    const listedPinned = new Set(sidebar.pinned.map(({ project, thread }) => `${project.machine.id}/${thread.id}`))
     // A thread, a level under its project (or on its own, among the pinned: `top`), and its panes under it.
     const threadRows = (project: Project, thread: ThreadInfo, top: boolean): Row[] => {
       const pinned = pins.has(`${project.machine.id}/${thread.id}`)
       const depth = top ? 0 : 1
       // Its own keys in each place it's listed; listed again under its project, it's left out of a search.
       const key = `${top ? 'pinned:' : ''}${project.key}/${thread.id}`
-      const again = pinned && !top
+      const again = !top && listedPinned.has(`${project.machine.id}/${thread.id}`)
       const isOn = project.machine.id === selection?.machine && thread.id === selection.thread
       const show = () => void dispatch('thread.select', { machine: project.machine.id, thread: thread.id }, { source: 'navigator' })
       const at = { machine: project.machine.id, thread }
@@ -93,7 +94,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
         ...project.threads.flatMap((thread) => threadRows(project, thread, false)),
       ]),
     ]
-  }, [sidebar, machines, selection?.machine, selection?.thread, lastThread])
+  }, [sidebar, pinList, machines, selection?.machine, selection?.thread, lastThread])
 
   // Searching flattens to the matches, best first; browsing keeps the tree (or one kind of row in it).
   const shown = useMemo(() => {

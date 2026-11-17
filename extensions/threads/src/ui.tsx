@@ -1,6 +1,6 @@
 // threads: the Threads space in the sidebar. The pinned threads first, from every project and machine, then projects (a
 // repository or folder on a machine) and the threads in each, its pinned at its top; the machine is said on the project,
-// where it isn't this computer. Pinned, each project and each thread with others under it fold, by their carets or ← and →
+// where it isn't this computer (Pinned can be hidden from the ··· menu: they still top their projects). Pinned, each project and each thread with others under it fold, by their carets or ← and →
 // (the folds are the window's: projects.ts). Its views:
 // - the list (`threads.list`), a space: sorted recently active, newest first, or needs you first (an app setting); with
 //   the sidebar hidden, a rail of status glyphs; the key to go anywhere (⌘L) beside its heading, while pointed at. A row's title is followed by other extensions' marks (the
@@ -12,7 +12,7 @@
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are thread-tools'.
 import { Fragment, useEffect, useMemo, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
 import {
-  call, defineAction, defineUiExtension, fold, isPinned, MachineDrift, shownRows, useFold, RailButton, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
+  call, defineAction, defineUiExtension, fold, isPinned, MachineDrift, shownRows, useFold, RailButton, SHOW_PINNED, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
   type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, STATUS_WORDS, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
@@ -331,9 +331,10 @@ function NewThreadButton({ label, machine, cwd }: { label: string; machine?: Mac
 
 const SORTS: { value: Sort; label: string }[] = [{ value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: `${STATUS_WORDS.blocked} first` }]
 
-/** The ··· menu: sort, details, hiding the sidebar. */
+/** The ··· menu: sort, the Pinned section shown or not, details, hiding the sidebar. */
 function Options() {
   const [sort, setSort] = useAppSetting<Sort>(SORT)
+  const [showPinned, setShowPinned] = useAppSetting<boolean>(SHOW_PINNED)
   const [details, setDetails] = usePlacement(DETAILS, 'beside')
   const dispatch = useDispatch()
   const sidebarKeys = useShortcut(SIDEBAR)
@@ -349,6 +350,7 @@ function Options() {
           </Menu.RadioGroup>
         </Menu.Group>
         <Menu.Separator />
+        <Menu.CheckboxItem checked={showPinned !== false} onCheckedChange={(checked) => void setShowPinned(checked).catch((error) => console.error(error))}>Show pinned</Menu.CheckboxItem>
         <Menu.CheckboxItem checked={details} onCheckedChange={(checked) => setDetails(checked)} hint={detailsKeys}>Thread details</Menu.CheckboxItem>
         <Menu.Item onClick={() => void dispatch(SIDEBAR, {}, { source: 'threads' }).catch((error) => console.error(error))} hint={sidebarKeys}>Hide sidebar</Menu.Item>
       </Menu.Popup>

@@ -161,6 +161,21 @@ it('pins threads from every project and machine to the top, and to the top of th
     await ui.until(() => pinned().join() === 'far,there,here', 'pinned from the palette, last')
     expect(await appSetting('app.pins')).toEqual([{ machine: 'box', thread: far.id }, { machine: 'local', thread: there.id }, { machine: 'local', thread: here.id }])
 
+    // Pinned hidden from the ··· menu, for every window: still pinned, at the tops of their projects.
+    $('.threads-menu-trigger')!.click()
+    await ui.until(() => Boolean(menuItem('Show pinned')), 'the ··· menu')
+    menuItem('Show pinned')!.click()
+    await ui.until(() => !$('.threads-pinned'), 'Pinned hidden')
+    expect(await appSetting('app.pins.shown')).toBe(false)
+    expect(rowOf('far')?.querySelector('.threads__pin')).not.toBeNull()
+    expect(project('stays')).toEqual(['there', 'stays'])
+    await ui.key('escape')
+    $('.threads-menu-trigger')!.click()
+    await ui.until(() => Boolean(menuItem('Show pinned')), 'the ··· menu again')
+    menuItem('Show pinned')!.click()
+    await ui.until(() => pinned().join() === 'far,there,here', 'Pinned shown again')
+    await ui.key('escape')
+
     // ⌘⇧] goes down the pinned first.
     rowOf('far', '.threads-pinned')!.click()
     await ui.until(() => titled() === 'far', 'far shown')

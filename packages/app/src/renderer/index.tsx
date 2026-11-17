@@ -20,7 +20,7 @@ import { WebAccess } from './web-access.tsx'
 import { ConnectedClients } from './connected.tsx'
 import { Shell, ThreadPicker } from './Shell.tsx'
 import { SORT } from './projects.ts'
-import { PINS } from './pins.ts'
+import { PINS, SHOW_PINNED } from './pins.ts'
 import { DEFAULT_WIDTH, MAX_WIDTH, MIN_WIDTH, SIDEBAR_WIDTH } from './sidebar-width.ts'
 import { ShellStateProvider } from './state.tsx'
 import { coreActions, defineWindowAction } from './actions.tsx'
@@ -88,6 +88,7 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
         { key: SORT, title: 'Sort projects and threads', default: 'recent', type: 'choice', options: [
           { value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' },
         ] },
+        { key: SHOW_PINNED, title: 'Show pinned', default: true, type: 'boolean' },
       ],
     })
     // Changed by dragging the sidebar's edge, and by pinning threads, not in Settings.

@@ -16,7 +16,7 @@ import { focusProvider } from './provider-focus.ts'
 import { useWindowEvents } from './window-events.ts'
 import { Notifications } from './notifications.tsx'
 import { freeze, pinnedFirst, projectKey, stillFolded, useProjectList, wayTo, type Project, type Sidebar } from './projects.ts'
-import { PINS, pinsOf, stillListed, type Pin } from './pins.ts'
+import { PINS, pinsOf, SHOW_PINNED, stillListed, type Pin } from './pins.ts'
 import { sidebarIsHidden, showSidebar, type SidebarMode } from './sidebar-mode.ts'
 import { TIGHT, useMedia } from './media.ts'
 import { APP } from '../shared/app-settings.ts'
@@ -173,7 +173,12 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const pins = useMemo(() => pinsOf(pinsValue), [pinsValue])
   // Sections and threads folded, as this window was left.
   const [folded, setFolded] = useLocalState<string[]>('sidebar.folded', [])
-  const sidebar = useMemo(() => pinnedFirst(projects, pins, folded), [projects, pins, folded])
+  // The Pinned section may be hidden: they still top their projects.
+  const [showPinned] = useAppSetting<boolean>(SHOW_PINNED)
+  const sidebar = useMemo(() => {
+    const all = pinnedFirst(projects, pins, folded)
+    return showPinned === false ? { ...all, pinned: [] } : all
+  }, [projects, pins, folded, showPinned])
   const fold = useCallback((keys: readonly string[], on: boolean) => setFolded((all) =>
     on ? [...all, ...keys.filter((key) => !all.includes(key))] : all.filter((key) => !keys.includes(key))), [])
   useEffect(() => {
