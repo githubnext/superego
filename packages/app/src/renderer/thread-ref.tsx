@@ -1,11 +1,11 @@
 // A thread named somewhere else: in a message ([title](thread:<id>)), a tool call, the title bar. It reads as the
-// thread's title, kept current (archived too), and opens it: a click shows it, ⌘-click opens it in a pane beside the thread shown;
+// thread's title, kept current (archived or hidden too: Ego's, as its threads' parent), and opens it: a click shows it, ⌘-click opens it in a pane beside the thread shown;
 // or as `open` says, given one (a link handler's, to open it beside the thread the link is in).
 import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import { StatusGlyph } from '@superego/ui'
 import { useRegistry } from './registry.tsx'
-import { useSelection, useThreads } from './state.tsx'
+import { useHidden, useSelection, useThreads } from './state.tsx'
 
 /**
  * A machine's archived threads, asked once for each set of threads it has in use (archiving or unarchiving one changes
@@ -36,7 +36,8 @@ export function ThreadRef({ machine, id, children, className = '', open: follow 
   const dispatch = useRegistry().router.dispatch
   const { selection } = useSelection()
   const inUse = useThreads(machine)
-  const listed = inUse?.find((t) => t.id === id)
+  const hidden = useHidden(machine)
+  const listed = inUse?.find((t) => t.id === id) ?? hidden?.find((t) => t.id === id)
   // One archived since it was named still reads as itself.
   const archived = useArchived(machine, id, inUse, Boolean(listed))
   const thread = listed ?? archived

@@ -74,7 +74,10 @@ export type ThreadInfo = {
   profile?: ProfileRef
   /** The project it belongs to, on its machine: a repository (by its main checkout, worktrees included) or a folder. */
   project: { root: string; name: string }
-  /** The thread that started it, if one did (an agent's thread_start, say): it shows nested under that one. */
+  /**
+   * The thread that started it, if one did (an agent's thread_start, say): it hears from it (its reports), and it shows
+   * nested under that one, where that one is listed. A hidden one's child (Ego's) shows top-level.
+   */
   parent?: ThreadId
   /** Put away: listed only with `archived`, readable, and taking no messages until unarchived. */
   archived?: boolean

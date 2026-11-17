@@ -97,11 +97,12 @@ describe("Ego's tools", () => {
     await expect(run(tools, 'superego_machines', { op: 'enable', machine: 'nope' })).rejects.toThrow(/No machine nope/)
   })
 
-  it('hands work to a thread of its own, where the work belongs, and names it', async () => {
+  it('hands work to a thread of its own, where the work belongs, as its child, and names it', async () => {
     const started: Parameters<EgoThreads['start']>[0][] = []
     const { tools = [] } = egoTools({ dir: '/data', ...on(createRouter()), snapshot, threads: threads(started) })
     expect(await text(tools, 'thread_start', { prompt: 'Add a profile', cwd: 'profiles', title: 'Profile' })).toBe('Started [Profile](thread:3) (id 3), in /data/profiles.')
-    expect(started).toEqual([{ prompt: 'Add a profile', title: 'Profile', cwd: '/data/profiles' }])
+    // Its parent is Ego's thread (the conversation calling), so it reports back to Ego.
+    expect(started).toEqual([{ prompt: 'Add a profile', title: 'Profile', cwd: '/data/profiles', parent: '1' }])
   })
 
   it("won't open the credential stores", async () => {
@@ -165,6 +166,13 @@ describe('egoPrompt', () => {
   it("names this machine's optional extensions, as they are", () => {
     expect(prompt).toContain('optional extensions it does without: coding-tools, ego, agent-ui\n')
     expect(egoPrompt({ name: 'Superego', id: 'superego', dataDir: '/data', agentsDir: '/agents', hostname: 'here', optional: [], secrets: [] })).toContain('superego_settings lists them')
+  })
+
+  it("doesn't describe a result before it exists: it waits for the thread's report, and passes on what was built", () => {
+    expect(prompt).toContain("Don't describe the result: it doesn't exist yet.")
+    expect(prompt).toContain('It reports back to you on its own')
+    expect(prompt).toContain("Don't wait on it with thread_read.")
+    expect(prompt).toContain('what it actually built')
   })
 
   it('takes the obvious default rather than asking', () => {

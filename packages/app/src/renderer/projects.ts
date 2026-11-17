@@ -70,7 +70,8 @@ export function groupProjects(machines: MachineEntry[], threads: Record<string, 
 
 /**
  * A project's threads with each one a thread started right under it, a level deeper (and its own under it), in the
- * order given otherwise. A thread whose parent isn't among them (archived, or in another project) stands on its own.
+ * order given otherwise. A thread whose parent isn't among them (archived, hidden like Ego's, or in another project)
+ * stands on its own.
  * Given threads already nested, it keeps their order.
  */
 export function nest(threads: ThreadInfo[]): Pick<Project, 'threads' | 'depth'> {

@@ -54,6 +54,8 @@ type ShellState = {
   archived: ThreadInfo | undefined
   /** The selected machine's threads that no list shows (extensions' own, like Ego's): shown when selected. */
   hidden: ThreadInfo[] | undefined
+  /** Every machine's, by machine id. */
+  hiddenAll: Record<string, ThreadInfo[] | undefined>
   /** The listed thread last selected: where the sidebar's spaces go back to from a hidden one (Ego's). */
   listed: Selection | undefined
   canBack: boolean
@@ -75,6 +77,8 @@ export const useMachines = () => useShellState().machines
 export const useThreads = (machine: string) => useShellState().threads[machine]
 /** Every machine's threads, by machine id. */
 export const useAllThreads = () => useShellState().threads
+/** A machine's threads that no list shows (extensions' own, like Ego's). */
+export const useHidden = (machine: string) => useShellState().hiddenAll[machine]
 /** Each machine's providers that rejected its credentials, by machine. */
 export const useRejections = () => useShellState().rejections
 /** The selected thread, and a way to select another (or none). */
@@ -193,7 +197,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const exists = (p: Place) => 'settings' in p || Boolean(hiddenAll[p.thread.machine]?.some((t) => t.id === p.thread.thread))
     || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread))
   const value = useMemo<ShellState>(() => ({
-    machines, threads, rejections, selection, settingsOpen, newThread, projects, hold, lastThread, sidebarHidden: sidebarIsHidden(sidebarMode, tight), archived, hidden, listed,
+    machines, threads, rejections, selection, settingsOpen, newThread, projects, hold, lastThread, sidebarHidden: sidebarIsHidden(sidebarMode, tight), archived, hidden, hiddenAll, listed,
     canBack: Boolean(step(history, -1, place, exists)),
     canForward: Boolean(step(history, 1, place, exists)),
     go: (by) => {

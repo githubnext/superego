@@ -354,9 +354,9 @@ it('gives extensions the thread operations: create (hidden, as a child), submit,
   expect(own.hidden).toBe(true)
   expect(await listed(peer)).toEqual([])
   expect((await api.threads.list({ hidden: true })).map((t) => t.id)).toEqual([own.id])
-  // A hidden thread's children are top-level; another's are its children.
+  // A hidden thread's children are its children too, listed where it isn't; another's likewise.
   const top = await api.threads.start({ title: 'Top', parent: own.id })
-  expect(top.parent).toBeUndefined()
+  expect(top.parent).toBe(own.id)
   const child = await api.threads.start({ title: 'Child', parent: top.id })
   expect(child.parent).toBe(top.id)
   expect((await listed(peer)).map((t) => t.id)).toEqual([child.id, top.id])

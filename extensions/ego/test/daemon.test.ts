@@ -9,6 +9,7 @@ import { callTool, say, testDaemon, type TestDaemon, type Turn } from '@superego
 import type { DaemonExtension } from '@superego/daemon'
 import type { SettingsSnapshot, ThreadInfo } from '@superego/protocol'
 import threadTools from '@superego/thread-tools/daemon'
+import { threadReports } from '@superego/thread-reports/daemon'
 import { ego } from '../src/daemon.ts'
 
 const NAME = 'Superego test'
@@ -64,9 +65,6 @@ it("keeps its own agent as one hidden thread per machine, in its data folder, kn
   const other = await d.transcript(plain.id)
   expect(other).not.toContain('superego_settings')
   expect(other).not.toContain(`You are ${NAME}'s own agent`)
-  // A thread started with it as its parent (as from the command line) is top-level all the same.
-  const started = await d.call<ThreadInfo>('thread.start', { parent: thread.id })
-  expect(started.parent).toBeUndefined()
   // Kept across restarts.
   const again = daemon = await d.restart()
   expect((await again.call<ThreadInfo>('ego.ask', {})).id).toBe(thread.id)
@@ -153,18 +151,30 @@ it("isn't archived by another thread's thread_archive either", async () => {
   expect((await egoOf(again))!.archived).toBeUndefined()
 })
 
-it('hands work to a thread of its own: top-level in its project, listed, not under Ego', async () => {
-  // Its folders are relative to its own, the data folder.
-  const d = await open([callTool('thread_start', { prompt: 'Turn on web access', title: 'Web', cwd: 'project' }), say('Started it.'), say('Done.')])
+it('hands work to a thread of its own, top-level in its project, and hears back from it when it finishes', async () => {
+  // Its folders are relative to its own, the data folder. Ego and the thread run at once: either may take either answer.
+  const d = await open([
+    callTool('thread_start', { prompt: 'Turn on web access', title: 'Web', cwd: 'project' }), say('zz-one'), say('zz-two'), say('zz-relayed'),
+  ], [threadReports({ quietMs: 50, maxMs: 200 })])
   const project = join(d.dataDir, 'project')
   await mkdir(project)
   const thread = await d.call<ThreadInfo>('ego.ask', {})
   await d.send(thread.id, 'turn on web access')
   const [started] = await threads(d)
   expect(started).toMatchObject({ title: 'Web', cwd: project, project: { root: project } })
-  expect(started!.parent).toBeUndefined()
   expect(await d.transcript(thread.id)).toContain(`Started [Web](thread:${started!.id})`)
-})
+  // Its report comes to Ego, which answers it.
+  await d.until(async () => (await d.transcript(thread.id)).includes('zz-relayed'), 'Ego to answer the report')
+  expect(await d.transcript(thread.id)).toMatch(new RegExp(`From \\[Web\\]\\(thread:${started!.id}\\): finished\\.\\\\n\\\\nzz-(one|two)`))
+  // Ego's child, yet top-level: listed where Ego isn't, so the sidebar has no parent to put it under.
+  const listed = await threads(d)
+  expect(listed.map((t) => t.id)).toEqual([started!.id])
+  expect(listed[0]!.parent).toBe(thread.id)
+  // Not quiet: Ego, in no list, speaks only when asked, so the thread's own notice tells the user it's done.
+  expect(listed[0]!.quiet).toBeUndefined()
+  // What it's told: started by Ego, which hears its answer.
+  expect(await d.transcript(started!.id)).toContain(`relayed to [${NAME}](thread:${thread.id})`)
+}, 30_000)
 
 it("changes this machine's settings itself", async () => {
   const d = await open([callTool('superego_set_setting', { key: 'web.port', value: 8888 }), say('Set.')])

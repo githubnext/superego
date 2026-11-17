@@ -11,7 +11,9 @@
 // reported, so a grandchild's result makes its way up. Kept with the child (this extension's state: true, its
 // parent's; false, the user's), so it holds across restarts. It's quiet (`ThreadInfo.quiet`), so a child working for
 // its parent is unread and notifies only when it needs the user; but only while its parent hears (it's there, not
-// archived, and not without thread-reports): a child whose report would reach no one is unread and notifies for itself.
+// archived, and not without thread-reports), and the user follows that one: a child whose report would reach no one is
+// unread and notifies for itself. So does a hidden thread's (Ego's): its parent hears it, but is in no list and speaks
+// when asked, so its report doesn't reach the user, and the child's own notice is how they learn it's done.
 //
 // Reports are best-effort, a convenience, not delivery to rely on: which children their parents have read
 // (`threads.noteRead`), the reports waiting to go (however long the parent's run) and which runs answered the parent
@@ -53,6 +55,8 @@ type Report = { thread: ThreadInfo; text: string }
 
 /** Whether a thread hears its children's reports: it's there, in use, and not without them. */
 const hears = (parent: ThreadInfo | undefined): parent is ThreadInfo => Boolean(parent && !parent.archived && !parent.without?.includes(reportsAbout.name))
+/** Whether its children are quiet: it hears them, and the user follows it (it's listed, not hidden like Ego's). */
+const speaksFor = (parent: ThreadInfo | undefined) => hears(parent) && !parent.hidden
 
 /** A thread's run ended, or it waits on a question, as its parent hears it. */
 async function describe(thread: ThreadInfo, host: ReportsHost, replied: boolean): Promise<string> {
@@ -145,21 +149,21 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
     const asked = new Set<string>()
     // Whether a child works for its parent (see the top): set by the messages it's sent, false once the user writes.
     const working = s.state<boolean>()
-    // The children whose parent doesn't hear them (archived, say), as last looked: checked for each in use from the
-    // start, as a run starts (its parent's profile may have changed), and for a parent's children as it's archived or
-    // brought back.
-    const unheard = new Set<string>()
-    const settle = (id: string, heard: boolean) => {
-      if (heard !== unheard.has(id)) return
-      if (heard) unheard.delete(id)
-      else unheard.add(id)
+    // The children whose parent doesn't speak for them (archived, or hidden: see the top), as last looked: checked for
+    // each in use from the start, as a run starts (its parent's profile may have changed), and for a parent's children
+    // as it's archived or brought back.
+    const loud = new Set<string>()
+    const settle = (id: string, quiet: boolean) => {
+      if (quiet !== loud.has(id)) return
+      if (quiet) loud.delete(id)
+      else loud.add(id)
       s.invalidate()
     }
-    const check = async (thread: ThreadInfo) => { if (thread.parent) settle(thread.id, hears(await info(thread.parent))) }
+    const check = async (thread: ThreadInfo) => { if (thread.parent) settle(thread.id, speaksFor(await info(thread.parent))) }
     const childrenOf = async (id: string) => (await s.threads.list()).filter((t) => t.parent === id)
     s.threads.list().then((all) => Promise.all(all.map(check))).catch((error) => console.error('thread-reports: checking parents failed:', error))
     // Quiet, so a child's own finishing or failing isn't unread too: its parent hears it.
-    s.quiet<boolean>(({ id, state }) => state === true && !unheard.has(id))
+    s.quiet<boolean>(({ id, state }) => state === true && !loud.has(id))
     // The children just made, whose next message is the prompt they were started with: what they answer then "finished".
     const fresh = new Set<string>()
     s.beforeSend(async ({ thread, by, from }) => {

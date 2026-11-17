@@ -552,8 +552,8 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   }
 
   /**
-   * A new thread as asked for: where, with what; a child of `parent` when a thread starts it (top-level when that one is
-   * hidden, an extension's own); `hidden`, in no list and the extension's of that name. Extensions' `starting` hooks
+   * A new thread as asked for: where, with what; a child of `parent` when a thread starts it (a hidden one's too, Ego's:
+   * it hears from it, though no list shows it there); `hidden`, in no list and the extension's of that name. Extensions' `starting` hooks
    * may move it (a worktree) and give it state.
    */
   async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, parent, options: asked, hidden, by, exposure, from }: ThreadStart) {
@@ -561,7 +561,8 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     const dir = folderOf(cwd)
     if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${hostname()}`)
     if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
-    if (parent && (await get(parent)).meta.hidden) parent = undefined
+    // A parent that's there (`not_found` otherwise).
+    if (parent) await get(parent)
     // The project's profile (or the user's) of that name, else the default one there is; checked (and allowed) now.
     // None for an extension's own thread: it runs as that extension makes it, whatever profiles say.
     const ref = hidden ? undefined : findProfile(dir, userProfiles, profileName?.trim() || undefined)

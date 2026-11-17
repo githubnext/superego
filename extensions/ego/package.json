@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@superego/sdk": "workspace:*",
+    "@superego/thread-reports": "workspace:*",
     "@types/react": "^19",
     "react": "^19"
   }
