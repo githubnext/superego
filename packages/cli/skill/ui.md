@@ -155,7 +155,7 @@ dispatch('thread.send', { thread: thread.id, text: 'Ship it' }, { machine: machi
 ```
 
 Components: `Button`, `IconButton`, `TextField`, `TextArea`, `Select`, `Switch`, `List`, `ListItem`, `Panel`,
-`Dialog`, `Menu`, `Popover`, `Tooltip`, `StatusGlyph`, `Markdown` (an agent's text set exactly as the transcript sets it, its links followed by the same handlers: `<Markdown text={answer} />`; for a preview, `<Markdown text={answer} compact lines={4} />`: `lines` cuts it to that many lines with an ellipsis, `compact` sets it at the UI's size with tighter spacing), `FileEditor` (the file editor,
+`Dialog`, `Menu`, `Popover`, `Tooltip`, `StatusGlyph`, `StatusWord`, `Glyph`, `Markdown` (an agent's text set exactly as the transcript sets it, its links followed by the same handlers: `<Markdown text={answer} />`; for a preview, `<Markdown text={answer} compact lines={4} />`: `lines` cuts it to that many lines with an ellipsis, `compact` sets it at the UI's size with tighter spacing), `FileEditor` (the file editor,
 Markdown in live preview: `<FileEditor machine={machine} thread={thread} path={path} actions={…} />`; its links follow the link handlers, as a message's do), `Diff`
 (a unified diff, file by file: `<Diff diff={text} />`; `parseDiff(text)` for its files and counts), `Picker` (a dialog
 with a list that narrows as you type, as the palette is: `<Picker label placeholder items={list} filter={(items, query) => …}
@@ -203,8 +203,12 @@ anything last happened in it: a dependency for `useMethod`'s `refresh`), `projec
 | `idle` | nothing to see: never run, or its answer or failure seen (showing the thread marks it seen) | |
 
 So `done` and `error` turn `idle` once the user opens the thread: they mean "unseen", not "finished" or "failed for
-good". `StatusGlyph` draws a status as the sidebar does (`<StatusGlyph status={t.status} />`), and `statusLabel(status)`
-says it in words, as tooltips and notifications do ("Finished: <recap>", "Needs you: a question"). To act on a change
+good". `StatusGlyph` draws a status's mark as every list does (`<StatusGlyph status={t.status} quiet={t.quiet} />`;
+`quiet`: a thread that reports to another, its work grey and its finished runs not new), `StatusWord` its word in its
+colour, and `statusWord(status)` and `statusLabel(status)` say it as the app, the CLI and notifications do: "Question",
+"Permission", "Sign in", "Failed", "Done", "Working" (the label adds what it did or why: "Done: <recap>"). `Glyph`
+draws the same marks by name (`<Glyph shape="landed" />`), with a few that aren't a thread's status: `queued`,
+`stalled`, `landed`, `offline`, `connecting`. To act on a change
 outside React, `superego.on('thread.status', …)` (the setup API, above).
 
 A board of one machine's threads, a column per state:

@@ -235,6 +235,7 @@ function Working({ steps, since }: { steps: number; since: number | undefined })
   const seconds = since === undefined ? undefined : Math.max(0, Math.floor((now - since) / 1000))
   return (
     <div className="transcript__working" role="status">
+      <StatusGlyph status={{ state: 'working' }} />
       <span>Working</span>
       {steps > 0 && <span>{steps === 1 ? '1 step' : `${steps} steps`}</span>}
       {seconds !== undefined && <span>{seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`}</span>}

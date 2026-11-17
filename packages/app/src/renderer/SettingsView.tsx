@@ -2,7 +2,7 @@
 // may name a custom component (`ui`) drawn below their settings; the Providers section is one.
 import { useEffect } from 'react'
 import type { Json, SectionInfo, SettingsSnapshot } from '@superego/protocol'
-import { Dialog, StatusGlyph } from '@superego/ui'
+import { Dialog, Glyph } from '@superego/ui'
 import { APP } from '../shared/app-settings.ts'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useSettings, useValue } from './client.ts'
@@ -42,7 +42,7 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
           {editable.length > 1 && <button className={target === ALL ? 'is-selected' : ''} onClick={() => setTarget(ALL)}>All machines</button>}
           {machines.filter((m) => m.state !== 'disabled').map((m) => (
             <button key={m.id} className={`settings__nav-machine ${target === m.id ? 'is-selected' : ''}`} onClick={() => setTarget(m.id)}>
-              <StatusGlyph status={machineGlyph(m.state)} /> {m.label}
+              <Glyph shape={machineGlyph(m.state)} /> {m.label}
             </button>
           ))}
         </nav>

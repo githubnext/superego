@@ -30,7 +30,7 @@ export default async function reopen(t) {
   await t.run(`window.dispatchEvent(new Event('blur'))`)
   for (const prompt of ['keyed one', 'keyed two']) await t.call('thread.start', { title: prompt, prompt }, second)
   await t.until(`document.querySelectorAll('.app__rail .rail-notice--auth').length === 1 && document.querySelector('.rail-notice--auth').getAttribute('aria-label') === 'faux rejected the API key on Second'`, 'one notice for the rejected key, naming the machine')
-  await t.until(`[...document.querySelectorAll('.superego-list-item')].filter((li) => /keyed (one|two)/.test(li.textContent) && li.querySelector('.superego-status--signin')).length === 2`, 'the threads waiting quietly')
+  await t.until(`[...document.querySelectorAll('.superego-list-item')].filter((li) => /keyed (one|two)/.test(li.textContent) && li.querySelector('.superego-status-word--signin')).length === 2`, 'the threads waiting quietly')
   // Both rejections are in (the window shows both waiting): a notification for the second would be in by now.
   await t.until(() => globalThis.superegoNotifications.some((n) => n.machine === second), 'a notification for the rejected key')
   await t.settled()

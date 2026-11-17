@@ -3,7 +3,7 @@
 // → to the first child. ⌃P, ⌃T and ⌃G show only projects, threads or panes (again: everything). Enter goes there.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Dialog, PushPinIcon, StatusGlyph } from '@superego/ui'
-import type { Status, ThreadInfo } from '@superego/protocol'
+import { unread, type Status, type ThreadInfo } from '@superego/protocol'
 import { score } from './score.ts'
 import { useRegistry } from './registry.tsx'
 import { paneTitle, shownPanes } from './lookups.ts'
@@ -21,6 +21,10 @@ type Row = {
   /** What else to show: the machine, a branch, a pane's thread. */
   detail?: string
   status?: Status
+  /** A thread that reports to another: its work grey, its finished runs nothing new. */
+  quiet?: boolean
+  /** A thread that wants a look: its title semibold, as in the sidebar. */
+  unread?: boolean
   /** Searched: the project, thread and pane titles it sits under. */
   path: string
   /** Where it is: the selected thread's row, or its pane in front. */
@@ -63,7 +67,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
       const detail = top ? [project.name, where(project)].filter(Boolean).join(' · ') : branchOf(thread)
       return [
         {
-          key, kind: 'thread', depth, title: thread.title, status: thread.status, pinned, again,
+          key, kind: 'thread', depth, title: thread.title, status: thread.status, quiet: Boolean(thread.quiet), unread: unread(thread), pinned, again,
           ...(detail ? { detail } : {}),
           path: `${project.name} ${thread.title}`, current: isOn && !thread.pane,
           go: go(() => {
@@ -141,8 +145,8 @@ export function Navigator({ onClose }: { onClose(): void }) {
             className={`navigator__row navigator__row--${row.kind} ${index === active ? 'is-active' : ''} ${row.current ? 'is-current' : ''}`}
             style={browsing ? { paddingLeft: `${12 + row.depth * 18}px` } : undefined}
             onMouseMove={() => setActive(index)} onClick={row.go}>
-            <span className="palette__glyph">{row.status ? <StatusGlyph status={row.status} /> : '▫'}</span>
-            <span className="palette__title">{row.title}</span>
+            <span className="palette__glyph">{row.status ? <StatusGlyph status={row.status} quiet={row.quiet} /> : '▫'}</span>
+            <span className={`palette__title ${row.unread ? 'is-unread' : ''}`}>{row.title}</span>
             {row.pinned && <PushPinIcon className="navigator__pin" size={11} weight="fill" aria-label="Pinned" />}
             {!browsing && row.depth > 0 && <span className="navigator__crumb">{row.path.slice(0, row.path.length - row.title.length).trim()}</span>}
             {row.detail && <span className="palette__detail">{row.detail}</span>}

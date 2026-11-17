@@ -30,8 +30,8 @@ export { usePlacement } from './placement.tsx'
 export { useNarrow } from './media.ts'
 export { useShortcut, useRailShortcut, keyLabel } from './keys.ts'
 export { useComposer, useComposerClaim, type Composer, type ComposerClaim } from './composer-view.tsx'
-export { EXTENSION_API, statusLabel } from '@superego/protocol'
-export type { Json, Status, StatusState, ThreadInfo } from '@superego/protocol'
+export { EXTENSION_API, statusLabel, statusShape, statusWord, STATUS_WORDS } from '@superego/protocol'
+export type { Json, Status, StatusShape, StatusState, ThreadInfo } from '@superego/protocol'
 export type { MachineEntry } from '../shared/bridge.ts'
 
 // Components to build from; `h` for a module that isn't JSX.
@@ -49,7 +49,7 @@ export { Diff, DiffStat, parseDiff, type DiffFile } from './diff.tsx'
 export { FileEditor, type FileEditorProps } from './file-editor.tsx'
 export { SignInFlow, type SignInFlowProps } from './sign-in-flow.tsx'
 export {
-  Button, ContextMenu, Dialog, IconButton, List, ListItem, Menu, Panel, Popover, Select, StatusGlyph, Switch, TextArea,
-  TextField, Tooltip, type SelectOption,
+  Button, ContextMenu, Dialog, Glyph, IconButton, List, ListItem, Menu, Panel, Popover, Select, StatusGlyph, StatusWord, Switch, TextArea,
+  TextField, Tooltip, type GlyphShape, type SelectOption,
 } from '@superego/ui'
 export * from '@superego/ui/icons'

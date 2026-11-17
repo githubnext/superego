@@ -17,31 +17,31 @@ const rejection = (since: number, threads = ['t', 'u']): ProviderRejection =>
 
 describe('what a notification says', () => {
   it('says what happened: what a run did, the question it asks, why it failed', () => {
-    expect(notice(thread('done', 'Merged the notices change into main'))).toEqual({ machine: 'box', thread: 't', title: 'Fix the build', status: 'Finished', text: 'Merged the notices change into main' })
+    expect(notice(thread('done', 'Merged the notices change into main'))).toEqual({ machine: 'box', thread: 't', title: 'Fix the build', status: 'Done', text: 'Merged the notices change into main' })
     // The question itself: its last paragraph, after any context, as plain text, shortened.
     const question = `Two ways to go, each with its own cost.\n\n- one\n- two\n\nShould I **rebase** onto main, or merge it, given ${'how much has changed '.repeat(5)}?`
     const asked = notice(thread('blocked', question))!
-    expect(asked).toMatchObject({ status: 'Needs you', text: expect.stringMatching(/^Should I rebase onto main, or merge it, given how much.*…$/) })
+    expect(asked).toMatchObject({ status: 'Question', text: expect.stringMatching(/^Should I rebase onto main, or merge it, given how much.*…$/) })
     expect(asked.text!.length).toBeLessThanOrEqual(100)
     // An error's first line.
     expect(notice(thread('error', '429 Too Many Requests\n{"error":{"type":"rate_limit"}}'))).toMatchObject({ status: 'Failed', text: '429 Too Many Requests' })
   })
 
-  it("falls back to today's words when there's nothing to say", () => {
-    expect(notice(thread('done'))).toEqual({ machine: 'box', thread: 't', title: 'Fix the build', status: 'Finished' })
+  it("says the word alone when there's nothing more to say", () => {
+    expect(notice(thread('done'))).toEqual({ machine: 'box', thread: 't', title: 'Fix the build', status: 'Done' })
     expect(notice(thread('error'))).toMatchObject({ status: 'Failed' })
-    expect(notice(thread('blocked'))).toMatchObject({ status: 'Needs you' })
+    expect(notice(thread('blocked'))).toMatchObject({ status: 'Question' })
     expect(notice(thread('blocked'))!.text).toBeUndefined()
   })
 
-  it('lays a notice out for the desktop (with a subtitle) and a browser (without)', () => {
+  it('names what it wants after the title, as the app does: the desktop says the machine under it when there are several', () => {
     const done = notice(thread('done', 'Merged it'))!
-    expect(desktopNotification(done, { label: 'Studio', several: false })).toEqual({ title: 'Fix the build', subtitle: 'Finished', body: 'Merged it' })
-    expect(desktopNotification(done, { label: 'Studio', several: true })).toEqual({ title: 'Fix the build', subtitle: 'Finished · Studio', body: 'Merged it' })
-    expect(browserNotification(done)).toEqual({ title: 'Fix the build', body: 'Finished: Merged it' })
-    const bare = notice(thread('blocked'))!
-    expect(desktopNotification(bare, { label: 'Studio', several: false })).toEqual({ title: 'Fix the build', subtitle: 'Needs you', body: '' })
-    expect(browserNotification(bare)).toEqual({ title: 'Fix the build', body: 'Needs you' })
+    expect(desktopNotification(done, { label: 'Studio', several: false })).toEqual({ title: 'Fix the build — Done', body: 'Merged it' })
+    expect(desktopNotification(done, { label: 'Studio', several: true })).toEqual({ title: 'Fix the build — Done', subtitle: 'Studio', body: 'Merged it' })
+    expect(browserNotification(done)).toEqual({ title: 'Fix the build — Done', body: 'Merged it' })
+    const asks = notice({ ...thread('blocked'), status: { state: 'blocked', kind: 'permission' } })!
+    expect(desktopNotification(asks, { label: 'Studio', several: false })).toEqual({ title: 'Fix the build — Permission', body: '' })
+    expect(browserNotification(asks)).toEqual({ title: 'Fix the build — Permission', body: '' })
   })
 })
 
@@ -68,9 +68,9 @@ describe('when to notify', () => {
     const child = (state: Status['state'], quiet = true) => thread(state, undefined, { parent: 'p', ...(quiet ? { quiet: true as const } : {}) })
     expect(notice(child('done'))).toBeUndefined()
     expect(notice(child('error'))).toBeUndefined()
-    expect(notice(child('blocked'))).toMatchObject({ status: 'Needs you' })
+    expect(notice(child('blocked'))).toMatchObject({ status: 'Question' })
     // Handed to the user (they wrote to it), or without reports: it notifies as any thread does.
-    expect(notice(child('done', false))).toMatchObject({ status: 'Finished' })
+    expect(notice(child('done', false))).toMatchObject({ status: 'Done' })
   })
 
   it('stays quiet for threads waiting for sign-in, and says it once for the provider', () => {

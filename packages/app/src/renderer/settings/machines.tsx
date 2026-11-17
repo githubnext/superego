@@ -1,8 +1,8 @@
 // Settings → Machines (the machines this app connects to: this computer, and any reached over ssh) and Settings → All
 // machines (every connected machine's settings at once).
 import { useEffect, useState } from 'react'
-import { remoteCommand, type Json, type SettingsSnapshot, type Status } from '@superego/protocol'
-import { Button, Select, StatusGlyph, Switch, TextField } from '@superego/ui'
+import { remoteCommand, type Json, type SettingsSnapshot } from '@superego/protocol'
+import { Button, Glyph, Select, Switch, TextField, type GlyphShape } from '@superego/ui'
 import type { MachineEntry } from '../../shared/bridge.ts'
 import { useSettings } from '../client.ts'
 import { useApp, useRegistry } from '../registry.tsx'
@@ -15,8 +15,8 @@ import { Setting } from './controls.tsx'
 import { APP } from '../../shared/app-settings.ts'
 
 /** A machine's connection, as a status glyph. */
-export const machineGlyph = (state: MachineEntry['state']): Status =>
-  ({ state: state === 'connected' || state === 'disabled' ? 'idle' : state === 'connecting' ? 'working' : 'error' })
+export const machineGlyph = (state: MachineEntry['state']): GlyphShape =>
+  state === 'connected' || state === 'disabled' ? 'idle' : state === 'connecting' ? 'connecting' : 'offline'
 
 /** What failed between this window and a connected machine (see machine-problems.ts), on its row. */
 function MachineProblems({ machine }: { machine: string }) {
@@ -61,7 +61,7 @@ export function Machines({ machines, onOpen }: { machines: MachineEntry[]; onOpe
         <div key={m.id} className="machine-row">
           <div className="setting__label">
             <div>
-              <StatusGlyph status={machineGlyph(m.state)} />{' '}
+              <Glyph shape={machineGlyph(m.state)} />{' '}
               {m.remote && !web ? <input className="machine-row__label" defaultValue={m.label} aria-label="Name"
                 onBlur={(e) => { if (e.target.value.trim() && e.target.value !== m.label) void act('machine.edit', { id: m.id, label: e.target.value.trim() }) }} /> : m.label}
             </div>

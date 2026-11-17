@@ -53,7 +53,7 @@ export function ThreadRef({ machine, id, children, className = '', open: follow 
   }
   return (
     <a href={`thread:${id}`} className={`thread-ref ${className}`} title={thread ? `${thread.title} (⌘-click: beside)` : `Thread ${id}`} onClick={open}>
-      {thread && <StatusGlyph status={thread.status} />}
+      {thread && <StatusGlyph status={thread.status} quiet={thread.quiet} />}
       <span className="thread-ref__title">{thread?.title ?? children ?? `Thread ${id}`}</span>
     </a>
   )

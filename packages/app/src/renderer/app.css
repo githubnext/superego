@@ -77,6 +77,8 @@
 .titlebar__sep { color: var(--superego-faint); font-size: var(--superego-text-sm); }
 .titlebar__title { color: var(--superego-text); }
 .titlebar__title .thread__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.titlebar__title > .superego-status { font-size: 14px; }
+.titlebar__word { font-size: var(--superego-text-sm); }
 /* Rename and archive: quiet buttons beside the title. */
 .titlebar__title .titlebar__action { flex: none; width: 22px; height: 22px; min-height: 22px; margin-left: -2px; border-radius: 5px; box-shadow: none; background: none; color: var(--superego-faint); }
 .titlebar__title .titlebar__action + .titlebar__action { margin-left: -4px; }
@@ -143,10 +145,8 @@
 .transcript__more { color: var(--superego-muted); font-size: var(--superego-text-sm); }
 /* The turn going on: a quiet line at its end, a soft blue dot before it. */
 .transcript__working { display: flex; align-items: center; gap: 6px; color: var(--superego-faint); font-size: var(--superego-text-sm); }
+.transcript__working > .superego-status { font-size: 15px; }
 .transcript__working > span + span::before { content: '·'; margin-right: 6px; }
-.transcript__working::before { content: ''; width: 7px; height: 7px; margin-right: 2px; border-radius: 50%; background: var(--superego-status-working); box-shadow: 0 0 0 3px color-mix(in srgb, var(--superego-status-working) 18%, transparent); animation: working-pulse 1.6s ease-in-out infinite; }
-@keyframes working-pulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--superego-status-working) 8%, transparent); } }
-@media (prefers-reduced-motion: reduce) { .transcript__working::before { animation: none; } }
 .transcript__error { color: var(--superego-status-error); font-size: var(--superego-text-ui); border-left: 2px solid currentColor; padding-left: var(--superego-space-3); }
 .msg, .md { overflow-wrap: anywhere; }
 /* What's read and copied: messages, the agent's thinking and output, diffs, files, errors. */
@@ -446,6 +446,7 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .palette__list li.is-active :is(.palette__glyph, .palette__detail, kbd, .superego-status) { color: inherit; }
 .palette__glyph { width: 1em; color: var(--superego-muted); font-family: var(--superego-mono); text-align: center; }
 .palette__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette__title.is-unread { font-weight: 600; }
 /* More after the title (where a link goes, a file's folder): cut short before the title is. */
 .palette__detail { flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--superego-muted); font-size: var(--superego-text-sm); }
 .palette__list kbd { font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-muted); }

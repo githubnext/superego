@@ -1,8 +1,7 @@
-/* Above the composer: "Needs you", then what the agent waits on. The thread's background behind it all, so the
+/* Above the composer: "Question", then what the agent waits on. The thread's background behind it all, so the
    transcript scrolls away under it. */
 .agent-ui-waiting { display: flex; flex-direction: column; background: var(--superego-bg); box-shadow: 0 -24px 24px var(--superego-bg); }
 .agent-ui-waiting__label { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-status-blocked-text, var(--superego-status-blocked)); }
-.agent-ui-waiting__label::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--superego-status-blocked); }
 /* A long one scrolls in itself, so the composer stays on screen. */
 .agent-ui-waiting__context { max-height: 45vh; overflow: auto; margin-bottom: var(--superego-space-4); font-size: var(--superego-text-body); line-height: var(--superego-leading-body); -webkit-user-select: text; user-select: text; }
 

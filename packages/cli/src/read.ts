@@ -7,7 +7,7 @@ export type Call = <T>(method: string, params: unknown) => Promise<T>
 
 /** What a thread is, for an agent elsewhere: no panes, nothing of the window. */
 export const brief = (t: ThreadInfo) => ({
-  id: t.id, title: t.title, state: t.status.state, ...(t.status.msg ? { status: t.status.msg } : {}), cwd: t.cwd,
+  id: t.id, title: t.title, state: t.status.state, ...(t.status.kind ? { kind: t.status.kind } : {}), ...(t.status.msg ? { status: t.status.msg } : {}), cwd: t.cwd,
   ...(t.parent ? { parent: t.parent } : {}), ...(t.profile ? { profile: t.profile.name } : {}), ...(t.model ? { model: t.model } : {}),
   ...(t.archived ? { archived: true } : {}), activeAt: new Date(t.activeAt).toISOString(),
 })

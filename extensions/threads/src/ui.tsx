@@ -15,8 +15,8 @@ import {
   call, defineAction, defineUiExtension, fold, isPinned, MachineDrift, shownRows, useFold, RailButton, SHOW_PINNED, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
   type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
-import { rollup, statusLabel, STATUS_WORDS, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
-import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, PushPinIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
+import { rollup, statusLabel, statusShape, statusWord, unread, type ThreadInfo } from '@superego/protocol'
+import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, Glyph, IconButton, List, ListItem, Menu, PlusIcon, PushPinIcon, StatusGlyph, StatusWord, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
 import { ago } from './ago.ts'
 import { registerLinks, registerRows } from './rows.tsx'
@@ -27,7 +27,7 @@ const DETAILS = 'threads.details'
 /** The shell's action that hides the sidebar, and shows it again: hidden, the list is dots in the rail. */
 const SIDEBAR = 'app.sidebar'
 /** How a project's machine is described while it isn't connected; anything else is offline. */
-const STATE_WORDS: Partial<Record<MachineEntry['state'], string>> = { connecting: 'connecting', 'needs-login': 'needs login', 'host-key': 'host key to check', disabled: 'off' }
+const STATE_WORDS: Partial<Record<MachineEntry['state'], string>> = { connecting: 'connecting…', 'needs-login': 'needs login', 'host-key': 'host key to check', disabled: 'off' }
 
 /** Settings and commands act through the app's settings, so every window and the menu agree. */
 const set = (c: Pick<WindowContext, 'dispatch'>, key: string, value: string | boolean) =>
@@ -91,7 +91,7 @@ function Threads() {
               {where(project) && <em>{where(project)}</em>}
               {project.machine.remote && <MachineDrift machine={project.machine} />}
             </button>
-            <Caret {...section} label={project.name} />
+            <Caret {...section} label={project.name} section />
             <NewThreadButton label={`New thread in ${project.name}`} machine={project.machine} cwd={project.root} />
           </div>
           {section.rows.length > 0 && (
@@ -154,7 +154,7 @@ function Pinned({ section, where }: { section: ShownSection; where(project: Proj
     }}>
       <div className="threads-project__head" onKeyDown={foldKeys(section, setFold)}>
         <button className="threads-project__name" onClick={() => setFold([section.fold], !section.folded)}>Pinned</button>
-        <Caret {...section} label="Pinned" />
+        <Caret {...section} label="Pinned" section />
       </div>
       {section.folded ? section.rows.length > 0 && (
         <List>
@@ -178,8 +178,11 @@ function Pinned({ section, where }: { section: ShownSection; where(project: Proj
 }
 
 /**
- * A thread's row: its status, title and marks (`thread.badge`), why it waits or when it was last active. Among the
- * pinned, where it is too; under its project, pinned, a pin. A right-click pins or unpins it, or archives it; it can be dragged into the pinned.
+ * A thread's row, as a mail app has it: unread, its title semibold with a mark before it (a dot for done, a target for a
+ * question or permission, a cross for failed); at the end, what it waits on in a word (Question, Permission, Sign in,
+ * Failed), the wave while it works, or when it was last active (in the accent while unread). Folded, the end sums up
+ * the threads under it (`Rollup`). Its marks (`thread.badge`) follow the title; among the pinned, where it is too;
+ * under its project, pinned, a pin. A right-click pins or unpins it, or archives it; it can be dragged into the pinned.
  */
 function ThreadRow({ machine, thread, selected, level = 0, row, where, className = '', ...data }: {
   machine: MachineEntry; thread: ThreadInfo; selected: boolean; level?: number; row?: ShownRow; where?: string; className?: string; 'data-pin'?: number
@@ -191,18 +194,19 @@ function ThreadRow({ machine, thread, selected, level = 0, row, where, className
   const archiveKeys = useShortcut('thread.archive')
   const at = { machine: machine.id, thread: thread.id }
   const on = isPinned(pins, at)
+  const shape = statusShape(thread.status, thread.quiet)
   const run = (id: string, options: { machine?: string } = {}) => () =>
     void dispatch(id, id === 'thread.archive' ? { thread: thread.id } : at, { source: 'threads', ...options }).catch((error) => console.error(error))
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger>
-        <ListItem selected={selected} leading={<StatusGlyph status={thread.status} />} draggable {...data} data-depth={level}
+        <ListItem selected={selected} leading={<span className="threads__lead">{LEADS.has(shape) && <StatusGlyph status={thread.status} quiet={thread.quiet} />}</span>} draggable {...data} data-depth={level}
           {...(row?.fold ? { 'aria-expanded': !row.folded } : {})} onKeyDown={(event) => rowKeys(event, row, setFold)}
           className={`${level ? 'threads-child' : ''} ${row?.folded ? 'is-folded' : ''} ${className}`} {...(level ? { style: { '--depth': level } as CSSProperties } : {})}
           onDragStart={(event) => { event.dataTransfer.setData(DRAGGED, JSON.stringify(at)); event.dataTransfer.effectAllowed = 'move' }}
-          trailing={waitingForSignIn(thread.status) ? <span className="threads__why threads__why--quiet">Waiting</span> : thread.status.state === 'blocked' ? <span className="threads__why">{STATUS_WORDS.blocked}</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">{STATUS_WORDS.error}</span> : ago(thread.activeAt)}
+          trailing={(row?.folded && rolledUp([thread, ...row.tucked])) || <RowEnd thread={thread} />}
           onClick={() => select(at)}>
-          <span className="threads__title">{thread.title}</span>
+          <span className={`threads__title ${unread(thread) ? 'is-unread' : ''}`}>{thread.title}</span>
           {row?.fold && <Caret fold={row.fold} folded={row.folded} tucked={row.tucked} label={thread.title} />}
           {on && !where && <PushPinIcon className="threads__pin" size={11} weight="fill" aria-label="Pinned" />}
           <Slot name="thread.badge" props={{ machine, thread }} />
@@ -217,21 +221,44 @@ function ThreadRow({ machine, thread, selected, level = 0, row, where, className
   )
 }
 
+/** The states a row marks before its title: those that want a look. */
+const LEADS = new Set(['done', 'question', 'permission', 'error'])
+
+/** The end of a thread's row: the wave while it works, what it waits on in a word, or when it was last active. */
+function RowEnd({ thread }: { thread: ThreadInfo }) {
+  const shape = statusShape(thread.status, thread.quiet)
+  if (shape === 'working') return <StatusGlyph status={thread.status} quiet={thread.quiet} className="threads__wave" />
+  if (shape === 'idle' || shape === 'done') return <span className={shape === 'done' ? 'threads__ago is-new' : 'threads__ago'}>{ago(thread.activeAt)}</span>
+  return <StatusWord status={thread.status} />
+}
+
 /**
- * The caret that folds a section, or the threads under a thread; shown on hover, and while folded, with how many are
- * out of sight and the most pressing of them (anything that needs you shows).
+ * Threads out of sight, summed up where they're folded: the wave (grey) while any of them works, then the most pressing
+ * word (Question, Permission, Failed) or how many are new. Nothing when they're all quiet.
  */
-function Caret({ fold: key, folded, tucked, label }: { fold: string; folded: boolean; tucked: ThreadInfo[]; label: string }) {
+function rolledUp(threads: ThreadInfo[]) {
+  const working = threads.some((t) => t.status.state === 'working')
+  const wanting = threads.filter(unread)
+  const top = rollup(wanting.map((t) => t.status))
+  const said = top.state === 'blocked' || top.state === 'error' ? <StatusWord status={top} /> : wanting.length ? <span className="threads-rollup__new">{wanting.length} new</span> : null
+  if (!working && !said) return null
+  return <span className="threads-rollup">{working && <Glyph shape="working" quiet label="Working" className="threads__wave" />}{said}</span>
+}
+
+/**
+ * The caret that folds a section, or the threads under a thread; shown on hover, and while folded. A folded section
+ * sums up what's out of sight after it (`rolledUp`), or says how many; a thread's row does at its end.
+ */
+function Caret({ fold: key, folded, tucked, label, section = false }: { fold: string; folded: boolean; tucked: ThreadInfo[]; label: string; section?: boolean }) {
   const setFold = useFold()
-  const status = rollup(tucked.map((t) => t.status))
   return (
     <>
       <button type="button" tabIndex={-1} className="threads-caret" aria-expanded={!folded} aria-label={`${folded ? 'Expand' : 'Collapse'} ${label}`}
         onClick={(event) => { event.stopPropagation(); setFold([key], !folded) }}>
         <CaretRightIcon size={10} weight="bold" aria-hidden />
       </button>
-      {folded && tucked.length > 0 && (
-        <span className="threads-tucked">{tucked.length}{status.state !== 'idle' && <StatusGlyph status={status} />}</span>
+      {section && folded && tucked.length > 0 && (
+        <span className="threads-tucked">{rolledUp(tucked) ?? tucked.length}</span>
       )}
     </>
   )
@@ -329,7 +356,7 @@ function NewThreadButton({ label, machine, cwd }: { label: string; machine?: Mac
   )
 }
 
-const SORTS: { value: Sort; label: string }[] = [{ value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: `${STATUS_WORDS.blocked} first` }, { value: 'name', label: 'Alphabetical' }]
+const SORTS: { value: Sort; label: string }[] = [{ value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' }, { value: 'name', label: 'Alphabetical' }]
 
 /** The ··· menu: sort, the Pinned section shown or not, details, hiding the sidebar. */
 function Options() {
@@ -394,10 +421,10 @@ function ThreadsRail({ open, sidebarHidden, show }: SpaceRailProps) {
             <div key={group.key} className="threads-rail__group">
               {index > 0 && <div className="threads-rail__sep" />}
               {group.threads.map(({ project, thread }) => (
-                <Tooltip key={`${project.machine.id}/${thread.id}`} side="right" content={<>{thread.title}<small className="threads-rail__tipnote">{waitingForSignIn(thread.status) || thread.status.state === 'blocked' ? statusLabel(thread.status) : ago(thread.activeAt)}</small></>}>
+                <Tooltip key={`${project.machine.id}/${thread.id}`} side="right" content={<>{thread.title}<small className="threads-rail__tipnote">{statusWord(thread.status, thread.quiet) || ago(thread.activeAt)}</small></>}>
                   <button className={`threads-rail__dot ${selection?.machine === project.machine.id && selection.thread === thread.id ? 'is-on' : ''} ${project.machine.state !== 'connected' ? 'is-stale' : ''}`}
-                    aria-label={`${thread.title}, ${statusLabel(thread.status)}`} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
-                    <StatusGlyph status={thread.status} />
+                    aria-label={`${thread.title}, ${statusLabel(thread.status, thread.quiet)}`} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
+                    <StatusGlyph status={thread.status} quiet={thread.quiet} />
                   </button>
                 </Tooltip>
               ))}

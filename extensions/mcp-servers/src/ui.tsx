@@ -13,7 +13,7 @@ import {
   type MachineEntry, type SlotProps, type ToolRowCall, type ViewProps,
 } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
-import { Button, CaretRightIcon, IconButton, MagnifyingGlassIcon, PlugIcon, Popover, XIcon } from '@superego/ui'
+import { Button, CaretRightIcon, Glyph, IconButton, MagnifyingGlassIcon, PlugIcon, Popover, XIcon } from '@superego/ui'
 import './styles.css'
 import { DOT, firstShortString, needs, stateText } from './describe.ts'
 import { ServersSection, SignInDialog } from './settings.tsx'
@@ -110,7 +110,7 @@ export function ServerList({ servers }: { servers: ThreadServers }) {
     <ul className="mcp-list">
       {servers.servers.map((s) => (
         <li key={s.id} className="mcp-list__item">
-          <span className={`superego-status superego-status--${DOT[s.state]}`} aria-hidden />
+          <Glyph shape={DOT[s.state]} />
           <span className="mcp-list__name" title={s.from === 'profile' ? "The profile's own" : undefined}>{s.title ?? s.name}</span>
           <span className="mcp-list__state">{stateText({ state: s.state, tools: s.tools, ...(s.deferred ? { deferred: s.deferred } : {}), config: {} })}</span>
           {s.error && <span className="mcp-list__error">{s.error}</span>}
@@ -118,7 +118,7 @@ export function ServerList({ servers }: { servers: ThreadServers }) {
       ))}
       {servers.left?.map((l) => (
         <li key={`left:${l.name}`} className="mcp-list__item is-left">
-          <span className="superego-status superego-status--off" aria-hidden />
+          <Glyph shape="offline" />
           <span className="mcp-list__name">{l.name}</span>
           <span className="mcp-list__state">Left out: {LEFT_OUT[l.why]}</span>
         </li>

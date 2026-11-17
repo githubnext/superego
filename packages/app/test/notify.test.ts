@@ -38,7 +38,7 @@ describe('notifications', () => {
     expect(notices()).toEqual([])
     track('local', [thread('a', { state: 'working' })])
     track('local', [thread('a', { state: 'done', msg: 'All done.' })])
-    expect(notices()).toEqual([{ machine: 'local', thread: 'a', title: 'a', status: 'Finished', text: 'All done.' }])
+    expect(notices()).toEqual([{ machine: 'local', thread: 'a', title: 'a', status: 'Done', text: 'All done.' }])
   })
 
   it('notifies once for a change, however often its list is heard (every window open, one decider)', () => {

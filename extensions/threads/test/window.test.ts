@@ -236,12 +236,12 @@ it('folds a thread\'s offshoots and a project, steps past them, keeps them folde
   const caret = (el: HTMLElement) => el.querySelector<HTMLElement>('.threads-caret')!
   expect(rowOf('here')!.querySelector('.threads-caret')).toBeNull()
 
-  // Its caret folds the parent's offshoots: how many, and the most pressing of them (finished, unread), in its row.
+  // Its caret folds the parent's offshoots, summed up at the end of its row: the wave while one works, then how many
+  // are new (its answer, unread).
   caret(rowOf('parent')!).click()
   await ui.until(() => !rowOf('offshoot'), 'the offshoot folded away')
   expect(titled()).toBe('here')
-  expect(rowOf('parent')!.querySelector('.threads-tucked')?.textContent).toBe('1')
-  await ui.until(() => Boolean(rowOf('parent')!.querySelector('.threads-tucked .superego-status--done')), 'its status, as the parent\'s')
+  await ui.until(() => rowOf('parent')!.querySelector('.superego-list-item__trailing')?.textContent === '1 new', 'its answer, new, on the parent')
   expect(JSON.parse(localStorage.getItem('superego.sidebar.folded')!)).toEqual([`thread:local/${parent.id}`])
   // Stepping goes past it.
   rowOf('parent')!.click()

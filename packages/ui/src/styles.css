@@ -41,7 +41,6 @@
   --superego-focus: 0 0 0 3px color-mix(in srgb, var(--superego-accent) 45%, transparent);
   --superego-status-working: var(--superego-accent);
   --superego-status-done: var(--superego-accent);
-  --superego-status-dot: 7px;
   --superego-status-blocked: light-dark(#ff9500, #ff9f0a);
   --superego-status-error: light-dark(#ff3b30, #ff453a);
   --superego-status-idle: light-dark(rgb(0 0 0 / .2), rgb(255 255 255 / .22));
@@ -108,16 +107,31 @@ button, summary { -webkit-user-select: none; user-select: none; }
   background: transparent; border: 0; outline: none;
 }
 
-/* A status: one small dot, its colour the state's; working is a ring that breathes. */
-.superego-status { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 1em; height: 1em; vertical-align: -0.12em; color: var(--superego-status-idle); }
-.superego-status::before { content: ''; box-sizing: border-box; width: var(--superego-status-dot); height: var(--superego-status-dot); border-radius: 50%; background: currentColor; }
+/* A status's mark (status.tsx), 1em square in its state's colour: words carry the meaning, marks are the short form. */
+.superego-status { display: inline-flex; flex: none; width: 1em; height: 1em; vertical-align: -0.12em; color: var(--superego-status-idle); }
+.superego-status > svg { width: 100%; height: 100%; overflow: visible; }
 .superego-status--working { color: var(--superego-status-working); }
-.superego-status--working::before { background: none; border: 1.5px solid currentColor; animation: superego-pulse 1.4s ease-in-out infinite; }
-.superego-status--done { color: var(--superego-status-done); }
-.superego-status--blocked { color: var(--superego-status-blocked); }
+.superego-status--done, .superego-status--landed { color: var(--superego-status-done); }
+.superego-status--question, .superego-status--permission { color: var(--superego-status-blocked); }
+.superego-status--stalled { color: var(--superego-status-blocked); }
 .superego-status--error { color: var(--superego-status-error); }
-.superego-status--signin::before { background: none; border: 1.5px dashed currentColor; }
+.superego-status--signin, .superego-status--connecting, .superego-status--working.is-quiet { color: var(--superego-muted); }
+.superego-status--queued, .superego-status--offline { color: var(--superego-faint); }
+/* Working: three dots breathing in turn; still under reduced motion, and where what's shown isn't live (`.is-stale`). */
+.superego-glyph__wave circle { opacity: .25; animation: superego-wave 1.2s ease-in-out infinite; }
+.superego-glyph__wave circle:nth-child(2) { animation-delay: .16s; }
+.superego-glyph__wave circle:nth-child(3) { animation-delay: .32s; }
+.superego-glyph__wave.is-still circle { animation: none; opacity: 1; }
+.is-stale .superego-glyph__wave circle { animation-play-state: paused; }
+@keyframes superego-wave { 30% { opacity: 1; } 60%, 100% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .superego-glyph__wave circle { animation: none; opacity: 1; } }
 @keyframes superego-pulse { 50% { opacity: .35; } }
+/* A status's word (Question, Permission, Failed, …), beside a title. */
+.superego-status-word { flex: none; font-weight: 500; white-space: nowrap; }
+.superego-status-word--question, .superego-status-word--permission { color: var(--superego-status-blocked-text); }
+.superego-status-word--error { color: var(--superego-status-error-text); }
+.superego-status-word--working, .superego-status-word--done { color: var(--superego-accent); }
+.superego-status-word--signin { color: var(--superego-muted); font-weight: 400; }
 
 .superego-list { list-style: none; margin: 0; padding: 0; }
 .superego-list-item { display: flex; align-items: center; gap: var(--superego-space-2); height: 28px; padding: 0 8px; border-radius: var(--superego-radius); }

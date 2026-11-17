@@ -6,7 +6,7 @@ import { groupProjects, unreadList, type MachineEntry } from '@superego/app/ui'
 import { fakeMachine, mountUi, testThread, type TestWindow } from '@superego/sdk/testing'
 import type { Status, ThreadInfo } from '@superego/protocol'
 import unread from '../src/ui.tsx'
-import { ago, filterUnread, shorten } from '../src/unread.ts'
+import { filterUnread, shorten } from '../src/unread.ts'
 
 const $ = (selector: string) => document.querySelector<HTMLElement>(selector)
 const $$ = (selector: string) => [...document.querySelectorAll<HTMLElement>(selector)]
@@ -41,13 +41,9 @@ it('narrows to what matches the title, project, machine or message, in the same 
   expect(filterUnread(list, 'zzz')).toEqual([])
 })
 
-it('shortens a message to one plain line, and says how long ago briefly', () => {
+it('shortens a message to one plain line', () => {
   expect(shorten('Shipped the **login** fix.\n\n- `a`\n- b')).toBe('Shipped the login fix. - a - b')
   expect(shorten('x'.repeat(200), 20)).toBe(`${'x'.repeat(19)}…`)
-  expect(ago(0, 30_000)).toBe('now')
-  expect(ago(0, 5 * 60_000)).toBe('5m')
-  expect(ago(0, 3 * 3_600_000)).toBe('3h')
-  expect(ago(0, 50 * 3_600_000)).toBe('2d')
 })
 
 let ui: TestWindow | undefined
@@ -66,14 +62,15 @@ const threads = () => [
   testThread({ id: 'calm', title: 'Nothing new', activeAt: now, status: { state: 'idle' } }),
 ]
 
-it('opens on ⌘U, most pressing first, narrows as you type, and goes to the one picked', async () => {
+it('opens on ⌘U, most pressing first, each in a word, narrows as you type, and goes to the one picked', async () => {
   ui = await mountUi({ window: true, extensions: [unread], machines: [machineWith(threads())], select: { thread: 'shown' } })
   expect(await ui.press('mod+u')).toBe('unread.list')
   await ui.until(() => titles().length === 3, 'the list')
   expect(titles()).toEqual(['Pick a name', 'Deploy', 'Fix the login'])
   const fixed = $$('.unread-list li')[2]!
   expect(fixed.textContent).toContain('Fixed the login form')
-  expect(fixed.querySelector('.palette__detail')?.textContent).toBe('5m')
+  // Each says what it wants in a word.
+  expect($$('.unread-list .palette__detail').map((d) => d.textContent)).toEqual(['Question', 'Failed', 'Done'])
   await ui.type('.unread-list .palette__input', 'login')
   await ui.until(() => titles().join() === 'Fix the login', 'narrowed')
   await ui.key('enter')

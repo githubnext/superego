@@ -1,14 +1,14 @@
 // unread, UI half: what agents have for you that you haven't seen (a result, a failure, a question). ⌘U lists them, the
-// most pressing first, to type a few letters of one and go there (after Fut's); with none, it says so and lists
+// most pressing first, each saying what it wants in a word (Question, Permission, Failed, Done), to type a few letters of one and go there (after Fut's); with none, it says so and lists
 // nothing. A bell with how many, coloured by the most pressing (as Fut shows its waiting agents), opens the same list:
 // a view (`unread.bell`), in the rail while there's no space (a sidebar shows its own), and beside Settings in a
 // phone's drawer. ⌘. goes to the next one, in every project or the one you're in.
 import { useEffect } from 'react'
 import { defineAction, defineUiExtension, Picker, unreadList, useMachines, useProjects, useSelection, type Store, type ViewProps } from '@superego/app/ui'
 import { rollup } from '@superego/protocol'
-import { BellIcon, Button, StatusGlyph } from '@superego/ui'
+import { BellIcon, Button, StatusGlyph, StatusWord } from '@superego/ui'
 import { about, SCOPE, type Scope } from './shared.ts'
-import { ago, filterUnread, nextUnread, shorten, type Unread } from './unread.ts'
+import { filterUnread, nextUnread, shorten, type Unread } from './unread.ts'
 import './styles.css'
 
 /** The list: shown, closed, or (asked for with nothing unread) a brief "Nothing unread" instead. */
@@ -100,7 +100,7 @@ function UnreadList({ onClose }: { onClose(): void }) {
             {thread.status.msg && <span className="unread-list__msg">{shorten(thread.status.msg)}</span>}
           </>
         ),
-        detail: ago(thread.activeAt),
+        detail: <StatusWord status={thread.status} />,
       })} />
   )
 }

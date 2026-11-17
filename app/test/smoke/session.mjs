@@ -77,7 +77,7 @@ export default async function session(t, s) {
   await t.until(`[...document.querySelectorAll('.threads-project__name')].some((n) => n.textContent.startsWith('elsewhere'))`, 'a project per folder')
   await t.until(`Boolean(${row('elsewhere')}?.querySelector('.superego-status--done'))`, 'other thread done, in the window')
   // What it did, too: its answer's first sentence (the daemon's recap).
-  await t.until(() => globalThis.superegoNotifications.some((n) => n.title === 'elsewhere' && n.thread === other && n.status === 'Finished' && n.text === 'echo: hi'), 'a notification of the thread finishing')
+  await t.until(() => globalThis.superegoNotifications.some((n) => n.title === 'elsewhere' && n.thread === other && n.status === 'Done' && n.text === 'echo: hi'), 'a notification of the thread finishing')
   // The app icon counts it, as the main process sets it (headless, kept here, not shown).
   const unreadNow = await t.run(`window.superego.call('local', 'thread.list', {}).then((ts) => ts.filter((t) => ['done', 'error', 'blocked'].includes(t.status.state) && t.status.kind !== 'auth' && !t.quiet).length)`)
   if (!(unreadNow >= 1)) t.fail(`no thread unread: ${unreadNow}`)
@@ -89,7 +89,7 @@ export default async function session(t, s) {
     const was = await t.run(`document.querySelector('.thread__title')?.textContent`)
     t.key('.')
     await t.until(`document.querySelector('.thread__title')?.textContent !== ${JSON.stringify(was)}`, 'cmd+. moved on')
-    await t.until(`!document.querySelector('.app__sidebar .superego-list-item.is-selected :is(.superego-status--done, .superego-status--error, .superego-status--blocked)')`, 'the thread shown, seen')
+    await t.until(`!document.querySelector('.app__sidebar .superego-list-item.is-selected :is(.superego-status--done, .superego-status--error, .superego-status--question, .superego-status--permission)')`, 'the thread shown, seen')
   }
   await t.until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'cmd+. reached the unread thread')
   // Seen, it's no longer counted.

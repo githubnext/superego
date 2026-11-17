@@ -70,7 +70,7 @@ export default async function threads(t, s) {
   await t.call('thread.send', { thread: asking, text: 'pick a colour' })
   await openRow(t, 'pick a colour')
   await t.until(`document.querySelector('.agent-ui-waiting')?.textContent.includes('Which colour?')`, 'question card above the composer')
-  await t.until(`Boolean(${row('pick a colour')}?.querySelector('.superego-status--blocked'))`, 'thread marked as needing you')
+  await t.until(`Boolean(${row('pick a colour')}?.querySelector('.superego-status--question'))`, 'thread marked as asking')
   // Sent while it's busy, a follow-up shows at once as waiting over the composer, and goes in when the agent is done;
   // one taken back with its × never does.
   const queued = (text) => `[...document.querySelectorAll('.queued-row')].find((r) => r.textContent.includes(${JSON.stringify(text)}))`

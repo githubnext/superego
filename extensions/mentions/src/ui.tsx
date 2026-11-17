@@ -57,7 +57,7 @@ export default defineUiExtension({
           return {
             label: offer.thread.title,
             ...(detail ? { detail } : {}),
-            icon: <StatusGlyph status={offer.thread.status} />,
+            icon: <StatusGlyph status={offer.thread.status} quiet={offer.thread.quiet} />,
             insert: offer.insert,
           }
         })

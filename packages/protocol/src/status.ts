@@ -20,17 +20,38 @@ const PRIORITY: Record<StatusState, number> = { blocked: 4, error: 3, done: 2, w
  */
 export const waitingForSignIn = (status: Status) => status.state === 'blocked' && status.kind === 'auth'
 
-/** Each state as the UI says it: in status tooltips, the sidebar's sort and notifications. */
-export const STATUS_WORDS = { idle: 'Idle', working: 'Working', done: 'Finished', blocked: 'Needs you', error: 'Failed' } as const satisfies Record<StatusState, string>
+/**
+ * What a status shows as, everywhere (the app's marks and words, the menu bar, the CLI, notifications): its state, a
+ * blocked one by what it waits on (a question, a permission, sign-in). A quiet thread (one that reports to another)
+ * that finished shows as idle: its parent hears, and it isn't unread.
+ */
+export type StatusShape = 'idle' | 'working' | 'done' | 'question' | 'permission' | 'signin' | 'error'
 
-/** What a blocked thread waits on, in words. */
-const WAITS_ON: Record<BlockedKind, string> = { permission: 'a permission', question: 'a question', auth: 'sign-in' }
+/** The shape a status shows as; `quiet`, for a thread that reports to another. */
+export function statusShape(status: Status, quiet = false): StatusShape {
+  switch (status.state) {
+    case 'blocked': return status.kind === 'auth' ? 'signin' : status.kind === 'permission' ? 'permission' : 'question'
+    case 'done': return quiet ? 'idle' : 'done'
+    default: return status.state
+  }
+}
 
-/** A thread's status in a few words: "Working", "Needs you: a question", "Finished: <recap>", "Waiting for sign-in". */
-export function statusLabel(status: Status): string {
-  if (waitingForSignIn(status)) return `Waiting for sign-in${status.msg ? `: ${status.msg}` : ''}`
-  if (status.state === 'blocked') return status.kind ? `${STATUS_WORDS.blocked}: ${WAITS_ON[status.kind]}` : STATUS_WORDS.blocked
-  return status.msg ? `${STATUS_WORDS[status.state]}: ${status.msg}` : STATUS_WORDS[status.state]
+/** Each shape as the UI says it: the word on a row, in the title bar, ⌘U, the menu bar, the CLI and notifications. */
+export const STATUS_WORDS = {
+  idle: 'Idle', working: 'Working', done: 'Done', question: 'Question', permission: 'Permission', signin: 'Sign in', error: 'Failed',
+} as const satisfies Record<StatusShape, string>
+
+/** The word for a status: "Question", "Done", "Sign in"; nothing when idle (nor for a quiet one that finished). */
+export function statusWord(status: Status, quiet = false): string {
+  const shape = statusShape(status, quiet)
+  return shape === 'idle' ? '' : STATUS_WORDS[shape]
+}
+
+/** A thread's status in a few words, for tooltips and screen readers: its word, and what it did or why it failed or waits ("Done: <recap>"). */
+export function statusLabel(status: Status, quiet = false): string {
+  const shape = statusShape(status, quiet)
+  const why = shape === 'done' || shape === 'error' || shape === 'signin' ? status.msg : undefined
+  return why ? `${STATUS_WORDS[shape]}: ${why}` : STATUS_WORDS[shape]
 }
 
 /**

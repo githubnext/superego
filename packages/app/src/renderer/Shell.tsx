@@ -197,7 +197,7 @@ export function Shell() {
               {thread && machine
                 ? (
                   <button type="button" className="app__mobiletitle" aria-expanded={sheet} aria-label={`${thread.title}: the thread's tools`} onClick={() => setSheet((open) => !open)}>
-                    <StatusGlyph status={thread.status} /><span className="app__mobiletitle-text">{thread.title}</span><CaretDownIcon size={12} aria-hidden />
+                    <StatusGlyph status={thread.status} quiet={thread.quiet} /><span className="app__mobiletitle-text">{thread.title}</span><CaretDownIcon size={12} aria-hidden />
                   </button>
                 )
                 : <span className="app__mobiletitle">{registry.app.name}</span>}
@@ -287,7 +287,7 @@ function ThreadSheet({ machine, thread, onClose }: { machine: MachineEntry; thre
       <div className="thread-sheet" role="dialog" aria-label={thread.title}>
         <div className="thread-sheet__head">
           <span className="thread-sheet__project">{machine.id !== 'local' && `${machine.label} · `}{thread.project.name}</span>
-          <span className="thread-sheet__title"><StatusGlyph status={thread.status} />{thread.title}</span>
+          <span className="thread-sheet__title"><StatusGlyph status={thread.status} quiet={thread.quiet} />{thread.title}</span>
         </div>
         <div className="thread-sheet__tools">
           <ThreadTools machine={machine} thread={thread} panes={false} />

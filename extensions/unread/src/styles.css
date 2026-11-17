@@ -10,10 +10,13 @@
 .unread-list .palette__glyph, .unread-list .palette__detail { line-height: 20px; }
 .unread-list .palette__title { display: flex; flex-direction: column; gap: 1px; }
 .unread-list__head { display: flex; align-items: baseline; gap: var(--superego-space-2); min-width: 0; line-height: 20px; }
-.unread-list__title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unread-list__title { font-weight: 600; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .unread-list__where, .unread-list__msg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--superego-muted); font-size: var(--superego-text-sm); }
 .unread-list__where { flex: 0 10 auto; }
 .unread-list li.is-active :is(.unread-list__where, .unread-list__msg) { color: inherit; opacity: .8; }
+.unread-list .palette__detail { font-size: var(--superego-text-xs); }
+.unread-list li.is-active .superego-status-word { color: inherit; }
+.unread-list .palette__glyph { font-size: 13px; }
 
 /* ⌘U with nothing unread: said for a moment where the list would be. */
 .unread-none {

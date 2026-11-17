@@ -4,7 +4,7 @@
 // Everything goes through the extension's actions on that machine (`target`), so a remote one works the same.
 import { useEffect, useState, type ReactNode } from 'react'
 import { SignInFlow, useDispatch, type SettingsComponentProps } from '@superego/app/ui'
-import { Button, CaretRightIcon, Dialog, DotsThreeIcon, IconButton, Menu, SegmentedControl, Select, Switch, TextField } from '@superego/ui'
+import { Button, CaretRightIcon, Dialog, DotsThreeIcon, Glyph, IconButton, Menu, SegmentedControl, Select, Switch, TextField } from '@superego/ui'
 import { CATALOG } from './catalog.ts'
 import { authMenu, checkText, commandLine, configOf, DOT, emptyForm, formOf, nameFrom, needs, secretLabel, secretPlaceholder, signInDetails, signInText, splitCommandLine, stateText, type ServerForm } from './describe.ts'
 import { ACTIONS, type CheckResult, type LogResult, type SectionData, type ServerInfo } from './shared.ts'
@@ -76,7 +76,7 @@ export function ServerRow({ server, own, run, onEdit, onLog, onHelp, children }:
       <div className="mcp-server__main">
         <div className="setting__label">
           <div className="mcp-server__name">
-            <span className={`superego-status superego-status--${DOT[state]}`} aria-hidden />
+            <Glyph shape={DOT[state]} />
             <span>{name}</span>
             {config.title && config.title.toLowerCase() !== name && <span className="mcp-server__title">{config.title}</span>}
           </div>

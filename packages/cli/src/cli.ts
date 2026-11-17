@@ -27,7 +27,7 @@ import {
 // The daemon itself only for `daemon run`: loading it costs every other command most of its start.
 import { appEnv, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
 import {
-  AUTH_REJECTED, compareVersions, consentRefused, driftPhrase, PROTOCOL_VERSION, RpcError, threadEnv, unreadThreads, versionOf, waitingForSignIn, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
+  AUTH_REJECTED, compareVersions, consentRefused, driftPhrase, PROTOCOL_VERSION, RpcError, threadEnv, unreadThreads, versionOf, statusShape, statusWord, STATUS_WORDS, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ProfileRef, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
@@ -69,8 +69,8 @@ function table(rows: string[][]) {
   const widths = rows[0]?.map((_, i) => Math.max(...rows.map((row) => (row[i] ?? '').length))) ?? []
   for (const row of rows) console.log(row.map((cell, i) => i === row.length - 1 ? cell : cell.padEnd(widths[i]!)).join('  ').trimEnd())
 }
-const GLYPH: Record<string, string> = { idle: '○', working: '●', done: '*', blocked: '?', error: '!' }
-const stateOf = (status: ThreadInfo['status']) => waitingForSignIn(status) ? '~ waiting for sign-in' : `${GLYPH[status.state]} ${status.state}`
+/** A thread's state as a column of words, as the app says them (Working, Question, Permission, Sign in, Failed, Done); blank when idle. */
+const stateOf = (thread: ThreadInfo) => statusWord(thread.status, thread.quiet)
 
 /** The providers that rejected a machine's credentials. */
 const rejectedOn = (call: <M extends MethodName>(method: M, params: Params<M>) => Promise<Result<M>>) =>
@@ -215,7 +215,7 @@ async function threads(machineName?: string, archived = false) {
   }))
   print(list, () => {
     if (!list.length) console.log(`No threads on ${machine.label}. Start one with: ${app.id}`)
-    else table(list.map((s: ThreadInfo) => [s.id, stateOf(s.status), s.title, s.cwd]))
+    else table(list.map((s: ThreadInfo) => [s.id, stateOf(s), s.title, s.cwd]))
     sayRejected(rejected, machine)
   })
 }
@@ -250,7 +250,7 @@ async function unreadCommand(machineName: string | undefined, countOnly: boolean
   print({ count: threads.length, threads }, () => {
     if (!found.length) return void console.log('Nothing unread')
     const several = new Set(found.map((f) => f.machine)).size > 1
-    table(found.map(({ label, thread }) => [thread.id, stateOf(thread.status), thread.title, ...(several ? [label] : [])]))
+    table(found.map(({ label, thread }) => [thread.id, stateOf(thread), thread.title, ...(several ? [label] : [])]))
   })
 }
 
@@ -866,7 +866,7 @@ async function readCommand(id: string | undefined, values: { machine?: string; w
   print(read, () => {
     const { thread, answer } = read
     // Its status, but when it's done: that's the start of its answer.
-    console.log(`${GLYPH[thread.state] ?? ''} ${thread.state}${thread.status && thread.state !== 'done' ? `: ${thread.status}` : ''} · ${thread.title || '(untitled)'}`)
+    console.log(`${STATUS_WORDS[statusShape({ state: thread.state, ...(thread.kind ? { kind: thread.kind } : {}) })]}${thread.status && thread.state !== 'done' ? `: ${thread.status}` : ''} · ${thread.title || '(untitled)'}`)
     console.log(answer ? `\n${answer}` : '\n(No answer yet)')
   })
   // It stopped on an error: say so to a script.

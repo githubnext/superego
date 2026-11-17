@@ -34,13 +34,3 @@ export function shorten(message: string, max = 120): string {
   const line = message.replace(/[`*_#>|[\]]/g, '').replace(/\s+/g, ' ').trim()
   return line.length > max ? `${line.slice(0, max - 1).trimEnd()}…` : line
 }
-
-/** How long ago, briefly: now, 5m, 2h, 3d. */
-export function ago(at: number, now = Date.now()): string {
-  const minutes = Math.floor((now - at) / 60_000)
-  if (!Number.isFinite(minutes)) return ''
-  if (minutes < 1) return 'now'
-  if (minutes < 60) return `${minutes}m`
-  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)}h`
-  return `${Math.floor(minutes / 60 / 24)}d`
-}

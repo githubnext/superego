@@ -76,7 +76,7 @@ describe('superego', () => {
     expect(await superegoJson(['read', created.id, '--wait'])).toMatchObject({ thread: { id: created.id, state: 'done' }, answer: 'echo: first question' })
     await superego(['send', created.id, 'second question'])
     // Right after the send: its answer to that, not the one before.
-    expect(await superego(['read', created.id, '--wait'])).toMatch(/^\* done · first question\n\necho: second question\n$/)
+    expect(await superego(['read', created.id, '--wait'])).toMatch(/^Done · first question\n\necho: second question\n$/)
     await expect(superego(['read', 'nope'])).rejects.toThrow(/No thread nope/)
   }, starting(1))
 
@@ -274,7 +274,7 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     const created = await superegoJson(['start', home, '-p', 'are you there'])
     await until(async () => (await superegoJson(['threads'])).find((t: any) => t.id === created.id)?.status.kind === 'auth')
     const listed = await superego(['threads'])
-    expect(listed).toMatch(new RegExp(`${created.id}\\s+~ waiting for sign-in`))
+    expect(listed).toMatch(new RegExp(`${created.id}\\s+Sign in\\s`))
     expect(listed).toContain('faux rejected the API key')
     expect(listed).toContain('superego providers key faux')
     expect(await superego(['providers', 'retry', 'faux'])).toContain('Retrying 1 thread')

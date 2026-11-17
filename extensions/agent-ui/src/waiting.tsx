@@ -1,7 +1,7 @@
 // What the agent waits on, above the composer: the oldest of its questions (ask_user) and forms (ask_ui), one at a
 // time; answering it brings up the next. The card claims the composer, so what's typed there answers it in words.
 import { useState } from 'react'
-import { Blocks, keyLabel, Markdown, useComposer, useComposerClaim, useValue, type MachineEntry } from '@superego/app/ui'
+import { Blocks, Glyph, keyLabel, Markdown, STATUS_WORDS, useComposer, useComposerClaim, useValue, type MachineEntry } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import { answerOf, keyMove, partsOf } from './question.ts'
 import { useAnswer } from './reply.ts'
@@ -13,7 +13,7 @@ export function Waiting({ machine, thread }: { machine: MachineEntry; thread: Th
   if (!first) return null
   return (
     <div className="agent-ui-waiting" role="group" aria-label="The agent asks">
-      <div className="agent-ui-waiting__label">Needs you</div>
+      <div className="agent-ui-waiting__label"><Glyph shape="question" />{STATUS_WORDS.question}</div>
       {first.tool === ASK_USER
         ? <QuestionCard key={first.id} machine={machine} id={first.id} question={first} />
         : <FormCard key={first.id} machine={machine} thread={thread} id={first.id} spec={first} />}

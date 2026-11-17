@@ -34,11 +34,14 @@ import type { ExtensionAbout } from './app.ts'
  * `describeRun`, `mainKind`, `linkHandler` and `urlKind`.
  * 3.0: a data view's content is blocks (`Block[]`, the schema agents draw with, from 'superego'), with `list` and
  * buttons that run the extension's actions. `ViewContent`, `ViewItem` and `ViewAction` are gone.
+ * 3.1: 'superego/ui''s `Glyph` (every mark, a status's and a board's or machine's), `StatusWord`, `statusShape`, `statusWord`
+ * and `STATUS_WORDS` (the words: Question, Permission, Sign in, Failed, Done, Working); `StatusGlyph` and `statusLabel` take
+ * `quiet`.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '3.0.0'
+export const EXTENSION_API = '3.1.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>

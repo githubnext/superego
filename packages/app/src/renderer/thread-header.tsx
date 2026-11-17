@@ -3,7 +3,7 @@
 // menu).
 import { useRef } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
-import { IconButton, Menu, PencilSimpleIcon, PanePlusIcon, StatusGlyph } from '@superego/ui'
+import { IconButton, Menu, PencilSimpleIcon, PanePlusIcon, StatusGlyph, StatusWord } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useRegistry } from './registry.tsx'
 import { paneMenu, PlacedViews, Slot, useLayout } from './placement.tsx'
@@ -14,8 +14,8 @@ import { ProfileChip } from './profile-card.tsx'
 import { startRename, stopRename, useRenaming } from './rename.ts'
 
 /**
- * Where you are, in the window's title bar: the thread's project (and machine, where it isn't this one), then its status
- * and title, with buttons to rename it (or the name being edited), to pin it and to archive it (not an extension's own hidden
+ * Where you are, in the window's title bar: the thread's project (and machine, where it isn't this one), then its mark,
+ * title and what it's doing in a word (Working, Question, Failed: not Done, which you're looking at), with buttons to rename it (or the name being edited), to pin it and to archive it (not an extension's own hidden
  * thread, which that extension looks after), or, archived, to bring it back.
  */
 export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
@@ -28,10 +28,11 @@ export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread
       </span>
       <span className="titlebar__sep" aria-hidden>›</span>
       <span className="titlebar__seg titlebar__title">
-        <StatusGlyph status={thread.status} />
+        <StatusGlyph status={thread.status} quiet={thread.quiet} />
         {editing ? <TitleField machine={machine} thread={thread} /> : (
           <>
             <span className="thread__title" title={thread.title} onDoubleClick={() => startRename(machine.id, thread.id)}>{thread.title.replace(/\.$/, '')}</span>
+            {thread.status.state !== 'done' && <StatusWord status={thread.status} quiet={thread.quiet} className="titlebar__word" />}
             <IconButton label="Rename" className="titlebar__action" onClick={() => startRename(machine.id, thread.id)}>
               <PencilSimpleIcon size={13} aria-hidden />
             </IconButton>

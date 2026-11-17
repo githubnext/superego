@@ -2,6 +2,7 @@
 // a call is about; and the Add and Edit dialog's form, which Ego's tool makes configs with too (ego.ts). Plain
 // functions, apart from React, so they're tested as such.
 import { CLIENT_SECRET, SERVER_NAME, type SecretInfo, type ServerConfig, type ServerInfo, type ServerState, type SignInInfo } from './shared.ts'
+import type { GlyphShape } from '@superego/ui'
 
 /** An argument as a shell would need it: bare when it can be, else in single quotes. */
 export const quote = (arg: string) => /^[\w@%+=:,./-]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`
@@ -87,9 +88,9 @@ export function stateText(server: Pick<ServerInfo, 'state' | 'tools' | 'deferred
   }
 }
 
-/** The status dot a state is drawn with (the app's `superego-status--*`). */
-export const DOT: Record<ServerState, string> = {
-  off: 'off', stopped: 'idle', starting: 'working', running: 'done', 'needs-sign-in': 'blocked', waiting: 'blocked', failed: 'error',
+/** The mark a state is drawn with (@superego/ui's `Glyph`): off a ring, starting the grey dots, running a check. */
+export const DOT: Record<ServerState, GlyphShape> = {
+  off: 'offline', stopped: 'idle', starting: 'connecting', running: 'landed', 'needs-sign-in': 'signin', waiting: 'permission', failed: 'error',
 }
 
 /** Whether a server needs the user before it can run: OAuth to sign in to, or a key or secret env value to set. */

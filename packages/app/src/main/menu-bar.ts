@@ -4,7 +4,7 @@
 // for the menu bar it sits in. Without one, the app's glyph is drawn as text.
 import { existsSync } from 'node:fs'
 import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
-import { unread, type AppConfig, type ThreadInfo } from '@superego/protocol'
+import { statusWord, unread, type AppConfig, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
 import type { ServiceState } from '../shared/service.ts'
 
@@ -19,8 +19,6 @@ export type MenuBarModel = {
   service(): ServiceState
   restart(): void
 }
-
-const GLYPH: Record<string, string> = { working: '●', done: '*', blocked: '?', error: '!' }
 
 export class MenuBar {
   #tray: Tray | undefined
@@ -73,7 +71,8 @@ export class MenuBar {
     const tooltip = working.length ? `${this.#app.name}: ${working.length} working` : this.#app.name
 
     const item = ({ machine, thread }: (typeof all)[number]): MenuItemConstructorOptions => ({
-      label: `${GLYPH[thread.status.state] ?? '○'}  ${thread.title}${machines.length > 1 ? `  — ${machine.label}` : ''}`,
+      // What it wants after its title, as the app and notifications say it: "Release notes — Permission".
+      label: `${thread.title} — ${statusWord(thread.status, thread.quiet)}${machines.length > 1 ? ` · ${machine.label}` : ''}`,
       click: () => this.#model.openThread(machine.id, thread.id),
     })
     const listed = [...wanting, ...working].slice(0, 12)

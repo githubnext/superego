@@ -8,8 +8,6 @@
 .mcp-server__unprofiled { display: inline-flex; align-items: center; }
 .mcp-server__more { width: 26px; height: 26px; min-height: 26px; box-shadow: none; background: none; color: var(--superego-muted); }
 .mcp-server__more:hover, .mcp-server__more[data-popup-open] { background: var(--superego-hover); color: var(--superego-text); }
-/* Switched off: a hollow dot. */
-.superego-status--off::before { background: none; border: 1.5px solid currentColor; }
 /* Waiting for Allow: the whole command line, as it will run. */
 .mcp-server__allow { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--superego-status-blocked) 8%, var(--superego-bg)); }
 .mcp-server__line { margin: 6px 0; font: var(--superego-text-sm)/1.45 var(--superego-mono); white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; }
