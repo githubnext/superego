@@ -1,7 +1,9 @@
 // The second machine's profile UI: the thread works without it, and the window asks; it runs once allowed here, stops
-// when its sources change, and is taken out when revoked, with a reload offered. Then Ego on each machine.
+// when its sources change, and is taken out when revoked, with a reload offered. A preview of its localhost, forwarded
+// here. Then Ego on each machine.
 import { readFileSync, writeFileSync } from 'node:fs'
-import { home, openNotice, openRow } from './common.mjs'
+import { createServer } from 'node:http'
+import { home, openNotice, openRow, pageAt } from './common.mjs'
 
 export default async function remote(t, s) {
   const onSecond = (await t.call('thread.start', { title: '' }, s.second)).id
@@ -9,6 +11,17 @@ export default async function remote(t, s) {
   await t.until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('over on second'))`, 'the remote thread in the sidebar', 30_000)
   await openRow(t, 'over on second')
   await t.until(`document.querySelector('.transcript')?.textContent.includes('echo: over on second')`, 'the remote thread works')
+  // A dev server on the second machine's localhost (this computer's too, here): its port is taken here, so the page is
+  // forwarded at another, and loads in Preview's own view through the machine's link.
+  const devServer = await new Promise((resolve) => { const server = createServer((_q, r) => { r.setHeader('content-type', 'text/html'); r.end('<title>on second</title>') }).listen(0, '127.0.0.1', () => resolve(server)) })
+  const devUrl = `http://127.0.0.1:${devServer.address().port}/`
+  await t.call('pane.open', { thread: onSecond, kind: 'preview', params: { url: devUrl } }, s.second)
+  await t.until(`document.querySelector('.panes__column:has(.web-view) .pane-header__url')?.textContent.includes('here at 127.0.0.1:')`, 'the page forwarded at another port')
+  const forwarded = await t.run(`document.querySelector('.panes__column:has(.web-view) .pane-header__url').href`)
+  await t.until(() => pageAt(forwarded)?.isLoading() === false && pageAt(forwarded).getTitle() === 'on second', "the second machine's page, through the forward")
+  const previewPane = (await t.call('thread.list', {}, s.second)).find((x) => x.id === onSecond).panes.find((p) => p.kind === 'preview').id
+  await t.call('pane.close', { thread: onSecond, pane: previewPane }, s.second)
+  devServer.close()
   await t.until(`document.querySelector('.profile-ui-notice')?.textContent.includes('Second’s profile default has UI code')`, 'asked to allow the remote profile UI')
   await t.check(`!document.querySelector('.remote-badge')`, 'remote profile UI ran before it was allowed')
   await t.run(`[...document.querySelectorAll('.profile-ui-notice button')].find((b) => /files?,/.test(b.textContent)).click()`)

@@ -96,7 +96,7 @@ Slots a profile can fill, each given `{ machine, thread }` (and for the editor o
 | `composer.above` | above the message box: something waiting on the user |
 | `details.section` | in thread details (⌘I), after what the core says: an `<h5>` and what you know of the thread. |
 | `editor.side`, `editor.bar` | beside a file in the editor, and in its bar |
-| `overlay` | over everything: a dialog of your own, drawn while you want it |
+| `overlay` | over everything: a dialog of your own, drawn while you want it. Mark its surface `data-superego-overlay` (Base UI popovers and dialogs from `superego/ui` are already known) so a web page in a pane, drawn above the window, steps aside while it's open |
 | `onboarding` | on the first-launch page, under its title: a word on what yours offers, and a way to it |
 
 ### A mark in the sidebar
@@ -127,6 +127,10 @@ Inside a pane: `<PaneHeader>` puts small things in the pane's header beside its 
 `code`, `href`) and `<PaneButton>`s (Refresh). `<PaneMessage>` stands in for what the pane shows while there's nothing
 (Loading…, an error). `useTabNote(note, key)` shows a note on its tab in the strip (Changes shows
 `<DiffStat added removed />`, +3 −1).
+
+A web page in a pane: `<WebView src partition="preview" title sandbox onEvent ref>` shows it as Preview does, as a browser
+tab on the desktop (its own cookies, back and forward through `ref`'s `go(-1)`, `reload()`; `onEvent` hears where it is
+now, a file it saved, what it was refused), framed in a browser (`sandbox` is the frame's). `hasWebViews()` says which.
 
 ## From 'superego/ui'
 

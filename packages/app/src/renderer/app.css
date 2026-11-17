@@ -625,6 +625,15 @@ a.pane-header__url { color: var(--superego-muted); text-decoration: none; }
 a.pane-header__url:hover { color: var(--superego-accent); }
 .pane-header__button { flex: none; height: 22px; padding: 0 8px; border: 0; border-radius: 5px; background: var(--superego-fill); color: var(--superego-text); font: inherit; font-size: calc(11.5px * var(--superego-text-scale)); cursor: default; }
 .pane-header__button:hover { background: var(--superego-selected); }
+/* A web page in a pane (web-view.tsx): on the desktop, a view laid over this box, and a still of it while it can't be
+   shown; in a browser, framed, with a line on what that can't do. */
+.web-view { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; outline: none; }
+.web-view__still { position: absolute; top: 0; left: 0; max-width: none; pointer-events: none; user-select: none; }
+.web-view__error { overflow-wrap: anywhere; }
+.web-view__error code { font: var(--superego-text-sm) var(--superego-mono); color: var(--superego-text); }
+.web-view--framed iframe { flex: 1; border: 0; width: 100%; background: #fff; }
+.web-view__framed { flex: none; margin: 0; padding: 6px var(--superego-space-3); border-top: 1px solid var(--superego-line); font-size: var(--superego-text-xs); color: var(--superego-muted); }
+.web-view__framed a { color: var(--superego-accent); text-decoration: none; }
 .diff-file { padding-bottom: 4px; }
 .diff-file summary { display: flex; gap: var(--superego-space-2); align-items: center; height: 30px; margin: 0 8px; padding: 0 10px 0 8px; border-radius: 6px; background: var(--superego-fill); font: calc(11.5px * var(--superego-text-scale)) var(--superego-mono); cursor: default; list-style: none; }
 .diff-file summary::-webkit-details-marker { display: none; }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preview shows a page as your browser does, not framed in the window: signing in, redirects to another port or site,
+  and cookies work there, and pages that refuse to be framed load. It has back and forward (also ⌘[ and ⌘]), ⌘R
+  reloads the page, and the header shows where the page is now. Links that open a new window open in your browser;
+  downloads go to Downloads. Artifacts show the same way. In a browser (Web access) pages are still framed, and the
+  pane says what that can't do.
+
 ## 0.1.3
 
 ### Fixes

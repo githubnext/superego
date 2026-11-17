@@ -64,8 +64,8 @@ export function contextMenuItems(params: MenuParams, { dev, mac, actions }: { de
   return groups.flatMap((group, i) => i ? [{ type: 'separator' as const }, ...group] : group)
 }
 
-/** Gives `contents` the menu; once, where each window is made. */
-export function attachContextMenu(contents: WebContents, { dev }: { dev: boolean }) {
+/** Gives `contents` the menu; once, where each window (or web view, in `window`) is made. */
+export function attachContextMenu(contents: WebContents, { dev, window }: { dev: boolean; window?: () => BrowserWindow }) {
   const actions: MenuActions = {
     open: (url) => void shell.openExternal(url),
     copyText: (text) => clipboard.writeText(text),
@@ -78,7 +78,7 @@ export function attachContextMenu(contents: WebContents, { dev }: { dev: boolean
   }
   contents.on('context-menu', (_event, params) => {
     const items = contextMenuItems(params, { dev, mac: process.platform === 'darwin', actions })
-    if (items.length) Menu.buildFromTemplate(items).popup({ window: BrowserWindow.fromWebContents(contents) ?? undefined })
+    if (items.length) Menu.buildFromTemplate(items).popup({ window: window?.() ?? BrowserWindow.fromWebContents(contents) ?? undefined })
   })
 }
 

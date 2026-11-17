@@ -50,7 +50,7 @@ project    a git repository (its worktrees too) or a folder, on a machine
   them too (`pane_open`). One can be maximized for a while (its tab's button, a double click on its title, `⌘⇧↩`):
   over the thread and the rest, in this window only, until Esc, Restore, or another pane or thread.
   Built in: the file editor (Markdown rendered, in live preview as Obsidian shows it, or as source) and another thread.
-  Bundled extensions add Changes (git's diff, `git`), Preview (a web page; another machine's `localhost` forwarded here) and Artifact (an HTML file the agent wrote,
+  Bundled extensions add Changes (git's diff, `git`), Preview (a web page, as a browser tab shows it; another machine's `localhost` forwarded here) and Artifact (an HTML file the agent wrote,
   sandboxed) (`web-panes`); a pane of an extension a thread goes without isn't shown.
 - **Files** named in a thread (`[[Note]]`, a relative link, `` `src/app.ts` ``) open beside it; the `files` extension
   adds a tree beside the editor and quick open.
@@ -237,6 +237,17 @@ the machine's ports (an API on `:3000` behind a page on `:5173`: preview that on
 links to the machine's port when it was taken here, anything that must reach the machine from outside (a third party's
 webhook or OAuth callback to a public address), and a browser on Web access, which can't listen: there the agent asks
 how the user reaches the machine.
+
+On the desktop, Preview and Artifact show their page as a browser tab does: a page of its own laid over the pane (a
+WebContentsView, `main/web-views.ts`), not a frame in the window, so its cookies are first-party (a sign-in on one port
+that redirects to another holds), and a page that refuses frames loads. Preview's pages share one session kept between
+launches (`persist:preview`); an artifact's is in memory. A page there has no app powers (sandboxed, isolated, no
+preload); what it asks for (the camera, notifications) is refused and its pane says so; a new window opens in the
+browser; a file it saves goes to Downloads. The view draws above the window's page, so the pane places it
+(`renderer/web-view.tsx`, the app's `WebView`): it follows the pane's box, is hidden when the pane is (behind a stack,
+under a maximized pane), and while any of the window's overlays is over it (a menu, a popover, a dialog: `OVERLAYS`, or
+an extension's `data-superego-overlay`), or the pane is partly out of view, a still of the page stands in its place. In
+a browser (Web access) the page is framed, and the pane says what that can't do.
 
 The daemon takes model keys from the providers' own variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) when none is
 stored in Settings. A restart keeps the environment it was started with and adds that of the shell asking for it. Where

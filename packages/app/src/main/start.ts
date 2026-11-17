@@ -11,11 +11,12 @@ import type { ThreadRef } from '../shared/bridge.ts'
 import { appMethods, callApp, registerAppActions, type AppActionContext } from './app-endpoint.ts'
 import { createWindows, setUpSession } from './app-windows.ts'
 import { readMainBuild } from './build.ts'
-import { registerArtifactScheme, serveArtifacts } from './artifacts.ts'
+import { registerArtifactScheme } from './artifacts.ts'
 import { commandLine } from './command-line.ts'
 import { createDesktop } from './desktop.ts'
 import { serveIpc } from './ipc.ts'
 import { createForwards } from './forwards.ts'
+import { serveWebViews } from './web-views.ts'
 import { LayoutFile } from './layout-file.ts'
 import { createMachines } from './machines.ts'
 import { createNotifier } from './notify.ts'
@@ -135,8 +136,8 @@ export function startApp(appConfig: AppConfig) {
 
   registerArtifactScheme()
   app.whenReady().then(() => {
-    serveArtifacts(machines.linkOf)
     if (!primary) return
+    serveWebViews({ windowOf: windows.of, linkOf: machines.linkOf })
     desktop.start()
     setUpSession()
     machines.start()

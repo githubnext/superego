@@ -9,7 +9,7 @@ import { openApp } from './harness.mjs'
 import { openNotice } from './smoke/common.mjs'
 
 const phase = process.env.SUPEREGO_SMOKE_PHASE ?? 'first'
-const first = ['threads', 'images', 'layout', 'panes', 'session', 'settings', 'web', 'remote']
+const first = ['threads', 'images', 'layout', 'panes', 'preview', 'session', 'settings', 'web', 'remote']
 const areas = Object.fromEntries(await Promise.all((phase === 'first' ? first : phase === 'reopen' ? ['reopen'] : []).map(async (name) =>
   [name, (await import(`./smoke/${name}.mjs`)).default])))
 

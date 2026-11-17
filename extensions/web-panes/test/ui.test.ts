@@ -1,7 +1,8 @@
 // web-panes' UI half in a window: web links open beside a thread in Preview, the one kind that takes URLs (a profile's
-// own first), and nowhere while the thread goes without web-panes.
+// own first), and nowhere while the thread goes without web-panes; a page framed in a browser, and in a view of its own
+// on the desktop.
 import { afterEach, expect, it, vi } from 'vitest'
-import { defineUiExtension, fileKind } from '@superego/app/ui'
+import { defineUiExtension, fileKind, type WebViewEvent } from '@superego/app/ui'
 import { mountUi, testThread, type TestWindow } from '@superego/sdk/testing'
 import webPanes from '../src/ui.tsx'
 import { ARTIFACT, PREVIEW } from '../src/shared.ts'
@@ -52,4 +53,47 @@ it('shows a page through the bridge\'s forward: at the address it gives, said wh
   expect(logged).toHaveBeenCalledOnce()
   logged.mockRestore()
   expect(asked).toEqual(['http://localhost:5173/', 'https://example.com/', 'http://localhost:4000/'])
+})
+
+it('shows a page in a view of its own on the desktop: placed over the pane, its header following it, and told what it did', async () => {
+  ui = await mountUi({ extensions: [webPanes] })
+  // The DOM here lays nothing out: every box is empty, so a pane is never in view, and never placed but out of sight.
+  globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as never
+  const views: { url: string; partition: string; ops: unknown[][]; listener?: (event: WebViewEvent) => void; closed: boolean }[] = []
+  window.superego.forward = undefined
+  window.superego.webView = ({ url, partition }) => {
+    const view = { url, partition, ops: [] as unknown[][], listener: undefined as ((event: WebViewEvent) => void) | undefined, closed: false }
+    views.push(view)
+    const op = (name: string) => (...args: unknown[]) => { view.ops.push([name, ...args]) }
+    return {
+      place: op('place'), load: op('load'), go: op('go'), reload: op('reload'), focus: op('focus'), reveal: op('reveal'),
+      snapshot: async () => null, onEvent: (listener) => { view.listener = listener }, close: () => { view.closed = true },
+    }
+  }
+  const pane = await ui.render({ pane: { kind: PREVIEW, params: { url: 'http://localhost:5179/as/mikker' } } })
+  await vi.waitFor(() => expect(views).toHaveLength(1))
+  const [view] = views
+  expect(view).toMatchObject({ url: 'http://localhost:5179/as/mikker', partition: 'preview' })
+  expect(pane.find('iframe')).toBeFalsy()
+  const state = { title: 'reforge', loading: false, canGoBack: true, canGoForward: false }
+  view!.listener!({ type: 'state', state: { ...state, url: 'http://localhost:5173/' } })
+  await vi.waitFor(() => expect(pane.text()).toContain('http://localhost:5173/'))
+  const button = (label: string) => pane.find(`button[aria-label="${label}"]`) as HTMLButtonElement
+  expect(button('Back').disabled).toBe(false)
+  expect(button('Forward').disabled).toBe(true)
+  await pane.click('Back')
+  expect(view!.ops).toContainEqual(['go', -1])
+  // A file it saved, shown where it is; something it asked for, refused.
+  view!.listener!({ type: 'download', name: 'report.pdf', path: '/Users/me/Downloads/report.pdf', state: 'completed' })
+  await vi.waitFor(() => expect(pane.text()).toContain('Saved report.pdf to Downloads'))
+  await pane.click('Show')
+  expect(view!.ops).toContainEqual(['reveal', '/Users/me/Downloads/report.pdf'])
+  view!.listener!({ type: 'denied', permission: 'media' })
+  await vi.waitFor(() => expect(pane.text()).toContain('The page asked for the camera or microphone: refused here'))
+  // A page that doesn't load says why, in the pane.
+  view!.listener!({ type: 'state', state: { ...state, url: 'http://localhost:5173/', error: { code: -102, description: 'ERR_CONNECTION_REFUSED', url: 'http://localhost:5173/' } } })
+  await vi.waitFor(() => expect(pane.text()).toContain("didn't load: ERR_CONNECTION_REFUSED"))
+  await ui.unmount()
+  ui = undefined
+  expect(view!.closed).toBe(true)
 })

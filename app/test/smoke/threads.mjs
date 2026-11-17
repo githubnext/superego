@@ -1,7 +1,7 @@
 // A fresh home: the first-launch page, a first thread with the user's profile UI, typing, skills, a web link in a pane,
 // and a replayed agent that asks, with follow-ups queued meanwhile.
 import { createServer } from 'node:http'
-import { openRow, row } from './common.mjs'
+import { openRow, pageAt, row } from './common.mjs'
 
 export default async function threads(t, s) {
   // The first-launch page (its switches and Get started: onboarding.test.ts), with Ego's word on it; put away for good
@@ -53,9 +53,8 @@ export default async function threads(t, s) {
   await t.call('thread.send', { thread: s.hello, text: `see ${page}` })
   await t.until(`Boolean(document.querySelector('.md a[href="${page}"] + .md__pane-link'))`, 'pane button beside a web link')
   await t.click(`.md a[href="${page}"] + .md__pane-link`)
-  await t.until(`Boolean(document.querySelector('.web-panes-frame iframe[src="${page}"]'))`, 'link opened in a preview pane')
-  const frame = () => t.contents().mainFrame.framesInSubtree.find((f) => f.url === page)
-  await t.until(async () => await frame()?.executeJavaScript('document.title') === 'framed page', 'a page that refuses framing, loaded in its pane')
+  await t.until(`Boolean(document.querySelector('.web-panes-frame .web-view'))`, 'link opened in a preview pane')
+  await t.until(() => pageAt(page)?.isLoading() === false && pageAt(page).getTitle() === 'framed page', 'a page that refuses framing, loaded in its pane')
   site.close()
   // ⌃O lists the links the thread drew (each claimed by what opens it): the web page and the thread it names.
   await t.call('thread.send', { thread: s.hello, text: `From [this thread](thread:${s.hello})` })

@@ -1,3 +1,7 @@
-/* A page in a pane: the frame fills the column under its header. */
+/* A page in a pane: the page (the app's WebView) fills the column under its header, and what it did (a file saved,
+   something refused) shows above it until dismissed. */
 .web-panes-frame { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.web-panes-frame iframe { flex: 1; border: 0; width: 100%; background: #fff; }
+.web-panes-notice { flex: none; display: flex; align-items: center; gap: var(--superego-space-2); padding: 4px var(--superego-space-3); border-bottom: 1px solid var(--superego-line); font-size: var(--superego-text-xs); color: var(--superego-muted); }
+.web-panes-notice > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.web-panes-notice button { flex: none; display: grid; place-items: center; height: 20px; padding: 0 6px; border: 0; border-radius: 5px; background: none; color: var(--superego-text); font: inherit; cursor: default; }
+.web-panes-notice button:hover { background: var(--superego-fill); }

@@ -48,6 +48,11 @@ export type SuperegoBridge = {
    */
   forward?(machine: MachineId, url: string): Promise<string>
   /**
+   * A web page in a view of its own laid over the window (main/web-views.ts): a top-level page, as a browser tab has it,
+   * so its cookies are first-party and a page that refuses to be framed loads. Absent in a browser, where a pane frames it.
+   */
+  webView?(options: { url: string; partition: WebViewPartition }): BridgeWebView
+  /**
    * Open a channel of `kind` on a machine's daemon: a byte stream both ways (a terminal's). Absent from a bridge
    * that can't; in a browser, only to the daemon that served the page.
    */
@@ -66,6 +71,56 @@ export type BridgeChannel = {
   close(): void
 }
 
+/**
+ * Whose cookies and storage a web view has: Preview's pages share theirs, kept between launches (`persist:preview`), as
+ * a browser keeps a profile's; an artifact's are its own, gone as the app quits.
+ */
+export type WebViewPartition = 'preview' | 'artifact'
+
+/** A box in the window's page, in its CSS pixels. */
+export type WebViewRect = { x: number; y: number; width: number; height: number }
+
+/** Where a web view's page is, as its window's main process tells it. */
+export type WebViewState = {
+  url: string
+  title: string
+  loading: boolean
+  canGoBack: boolean
+  canGoForward: boolean
+  /** Why the page last asked for didn't load (it isn't there, a certificate refused), or that it crashed. */
+  error?: { code: number; description: string; url: string }
+}
+
+/**
+ * What a web view tells its pane: where it is now; that it took the keyboard (a click into it); a file it saved (to the
+ * Downloads folder, as a browser does); something it asked for that was refused (the camera, notifications).
+ */
+export type WebViewEvent =
+  | { type: 'state'; state: WebViewState }
+  | { type: 'focus' }
+  | { type: 'download'; name: string; path: string; state: 'progressing' | 'completed' | 'cancelled' | 'interrupted' }
+  | { type: 'denied'; permission: string }
+
+/**
+ * A web page over a pane, held by the main process (main/web-views.ts). It draws above the window's page, wherever it's
+ * placed: `place` puts it at `rect`, or (not `shown`) keeps it that size out of sight, for a still of it (`snapshot`)
+ * to show in its place while something of the window's is over it (see renderer/web-view.tsx); null hides it.
+ */
+export type BridgeWebView = {
+  place(rect: WebViewRect | null, shown: boolean): void
+  load(url: string): void
+  go(by: -1 | 1): void
+  reload(): void
+  /** Give it the keyboard (`true`), or, if it has it, give it back to the window. */
+  focus(on: boolean): void
+  /** A still of the page as it is now, as an image's bytes (PNG); none while it has nothing drawn. */
+  snapshot(): Promise<Uint8Array | null>
+  /** Show a file it saved in the Finder (or the system's file manager). */
+  reveal(path: string): void
+  onEvent(listener: (event: WebViewEvent) => void): void
+  close(): void
+}
+
 /** An artifact's address on the desktop: superego-artifact://<machine>/<thread>/<path>, served by the main process. */
 export const artifactUrl = (machine: MachineId, thread: string, path: string) =>
   `superego-artifact://${encodeURIComponent(machine)}/${encodeURIComponent(thread)}/${path.split('/').map(encodeURIComponent).join('/')}`
@@ -74,6 +129,8 @@ export const CHANNEL = {
   call: 'superego:call', machines: 'superego:machines', event: 'superego:event', forward: 'superego:forward',
   // A window's protocol channels, held for it by the main process: opened, ready for data (once the window knows its
   // id), their data, written, read and closed; the main process drops all of a window's as its page (re)loads.
+  // A window's web views (main/web-views.ts): opened, told what to do, a still of one, and what they tell their pane.
+  viewOpen: 'superego:view-open', view: 'superego:view', viewSnapshot: 'superego:view-snapshot', viewEvent: 'superego:view-event',
   open: 'superego:ch-open', start: 'superego:ch-start', data: 'superego:ch-data', write: 'superego:ch-write', ack: 'superego:ch-ack', close: 'superego:ch-close',
 } as const
 /** What the main process tells a window of one of its channels: a chunk, or that it closed (and why, when it failed). */

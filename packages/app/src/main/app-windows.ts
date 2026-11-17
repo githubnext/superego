@@ -2,7 +2,7 @@
 // (its subscriptions, shortcuts, the thread it shows, what waits to be shown in it, its channels), torn down in one
 // place as its page loads again or it closes. Kept between launches by WindowList (windows.ts), and reopened as they were left.
 import { join } from 'node:path'
-import { app, BrowserWindow, screen, session, shell, type WebContents } from 'electron'
+import { app, BrowserWindow, screen, session, shell, type Input, type WebContents } from 'electron'
 import type { AppConfig, Channel } from '@superego/protocol'
 import { CHANNEL, type AppHandlers, type SuperegoEvent, type ThreadRef } from '../shared/bridge.ts'
 import { APP } from '../shared/app-settings.ts'
@@ -41,6 +41,8 @@ export class AppWindow {
   declaredViews = false
   /** Its protocol channels (a terminal's bytes, say), by id. */
   readonly channels = new Map<string, HeldChannel>()
+  /** The web views over its panes (main/web-views.ts), by id: each closes itself. */
+  readonly views = new Map<string, { close(): void }>()
   /** Its methods on the app's endpoint. */
   readonly methods: AppHandlers
 
@@ -58,7 +60,7 @@ export class AppWindow {
 
   /**
    * A page starts loading in it (the first, or a reload), or it closed (`reason`): what the last page had goes. Its
-   * subscriptions stop, its channels are aborted, and what it said (its shortcuts, the thread it shows) is forgotten;
+   * subscriptions stop, its channels are aborted, its web views close, and what it said (its shortcuts, the thread it shows) is forgotten;
    * what's to show waits for the new page to listen, and `pending` is kept for it.
    */
   pageLoaded(reason = 'The page loaded again') {
@@ -69,6 +71,19 @@ export class AppWindow {
     this.boundKeys = new Set()
     this.shown = undefined
     for (const held of this.channels.values()) held.channel.abort(reason)
+    for (const view of [...this.views.values()]) view.close()
+  }
+
+  /**
+   * A key pressed where its page can't hear it (a frame in it, a web view over it): sent to the page to run, when it's
+   * one of its shortcuts. Whether it was.
+   */
+  takeKey(input: Input): boolean {
+    if (input.type !== 'keyDown' || !(input.meta || input.control || input.alt)) return false
+    const keys = shortcutOf({ key: input.key, code: input.code, metaKey: input.meta, ctrlKey: input.control, altKey: input.alt, shiftKey: input.shift })
+    if (!keys || !this.boundKeys.has(keys)) return false
+    this.sendApp('app.key', { keys })
+    return true
   }
 
   /** Show what it was asked to, now if its page listens, else once it does. */
@@ -161,17 +176,14 @@ export function createWindows({ app: appConfig, dataDir, headless, methods, chan
       if (/^https?:/.test(url)) void shell.openExternal(url)
       return { action: 'deny' }
     })
-    // App-wide shortcuts work wherever the keyboard is. A page in a pane (Preview, an artifact) is a frame of its own,
-    // and its key presses never reach the window's page; so while one has the keyboard, a press that's one of the
-    // window's shortcuts is taken here, before any frame, and sent to the window to run.
+    // App-wide shortcuts work wherever the keyboard is. A frame in the page (an agent's HTML block) is a page of its
+    // own, and its key presses never reach the window's; so while one has the keyboard, a press that's one of the
+    // window's shortcuts is taken here, before any frame, and sent to the window to run. A web view's are taken as
+    // well (web-views.ts).
     contents.on('before-input-event', (event, input) => {
-      if (input.type !== 'keyDown' || !(input.meta || input.control || input.alt)) return
       const frame = contents.focusedFrame
       if (!frame || frame === contents.mainFrame) return
-      const keys = shortcutOf({ key: input.key, code: input.code, metaKey: input.meta, ctrlKey: input.control, altKey: input.alt, shiftKey: input.shift })
-      if (!keys || !window.boundKeys.has(keys)) return
-      event.preventDefault()
-      window.sendApp('app.key', { keys })
+      if (window.takeKey(input)) event.preventDefault()
     })
     // Back and forward from outside the page: a mouse's buttons (Windows, Linux) and a swipe (macOS, as its trackpad
     // setting lets one through). The window goes along its own history.
@@ -244,28 +256,8 @@ export function createWindows({ app: appConfig, dataDir, headless, methods, chan
   }
 }
 
-/**
- * What the windows' pages may do: list the installed fonts (font pickers, the Local Font Access API), and nothing else
- * asked for; and show a site in a Preview pane, which most sites refuse (X-Frame-Options, CSP frame-ancestors), there to
- * stop other sites wrapping them. Here the frame is the user's own pane, so for frames only, those refusals are
- * dropped; the frame stays sandboxed (no top navigation), and top-level loads are untouched.
- */
+/** What the windows' pages may do: list the installed fonts (font pickers, the Local Font Access API), and nothing else asked for. */
 export function setUpSession() {
   session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(permission === 'local-fonts'))
   session.defaultSession.setPermissionCheckHandler((_contents, permission) => permission === 'local-fonts')
-  session.defaultSession.webRequest.onHeadersReceived({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
-    if (details.resourceType !== 'subFrame' || !details.responseHeaders) return callback({})
-    const headers: Record<string, string[]> = {}
-    for (const [name, values] of Object.entries(details.responseHeaders)) {
-      const key = name.toLowerCase()
-      if (key === 'x-frame-options') continue
-      if (key === 'content-security-policy') {
-        const kept = values.map((policy) => policy.split(';').filter((d) => !/^\s*frame-ancestors\b/i.test(d)).join(';')).filter((p) => p.trim())
-        if (kept.length) headers[name] = kept
-        continue
-      }
-      headers[name] = values
-    }
-    callback({ responseHeaders: headers })
-  })
 }

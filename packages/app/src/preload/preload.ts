@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import { artifactUrl, CHANNEL, type BridgeChannel, type CallResult, type ChannelEvent, type SuperegoBridge, type SuperegoEvent } from '../shared/bridge.ts'
+import { artifactUrl, CHANNEL, type BridgeChannel, type BridgeWebView, type CallResult, type ChannelEvent, type SuperegoBridge, type SuperegoEvent, type WebViewEvent, type WebViewPartition } from '../shared/bridge.ts'
 
 /**
  * The bridge as this (isolated) world has it: its calls answer with what happened (CallResult), not by throwing. An error
@@ -16,6 +16,7 @@ const bridge = {
     listeners.add(listener)
     return () => { listeners.delete(listener) }
   },
+  webView: ({ url, partition }: { url: string; partition: WebViewPartition }) => webView(url, partition),
   async channel(machine: string, kind: string, params: unknown): Promise<CallResult> {
     const response = await ipcRenderer.invoke(CHANNEL.open, machine, kind, params) as CallResult
     return response.ok ? { ok: true, result: held(response.result as string) } : response
@@ -61,6 +62,30 @@ function held(id: string): BridgeChannel {
     onData: (listener) => { reader = listener; for (const bytes of waiting.splice(0)) read(bytes) },
     onClose: (listener) => { if (closed) listener(closed.reason); else closers.add(listener) },
     close: () => { if (!closed) ipcRenderer.send(CHANNEL.close, id) },
+  }
+}
+
+// The window's web views (main/web-views.ts): told what to do by id, and what each tells its pane passed on to it.
+const views = new Map<string, (event: WebViewEvent) => void>()
+ipcRenderer.on(CHANNEL.viewEvent, (_event: IpcRendererEvent, { id, event }: { id: string; event: WebViewEvent }) => views.get(id)?.(event))
+
+function webView(url: string, partition: WebViewPartition): BridgeWebView {
+  const id = crypto.randomUUID()
+  const waiting: WebViewEvent[] = []
+  let listener: ((event: WebViewEvent) => void) | undefined
+  views.set(id, (event) => { if (listener) listener(event); else waiting.push(event) })
+  ipcRenderer.send(CHANNEL.viewOpen, id, url, partition)
+  const op = (name: string, ...args: unknown[]) => ipcRenderer.send(CHANNEL.view, id, name, ...args)
+  return {
+    place: (rect, shown) => op('place', rect, shown),
+    load: (to) => op('load', to),
+    go: (by) => op('go', by),
+    reload: () => op('reload'),
+    focus: (on) => op('focus', on),
+    reveal: (path) => op('reveal', path),
+    snapshot: () => ipcRenderer.invoke(CHANNEL.viewSnapshot, id) as Promise<Uint8Array | null>,
+    onEvent: (next) => { listener = next; for (const event of waiting.splice(0)) next(event) },
+    close: () => { views.delete(id); op('close') },
   }
 }
 

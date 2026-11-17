@@ -4,7 +4,7 @@
 import { BrowserWindow, app } from 'electron'
 import { createServer } from 'node:http'
 import { mkdirSync, readFileSync } from 'node:fs'
-import { home, openRow, row } from './common.mjs'
+import { clickInto, home, openRow, pageAt, row } from './common.mjs'
 
 export default async function session(t, s) {
   // The window as it was left, after a reload: the same thread selected, its unsent draft still there.
@@ -192,11 +192,11 @@ export default async function session(t, s) {
   const front = (label) => t.until(`(document.querySelector('.panes__tab.is-active .panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}`, `${label} brought forward`)
   const closeBeside = () => t.run(`window.superego.call('local', 'pane.close', { thread: '${other}', pane: document.querySelector('[data-column]:not([data-column="thread"])').dataset.column })`)
   await t.call('pane.open', { thread: other, kind: 'preview', params: { url: `http://127.0.0.1:${another.address().port}/` } })
-  await t.until(`Boolean(document.querySelector('.web-panes-frame iframe'))`, 'a page beside the thread')
+  await t.until(() => pageAt(`http://127.0.0.1:${another.address().port}/`), 'a page beside the thread')
   await t.run(`document.querySelector('.composer textarea').focus()`)
   await ringed('thread')
   t.key('Right', ['meta', 'alt'])
-  await t.until(`document.activeElement?.matches('.web-panes-frame iframe')`, 'cmd+alt+right into the page')
+  await t.until(`document.activeElement?.matches('.web-view')`, 'cmd+alt+right into the page')
   await ringed('Preview')
   await front('Preview')
   // Out of it again: the page has the keyboard, so the window takes the key before it.
@@ -204,8 +204,8 @@ export default async function session(t, s) {
   await t.until(`document.activeElement?.matches('.thread__scroll')`, 'cmd+alt+left out of the page')
   await ringed('thread')
   await front('thread')
-  await t.mouse('.web-panes-frame iframe')
-  await t.until(`document.activeElement?.matches('.web-panes-frame iframe')`, 'a click into the page')
+  clickInto(t, pageAt(`http://127.0.0.1:${another.address().port}/`))
+  await t.until(`document.activeElement?.matches('.web-view')`, 'a click into the page')
   await ringed('Preview')
   await front('Preview')
   await closeBeside()

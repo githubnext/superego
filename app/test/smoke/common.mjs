@@ -1,5 +1,16 @@
-// What smoke's areas share: the sidebar's rows, the rail's notices, and a restart onto new code.
+// What smoke's areas share: the sidebar's rows, the rail's notices, a pane's web page, and a restart onto new code.
+import { webContents } from 'electron'
+
 export const home = process.env.SUPEREGO_HOME
+
+/** The page in a pane's web view (Preview's, an artifact's) whose address starts with `prefix`. */
+export const pageAt = (prefix) => webContents.getAllWebContents().find((c) => !c.isDestroyed() && c.getURL().startsWith(prefix))
+
+/** A click into a pane's web page, at `x`, `y` in it. A hidden window's view never has the system's focus: the click's, as it comes. */
+export function clickInto(t, page, { x = 200, y = 200 } = {}) {
+  for (const type of ['mouseDown', 'mouseUp']) page.sendInputEvent({ type, button: 'left', clickCount: 1, x, y })
+  if (!t.win().isVisible()) page.emit('focus')
+}
 /** An extra file in the build: the daemon's code on disk changed, as an update would change it. */
 export const STRAY = new URL('../../out/main/zz-smoke-restart.js', import.meta.url).pathname
 

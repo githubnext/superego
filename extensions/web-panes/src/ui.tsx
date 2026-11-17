@@ -1,11 +1,13 @@
 // web-panes, UI half: Preview, a web page beside the thread (a link it names, opened beside; the agent's pane_open
-// "preview"), and Artifact, an HTML file the agent wrote, shown as a page. Both reload from their header; an artifact
-// also whenever the thread moves on, as it may have rewritten it. A preview of `localhost` on another machine than this
+// "preview"), and Artifact, an HTML file the agent wrote, shown as a page. On the desktop each is a page of its own over
+// the pane, as a browser tab is (the app's WebView): its cookies hold, its redirects through other ports and sites
+// work, its history goes back and forward. In a browser they're framed. Both reload from their header; an artifact also
+// whenever the thread moves on, as it may have rewritten it. A preview of `localhost` on another machine than this
 // computer loads from that machine's, forwarded here by the app (the bridge's `forward`).
-import { useEffect, useState } from 'react'
-import { defineUiExtension, PaneButton, PaneHeader, PaneMessage, PaneNote, type PaneProps } from '@superego/app/ui'
+import { useEffect, useRef, useState } from 'react'
+import { defineUiExtension, hasWebViews, PaneButton, PaneHeader, PaneMessage, PaneNote, WebView, type PaneProps, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'
-import { FileTextIcon, GlobeIcon } from '@superego/ui'
+import { ArrowLeftIcon, ArrowRightIcon, FileTextIcon, GlobeIcon, XIcon } from '@superego/ui'
 import './styles.css'
 import { about, ARTIFACT, PREVIEW } from './shared.ts'
 
@@ -24,7 +26,6 @@ export default defineUiExtension({
 /** A web page: a dev server (the thread's machine's `localhost`, forwarded here when that's another computer), docs. */
 function PreviewPane({ machine, pane }: PaneProps) {
   const { url } = params<{ url?: string }>(pane)
-  const [key, setKey] = useState(0)
   const valid = Boolean(url && /^https?:\/\//.test(url))
   const [shown, setShown] = useState<{ for: string; url?: string; error?: string }>()
   useEffect(() => {
@@ -44,30 +45,76 @@ function PreviewPane({ machine, pane }: PaneProps) {
   if (!url || !valid) return <PaneMessage>No address (an http or https URL) given.</PaneMessage>
   if (shown?.for !== url) return <PaneMessage>Loading…</PaneMessage>
   if (shown.error) return <PaneMessage>{shown.error}</PaneMessage>
-  const at = shown.url!
-  // Forwarded at another port (the machine's is taken here): said, as its own links to that port lead elsewhere.
-  const moved = at !== url && new URL(at).port !== new URL(url).port
-  const note = moved ? `${url} (${machine.label}), here at ${new URL(at).host}` : url
+  return <Page key={shown.url} url={url} at={shown.url!} machine={machine.label} />
+}
+
+/** What a page did that its pane tells of, until it's dismissed: a file it saved, something it was refused. */
+type Notice = { text: string; path?: string }
+
+/** The page at `at`, where `url` (on `machine`) loads from here. */
+function Page({ url, at, machine }: { url: string; at: string; machine: string }) {
+  const view = useRef<WebViewHandle>(null)
+  const [state, setState] = useState<{ url: string; canGoBack: boolean; canGoForward: boolean }>()
+  const [notice, setNotice] = useState<Notice>()
+  const onEvent = (event: WebViewEvent) => {
+    if (event.type === 'state') setState(event.state)
+    if (event.type === 'download' && event.state !== 'progressing') {
+      setNotice(event.state === 'completed' ? { text: `Saved ${event.name} to Downloads`, path: event.path } : { text: `${event.name} wasn't saved (${event.state})` })
+    }
+    if (event.type === 'denied') setNotice({ text: `The page asked for ${PERMISSIONS[event.permission] ?? event.permission}: refused here` })
+  }
+  // Forwarded from another machine: its address there is shown, with where it's come from, and where it is here when
+  // that's at another port (the machine's is taken here), as the page's own links to that port lead elsewhere.
+  const here = new URL(at)
+  const current = state?.url || at
+  const forwarded = at !== url && current.startsWith(here.origin)
+  const address = forwarded ? new URL(url).origin + current.slice(here.origin.length) : current
+  const moved = forwarded && here.port !== new URL(url).port
+  const note = forwarded ? `${address} (${machine}${moved ? `, here at ${here.host}` : ''})` : address
+  const native = hasWebViews()
   return (
     <div className="web-panes-frame">
-      <PaneHeader><PaneNote title={note} href={at}>{note}</PaneNote><PaneButton onClick={() => setKey((k) => k + 1)}>Reload</PaneButton></PaneHeader>
-      <iframe key={key} src={at} title={url} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
+      <PaneHeader>
+        {native && <PaneButton aria-label="Back" title="Back" disabled={!state?.canGoBack} onClick={() => view.current?.go(-1)}><ArrowLeftIcon size={12} aria-hidden /></PaneButton>}
+        {native && <PaneButton aria-label="Forward" title="Forward" disabled={!state?.canGoForward} onClick={() => view.current?.go(1)}><ArrowRightIcon size={12} aria-hidden /></PaneButton>}
+        <PaneNote title={note} href={current}>{note}</PaneNote>
+        <PaneButton onClick={() => view.current?.reload()}>Reload</PaneButton>
+      </PaneHeader>
+      {notice && (
+        <div className="web-panes-notice" role="status">
+          <span>{notice.text}</span>
+          {notice.path && <button type="button" onClick={() => view.current?.reveal(notice.path!)}>Show</button>}
+          <button type="button" aria-label="Dismiss" onClick={() => setNotice(undefined)}><XIcon size={11} aria-hidden /></button>
+        </div>
+      )}
+      <WebView ref={view} src={at} partition="preview" title={url} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" onEvent={onEvent} />
     </div>
   )
+}
+
+/** What a page asks for, as the pane says it. */
+const PERMISSIONS: Record<string, string> = {
+  media: 'the camera or microphone', geolocation: 'your location', notifications: 'notifications', midi: 'MIDI devices', midiSysex: 'MIDI devices',
+  'clipboard-read': 'the clipboard', fullscreen: 'the full screen', 'display-capture': 'the screen', pointerLock: 'the pointer', keyboardLock: 'the keyboard',
+  'idle-detection': 'idle detection', 'storage-access': 'its storage elsewhere', 'top-level-storage-access': 'its storage elsewhere', hid: 'HID devices', serial: 'serial ports', usb: 'USB devices',
 }
 
 /** An HTML file the agent wrote, shown as a page: sandboxed, from its own origin, with its relative files beside it. */
 function ArtifactPane({ machine, thread, pane }: PaneProps) {
   const { path } = params<{ path?: string }>(pane)
-  const [key, setKey] = useState(0)
-  useEffect(() => { setKey((k) => k + 1) }, [thread.activeAt])
+  const view = useRef<WebViewHandle>(null)
+  const first = useRef(true)
+  useEffect(() => {
+    if (first.current) { first.current = false; return }
+    view.current?.reload()
+  }, [thread.activeAt])
   if (!path) return <PaneMessage>No file given.</PaneMessage>
   const url = window.superego.artifactUrl?.(machine.id, thread.id, path)
   if (!url) return <PaneMessage>Artifacts aren't shown here.</PaneMessage>
   return (
     <div className="web-panes-frame">
-      <PaneHeader><PaneNote title={path} code>{path}</PaneNote><PaneButton onClick={() => setKey((k) => k + 1)}>Reload</PaneButton></PaneHeader>
-      <iframe key={key} src={url} title={path} sandbox="allow-scripts allow-forms allow-popups" />
+      <PaneHeader><PaneNote title={path} code>{path}</PaneNote><PaneButton onClick={() => view.current?.reload()}>Reload</PaneButton></PaneHeader>
+      <WebView ref={view} src={url} partition="artifact" title={path} sandbox="allow-scripts allow-forms allow-popups" />
     </div>
   )
 }
