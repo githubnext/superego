@@ -1,5 +1,5 @@
 // Screenshots of every thread state as the window draws it (run by `test/look.sh <dir> states`): the sidebar (unread
-// titles semibold, the word for what a thread waits on, the wave while it works, quiet offshoots, a folded parent's
+// titles semibold, the word for what a thread waits on, the spinner while it works, quiet offshoots, a folded parent's
 // roll-up, pinned, an offline machine's project), the rail with the sidebar hidden, the title bar for a thread working,
 // asking and failed, and ⌘U; in light and dark. Into $SUPEREGO_SHOWCASE_OUT.
 //

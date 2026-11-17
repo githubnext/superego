@@ -21,11 +21,13 @@ it('draws each state in a shape of its own, named for screen readers', () => {
   expect(glyph({ state: 'blocked', kind: 'permission' })).toContain('superego-status--permission')
   expect(glyph({ state: 'blocked', kind: 'permission' })).toContain('aria-label="Permission"')
   expect(glyph({ state: 'error', msg: 'Out of credits' })).toContain('aria-label="Failed: Out of credits"')
-  expect(glyph({ state: 'working' })).toContain('superego-glyph__wave')
+  expect(glyph({ state: 'working' })).toContain('superego-glyph__spin')
 })
 
-it("draws a quiet thread's work grey and its finished run as nothing new", () => {
+it("draws a quiet thread's work as a smaller grey spinner and its finished run as nothing new", () => {
   expect(glyph({ state: 'working' }, true)).toContain('is-quiet')
+  expect(glyph({ state: 'working' }, true)).toContain('superego-glyph__spin')
+  expect(shape(glyph({ state: 'working' }, true))).not.toBe(shape(glyph({ state: 'working' })))
   expect(shape(glyph({ state: 'done' }, true))).toBe(shape(glyph({ state: 'idle' })))
   expect(glyph({ state: 'blocked', kind: 'question' }, true)).toContain('superego-status--question')
 })
@@ -40,5 +42,7 @@ it('says the word in its colour, and nothing when idle', () => {
 
 it("draws a board's and a machine's marks with the same set", () => {
   for (const s of ['queued', 'stalled', 'landed', 'offline', 'connecting'] as const) expect(renderToStaticMarkup(h(Glyph, { shape: s }))).toContain(`superego-status--${s}`)
-  expect(renderToStaticMarkup(h(Glyph, { shape: 'stalled' }))).toContain('is-still')
+  // Stalled is the spinner stopped; connecting, the quiet spinner.
+  expect(renderToStaticMarkup(h(Glyph, { shape: 'stalled' }))).not.toContain('superego-glyph__spin')
+  expect(renderToStaticMarkup(h(Glyph, { shape: 'connecting' }))).toContain('superego-glyph__spin')
 })

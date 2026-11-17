@@ -236,7 +236,7 @@ it('folds a thread\'s offshoots and a project, steps past them, keeps them folde
   const caret = (el: HTMLElement) => el.querySelector<HTMLElement>('.threads-caret')!
   expect(rowOf('here')!.querySelector('.threads-caret')).toBeNull()
 
-  // Its caret folds the parent's offshoots, summed up at the end of its row: the wave while one works, then how many
+  // Its caret folds the parent's offshoots, summed up at the end of its row: a spinner while one works, then how many
   // are new (its answer, unread).
   caret(rowOf('parent')!).click()
   await ui.until(() => !rowOf('offshoot'), 'the offshoot folded away')

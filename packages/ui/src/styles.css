@@ -117,14 +117,12 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-status--error { color: var(--superego-status-error); }
 .superego-status--signin, .superego-status--connecting, .superego-status--working.is-quiet { color: var(--superego-muted); }
 .superego-status--queued, .superego-status--offline { color: var(--superego-faint); }
-/* Working: three dots breathing in turn; still under reduced motion, and where what's shown isn't live (`.is-stale`). */
-.superego-glyph__wave circle { opacity: .25; animation: superego-wave 1.2s ease-in-out infinite; }
-.superego-glyph__wave circle:nth-child(2) { animation-delay: .16s; }
-.superego-glyph__wave circle:nth-child(3) { animation-delay: .32s; }
-.superego-glyph__wave.is-still circle { animation: none; opacity: 1; }
-.is-stale .superego-glyph__wave circle { animation-play-state: paused; }
-@keyframes superego-wave { 30% { opacity: 1; } 60%, 100% { opacity: .25; } }
-@media (prefers-reduced-motion: reduce) { .superego-glyph__wave circle { animation: none; opacity: 1; } }
+/* Working: a spinner, every one in step (status.tsx); still under reduced motion, and where what's shown isn't live
+   (`.is-stale`). */
+.superego-glyph__spin { transform-box: fill-box; transform-origin: center; animation: superego-spin 1.6s linear infinite; }
+.is-stale .superego-glyph__spin { animation: none; }
+@keyframes superego-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .superego-glyph__spin { animation: none; } }
 @keyframes superego-pulse { 50% { opacity: .35; } }
 /* A status's word (Question, Permission, Failed, …), beside a title. */
 .superego-status-word { flex: none; font-weight: 500; white-space: nowrap; }

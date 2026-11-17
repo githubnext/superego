@@ -179,8 +179,8 @@ function Pinned({ section, where }: { section: ShownSection; where(project: Proj
 
 /**
  * A thread's row, as a mail app has it: unread, its title semibold with a mark before it (a dot for done, a target for a
- * question or permission, a cross for failed); at the end, what it waits on in a word (Question, Permission, Sign in,
- * Failed), the wave while it works, or when it was last active (in the accent while unread). Folded, the end sums up
+ * question or permission, a cross for failed), and a spinner before it while it works; at the end, what it waits on in
+ * a word (Question, Permission, Sign in, Failed), or when it was last active (in the accent while unread). Folded, the end sums up
  * the threads under it (`Rollup`). Its marks (`thread.badge`) follow the title; among the pinned, where it is too;
  * under its project, pinned, a pin. A right-click pins or unpins it, or archives it; it can be dragged into the pinned.
  */
@@ -221,19 +221,18 @@ function ThreadRow({ machine, thread, selected, level = 0, row, where, className
   )
 }
 
-/** The states a row marks before its title: those that want a look. */
-const LEADS = new Set(['done', 'question', 'permission', 'error'])
+/** The states a row marks before its title: those that want a look, and working. */
+const LEADS = new Set(['working', 'done', 'question', 'permission', 'error'])
 
-/** The end of a thread's row: the wave while it works, what it waits on in a word, or when it was last active. */
+/** The end of a thread's row: what it waits on in a word, or when it was last active. */
 function RowEnd({ thread }: { thread: ThreadInfo }) {
   const shape = statusShape(thread.status, thread.quiet)
-  if (shape === 'working') return <StatusGlyph status={thread.status} quiet={thread.quiet} className="threads__wave" />
-  if (shape === 'idle' || shape === 'done') return <span className={shape === 'done' ? 'threads__ago is-new' : 'threads__ago'}>{ago(thread.activeAt)}</span>
+  if (shape === 'working' || shape === 'idle' || shape === 'done') return <span className={shape === 'done' ? 'threads__ago is-new' : 'threads__ago'}>{ago(thread.activeAt)}</span>
   return <StatusWord status={thread.status} />
 }
 
 /**
- * Threads out of sight, summed up where they're folded: the wave (grey) while any of them works, then the most pressing
+ * Threads out of sight, summed up where they're folded: a spinner (grey) while any of them works, then the most pressing
  * word (Question, Permission, Failed) or how many are new. Nothing when they're all quiet.
  */
 function rolledUp(threads: ThreadInfo[]) {
@@ -242,7 +241,7 @@ function rolledUp(threads: ThreadInfo[]) {
   const top = rollup(wanting.map((t) => t.status))
   const said = top.state === 'blocked' || top.state === 'error' ? <StatusWord status={top} /> : wanting.length ? <span className="threads-rollup__new">{wanting.length} new</span> : null
   if (!working && !said) return null
-  return <span className="threads-rollup">{working && <Glyph shape="working" quiet label="Working" className="threads__wave" />}{said}</span>
+  return <span className="threads-rollup">{working && <Glyph shape="working" quiet label="Working" className="threads-rollup__spin" />}{said}</span>
 }
 
 /**

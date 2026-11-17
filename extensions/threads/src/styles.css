@@ -21,18 +21,18 @@
 /* The title truncates; the marks after it (thread.badge) stay. */
 .threads-project .superego-list-item__body { display: flex; align-items: center; gap: 5px; }
 .threads__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* As in a mail app: unread, the title is semibold and marked before it; the end says what it waits on, or the wave. */
+/* As in a mail app: unread, the title is semibold and marked before it; the end says what it waits on; working, a spinner
+   before it. */
 .threads__title.is-unread { font-weight: 600; }
 .threads__lead { display: grid; place-items: center; width: 13px; font-size: 12px; }
 .threads .superego-list-item__trailing { display: inline-flex; align-items: center; gap: 4px; }
-.threads__wave { font-size: 15px; }
 .threads__ago.is-new { color: var(--superego-accent); }
 .threads__pin { flex: none; color: var(--superego-faint); }
 .superego-list-item.threads-child { padding-left: calc(8px + var(--depth) * 14px); }
-/* A machine that isn't connected: its rows the last thing known, at half strength, their waves still. */
+/* A machine that isn't connected: its rows the last thing known, at half strength, their spinners still. */
 .threads-project.is-stale .superego-list-item, .threads-project.is-stale .threads-project__name { opacity: .5; }
 /* Folding: a caret after a section's name or a thread's title, shown on hover and while folded (pointing right); folded,
-   what's out of sight summed up: the wave while any works, then the most pressing word or how many are new. */
+   what's out of sight summed up: a spinner while any works, then the most pressing word or how many are new. */
 .threads-caret { flex: none; display: grid; place-items: center; width: 16px; height: 16px; margin: 0 -2px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--superego-faint); cursor: default; opacity: 0; transition: opacity .1s; }
 .threads-caret svg { transform: rotate(90deg); transition: transform .12s; }
 .threads-caret:hover { color: var(--superego-text); background: var(--superego-hover); }
@@ -40,6 +40,7 @@
 .threads-project.is-folded > .threads-project__head > .threads-caret svg, .superego-list-item.is-folded .threads-caret svg { transform: none; }
 .threads-tucked { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: var(--superego-text-xs); font-weight: 400; color: var(--superego-faint); font-variant-numeric: tabular-nums; }
 .threads-rollup { display: inline-flex; align-items: center; gap: 4px; }
+.threads-rollup__spin { font-size: 12px; }
 .threads-rollup__new { color: var(--superego-accent); font-weight: 500; }
 /* Pinned: from every project, each saying where it is, quietly; a row being dragged shows where it would land. */
 .threads-pinned .superego-list-item.is-stale { opacity: .5; }

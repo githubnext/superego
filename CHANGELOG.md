@@ -5,14 +5,14 @@
 - Upgrade: CSS in a profile or extension that draws its own status dots with `--superego-status-dot` needs changing:
   that variable is gone. Draw them with 'superego/ui''s `Glyph` or `StatusGlyph` instead (`api: '^3.1'`).
 - Threads read like a mail inbox: an unread title is bold, with a mark before it, and the row says what's wanted in a
-  word: Question, Permission, Sign in or Failed. A working thread shows three breathing dots where its time would be
-  (still with reduced motion). The words are the same in the title bar, ⌘U, the menu bar, `superego threads` and
+  word: Question, Permission, Sign in or Failed. A working thread has a spinner before its title, and every spinner
+  turns in step, so many at once move as one (still with reduced motion). The words are the same in the title bar, ⌘U, the menu bar, `superego threads` and
   `superego unread`, and notifications ("Release notes — Permission").
 - Each state has its own shape, so none is told apart by colour alone, in the highlighted row of ⌘U and ⌘L too.
-- A thread working for another (quiet) shows grey while it works, and nothing new once it's done: the unread count
-  already left it out. A collapsed thread sums up what's under it: the dots while any works, then what needs you, or
-  how many are new.
-- A machine that's offline shows its threads at half strength, their dots still; Settings no longer marks it as failed.
+- A thread working for another (quiet) shows a smaller grey spinner while it works, and nothing new once it's done: the
+  unread count already left it out. A collapsed thread sums up what's under it: a spinner while any works, then what
+  needs you, or how many are new.
+- A machine that's offline shows its threads at half strength, their spinners still; Settings no longer marks it as failed.
 - Collapse parts of the sidebar: Pinned, a project, or the threads another thread started, from the caret beside its
   name (or ← and →). Collapsed, it shows how many threads it holds and whether any needs you. ⌘⌥↑ and ⌘⌥↓ skip what's
   collapsed, and going to a thread inside opens the way to it. ⌘K has Collapse all threads and Expand all threads.
