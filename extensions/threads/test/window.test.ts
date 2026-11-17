@@ -126,7 +126,7 @@ it('draws a thread link in your message as the thread it names', async () => {
   await ui.until(() => Boolean($$('.msg--user').at(-1)?.querySelector('a.thread-ref')), 'the link drawn as a thread')
 })
 
-it('pins threads from every project and machine to the top, only there, and unpins them; archived, a thread leaves them', async () => {
+it('pins threads from every project and machine to the top, and to the top of their projects, and unpins them; archived, a thread leaves them', async () => {
   const box = await testDaemon({ model: 'echo' })
   try {
     const elsewhere = join(daemon.dataDir, 'elsewhere')
@@ -144,12 +144,15 @@ it('pins threads from every project and machine to the top, only there, and unpi
     await ui.until(() => Boolean(menuItem('Pin')), 'the row menu')
     menuItem('Pin')!.click()
     await ui.until(() => pinned().join() === 'far', 'pinned, from the other machine')
-    expect(rowOf('far')).toBeUndefined()
+    // Still under its project too, marked.
+    expect(rowOf('far')?.querySelector('.threads__pin')).not.toBeNull()
     expect(rowOf('far', '.threads-pinned')?.querySelector('.threads-pinned__where')?.textContent).toMatch(/Build box/)
     $('.app__titlebar .thread__pin')!.click()
     await ui.until(() => pinned().join() === 'far,there' && $('.app__titlebar .thread__pin')?.getAttribute('aria-pressed') === 'true', 'the shown one pinned from the title bar')
-    expect(rowOf('there')).toBeUndefined()
-    expect(rowOf('stays')).toBeDefined()
+    // At the top of its project, above the one newer.
+    const project = (title: string) => rows().filter((li) => li.closest('section') === rowOf(title)!.closest('section')).map((li) => li.querySelector('.threads__title')?.textContent)
+    expect(project('stays')).toEqual(['there', 'stays'])
+    expect(rowOf('stays')?.querySelector('.threads__pin')).toBeNull()
     await ui.select({ thread: here.id })
     await ui.key('mod+k')
     await ui.until(() => Boolean($$('.palette__list li').find((li) => li.textContent?.includes('Pin thread'))), 'Pin thread in the palette')
@@ -170,7 +173,7 @@ it('pins threads from every project and machine to the top, only there, and unpi
     rightClick(rowOf('far', '.threads-pinned')!)
     await ui.until(() => Boolean(menuItem('Unpin')), 'the pinned row menu')
     menuItem('Unpin')!.click()
-    await ui.until(() => pinned().join() === 'there,here' && Boolean(rowOf('far')), 'unpinned, back in its project')
+    await ui.until(() => pinned().join() === 'there,here' && !rowOf('far')?.querySelector('.threads__pin'), 'unpinned, unmarked in its project')
 
     // Archived, it leaves the pins: unarchived, it's not pinned again.
     await daemon.call('thread.archive', { thread: there.id })
@@ -180,13 +183,15 @@ it('pins threads from every project and machine to the top, only there, and unpi
     await ui.until(() => Boolean(rowOf('there')), 'unarchived, under its project')
     expect(pinned().join()).toBe('here')
 
-    // The navigator lists the pinned first, marked, then the projects with the rest.
+    // The navigator lists the pinned first, marked, then the projects, the pinned again at their tops; a search finds it once.
     await ui.key('mod+l')
     await ui.until(() => Boolean($('.navigator__row')), 'the navigator')
     const first = $('.navigator__row')!
     expect(first.querySelector('.palette__title')?.textContent).toBe('here')
     expect(first.querySelector('.navigator__pin')).not.toBeNull()
-    expect($$('.navigator__row--thread .palette__title').filter((t) => t.textContent === 'here')).toHaveLength(1)
+    expect($$('.navigator__row--thread .palette__title').filter((t) => t.textContent === 'here')).toHaveLength(2)
+    await ui.type('.palette__input', 'here')
+    await ui.until(() => $$('.navigator__row--thread .palette__title').filter((t) => t.textContent === 'here').length === 1, 'found once')
     await ui.key('escape')
     await ui.until(() => !$('.navigator__row'), 'the navigator closed')
 
@@ -194,6 +199,8 @@ it('pins threads from every project and machine to the top, only there, and unpi
     await ui.key('mod+/')
     await ui.until(() => dots(), 'the dots')
     expect($('.threads-rail__dot')!.getAttribute('aria-label')).toMatch(/^here,/)
+    // Each once: not again with its project.
+    expect($$('.threads-rail__dot').filter((dot) => dot.getAttribute('aria-label')?.startsWith('here,'))).toHaveLength(1)
   } finally {
     await ui?.unmount()
     await box.close()

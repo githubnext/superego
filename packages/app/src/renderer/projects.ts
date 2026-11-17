@@ -1,7 +1,8 @@
 // Projects: what holds threads. A project is a repository (its main checkout) or a folder on a machine, and
 // holds the threads started there, worktrees and all. The machine is a fact about the project, not a level above it.
 // One order for every place that walks them (the sidebar, its rail, the navigator, ⌘⇧[ and ⌘⇧]): the rows the sidebar
-// shows, top to bottom, whether it's open or not; pinned threads first (see pins.ts), then each project's. The sort (the window's own setting, `app.sort`, which the sidebar's
+// shows, top to bottom, whether it's open or not; pinned threads first (see pins.ts), then each project's (its pinned
+// at its top, again). The sort (the window's own setting, `app.sort`, which the sidebar's
 // menu changes) sets it; a thread another started sits right under it.
 import { useMemo } from 'react'
 import { rollup, statusRank, unreadThreads, type Status, type ThreadInfo } from '@superego/protocol'
@@ -35,8 +36,8 @@ export const projectKey = (machine: string, root: string) => `${machine}:${root}
 export type PinnedThread = { project: Project; thread: ThreadInfo }
 
 /**
- * What the sidebar lists, top to bottom: the pinned threads, in the order they were pinned, then the projects with the
- * rest (a project whose threads are all pinned isn't listed). Each thread once.
+ * What the sidebar lists, top to bottom: the pinned threads, in the order they were pinned, then every project, its
+ * pinned threads at its top (in that order too) and the rest as they sort. A pinned thread is listed twice.
  */
 export type Sidebar = { pinned: PinnedThread[]; projects: Project[] }
 
@@ -48,20 +49,29 @@ export function pinnedFirst(projects: Project[], pins: readonly Pin[]): Sidebar 
     const project = projects.find((p) => p.machine.id === pin.machine && p.threads.some((t) => t.id === pin.thread))
     if (project) pinned.push({ project, thread: project.threads.find((t) => t.id === pin.thread)! })
   }
-  const out = new Set(pinned.map(({ project, thread }) => `${project.machine.id}/${thread.id}`))
-  const rest = projects.flatMap((project) => {
-    if (!project.threads.some((t) => out.has(`${project.machine.id}/${t.id}`))) return [project]
-    const threads = project.threads.filter((t) => !out.has(`${project.machine.id}/${t.id}`))
-    return threads.length ? [{ ...project, ...nest(threads) }] : []
-  })
-  return { pinned, projects: rest }
+  return {
+    pinned,
+    projects: projects.map((project) => {
+      const top = pinned.filter((p) => p.project === project).map((p) => p.thread)
+      // Each with the threads it started right under it, as everywhere.
+      return top.length ? { ...project, ...nest([...top, ...project.threads.filter((t) => !top.includes(t))]) } : project
+    }),
+  }
 }
 
-/** The sidebar's threads, top to bottom: the pinned, then each project's. */
-export const sidebarOrder = ({ pinned, projects }: Sidebar) => [
-  ...pinned.map(({ project, thread }) => ({ machine: project.machine.id, thread: thread.id })),
-  ...projects.flatMap((s) => s.threads.map((thread) => ({ machine: s.machine.id, thread: thread.id }))),
-]
+/** The sidebar's threads, top to bottom, each once: the pinned, then each project's others. */
+export function sidebarOrder({ pinned, projects }: Sidebar) {
+  const seen = new Set<string>()
+  return [
+    ...pinned.map(({ project, thread }) => ({ machine: project.machine.id, thread: thread.id })),
+    ...projects.flatMap((s) => s.threads.map((thread) => ({ machine: s.machine.id, thread: thread.id }))),
+  ].filter(({ machine, thread }) => {
+    const key = `${machine}/${thread}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
 
 /**
  * Every unread thread in `projects` but the one shown (`selection`: it's being seen), the most pressing first, with
@@ -142,7 +152,8 @@ export function freeze(frozen: Project[], live: Project[]): Project[] {
 }
 
 /**
- * The thread `by` from `from`: down (or up) the rows the sidebar shows, pinned ones first, across projects, and around at the ends; from
+ * The thread `by` from `from`: down (or up) the rows the sidebar shows, pinned ones first (and not again in their project),
+ * across projects, and around at the ends; from
  * nothing (or a thread not listed: archived, Ego's), the first or the last. No project's threads are closed in the sidebar, so
  * every listed thread is a row; archived ones aren't listed.
  */

@@ -1,6 +1,6 @@
 // threads: the Threads space in the sidebar. The pinned threads first, from every project and machine, then projects (a
-// repository or folder on a machine) and the rest of the threads in each; the machine is said on the project, where it
-// isn't this computer. Its views:
+// repository or folder on a machine) and the threads in each, its pinned at its top; the machine is said on the project,
+// where it isn't this computer. Its views:
 // - the list (`threads.list`), a space: sorted recently active, newest first, or needs you first (an app setting); with
 //   the sidebar hidden, a rail of status glyphs; the key to go anywhere (⌘L) beside its heading, while pointed at. A row's title is followed by other extensions' marks (the
 //   `thread.badge` slot: a worktree's branch, say); a right-click on it pins or unpins it, or archives it. Pinned
@@ -15,7 +15,7 @@ import {
   type MachineEntry, type Pin, type Project, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, STATUS_WORDS, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
-import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
+import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, PushPinIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
 import { ago } from './ago.ts'
 import { registerLinks, registerRows } from './rows.tsx'
@@ -65,8 +65,6 @@ function Threads() {
     : several || project.machine.id !== 'local' ? project.machine.label : undefined
   const local = machines.find((m) => m.id === 'local')
   const ready = local?.state === 'connected'
-  // Going to a project goes to the thread last shown in it, pinned or not.
-  const whole = (project: Project) => projects.find((p) => p.key === project.key) ?? project
 
   return (
     <div className={`threads ${ready ? 'is-ready' : ''}`} data-focus-scope onPointerEnter={() => hold(true)} onPointerLeave={() => hold(false)}>
@@ -83,7 +81,7 @@ function Threads() {
       {sidebar.projects.map((project) => (
         <section key={project.key} className={`threads-project ${project.machine.state !== 'connected' ? 'is-stale' : ''}`}>
           <div className="threads-project__head">
-            <button className="threads-project__name" title={project.root} onClick={() => showProject({ select, lastThread }, whole(project))}>
+            <button className="threads-project__name" title={project.root} onClick={() => showProject({ select, lastThread }, project)}>
               {project.name}
               {where(project) && <em>{where(project)}</em>}
               {project.machine.remote && <MachineDrift machine={project.machine} />}
@@ -159,8 +157,8 @@ function Pinned({ where }: { where(project: Project): string }) {
 }
 
 /**
- * A thread's row: its status, title and marks (`thread.badge`), why it waits or when it was last active; pinned, where
- * it is too. A right-click pins or unpins it, or archives it; it can be dragged into the pinned.
+ * A thread's row: its status, title and marks (`thread.badge`), why it waits or when it was last active. Among the
+ * pinned, where it is too; under its project, pinned, a pin. A right-click pins or unpins it, or archives it; it can be dragged into the pinned.
  */
 function ThreadRow({ machine, thread, selected, level = 0, where, className = '', ...data }: {
   machine: MachineEntry; thread: ThreadInfo; selected: boolean; level?: number; where?: string; className?: string; 'data-pin'?: number
@@ -182,6 +180,7 @@ function ThreadRow({ machine, thread, selected, level = 0, where, className = ''
           trailing={waitingForSignIn(thread.status) ? <span className="threads__why threads__why--quiet">Waiting</span> : thread.status.state === 'blocked' ? <span className="threads__why">{STATUS_WORDS.blocked}</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">{STATUS_WORDS.error}</span> : ago(thread.activeAt)}
           onClick={() => select(at)}>
           <span className="threads__title">{thread.title}</span>
+          {on && !where && <PushPinIcon className="threads__pin" size={11} weight="fill" aria-label="Pinned" />}
           <Slot name="thread.badge" props={{ machine, thread }} />
           {where && <em className="threads-pinned__where">{where}</em>}
         </ListItem>
@@ -300,10 +299,13 @@ function ThreadsRail({ open, sidebarHidden, show }: SpaceRailProps) {
   const waiting = unreadList(projects, selection).map(({ thread }) => thread.status)
   const badge = !hidden && waiting.length ? rollup(waiting).state : undefined
   const click = () => show(!open || hidden)
-  // As the sidebar lists them: the pinned first, then each project's.
+  // As the sidebar lists them, each once: the pinned first, then each project's others.
+  const pinned = new Set(sidebar.pinned.map(({ project, thread }) => `${project.machine.id}/${thread.id}`))
   const groups = [
     ...(sidebar.pinned.length ? [{ key: 'pinned', threads: sidebar.pinned }] : []),
-    ...sidebar.projects.map((project) => ({ key: project.key, threads: project.threads.map((thread) => ({ project, thread })) })),
+    ...sidebar.projects.map((project) => ({
+      key: project.key, threads: project.threads.filter((t) => !pinned.has(`${project.machine.id}/${t.id}`)).map((thread) => ({ project, thread })),
+    })).filter((group) => group.threads.length),
   ]
   return (
     <TooltipProvider>

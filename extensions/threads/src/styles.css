@@ -21,6 +21,7 @@
 /* The title truncates; the marks after it (thread.badge) stay. */
 .threads-project .superego-list-item__body { display: flex; align-items: center; gap: 5px; }
 .threads__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.threads__pin { flex: none; color: var(--superego-faint); }
 .superego-list-item.threads-child { padding-left: calc(8px + var(--depth) * 14px); }
 .threads-project.is-stale .superego-list-item, .threads-project.is-stale .threads-project__name { color: var(--superego-muted); }
 /* Pinned: from every project, each saying where it is, quietly; a row being dragged shows where it would land. */

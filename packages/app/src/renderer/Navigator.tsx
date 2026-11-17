@@ -25,8 +25,10 @@ type Row = {
   path: string
   /** Where it is: the selected thread's row, or its pane in front. */
   current: boolean
-  /** A pinned thread: listed first, as in the sidebar. */
+  /** A pinned thread: listed first, as in the sidebar, and again at its project's top. */
   pinned?: boolean
+  /** Its row (or a pane's) under its project, a pinned thread's second: a search lists it once, from the first. */
+  again?: boolean
   go(): void
 }
 
@@ -35,7 +37,7 @@ const KINDS: Record<string, Kind> = { p: 'project', t: 'thread', g: 'pane' }
 export function Navigator({ onClose }: { onClose(): void }) {
   const registry = useRegistry()
   const machines = useMachines()
-  const { projects, sidebar, lastThread } = useProjects()
+  const { sidebar, lastThread } = useProjects()
   const { selection, select } = useSelection()
   const [query, setQuery] = useState('')
   const [only, setOnly] = useState<Kind>()
@@ -45,16 +47,22 @@ export function Navigator({ onClose }: { onClose(): void }) {
     const several = machines.filter((m) => m.state !== 'disabled').length > 1
     const where = (project: Project) => several || project.machine.id !== 'local' ? project.machine.label : undefined
     const go = (fn: () => void) => () => { onClose(); fn() }
-    // A thread, a level under its project (or on its own, pinned), and its panes under it.
-    const threadRows = (project: Project, thread: ThreadInfo, depth: number, pinned: boolean): Row[] => {
+    const pins = new Set(sidebar.pinned.map(({ project, thread }) => `${project.machine.id}/${thread.id}`))
+    // A thread, a level under its project (or on its own, among the pinned: `top`), and its panes under it.
+    const threadRows = (project: Project, thread: ThreadInfo, top: boolean): Row[] => {
+      const pinned = pins.has(`${project.machine.id}/${thread.id}`)
+      const depth = top ? 0 : 1
+      // Its own keys in each place it's listed; listed again under its project, it's left out of a search.
+      const key = `${top ? 'pinned:' : ''}${project.key}/${thread.id}`
+      const again = pinned && !top
       const isOn = project.machine.id === selection?.machine && thread.id === selection.thread
       const show = () => void dispatch('thread.select', { machine: project.machine.id, thread: thread.id }, { source: 'navigator' })
       const at = { machine: project.machine.id, thread }
       // Pinned: where it is. Else its branch, when the worktrees extension gave it one of its own.
-      const detail = pinned ? [project.name, where(project)].filter(Boolean).join(' · ') : branchOf(thread)
+      const detail = top ? [project.name, where(project)].filter(Boolean).join(' · ') : branchOf(thread)
       return [
         {
-          key: `${project.key}/${thread.id}`, kind: 'thread', depth, title: thread.title, status: thread.status, pinned,
+          key, kind: 'thread', depth, title: thread.title, status: thread.status, pinned, again,
           ...(detail ? { detail } : {}),
           path: `${project.name} ${thread.title}`, current: isOn && !thread.pane,
           go: go(() => {
@@ -63,7 +71,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
           }),
         },
         ...shownPanes(registry, at).map((pane): Row => ({
-          key: `${project.key}/${thread.id}/${pane.id}`, kind: 'pane', depth: depth + 1, title: paneTitle(registry, pane, at),
+          key: `${key}/${pane.id}`, kind: 'pane', again, depth: depth + 1, title: paneTitle(registry, pane, at),
           path: `${project.name} ${thread.title} ${paneTitle(registry, pane, at)}`, current: isOn && thread.pane === pane.id,
           go: go(() => {
             show()
@@ -73,26 +81,25 @@ export function Navigator({ onClose }: { onClose(): void }) {
         })),
       ]
     }
-    // As the sidebar lists them: the pinned threads first, then every project with the rest of its threads.
-    const rest = new Map(sidebar.projects.map((p) => [p.key, p]))
+    // As the sidebar lists them: the pinned threads first, then every project with its threads, its pinned at its top.
     return [
-      ...sidebar.pinned.flatMap(({ project, thread }) => threadRows(project, thread, 0, true)),
-      ...projects.flatMap((project: Project): Row[] => [
+      ...sidebar.pinned.flatMap(({ project, thread }) => threadRows(project, thread, true)),
+      ...sidebar.projects.flatMap((project: Project): Row[] => [
         {
           key: project.key, kind: 'project', depth: 0, title: project.name, status: project.status, path: project.name, current: false,
           ...(where(project) ? { detail: where(project) } : {}),
           go: go(() => showProject({ select, lastThread }, project)),
         },
-        ...(rest.get(project.key)?.threads ?? []).flatMap((thread) => threadRows(project, thread, 1, false)),
+        ...project.threads.flatMap((thread) => threadRows(project, thread, false)),
       ]),
     ]
-  }, [projects, sidebar, machines, selection?.machine, selection?.thread, lastThread])
+  }, [sidebar, machines, selection?.machine, selection?.thread, lastThread])
 
   // Searching flattens to the matches, best first; browsing keeps the tree (or one kind of row in it).
   const shown = useMemo(() => {
     const kept = rows.filter((r) => !only || r.kind === only)
     if (!query.trim()) return kept
-    return kept.map((row) => ({ row, rank: score(row.path, query) })).filter(({ rank }) => rank > 0).sort((a, b) => b.rank - a.rank).map(({ row }) => row)
+    return kept.filter((row) => !row.again).map((row) => ({ row, rank: score(row.path, query) })).filter(({ rank }) => rank > 0).sort((a, b) => b.rank - a.rank).map(({ row }) => row)
   }, [rows, query, only])
 
   const [active, setActive] = useState(() => Math.max(0, rows.findIndex((r) => r.current)))

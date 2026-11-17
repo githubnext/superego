@@ -55,20 +55,20 @@ it('holds still under the pointer, and stepping goes down the rows as they stand
   expect(shown(groupProjects(machines, later, 'recent')).slice(0, 5)).toEqual(['local/parent', 'local/new-child', 'local/child', 'local/grandchild', 'local/solo'])
 })
 
-it('lists pinned threads first, in the order they were pinned, across projects and machines, each only there', () => {
+it('lists pinned threads first, in the order they were pinned, across projects and machines, and again at the top of their projects', () => {
   const projects = groupProjects(machines, threads, 'recent')
-  const pins = [{ machine: 'local', thread: 'site' }, { machine: 'box', thread: 'far' }, { machine: 'local', thread: 'parent' }, { machine: 'local', thread: 'archived' }]
+  const pins = [{ machine: 'local', thread: 'site' }, { machine: 'box', thread: 'far' }, { machine: 'local', thread: 'solo' }, { machine: 'local', thread: 'parent' }, { machine: 'local', thread: 'archived' }]
   const sidebar = pinnedFirst(projects, pins)
   // The pin of a thread not listed (archived) lists nothing.
-  expect(sidebar.pinned.map(({ project, thread }) => `${project.machine.id}/${thread.id} in ${project.name}`)).toEqual(['local/site in site', 'box/far in superego', 'local/parent in superego'])
-  // Not again under their projects: what a pinned parent started stands on its own there.
-  expect(shown(sidebar.projects)).toEqual(['box/far-child', 'local/solo', 'local/child', 'local/grandchild', 'local/stray'])
-  expect(sidebar.projects.map((s) => s.threads.map((t) => s.depth[t.id]))).toEqual([[0], [0, 0, 1], [0]])
-  const order = ['local/site', 'box/far', 'local/parent', 'box/far-child', 'local/solo', 'local/child', 'local/grandchild', 'local/stray']
-  expect(sidebarOrder(sidebar).map((t) => `${t.machine}/${t.thread}`)).toEqual(order)
-  expect(visits(projects, order.length, 1, pins)).toEqual(order)
-  // A project whose threads are all pinned isn't listed below.
-  const all = pinnedFirst(projects, [{ machine: 'box', thread: 'far-child' }, { machine: 'box', thread: 'far' }])
-  expect(all.projects.map((s) => `${s.machine.id}:${s.name}`)).toEqual(['local:superego', 'local:site'])
-  expect(all.pinned.map(({ thread }) => thread.id)).toEqual(['far-child', 'far'])
+  expect(sidebar.pinned.map(({ project, thread }) => `${project.machine.id}/${thread.id} in ${project.name}`)).toEqual(['local/site in site', 'box/far in superego', 'local/solo in superego', 'local/parent in superego'])
+  // Each project still has them all: its pinned at its top, in the pins' order, the rest as they sort; what a thread
+  // started still right under it.
+  expect(shown(sidebar.projects)).toEqual(['box/far', 'box/far-child', 'local/solo', 'local/parent', 'local/child', 'local/grandchild', 'local/site', 'local/stray'])
+  const later = pinnedFirst(projects, [{ machine: 'local', thread: 'stray' }, { machine: 'local', thread: 'parent' }, { machine: 'local', thread: 'solo' }])
+  expect(shown(later.projects)).toEqual(['box/far', 'box/far-child', 'local/parent', 'local/child', 'local/grandchild', 'local/solo', 'local/stray', 'local/site'])
+  // Stepping goes down each thread once: the pinned, then the others.
+  const order = ['local/stray', 'local/parent', 'local/solo', 'box/far', 'box/far-child', 'local/child', 'local/grandchild', 'local/site']
+  expect(sidebarOrder(later).map((t) => `${t.machine}/${t.thread}`)).toEqual(order)
+  expect(visits(projects, order.length, 1, [{ machine: 'local', thread: 'stray' }, { machine: 'local', thread: 'parent' }, { machine: 'local', thread: 'solo' }])).toEqual(order)
+  expect(pinnedFirst(projects, []).projects).toBe(projects)
 })
