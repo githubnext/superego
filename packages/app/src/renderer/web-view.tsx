@@ -10,7 +10,7 @@
 //
 // The pane takes the focus as other panes do (⌃Tab, a click on its tab or bar), and keeps it: Return passes it into the
 // page, as a click into the page does. The window's shortcuts (⌃Tab, ⌘W) still work from inside it, and take it out.
-import { useEffect, useImperativeHandle, useRef, useState, type FocusEvent, type KeyboardEvent, type Ref } from 'react'
+import { useEffect, useImperativeHandle, useRef, useState, type FocusEvent as ReactFocusEvent, type KeyboardEvent, type Ref } from 'react'
 import type { BridgeWebView, WebViewEvent, WebViewPartition, WebViewRect, WebViewState } from '../shared/bridge.ts'
 
 /**
@@ -150,7 +150,7 @@ function NativeWebView({ src, partition, onEvent, onWaiting, ref }: WebViewProps
     setInPage(true)
     view.current?.focus(true)
   }
-  const blur = (event: FocusEvent) => {
+  const blur = (event: ReactFocusEvent) => {
     setHeld(false)
     if (!event.relatedTarget) return
     setInPage(false)

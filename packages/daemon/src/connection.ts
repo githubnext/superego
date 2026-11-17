@@ -69,7 +69,7 @@ export function serveConnection(peer: RpcPeer, { hangUp, silence = 30_000 }: Con
     if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) throw new RpcError('invalid', 'A forward needs a port')
     if (typeof host !== 'string' || !isLoopback(host)) throw new RpcError('invalid', 'A forward reaches this machine\'s loopback only')
     // `localhost` tries each of its addresses (::1, 127.0.0.1): a dev server may listen on either.
-    const socket = connect({ host: host.replace(/^\[|\]$/g, ''), port, allowHalfOpen: true, autoSelectFamily: true })
+    const socket = connect({ host, port, allowHalfOpen: true, autoSelectFamily: true })
     await new Promise<void>((resolve, reject) => {
       socket.once('connect', resolve)
       socket.once('error', (error) => reject(new RpcError('refused', `Nothing answers at ${host}:${port} here (${error.message})`)))

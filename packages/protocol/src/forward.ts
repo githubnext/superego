@@ -7,8 +7,8 @@ import type { Channel } from './channels.ts'
 /** The channel kind: a daemon that offers the `forward` feature accepts it. */
 export const FORWARD = 'forward'
 
-/** The hosts that are a machine's own loopback, as a URL names them. */
-const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
+/** The hosts that are a machine's own loopback, as a socket names them (IPv6 without a URL's brackets). */
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1'])
 export const isLoopback = (hostname: string) => LOOPBACK.has(hostname.toLowerCase())
 
 /** The byte stream a forward joins a channel to: a TCP socket, as Node has it. */

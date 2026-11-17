@@ -26,7 +26,7 @@ export class Clients {
   #windows: Windows = { here: false, elsewhere: [], browser: false }
 
   /** `hostname`: this machine's, to tell a client on another computer by its hello. `windowKinds`: the kinds that are a window (the app's, a browser's). */
-  constructor({ hostname = '', windowKinds = [] }: { hostname?: string; windowKinds?: string[] } = {}) {
+  constructor({ hostname, windowKinds }: { hostname: string; windowKinds: string[] }) {
     this.#hostname = hostname.toLowerCase()
     this.#windowKinds = new Set(windowKinds)
   }
@@ -52,11 +52,12 @@ export class Clients {
     entry.info.kind = kind
     if (from) entry.info.from = from
     else delete entry.info.from
-    if (entry.info.via === 'socket' || entry.info.label === 'client') entry.info.label = label?.trim() || kind
+    const named = label?.trim()
+    if (entry.info.via === 'socket' || entry.info.label === 'client') entry.info.label = named || kind
     // Over the socket, a client names its computer in hello (the app and the command line send its hostname): another
     // computer's came over ssh.
     if (entry.info.via === 'socket') {
-      if (label?.trim() && this.#hostname && label.trim().toLowerCase() !== this.#hostname) entry.info.elsewhere = true
+      if (named && named.toLowerCase() !== this.#hostname) entry.info.elsewhere = true
       else delete entry.info.elsewhere
     }
     this.#changed(true)
@@ -75,7 +76,7 @@ export class Clients {
         browser: windows.some((w) => w.elsewhere && w.via !== 'socket'),
       }
     }
-    return { ...this.#windows, elsewhere: [...this.#windows.elsewhere] }
+    return this.#windows
   }
 
   /** It called something. Told to watchers at most once a second: activity alone isn't worth a stream of updates. */

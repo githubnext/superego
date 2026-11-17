@@ -92,7 +92,7 @@ export type WebViewState = {
 }
 
 /**
- * What a web view tells its pane: where it is now; that it took the keyboard (a click into it); a file it saved (to the
+ * What a web view tells its pane: where it is now; that it took the keyboard (Return, a click into it); a file it saved (to the
  * Downloads folder, as a browser does); something it asked for that was refused (the camera, notifications).
  */
 export type WebViewEvent =
@@ -127,10 +127,10 @@ export const artifactUrl = (machine: MachineId, thread: string, path: string) =>
 
 export const CHANNEL = {
   call: 'superego:call', machines: 'superego:machines', event: 'superego:event', forward: 'superego:forward',
-  // A window's protocol channels, held for it by the main process: opened, ready for data (once the window knows its
-  // id), their data, written, read and closed; the main process drops all of a window's as its page (re)loads.
   // A window's web views (main/web-views.ts): opened, told what to do, a still of one, and what they tell their pane.
   viewOpen: 'superego:view-open', view: 'superego:view', viewSnapshot: 'superego:view-snapshot', viewEvent: 'superego:view-event',
+  // A window's protocol channels, held for it by the main process: opened, ready for data (once the window knows its
+  // id), their data, written, read and closed; the main process drops all of a window's as its page (re)loads.
   open: 'superego:ch-open', start: 'superego:ch-start', data: 'superego:ch-data', write: 'superego:ch-write', ack: 'superego:ch-ack', close: 'superego:ch-close',
 } as const
 /** What the main process tells a window of one of its channels: a chunk, or that it closed (and why, when it failed). */

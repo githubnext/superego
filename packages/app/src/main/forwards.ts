@@ -88,12 +88,13 @@ export function createForwards({ machines, linkOf }: { machines(): MachineEntry[
       const entry = machines().find((m) => m.id === machine)
       if (!entry) throw new RpcError('unknown_machine', `No machine ${machine}`)
       const parsed = new URL(url)
-      if (!entry.remote || !isLoopback(parsed.hostname)) return url
+      const host = parsed.hostname.replace(/^\[|\]$/g, '')
+      if (!entry.remote || !isLoopback(host)) return url
       if (!entry.features?.includes(FORWARD)) {
         throw new RpcError('unsupported', `Superego on ${entry.label} can't forward its localhost here: update it to show this page.`)
       }
       const port = Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80))
-      const here = await forward(machine, parsed.hostname.replace(/^\[|\]$/g, ''), port)
+      const here = await forward(machine, host, port)
       if (here !== port) parsed.port = String(here)
       return parsed.toString()
     },
