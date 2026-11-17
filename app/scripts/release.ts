@@ -4,10 +4,11 @@
 // it releases is the local main as it is now: built in a worktree of its own (a fresh `pnpm install`, then the bundle),
 // so the main checkout, which other work fast-forwards all the time, is never touched. The version isn't committed: it
 // goes into the bundle and onto the tag. Nothing leaves this Mac until the app is notarized; then main and an annotated
-// tag v<version> on the commit built are pushed, and a GitHub release (gh) gets the zip and notes from the commits.
-// `--no-publish` stops before the tag: the notarized zip, to try out.
+// tag v<version> on the commit built are pushed, and a GitHub release (gh) gets the zip and, as its notes, the
+// version's section of CHANGELOG.md (Unreleased's notes, moved under the version and tightened first: the release stops
+// early without it). `--no-publish` stops before the tag: the notarized zip, to try out.
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readdirSync } from 'node:fs'
+import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { developerId, notaryAuth } from './notary.ts'
@@ -40,6 +41,11 @@ run('git', ['fetch', '--quiet', 'origin', 'main', '--tags'])
 if (succeeds('git', ['rev-parse', '--verify', '--quiet', `refs/tags/${tag}`])) fail(`${tag} is already tagged.`)
 if (!succeeds('git', ['merge-base', '--is-ancestor', 'origin/main', 'main'])) fail('origin/main has commits main doesn\'t: bring them into main first.')
 run('gh', ['auth', 'status'])
+// The release's notes: the version's section of main's CHANGELOG.md, written as Unreleased and moved under its version.
+const changelog = read('git', ['show', 'main:CHANGELOG.md'])
+const section = changelog.split(/^## /m).find((part) => part.split('\n')[0]!.trim() === version)
+const notes = section?.slice(section.indexOf('\n') + 1).trim()
+if (!notes) fail(`CHANGELOG.md on main has no "## ${version}" section: move Unreleased's notes under it (and tighten them) first.`)
 const identity = developerId()
 notaryAuth()
 
@@ -72,14 +78,16 @@ if (!publish) {
 }
 
 run('git', ['tag', '--annotate', tag, '-m', `Superego ${version}`, commit])
+const notesFile = join(tree, 'release-notes.md')
+writeFileSync(notesFile, `${notes}\n`)
 try {
   run('git', ['push', 'origin', `${commit}:refs/heads/main`, `refs/tags/${tag}`])
-  run('gh', ['release', 'create', tag, zip, '--verify-tag', '--title', `Superego ${version}`, '--generate-notes'])
+  run('gh', ['release', 'create', tag, zip, '--verify-tag', '--title', `Superego ${version}`, '--notes-file', notesFile])
 } catch (error) {
   console.error(`\nPublishing failed. The notarized zip is kept: ${zip}`)
   console.error(`Fix what's wrong above, then by hand (the tag is made${succeeds('git', ['ls-remote', '--exit-code', 'origin', `refs/tags/${tag}`]) ? ' and pushed' : ', not pushed'}):`)
   console.error(`  git push origin ${commit}:refs/heads/main refs/tags/${tag}`)
-  console.error(`  gh release create ${tag} ${zip} --verify-tag --title "Superego ${version}" --generate-notes`)
+  console.error(`  gh release create ${tag} ${zip} --verify-tag --title "Superego ${version}" --notes-file ${notesFile}`)
   console.error(`  git worktree remove --force ${tree}`)
   throw error
 }

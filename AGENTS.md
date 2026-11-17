@@ -11,6 +11,13 @@ The app is in its infancy and under heavy development. This means, we barely hav
 Surface every failure: to the console and somewhere in the UI the user can see (a notice, the row it belongs to, the
 pane). No silent `catch(() => {})`: swallowing an error needs a comment saying why that failure is expected and harmless.
 
+## Changelog
+
+User-visible changes go in `CHANGELOG.md`'s top `## Unreleased` section, in the same change: short bullets from the
+user's point of view. Leave out implementation details, internal refactors, tests, docs and tooling. At release, the
+notes are consolidated under the version (see `docs/releasing.md`). Put a plain upgrade warning first when something a
+user has (a profile, an extension, a script) needs changing.
+
 ## House rules
 
 - Work in your own worktree. Never reset, stash or overwrite anything in the main checkout.

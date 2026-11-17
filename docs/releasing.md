@@ -65,8 +65,12 @@ local `main` as it is when it starts, so merge first.
    zip's name, not into `app/package.json`. Nothing is committed for a release; the tag says which commit it was.
    If anything fails, nothing has left this Mac, and the worktree is kept to look at.
 4. An annotated tag `v<version>` on that commit, then pushes it and that commit to `main` on GitHub.
-5. `gh release create v<version>` with the zip, titled `Superego <version>`, its notes generated from the commits
-   since the last release. Edit them on GitHub afterwards if they need it. Then it removes the worktree.
+5. `gh release create v<version>` with the zip, titled `Superego <version>`, its notes the `## <version>` section of
+   `CHANGELOG.md` on main. Then it removes the worktree.
+
+Before releasing, consolidate the changelog: move `## Unreleased`'s notes under a new `## <version>` heading,
+tighten them into short sections grouped by what the user sees, leave an empty `## Unreleased` above it, and merge
+that to main. `pnpm release` stops before building if main's `CHANGELOG.md` has no section for the version.
 
 Before releasing, run the checks as before any merge: `pnpm test` and `pnpm smoke`.
 

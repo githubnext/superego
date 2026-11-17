@@ -1,0 +1,52 @@
+# Changelog
+
+## Unreleased
+
+## 0.1.2
+
+**Upgrading:** extensions now need `api: '^3'`. A profile's own extensions that still ask for `^2` won't load until
+their `about` is updated.
+
+### Agents and Ego
+
+- Agents can no longer give your consent for you. Allowing an MCP server command, a project profile or web access only
+  works from the window, or from your own terminal.
+- Ego hears back from the threads it starts and tells you what was actually built and how to try it.
+- Ego waits for an MCP server to be running before saying it works, and asks before using a server in every thread.
+- Agents can draw lists: rows with a status, a thread link and buttons.
+
+### Building extensions
+
+- `superego extension new` has starters for a tool (`--tool`), a pane (`--ui`) and a sidebar mark (`--badge`).
+- Extensions' views are drawn from the same blocks agents use, with inputs and buttons that run the extension's own
+  actions.
+- The guide is split into topics that agents can read whole, with a new topic on the thread tools.
+- `superego/testing` gives a thread the profile under test, and can read a thread's facts and tool calls.
+
+### Fixes
+
+- The window says when it runs a newer build than the app, and offers a restart.
+- `superego read --wait` waits on the daemon instead of polling.
+
+## 0.1.1
+
+### New & Improved
+
+- Notifications and the app icon's unread count are built into the app, with one unread list behind the rail, the
+  bell, ⌘. and `superego unread`.
+- ask_user and the agents' UI tools share one queue of questions above the composer.
+- Failed tool calls show the error, not the raw wrapper around it.
+- Pane kinds like Preview and Artifact are known before any window connects.
+
+### Fixes
+
+- Agents can't pass an outside agent's request on to Ego to change your setup.
+- The desktop notifies you of what happened while a machine was away.
+- Reloading a window no longer leaks its watches or loses a notification click.
+- Closing the daemon waits for everything it was saving.
+
+## 0.1.0
+
+The first test build: Superego runs agent threads in projects on this Mac and on machines you reach over ssh, with
+panes beside each thread, worktrees for parallel work, MCP servers, notifications, multiple windows (⌘⇧N), a resizable
+sidebar, Ego to set things up, and extensions and profiles to make it yours.
