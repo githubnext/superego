@@ -14,7 +14,7 @@ import {
   type BehaviourSlot, type Layout, type Place, type Registry, type SlotProps, type UiExtension, type ViewProps,
 } from '@superego/app/internals'
 import type { LinkHandler, LinkWhere, ToolRow, ToolRowCall } from '@superego/app/ui'
-import type { TestDaemon } from './daemon.ts'
+import { onRestart, type TestDaemon } from './daemon.ts'
 import { useDom } from './dom.ts'
 
 /**
@@ -57,6 +57,8 @@ export type TestMachine = {
   listen(tell: (method: string, params: unknown) => void): () => void
   /** A fake's: change a live value (whole, or one scope's part) and tell its watchers. */
   setValue?(key: string, value: Json, scope?: string): void
+  /** `daemonMachine`'s: the test daemon it is (its profile, its restarts). */
+  daemon?: TestDaemon
 }
 
 /** What a `fakeMachine` is and answers. */
@@ -81,22 +83,56 @@ export type FakeMachineOptions = {
   state?: MachineEntry['state']
 }
 
-/** A thread to show, with what a daemon would say of it; give what matters to the test. */
-export function testThread(thread: Partial<ThreadInfo> = {}): ThreadInfo {
-  const id = thread.id ?? `t${++threads}`
+/**
+ * A thread to show, with what a daemon would say of it; give what matters to the test. It's a thread of the profile
+ * under test, so that profile's UI draws for it: the profile of the window mounted now (`mountUi({ profile })`), else
+ * the one `superego extension test` runs the tests of. `profile: null` for a thread of no profile, or give another.
+ *
+ *   const machine = fakeMachine({ threads: [testThread({ id: 't1', title: 'Fix the build' })] })
+ *   const badge = await ui.render({ slot: 'thread.badge', thread: testThread({ cwd: '/work/db' }) })
+ *   await expect(ui.render({ slot: 'thread.badge', thread: testThread({ profile: null }) })).rejects.toThrow()
+ */
+export function testThread(thread: Omit<Partial<ThreadInfo>, 'profile'> & { profile?: ProfileRef | null } = {}): ThreadInfo {
+  const { profile = profileUnderTest(), ...rest } = thread
+  const id = rest.id ?? `t${++threads}`
   return {
     id, title: `Thread ${id}`, cwd: '/work', createdAt: 0, activeAt: 0, project: { root: '/work', name: 'work' }, status: { state: 'idle' },
-    ...thread,
+    ...rest, ...(profile ? { profile } : {}),
   }
 }
 let threads = 0
+
+/** The profiles of the windows mounted now, the newest last: `testThread`'s, while one is. */
+const mountedProfiles: ProfileRef[] = []
+
+/** The profile `superego extension test` runs the tests of, as a thread of it would name it: none in other test runners. */
+function profileRun(): ProfileRef | undefined {
+  const dir = (globalThis as { __superegoProfileUnderTest?: string }).__superegoProfileUnderTest
+  return dir ? { scope: 'user', name: dir.split('/').filter(Boolean).at(-1) ?? 'default', dir } : undefined
+}
+
+/** The profile a test thread is of, unless given: the mounted window's, else the one under test. */
+const profileUnderTest = () => mountedProfiles.at(-1) ?? profileRun()
+
+/** A window's profile, when it's given no `ref` and isn't on a test daemon with one, nor under `superego extension test`. */
+const TEST_PROFILE: ProfileRef = { scope: 'user', name: 'default', dir: '/profiles/default' }
 
 /** The features a daemon of this generation offers. */
 const CURRENT: string[] = [...RELEASED.features]
 
 /**
  * A machine of your making: its threads, values and methods answer the window's calls; any other call fails as an
- * unknown method would. Everything asked of it is in `calls` (the window's, by method).
+ * unknown method would. Everything asked of it is in `calls` (the window's, by method). An action the window runs is
+ * an `action.run` call there (`{ method: 'action.run', params: { id, params } }`), answered by `methods[id]`.
+ *
+ *   const machine = fakeMachine({
+ *     threads: [testThread({ id: 't1' })],
+ *     values: { 'builds.queue': { t1: [{ id: 'b1', state: 'running' }] } },   // a scoped value: by thread
+ *     methods: { 'builds.cancel': ({ id }) => null },
+ *   })
+ *   await beside.click('Cancel')
+ *   expect(machine.calls).toContainEqual({ method: 'action.run', params: { id: 'builds.cancel', params: { id: 'b1' } } })
+ *   machine.setValue('builds.queue', [{ id: 'b1', state: 'cancelled' }], 't1')
  */
 export function fakeMachine(options: FakeMachineOptions = {}): TestMachine & { calls: { method: string; params: any }[]; setValue(key: string, value: Json, scope?: string): void } {
   const id = options.id ?? 'local'
@@ -159,32 +195,46 @@ export function fakeMachine(options: FakeMachineOptions = {}): TestMachine & { c
   return machine
 }
 
-/** A test daemon as a machine of the window: everything it says comes in as it would from the app's connection. */
+/**
+ * A test daemon as a machine of the window: everything it says comes in as it would from the app's connection. It
+ * follows the daemon across `restart`, as the app follows a daemon that comes back: away while it's stopped, then
+ * watching again. (`mountUi` takes the daemon itself as the machine `local`.)
+ *
+ *   const ui = await mountUi({ machines: [daemonMachine(daemon)], profile: { extensions: [ui] } })
+ */
 export function daemonMachine(daemon: TestDaemon, id = 'local', label = id): TestMachine {
   const listeners = new Set<(method: string, params: unknown) => void>()
-  const offs: (() => void)[] = []
+  let offs: (() => void)[] = []
   const entry: MachineEntry = {
     id, label, state: 'connected', machine: { id: `${id}-daemon`, hostname: id }, features: daemon.features, extensions: daemon.extensions,
   }
+  /** Hear what the daemon's connection (the one now) says, for the window. */
+  const hear = () => {
+    offs = RELEASED.notifications.map((event) => daemon.peer.on(event, (params: unknown) => {
+      if (event === 'features.changed') {
+        const { features, extensions } = params as Notifications['features.changed']
+        Object.assign(entry, { features, extensions })
+      }
+      for (const l of listeners) l(event, params)
+    }))
+  }
+  // Restarted: its new connection's, at what the new daemon offers.
+  const restarted = (phase: 'stopping' | 'started') => {
+    if (phase !== 'started') return
+    for (const off of offs.splice(0)) off()
+    Object.assign(entry, { features: daemon.features, extensions: daemon.extensions })
+    hear()
+  }
+  let offRestart = () => {}
   const machine: TestMachine = {
-    id, entry,
+    id, entry, daemon,
     call: (method, params) => daemon.peer.call(method, params),
     listen(listener) {
-      if (!listeners.size) {
-        for (const event of RELEASED.notifications) {
-          offs.push(daemon.peer.on(event, (params: unknown) => {
-            if (event === 'features.changed') {
-              const { features, extensions } = params as Notifications['features.changed']
-              Object.assign(entry, { features, extensions })
-            }
-            for (const l of listeners) l(event, params)
-          }))
-        }
-      }
+      if (!listeners.size) { hear(); offRestart = onRestart(daemon, restarted) }
       listeners.add(listener)
       return () => {
         listeners.delete(listener)
-        if (!listeners.size) for (const off of offs.splice(0)) off()
+        if (!listeners.size) { for (const off of offs.splice(0)) off(); offRestart() }
       }
     },
   }
@@ -195,8 +245,12 @@ export function daemonMachine(daemon: TestDaemon, id = 'local', label = id): Tes
 export type MountOptions = {
   /** UI halves set up as the app's own (bundled), in order. */
   extensions?: UiExtension[]
-  /** UI halves set up as a profile's: drawn only in threads of that profile, on that machine. One that fails to start throws. */
-  profile?: { ref: ProfileRef; machine?: string; extensions: UiExtension[] }
+  /**
+   * UI halves set up as a profile's: drawn only in threads of that profile, on that machine (the first, unless given).
+   * One that fails to start throws. `ref`, the profile as its threads name it: unless given, the test daemon's that
+   * machine is (`daemon.profile`), else the profile under test. `testThread()` makes threads of it while it's mounted.
+   */
+  profile?: { ref?: ProfileRef; machine?: string; extensions: UiExtension[] }
   /** The machines it reaches: fakes, or test daemons (`daemonMachine`, or the daemon itself as `local`). */
   machines?: (TestMachine | TestDaemon)[]
   /** The user's layout (`app.layout`). */
@@ -241,7 +295,16 @@ export type Rendered = {
   text(): string
   /** The first element `selector` matches, if any. */
   find(selector: string): HTMLElement | null
-  /** Click the first button or link whose text is `text` (or that `selector` matches), and let what it set off settle. */
+  /**
+   * Click what says `text`, as a person would, and let what it set off settle: a button, link, tab, menu item, list
+   * row or anything else with a role to click, by its text or its label (`aria-label`, `title`); else the innermost
+   * element whose text is just that (the click bubbles up to whatever handles it). Not a text: a CSS selector. Throws
+   * for none, or a disabled one, naming what there is to click.
+   *
+   *   await beside.click('Cancel')
+   *   await beside.click('lint')                         // a list row, by its title
+   *   await beside.click('button[aria-label="Dismiss"]') // by selector
+   */
   click(text: string): Promise<void>
   /** Take it away (the window stays). */
   unmount(): Promise<void>
@@ -340,6 +403,13 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     },
   })
   const machines = (options.machines ?? [fakeMachine()]).map((m) => isDaemon(m) ? daemonMachine(m) : versioned(m))
+  // The profile's, as its threads name it: a test daemon's own (its copy), else the one under test.
+  const profileMachine = options.profile ? options.profile.machine ?? machines[0]?.id : undefined
+  const profile = options.profile && {
+    ...options.profile,
+    machine: profileMachine!,
+    ref: options.profile.ref ?? machines.find((m) => m.id === profileMachine)?.daemon?.profile ?? profileRun() ?? TEST_PROFILE,
+  }
   const calls: TestWindow['calls'] = []
   const eventListeners = new Set<(event: SuperegoEvent) => void>()
   const emit = (event: SuperegoEvent) => { for (const l of eventListeners) l(event) }
@@ -349,6 +419,10 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   const entries = () => machines.map((m) => ({ ...m.entry }))
   // What a machine says (a live value changing, a thread's status) re-renders what shows it: in `act`, as React asks of a test.
   const offs = machines.map((m) => m.listen((method, params) => inActNow(() => emit({ machine: m.id, method, params }))))
+  // A test daemon restarted: away while it's stopped, then back (the window watches again), as the app's connection says.
+  for (const m of machines) {
+    if (m.daemon) offs.push(onRestart(m.daemon, (phase) => ui.setMachine(m.id, { state: phase === 'stopping' ? 'disconnected' : 'connected' })))
+  }
   const bridge: SuperegoBridge = {
     async call(machine, method, params: any) {
       if (machine === 'app') {
@@ -390,7 +464,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     let made: Registry | undefined
     try {
       made = windowRegistry(app, options.extensions ?? [])
-      if (options.profile) install(made, options.profile.machine ?? machines[0]!.id, options.profile.ref, options.profile.extensions)
+      if (profile) install(made, profile.machine, profile.ref, profile.extensions)
       return made
     } catch (error) {
       made?.teardown()
@@ -442,9 +516,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     text: () => container.textContent ?? '',
     find: (selector) => container.querySelector<HTMLElement>(selector),
     async click(text) {
-      const target = [...container.querySelectorAll<HTMLElement>('button, a, [role="button"]')].find((el) => el.textContent?.trim() === text)
-        ?? container.querySelector<HTMLElement>(text)
-      if (!target) throw new Error(`Nothing to click that says "${text}" in: ${container.textContent}`)
+      const target = clickable(container, text)
       await inAct(async () => { target.click() })
       await settle()
     },
@@ -503,7 +575,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
           if (!paneKind(registry, what.pane.kind, where)) {
             const kinds = [...new Set(seenIn(registry.panes, where).map((p) => p.kind))]
             const theirs = registry.panes.some((p) => p.kind === what.pane.kind && p.owner.profile)
-            throw new Error(`No pane kind ${what.pane.kind} in thread ${info.id}${theirs ? " (a profile's pane kinds are its threads': give a thread of that profile)" : ''}: ${kinds.join(', ') || 'none'}`)
+            throw new Error(`No pane kind ${what.pane.kind} in thread ${info.id}${theirs ? ` (a profile's pane kinds are its threads': ${ofProfile(info)})` : ''}: ${kinds.join(', ') || 'none'}`)
           }
           const { kind, params, title, id = 'pane-1' } = what.pane
           const pane = { id, kind, ...(params !== undefined ? { params } : {}), ...(title !== undefined ? { title } : {}) }
@@ -512,7 +584,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
           const slot = slotNamed(what.slot)
           if (!seenIn(registry.slots[slot], where).length) {
             const theirs = registry.slots[slot].length
-            throw new Error(`Nothing fills ${slot} in thread ${info.id}${theirs ? ` (${theirs} elsewhere: a profile's fill its threads' slots, and a thread goes without an optional extension it names in without)` : ''}`)
+            throw new Error(`Nothing fills ${slot} in thread ${info.id}${theirs ? ` (${theirs} elsewhere: a profile's fill its threads' slots, ${ofProfile(info)}; and a thread goes without an optional extension it names in without)` : ''}`)
           }
           const props = what.props as Record<string, unknown> | undefined
           node = <InThread machine={at} thread={thread} draw={(machine, info) =>
@@ -593,6 +665,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       registry.teardown()
       // The next window fetches its profiles' UI afresh.
       resetProfileUi()
+      if (profile) mountedProfiles.splice(mountedProfiles.lastIndexOf(profile.ref), 1)
       letGoOfDom()
     },
   }
@@ -612,14 +685,57 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     if (shell.selection?.machine === machine && threadOf(machine, shell.selection.thread)) return shell.selection.thread
     const first = shell.threads[machine]?.[0]
     if (first) return first.id
-    const ref = options.profile && (options.profile.machine ?? machines[0]!.id) === machine ? options.profile.ref : undefined
-    return testThread({ id: 'test', ...(ref ? { profile: ref } : {}) })
+    return testThread({ id: 'test', profile: profile && profile.machine === machine ? profile.ref : null })
   }
+  if (profile) mountedProfiles.push(profile.ref)
+  /** What to do about a thread that isn't of the profile whose UI draws there. */
+  const ofProfile = (info: ThreadInfo) => info.profile
+    ? `and this thread is of the profile at ${info.profile.dir}, not ${profile ? profile.ref.dir : "mountUi's (it has no profile)"}: give a thread of that one`
+    : `and this thread has none: give one of the profile's (testThread() is, while the window's mounted with mountUi({ profile }); or testThread({ profile }))`
   const slotNamed = <S extends BehaviourSlot>(slot: S): S => {
     if (slot in registry.slots) return slot
     throw new Error(`No slot ${slot}: ${Object.keys(registry.slots).join(', ')} (one that's a place now is a view: render({ view, place }))`)
   }
   return ui
+}
+
+/** What a person could click, by its role: what `click` looks at first. */
+const CLICKABLE = [
+  'button', 'a', 'summary', 'label', 'input[type="checkbox"]', 'input[type="radio"]', 'input[type="button"]', 'input[type="submit"]',
+  ...['button', 'link', 'tab', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'option', 'treeitem', 'row', 'gridcell', 'listitem', 'checkbox', 'radio', 'switch']
+    .map((role) => `[role="${role}"]`),
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ')
+
+const squash = (text: string) => text.replace(/\s+/g, ' ').trim()
+
+/** What `click(text)` clicks in `container`; else it throws, saying what there is to click. */
+function clickable(container: HTMLElement, text: string): HTMLElement {
+  const wanted = squash(text)
+  const names = (el: HTMLElement) => [el.getAttribute('aria-label'), el.textContent, el.getAttribute('title')].map((name) => squash(name ?? '')).filter(Boolean)
+  // The innermost of those that match: a button that says it, not the row around it that says only it too.
+  const innermost = (matches: HTMLElement[]) => matches.find((el) => !matches.some((other) => other !== el && el.contains(other)))
+  const roles = [...container.querySelectorAll<HTMLElement>(CLICKABLE)]
+  const target = innermost(roles.filter((el) => names(el).includes(wanted)))
+    ?? innermost([...container.querySelectorAll<HTMLElement>('*')].filter((el) => squash(el.textContent ?? '') === wanted))
+    ?? bySelector(container, text)
+  if (!target) {
+    const there = roles.map((el) => `"${names(el)[0] ?? ''}" (${el.getAttribute('role') ?? el.tagName.toLowerCase()})`)
+    const listed = there.length ? `what has a role to click: ${there.slice(0, 20).join(', ')}${there.length > 20 ? `, and ${there.length - 20} more` : ''}` : 'nothing with a role to click'
+    throw new Error(`Nothing to click that says "${text}" (by text, label or selector). There's ${listed}. Its text: "${squash(container.textContent ?? '').slice(0, 300)}"`)
+  }
+  if (target.closest('[disabled], [aria-disabled="true"]')) throw new Error(`"${text}" is disabled: nothing to click`)
+  return target
+}
+
+/** The first element `selector` matches, if it's a selector at all (a text like "Run (2)" isn't). */
+function bySelector(container: HTMLElement, selector: string): HTMLElement | null {
+  try {
+    return container.querySelector<HTMLElement>(selector)
+  } catch {
+    // Not a selector: a text nothing says, which the caller reports.
+    return null
+  }
 }
 
 /** Keys by the names `ui.key` takes, as a keyboard event says them. */

@@ -79,17 +79,39 @@ describe('a daemon with a scripted model', () => {
     expect((await other.peer.call<{ id: string }[]>('thread.list', {})).map((t) => t.id)).toEqual([thread.id])
     other.close()
     // Restarted, it still echoes.
-    const again = keep(await daemon.restart())
-    await again.send(thread.id, 'and this')
-    expect(await again.transcript(thread.id)).toContain('and this')
+    expect(await daemon.restart()).toBe(daemon)
+    keep(daemon)
+    await daemon.send(thread, 'and this')
+    expect(await daemon.transcript(thread.id)).toContain('and this')
   })
 
-  it('keeps threads and state across a restart, with a new script', async () => {
-    const first = await testDaemon({ profile: PROFILE, model: [say('Hello.')] })
-    const thread = await first.thread('hi')
-    const second = keep(await first.restart({ model: [say('Again.')] }))
-    await second.send(thread.id, 'once more')
-    expect(await second.transcript(thread.id)).toContain('Again.')
+  it('keeps threads, state and the handle across a restart, with a new script', async () => {
+    const daemon = keep(await testDaemon({ profile: PROFILE, model: [callTool('enqueue', { what: 'lint' }), say('Hello.')] }))
+    const thread = await daemon.thread('hi')
+    const queue = await daemon.watch<{ items: { title: string }[] }[]>('queue.items', { scope: thread.id })
+    const before = daemon.peer
+    await daemon.restart({ model: [callTool('enqueue', { what: 'test' }), say('Again.')] })
+    // The same handle: its calls and watches reach the new daemon.
+    expect(daemon.peer).not.toBe(before)
+    expect(daemon.extensions.map((e) => e.name)).toContain('queue')
+    await daemon.send(thread.id, 'once more')
+    expect(await daemon.transcript(thread.id)).toContain('Again.')
+    // Its queue is in memory: the new daemon's starts over.
+    await queue.until((view) => view[0]?.items[0]?.title === 'test', 'the new daemon\'s queue')
+    expect(queue.seen.map((view) => view[0]?.items.map((i) => i.title))).toEqual([['lint'], undefined, ['test']])
+  })
+
+  it("says a thread's tool calls, with their args and results, and its facts", async () => {
+    const facts = defineDaemonExtension({ name: 'facts', setup(superego) { superego.facts(({ id }) => ({ seen: id })) } })
+    const daemon = keep(await testDaemon({ profile: PROFILE, extensions: [facts], model: [callTool('enqueue', { what: 'lint' }), callTool('nope'), say('Done.')] }))
+    const thread = await daemon.thread('Queue a lint')
+    expect(await daemon.toolCalls(thread)).toEqual([
+      { id: expect.any(String), name: 'enqueue', args: { what: 'lint' }, result: { isError: false, text: 'Queued lint' } },
+      { id: expect.any(String), name: 'nope', args: {}, result: { isError: true, text: expect.stringContaining('Tool nope is not available') } },
+    ])
+    expect(await daemon.facts(thread)).toEqual({ facts: { seen: thread.id } })
+    expect(await daemon.facts((await daemon.thread()).id)).toEqual({ facts: { seen: expect.any(String) } })
+    await expect(daemon.facts('nothing')).rejects.toThrow(/No thread nothing/)
   })
 })
 
@@ -197,6 +219,43 @@ describe('a window for a UI half', () => {
     } finally { console.error = errors }
   })
 
+  it("makes test threads of the window's profile, given none", async () => {
+    expect(testThread().profile).toBeUndefined()
+    const ui = keep(await mountUi({ profile: { extensions: [queueUi] } }))
+    const thread = testThread()
+    expect(thread.profile).toEqual({ scope: 'user', name: 'default', dir: '/profiles/default' })
+    expect(ui.placed('beside', { thread: thread.id })).toEqual([])
+    expect(testThread({ profile: null }).profile).toBeUndefined()
+    const other = { scope: 'user' as const, name: 'other', dir: '/profiles/other' }
+    expect(testThread({ profile: other }).profile).toBe(other)
+    await ui.unmount(); open.pop()
+    expect(testThread().profile).toBeUndefined()
+  })
+
+  it('clicks what says a text, whatever its role, and says what there is when nothing does', async () => {
+    const clicked: string[] = []
+    const rows = defineUiExtension({
+      name: 'rows', setup(superego) {
+        superego.view('rows.list', { title: 'Rows', context: 'thread', fits: ['beside'], default: 'beside', component: () => h('div', null,
+          h('div', { role: 'tablist' }, h('div', { role: 'tab', onClick: () => clicked.push('tab') }, 'Builds')),
+          h('ul', null, h('li', { onClick: () => clicked.push('row') }, h('strong', null, 'lint'), h('span', null, 'running'))),
+          h('div', { role: 'menuitem', 'aria-label': 'Archive', onClick: () => clicked.push('menu') }, '⌫'),
+          h('button', { type: 'button', disabled: true }, 'Retry'),
+          h('button', { type: 'button', onClick: () => clicked.push('button') }, 'Run (2)'),
+        ) })
+      },
+    })
+    const ui = keep(await mountUi({ extensions: [rows], machines: [fakeMachine({ threads: [testThread({ id: 't1' })] })] }))
+    const beside = await ui.render({ place: 'beside', thread: 't1' })
+    await beside.click('Builds')
+    await beside.click('lint')
+    await beside.click('Archive')
+    await beside.click('Run (2)')
+    expect(clicked).toEqual(['tab', 'row', 'menu', 'button'])
+    await expect(beside.click('Retry')).rejects.toThrow('"Retry" is disabled')
+    await expect(beside.click('Deploy')).rejects.toThrow(/Nothing to click that says "Deploy".*"Builds" \(tab\).*"Archive" \(menuitem\)/)
+  })
+
   it('says a machine is away', async () => {
     const thread = testThread({ id: 't1' })
     const machine = fakeMachine({ extensions: ['queue'], threads: [thread], values: { 'queue.items': { t1: ['old'], t2: ['x'] } } })
@@ -270,6 +329,21 @@ describe('a window on test daemons', () => {
     expect(onBox.text()).toContain('on box')
     expect(onBox.text()).not.toContain('on laptop')
     expect(onLaptop.text()).toContain('on laptop')
+  })
+
+  it("follows its daemon across a restart, and takes its profile as the window's", async () => {
+    const daemon = keep(await testDaemon({ profile: PROFILE, model: [callTool('enqueue', { what: 'lint' }), say('ok')] }))
+    const thread = await daemon.thread('queue')
+    // No ref given: the daemon's, which its threads name; and while it's mounted, a test thread's.
+    const ui = keep(await mountUi({ machines: [daemon], profile: { extensions: [] } }))
+    expect(thread.profile).toEqual(daemon.profile)
+    expect(testThread().profile).toEqual(daemon.profile)
+    const beside = await ui.render({ view: 'queue.list', place: 'beside', thread: thread.id })
+    await ui.until(() => beside.text().includes('lint'), 'the queue')
+    await daemon.restart({ model: [callTool('enqueue', { what: 'test' }), say('ok')] })
+    await daemon.send(thread, 'another')
+    await ui.until(() => beside.text().includes('test'), 'the queue, from the restarted daemon')
+    expect(ui.machines[0]!.entry.state).toBe('connected')
   })
 
   it("draws what the daemon says as it says it, quietly, and lets its profile's UI land before it's unmounted", async () => {

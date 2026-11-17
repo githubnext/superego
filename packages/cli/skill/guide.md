@@ -254,24 +254,40 @@ it('queues builds and shows the thread its own', async () => {
   set up as the app's own (a factory's with the options a test needs: `ordersExtension({ clock })`). `model` is the
   model's turns in order: `say(text)`, `callTool(name, args)`, `callTools(…)`; or `'echo'`, a model that answers every
   request with the last user message (side calls to the thread's model too). `dataDir` runs it on a folder you made
-  (and keeps it). It has `thread(prompt)`, `send`, `idle`, `transcript`, `call`, `dispatch`, `watch(key, { scope })`,
-  `until(check)`, `extensions` (the manifests of those set up and on there, kept current: where yours shows) and
+  (and keeps it). It has `thread(prompt)`, `send`, `idle`, `info`, `call`, `dispatch` (an `action.run` call),
+  `watch(key, { scope })` (`value`, `seen`, `until(check)`), `until(check)` (a function that returns true, or a promise
+  of it); `toolCalls(thread)`, the calls a thread made in order (`{ name, args, result: { isError, text } }`),
+  `facts(thread)`, what extensions say of it (`superego.facts`), and `transcript(thread)`, its entries as JSON text
+  (a thread is its id or its info); `extensions` (the manifests of those set up and on there, kept current: where yours shows) and
   `features` (protocol features only); `app` (its own id), `dataDir` and `agentsDir` (skills go in `skills/`); `peer`,
   the connection (`Channels.of(daemon.peer)` opens a channel), and `connect()` for another client's, as a second
-  window; `edit(path, content)` then `reload()` to load a change (a helper edited alone loads too); `restart({ model,
-  whileStopped })` on the same folder (`whileStopped` runs while no daemon does); `close()`.
+  window; `profile`, the ref its threads have; `edit(path, content)` then `reload()` to load a change (a helper edited
+  alone loads too); `restart({ model, whileStopped })` on the same folder (`whileStopped` runs while no daemon does),
+  after which the same handle, its watches and a window over it reach the new daemon; `close()`.
+
+  <!-- check: daemon; import { expect } from 'vitest'; import { callTool, say, testDaemon } from 'superego/testing'; declare const profile: string -->
+  ```ts
+  const daemon = await testDaemon({ profile, model: [callTool('enqueue_build', { command: 'make' }), say('Queued.')] })
+  const thread = await daemon.thread('Build it')
+  expect(await daemon.toolCalls(thread)).toMatchObject([{ name: 'enqueue_build', args: { command: 'make' }, result: { isError: false } }])
+  await daemon.restart({ model: [say('Still here.')] })      // the same daemon object, on the same folder
+  expect((await daemon.send(thread, 'Still there?')).status.msg).toBe('Still here.')
+  ```
 - **`isRunning(pid)`**: whether a process is still there, to check that what an extension started stopped with it.
   The queue examples' tests cancel a build whose command starts a `sleep` of its own, and check it's gone once the
   build says cancelled.
 - **`mountUi({ extensions, profile, machines, layout, narrow, select, window })`**: `extensions` are set up as the app's,
-  `profile: { ref, extensions }` as that profile's (drawn only in its threads). `machines` are test daemons
+  `profile: { extensions }` as that profile's (drawn only in its threads): the test daemon's profile when the machine
+  is one, else the profile `extension test` runs (`ref` for another). `machines` are test daemons
   (`daemonMachine(daemon, id)`) or fakes: `fakeMachine({ threads, values, methods, extensions, features })`, whose
   `setValue(key, value, scope)` changes a live value, and whose `calls` say what the window asked. Without setup, a
   fake is `local`, connected, with this build's features and no extensions. `threads.watch` and `thread.list` answer
   `threads` (none archived or hidden), `value.watch` a key's value from `values` (`null` if it isn't there; give a scoped
   value as `{ [scope]: value }`), `action.list` answers `actions`, and settings are empty. Any other method, and an
   action, runs `methods[name]`; with none, it fails `not_found`. `calls` leaves out the watches. `mountUi` has
-  `render({ view, place, thread })` (`text()`, `find(selector)`, `click(text)`), `placed(place, { thread })`,
+  `render({ view, place, thread })` (`text()`, `find(selector)`, `click(text)`: a button, link, tab, menu item, list
+  row or any element by its text or `aria-label`, else a selector; it fails naming what there is to click),
+  `placed(place, { thread })`,
   `press(keys)`, `dispatch`, `select`, `setMachine(id, { state: 'disconnected' })`, `installProfile`, `until`, and
   `unmount()`, which lets a profile's UI the window is still fetching land, then tears every extension down (their
   `signal`s abort): unmount before closing the daemons it's on. `window: true` draws the whole window, as the app does
@@ -280,7 +296,8 @@ it('queues builds and shows the thread its own', async () => {
   field. Its app settings are the app's own. Give its test file `// @vitest-environment happy-dom`: the window's menus
   and dialogs open, and its fields take typing, only in a DOM that was there as React and they loaded.
 - **A pane kind or a slot**: `render({ pane: { kind, params } })` and `render({ slot, props })` draw them as the
-  window does, for `thread`: an id the machine has, or a `ThreadInfo` as it is (`testThread({ cwd, profile, without })`);
+  window does, for `thread`: an id the machine has, or a `ThreadInfo` as it is (`testThread({ cwd, without })`, a thread
+  of `mountUi`'s profile while it's mounted, else of the profile under test; `profile: null` for none);
   without one, the selected thread, the machine's first, or a made-up one of `mountUi`'s profile. A kind or slot that
   thread wouldn't see (a profile's in another profile's thread, one it goes `without`) throws, saying what it has.
 - **Tool rows and links**: `render({ tool: { name, arguments, state, result }, thread })` draws a call's row as the

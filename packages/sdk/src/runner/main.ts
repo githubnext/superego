@@ -134,6 +134,8 @@ async function work(files: string[]): Promise<number> {
   // The process that started it gone (killed outright): nothing to tell, and no one to stop it.
   process.on('disconnect', () => process.exit(1))
   const send = (message: Message) => new Promise<void>((done) => { process.send!(message, () => done()) })
+  // The profile these tests are of: what 'superego/testing' gives a test thread and a window's profile UI unless told another.
+  ;(globalThis as { __superegoProfileUnderTest?: string }).__superegoProfileUnderTest = dir
   hook()
   provide((await import('./modules.ts')).modules)
   const { runFile } = await import('./run.ts')

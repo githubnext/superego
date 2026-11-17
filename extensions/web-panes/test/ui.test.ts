@@ -28,5 +28,5 @@ it("opens web links in a profile's own kind that takes them, for its threads", a
   const browser = defineUiExtension({ name: 'browser', setup(superego) { superego.pane('browser', { title: 'Browser', component: View, urls: true }) } })
   ui = await mountUi({ extensions: [webPanes], profile: { ref: profile, extensions: [browser] } })
   expect(ui.urlKind({ thread: testThread({ profile }) })).toBe('browser')
-  expect(ui.urlKind({ thread: testThread() })).toBe(PREVIEW)
+  expect(ui.urlKind({ thread: testThread({ profile: null }) })).toBe(PREVIEW)
 })

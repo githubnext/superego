@@ -62,7 +62,9 @@ describe('rendering a pane kind', () => {
     const ui = keep(await mountUi({ profile: { ref, extensions: [board] } }))
     // No thread given and none on the machine: one of the profile's, made up.
     expect((await ui.render({ pane: { kind: 'board.card', params: { card: 'A' } } })).text()).toContain('A in Thread test')
-    await expect(ui.render({ pane: { kind: 'board.card' }, thread: testThread() })).rejects.toThrow(/give a thread of that profile/)
+    await expect(ui.render({ pane: { kind: 'board.card' }, thread: testThread({ profile: null }) })).rejects.toThrow(/this thread has none: give one of the profile's/)
+    // A test thread is of the window's profile, given none.
+    expect((await ui.render({ pane: { kind: 'board.card', params: { card: 'B' } }, thread: testThread({ id: 'mine' }) })).text()).toContain('B in Thread mine')
   })
 })
 
