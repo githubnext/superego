@@ -53,8 +53,8 @@ It's the smallest working one of its shape to change: a tool that counts words; 
 `version` and the extension `api` it needs, a test on [`superego/testing`](#testing) that passes as made, a README, and
 the profile's types, as `superego profile types` gives them: a `tsconfig.json`, and `node_modules` linked to
 `~/.superego/types`, the declarations of `'superego'`, `'superego/ui'`, `'superego/testing'`, React and vitest built
-from this Superego's own source, so `test` (and an editor) checks the types. Send one of the profile's threads a message and it's there; after an edit, the next turn loads it
-again (`superego extension reload` loads it now). A project's profile runs as it was allowed: the user allows it again
+from this Superego's own source, so `test` (and an editor) checks the types. Send one of the profile's threads a message
+and it's there; after an edit, the next turn loads it again (`superego extension reload` loads it now). A project's profile runs as it was allowed: the user allows it again
 after an edit (`superego profile allow`, or in the window). That's their consent: an agent's is refused, so ask them.
 
 A thread keeps the profile it started with, so a profile made after it started (the first `default`, made by `new`)
