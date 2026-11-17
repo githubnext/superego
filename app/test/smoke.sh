@@ -9,6 +9,8 @@ cd "$(dirname "$0")/.."
 node scripts/build.ts
 # `superego extension new` and `test` with only what the build carries, out of the repo's reach.
 sh test/author-test.sh
+# The providers' OAuth flows, which pi loads by a path the bundle can't follow, load in the build.
+sh test/oauth.sh
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_MODEL=faux SUPEREGO_HEADLESS=1
 # A recorded agent that asks the user something, then uses the answer: offered as the model "replay/replay".

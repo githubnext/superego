@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Signing in with ChatGPT works in the app again, and so does renewing the sign-in: threads no longer fail with
+  "OAuth refresh failed for openai: Cannot find module …openai-chatgpt.js".
 - Changes can show what's uncommitted, what's staged, everything since the branch left main, or since its upstream:
   pick it in the pane's header. A thread on a branch opens on "Since main".
 - A remote machine can run a release instead of main: `scripts/install-machine.sh --release` installs the release's app

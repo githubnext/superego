@@ -10,6 +10,7 @@ import { createAssistantMessageEventStream, fauxAssistantMessage, fauxProvider, 
 import { createModels, getSupportedThinkingLevels, clampThinkingLevel, type Models, type Provider } from '@earendil-works/pi-ai/models'
 import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic'
 import { openaiProvider } from '@earendil-works/pi-ai/providers/openai'
+import { registerBunOAuthFlows } from '@earendil-works/pi-ai/bun-oauth'
 import type { ModelRef } from '@earendil-works/pi-durable'
 import { RpcError, type AppConfig, type AuthEvent, type ModelCatalog, type AuthPrompt, type ProviderAuthInfo, type SettingOption } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
@@ -20,6 +21,11 @@ import { watchFiles } from './watch-files.ts'
 import { wrapStreams } from './provider-streams.ts'
 import { writeAtomic } from './write-atomic.ts'
 import type { AuthFlowEvent, AuthFlows } from './auth-flows.ts'
+
+// pi loads a provider's OAuth flow (to sign in, and to renew a sign-in) with an import() of a path worked out as it runs,
+// beside its own file, which a bundle can't follow: the built app has no such file. These are its flows imported
+// statically, for it to use instead (pi's hook for bundles; "Bun" only by name). app/test/oauth.sh checks the build.
+registerBunOAuthFlows()
 
 /** The model each provider starts on when it is the first one signed in. */
 const PREFERRED: Record<string, string> = { anthropic: 'claude-opus-5-5', openai: 'gpt-6.1-sol' }

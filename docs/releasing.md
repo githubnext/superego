@@ -98,7 +98,9 @@ Before releasing, consolidate the changelog: move `## Unreleased`'s notes under 
 tighten them into short sections grouped by what the user sees, leave an empty `## Unreleased` above it, and merge
 that to main. `pnpm release` stops before building if main's `CHANGELOG.md` has no section for the version.
 
-Before releasing, run the checks as before any merge: `pnpm test` and `pnpm smoke`.
+Before releasing, run the checks as before any merge: `pnpm test` and `pnpm smoke`. Smoke includes
+[app/test/oauth.sh](../app/test/oauth.sh): the providers' OAuth flows load in the build (pi loads them by a path the
+bundle can't follow). It takes a packaged app too: `app/test/oauth.sh app/dist/mac-arm64/Superego.app`.
 
 After it: download the zip from the release, open it, and check it starts (a first launch from a download goes
 through Gatekeeper's check, which a local build skips).
