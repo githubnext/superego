@@ -24,9 +24,13 @@ pane). No silent `catch(() => {})`: swallowing an error needs a comment saying w
 
 - **While working:** `pnpm typecheck` (incremental: quick after the first run) and only the tests related to what you
   changed: `pnpm vitest related --run <files>`, or a package's own (`pnpm test packages/cli`).
-- **Before merging:** the full `pnpm test` and `pnpm smoke`, once each. Run them with `ELECTRON_RUN_AS_NODE` and
-  `ELECTRON_RENDERER_URL` unset (`env -u ELECTRON_RUN_AS_NODE -u ELECTRON_RENDERER_URL pnpm smoke`): agents started from
-  the dev app inherit them, and they make Electron run as plain Node or load the dev server's page instead of the build.
+- **Before merging:** `pnpm typecheck` and the tests related to what you changed (`pnpm vitest related --run <files>`,
+  or the packages you touched). Add `pnpm smoke` when you changed `app/`, `packages/app` or the protocol
+  (`packages/protocol`). The full `pnpm test` runs on main once per batch of merges (the chief of staff's check), not
+  before every merge; run it yourself only for a change that reaches across many packages (a rename, an API change).
+  Run checks with `ELECTRON_RUN_AS_NODE` and `ELECTRON_RENDERER_URL` unset
+  (`env -u ELECTRON_RUN_AS_NODE -u ELECTRON_RENDERER_URL pnpm smoke`): agents started from the dev app inherit them,
+  and they make Electron run as plain Node or load the dev server's page instead of the build.
 - **After a rebase:** `pnpm install` if `pnpm-lock.yaml` changed; then `pnpm typecheck` and the related tests again.
   Run smoke again only if the rebase brought in changes under `app/` or `packages/app`, or to the protocol
   (`packages/protocol`).
