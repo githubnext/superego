@@ -1,6 +1,6 @@
 // Screenshots of the composer and what's around it (run by `test/look.sh <dir> composer`): idle with suggestions, a
-// file waiting, the agent working with messages queued and one typed to steer, a question waiting, archived, and the
-// narrow layout; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
+// file waiting, the agent working with messages queued and one typed to steer, a question waiting, archived, @ mentions
+// offered and sent, and the narrow layout; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
 import { openApp } from './harness.mjs'
 import { writeFileSync } from 'node:fs'
 
@@ -77,6 +77,8 @@ await openApp({ name: 'composer', timeout: 180_000 }, async (t) => {
   await type('')
   await run(`document.querySelector('.attachment__remove')?.click()`)
 
+  // The echo model, to go back to for the mentions below once the recording is used up.
+  const echo = await run(`window.superego.call('local', 'settings.watch', {}).then((s) => s.value.values['agent.model'] ?? null)`)
   await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: 'replay/replay' })`)
   // Working, a follow-up queued (to send now), a steer waiting for the step, and words typed to steer with.
   const working = await create('Focus ring disappears')
@@ -109,4 +111,19 @@ await openApp({ name: 'composer', timeout: 180_000 }, async (t) => {
   await until(`(() => { const li = [...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('Dates land a day early')); li?.click(); return Boolean(li) && Boolean(document.querySelector('.titlebar__archived')) })()`, 'archived thread shown')
   await both('archived')
   await phone('archived-narrow')
+
+  // Mentions: @ offers other threads, then the thread's files; sent, they show as links and the agent is told of them.
+  await run(`window.superego.call('local', 'settings.set', { key: 'agent.model', value: ${JSON.stringify(echo)} })`)
+  await create('Mention a thread')
+  await open('Mention a thread')
+  await type('Compare with @')
+  await until(`document.querySelectorAll('.completions__item').length > 3`, 'threads and files offered')
+  await both('mention-menu')
+  await type('Compare with @dat')
+  await until(`document.querySelector('.completions__item.is-active')?.textContent.startsWith('dates.mjs')`, 'the file offered')
+  await both('mention-file')
+  await type(`Why does @thread:${working} keep failing in @src/dates.mjs?`)
+  await run(`document.querySelector('.composer__send').click()`)
+  await until(`Boolean(document.querySelector('.transcript .thread-ref')) && Boolean(document.querySelector('.transcript .md__file'))`, 'the mentions drawn as links')
+  await both('mention-sent')
 })

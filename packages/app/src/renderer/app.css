@@ -768,8 +768,11 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .dock:not(:focus-within) .completions { display: none; }
 .completions__item { display: flex; align-items: baseline; gap: var(--superego-space-3); padding: 6px 10px; border-radius: var(--superego-radius); cursor: default; }
 .completions__item.is-active { background: var(--superego-selected); }
-.completions__label { flex: none; font-weight: 500; }
-.completions__detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--superego-muted); }
+/* Its icon, when a menu offers things of several kinds: a thread's status, a file. */
+.completions__icon { flex: none; align-self: center; display: inline-flex; color: var(--superego-muted); }
+/* A long label gives way only once its detail has. */
+.completions__label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.completions__detail { flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--superego-muted); }
 /* Over the box: Jump to bottom, floating on its own. */
 .dock__bar { position: absolute; left: 0; right: 0; bottom: calc(100% + 14px); display: flex; justify-content: center; pointer-events: none; }
 .dock__bar > * { pointer-events: auto; }

@@ -1,7 +1,8 @@
 // The thread tools in the window: their rows in a transcript, and threads named in Markdown as links,
-// [title](thread:<id>). Both are the required UI half's, so a thread whose agent goes without the tools (Ego, with a
-// thread_read and a thread_start of its own) still shows them, and a message naming a thread still links to it.
-import { ThreadRef, type ToolRowCall, type UiApi } from '@superego/app/ui'
+// [title](thread:<id>), or [title](thread:<machine>/<id>) for one on another machine. Both are the required UI half's,
+// so a thread whose agent goes without the tools (Ego, with a thread_read and a thread_start of its own) still shows
+// them, and a message naming a thread still links to it.
+import { ThreadRef, useMachines, type MachineEntry, type ToolRowCall, type UiApi } from '@superego/app/ui'
 import { ArchiveIcon, ArrowElbowDownRightIcon, ChatCircleIcon, ChatsCircleIcon } from '@superego/ui'
 
 const THREAD = 'thread:'
@@ -28,18 +29,36 @@ export function registerRows(superego: UiApi) {
   })
 }
 
+/**
+ * Where a `thread:` link goes: `thread:<id>`, a thread on the machine it's named on; `thread:<machine>/<id>`, one on
+ * another the window reaches, by its id, name or hostname. A machine the window doesn't know, undefined.
+ */
+export function linkedThread(href: string, here: string | undefined, machines: readonly MachineEntry[]): { machine: string; id: string } | undefined {
+  const rest = href.slice(THREAD.length)
+  const slash = rest.lastIndexOf('/')
+  if (slash < 0) return here ? { machine: here, id: rest } : undefined
+  const name = rest.slice(0, slash)
+  const wanted = name.toLowerCase()
+  const machine = machines.find((m) => m.id === name) ?? machines.find((m) => m.label.toLowerCase() === wanted || m.machine?.hostname.toLowerCase() === wanted)
+  return machine && { machine: machine.id, id: rest.slice(slash + 1) }
+}
+
 export function registerLinks(superego: UiApi) {
   superego.link({
     scheme: 'thread',
     match: (href, kind, where) => kind === 'link' && Boolean(where.machine) && href.startsWith(THREAD),
     // Followed as `open` below says, so a click and ⌃O's list agree: beside the thread the link is in.
-    render: ({ href, children, where, open }) => <ThreadRef machine={where.machine!} id={href.slice(THREAD.length)} open={(beside) => void open(beside)}>{children}</ThreadRef>,
-    // Shown; or, beside, in a pane beside the thread it's named in.
+    render: function ThreadLink({ href, children, where, open }) {
+      const to = linkedThread(href, where.machine, useMachines())
+      return to ? <ThreadRef machine={to.machine} id={to.id} open={(beside) => void open(beside)}>{children}</ThreadRef> : <span title={`${href}: no such machine here`}>{children}</span>
+    },
+    // Shown; or, beside, in a pane beside the thread it's named in (one on its machine: a pane shows its own machine's).
     open(href, { machine, thread, beside }) {
-      const id = href.slice(THREAD.length)
-      return beside && thread && thread.id !== id
-        ? superego.dispatch('pane.open', { thread: thread.id, kind: 'thread', params: { thread: id } }, { machine: machine!, source: 'thread link' }).then(() => {})
-        : superego.dispatch('thread.select', { machine: machine!, thread: id }, { source: 'thread link' }).then(() => {})
+      const to = linkedThread(href, machine, superego.window.machines)
+      if (!to) return `${href.slice(THREAD.length).split('/')[0]} isn't a machine here`
+      return beside && thread && to.machine === machine && thread.id !== to.id
+        ? superego.dispatch('pane.open', { thread: thread.id, kind: 'thread', params: { thread: to.id } }, { machine: machine!, source: 'thread link' }).then(() => {})
+        : superego.dispatch('thread.select', { machine: to.machine, thread: to.id }, { source: 'thread link' }).then(() => {})
     },
   })
 }

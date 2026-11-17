@@ -4,16 +4,18 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { ProviderRejection, ThreadInfo } from '@superego/protocol'
 import { rejectionChanges, statusChanges, type Rejected, type Statuses } from '../shared/changes.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
 import type { Registry } from './registry.tsx'
 import type { Selection } from './state.tsx'
 
 const same = (a: Selection | undefined, b: Selection | undefined) => a?.machine === b?.machine && a?.thread === b?.thread
 
 /**
- * Feed the registry's listeners from the shell: every machine's threads (and its hidden ones), the selection and
+ * Feed the registry's listeners from the shell: the machines, every machine's threads (and its hidden ones), the selection and
  * the thread it shows, and the window's focus and visibility.
  */
-export function useWindowEvents(registry: Registry, { threads, rejections, hidden, selection, shown }: {
+export function useWindowEvents(registry: Registry, { machines, threads, rejections, hidden, selection, shown }: {
+  machines: MachineEntry[]
   threads: Record<string, ThreadInfo[] | undefined>
   /** The threads no list shows (extensions' own, Ego's), by machine: their statuses are heard too. */
   hidden?: Record<string, ThreadInfo[] | undefined>
@@ -23,7 +25,7 @@ export function useWindowEvents(registry: Registry, { threads, rejections, hidde
 }) {
   // The thread shown first, so a listener hearing of its status sees it as shown, with its new status: set as a render
   // commits (layout effects run before the effects below), not during one that may never commit.
-  useLayoutEffect(() => { registry.window.thread = shown })
+  useLayoutEffect(() => { registry.window.thread = shown; registry.window.machines = machines; registry.window.threads = threads })
   const statuses = useRef<Statuses>(new Map())
   const selected = useRef<Selection | undefined>(undefined)
   useEffect(() => {

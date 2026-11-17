@@ -292,6 +292,7 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
         {menu.map((item, index) => (
           <div key={`${item.label}-${index}`} role="option" aria-selected={index === pick} className={`completions__item ${index === pick ? 'is-active' : ''}`}
             onMouseEnter={() => setPick(index)} onMouseDown={(e) => { e.preventDefault(); take(item) }}>
+            {item.icon && <span className="completions__icon" aria-hidden>{item.icon}</span>}
             <span className="completions__label">{item.label}</span>
             {item.detail && <span className="completions__detail">{item.detail}</span>}
           </div>

@@ -1,0 +1,26 @@
+{
+  "name": "@superego/mentions",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./daemon": "./src/daemon.ts",
+    "./ui": "./src/ui.tsx"
+  },
+  "dependencies": {
+    "@superego/daemon": "workspace:*",
+    "@superego/protocol": "workspace:*",
+    "@superego/app": "workspace:*",
+    "@superego/ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@superego/files": "workspace:*",
+    "@superego/sdk": "workspace:*",
+    "@superego/threads": "workspace:*",
+    "@types/react": "^19",
+    "react": "^19"
+  }
+}

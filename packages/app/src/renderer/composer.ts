@@ -2,15 +2,18 @@
 // `/skill:co`), offers items for it, and says what each puts in its place; the composer draws the menu and keeps its
 // keys (↑↓ pick, ⇥ or ⏎ take, esc leaves the word). And what goes with a sent message: an extension finds the blocks
 // it put in one (a skill's instructions, say) and draws them under it, kept out of the message's own text.
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
 
 /** The word a provider completes: where it starts (its trigger included) and what to look up. Providers may add their own. */
 export type CompletionWord = { start: number; query: string }
 
-/** One thing offered: `label` in the menu, `detail` beside it; taken, `insert` replaces the word (end it with a space to go on typing). */
-export type Completion = { label: string; detail?: string; insert: string }
+/**
+ * One thing offered: `label` in the menu, `detail` beside it, `icon` before it (to tell kinds apart in one menu); taken,
+ * `insert` replaces the word (end it with a space to go on typing).
+ */
+export type Completion = { label: string; detail?: string; icon?: ReactNode; insert: string }
 
 /** Where the composer is: the thread it sends to, on its machine. */
 export type ComposerWhere = { machine: MachineEntry; thread: ThreadInfo }
@@ -76,7 +79,17 @@ export type SentWith<T = any> = {
   /** What it put in a sent message: the items to draw, and the blocks (by index) they were, which the message's text leaves out. */
   read(blocks: readonly SentBlock[]): { items: T[]; blocks: number[] } | undefined
   /** Draws them under the message: a chip each, say. */
-  component: ComponentType<ComposerWhere & { items: T[] }>
+  component?: ComponentType<ComposerWhere & { items: T[] }>
+  /** The message's own words as Markdown to draw, given what was found: a name it mentions as a link, say. */
+  words?(text: string, items: T[]): string
+}
+
+/** A sent message's words as the readers that found something in it draw them (`words`), each in turn. */
+export function sentWords(found: readonly { reader: SentWith; items: unknown[] }[], text: string): string {
+  return found.reduce((words, { reader, items }) => {
+    if (!reader.words) return words
+    try { return reader.words(words, items) } catch (error) { console.error('Drawing a sent message\'s words failed', error); return words }
+  }, text)
 }
 
 /** A sent message as `readers` find it: what each found in it, and the blocks none of them claimed. */

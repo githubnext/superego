@@ -9,6 +9,9 @@
   pane says what that can't do.
 - ⌘U lists the unread threads, what needs you first, with each one's question or recap: type a few letters and
   press Enter to go there. The bell opens the same list. Change its key in Settings → Keyboard.
+- Type `@` to mention another thread (on any machine) or a file in the thread's folder: pick it from the list, and the
+  agent is told what it is and how to read it. In the sent message, a mentioned thread shows by its title and opens on
+  a click; a file opens beside the thread.
 
 ## 0.1.3
 

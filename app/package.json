@@ -20,6 +20,7 @@
     "@superego/images": "workspace:*",
     "@superego/links": "workspace:*",
     "@superego/mcp-servers": "workspace:*",
+    "@superego/mentions": "workspace:*",
     "@superego/skills": "workspace:*",
     "@superego/suggestions": "workspace:*",
     "@superego/tasks": "workspace:*",

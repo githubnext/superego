@@ -187,7 +187,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   // What extensions hear of it (`superego.on`): statuses changing, the thread shown, the window's focus.
   const registry = useRegistry()
   useWindowEvents(registry, {
-    threads, rejections, selection,
+    machines, threads, rejections, selection,
     hidden: hiddenAll,
     shown: shown ?? (archived?.id === selection?.thread ? archived : undefined) ?? hidden?.find((t) => t.id === selection?.thread),
   })

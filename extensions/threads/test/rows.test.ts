@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ToolRowCall } from '@superego/app/ui'
 import { mountUi, testThread, type TestWindow } from '@superego/sdk/testing'
 import threads from '../src/ui.tsx'
+import { linkedThread } from '../src/rows.tsx'
 
 const thread = testThread({ id: '1', title: 't' })
 const where = { machine: 'local', thread }
@@ -59,4 +60,24 @@ it('claims thread: links in a thread, and opens one there, or beside it', async 
   // Itself, beside itself, is just shown.
   await handler.open('thread:1', { ...where, beside: true, kind: 'link' })
   expect(dispatch).toHaveBeenLastCalledWith('thread.select', { machine: 'local', thread: '1' }, expect.anything())
+})
+
+it('follows a thread: link to another machine, named by its id, name or hostname', async () => {
+  const machines = [
+    { id: 'local', label: 'This Mac', state: 'connected' as const },
+    { id: 'm-9', label: 'workbox', state: 'connected' as const, machine: { id: 'd', hostname: 'box.lan' } },
+  ]
+  expect(linkedThread('thread:42', 'local', machines)).toEqual({ machine: 'local', id: '42' })
+  expect(linkedThread('thread:workbox/42', 'local', machines)).toEqual({ machine: 'm-9', id: '42' })
+  expect(linkedThread('thread:WorkBox/42', 'local', machines)).toEqual({ machine: 'm-9', id: '42' })
+  expect(linkedThread('thread:box.lan/42', 'local', machines)).toEqual({ machine: 'm-9', id: '42' })
+  expect(linkedThread('thread:m-9/42', 'local', machines)).toEqual({ machine: 'm-9', id: '42' })
+  expect(linkedThread('thread:elsewhere/42', 'local', machines)).toBeUndefined()
+  ui.registry.window.machines = machines
+  const handler = ui.linkHandler('thread:workbox/42', 'link', where)!
+  const dispatch = vi.spyOn(ui.registry.router, 'dispatch').mockResolvedValue(undefined as never)
+  // Shown, beside or not: a pane shows a thread of its own machine.
+  await handler.open('thread:workbox/42', { ...where, beside: true, kind: 'link' })
+  expect(dispatch).toHaveBeenLastCalledWith('thread.select', { machine: 'm-9', thread: '42' }, expect.anything())
+  expect(await handler.open('thread:elsewhere/42', { ...where, beside: false, kind: 'link' })).toBe("elsewhere isn't a machine here")
 })

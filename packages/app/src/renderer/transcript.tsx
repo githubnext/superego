@@ -13,7 +13,7 @@ import { Markdown } from './Markdown.tsx'
 import { Chevron, DescribedCall, describeRun, mainKind, RowIcon, statOf } from './tool-rows.tsx'
 import { DiffStat } from './diff.tsx'
 import { splitMessage } from './attachments.ts'
-import { readSent, type SentBlock } from './composer.ts'
+import { readSent, sentWords, type SentBlock } from './composer.ts'
 import { Contained } from './contained.tsx'
 
 /** A message in the conversation, as the model sees it. */
@@ -137,13 +137,14 @@ function Sent({ blocks, className, children }: { blocks: SentBlock[]; className:
   const registry = useRegistry()
   const { found, rest } = readSent(sentWithIn(registry, { machine: here.machine.id, thread: here.thread }), blocks)
   const { text, files } = splitMessage(rest)
-  if (!text && !found.length && !files.length && !children) return null
+  const drawn = found.filter(({ reader }) => reader.component)
+  if (!text && !drawn.length && !files.length && !children) return null
   return (
     <div className={className}>
-      {text && <Markdown text={text} breaks />}
-      {(found.length > 0 || files.length > 0) && (
+      {text && <Markdown text={sentWords(found, text)} breaks />}
+      {(drawn.length > 0 || files.length > 0) && (
         <div className="msg__files">
-          {found.map(({ reader: { component: Component, owner }, items }) => <Contained key={`${owner.profile ?? ''}/${owner.extension}`} name={owner.extension} inline><Component {...here} items={items} /></Contained>)}
+          {drawn.map(({ reader: { component: Component, owner }, items }) => <Contained key={`${owner.profile ?? ''}/${owner.extension}`} name={owner.extension} inline>{Component && <Component {...here} items={items} />}</Contained>)}
           <Files files={files} />
         </div>
       )}

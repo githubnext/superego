@@ -115,7 +115,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
       visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
-      selection: undefined, thread: undefined,
+      selection: undefined, thread: undefined, machines: [], threads: {},
     },
     emit(event, payload) {
       if (event === 'focus') registry.window.focused = (payload as WindowEvents['focus']).focused

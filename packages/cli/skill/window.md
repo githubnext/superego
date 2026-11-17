@@ -133,7 +133,7 @@ first handler that claims it, asked in this order:
 
 1. **the thread's profile's** (its `ui` files' `superego.link`), only in that profile's threads;
 2. **the extensions'**, in the order they're set up, but not those of an optional one the thread goes without
-   (`threads` claims `thread:`);
+   (`threads` claims `thread:<id>`, and `thread:<machine>/<id>` for one on another machine, by its name or id);
 3. **the core's**, the defaults: files a thread names (relative links, inline code that reads as a path, and
    `wikilink:`), which open in the pane kind that takes the file, and web pages (`http:`, `https:`, `mailto:`), which
    open in the browser, or beside in a pane that shows web pages (`urls: true`, `web-panes`' Preview).
@@ -178,8 +178,8 @@ superego.on('thread.status', ({ thread, before }) => {
 
 Notifications and the app icon's count are the app's own (Settings → Notifications): an extension needn't notify.
 
-`window` is how things are as the event arrives: `focused`, `visible`, the `selection` and the `thread` it shows. The
-core marks a finished thread seen the same way, on `select`, `focus` and `thread.status`.
+`window` is how things are as the event arrives: `focused`, `visible`, the `selection` and the `thread` it shows, the
+`machines` the window reaches and each one's `threads` in use (by machine id). The core marks a finished thread seen the same way, on `select`, `focus` and `thread.status`.
 
 `auth.rejected` is a machine's provider rejecting its credentials (`{ machine, rejection }`, a `ProviderRejection`):
 once, however many threads it stops. Those threads are `blocked` with kind `auth` (`waitingForSignIn`), quiet on their

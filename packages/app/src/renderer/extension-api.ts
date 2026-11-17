@@ -300,6 +300,10 @@ export type WindowState = {
   selection: Selection | undefined
   /** The thread shown, as the window has it (archived and Ego's too). */
   thread: ThreadInfo | undefined
+  /** The machines the window reaches, connected or not. */
+  machines: readonly MachineEntry[]
+  /** Each machine's threads in use (by machine id), as the sidebar lists them. */
+  threads: Readonly<Record<string, readonly ThreadInfo[] | undefined>>
 }
 
 /** What a UI half's `setup` gets (`superego`): ways to add to the window, for as long as the extension is set up. */

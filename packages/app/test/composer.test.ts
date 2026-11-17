@@ -2,7 +2,7 @@
 // read out of a sent message, and whose providers and readers a thread sees.
 import { describe, expect, it, vi } from 'vitest'
 import { defineApp, type ThreadInfo } from '@superego/protocol'
-import { askFor, complete, completing, menuFor, readSent, type Completion, type CompletionProvider, type CompletionWord, type Offered, type SentWith } from '../src/renderer/composer.ts'
+import { askFor, complete, completing, menuFor, readSent, sentWords, type Completion, type CompletionProvider, type CompletionWord, type Offered, type SentWith } from '../src/renderer/composer.ts'
 import { defineUiExtension } from '../src/renderer/extension-api.ts'
 import { createRegistry } from '../src/renderer/registry.tsx'
 import { completionsIn, sentWithIn } from '../src/renderer/lookups.ts'
@@ -41,6 +41,14 @@ describe('what went with a sent message', () => {
     const { found, rest } = readSent([nothing, marks], blocks)
     expect(found).toEqual([{ reader: marks, items: ['a', 'b'] }])
     expect(rest).toEqual([blocks[0], blocks[2]])
+  })
+  it("draws the message's words as each reader that found something says, and as they are past one that throws", () => {
+    const upper: SentWith<string> = { read: () => undefined, words: (text, items) => `${text.toUpperCase()} (${items.join(',')})` }
+    const broken: SentWith<string> = { read: () => undefined, words: () => { throw new Error('no') } }
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(sentWords([{ reader: upper, items: ['a'] }, { reader: marks, items: ['b'] }, { reader: broken, items: ['c'] }], 'hi')).toBe('HI (a)')
+    expect(error).toHaveBeenCalledOnce()
+    error.mockRestore()
   })
 })
 

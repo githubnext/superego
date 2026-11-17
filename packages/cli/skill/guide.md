@@ -348,6 +348,7 @@ source, at `extensions/<name>/src`, so only a checkout has them.
 | `git` | Changes: a `method` (a read), a `pane` the agent is told of, built on the kit's `Diff`, an `action` with keys |
 | `web-panes` | two pane kinds and nothing else, described in `about.panes` (so no daemon half: the daemon lists its `about`); `urls: true` makes web links open in one |
 | `skills` | a prompt section, a `beforeSend` transform, a `method`; `composer.complete` and `composer.sentWith` |
+| `mentions` | a `beforeSend` transform; `composer.complete` (with `superego.window`'s threads and `files.list`) and `composer.sentWith`'s `words` |
 | `files` | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | `links` | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
 | `unread` | UI only: a view in the rail `withoutSpaces` and in a phone's `drawer`, an action with keys reading projects, an app setting |

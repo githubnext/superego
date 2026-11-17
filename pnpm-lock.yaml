@@ -248,6 +248,9 @@ importers:
       '@superego/mcp-servers':
         specifier: workspace:*
         version: link:../extensions/mcp-servers
+      '@superego/mentions':
+        specifier: workspace:*
+        version: link:../extensions/mentions
       '@superego/protocol':
         specifier: workspace:*
         version: link:../packages/protocol
@@ -526,6 +529,37 @@ importers:
       zod:
         specifier: 4.6.7
         version: 4.6.7
+
+  extensions/mentions:
+    dependencies:
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@superego/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@superego/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@superego/files':
+        specifier: workspace:*
+        version: link:../files
+      '@superego/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@superego/threads':
+        specifier: workspace:*
+        version: link:../threads
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      react:
+        specifier: ^19
+        version: 19.3.1
 
   extensions/skills:
     dependencies:
