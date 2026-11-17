@@ -42,9 +42,10 @@ export default async function web(t, s) {
   await b.until(`Boolean(document.querySelector('.app__footer .unread-button'))`, 'Unread beside Settings on a phone')
   await b.until(`Boolean(document.querySelector('.app__footer .ego__button'))`, 'Ego beside Settings on a phone')
   await b.click('.app__footer .unread-button')
-  await b.until(`[...document.querySelectorAll('.unread-menu .superego-menu__item')].some((i) => i.textContent.includes('unread on the phone'))`, 'the finished thread in Unread')
-  await b.run(`[...document.querySelectorAll('.unread-menu .superego-menu__item')].find((i) => i.textContent.includes('unread on the phone')).click()`)
+  await b.until(`[...document.querySelectorAll('.unread-list .palette__list li')].some((i) => i.textContent.includes('unread on the phone'))`, 'the finished thread in Unread')
+  await b.run(`[...document.querySelectorAll('.unread-list .palette__list li')].find((i) => i.textContent.includes('unread on the phone')).click()`)
   await b.until(`document.querySelector('.app__mobilebar')?.textContent.includes('unread on the phone') && !document.querySelector('.app__sidebar')`, 'Unread went to the thread')
+  await b.until(`!document.querySelector('.unread-list')`, 'the unread list closed')
   // A data view on a phone: the skills, placed as a space, switched to from the drawer's foot and drawn from data.
   await b.call('app.settings.set', { key: 'app.layout', value: { place: { 'skills.view': 'space' } } }, 'app')
   await b.click('.app__mobilebar button')
