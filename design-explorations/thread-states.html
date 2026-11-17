@@ -1,0 +1,931 @@
+<!--
+  Superego: thread states and activity, four directions for one set of marks.
+  Source: packages/protocol/src/status.ts, packages/ui/src/status.tsx, extensions/threads, extensions/unread, the chief-of-staff board
+  Date: 2026-11-05
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Superego: thread states and activity</title>
+  <style>
+    :root {
+      --brand-50: #f4f4f5;
+      --brand-100: #e4e4e7;
+      --brand-300: #a1a1aa;
+      --brand-500: #52525b;
+      --brand-700: #27272a;
+      --accent-50: #f4f4f5;
+      --accent-500: #3f3f46;
+      --accent-700: #18181b;
+      --ink: #18181b;
+      --ink-soft: #3f3f46;
+      --ink-mute: #71717a;
+      --line: #e4e4e7;
+      --line-soft: #f4f4f5;
+      --paper: #ffffff;
+      --bg: #fafafa;
+      --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+      --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      --shadow-sm: 0 1px 2px rgba(9, 9, 11, 0.04);
+      --shadow-md: 0 4px 24px -8px rgba(9, 9, 11, 0.08), 0 2px 4px rgba(9, 9, 11, 0.03);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      line-height: 1.5;
+    }
+
+    .page {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 72px 48px 160px;
+    }
+    .doc-header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 40px;
+      margin-bottom: 80px;
+    }
+    .doc-eyebrow {
+      font-family: var(--mono);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--brand-500);
+      background: var(--brand-50);
+      padding: 6px 12px;
+      border-radius: 999px;
+      margin-bottom: 20px;
+    }
+    .doc-eyebrow::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--brand-500);
+    }
+    .doc-title {
+      font-family: var(--sans);
+      font-size: 44px;
+      line-height: 1.08;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      margin: 0 0 16px;
+      color: var(--ink);
+    }
+    .doc-subtitle {
+      font-size: 19px;
+      color: var(--ink-soft);
+      max-width: 720px;
+      margin: 0 0 32px;
+      line-height: 1.45;
+    }
+    .doc-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      font-size: 13px;
+      color: var(--ink-mute);
+    }
+    .doc-meta > div { display: flex; gap: 6px; }
+    .doc-meta b {
+      color: var(--ink-soft);
+      font-weight: 600;
+    }
+    .variant {
+      margin-bottom: 96px;
+    }
+    .variant:last-child { margin-bottom: 0; }
+
+    .variant-head {
+      display: grid;
+      grid-template-columns: 64px 1fr;
+      gap: 20px;
+      align-items: start;
+      margin-bottom: 28px;
+    }
+    .variant-letter {
+      width: 48px;
+      height: 48px;
+      border-radius: 999px;
+      background: var(--ink);
+      color: white;
+      font-family: var(--mono);
+      font-weight: 500;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      letter-spacing: -0.02em;
+    }
+    .variant-meta h2 {
+      margin: 4px 0 6px;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      color: var(--ink);
+    }
+    .variant-tradeoff {
+      font-size: 15px;
+      color: var(--ink-soft);
+      margin: 0;
+      max-width: 760px;
+    }
+    .variant-tradeoff b {
+      color: var(--brand-500);
+      font-weight: 600;
+    }
+    .preview-frame {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      margin-left: 84px;
+      position: relative;
+    }
+    .preview-frame::before {
+      content: '';
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #e4e4e7;
+      box-shadow: 18px 0 0 #e4e4e7, 36px 0 0 #e4e4e7;
+      z-index: 2;
+    }
+    .preview-frame-bar {
+      font-family: var(--mono);
+      background: #fafafa;
+      border-bottom: 1px solid var(--line-soft);
+      padding: 14px 16px 14px 76px;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-mute);
+      font-weight: 600;
+    }
+    .preview {
+      padding: 0;
+      min-height: 200px;
+    }
+    .variant-analysis {
+      margin: 24px 0 0 84px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 24px;
+    }
+    .analysis-block {
+      padding: 18px 20px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--paper);
+    }
+    .analysis-block h4 {
+      font-family: var(--mono);
+      margin: 0 0 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--brand-500);
+    }
+    .analysis-block.is-risk h4 { color: #b8341f; }
+    .analysis-block.is-pick h4 { color: var(--accent-700); }
+    .analysis-block p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--ink-soft);
+    }
+    .decision {
+      margin-top: 120px;
+      padding: 40px 48px;
+      background: var(--ink);
+      color: white;
+      border-radius: 20px;
+    }
+    .decision h3 {
+      font-family: var(--sans);
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin: 0 0 8px;
+    }
+    .decision-sub {
+      color: rgba(255, 255, 255, 0.65);
+      font-size: 14px;
+      margin: 0 0 28px;
+    }
+    .decision-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+    }
+    .decision-cell b {
+      display: block;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--brand-100);
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .decision-cell span {
+      font-size: 15px;
+      color: rgba(255, 255, 255, 0.85);
+      line-height: 1.45;
+    }
+    @media (max-width: 900px) {
+      .page { padding: 40px 20px 80px; }
+      .doc-title { font-size: 36px; }
+      .variant-head { grid-template-columns: 48px 1fr; gap: 12px; }
+      .preview-frame { margin-left: 0; }
+      .variant-analysis { margin-left: 0; grid-template-columns: 1fr; }
+    }
+
+    .doc-header { margin-bottom: 56px; }
+    .doc-subtitle b { color: var(--ink); font-weight: 600; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; gap: 18px; align-items: center; padding: 12px 0; margin: -24px 0 40px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); font-size: 13px; color: var(--ink-soft); }
+    .toolbar label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+    .toolbar nav { margin-left: auto; display: flex; gap: 14px; }
+    .toolbar nav a { color: var(--ink-mute); text-decoration: none; }
+    .toolbar nav a:hover { color: var(--ink); }
+    .now { margin: 0 0 96px; }
+    .now h2, .closing h2 { font-size: 26px; font-weight: 700; letter-spacing: -0.015em; margin: 0 0 8px; }
+    .now > p, .closing > p { color: var(--ink-soft); max-width: 760px; margin: 0 0 24px; }
+    .now-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+    .issues { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+    .issues li { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; font-size: 14px; line-height: 1.5; color: var(--ink-soft); }
+    .issues li b { color: var(--ink); font-weight: 600; }
+    .issues code, .closing code { font: 12px var(--mono); background: var(--line-soft); padding: 1px 5px; border-radius: 4px; }
+    .preview { padding: 28px; }
+    .stage { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+    .stage-col { display: flex; flex-direction: column; gap: 16px; flex: 1; min-width: 380px; }
+    .cap { font-size: 12px; color: var(--ink-mute); margin: 0 0 6px; }
+    .sub-h { font-size: 15px; font-weight: 600; margin: 36px 0 12px; color: var(--ink); }
+    .stage2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 470px); gap: 28px; margin-top: 28px; }
+    .combos { align-items: start; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+    .combo { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--paper); }
+    .combo p { margin: 0; padding: 8px 12px 10px; font-size: 13px; color: var(--ink-soft); border-top: 1px solid var(--line-soft); }
+    .combo p b { color: var(--ink); font-weight: 600; }
+    .combo .sg { padding: 6px; }
+    .elsewhere { display: grid; grid-template-columns: 170px 1fr; gap: 6px 16px; font-size: 13px; margin: 0; }
+    .elsewhere dt { color: var(--ink-mute); }
+    .elsewhere dd { margin: 0; color: var(--ink-soft); }
+    .elsewhere code { font: 13px var(--mono); color: var(--ink); }
+    .closing { margin-top: 96px; }
+    .closing ol { padding-left: 20px; display: grid; gap: 14px; max-width: 860px; }
+    .closing li { font-size: 15px; color: var(--ink-soft); line-height: 1.55; }
+    .closing li b { color: var(--ink); }
+    .aspire { margin-top: 24px; font-size: 13px; color: var(--ink-mute); max-width: 860px; }
+    .previews.gray .sg { filter: grayscale(1); }
+    .sg {
+      --superego-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+      --superego-bg: light-dark(#ffffff, #1d1d1f);
+      --superego-chrome: light-dark(#f2f2f4, #262628);
+      --superego-rail-bg: light-dark(#ebebed, #212123);
+      --superego-line: light-dark(#dedee1, #38383b);
+      --superego-fill: light-dark(rgb(0 0 0 / .05), rgb(255 255 255 / .06));
+      --superego-raised: light-dark(#ffffff, #2c2c2e);
+      --superego-border: light-dark(#d1d1d6, #444446);
+      --superego-text: light-dark(rgb(0 0 0 / .85), rgb(255 255 255 / .88));
+      --superego-muted: light-dark(rgb(0 0 0 / .55), rgb(255 255 255 / .56));
+      --superego-faint: light-dark(rgb(0 0 0 / .36), rgb(255 255 255 / .36));
+      --superego-accent: light-dark(#007aff, color-mix(in oklab, #007aff 92%, white));
+      --superego-accent-text: #fff;
+      --superego-selected: light-dark(rgb(0 0 0 / .07), rgb(255 255 255 / .08));
+      --superego-hover: light-dark(rgb(0 0 0 / .04), rgb(255 255 255 / .05));
+      --superego-status-blocked: light-dark(#ff9500, #ff9f0a);
+      --superego-status-error: light-dark(#ff3b30, #ff453a);
+      --superego-status-idle: light-dark(rgb(0 0 0 / .2), rgb(255 255 255 / .22));
+      --superego-status-blocked-text: light-dark(#c26a00, #ff9f0a);
+      --superego-status-error-text: light-dark(#d70015, #ff6961);
+      --superego-shadow-float: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(0 0 0 / .6)), 0 12px 36px -8px rgb(0 0 0 / .28), 0 2px 6px rgb(0 0 0 / .08);
+      font: 13px/1.45 var(--superego-font); color: var(--superego-text); -webkit-font-smoothing: antialiased; cursor: default;
+    }
+    .sg.light { color-scheme: light; }
+    .sg.dark { color-scheme: dark; }
+    .sg { background: var(--superego-bg); }
+    .sg-chrome { background: var(--superego-chrome); }
+
+    .g { display: block; flex: none; width: 12px; height: 12px; overflow: visible; }
+    .t-accent { color: var(--superego-accent); }
+    .t-blocked { color: var(--superego-status-blocked); }
+    .t-error { color: var(--superego-status-error); }
+    .t-idle { color: var(--superego-status-idle); }
+    .t-muted { color: var(--superego-muted); }
+    .t-faint { color: var(--superego-faint); }
+    .spin { animation: sg-spin 1.6s linear infinite; }
+    @keyframes sg-spin { to { transform: rotate(360deg); } }
+    .pulse { animation: sg-pulse 1.4s ease-in-out infinite; }
+    @keyframes sg-pulse { 50% { opacity: .35; } }
+    .wave circle { animation: sg-wave 1.2s ease-in-out infinite; opacity: .25; }
+    .wave circle:nth-child(2) { animation-delay: .16s; }
+    .wave circle:nth-child(3) { animation-delay: .32s; }
+    @keyframes sg-wave { 30% { opacity: 1; } 60%, 100% { opacity: .25; } }
+    .wave.still circle { animation: none; opacity: 1; }
+    .hb { color: var(--superego-muted); transition: color 1.2s ease; }
+    .hb .core, .hb .ripple { opacity: 0; transform-box: fill-box; transform-origin: center; }
+    .hb.beat { color: var(--superego-accent); transition: none; }
+    .hb.q.beat { color: var(--superego-text); }
+    .hb.beat .core { animation: sg-flash .9s ease-out; }
+    .hb.beat .ripple { animation: sg-ripple .9s ease-out; }
+    @keyframes sg-flash { 0% { opacity: .9; } 100% { opacity: 0; } }
+    @keyframes sg-ripple { 0% { opacity: .7; transform: scale(1); } 100% { opacity: 0; transform: scale(2); } }
+    .calm .spin, .calm .pulse, .calm .wave circle { animation: none; }
+    .calm .wave circle { opacity: 1; }
+    .sb { width: 248px; padding: 6px 8px 10px; border-radius: 10px; box-shadow: 0 0 0 1px var(--superego-line); }
+    .sb-head { display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 2px 0 8px; font-size: 12px; font-weight: 600; color: var(--superego-muted); }
+    .sb-head span { font-weight: 400; font-size: 15px; color: var(--superego-faint); }
+    .sb-proj { margin-top: 12px; }
+    .sb-proj__head { display: flex; align-items: center; gap: 4px; min-height: 22px; padding: 0 2px 2px 2px; font-size: 11px; font-weight: 600; color: var(--superego-muted); white-space: nowrap; }
+    .sb-proj__head em { font-style: normal; font-weight: 400; color: var(--superego-faint); overflow: hidden; text-overflow: ellipsis; display: inline-flex; gap: 4px; align-items: center; }
+    .sb-proj__head .g { width: 10px; height: 10px; }
+    .caret { flex: none; width: 10px; height: 10px; color: var(--superego-faint); transition: transform .12s; }
+    .caret.open { transform: rotate(90deg); }
+    .caret.none { visibility: hidden; }
+    .row { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 2px; border-radius: 6px; white-space: nowrap; }
+    .row.sel { background: var(--superego-selected); }
+    .row .lead { flex: none; width: 13px; display: grid; place-items: center; }
+    .row .title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .row .title.unread { font-weight: 600; }
+    .row .mark { flex: none; color: var(--superego-faint); display: inline-flex; }
+    .row .mark svg { width: 11px; height: 11px; }
+    .row .where { flex: 0 1 auto; min-width: 20px; overflow: hidden; text-overflow: ellipsis; color: var(--superego-faint); font-size: 11px; }
+    .row .gap { flex: 1; min-width: 4px; }
+    .row .trail { flex: none; color: var(--superego-faint); font-size: 11px; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 3px; }
+    .row .trail .g { width: 9px; height: 9px; }
+    .row .why { font-weight: 500; color: var(--superego-status-blocked-text); }
+    .row .why.err { color: var(--superego-status-error-text); }
+    .row .why.mute { color: var(--superego-muted); font-weight: 400; }
+    .row .why.acc { color: var(--superego-accent); font-weight: 500; }
+    .stale .row, .stale .sb-proj__head > b { opacity: .5; }
+    .stale .spin, .stale .wave circle { animation-play-state: paused; }
+    .sb-arch { margin-top: 12px; display: flex; gap: 4px; align-items: center; padding: 0 2px; min-height: 24px; color: var(--superego-faint); font-size: 12px; }
+    .rail { width: 48px; padding: 8px 0 10px; border-radius: 10px; background: var(--superego-rail-bg); box-shadow: 0 0 0 1px var(--superego-line); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .rail-btn { position: relative; width: 32px; height: 30px; display: grid; place-items: center; color: var(--superego-muted); border-radius: 8px; background: var(--superego-chrome); margin-bottom: 4px; }
+    .rail-btn svg.icon { width: 18px; height: 18px; }
+    .rail-btn .badge { position: absolute; right: 1px; top: 1px; padding: 1px; border-radius: 50%; background: var(--superego-rail-bg); }
+    .rail-btn .badge .g { width: 10px; height: 10px; }
+    .rail-dot { width: 26px; height: 20px; border-radius: 6px; display: grid; place-items: center; }
+    .rail-dot.sel { background: var(--superego-selected); }
+    .rail-dot.stale { opacity: .4; }
+    .rail-sep { width: 12px; height: 1px; background: var(--superego-line); margin: 3px 0; }
+    .rail-bell { margin-top: 10px; display: flex; align-items: center; gap: 3px; font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 500; }
+    .rail-bell svg { width: 14px; height: 14px; }
+    .tb { height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 10px; box-shadow: 0 0 0 1px var(--superego-line); white-space: nowrap; min-width: 0; }
+    .tb .proj { color: var(--superego-muted); font-weight: 500; }
+    .tb .dot { color: var(--superego-faint); }
+    .tb .g { width: 14px; height: 14px; }
+    .tb .ttl { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .tb .word { font-size: 12px; font-weight: 500; }
+    .tb .word.w-blocked { color: var(--superego-status-blocked-text); }
+    .tb .word.w-error { color: var(--superego-status-error-text); }
+    .tb .word.w-working { color: var(--superego-accent); }
+    .tb .word.w-muted { color: var(--superego-muted); font-weight: 400; }
+    .tb .sp { flex: 1; }
+    .chip { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px; border-radius: 6px; font-size: 12px; color: var(--superego-muted); background: var(--superego-fill); }
+    .chip svg { width: 12px; height: 12px; }
+    .chip.trouble { color: var(--superego-status-blocked-text); }
+    .model { font-size: 12px; color: var(--superego-muted); }
+    .pk { width: 100%; max-width: 470px; border-radius: 12px; background: var(--superego-raised); box-shadow: var(--superego-shadow-float); overflow: hidden; }
+    .pk-in { padding: 13px 16px; font-size: 15px; color: var(--superego-faint); border-bottom: 1px solid var(--superego-border); }
+    .pk ul { list-style: none; margin: 0; padding: 6px; }
+    .pk li { display: flex; gap: 8px; align-items: flex-start; padding: 6px 10px; border-radius: 6px; }
+    .pk li .lead { width: 13px; height: 20px; display: grid; place-items: center; flex: none; }
+    .pk li .g { width: 13px; height: 13px; }
+    .pk li.on { background: var(--superego-accent); color: var(--superego-accent-text); }
+    .pk li.on .lead > *, .pk li.on .lead .t-accent, .pk li.on .lead [class*="t-"] { color: inherit !important; }
+    .pk .two { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
+    .pk .l1 { display: flex; gap: 8px; align-items: baseline; line-height: 20px; white-space: nowrap; min-width: 0; }
+    .pk .l1 b { font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+    .pk .l1 b.unread { font-weight: 600; }
+    .pk .l1 span, .pk .l2 { color: var(--superego-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pk li.on .l1 span, .pk li.on .l2 { color: inherit; opacity: .8; }
+    .pk .kw { font-size: 11px; font-weight: 500; flex: none; line-height: 20px; }
+    .pk .kw.w-blocked { color: var(--superego-status-blocked-text); }
+    .pk .kw.w-error { color: var(--superego-status-error-text); }
+    .pk .kw.w-done { color: var(--superego-accent); }
+    .pk li.on .kw { color: inherit; }
+    .lg { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .lg th { text-align: left; font-weight: 500; color: var(--superego-muted); font-size: 11px; padding: 8px 10px; border-bottom: 1px solid var(--superego-line); }
+    .lg td { padding: 6px 10px; border-bottom: 1px solid var(--superego-line); vertical-align: middle; }
+    .lg tr:last-child td { border-bottom: 0; }
+    .lg td.st { color: var(--superego-text); white-space: nowrap; }
+    .lg td.st small { display: block; color: var(--superego-faint); font-size: 11px; }
+    .lg td.cell .box { display: inline-grid; place-items: center; }
+    .lg .rail-dot { background: var(--superego-rail-bg); }
+    .lg .row-g .g { width: 12px; height: 12px; }
+    .lg .tb-g .g { width: 14px; height: 14px; }
+    .lg .pk-g { display: inline-flex; gap: 6px; }
+    .lg .pk-g span { width: 26px; height: 22px; border-radius: 5px; display: grid; place-items: center; }
+    .lg .pk-g span.on { background: var(--superego-accent); color: #fff; }
+    .lg .pk-g span.on [class*="t-"] { color: inherit; }
+    .lg .pk-g .g { width: 13px; height: 13px; }
+    .lg td.wd { color: var(--superego-muted); }
+    .lg td.wd .why { font-weight: 500; color: var(--superego-status-blocked-text); }
+    .lg td.wd .why.err { color: var(--superego-status-error-text); }
+    .lg td.tx { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--superego-text); }
+    .lg-wrap { border-radius: 10px; box-shadow: 0 0 0 1px var(--superego-line); overflow: hidden; }
+    .lg-wrap.two { display: grid; grid-template-columns: 1fr 1fr; }
+    .lg tr.sect td { color: var(--superego-faint); font-size: 11px; font-weight: 500; padding-top: 12px; }
+    [data-dir="b"] .row .lead { width: 15px; }
+    [data-dir="c"] .row .trail .g { width: 15px; height: 15px; }
+    [data-dir="b"] .row .lead .g, [data-dir="b"] .lg .row-g .g, [data-dir="b"] .rail-dot .g { width: 14px; height: 14px; }
+    [data-dir="b"] .tb .g, [data-dir="b"] .lg .tb-g .g { width: 15px; height: 15px; }
+    [data-dir="b"] .pk li .g, [data-dir="b"] .lg .pk-g .g { width: 14px; height: 14px; }
+  </style>
+</head>
+<body>
+  <main class="page">
+
+    <header class="doc-header">
+      <div class="doc-eyebrow">Design exploration</div>
+      <h1 class="doc-title">Thread states and activity</h1>
+      <p class="doc-subtitle">One set of marks for what a thread is doing: in the sidebar, the folded rail, the title bar, ⌘U, the board, the menu bar and the CLI. Four directions. <b>Turn on grayscale</b> to check that each shape still reads without its colour.</p>
+      <div class="doc-meta">
+        <div><b>Source</b> packages/protocol/src/status.ts · packages/ui StatusGlyph · extensions/threads · extensions/unread · chief-of-staff board</div>
+        <div><b>Generated</b> 2026-11-05</div>
+        <div><b>Variants</b> 4</div>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <label><input type="checkbox" id="gray" /> Grayscale</label>
+      <label><input type="checkbox" id="calm" /> Reduce motion</label>
+      <nav><a href="#now">Today</a><a href="#a">A</a><a href="#b">B</a><a href="#c">C</a><a href="#d">D</a><a href="#pick">Pick</a></nav>
+    </div>
+
+    <div class="previews" id="previews">
+
+    <section class="now" id="now">
+      <h2>Today</h2>
+      <p>Every place that shows a thread uses <code>StatusGlyph</code>, a 7px dot, except the menu bar, the CLI, the board and the transcript, which each have their own marks.</p>
+      <div class="now-grid">
+        <div>
+          <div class="stage" data-render="stage-mini" data-dir="now"></div>
+        </div>
+        <ul class="issues">
+          <li><b>Colour alone separates the states that want you.</b> Finished, needs you and failed are the same filled dot in blue, orange and red. In ⌘U's highlighted row all three turn into the same white dot.</li>
+          <li><b>Working looks different in each place:</b> a hollow ring that pulses in the sidebar, a filled dot with a halo in the transcript, <code>●</code> in the menu bar and CLI. Idle is a filled grey dot in the app and <code>○</code> in the CLI.</li>
+          <li><b>Working and finished share the accent.</b> The only difference is a 1.5px ring versus a fill, and the ring fades in and out.</li>
+          <li><b>One shape, two meanings:</b> the dashed ring means <i>waiting for sign-in</i> in the sidebar and <i>queued</i> on the board. A hollow ring means working, MCP off and planned. Orange means needs you, and on the board it also means stalled.</li>
+          <li><b>Quiet children lie about being unread.</b> When one finishes it gets the blue “finished” dot, but the bell, the Dock and ⌘U don't count it. The row says unread and the count says it isn't.</li>
+          <li><b>Some states have no mark at all:</b> quiet (a child reporting to its parent), from an outside agent, stalled (only the board knows), and a folded parent whose children are busy. An offline machine just dims to 40%. In Settings, “offline” is a red <i>failed</i> dot.</li>
+          <li><b>The words drift:</b> Finished / done / landed; Needs you / Waiting / Waiting for sign-in; <code>*</code> for finished in the menu bar; the row shows a time for finished and working threads alike.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ===== A ===== -->
+    <section class="variant" id="a">
+      <div class="variant-head">
+        <div class="variant-letter">A</div>
+        <div class="variant-meta">
+          <h2>Shaped dots</h2>
+          <p class="variant-tradeoff"><b>Optimizes for</b> the smallest change that fixes everything: still one small dot per thread, but each state has its own shape. <b>·  Tradeoff</b> at 7px the shapes are subtle; the dot stays a code you learn, not something you read.</p>
+        </div>
+      </div>
+      <div class="preview-frame">
+        <div class="preview-frame-bar">Variant A · sidebar, rail, title bar, ⌘U · light and dark</div>
+        <div class="preview" data-render="full" data-dir="a"></div>
+      </div>
+      <div class="variant-analysis">
+        <div class="analysis-block"><h4>What works</h4><p>Filled means “look at me”, and only that. A spinner means work, and every spinner turns in step, so ten of them move like one and don't flicker. A spinner that stops (orange) is stalled. Every shape also works in white on ⌘U's blue row.</p></div>
+        <div class="analysis-block is-risk"><h4>What risks</h4><p>The target and the no-entry dot need a second look at rail size. Spinners are the most motion of the four directions, even in step.</p></div>
+        <div class="analysis-block is-pick"><h4>Pick this if</h4><p>You like today's quiet dots and want them honest: shape first, one meaning per mark, the same everywhere.</p></div>
+      </div>
+    </section>
+
+    <!-- ===== B ===== -->
+    <section class="variant" id="b">
+      <div class="variant-head">
+        <div class="variant-letter">B</div>
+        <div class="variant-meta">
+          <h2>Small symbols</h2>
+          <p class="variant-tradeoff"><b>Optimizes for</b> reading a state at a glance: a 14px circle with a ✓, ?, ! or lock in it, the way Linear and GitHub do it. <b>·  Tradeoff</b> louder and busier: every row gets an icon, and the sidebar starts to look like an issue tracker.</p>
+        </div>
+      </div>
+      <div class="preview-frame">
+        <div class="preview-frame-bar">Variant B · sidebar, rail, title bar, ⌘U · light and dark</div>
+        <div class="preview" data-render="full" data-dir="b"></div>
+      </div>
+      <div class="variant-analysis">
+        <div class="analysis-block"><h4>What works</h4><p>Nothing to learn: ? asks, ! failed, ✓ finished, a lock wants permission. It works in grayscale, in white, and in the menu bar's text (<code>✓ ? !</code>), so the CLI and the app finally match.</p></div>
+        <div class="analysis-block is-risk"><h4>What risks</h4><p>Idle rows get a ring too, so every row has a mark and the list gets heavier. Filled symbols in colour pull hard, maybe too hard for a sidebar you look at all day.</p></div>
+        <div class="analysis-block is-pick"><h4>Pick this if</h4><p>You'd rather be told than have to remember, and you run many threads where telling question, permission and failure apart at a glance matters.</p></div>
+      </div>
+    </section>
+
+    <!-- ===== C ===== -->
+    <section class="variant" id="c">
+      <div class="variant-head">
+        <div class="variant-letter">C</div>
+        <div class="variant-meta">
+          <h2>Words first</h2>
+          <p class="variant-tradeoff"><b>Optimizes for</b> calm and plain language, like a mail app: unread titles are semibold with a dot, working is three dots breathing where the time goes, and what a thread waits on is said in a word. <b>·  Tradeoff</b> it needs room for words, so the rail and small places fall back on a second set of glyphs.</p>
+        </div>
+      </div>
+      <div class="preview-frame">
+        <div class="preview-frame-bar">Variant C · sidebar, rail, title bar, ⌘U · light and dark</div>
+        <div class="preview" data-render="full" data-dir="c"></div>
+      </div>
+      <div class="variant-analysis">
+        <div class="analysis-block"><h4>What works</h4><p>The quietest list of the four: idle and working rows have no glyph at all, and unread is as plain as in Mail. “Question”, “Permission” and “Sign in” say what's wanted, with nothing to decode.</p></div>
+        <div class="analysis-block is-risk"><h4>What risks</h4><p>Two vocabularies, words on rows and dots in the rail, so it's less “one language”. The wave sits at the far right, where your eye looks last.</p></div>
+        <div class="analysis-block is-pick"><h4>Pick this if</h4><p>The sidebar should feel like a calm inbox, and you read rows more than you scan the rail.</p></div>
+      </div>
+    </section>
+
+    <!-- ===== D ===== -->
+    <section class="variant" id="d">
+      <div class="variant-head">
+        <div class="variant-letter">D</div>
+        <div class="variant-meta">
+          <h2>Heartbeat</h2>
+          <p class="variant-tradeoff"><b>Optimizes for</b> motion that means something: a working thread is a grey ring that flashes blue each time it actually does something. A stuck one goes still, then turns into a flat orange ring. <b>·  Tradeoff</b> needs a beat per activity (there's <code>activeAt</code> to go on), and still rings look alike at a glance.</p>
+        </div>
+      </div>
+      <div class="preview-frame">
+        <div class="preview-frame-bar">Variant D · sidebar, rail, title bar, ⌘U · light and dark</div>
+        <div class="preview" data-render="full" data-dir="d"></div>
+      </div>
+      <div class="variant-analysis">
+        <div class="analysis-block"><h4>What works</h4><p>Ten working threads twinkle now and then instead of spinning together. You can feel which one is busy and which has gone quiet, and “stalled” becomes a state every list shows, not only the board. The static shapes are A's.</p></div>
+        <div class="analysis-block is-risk"><h4>What risks</h4><p>Between beats, working is a grey ring, close to idle at a glance. Beats need a feed of activity in every window, and a long model call with no tool calls looks idle.</p></div>
+        <div class="analysis-block is-pick"><h4>Pick this if</h4><p>Watching many agents is the job, and spotting the stuck one matters more than knowing they're all busy.</p></div>
+      </div>
+    </section>
+
+    </div>
+
+    <section class="decision" id="pick">
+      <h3>How to pick a direction</h3>
+      <p class="decision-sub">The shapes, the motion and the words can be mixed: D's motion works on A's shapes, and C's semibold unread title works with any of them.</p>
+      <div class="decision-grid">
+        <div class="decision-cell"><b>Today's look, made honest →</b><span>A, shaped dots</span></div>
+        <div class="decision-cell"><b>Read it, don't learn it →</b><span>B, small symbols</span></div>
+        <div class="decision-cell"><b>A calm inbox →</b><span>C, words first</span></div>
+        <div class="decision-cell"><b>Find the stuck one →</b><span>D, heartbeat</span></div>
+      </div>
+    </section>
+
+    <section class="closing">
+      <h2>Recommendation</h2>
+      <p><b>A's shapes, with C's semibold title for unread.</b> It's the smallest change from today and fixes every inconsistency on the list. Shape carries the meaning in grayscale and in ⌘U's white row, and it works out to the menu bar and CLI as text: <code>· ◐ ● ◉ ⊖ ◌</code>. Keep D's “stopped spinner = stalled” as a later step, once the window knows when activity last happened.</p>
+      <h2 style="font-size:20px;margin-top:32px">Decisions for you</h2>
+      <ol>
+        <li><b>The shapes:</b> shaped dots (A), or symbols in circles (B)? Everything else follows from this.</li>
+        <li><b>How working moves:</b> spinners turning in step (A/B), a breathing three-dot wave (C), or a flash per real activity (D)? Under reduced motion, all of them stand still.</li>
+        <li><b>Quiet children:</b> a smaller grey spinner while they work, and no “finished” dot when they finish, since their parent hears and the count already agrees? A quiet child that needs you still shows the target.</li>
+        <li><b>The words:</b> keep <i>Finished · Needs you · Failed · Waiting for sign-in</i> (A, D), or name what's asked on the row: <i>Question · Permission · Sign in</i> (C)? Either way, the menu bar, CLI and notifications use the same words as the app.</li>
+      </ol>
+      <p class="aspire">Not in the data yet: a mark for a thread started by an outside agent (the title bar chip and row mark here are a proposal), stalled outside the board (D), and the folded parent's roll-up, which comes with “Threads list: collapse projects, sections and sub-threads”. A thread is in one state at a time, so “working and unread” only happens on a folded parent whose child finished: the roll-up shows it.</p>
+    </section>
+
+  </main>
+  <script>
+const S = (inner, cls = '') => `<svg class="g ${cls}" viewBox="0 0 16 16" aria-hidden="true">${inner}</svg>`
+const C = (r, extra = '') => `<circle cx="8" cy="8" r="${r}" ${extra}/>`
+const fill = 'fill="currentColor"'
+const ring = (w, dash = '') => `fill="none" stroke="currentColor" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ''}`
+const arc = (r, w, dash) => C(r, `fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-dasharray="${dash}"`)
+const check = (w = 2) => `<path d="M4 8.4l2.6 2.6 5.4-5.6" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`
+const faintRing = (r = 6, w = 1.3, dash = '') => C(r, `${ring(w, dash)} opacity=".4"`)
+
+const IC = {
+  caret: '<svg class="caret" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  pin: '<svg viewBox="0 0 16 16"><path d="M10.4 1.3l4.3 4.3-1.9.9-2.6 2.6.4 3.1-1.1 1.1-3-3-3.6 3.6-.8-.8 3.6-3.6-3-3 1.1-1.1 3.1.4 2.6-2.6z" fill="currentColor"/></svg>',
+  branch: '<svg viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4.5" cy="3.5" r="1.7"/><circle cx="4.5" cy="12.5" r="1.7"/><circle cx="11.5" cy="5" r="1.7"/><path d="M4.5 5.2v5.6M11.5 6.7c0 3-7 2.5-7 4.1"/></g></svg>',
+  outside: '<svg viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M4.5 6.5l2 1.5-2 1.5M8.5 10h3"/></g></svg>',
+  plug: '<svg viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5.5 1.5v3M10.5 1.5v3M3.5 4.5h9v3a4.5 4.5 0 0 1-9 0zM8 12v2.5"/></g></svg>',
+  chats: '<svg class="icon" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M1.5 3h9v6.5h-5l-3 2.5V9.5h-1z"/><path d="M10.5 6h4v6.5h-1v2l-2.5-2H7"/></g></svg>',
+  bell: '<svg viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M4 11V7a4 4 0 0 1 8 0v4l1.5 1.5h-11z"/><path d="M6.5 14.2h3"/></g></svg>',
+}
+
+const bullseye = (w = 1.5) => C(2.6, fill) + C(5.6, ring(w))
+const knock = (id, r, cut) => `<defs><mask id="${id}"><circle cx="8" cy="8" r="${r}" fill="#fff"/>${cut}</mask></defs><circle cx="8" cy="8" r="${r}" fill="currentColor" mask="url(#${id})"/>`
+const noEntry = knock('k-noentry', 5.7, '<rect x="4.9" y="7.1" width="6.2" height="1.8" rx=".9" fill="#000"/>')
+const waveG = (cls, still = false) => S(`<g class="wave${still ? ' still' : ''}">${['3.4', '8', '12.6'].map((x) => `<circle cx="${x}" cy="8" r="1.6" fill="currentColor"/>`).join('')}</g>`, cls)
+const hb = (r, quiet) => S(C(r, `class="core" ${fill}`) + C(r, `class="ripple" ${ring(1.2)}`) + C(r, ring(quiet ? 1.4 : 1.6)), `hb${quiet ? ' q' : ''}`)
+
+const DIRS = {
+  now: {
+    glyph: {
+      idle: S(C(3.5, fill), 't-idle'), working: S(C(3.5, ring(1.5)), 't-accent pulse'), done: S(C(3.5, fill), 't-accent'),
+      question: S(C(3.5, fill), 't-blocked'), permission: S(C(3.5, fill), 't-blocked'), signin: S(C(3.5, ring(1.5, '1.8 1.6')), 't-idle'),
+      error: S(C(3.5, fill), 't-error'), qworking: S(C(3.5, ring(1.5)), 't-accent pulse'), qdone: S(C(3.5, fill), 't-accent'),
+      queued: S(C(3.5, ring(1.5, '1.8 1.6')), 't-faint'), stalled: S(C(3.5, ring(1.5)), 't-blocked'), landed: S(check(2.2), 't-accent'),
+      connecting: S(C(3.5, ring(1.5)), 't-accent pulse'), offline: S(C(3.5, fill), 't-error'),
+    },
+    words: {
+      idle: 'Idle · <i>time on the row</i>', working: 'Working · <i>time on the row</i>', done: 'Finished · <i>time on the row</i>', question: 'Needs you: a question · <span class="why">Needs you</span>',
+      permission: 'Needs you: a permission · <span class="why">Needs you</span>', signin: 'Waiting for sign-in · <i>“Waiting”</i>', error: 'Failed · <span class="why err">Failed</span>',
+      qworking: 'Working', qdone: 'Finished', queued: 'Queued', stalled: 'Stalled 7m', landed: 'Landed', connecting: 'connecting', offline: 'offline',
+    },
+    txt: { idle: '○', working: '●', done: '*', question: '?', permission: '?', signin: '?', error: '!', qworking: '●', qdone: '*', queued: '—', stalled: '—', landed: '—', connecting: 'connecting', offline: 'offline' },
+    trail(r) { return r.s === 'blocked' ? '<span class="why">Needs you</span>' : r.s === 'error' ? '<span class="why err">Failed</span>' : r.s === 'signin' ? '<span class="why mute">Waiting</span>' : r.ago ?? 'now' },
+    roll() { return '' },
+    head(m) { return m === 'connecting' ? 'connecting' : 'offline' },
+  },
+  a: {
+    glyph: {
+      idle: S(C(2.25, fill), 't-idle'), working: S(arc(5, 2, '21 10.4'), 't-accent spin'), done: S(C(5, fill), 't-accent'),
+      question: S(bullseye(), 't-blocked'), permission: S(bullseye(), 't-blocked'), signin: S(C(4.9, ring(1.5, '2.3 2.03')), 't-muted'),
+      error: S(noEntry, 't-error'), qworking: S(arc(4, 1.7, '17 8.1'), 't-muted spin'), qdone: S(C(2.25, fill), 't-idle'),
+      queued: S(C(3.7, ring(1.3)), 't-faint'), stalled: S(arc(5, 2, '21 10.4'), 't-blocked'), landed: S(check(), 't-accent'),
+      connecting: S(arc(4, 1.7, '17 8.1'), 't-muted spin'), offline: S(C(3.7, ring(1.3)), 't-faint'),
+    },
+    words: {
+      idle: 'Idle · <i>time on the row</i>', working: 'Working · <i>nothing on the row</i>', done: 'Finished · <i>time on the row</i>', question: 'Needs you: a question · <span class="why">Needs you</span>',
+      permission: 'Needs you: a permission · <span class="why">Needs you</span>', signin: 'Waiting for sign-in · <i>“Sign in”</i>', error: 'Failed · <span class="why err">Failed</span>',
+      qworking: 'Working, for Chief of Staff', qdone: 'Finished, reported to its parent', queued: 'Queued', stalled: 'Stalled for 7m', landed: 'Landed', connecting: 'mbp · connecting', offline: 'workbox · offline',
+    },
+    txt: { idle: '·', working: '◐', done: '●', question: '◉', permission: '◉', signin: '◌', error: '⊖', qworking: '◐', qdone: '·', queued: '○', stalled: '◐ (orange)', landed: '✓', connecting: '◐', offline: '○' },
+    trail(r) { return r.s === 'blocked' ? '<span class="why">Needs you</span>' : r.s === 'error' ? '<span class="why err">Failed</span>' : r.s === 'signin' ? '<span class="why mute">Sign in</span>' : r.s === 'working' ? '' : r.ago ?? '' },
+    roll(kids, d) { return kids.map((k) => d.glyph[k.s === 'working' ? 'qworking' : k.s]).join('') },
+    head(m, d) { return m === 'connecting' ? `${d.glyph.connecting}connecting` : 'offline' },
+    unreadTitle: true,
+  },
+  b: {
+    glyph: {
+      idle: S(faintRing(), 't-muted'), working: S(faintRing() + arc(6, 2, '8.5 29.2'), 't-accent spin'), done: S(knock('k-check', 6.8, '<path d="M4.9 8.3l2.1 2.1 4.1-4.4" fill="none" stroke="#000" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>'), 't-accent'),
+      question: S(knock('k-q', 6.8, '<text x="8" y="11.6" text-anchor="middle" font-size="10.5" font-weight="700" font-family="-apple-system,system-ui,sans-serif" fill="#000">?</text>'), 't-blocked'),
+      permission: S(knock('k-lock', 6.8, '<rect x="5.3" y="7.4" width="5.4" height="4" rx=".9" fill="#000"/><path d="M6.5 7.6V6.4a1.5 1.5 0 0 1 3 0v1.2" fill="none" stroke="#000" stroke-width="1.3"/>'), 't-blocked'),
+      signin: S(C(6, ring(1.3)) + ['5.3', '8', '10.7'].map((x) => `<circle cx="${x}" cy="8" r=".95" fill="currentColor"/>`).join(''), 't-muted'),
+      error: S(knock('k-bang', 6.8, '<rect x="7.15" y="4" width="1.7" height="5.2" rx=".85" fill="#000"/><circle cx="8" cy="11.5" r="1" fill="#000"/>'), 't-error'),
+      qworking: S(faintRing() + arc(6, 2, '8.5 29.2'), 't-muted spin'), qdone: S(faintRing(), 't-muted'),
+      queued: S(faintRing(6, 1.3, '1.6 2.1'), 't-muted'), stalled: S(C(6, ring(1.3)) + '<rect x="5.7" y="5.3" width="1.6" height="5.4" rx=".6" fill="currentColor"/><rect x="8.7" y="5.3" width="1.6" height="5.4" rx=".6" fill="currentColor"/>', 't-blocked'),
+      landed: S(C(6, ring(1.3)) + check(1.7), 't-accent'),
+      connecting: S(faintRing() + arc(6, 2, '8.5 29.2'), 't-muted spin'), offline: S(faintRing(6, 1.3, '1.6 2.1') + '<path d="M4 12L12 4" stroke="currentColor" opacity=".4" stroke-width="1.3" stroke-linecap="round"/>', 't-muted'),
+    },
+    words: {
+      idle: 'Idle', working: 'Working', done: 'Done · <i>time on the row</i>', question: 'Needs you: a question', permission: 'Needs you: a permission', signin: 'Waiting for sign-in',
+      error: 'Failed', qworking: 'Working, for Chief of Staff', qdone: 'Done, reported to its parent', queued: 'Queued', stalled: 'Stalled for 7m', landed: 'Merged', connecting: 'mbp · connecting', offline: 'workbox · offline',
+    },
+    txt: { idle: '○', working: '◐', done: '✓', question: '?', permission: '?', signin: '…', error: '!', qworking: '◐', qdone: '○', queued: '◌', stalled: '‖', landed: '✓', connecting: '◐', offline: '⊘' },
+    trail(r) { return r.s === 'working' ? '' : r.ago ?? '' },
+    roll(kids, d) { const top = kids.find((k) => k.s === 'done') ? 'done' : 'working'; return `${d.glyph[top]}${kids.length}` },
+    head(m, d) { return m === 'connecting' ? `${d.glyph.connecting}connecting` : `${d.glyph.offline}offline` },
+    size: 14,
+  },
+  c: {
+    glyph: {
+      idle: S(C(1.9, fill), 't-idle'), working: waveG('t-accent'), done: S(C(3.4, fill), 't-accent'),
+      question: S(bullseye(1.4), 't-blocked'), permission: S(bullseye(1.4), 't-blocked'), signin: S(C(4.6, ring(1.4, '2.2 1.9')), 't-muted'),
+      error: S('<path d="M5 5l6 6M11 5l-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>', 't-error'),
+      qworking: waveG('t-muted'), qdone: S(C(1.9, fill), 't-idle'), queued: S(C(3.4, ring(1.3)), 't-faint'), stalled: waveG('t-blocked', true), landed: S(check(), 't-accent'),
+      connecting: waveG('t-muted'), offline: S(C(3.4, ring(1.3)), 't-faint'),
+    },
+    words: {
+      idle: '<i>time on the row</i>', working: 'Working · <i>the wave on the row</i>', done: 'Done · <i>semibold, time in blue</i>', question: 'Question · <span class="why">Question</span>', permission: 'Permission · <span class="why">Permission</span>',
+      signin: 'Sign in · <i>muted</i>', error: 'Failed · <span class="why err">Failed</span>', qworking: 'Working, grey wave', qdone: 'Done, not bold', queued: 'Queued', stalled: 'Stalled 7m', landed: 'Landed', connecting: 'connecting…', offline: 'offline',
+    },
+    txt: { idle: '', working: 'Working', done: 'Done', question: 'Question', permission: 'Permission', signin: 'Sign in', error: 'Failed', qworking: 'Working', qdone: '', queued: 'Queued', stalled: 'Stalled', landed: 'Landed', connecting: 'connecting…', offline: 'offline' },
+    lead(r, key, d) { return ['done', 'question', 'permission', 'error'].includes(key) ? d.glyph[key] : '' },
+    trail(r, key, d) {
+      if (key === 'working' || key === 'qworking') return d.glyph[key]
+      if (r.s === 'blocked') return `<span class="why">${r.k === 'permission' ? 'Permission' : 'Question'}</span>`
+      if (r.s === 'error') return '<span class="why err">Failed</span>'
+      if (r.s === 'signin') return '<span class="why mute">Sign in</span>'
+      if (key === 'done') return `<span class="why acc">${r.ago}</span>`
+      return r.ago ?? ''
+    },
+    roll(kids, d) { const n = kids.filter((k) => k.s === 'done').length; return `${d.glyph.qworking}${n ? `<span class="why acc">${n} new</span>` : ''}` },
+    head(m) { return m === 'connecting' ? 'connecting…' : 'offline' },
+    unreadTitle: true,
+  },
+  d: {
+    glyph: {
+      idle: S(C(2.25, fill), 't-idle'), working: hb(4.6), done: S(C(4.8, fill), 't-accent'),
+      question: S(bullseye(), 't-blocked'), permission: S(bullseye(), 't-blocked'), signin: S(C(4.7, ring(1.5, '2.3 1.95')), 't-muted'),
+      error: S(noEntry, 't-error'), qworking: hb(3.5, true), qdone: S(C(2.25, fill), 't-idle'), queued: S(C(3.5, ring(1.2, '1 1.6')), 't-faint'),
+      stalled: S(C(4.6, ring(1.6, '2.4 2.42')), 't-blocked'), landed: S(check(), 't-accent'), connecting: hb(3.5, true), offline: S(C(3.5, ring(1.3)), 't-faint'),
+    },
+    words: {
+      idle: 'Idle · <i>time on the row</i>', working: 'Working · <i>nothing on the row</i>', done: 'Finished · <i>time on the row</i>', question: 'Needs you: a question · <span class="why">Needs you</span>',
+      permission: 'Needs you: a permission · <span class="why">Needs you</span>', signin: 'Waiting for sign-in · <i>“Sign in”</i>', error: 'Failed · <span class="why err">Failed</span>',
+      qworking: 'Working, for Chief of Staff', qdone: 'Finished, reported to its parent', queued: 'Queued', stalled: 'Quiet for 7m · <i>on every list</i>', landed: 'Landed', connecting: 'mbp · connecting', offline: 'workbox · offline',
+    },
+    txt: { idle: '·', working: '○ / ●', done: '●', question: '◉', permission: '◉', signin: '◌', error: '⊖', qworking: '∘', qdone: '·', queued: '∘', stalled: '◌ (orange)', landed: '✓', connecting: '∘', offline: '○' },
+    trail(r) { return r.stalled ? `<span class="why mute">Quiet ${r.stalled}</span>` : r.s === 'blocked' ? '<span class="why">Needs you</span>' : r.s === 'error' ? '<span class="why err">Failed</span>' : r.s === 'signin' ? '<span class="why mute">Sign in</span>' : r.s === 'working' ? '' : r.ago ?? '' },
+    roll(kids, d) { return kids.map((k) => d.glyph[k.s === 'working' ? 'qworking' : k.s]).join('') },
+    head(m, d) { return m === 'connecting' ? `${d.glyph.connecting}connecting` : 'offline' },
+    stalls: true,
+  },
+}
+
+const key = (r, d) => {
+  if (d.stalls && r.stalled) return 'stalled'
+  if (r.s === 'blocked') return r.k
+  if (r.q && r.s === 'working') return 'qworking'
+  if (r.q && r.s === 'done') return 'qdone'
+  return r.s
+}
+const isUnread = (r) => (r.s === 'blocked') || (!r.q && (r.s === 'done' || r.s === 'error'))
+
+const SUPEREGO_KIDS = [
+  { t: 'Design: one language for thread states', s: 'working', q: true, br: true, sel: true },
+  { t: 'Threads list: collapse projects and sections', s: 'working', q: true, br: true },
+  { t: 'Rail notices: one dot for all', s: 'working', q: true, br: true },
+  { t: 'Release notes for 0.9', s: 'blocked', k: 'permission', q: true, br: true, ago: '1m' },
+  { t: 'Pinned threads stay in their projects', s: 'done', q: true, br: true, ago: '6m' },
+]
+const STAFF_KIDS = [{ s: 'working' }, { s: 'working' }, { s: 'done' }]
+const STAFF_BOARD = { t: 'Design: the staff board as a persistent overview', s: 'blocked', k: 'question', ago: '2m' }
+const FIX = { t: 'Fix flaky sync test', s: 'working', out: true, stalled: '7m' }
+const SMOKE = { t: 'Smoke split by area on one harness', s: 'error', br: true, ago: '12m' }
+const MENTIONS = { t: '@ mentions in the composer: threads and files', s: 'done', br: true, ago: '4m' }
+const FIXTURE = [
+  { pinned: true, rows: [{ t: 'Chief of Staff', s: 'working', where: 'superego' }, { ...STAFF_BOARD, where: 'dotfiles · mbp' }] },
+  { name: 'superego', rows: [
+    { t: 'Chief of Staff', s: 'working', pin: true, open: true, kids: SUPEREGO_KIDS },
+    MENTIONS, SMOKE, FIX,
+    { t: 'Onboarding copy pass', s: 'signin', ago: '20m' },
+    { t: 'Rename settings tabs', s: 'idle', ago: '2h' },
+  ] },
+  { name: 'Tuna', rows: [
+    { t: 'Chief of Staff', s: 'idle', ago: '5m', open: false, kids: STAFF_KIDS },
+    { t: 'Sentry overview via the Sentry MCP', s: 'idle', ago: '3h' },
+  ] },
+  { name: 'dotfiles', mach: 'mbp', rows: [{ ...STAFF_BOARD, pin: true }] },
+  { name: 'tremolo', mach: 'workbox', mstate: 'offline', rows: [{ t: 'Bench: live CSS knobs', s: 'working' }, { t: 'Page links in the editor', s: 'idle', ago: '1d' }] },
+]
+
+function row(d, r, depth = 0) {
+  const k = key(r, d)
+  const lead = d.lead ? d.lead(r, k, d) : d.glyph[k]
+  const caret = r.kids ? IC.caret.replace('class="caret"', `class="caret${r.open ? ' open' : ''}"`) : IC.caret.replace('class="caret"', 'class="caret none"')
+  const marks = [
+    r.pin && !r.where ? `<span class="mark" title="Pinned">${IC.pin}</span>` : '',
+    r.br ? `<span class="mark" title="On its own branch">${IC.branch}</span>` : '',
+    r.out ? `<span class="mark" title="Started by Claude Code">${IC.outside}</span>` : '',
+  ].join('')
+  const where = r.where ? `<em class="where">${r.where}</em>` : ''
+  const trail = r.kids && !r.open ? d.roll(r.kids, d) : d.trail(r, k, d)
+  const bold = d.unreadTitle && isUnread(r) ? ' unread' : ''
+  const pad = depth ? ` style="padding-left:${2 + depth * 14}px"` : ''
+  let html = `<div class="row${r.sel ? ' sel' : ''}"${pad}>${caret}<span class="lead">${lead}</span><span class="title${bold}">${r.t}</span>${marks}${where}<span class="gap"></span><span class="trail">${trail}</span></div>`
+  if (r.kids && r.open) html += r.kids.map((c) => row(d, c, depth + 1)).join('')
+  return html
+}
+
+function sidebar(d, scheme) {
+  let h = `<div class="sg sg-chrome sb ${scheme}"><div class="sb-head">Threads<span>+</span></div>`
+  for (const p of FIXTURE) {
+    if (p.pinned) { h += `<section class="sb-proj"><div class="sb-proj__head">${IC.caret.replace('caret', 'caret open')}<b>Pinned</b></div>${p.rows.map((r) => row(d, r)).join('')}</section>`; continue }
+    const mach = p.mach ? ` <em>${p.mach}${p.mstate ? ` · ${d.head(p.mstate, d)}` : ''}</em>` : ''
+    h += `<section class="sb-proj${p.mstate ? ' stale' : ''}"><div class="sb-proj__head">${IC.caret.replace('caret', 'caret open')}<b>${p.name}</b>${mach}</div>${p.rows.map((r) => row(d, r)).join('')}</section>`
+  }
+  return h + `<div class="sb-arch">${IC.caret}Archived <span>14</span></div></div>`
+}
+
+function rail(d, scheme) {
+  const flat = []
+  const push = (r, stale) => { flat.push({ r, stale }); if (r.kids && r.open) r.kids.forEach((c) => flat.push({ r: c, stale })) }
+  let h = `<div class="sg rail ${scheme}"><div class="rail-btn">${IC.chats}<span class="badge">${d.glyph.question}</span></div>`
+  FIXTURE.forEach((p, i) => {
+    if (p.name === 'dotfiles') return
+    if (i > 0) h += '<div class="rail-sep"></div>'
+    p.rows.forEach((r) => push(r, !!p.mstate))
+    h += flat.splice(0).map(({ r, stale }) => `<div class="rail-dot${r.sel ? ' sel' : ''}${stale ? ' stale' : ''}" title="${r.t ?? ''}">${d.glyph[key(r, d)]}</div>`).join('')
+  })
+  return h + `<div class="rail-bell t-blocked">${IC.bell}4</div></div>`
+}
+
+function titlebar(d, scheme, which) {
+  const T = {
+    working: { proj: 'superego', r: FIX, chips: `<span class="chip">${IC.outside}Claude Code</span><span class="chip">${IC.plug}2</span>` },
+    blocked: { proj: 'dotfiles', r: STAFF_BOARD, chips: `<span class="chip trouble">${IC.plug}3</span>` },
+    error: { proj: 'superego', r: SMOKE, chips: `<span class="chip">${IC.branch}smoke-by-area</span>` },
+  }[which]
+  const k = key(T.r, d)
+  const wordFor = {
+    now: {}, b: {},
+    a: { question: ['Needs you', 'w-blocked'], error: ['Failed', 'w-error'] },
+    c: { working: ['Working', 'w-working'], question: ['Question', 'w-blocked'], error: ['Failed', 'w-error'] },
+    d: { stalled: ['Quiet for 7m', 'w-muted'], question: ['Needs you', 'w-blocked'], error: ['Failed', 'w-error'] },
+  }[dkey(d)][k]
+  return `<div class="sg tb ${scheme}"><span class="proj">${T.proj}</span><span class="dot">·</span>${d.glyph[k]}<span class="ttl">${T.r.t}</span>${wordFor ? `<span class="word ${wordFor[1]}">${wordFor[0]}</span>` : ''}<span class="sp"></span>${T.chips}<span class="model">opus-4.5</span></div>`
+}
+const dkey = (d) => Object.keys(DIRS).find((k) => DIRS[k] === d)
+
+function picker(d, scheme) {
+  const items = [
+    { r: STAFF_BOARD, where: 'dotfiles · mbp', msg: 'Which wave should the board open on?' },
+    { r: SUPEREGO_KIDS[3], where: 'superego', msg: 'Run git push origin v0.9?' },
+    { r: SMOKE, where: 'superego', msg: 'check.ts stopped it after 8 minutes' },
+    { r: MENTIONS, where: 'superego', msg: 'Mentions offer threads and files; 14 tests added' },
+  ]
+  const kw = (r) => dkey(d) !== 'c' ? '' : r.s === 'blocked' ? `<span class="kw w-blocked">${r.k === 'permission' ? 'Permission' : 'Question'}</span>` : r.s === 'error' ? '<span class="kw w-error">Failed</span>' : '<span class="kw w-done">Done</span>'
+  return `<div class="sg pk ${scheme}"><div class="pk-in">Go to an unread thread</div><ul>${items.map(({ r, where, msg }, i) =>
+    `<li class="${i === 0 ? 'on' : ''}"><span class="lead">${d.glyph[key(r, d)]}</span><span class="two"><span class="l1"><b class="${d.unreadTitle ? 'unread' : ''}">${r.t}</b><span>${where}</span></span><span class="l2">${msg}</span></span>${kw(r)}</li>`).join('')}</ul></div>`
+}
+
+const LEG = [
+  ['sect', 'A thread'], ['idle', 'Idle', 'seen'], ['working', 'Working'], ['done', 'Finished', 'unread'], ['question', 'Needs you', 'a question'],
+  ['permission', 'Needs you', 'a permission'], ['signin', 'Waiting for sign-in'], ['error', 'Failed', 'unread'],
+  ['sect', 'A child that reports to its parent (quiet)'], ['qworking', 'Working'], ['qdone', 'Finished'],
+  ['sect', 'On the board'], ['queued', 'Queued'], ['stalled', 'Stalled'], ['landed', 'Landed'], ['question', 'Decision waiting'],
+  ['sect', 'Its machine'], ['connecting', 'Connecting'], ['offline', 'Offline'],
+]
+
+function legend(d) {
+  const rows = LEG.map(([k, label, sub]) => {
+    if (k === 'sect') return `<tr class="sect"><td colspan="7">${label}</td></tr>`
+    const g = d.glyph[k]
+    return `<tr><td class="st">${label}${sub ? `<small>${sub}</small>` : ''}</td>
+      <td class="cell"><span class="rail-dot box">${g}</span></td>
+      <td class="cell row-g"><span class="box">${g}</span></td>
+      <td class="cell tb-g"><span class="box">${g}</span></td>
+      <td class="cell"><span class="pk-g"><span>${g}</span><span class="on">${g}</span></span></td>
+      <td class="wd">${d.words[k]}</td>
+      <td class="tx">${d.txt[k] || '<span style="color:var(--superego-faint)">—</span>'}</td></tr>`
+  }).join('')
+  const head = '<tr><th>State</th><th>Rail</th><th>Row</th><th>Title bar</th><th>⌘U</th><th>Words: tooltip, title bar · on the row</th><th>Menu bar, CLI</th></tr>'
+  const table = (scheme) => `<div class="sg ${scheme}"><table class="lg">${head}${rows}</table></div>`
+  return `<div class="lg-wrap">${table('light')}</div><p class="cap" style="margin-top:12px">Dark</p><div class="lg-wrap">${table('dark')}</div>`
+}
+
+function combos(d) {
+  const one = (html, cap, scheme = 'light') => `<div class="combo"><div class="sg sg-chrome ${scheme}">${html}</div><p>${cap}</p></div>`
+  const many = Array.from({ length: 8 }, (_, i) => ({ t: ['Lint pass', 'Type errors in cli', 'Smoke: settings', 'Docs: releasing', 'Bump electron', 'Rail tooltips', 'Picker keys', 'Theme tokens'][i], s: 'working', q: true, br: true }))
+  const head = (name, m) => `<div class="sb-proj__head" style="padding-left:2px">${IC.caret.replace('caret', 'caret open')}<b>${name}</b> <em>${m === 'connecting' ? 'mbp' : 'workbox'} · ${d.head(m, d)}</em></div>`
+  return [
+    one(row(d, { t: 'Chief of Staff', s: 'idle', ago: '5m', kids: STAFF_KIDS }) + row(d, { t: 'Chief of Staff', s: 'working', open: true, kids: [{ t: 'Rail notices: one dot for all', s: 'working', q: true }, { t: 'Picker keys', s: 'done', ago: '1m' }] }),
+      '<b>Working and unread.</b> A thread is in one state at a time, so this happens on a parent: folded, it rolls up its children; open, each child shows its own.'),
+    one(`<div class="sb-proj__head" style="padding-left:2px">${IC.caret.replace('caret', 'caret open')}<b>Pinned</b></div>` + row(d, { ...STAFF_BOARD, where: 'dotfiles · mbp' }) + row(d, { t: 'Chief of Staff', s: 'working', where: 'superego' }),
+      '<b>Needs you, pinned.</b> Pinned rows look like any other, plus where they live; the pin icon shows only in their own project.'),
+    one(row(d, SUPEREGO_KIDS[1], 1) + row(d, SUPEREGO_KIDS[4], 1) + row(d, SUPEREGO_KIDS[3], 1),
+      '<b>Quiet children.</b> Working smaller and grey; finished shows no unread dot (its parent hears); needing you still shows.'),
+    `<div class="combo"><div class="sg sg-chrome light stale">${head('tremolo', 'offline')}${row(d, { t: 'Bench: live CSS knobs', s: 'working' })}${row(d, { t: 'Page links in the editor', s: 'done', ago: '1d' })}</div><p><b>Offline machine.</b> Its rows are half strength with motion stopped: the last thing known, not live.</p></div>`,
+    `<div class="combo"><div class="sg sg-chrome dark stale">${head('dotfiles', 'connecting')}${row(d, { ...STAFF_BOARD, pin: true })}</div><p><b>Connecting, dark.</b> Same as offline, with the machine's own working mark in its head.</p></div>`,
+    one(many.map((r) => row(d, r, 1)).join(''), '<b>Eight at once.</b> How calm a busy project stays.'),
+  ].join('')
+}
+
+function elsewhere(d) {
+  const k = dkey(d)
+  const E = {
+    a: [['Threads button, folded', 'the most pressing unread mark, small, at its corner (the target here)'], ['Bell, Dock', 'the count, as today; the bell in the most pressing colour'], ['Menu bar, CLI', '<code>·</code> idle <code>◐</code> working <code>●</code> finished <code>◉</code> needs you <code>⊖</code> failed <code>◌</code> sign-in'], ['Notification', 'title: the thread; body: “Needs you: a question” + the question']],
+    b: [['Threads button, folded', 'the most pressing symbol at its corner'], ['Bell, Dock', 'the count; the bell in the most pressing colour'], ['Menu bar, CLI', '<code>○</code> idle <code>◐</code> working <code>✓</code> done <code>?</code> needs you <code>!</code> failed <code>…</code> sign-in: today\'s CLI, with ✓ for *'], ['Notification', '“Done: <recap>”, “Needs you: a question”']],
+    c: [['Threads button, folded', 'a dot in the most pressing colour, as the rail notices do'], ['Bell, Dock', 'the count'], ['Menu bar, CLI', 'words in a column: <code>Working</code>, <code>Question</code>, <code>Failed</code>; blank when idle'], ['Notification', 'the word as the title\'s suffix: “Release notes for 0.9 — Permission”']],
+    d: [['Threads button, folded', 'the target at its corner; it flashes once when something new comes in'], ['Bell, Dock', 'the count'], ['Menu bar, CLI', 'as A; <code>quiet 7m</code> beside a stalled thread'], ['Notification', 'as A, plus one for a thread that has been quiet for 10 minutes (opt-in)']],
+  }[k]
+  return `<dl class="elsewhere">${E.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl>`
+}
+
+for (const el of document.querySelectorAll('[data-render]')) {
+  const d = DIRS[el.dataset.dir]
+  if (el.dataset.render === 'stage-mini') {
+    el.innerHTML = `${sidebar(d, 'light')}${rail(d, 'light')}<div class="stage-col" style="min-width:300px"><div>${picker(d, 'light')}</div><div class="lg-wrap"><div class="sg light"><table class="lg"><tr><th>State</th><th>Row</th><th>⌘U</th><th>Menu bar, CLI</th></tr>${LEG.map(([k, l, s]) => k === 'sect' ? `<tr class="sect"><td colspan="4">${l}</td></tr>` : `<tr><td class="st">${l}${s ? `<small>${s}</small>` : ''}</td><td class="row-g"><span class="box">${d.glyph[k]}</span></td><td><span class="pk-g"><span>${d.glyph[k]}</span><span class="on">${d.glyph[k]}</span></span></td><td class="tx">${d.txt[k]}</td></tr>`).join('')}</table></div></div></div>`
+    continue
+  }
+  el.innerHTML = `
+    <div class="stage">
+      <div><p class="cap">Sidebar</p>${sidebar(d, 'light')}</div>
+      <div><p class="cap">Dark</p>${sidebar(d, 'dark')}</div>
+      <div><p class="cap">Folded</p><div style="display:flex;gap:10px">${rail(d, 'light')}${rail(d, 'dark')}</div></div>
+    </div>
+    <div class="stage2">
+      <div><p class="cap">Title bar</p><div style="display:grid;gap:8px">${titlebar(d, 'light', 'working')}${titlebar(d, 'light', 'blocked')}${titlebar(d, 'light', 'error')}${titlebar(d, 'dark', 'blocked')}</div>
+        <p class="cap" style="margin-top:20px">Elsewhere</p>${elsewhere(d)}</div>
+      <div><p class="cap">⌘U</p>${picker(d, 'light')}</div>
+    </div>
+    <h3 class="sub-h">Combinations</h3>
+    <div class="combos">${combos(d)}</div>
+    <h3 class="sub-h">Every state, at every size</h3>
+    ${legend(d)}`
+}
+
+for (const g of document.querySelectorAll('.hb')) g.dataset.rate = String(0.025 + Math.random() * 0.09)
+const calm = () => document.body.classList.contains('calm')
+setInterval(() => {
+  if (calm()) return
+  for (const g of document.querySelectorAll('.hb:not(.beat)')) {
+    if (g.closest('.stale') || Math.random() > Number(g.dataset.rate)) continue
+    g.classList.add('beat')
+    setTimeout(() => g.classList.remove('beat'), 900)
+  }
+}, 250)
+document.getElementById('gray').addEventListener('change', (e) => document.getElementById('previews').classList.toggle('gray', e.target.checked))
+document.getElementById('calm').addEventListener('change', (e) => document.body.classList.toggle('calm', e.target.checked))
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) { document.body.classList.add('calm'); document.getElementById('calm').checked = true }
+
+  </script>
+</body>
+</html>
