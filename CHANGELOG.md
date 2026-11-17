@@ -2,14 +2,6 @@
 
 ## Unreleased
 
-- An image too big for the model (a long pasted screenshot, a large photo, one an agent reads or a tool returns) no
-  longer breaks its thread: it's sent scaled down, and the file you attached stays as it was. One the model still
-  refuses is left out from then on, the thread says so, and the message is sent again without it. Threads stuck on such
-  an image work again from their next message.
-- Preview and Artifact panes keep their page: switching threads, opening Settings or rearranging panes no longer
-  loads it again. Coming back shows it as it was, at the address you'd navigated to, scroll and state intact.
-- An artifact reloads when its file changes, rather than whenever the thread moves on.
-
 ## 0.1.4
 
 **Upgrading:** CSS in a profile or extension that draws its own status dots with `--superego-status-dot` needs
@@ -45,6 +37,12 @@ changing: that variable is gone. Use `superego/ui`'s `Glyph` or `StatusGlyph` in
 - Focusing a Preview or Artifact pane no longer puts you in the page: press Return, or click into it.
 
 ### Fixes
+
+- An image too big for the model (a long pasted screenshot, a large photo) no longer breaks its thread: it's sent
+  scaled down, and one the model still refuses is left out, with a note. Threads stuck on such an image work again
+  from their next message.
+- Preview and Artifact panes keep their page when you switch threads, open Settings or rearrange panes, and an
+  artifact reloads when its file changes.
 
 - Suggestions over the composer no longer turn see-through on hover.
 
