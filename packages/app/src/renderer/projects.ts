@@ -2,7 +2,8 @@
 // holds the threads started there, worktrees and all. The machine is a fact about the project, not a level above it.
 // One order for every place that walks them (the sidebar, its rail, the navigator, ⌘⇧[ and ⌘⇧]): the rows the sidebar
 // shows, top to bottom, whether it's open or not; pinned threads first (see pins.ts), then each project's (its pinned
-// at its top, again). The sort (the window's own setting, `app.sort`, which the sidebar's
+// at its top, again). The sidebar's sections (Pinned, each project) and the threads with others under them fold,
+// as the window was left (`folded`); ⌘⇧[ and ⌘⇧] go down the rows still shown, the selected one always among them. The sort (the window's own setting, `app.sort`, which the sidebar's
 // menu changes) sets it; a thread another started sits right under it.
 import { useMemo } from 'react'
 import { rollup, statusRank, unreadThreads, type Status, type ThreadInfo } from '@superego/protocol'
@@ -37,13 +38,14 @@ export type PinnedThread = { project: Project; thread: ThreadInfo }
 
 /**
  * What the sidebar lists, top to bottom: the pinned threads, in the order they were pinned, then every project, its
- * pinned threads at its top (in that order too) and the rest as they sort. A pinned thread is listed twice.
+ * pinned threads at its top (in that order too) and the rest as they sort. A pinned thread is listed twice. `folded`:
+ * the sections and threads folded (see `fold`), what's in them out of sight.
  */
-export type Sidebar = { pinned: PinnedThread[]; projects: Project[] }
+export type Sidebar = { pinned: PinnedThread[]; projects: Project[]; folded: readonly string[] }
 
 /** The sidebar of `projects`, with `pins` taken to the top. Pins of threads not among them (archived, on a machine off) aren't listed. */
-export function pinnedFirst(projects: Project[], pins: readonly Pin[]): Sidebar {
-  if (!pins.length) return { pinned: [], projects }
+export function pinnedFirst(projects: Project[], pins: readonly Pin[], folded: readonly string[] = []): Sidebar {
+  if (!pins.length) return { pinned: [], projects, folded }
   const pinned: PinnedThread[] = []
   for (const pin of pins) {
     const project = projects.find((p) => p.machine.id === pin.machine && p.threads.some((t) => t.id === pin.thread))
@@ -51,6 +53,7 @@ export function pinnedFirst(projects: Project[], pins: readonly Pin[]): Sidebar 
   }
   return {
     pinned,
+    folded,
     projects: projects.map((project) => {
       const top = pinned.filter((p) => p.project === project).map((p) => p.thread)
       // Each with the threads it started right under it, as everywhere.
@@ -59,18 +62,111 @@ export function pinnedFirst(projects: Project[], pins: readonly Pin[]): Sidebar 
   }
 }
 
-/** The sidebar's threads, top to bottom, each once: the pinned, then each project's others. */
-export function sidebarOrder({ pinned, projects }: Sidebar) {
+/**
+ * What folds in the sidebar, by key: the Pinned section, a project (by machine and folder), a thread with others under
+ * it (by machine and id). Kept in the window, as it was left.
+ */
+export const fold = {
+  pinned: 'pinned',
+  project: (project: Pick<Project, 'key'>) => `project:${project.key}`,
+  thread: (machine: string, thread: string) => `thread:${machine}/${thread}`,
+}
+
+/**
+ * A row the sidebar shows: a thread, how far in, and, when others sit under it, its fold (`fold`) and whether it's
+ * folded; `tucked`, those under it out of sight.
+ */
+export type ShownRow = { project: Project; thread: ThreadInfo; depth: number; fold?: string; folded: boolean; tucked: ThreadInfo[] }
+/** A section as the sidebar shows it: its fold, its rows, and (folded) the threads out of sight in it. */
+export type ShownSection = { fold: string; folded: boolean; rows: ShownRow[]; tucked: ThreadInfo[] }
+
+type At = { machine: string; thread: string } | undefined
+const isAt = (at: At, machine: string, thread: string) => at?.machine === machine && at.thread === thread
+
+/**
+ * The rows the sidebar shows, section by section, given what's folded: a folded section shows none of its threads, a
+ * folded thread none of those under it (and theirs). The selected thread (`selection`) shows wherever it is, folded
+ * or not: in a folded section on its own, under a folded thread right under it.
+ */
+export function shownRows(sidebar: Sidebar, selection?: At): { pinned: ShownSection; projects: (ShownSection & { project: Project })[] } {
+  const folded = new Set(sidebar.folded)
+  const section = (key: string, rows: ShownRow[]): ShownSection => {
+    if (!folded.has(key)) return { fold: key, folded: false, rows, tucked: [] }
+    const shown = rows.filter((row) => isAt(selection, row.project.machine.id, row.thread.id))
+    return {
+      fold: key, folded: true,
+      rows: shown.map((row) => ({ ...row, depth: 0, fold: undefined, folded: false, tucked: [] })),
+      tucked: rows.flatMap((row) => shown.includes(row) ? row.tucked : [row.thread, ...row.tucked]),
+    }
+  }
+  const projectRows = (project: Project) => {
+    const rows: ShownRow[] = []
+    // The folded thread the rows go under, while they're deeper than it.
+    let under: ShownRow | undefined
+    project.threads.forEach((thread, i) => {
+      const depth = project.depth[thread.id] ?? 0
+      if (under && depth > under.depth) {
+        if (isAt(selection, project.machine.id, thread.id)) rows.push({ project, thread, depth: under.depth + 1, folded: false, tucked: [] })
+        else under.tucked.push(thread)
+        return
+      }
+      const next = project.threads[i + 1]
+      const key = next && (project.depth[next.id] ?? 0) > depth ? fold.thread(project.machine.id, thread.id) : undefined
+      const row: ShownRow = { project, thread, depth, ...(key ? { fold: key } : {}), folded: Boolean(key && folded.has(key)), tucked: [] }
+      rows.push(row)
+      under = row.folded ? row : undefined
+    })
+    return rows
+  }
+  return {
+    pinned: section(fold.pinned, sidebar.pinned.map(({ project, thread }) => ({ project, thread, depth: 0, folded: false, tucked: [] }))),
+    projects: sidebar.projects.map((project) => ({ project, ...section(fold.project(project), projectRows(project)) })),
+  }
+}
+
+/** The sidebar's threads, top to bottom, each once: the pinned, then each project's others; of those, the rows shown (see `shownRows`). */
+export function sidebarOrder(sidebar: Sidebar, selection?: At) {
+  const { pinned, projects } = shownRows(sidebar, selection)
   const seen = new Set<string>()
-  return [
-    ...pinned.map(({ project, thread }) => ({ machine: project.machine.id, thread: thread.id })),
-    ...projects.flatMap((s) => s.threads.map((thread) => ({ machine: s.machine.id, thread: thread.id }))),
-  ].filter(({ machine, thread }) => {
-    const key = `${machine}/${thread}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+  return [pinned, ...projects].flatMap((s) => s.rows).map(({ project, thread }) => ({ machine: project.machine.id, thread: thread.id }))
+    .filter(({ machine, thread }) => {
+      const key = `${machine}/${thread}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+}
+
+/**
+ * What to unfold to show `selection` in the sidebar: nothing when a row shows it already; for a pinned thread, Pinned;
+ * else its project, and every thread above it there.
+ */
+export function wayTo(sidebar: Sidebar, selection: { machine: string; thread: string }): string[] {
+  if (sidebarOrder(sidebar).some((at) => isAt(at, selection.machine, selection.thread))) return []
+  const folded = new Set(sidebar.folded)
+  if (sidebar.pinned.some(({ project, thread }) => isAt(selection, project.machine.id, thread.id))) return [fold.pinned]
+  const project = sidebar.projects.find((p) => p.machine.id === selection.machine && p.threads.some((t) => t.id === selection.thread))
+  if (!project) return []
+  const way = [fold.project(project)]
+  // Up from it: each row before it less deep than the last is a thread it's under.
+  const at = project.threads.findIndex((t) => t.id === selection.thread)
+  let depth = project.depth[selection.thread] ?? 0
+  for (let i = at - 1; i >= 0 && depth > 0; i--) {
+    const above = project.threads[i]!
+    const d = project.depth[above.id] ?? 0
+    if (d < depth) { way.push(fold.thread(project.machine.id, above.id)); depth = d }
+  }
+  return way.filter((key) => folded.has(key))
+}
+
+/**
+ * The folds still worth keeping: of a section or thread still listed, or on a machine whose threads aren't known now
+ * (not connected, or not heard yet), which keeps its own.
+ */
+export function stillFolded(folded: readonly string[], projects: readonly Project[], machines: readonly MachineEntry[], threads: Record<string, ThreadInfo[] | undefined>): string[] {
+  const listed = new Set([fold.pinned, ...projects.flatMap((p) => [fold.project(p), ...p.threads.map((t) => fold.thread(p.machine.id, t.id))])])
+  const known = machines.filter((m) => m.state === 'connected' && threads[m.id])
+  return folded.filter((key) => listed.has(key) || !known.some((m) => key.startsWith(`project:${projectKey(m.id, '')}`) || key.startsWith(`thread:${m.id}/`)))
 }
 
 /**
@@ -153,12 +249,11 @@ export function freeze(frozen: Project[], live: Project[]): Project[] {
 
 /**
  * The thread `by` from `from`: down (or up) the rows the sidebar shows, pinned ones first (and not again in their project),
- * across projects, and around at the ends; from
- * nothing (or a thread not listed: archived, Ego's), the first or the last. No project's threads are closed in the sidebar, so
- * every listed thread is a row; archived ones aren't listed.
+ * across projects, and around at the ends, past what's folded; from nothing (or a thread not listed: archived, Ego's),
+ * the first or the last.
  */
 export function threadBeside(sidebar: Sidebar, from: { machine: string; thread: string } | undefined, by: number) {
-  const order = sidebarOrder(sidebar)
+  const order = sidebarOrder(sidebar, from)
   if (!order.length) return undefined
   const at = order.findIndex((o) => o.machine === from?.machine && o.thread === from.thread)
   return order[at < 0 ? (by > 0 ? 0 : order.length - 1) : (at + by + order.length) % order.length]

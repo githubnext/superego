@@ -37,6 +37,8 @@ export type WindowContext = {
   /** What the sidebar lists, top to bottom: the pinned threads, then the projects with the rest. */
   sidebar: Sidebar
   lastThread: Record<string, string>
+  /** Fold sections or threads in the sidebar, by key (projects.ts's `fold`), or unfold them. */
+  fold(keys: readonly string[], folded: boolean): void
   toggleSidebar(): void
   toggleNavigator(): void
   /** The picker of panes to open beside the selected thread (⌘⇧P). */

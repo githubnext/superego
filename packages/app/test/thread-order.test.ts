@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import type { Status, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../src/shared/bridge.ts'
-import { freeze, groupProjects, pinnedFirst, sidebarOrder, threadBeside, type Project } from '../src/renderer/projects.ts'
+import { fold, freeze, groupProjects, pinnedFirst, shownRows, sidebarOrder, stillFolded, threadBeside, wayTo, type Project } from '../src/renderer/projects.ts'
 
 const machine = (id: string): MachineEntry => ({ id, label: id === 'local' ? 'This computer' : 'Build box', state: 'connected' })
 const thread = (id: string, root: string, activeAt: number, more: Partial<ThreadInfo> = {}): ThreadInfo =>
@@ -71,4 +71,63 @@ it('lists pinned threads first, in the order they were pinned, across projects a
   expect(sidebarOrder(later).map((t) => `${t.machine}/${t.thread}`)).toEqual(order)
   expect(visits(projects, order.length, 1, [{ machine: 'local', thread: 'stray' }, { machine: 'local', thread: 'parent' }, { machine: 'local', thread: 'solo' }])).toEqual(order)
   expect(pinnedFirst(projects, []).projects).toBe(projects)
+})
+
+/** Each section's rows as shown: `machine/id` (with a ▸ when folded, and how many out of sight under it). */
+const rowsOf = (folded: string[], selection?: { machine: string; thread: string }, pins: { machine: string; thread: string }[] = []) => {
+  const { pinned, projects } = shownRows(pinnedFirst(groupProjects(machines, threads, 'recent'), pins, folded), selection)
+  return [pinned, ...projects].map((s) => [
+    `${s.folded ? '▸' : '▾'}${s.tucked.length ? ` ${s.tucked.length}` : ''}`,
+    ...s.rows.map((r) => `${'  '.repeat(r.depth)}${r.project.machine.id}/${r.thread.id}${r.folded ? ` ▸ ${r.tucked.length}` : ''}`),
+  ])
+}
+const superego = (machine: string) => fold.project({ key: `${machine}:/code/superego` })
+
+it('folds sections and the threads under a thread, out of sight, the selected one still shown', () => {
+  // Folded: box's project, and the parent's threads (the child and its own).
+  const folded = [superego('box'), fold.thread('local', 'parent')]
+  expect(rowsOf(folded)).toEqual([
+    ['▾'],
+    ['▸ 2'],
+    ['▾', 'local/solo', 'local/parent ▸ 2'],
+    ['▾', 'local/site', 'local/stray'],
+  ])
+  // Selected, the grandchild shows right under the folded parent; far-child on its own in its folded project.
+  expect(rowsOf(folded, { machine: 'local', thread: 'grandchild' })[2]).toEqual(['▾', 'local/solo', 'local/parent ▸ 1', '  local/grandchild'])
+  expect(rowsOf(folded, { machine: 'box', thread: 'far-child' })[1]).toEqual(['▸ 1', 'box/far-child'])
+  // Pinned folds too; its threads still in their projects.
+  expect(rowsOf([fold.pinned], undefined, [{ machine: 'local', thread: 'site' }])[0]).toEqual(['▸ 1'])
+  expect(rowsOf([fold.pinned], undefined, [{ machine: 'local', thread: 'site' }])[3]).toEqual(['▾', 'local/site', 'local/stray'])
+})
+
+it('steps past what is folded, but from the selected thread under a fold', () => {
+  const projects = groupProjects(machines, threads, 'recent')
+  const sidebar = pinnedFirst(projects, [], [superego('box'), fold.thread('local', 'parent')])
+  const order = ['local/solo', 'local/parent', 'local/site', 'local/stray']
+  expect(sidebarOrder(sidebar).map((t) => `${t.machine}/${t.thread}`)).toEqual(order)
+  expect(threadBeside(sidebar, { machine: 'local', thread: 'solo' }, 1)).toEqual({ machine: 'local', thread: 'parent' })
+  expect(threadBeside(sidebar, { machine: 'local', thread: 'parent' }, 1)).toEqual({ machine: 'local', thread: 'site' })
+  expect(threadBeside(sidebar, { machine: 'local', thread: 'grandchild' }, 1)).toEqual({ machine: 'local', thread: 'site' })
+  expect(threadBeside(sidebar, { machine: 'local', thread: 'grandchild' }, -1)).toEqual({ machine: 'local', thread: 'parent' })
+  expect(threadBeside(sidebar, { machine: 'local', thread: 'solo' }, -1)).toEqual({ machine: 'local', thread: 'stray' })
+})
+
+it('unfolds the way to a thread: its project and the threads above it, or Pinned for a pinned one', () => {
+  const projects = groupProjects(machines, threads, 'recent')
+  const folded = [superego('local'), fold.thread('local', 'parent'), fold.thread('local', 'child'), superego('box'), fold.pinned]
+  const sidebar = pinnedFirst(projects, [{ machine: 'box', thread: 'far' }], folded)
+  expect(wayTo(sidebar, { machine: 'local', thread: 'grandchild' }).sort()).toEqual([superego('local'), fold.thread('local', 'child'), fold.thread('local', 'parent')].sort())
+  expect(wayTo(sidebar, { machine: 'local', thread: 'solo' })).toEqual([superego('local')])
+  expect(wayTo(sidebar, { machine: 'box', thread: 'far' })).toEqual([fold.pinned])
+  // Shown already: nothing to unfold.
+  expect(wayTo(sidebar, { machine: 'local', thread: 'site' })).toEqual([])
+  expect(wayTo(pinnedFirst(projects, [], [fold.thread('local', 'child')]), { machine: 'local', thread: 'child' })).toEqual([])
+})
+
+it('forgets folds of what is no longer listed, where that is known', () => {
+  const projects = groupProjects(machines, threads, 'recent')
+  const folded = [fold.pinned, superego('local'), fold.project({ key: 'local:/code/gone' }), fold.thread('local', 'parent'), fold.thread('local', 'gone'), fold.thread('off', 'x'), fold.project({ key: 'off:/code/x' })]
+  expect(stillFolded(folded, projects, machines, threads)).toEqual([fold.pinned, superego('local'), fold.thread('local', 'parent'), fold.thread('off', 'x'), fold.project({ key: 'off:/code/x' })])
+  // Not heard from yet: kept.
+  expect(stillFolded(folded, [], machines, {})).toEqual(folded)
 })

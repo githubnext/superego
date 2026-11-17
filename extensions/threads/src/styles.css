@@ -13,9 +13,9 @@
 .threads__empty { padding: var(--superego-space-2) 8px; font-size: var(--superego-text-sm); color: var(--superego-muted); }
 .threads-project { margin-top: 14px; }
 .threads-project__head { display: flex; align-items: center; gap: 4px; padding: 0 2px 2px 8px; min-height: 22px; }
-.threads-project__name { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; border: 0; background: none; padding: 0; font: inherit; font-size: var(--superego-text-xs); font-weight: 600; color: var(--superego-muted); text-align: left; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.threads-project__name { flex: 0 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 6px; border: 0; background: none; padding: 0; font: inherit; font-size: var(--superego-text-xs); font-weight: 600; color: var(--superego-muted); text-align: left; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .threads-project__name em { font-style: normal; font-weight: 400; color: var(--superego-faint); overflow: hidden; text-overflow: ellipsis; }
-.threads-project .threads__new { width: 20px; height: 20px; min-height: 20px; box-shadow: none; background: none; color: var(--superego-muted); opacity: 0; transition: opacity .1s; }
+.threads-project .threads__new { margin-left: auto; width: 20px; height: 20px; min-height: 20px; box-shadow: none; background: none; color: var(--superego-muted); opacity: 0; transition: opacity .1s; }
 .threads-project:hover .threads__new, .threads-project .threads__new:focus-visible { opacity: 1; }
 .threads .superego-list-item { color: var(--superego-text); }
 /* The title truncates; the marks after it (thread.badge) stay. */
@@ -24,6 +24,14 @@
 .threads__pin { flex: none; color: var(--superego-faint); }
 .superego-list-item.threads-child { padding-left: calc(8px + var(--depth) * 14px); }
 .threads-project.is-stale .superego-list-item, .threads-project.is-stale .threads-project__name { color: var(--superego-muted); }
+/* Folding: a caret after a section's name or a thread's title, shown on hover and while folded (pointing right); folded,
+   how many are out of sight and the most pressing of them. */
+.threads-caret { flex: none; display: grid; place-items: center; width: 16px; height: 16px; margin: 0 -2px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--superego-faint); cursor: default; opacity: 0; transition: opacity .1s; }
+.threads-caret svg { transform: rotate(90deg); transition: transform .12s; }
+.threads-caret:hover { color: var(--superego-text); background: var(--superego-hover); }
+.threads-project__head:hover .threads-caret, .superego-list-item:hover .threads-caret, .threads-project.is-folded > .threads-project__head > .threads-caret, .superego-list-item.is-folded .threads-caret { opacity: 1; }
+.threads-project.is-folded > .threads-project__head > .threads-caret svg, .superego-list-item.is-folded .threads-caret svg { transform: none; }
+.threads-tucked { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: var(--superego-text-xs); font-weight: 400; color: var(--superego-faint); font-variant-numeric: tabular-nums; }
 /* Pinned: from every project, each saying where it is, quietly; a row being dragged shows where it would land. */
 .threads-pinned .superego-list-item.is-stale { color: var(--superego-muted); }
 .threads-pinned__where { flex: 0 1 auto; min-width: 24px; overflow: hidden; text-overflow: ellipsis; font-style: normal; color: var(--superego-faint); font-size: var(--superego-text-xs); }

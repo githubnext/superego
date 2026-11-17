@@ -38,7 +38,7 @@ import { NewThreadDialog } from './NewThread.tsx'
 import { Onboarding, useOnboarding } from './Onboarding.tsx'
 import { bound, RailTabNumber, shortcutOf, useActions, useRailShortcut, useShortcut, type Keymap } from './keys.ts'
 import { railTabs } from './rail-tabs.ts'
-import { useAllThreads, useHistory, useMachines, useNewThreadDialog, useSelection, useProjects, useSettingsDialog, useShell, useSidebar, type Selection } from './state.tsx'
+import { useAllThreads, useFold, useHistory, useMachines, useNewThreadDialog, useSelection, useProjects, useSettingsDialog, useShell, useSidebar, type Selection } from './state.tsx'
 
 /** Dispatch an action from this window: `dispatch('app.sidebar')`, `dispatch('thread.select', { machine, thread })`. */
 export function useDispatch() {
@@ -52,6 +52,7 @@ export function Shell() {
   const [panePicker, setPanePicker] = useState(false)
   const sidebar = useSidebar()
   const { projects, sidebar: rows, lastThread } = useProjects()
+  const fold = useFold()
   const [log, setLog] = useState(false)
   const machines = useMachines()
   const { selection, select, machine, thread, hidden: alone, listed } = useSelection()
@@ -109,7 +110,7 @@ export function Shell() {
       const found = allThreads[s.machine]?.find((x) => x.id === s.thread) ?? (s.machine === selection?.machine && s.thread === selection.thread ? thread : undefined)
       return found?.panes ? { ...found, panes: shownPanes(registry, { machine: s.machine, thread: found }) } : found
     },
-    projects, sidebar: rows, lastThread, appSetting: (key) => watched<SettingsSnapshot>(APP, 'settings.watch', {})?.values[key] as never,
+    projects, sidebar: rows, lastThread, fold, appSetting: (key) => watched<SettingsSnapshot>(APP, 'settings.watch', {})?.values[key] as never,
     toggleSidebar: () => narrow ? setDrawer((open) => !open) : sidebar.show(),
     back: history.back, forward: history.forward,
     railTabs: tabsNow,

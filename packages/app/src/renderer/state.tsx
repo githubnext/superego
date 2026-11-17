@@ -15,7 +15,7 @@ import { setLocalState, useLocalState } from './local-state.ts'
 import { focusProvider } from './provider-focus.ts'
 import { useWindowEvents } from './window-events.ts'
 import { Notifications } from './notifications.tsx'
-import { freeze, pinnedFirst, projectKey, useProjectList, type Project, type Sidebar } from './projects.ts'
+import { freeze, pinnedFirst, projectKey, stillFolded, useProjectList, wayTo, type Project, type Sidebar } from './projects.ts'
 import { PINS, pinsOf, stillListed, type Pin } from './pins.ts'
 import { sidebarIsHidden, showSidebar, type SidebarMode } from './sidebar-mode.ts'
 import { TIGHT, useMedia } from './media.ts'
@@ -49,6 +49,8 @@ type ShellState = {
   pins: Pin[]
   /** Hold the order still (the pointer is over the sidebar), or let it follow activity again. */
   hold(held: boolean): void
+  /** Fold sections or threads in the sidebar (see projects.ts's `fold`), or unfold them. */
+  fold(keys: readonly string[], folded: boolean): void
   /** The thread last shown in a project, by its key. */
   lastThread: Record<string, string>
   /** Whether the sidebar is hidden (see sidebar-mode.ts). */
@@ -105,6 +107,8 @@ export function useProjects() {
   const { projects, sidebar, pins, lastThread, hold } = useShellState()
   return { projects, sidebar, pins, lastThread, hold }
 }
+/** Fold sections or threads in the sidebar, by their keys (projects.ts's `fold`), or unfold them; `useProjects().sidebar.folded` has what's folded. */
+export const useFold = () => useShellState().fold
 /** Whether the sidebar is hidden, and a way to show or hide it (`show()` the other way). */
 export function useSidebar() {
   const { sidebarHidden, showSidebar } = useShellState()
@@ -167,11 +171,20 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   // Pinned threads go to the top, in the order they were pinned; one no longer listed (archived) leaves the pins.
   const [pinsValue, setPins] = useAppSetting<Pin[]>(PINS)
   const pins = useMemo(() => pinsOf(pinsValue), [pinsValue])
-  const sidebar = useMemo(() => pinnedFirst(projects, pins), [projects, pins])
+  // Sections and threads folded, as this window was left.
+  const [folded, setFolded] = useLocalState<string[]>('sidebar.folded', [])
+  const sidebar = useMemo(() => pinnedFirst(projects, pins, folded), [projects, pins, folded])
+  const fold = useCallback((keys: readonly string[], on: boolean) => setFolded((all) =>
+    on ? [...all, ...keys.filter((key) => !all.includes(key))] : all.filter((key) => !keys.includes(key))), [])
   useEffect(() => {
     const kept = stillListed(pins, machines, threads)
     if (kept.length < pins.length) void setPins(kept).catch((error) => console.error('Unpinning archived threads', error))
   }, [pins, machines, threads])
+  // A fold of a thread or project no longer listed (archived) goes.
+  useEffect(() => {
+    const kept = stillFolded(folded, live, machines, threads)
+    if (kept.length < folded.length) setFolded(kept)
+  }, [folded, live, machines, threads])
   // Each project remembers the thread last shown in it: going back to the project goes back to that thread.
   const [lastThread, setLastThread] = useLocalState<Record<string, string>>('projects.last', {})
   const shown = selection && threads[selection.machine]?.find((t) => t.id === selection.thread)
@@ -183,6 +196,16 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (shown && (listed?.machine !== selection!.machine || listed.thread !== shown.id)) setListed({ machine: selection!.machine, thread: shown.id })
   }, [selection?.machine, shown?.id])
+  // Selecting a thread (from the sidebar, the navigator, a notification) unfolds the way to it, once: folded again
+  // after, it stays selected, out from under the fold. The one selected as the window opens is where it was left.
+  const unfoldedFor = useRef(selection && `${selection.machine}/${selection.thread}`)
+  useEffect(() => {
+    const key = selection && `${selection.machine}/${selection.thread}`
+    if (!key || unfoldedFor.current === key || !shown) return
+    unfoldedFor.current = key
+    const way = wayTo(sidebar, selection!)
+    if (way.length) fold(way, false)
+  }, [selection?.machine, selection?.thread, shown, sidebar])
   // A selected thread that isn't in its machine's list may be archived: shown from the archived list, read only.
   // Asked again when the list changes (archiving or unarchiving moves threads between the two).
   const [archived, setArchived] = useState<ThreadInfo>()
@@ -213,7 +236,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const exists = (p: Place) => 'settings' in p || Boolean(hiddenAll[p.thread.machine]?.some((t) => t.id === p.thread.thread))
     || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread))
   const value = useMemo<ShellState>(() => ({
-    machines, threads, rejections, selection, settingsOpen, newThread, projects, sidebar, pins, hold, lastThread, sidebarHidden: sidebarIsHidden(sidebarMode, tight), archived, hidden, hiddenAll, listed,
+    machines, threads, rejections, selection, settingsOpen, newThread, projects, sidebar, pins, hold, fold, lastThread, sidebarHidden: sidebarIsHidden(sidebarMode, tight), archived, hidden, hiddenAll, listed,
     canBack: Boolean(step(history, -1, place, exists)),
     canForward: Boolean(step(history, 1, place, exists)),
     go: (by) => {

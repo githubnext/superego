@@ -2,7 +2,7 @@
 // The sidebar in the window drawn whole (superego/testing's mountUi) over a real daemon: its ··· menu (sorting, hiding
 // it), ⌘/ to hide it (the threads as dots in the rail) and show it again, the details beside the thread (⌘I, the model
 // button), the archived threads at its end, a thread another started right under it, ⌘⇧] ⌘⇧[ down and up the rows,
-// and pinned threads at the top, from every project and machine.
+// and pinned threads at the top, from every project and machine; projects, Pinned and a thread's offshoots folded.
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -205,4 +205,57 @@ it('pins threads from every project and machine to the top, and to the top of th
     await ui?.unmount()
     await box.close()
   }
+})
+
+it('folds a thread\'s offshoots and a project, steps past them, keeps them folded, and unfolds the way to a thread selected', async () => {
+  const elsewhere = join(daemon.dataDir, 'elsewhere')
+  await mkdir(elsewhere, { recursive: true })
+  const parent = await daemon.thread(undefined, { title: 'parent', cwd: elsewhere })
+  const offshoot = await daemon.call('thread.start', { cwd: elsewhere, title: 'offshoot', parent: parent.id }) as { id: string }
+  await daemon.call('thread.send', { thread: offshoot.id, text: 'hello' })
+  const here = await daemon.thread(undefined, { title: 'here' })
+  ui = await mountUi({ window: true, extensions: [threads], machines: [daemon], select: { thread: here.id } })
+  await ui.until(() => Boolean(rowOf('offshoot')?.classList.contains('threads-child')), 'the offshoot under its parent')
+  const caret = (el: HTMLElement) => el.querySelector<HTMLElement>('.threads-caret')!
+  expect(rowOf('here')!.querySelector('.threads-caret')).toBeNull()
+
+  // Its caret folds the parent's offshoots: how many, and the most pressing of them (finished, unread), in its row.
+  caret(rowOf('parent')!).click()
+  await ui.until(() => !rowOf('offshoot'), 'the offshoot folded away')
+  expect(titled()).toBe('here')
+  expect(rowOf('parent')!.querySelector('.threads-tucked')?.textContent).toBe('1')
+  await ui.until(() => Boolean(rowOf('parent')!.querySelector('.threads-tucked .superego-status--done')), 'its status, as the parent\'s')
+  expect(JSON.parse(localStorage.getItem('superego.sidebar.folded')!)).toEqual([`thread:local/${parent.id}`])
+  // Stepping goes past it.
+  rowOf('parent')!.click()
+  await ui.until(() => titled() === 'parent', 'the parent shown')
+  await ui.key('mod+alt+arrowdown')
+  await ui.until(() => titled() === 'here', 'past the folded offshoot, on to the next project')
+
+  // → on the row unfolds, ← folds it again.
+  rowOf('parent')!.focus()
+  await ui.key('right')
+  await ui.until(() => Boolean(rowOf('offshoot')), 'unfolded from the keyboard')
+  await ui.key('left')
+  await ui.until(() => !rowOf('offshoot'), 'folded from the keyboard')
+  // Selected from elsewhere (here, as the navigator or a notification would), it unfolds the way to it.
+  await ui.select({ thread: offshoot.id })
+  await ui.until(() => Boolean(rowOf('offshoot')) && rowOf('parent')!.getAttribute('aria-expanded') === 'true', 'unfolded to the offshoot selected')
+
+  // A project folds from its heading's caret, and from ← on its name; its threads out of sight, but the one selected.
+  const section = rowOf('parent')!.closest('section')!
+  caret(section.querySelector('.threads-project__head')!).click()
+  await ui.until(() => section.classList.contains('is-folded'), 'the project folded')
+  expect(rows().filter((li) => section.contains(li)).map((li) => li.querySelector('.threads__title')?.textContent)).toEqual(['offshoot'])
+  expect(section.querySelector('.threads-project__head .threads-tucked')?.textContent).toBe('1')
+  section.querySelector<HTMLElement>('.threads-project__name')!.focus()
+  await ui.key('right')
+  await ui.until(() => !section.classList.contains('is-folded') && Boolean(rowOf('parent')), 'unfolded from its name')
+
+  // ⌘K: collapse every section, then expand everything.
+  await ui.dispatch('threads.collapse')
+  await ui.until(() => $$('.threads-project.is-folded').length === 2 && rows().length === 1, 'all folded, the selected one still shown')
+  await ui.dispatch('threads.expand')
+  await ui.until(() => !$('.threads-project.is-folded') && Boolean(rowOf('parent') && rowOf('offshoot') && rowOf('here')), 'all unfolded')
+  expect(localStorage.getItem('superego.sidebar.folded')).toBeNull()
 })

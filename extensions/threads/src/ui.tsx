@@ -1,6 +1,7 @@
 // threads: the Threads space in the sidebar. The pinned threads first, from every project and machine, then projects (a
 // repository or folder on a machine) and the threads in each, its pinned at its top; the machine is said on the project,
-// where it isn't this computer. Its views:
+// where it isn't this computer. Pinned, each project and each thread with others under it fold, by their carets or ← and →
+// (the folds are the window's: projects.ts). Its views:
 // - the list (`threads.list`), a space: sorted recently active, newest first, or needs you first (an app setting); with
 //   the sidebar hidden, a rail of status glyphs; the key to go anywhere (⌘L) beside its heading, while pointed at. A row's title is followed by other extensions' marks (the
 //   `thread.badge` slot: a worktree's branch, say); a right-click on it pins or unpins it, or archives it. Pinned
@@ -9,10 +10,10 @@
 //   `details.section` slot: its MCP servers, say); beside it or not, ⌘I
 // - the model (`threads.model`), in the title bar: a button that shows or hides the details
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are thread-tools'.
-import { Fragment, useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react'
+import { Fragment, useEffect, useMemo, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
 import {
-  call, defineAction, defineUiExtension, isPinned, MachineDrift, RailButton, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
-  type MachineEntry, type Pin, type Project, type Sort, type SpaceRailProps, type WindowContext,
+  call, defineAction, defineUiExtension, fold, isPinned, MachineDrift, shownRows, useFold, RailButton, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
+  type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, STATUS_WORDS, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, PushPinIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
@@ -47,6 +48,8 @@ export default defineUiExtension({
     // ⌘⌥↓ and ⌘⌥↑ too: the same step as thread.next and thread.previous, down the rows the sidebar shows.
     action('threads.next', 'Next thread', (c) => void c.dispatch('thread.next', {}, { source: 'threads' }), 'mod+alt+arrowdown')
     action('threads.previous', 'Previous thread', (c) => void c.dispatch('thread.previous', {}, { source: 'threads' }), 'mod+alt+arrowup')
+    action('threads.collapse', 'Collapse all threads', (c) => c.fold([...c.sidebar.pinned.length ? [fold.pinned] : [], ...c.sidebar.projects.map(fold.project)], true))
+    action('threads.expand', 'Expand all threads', (c) => c.fold(c.sidebar.folded, false))
   },
 })
 
@@ -54,6 +57,8 @@ function Threads() {
   const machines = useMachines().filter((m) => m.state !== 'disabled')
   const { projects, sidebar, lastThread, hold } = useProjects()
   const { selection, select } = useSelection()
+  const shown = useMemo(() => shownRows(sidebar, selection), [sidebar, selection?.machine, selection?.thread])
+  const setFold = useFold()
   // While the pointer is over the list, rows keep their places: a thread changing state doesn't move under it. The
   // order is held for the whole window, so ⌘⇧[ and ⌘⇧] go down the rows as they stand.
   useEffect(() => () => hold(false), [])
@@ -77,23 +82,26 @@ function Threads() {
         </span>
       </div>
       {projects.length === 0 && <div className="threads__empty">{ready ? 'Start a thread in a folder to see its project here.' : local?.state === 'connecting' || !local?.error ? 'Connecting…' : local.error}</div>}
-      {sidebar.pinned.length > 0 && <Pinned where={(project) => [project.name, where(project)].filter(Boolean).join(' · ')} />}
-      {sidebar.projects.map((project) => (
-        <section key={project.key} className={`threads-project ${project.machine.state !== 'connected' ? 'is-stale' : ''}`}>
-          <div className="threads-project__head">
+      {sidebar.pinned.length > 0 && <Pinned section={shown.pinned} where={(project) => [project.name, where(project)].filter(Boolean).join(' · ')} />}
+      {shown.projects.map(({ project, ...section }) => (
+        <section key={project.key} className={`threads-project ${project.machine.state !== 'connected' ? 'is-stale' : ''} ${section.folded ? 'is-folded' : ''}`}>
+          <div className="threads-project__head" onKeyDown={foldKeys(section, setFold)}>
             <button className="threads-project__name" title={project.root} onClick={() => showProject({ select, lastThread }, project)}>
               {project.name}
               {where(project) && <em>{where(project)}</em>}
               {project.machine.remote && <MachineDrift machine={project.machine} />}
             </button>
+            <Caret {...section} label={project.name} />
             <NewThreadButton label={`New thread in ${project.name}`} machine={project.machine} cwd={project.root} />
           </div>
-          <List>
-            {project.threads.map((thread) => (
-              <ThreadRow key={thread.id} machine={project.machine} thread={thread} level={project.depth[thread.id] ?? 0}
-                selected={selection?.machine === project.machine.id && selection.thread === thread.id} />
-            ))}
-          </List>
+          {section.rows.length > 0 && (
+            <List>
+              {section.rows.map((row) => (
+                <ThreadRow key={row.thread.id} machine={project.machine} thread={row.thread} level={row.depth} row={row}
+                  selected={selection?.machine === project.machine.id && selection.thread === row.thread.id} />
+              ))}
+            </List>
+          )}
         </section>
       ))}
       <Archived machines={machines} live={projects} />
@@ -108,10 +116,11 @@ const DRAGGED = 'application/x-superego-thread'
  * The pinned threads, from every project and machine, in the order they were pinned, each saying where it is. Dragged,
  * a row moves; a project's row dropped here is pinned where it's dropped.
  */
-function Pinned({ where }: { where(project: Project): string }) {
+function Pinned({ section, where }: { section: ShownSection; where(project: Project): string }) {
   const { sidebar } = useProjects()
   const { selection } = useSelection()
   const dispatch = useDispatch()
+  const setFold = useFold()
   // The gap a drop would land in: before the row at this index (the count: after the last).
   const [gap, setGap] = useState<number>()
   const gapAt = (event: DragEvent) => {
@@ -140,10 +149,21 @@ function Pinned({ where }: { where(project: Project): string }) {
     void dispatch('thread.pin', { ...pin, at }, { source: 'threads' }).catch((error) => console.error(error))
   }
   return (
-    <section className="threads-project threads-pinned" onDragOver={over} onDrop={drop} onDragLeave={(event) => {
+    <section className={`threads-project threads-pinned ${section.folded ? 'is-folded' : ''}`} onDragOver={over} onDrop={drop} onDragLeave={(event) => {
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setGap(undefined)
     }}>
-      <div className="threads-project__head"><span className="threads-project__name">Pinned</span></div>
+      <div className="threads-project__head" onKeyDown={foldKeys(section, setFold)}>
+        <button className="threads-project__name" onClick={() => setFold([section.fold], !section.folded)}>Pinned</button>
+        <Caret {...section} label="Pinned" />
+      </div>
+      {section.folded ? section.rows.length > 0 && (
+        <List>
+          {section.rows.map(({ project, thread }) => (
+            <ThreadRow key={`${project.machine.id}/${thread.id}`} machine={project.machine} thread={thread} where={where(project)} selected
+              className={project.machine.state !== 'connected' ? 'is-stale' : ''} />
+          ))}
+        </List>
+      ) : (
       <List>
         {sidebar.pinned.map(({ project, thread }, index) => (
           <ThreadRow key={`${project.machine.id}/${thread.id}`} machine={project.machine} thread={thread} where={where(project)}
@@ -152,6 +172,7 @@ function Pinned({ where }: { where(project: Project): string }) {
             data-pin={index} />
         ))}
       </List>
+      )}
     </section>
   )
 }
@@ -160,9 +181,10 @@ function Pinned({ where }: { where(project: Project): string }) {
  * A thread's row: its status, title and marks (`thread.badge`), why it waits or when it was last active. Among the
  * pinned, where it is too; under its project, pinned, a pin. A right-click pins or unpins it, or archives it; it can be dragged into the pinned.
  */
-function ThreadRow({ machine, thread, selected, level = 0, where, className = '', ...data }: {
-  machine: MachineEntry; thread: ThreadInfo; selected: boolean; level?: number; where?: string; className?: string; 'data-pin'?: number
+function ThreadRow({ machine, thread, selected, level = 0, row, where, className = '', ...data }: {
+  machine: MachineEntry; thread: ThreadInfo; selected: boolean; level?: number; row?: ShownRow; where?: string; className?: string; 'data-pin'?: number
 }) {
+  const setFold = useFold()
   const { select } = useSelection()
   const { pins } = useProjects()
   const dispatch = useDispatch()
@@ -174,12 +196,14 @@ function ThreadRow({ machine, thread, selected, level = 0, where, className = ''
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger>
-        <ListItem selected={selected} leading={<StatusGlyph status={thread.status} />} draggable {...data}
-          className={`${level ? 'threads-child' : ''} ${className}`} {...(level ? { style: { '--depth': level } as CSSProperties } : {})}
+        <ListItem selected={selected} leading={<StatusGlyph status={thread.status} />} draggable {...data} data-depth={level}
+          {...(row?.fold ? { 'aria-expanded': !row.folded } : {})} onKeyDown={(event) => rowKeys(event, row, setFold)}
+          className={`${level ? 'threads-child' : ''} ${row?.folded ? 'is-folded' : ''} ${className}`} {...(level ? { style: { '--depth': level } as CSSProperties } : {})}
           onDragStart={(event) => { event.dataTransfer.setData(DRAGGED, JSON.stringify(at)); event.dataTransfer.effectAllowed = 'move' }}
           trailing={waitingForSignIn(thread.status) ? <span className="threads__why threads__why--quiet">Waiting</span> : thread.status.state === 'blocked' ? <span className="threads__why">{STATUS_WORDS.blocked}</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">{STATUS_WORDS.error}</span> : ago(thread.activeAt)}
           onClick={() => select(at)}>
           <span className="threads__title">{thread.title}</span>
+          {row?.fold && <Caret fold={row.fold} folded={row.folded} tucked={row.tucked} label={thread.title} />}
           {on && !where && <PushPinIcon className="threads__pin" size={11} weight="fill" aria-label="Pinned" />}
           <Slot name="thread.badge" props={{ machine, thread }} />
           {where && <em className="threads-pinned__where">{where}</em>}
@@ -191,6 +215,53 @@ function ThreadRow({ machine, thread, selected, level = 0, where, className = ''
       </ContextMenu.Popup>
     </ContextMenu.Root>
   )
+}
+
+/**
+ * The caret that folds a section, or the threads under a thread; shown on hover, and while folded, with how many are
+ * out of sight and the most pressing of them (anything that needs you shows).
+ */
+function Caret({ fold: key, folded, tucked, label }: { fold: string; folded: boolean; tucked: ThreadInfo[]; label: string }) {
+  const setFold = useFold()
+  const status = rollup(tucked.map((t) => t.status))
+  return (
+    <>
+      <button type="button" tabIndex={-1} className="threads-caret" aria-expanded={!folded} aria-label={`${folded ? 'Expand' : 'Collapse'} ${label}`}
+        onClick={(event) => { event.stopPropagation(); setFold([key], !folded) }}>
+        <CaretRightIcon size={10} weight="bold" aria-hidden />
+      </button>
+      {folded && tucked.length > 0 && (
+        <span className="threads-tucked">{tucked.length}{status.state !== 'idle' && <StatusGlyph status={status} />}</span>
+      )}
+    </>
+  )
+}
+
+/** ← and → on a section's heading: fold it, unfold it. */
+const foldKeys = (section: ShownSection, setFold: (keys: readonly string[], folded: boolean) => void) => (event: KeyboardEvent) => {
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return
+  event.preventDefault()
+  setFold([section.fold], event.key === 'ArrowLeft')
+}
+
+/**
+ * ← and → on a thread's row, as in a tree: ← folds the threads under it, or (none, or folded) goes to the thread it's
+ * under, or its section's heading; → unfolds them, or goes to the first.
+ */
+function rowKeys(event: KeyboardEvent<HTMLLIElement>, row: ShownRow | undefined, setFold: (keys: readonly string[], folded: boolean) => void) {
+  if (!row || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return
+  const li = event.currentTarget
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault()
+    if (row.fold && !row.folded) return setFold([row.fold], true)
+    let above = li.previousElementSibling as HTMLElement | null
+    while (above && Number(above.dataset.depth) >= row.depth) above = above.previousElementSibling as HTMLElement | null
+    ;(above ?? li.closest('section')?.querySelector<HTMLElement>('.threads-project__name'))?.focus()
+  } else if (event.key === 'ArrowRight' && row.fold) {
+    event.preventDefault()
+    if (row.folded) return setFold([row.fold], false)
+    ;(li.nextElementSibling as HTMLElement | null)?.focus()
+  }
 }
 
 /** The key that goes to any project, thread or pane (the shell's navigator): a faint keycap, shown while pointed at. */
