@@ -2,7 +2,7 @@
 // and the keyboard agree on. The window is a row of regions, left to right: the sidebar, the thread, each pane beside
 // it, the column beside. ⌘⌥← and ⌘⌥→ move between them, ⌃I goes to the prompt (esc leaves it for the thread); going to a region focuses
 // what's used there (the selected thread in the sidebar, the thread's transcript, an editor's text, what a pane marks
-// `data-focus` (a terminal), a page, else the pane itself). Focus moving into a pane makes it the thread's focused pane; a pane brought forward from the keyboard
+// `data-focus` (a terminal, a web page's box: Return takes it into the page), else the pane itself). Focus moving into a pane makes it the thread's focused pane; a pane brought forward from the keyboard
 // (⌃Tab, the navigator) takes the focus with it. A pane at the back of a stack (see panes.tsx) is a region too: going
 // there brings it to the front. Those under a maximized pane aren't, until it's restored (going to one restores it).
 
@@ -20,7 +20,7 @@ function regions(): HTMLElement[] {
 
 /**
  * What to focus in a region: what's used there. A thread is its transcript (to read and scroll; typing goes on to the
- * prompt), an editor its text (rendered, the text to read), a page itself; any other pane takes the focus itself; a
+ * prompt), an editor its text (rendered, the text to read), what a pane marks `data-focus`; any other pane takes the focus itself; a
  * space or a column beside of other views (a data view's), the first thing in it to use, past the views' ··· buttons.
  */
 function target(region: HTMLElement): HTMLElement | null {

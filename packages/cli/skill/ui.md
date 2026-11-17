@@ -131,6 +131,8 @@ Inside a pane: `<PaneHeader>` puts small things in the pane's header beside its 
 A web page in a pane: `<WebView src partition="preview" title sandbox onEvent ref>` shows it as Preview does, as a browser
 tab on the desktop (its own cookies, back and forward through `ref`'s `go(-1)`, `reload()`; `onEvent` hears where it is
 now, a file it saved, what it was refused), framed in a browser (`sandbox` is the frame's). `hasWebViews()` says which.
+Focused, the pane keeps the keyboard until Return (or a click) passes it into the page; `onWaiting(waiting)` says when
+it's waiting for that, for a hint.
 
 ## From 'superego/ui'
 

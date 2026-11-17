@@ -1,7 +1,7 @@
 // Preview as a browser tab: a page of its own over its pane. A sign-in that sets a SameSite=Lax cookie on one port and
 // redirects to another holds, and still does after a reload; the header follows the page's address and goes back; a page
 // that refuses frames loads; a link to a new window goes to the browser. The view follows its pane: hidden (a still in its
-// place) under a dialog, hidden at the back of a stack, given the keyboard as its pane is focused.
+// place) under a dialog, hidden at the back of a stack.
 import { createServer } from 'node:http'
 import { shell } from 'electron'
 import { clickInto, home, openRow, pageAt } from './common.mjs'

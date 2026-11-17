@@ -5,3 +5,4 @@
 .web-panes-notice > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .web-panes-notice button { flex: none; display: grid; place-items: center; height: 20px; padding: 0 6px; border: 0; border-radius: 5px; background: none; color: var(--superego-text); font: inherit; cursor: default; }
 .web-panes-notice button:hover { background: var(--superego-fill); }
+.web-panes-hint { flex: none; font-size: var(--superego-text-xs); color: var(--superego-muted); opacity: 0.7; white-space: nowrap; }

@@ -195,12 +195,26 @@ export default async function session(t, s) {
   await t.until(() => pageAt(`http://127.0.0.1:${another.address().port}/`), 'a page beside the thread')
   await t.run(`document.querySelector('.composer textarea').focus()`)
   await ringed('thread')
+  // The page's keyboard, as the window gives it (a hidden window's view never has the system's focus to show).
+  const shown = pageAt(`http://127.0.0.1:${another.address().port}/`)
+  let given = 0
+  const giveFocus = shown.focus
+  shown.focus = function () { given++; return giveFocus.call(this) }
   t.key('Right', ['meta', 'alt'])
-  await t.until(`document.activeElement?.matches('.web-view')`, 'cmd+alt+right into the page')
+  await t.until(`document.activeElement?.matches('.web-view')`, 'cmd+alt+right into the pane')
   await ringed('Preview')
   await front('Preview')
+  // The pane has the keyboard, not the page, and says so; Return passes it in.
+  const hint = `[...document.querySelectorAll('.web-panes-hint')].some((h) => h.textContent === '↩ to use the page')`
+  await t.until(hint, 'the hint in the pane\'s header')
+  await t.settled()
+  if (given) t.fail('the page took the keyboard as its pane was focused')
+  t.key('Return', [])
+  await t.until(() => given === 1, 'return passes the keyboard into the page')
+  await t.until(`!(${hint})`, 'the hint gone')
+  shown.focus = giveFocus
   // Out of it again: the page has the keyboard, so the window takes the key before it.
-  t.key('Left', ['meta', 'alt'])
+  for (const type of ['keyDown', 'keyUp']) shown.sendInputEvent({ type, keyCode: 'Left', modifiers: ['meta', 'alt'] })
   await t.until(`document.activeElement?.matches('.thread__scroll')`, 'cmd+alt+left out of the page')
   await ringed('thread')
   await front('thread')

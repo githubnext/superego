@@ -7,7 +7,10 @@
 // whenever anything of the window's is over it (a menu, a popover, a tooltip, a dialog: OVERLAYS), or the pane is
 // partly out of view (a view can't be cut short), the pane shows a still of the page in its place and hides the view
 // until it's clear again. A still is taken just before the view is hidden, and again each second while it's shown.
-import { useEffect, useImperativeHandle, useRef, useState, type FocusEvent, type Ref } from 'react'
+//
+// The pane takes the focus as other panes do (⌃Tab, a click on its tab or bar), and keeps it: Return passes it into the
+// page, as a click into the page does. The window's shortcuts (⌃Tab, ⌘W) still work from inside it, and take it out.
+import { useEffect, useImperativeHandle, useRef, useState, type FocusEvent, type KeyboardEvent, type Ref } from 'react'
 import type { BridgeWebView, WebViewEvent, WebViewPartition, WebViewRect, WebViewState } from '../shared/bridge.ts'
 
 /**
@@ -30,6 +33,8 @@ export type WebViewProps = {
   sandbox: string
   /** Where the page is now, and what it did (the desktop's alone). */
   onEvent?(event: WebViewEvent): void
+  /** Whether the pane has the keyboard and its page doesn't, as that changes: Return passes it in (a hint can say so). */
+  onWaiting?(waiting: boolean): void
   ref?: Ref<WebViewHandle>
 }
 
@@ -48,12 +53,33 @@ export function WebView(props: WebViewProps) {
   return hasWebViews() ? <NativeWebView {...props} /> : <FramedWebView {...props} />
 }
 
-function FramedWebView({ src, title, sandbox, ref }: WebViewProps) {
+/** Return, pressed on the pane's own box (not a link or button in it): `enter` passes the keyboard into the page. */
+const onReturn = (enter: () => void) => (event: KeyboardEvent<HTMLElement>) => {
+  if (event.target !== event.currentTarget || event.key !== 'Enter' || event.nativeEvent.isComposing) return
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return
+  event.preventDefault()
+  enter()
+}
+
+/** Tell `onWaiting` whether the pane is waiting for Return, as that changes. */
+function useWaiting(waiting: boolean, onWaiting: WebViewProps['onWaiting']) {
+  const listener = useRef(onWaiting)
+  listener.current = onWaiting
+  useEffect(() => { listener.current?.(waiting) }, [waiting])
+  useEffect(() => () => listener.current?.(false), [])
+}
+
+function FramedWebView({ src, title, sandbox, onWaiting, ref }: WebViewProps) {
   const [key, setKey] = useState(0)
+  const frame = useRef<HTMLIFrameElement>(null)
+  // The box itself has the focus (the page has it once the frame does).
+  const [held, setHeld] = useState(false)
+  useWaiting(held, onWaiting)
   useImperativeHandle(ref, () => ({ go: () => {}, reload: () => setKey((k) => k + 1), reveal: () => {} }), [])
   return (
-    <div className="web-view web-view--framed">
-      <iframe key={key} src={src} title={title} sandbox={sandbox} />
+    <div className="web-view web-view--framed" tabIndex={-1} data-focus onKeyDown={onReturn(() => frame.current?.focus())}
+      onFocus={(event) => setHeld(event.target === event.currentTarget)} onBlur={(event) => { if (event.target === event.currentTarget) setHeld(false) }}>
+      <iframe ref={frame} key={key} src={src} title={title} sandbox={sandbox} />
       <p className="web-view__framed">
         Framed here: a page that refuses frames, or signs in with cookies, may not work. <a href={src} target="_blank" rel="noreferrer">Open in a new tab</a>
       </p>
@@ -63,7 +89,7 @@ function FramedWebView({ src, title, sandbox, ref }: WebViewProps) {
 
 type Still = { url: string; width: number }
 
-function NativeWebView({ src, partition, onEvent, ref }: WebViewProps) {
+function NativeWebView({ src, partition, onEvent, onWaiting, ref }: WebViewProps) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<BridgeWebView>(undefined)
   const placer = useRef<Placer>(undefined)
@@ -71,11 +97,11 @@ function NativeWebView({ src, partition, onEvent, ref }: WebViewProps) {
   const [error, setError] = useState<WebViewState['error']>()
   const listener = useRef(onEvent)
   listener.current = onEvent
-  /**
-   * Set while the page takes the focus the view already has, or the window takes the keyboard back (a click on it, from
-   * another app or the view): the view isn't given it then.
-   */
-  const following = useRef(false)
+  // The box has the window's focus (the pane's), and the page has the keyboard: the pane waits for Return while it has
+  // the one and not the other.
+  const [held, setHeld] = useState(false)
+  const [inPage, setInPage] = useState(false)
+  useWaiting(held && !inPage, onWaiting)
   const opened = useRef(src)
 
   useEffect(() => {
@@ -87,23 +113,20 @@ function NativeWebView({ src, partition, onEvent, ref }: WebViewProps) {
         setError(event.state.error)
         placer.current?.block(Boolean(event.state.error))
       }
-      // A click into the page: the pane takes the focus as well, as it would for a frame in it. The window's page doesn't
-      // have the keyboard then (the view does), so it doesn't hear its own focus move: it's told, as a frame's would.
-      if (event.type === 'focus' && document.activeElement !== el) {
-        following.current = true
-        el.focus({ preventScroll: true })
-        el.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
-        following.current = false
+      // The page has the keyboard (Return, a click into it). Clicked, the pane takes the focus as well, as it would for a
+      // frame in it. The window's page doesn't have the keyboard then (the view does), so it doesn't hear its own focus
+      // move: it's told, as a frame's would.
+      if (event.type === 'focus') {
+        setInPage(true)
+        if (document.activeElement !== el) {
+          el.focus({ preventScroll: true })
+          el.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+        }
       }
       listener.current?.(event)
     })
-    // The window coming back to the front: its page hears focus come to what had it, the pane, but the keyboard stays
-    // where the click went.
-    const regained = (event: Event) => {
-      if (event.target !== window) return
-      following.current = true
-      setTimeout(() => { following.current = false })
-    }
+    // The window's page has the keyboard again (a click on it, a shortcut from the page): the page hasn't.
+    const regained = (event: Event) => { if (event.target === window) setInPage(false) }
     window.addEventListener('focus', regained, true)
     const placing = placeView(el, made, setStill)
     placer.current = placing
@@ -121,12 +144,20 @@ function NativeWebView({ src, partition, onEvent, ref }: WebViewProps) {
   }, [src])
   useImperativeHandle(ref, () => ({ go: (by) => view.current?.go(by), reload: () => view.current?.reload(), reveal: (path) => view.current?.reveal(path) }), [])
 
-  // The keyboard goes into the page as the pane is focused (a key, a click on its tab), and back to the window as the
-  // focus moves on to something else in it. The window losing the focus (to the page itself, or another app) isn't that.
-  const focus = () => { if (!following.current) view.current?.focus(true) }
-  const blur = (event: FocusEvent) => { if (event.relatedTarget) view.current?.focus(false) }
+  // Return gives the page the keyboard; the focus moving on to something else in the window takes it back. The window
+  // losing the focus (to the page itself, or another app) isn't that.
+  const enter = () => {
+    setInPage(true)
+    view.current?.focus(true)
+  }
+  const blur = (event: FocusEvent) => {
+    setHeld(false)
+    if (!event.relatedTarget) return
+    setInPage(false)
+    view.current?.focus(false)
+  }
   return (
-    <div ref={host} className="web-view" tabIndex={-1} data-focus onFocus={focus} onBlur={blur}>
+    <div ref={host} className="web-view" tabIndex={-1} data-focus onFocus={() => setHeld(true)} onBlur={blur} onKeyDown={onReturn(enter)}>
       {still && !error && <img className="web-view__still" src={still.url} style={{ width: still.width }} alt="" draggable={false} />}
       {error && <div className="pane-empty web-view__error">{error.url ? <code>{error.url}</code> : null} didn't load: {error.description}</div>}
     </div>

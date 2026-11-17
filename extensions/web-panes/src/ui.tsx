@@ -56,6 +56,7 @@ function Page({ url, at, machine }: { url: string; at: string; machine: string }
   const view = useRef<WebViewHandle>(null)
   const [state, setState] = useState<{ url: string; canGoBack: boolean; canGoForward: boolean }>()
   const [notice, setNotice] = useState<Notice>()
+  const [waiting, setWaiting] = useState(false)
   const onEvent = (event: WebViewEvent) => {
     if (event.type === 'state') setState(event.state)
     if (event.type === 'download' && event.state !== 'progressing') {
@@ -78,6 +79,7 @@ function Page({ url, at, machine }: { url: string; at: string; machine: string }
         {native && <PaneButton aria-label="Back" title="Back" disabled={!state?.canGoBack} onClick={() => view.current?.go(-1)}><ArrowLeftIcon size={12} aria-hidden /></PaneButton>}
         {native && <PaneButton aria-label="Forward" title="Forward" disabled={!state?.canGoForward} onClick={() => view.current?.go(1)}><ArrowRightIcon size={12} aria-hidden /></PaneButton>}
         <PaneNote title={note} href={current}>{note}</PaneNote>
+        {waiting && <ReturnHint />}
         <PaneButton onClick={() => view.current?.reload()}>Reload</PaneButton>
       </PaneHeader>
       {notice && (
@@ -87,10 +89,13 @@ function Page({ url, at, machine }: { url: string; at: string; machine: string }
           <button type="button" aria-label="Dismiss" onClick={() => setNotice(undefined)}><XIcon size={11} aria-hidden /></button>
         </div>
       )}
-      <WebView ref={view} src={at} partition="preview" title={url} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" onEvent={onEvent} />
+      <WebView ref={view} src={at} partition="preview" title={url} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" onEvent={onEvent} onWaiting={setWaiting} />
     </div>
   )
 }
+
+/** The pane has the keyboard, its page doesn't: Return passes it in. */
+const ReturnHint = () => <span className="web-panes-hint">↩ to use the page</span>
 
 /** What a page asks for, as the pane says it. */
 const PERMISSIONS: Record<string, string> = {
@@ -104,6 +109,7 @@ function ArtifactPane({ machine, thread, pane }: PaneProps) {
   const { path } = params<{ path?: string }>(pane)
   const view = useRef<WebViewHandle>(null)
   const first = useRef(true)
+  const [waiting, setWaiting] = useState(false)
   useEffect(() => {
     if (first.current) { first.current = false; return }
     view.current?.reload()
@@ -113,8 +119,8 @@ function ArtifactPane({ machine, thread, pane }: PaneProps) {
   if (!url) return <PaneMessage>Artifacts aren't shown here.</PaneMessage>
   return (
     <div className="web-panes-frame">
-      <PaneHeader><PaneNote title={path} code>{path}</PaneNote><PaneButton onClick={() => view.current?.reload()}>Reload</PaneButton></PaneHeader>
-      <WebView ref={view} src={url} partition="artifact" title={path} sandbox="allow-scripts allow-forms allow-popups" />
+      <PaneHeader><PaneNote title={path} code>{path}</PaneNote>{waiting && <ReturnHint />}<PaneButton onClick={() => view.current?.reload()}>Reload</PaneButton></PaneHeader>
+      <WebView ref={view} src={url} partition="artifact" title={path} sandbox="allow-scripts allow-forms allow-popups" onWaiting={setWaiting} />
     </div>
   )
 }

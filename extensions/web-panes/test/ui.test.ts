@@ -47,6 +47,14 @@ it('shows a page through the bridge\'s forward: at the address it gives, said wh
   const same = await ui.render({ pane: { kind: PREVIEW, params: { url: 'https://example.com/' } } })
   await vi.waitFor(() => expect(frame(same)).toBe('https://example.com/'))
   expect(same.text()).not.toContain('here at')
+  // Focused, the pane keeps the keyboard, and says so; Return passes it into the frame.
+  const box = same.find('.web-view') as HTMLElement
+  box.focus()
+  await vi.waitFor(() => expect(same.text()).toContain('↩ to use the page'))
+  expect(document.activeElement).toBe(box)
+  box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  await vi.waitFor(() => expect(document.activeElement).toBe(same.find('iframe')))
+  await vi.waitFor(() => expect(same.text()).not.toContain('↩ to use the page'))
   const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
   const old = await ui.render({ pane: { kind: PREVIEW, params: { url: 'http://localhost:4000/' } } })
   await vi.waitFor(() => expect(old.text()).toContain('update it to show this page'))
@@ -83,6 +91,14 @@ it('shows a page in a view of its own on the desktop: placed over the pane, its 
   expect(button('Forward').disabled).toBe(true)
   await pane.click('Back')
   expect(view!.ops).toContainEqual(['go', -1])
+  // Focused, the pane keeps the keyboard, and says so; Return gives it to the page.
+  const box = pane.find('.web-view') as HTMLElement
+  box.focus()
+  await vi.waitFor(() => expect(pane.text()).toContain('↩ to use the page'))
+  expect(view!.ops.some(([op]) => op === 'focus')).toBe(false)
+  box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  await vi.waitFor(() => expect(view!.ops).toContainEqual(['focus', true]))
+  await vi.waitFor(() => expect(pane.text()).not.toContain('↩ to use the page'))
   // A file it saved, shown where it is; something it asked for, refused.
   view!.listener!({ type: 'download', name: 'report.pdf', path: '/Users/me/Downloads/report.pdf', state: 'completed' })
   await vi.waitFor(() => expect(pane.text()).toContain('Saved report.pdf to Downloads'))
