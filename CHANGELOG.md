@@ -2,16 +2,26 @@
 
 ## Unreleased
 
+## 0.1.3
+
+### Fixes
+
 - Signing in with ChatGPT works in the app again, and so does renewing the sign-in: threads no longer fail with
   "OAuth refresh failed for openai: Cannot find module …openai-chatgpt.js".
+- The pane menu in the title bar highlights its items under the mouse and from the keyboard again.
+
+### Panes
+
+- ⌘⇧P opens a pane beside the thread: pick one of the pane menu's by typing a few letters. Change its key in
+  Settings → Keyboard.
 - Changes can show what's uncommitted, what's staged, everything since the branch left main, or since its upstream:
   pick it in the pane's header. A thread on a branch opens on "Since main".
+
+### Machines
+
 - A remote machine can run a release instead of main: `scripts/install-machine.sh --release` installs the release's app
   on a Mac (no checkout needed), or checks out the release's tag on Linux. Updating such a machine moves it to the
   newest release.
-- ⌘⇧P opens a pane beside the thread: pick one of the pane menu's by typing a few letters. Change its key in
-  Settings → Keyboard.
-- The pane menu in the title bar highlights its items under the mouse and from the keyboard again.
 
 ## 0.1.2
 
