@@ -57,6 +57,9 @@ The form now validates on blur; tests in login.test.ts.
 - A child's own children report to it, and its run then reports up, so a grandchild's result reaches the top.
 - While its parent hears it, a child is quiet: its finishing isn't unread or notified (needing the user still is). Once
   the parent is archived, the child notifies for itself.
+- A hidden thread's child (an extension's own agent's, like Ego's, started with `parent`) reports to it all the same,
+  but shows top-level in the sidebar, as no list has its parent, and isn't quiet: the user doesn't follow the hidden
+  thread, so the child's own notice tells them it's done.
 - The child is told its answer goes to its parent, and to put the outcome first.
 - Reports are best effort: one waiting to go is lost if the daemon restarts. A workflow that must know a child finished
   asks it with `thread_read`.
