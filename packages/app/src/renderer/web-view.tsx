@@ -19,8 +19,10 @@ export const OVERLAYS = '.superego-layer, .superego-dialog__backdrop, .superego-
 /** What a pane does to its page: go back and forward, reload it, show a file it saved. */
 export type WebViewHandle = { go(by: -1 | 1): void; reload(): void; reveal(path: string): void }
 
+/** A page to show: its address, and whose cookies it keeps (`partition`). */
 export type WebViewProps = {
   src: string
+  /** Its cookies and storage: kept between launches, or only while the app runs. */
   partition: WebViewPartition
   /** The page's accessible name. */
   title: string
@@ -34,6 +36,14 @@ export type WebViewProps = {
 /** Whether pages show in views of their own here (the desktop), with their history to go along, or framed (a browser). */
 export const hasWebViews = () => Boolean(window.superego?.webView)
 
+/**
+ * A web page in a pane, as a browser tab shows it: on the desktop a view of its own over the pane (its own cookies,
+ * framing allowed, back and forward), in a browser an iframe. The window's overlays (`OVERLAYS`) stay above it.
+ *
+ * ```tsx
+ * <WebView src="http://localhost:5173" partition="preview" title="Preview" sandbox="allow-scripts allow-forms" />
+ * ```
+ */
 export function WebView(props: WebViewProps) {
   return hasWebViews() ? <NativeWebView {...props} /> : <FramedWebView {...props} />
 }
