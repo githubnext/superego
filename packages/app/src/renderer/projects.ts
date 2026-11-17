@@ -11,7 +11,7 @@ import type { MachineEntry } from '../shared/bridge.ts'
 import { useAppSetting } from './client.ts'
 import type { Pin } from './pins.ts'
 
-export type Sort = 'recent' | 'created' | 'status'
+export type Sort = 'recent' | 'created' | 'status' | 'name'
 /** App setting: the order of projects, and of the threads in each. */
 export const SORT = 'app.sort'
 
@@ -178,12 +178,16 @@ export function unreadList(projects: Project[], selection?: { machine: string; t
   return unreadThreads(projects.flatMap((project) => project.threads.map((thread) => ({ machine: project.machine.id, project, thread }))), selection)
 }
 
+/** Names as people sort them: case aside, numbers by value ("Wave 2" before "Wave 10"). */
+const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare
+
 /** Every machine's threads, as projects, in `sort`'s order: projects and the threads in each. */
 export function groupProjects(machines: MachineEntry[], threads: Record<string, ThreadInfo[] | undefined>, sort: Sort = 'recent'): Project[] {
   const byThread = (a: ThreadInfo, b: ThreadInfo) =>
     sort === 'created' ? b.createdAt - a.createdAt
       : sort === 'status' ? statusRank(b.status) - statusRank(a.status) || b.activeAt - a.activeAt
-        : b.activeAt - a.activeAt
+        : sort === 'name' ? byName(a.title, b.title) || b.activeAt - a.activeAt
+          : b.activeAt - a.activeAt
   const projects = new Map<string, Project>()
   for (const machine of machines) {
     for (const thread of threads[machine.id] ?? []) {
@@ -204,7 +208,8 @@ export function groupProjects(machines: MachineEntry[], threads: Record<string, 
   return list.sort((a, b) =>
     sort === 'created' ? newest(b) - newest(a)
       : sort === 'status' ? statusRank(b.status) - statusRank(a.status) || b.activeAt - a.activeAt
-        : b.activeAt - a.activeAt)
+        : sort === 'name' ? byName(a.name, b.name) || byName(a.machine.label, b.machine.label)
+          : b.activeAt - a.activeAt)
 }
 
 /**

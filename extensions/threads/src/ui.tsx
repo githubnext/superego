@@ -2,7 +2,7 @@
 // repository or folder on a machine) and the threads in each, its pinned at its top; the machine is said on the project,
 // where it isn't this computer (Pinned can be hidden from the ··· menu: they still top their projects). Pinned, each project and each thread with others under it fold, by their carets or ← and →
 // (the folds are the window's: projects.ts). Its views:
-// - the list (`threads.list`), a space: sorted recently active, newest first, or needs you first (an app setting); with
+// - the list (`threads.list`), a space: sorted recently active, newest first, needs you first or alphabetically (an app setting); with
 //   the sidebar hidden, a rail of status glyphs; the key to go anywhere (⌘L) beside its heading, while pointed at. A row's title is followed by other extensions' marks (the
 //   `thread.badge` slot: a worktree's branch, say); a right-click on it pins or unpins it, or archives it. Pinned
 //   rows are dragged to reorder them, and a project's row dragged among them is pinned there
@@ -329,7 +329,7 @@ function NewThreadButton({ label, machine, cwd }: { label: string; machine?: Mac
   )
 }
 
-const SORTS: { value: Sort; label: string }[] = [{ value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: `${STATUS_WORDS.blocked} first` }]
+const SORTS: { value: Sort; label: string }[] = [{ value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: `${STATUS_WORDS.blocked} first` }, { value: 'name', label: 'Alphabetical' }]
 
 /** The ··· menu: sort, the Pinned section shown or not, details, hiding the sidebar. */
 function Options() {

@@ -86,7 +86,7 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
       id: 'navigation', title: 'Navigation', order: 60,
       settings: [
         { key: SORT, title: 'Sort projects and threads', default: 'recent', type: 'choice', options: [
-          { value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' },
+          { value: 'recent', label: 'Recently active' }, { value: 'created', label: 'Newest first' }, { value: 'status', label: 'Needs you first' }, { value: 'name', label: 'Alphabetical' },
         ] },
         { key: SHOW_PINNED, title: 'Show pinned', default: true, type: 'boolean' },
       ],

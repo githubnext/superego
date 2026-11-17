@@ -131,3 +131,18 @@ it('forgets folds of what is no longer listed, where that is known', () => {
   // Not heard from yet: kept.
   expect(stillFolded(folded, [], machines, {})).toEqual(folded)
 })
+
+it('sorts alphabetically: projects by name, threads by title, case aside and numbers by value, offshoots under their parent and the pinned first', () => {
+  const at = (id: string, root: string, more: Partial<ThreadInfo> = {}) => thread(id, root, 0, more)
+  const list = {
+    local: [
+      at('wave 10', '/code/Zeta'), at('Wave 2', '/code/Zeta'), at('alpha', '/code/Zeta'),
+      at('b child', '/code/Zeta', { parent: 'alpha' }), at('A child', '/code/Zeta', { parent: 'alpha' }),
+      at('only', '/code/beta'),
+    ],
+  }
+  const projects = groupProjects([machine('local')], list, 'name')
+  expect(projects.map((p) => p.name)).toEqual(['beta', 'Zeta'])
+  expect(shown(projects)).toEqual(['local/only', 'local/alpha', 'local/A child', 'local/b child', 'local/Wave 2', 'local/wave 10'])
+  expect(shown(pinnedFirst(projects, [{ machine: 'local', thread: 'wave 10' }]).projects).slice(1)).toEqual(['local/wave 10', 'local/alpha', 'local/A child', 'local/b child', 'local/Wave 2'])
+})

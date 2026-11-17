@@ -37,6 +37,8 @@ it('sorts from its ··· menu, and hides from there, from ⌘/ and from the rai
   menuItem('Needs you first')!.click()
   const appSetting = async (key: string) => ((await window.superego.call('app', 'settings.watch', {})) as { value: { values: Record<string, unknown> } }).value.values[key]
   await ui.until(async () => await appSetting('app.sort') === 'status', 'sorted by status')
+  await ui.dispatch('threads.sort.name')
+  await ui.until(async () => await appSetting('app.sort') === 'name', 'sorted alphabetically, from ⌘K')
   await ui.key('mod+/')
   await ui.until(() => !sidebar() && dots(), 'hidden: the sidebar gone, the threads as dots')
   await ui.key('mod+/')
