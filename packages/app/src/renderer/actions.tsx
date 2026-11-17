@@ -2,13 +2,14 @@
 // forwarded to where they run (see `dispatch`). Every dispatch from this window is logged, and the log is one action
 // away (Show action log).
 import { useEffect, useState } from 'react'
-import { createRouter, lit, obj, opt, str, type Router, union, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
+import { createRouter, int, lit, obj, opt, str, type Router, union, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
 import { Dialog } from '@superego/ui'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { APP, PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
-import { threadBeside, type Project } from './projects.ts'
+import { threadBeside, type Project, type Sidebar } from './projects.ts'
+import { isPinned, pinAt, PINS, pinsOf, unpin, type Pin } from './pins.ts'
 import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
 import { scrollHalfPage } from './scroll.ts'
 import { startRename } from './rename.ts'
@@ -33,6 +34,8 @@ export type WindowContext = {
   threadOf(selection: Selection): ThreadInfo | undefined
   /** Every project, in the sidebar's order, and the thread last shown in each (by project key). */
   projects: Project[]
+  /** What the sidebar lists, top to bottom: the pinned threads, then the projects with the rest. */
+  sidebar: Sidebar
   lastThread: Record<string, string>
   toggleSidebar(): void
   toggleNavigator(): void
@@ -256,6 +259,24 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
     id: 'thread.startRename', title: 'Rename thread…', 
     run: (_p, c) => { if (c.selection) startRename(c.selection.machine, c.selection.thread) },
   }),
+  // Pins are the app's (see pins.ts): `thread` on `machine`, else the selected thread.
+  defineWindowAction({
+    id: 'thread.pin', title: 'Pin thread',
+    description: 'To the top of the sidebar; pinned already, `at` moves it (0 is first)',
+    params: obj({ machine: opt(str()), thread: opt(str()), at: opt(int()) }),
+    when: (c) => Boolean(c.selection && pinnable(c, c.selection) && !isPinned(pinsNow(c), c.selection)),
+    run: ({ machine, thread, at }, c) => setPins(c, pinAt(pinsNow(c), pinOf(c, { machine, thread }), at)),
+  }),
+  defineWindowAction({
+    id: 'thread.unpin', title: 'Unpin thread',
+    params: obj({ machine: opt(str()), thread: opt(str()) }),
+    when: (c) => Boolean(c.selection && isPinned(pinsNow(c), c.selection)),
+    run: ({ machine, thread }, c) => {
+      const at = machine && thread ? { machine, thread } : c.selection
+      if (!at) throw new Error('No thread to unpin')
+      return setPins(c, unpin(pinsNow(c), at))
+    },
+  }),
   defineWindowAction({
     id: 'thread.new', title: 'New thread…', keys: 'mod+n',
     params: obj({}), run: (_p, c) => c.newThread(),
@@ -297,8 +318,20 @@ function stepProject(c: WindowContext, by: number) {
   if (next) showProject(c, next)
 }
 
+const pinsNow = (c: WindowContext) => pinsOf(c.appSetting(PINS))
+const setPins = (c: WindowContext, pins: Pin[]) => c.dispatch('app.settings.set', { key: PINS, value: pins }, { machine: APP, source: 'pins' }).then(() => null)
+/** A thread the sidebar lists: not archived, nor one no list shows (Ego's). */
+const pinnable = (c: WindowContext, at: Pin) => { const info = c.threadOf(at); return Boolean(info && !info.archived && !info.hidden) }
+/** The thread a pin action is for: the one named, else the selected; one the sidebar lists. */
+function pinOf(c: WindowContext, { machine, thread }: { machine?: string; thread?: string }): Pin {
+  const at = machine && thread ? { machine, thread } : c.selection
+  if (!at) throw new Error('No thread to pin')
+  if (!pinnable(c, at)) throw new Error(`Only a thread the sidebar lists can be pinned, not ${at.thread} on ${at.machine}`)
+  return at
+}
+
 function stepThread(c: WindowContext, by: number) {
-  const next = threadBeside(c.projects, c.selection, by)
+  const next = threadBeside(c.sidebar, c.selection, by)
   if (next) c.select(next)
 }
 

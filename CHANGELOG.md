@@ -12,6 +12,10 @@
 - Type `@` to mention another thread (on any machine) or a file in the thread's folder: pick it from the list, and the
   agent is told what it is and how to read it. In the sent message, a mentioned thread shows by its title and opens on
   a click; a file opens beside the thread.
+- Pin a thread to keep it at the top of the sidebar, under Pinned, whichever project or machine it's on: from its
+  row's right-click menu, the pin in the title bar, or "Pin thread" in ⌘K. Drag pinned threads to reorder them, or drag
+  a thread among them to pin it there. Pins are the same in every window; an archived thread leaves them.
+- With the sidebar hidden, the rail's dots and the navigator (⌘L) list pinned threads first.
 
 ## 0.1.3
 

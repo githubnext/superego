@@ -82,6 +82,10 @@ function check(spec: SettingSpec, value: Json): void {
     case 'layout':
       if (!value || typeof value !== 'object' || Array.isArray(value)) throw bad('expected a layout')
       return
+    case 'pins':
+      if (!Array.isArray(value) || !value.every((pin) => pin !== null && typeof pin === 'object' && !Array.isArray(pin)
+        && typeof pin.machine === 'string' && typeof pin.thread === 'string')) throw bad('expected threads, each { machine, thread }')
+      return
     case 'choice':
       if (value === null && type.nullable) return
       if (typeof value !== 'string' || !type.options.some((option) => option.value === value)) throw bad(`unknown choice ${JSON.stringify(value)}`)

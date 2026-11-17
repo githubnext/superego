@@ -20,6 +20,7 @@ import { WebAccess } from './web-access.tsx'
 import { ConnectedClients } from './connected.tsx'
 import { Shell, ThreadPicker } from './Shell.tsx'
 import { SORT } from './projects.ts'
+import { PINS } from './pins.ts'
 import { DEFAULT_WIDTH, MAX_WIDTH, MIN_WIDTH, SIDEBAR_WIDTH } from './sidebar-width.ts'
 import { ShellStateProvider } from './state.tsx'
 import { coreActions, defineWindowAction } from './actions.tsx'
@@ -89,10 +90,13 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
         ] },
       ],
     })
-    // Changed by dragging the sidebar's edge, not in Settings.
+    // Changed by dragging the sidebar's edge, and by pinning threads, not in Settings.
     core.appSettings({
       id: 'sidebar', title: 'Sidebar', order: 61,
-      settings: [{ key: SIDEBAR_WIDTH, title: 'Sidebar width', default: DEFAULT_WIDTH, type: 'number', min: MIN_WIDTH, max: MAX_WIDTH, step: 1, hidden: true }],
+      settings: [
+        { key: SIDEBAR_WIDTH, title: 'Sidebar width', default: DEFAULT_WIDTH, type: 'number', min: MIN_WIDTH, max: MAX_WIDTH, step: 1, hidden: true },
+        { key: PINS, title: 'Pinned threads', default: [], type: 'pins', hidden: true },
+      ],
     })
     registerBuiltInPanes(core)
     registerToolRows(core)

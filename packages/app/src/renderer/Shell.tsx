@@ -25,7 +25,7 @@ import { refreshFontsSoon } from './fonts.ts'
 import { AuthNotice } from './AuthNotice.tsx'
 import { ThreadView } from './ThreadView.tsx'
 import { ThreadTitle, ThreadTools } from './thread-header.tsx'
-import { ArchiveButton, UnarchiveButton } from './thread-actions.tsx'
+import { ArchiveButton, PinButton, UnarchiveButton } from './thread-actions.tsx'
 import { StripSlot } from './panes.tsx'
 import { useSidebarEdge } from './sidebar-edge.tsx'
 import { SettingsView } from './SettingsView.tsx'
@@ -51,7 +51,7 @@ export function Shell() {
   const [navigator, setNavigator] = useState(false)
   const [panePicker, setPanePicker] = useState(false)
   const sidebar = useSidebar()
-  const { projects, lastThread } = useProjects()
+  const { projects, sidebar: rows, lastThread } = useProjects()
   const [log, setLog] = useState(false)
   const machines = useMachines()
   const { selection, select, machine, thread, hidden: alone, listed } = useSelection()
@@ -109,7 +109,7 @@ export function Shell() {
       const found = allThreads[s.machine]?.find((x) => x.id === s.thread) ?? (s.machine === selection?.machine && s.thread === selection.thread ? thread : undefined)
       return found?.panes ? { ...found, panes: shownPanes(registry, { machine: s.machine, thread: found }) } : found
     },
-    projects, lastThread, appSetting: (key) => watched<SettingsSnapshot>(APP, 'settings.watch', {})?.values[key] as never,
+    projects, sidebar: rows, lastThread, appSetting: (key) => watched<SettingsSnapshot>(APP, 'settings.watch', {})?.values[key] as never,
     toggleSidebar: () => narrow ? setDrawer((open) => !open) : sidebar.show(),
     back: history.back, forward: history.forward,
     railTabs: tabsNow,
@@ -290,6 +290,7 @@ function ThreadSheet({ machine, thread, onClose }: { machine: MachineEntry; thre
         </div>
         <div className="thread-sheet__tools">
           <ThreadTools machine={machine} thread={thread} panes={false} />
+          <PinButton machine={machine} thread={thread} />
           {thread.hidden ? null : thread.archived ? <UnarchiveButton machine={machine} thread={thread} /> : <ArchiveButton machine={machine} thread={thread} />}
         </div>
         {kinds.length > 0 && (

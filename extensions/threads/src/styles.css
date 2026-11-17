@@ -23,6 +23,11 @@
 .threads__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .superego-list-item.threads-child { padding-left: calc(8px + var(--depth) * 14px); }
 .threads-project.is-stale .superego-list-item, .threads-project.is-stale .threads-project__name { color: var(--superego-muted); }
+/* Pinned: from every project, each saying where it is, quietly; a row being dragged shows where it would land. */
+.threads-pinned .superego-list-item.is-stale { color: var(--superego-muted); }
+.threads-pinned__where { flex: 0 1 auto; min-width: 24px; overflow: hidden; text-overflow: ellipsis; font-style: normal; color: var(--superego-faint); font-size: var(--superego-text-xs); }
+.threads-pinned .superego-list-item.is-drop-before { box-shadow: inset 0 2px 0 var(--superego-accent); }
+.threads-pinned .superego-list-item.is-drop-after { box-shadow: inset 0 -2px 0 var(--superego-accent); }
 .threads__why { color: var(--superego-status-blocked-text); font-weight: 500; }
 .threads__why--error { color: var(--superego-status-error-text); }
 .threads__why--quiet { color: var(--superego-muted); font-weight: 400; }

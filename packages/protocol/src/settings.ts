@@ -24,6 +24,8 @@ export type SettingType =
   | { type: 'keymap' }
   /** Where the window's views go, by view id (see `app.layout`): only what differs from the views' own defaults. */
   | { type: 'layout' }
+  /** Threads pinned to the top of the sidebar, in their order: each by its machine and id (`[{ machine, thread }]`). */
+  | { type: 'pins' }
 
 /** A setting as clients see it: its type, with options resolved for the current state. */
 export type SettingInfo = SettingType & {

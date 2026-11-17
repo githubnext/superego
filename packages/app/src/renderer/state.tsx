@@ -4,7 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AUTH_REJECTED, DATA_VIEWS, type Json, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
-import { has, machine as client, useHiddenThreads, useMachineList, useThreads as useThreadsWatch, useValue } from './client.ts'
+import { has, machine as client, useAppSetting, useHiddenThreads, useMachineList, useThreads as useThreadsWatch, useValue } from './client.ts'
 import { checkDataViews, warnDropped } from './data-view-check.ts'
 import { clearProblem, reportProblem } from './machine-problems.ts'
 import { useRegistry } from './registry.tsx'
@@ -15,7 +15,8 @@ import { setLocalState, useLocalState } from './local-state.ts'
 import { focusProvider } from './provider-focus.ts'
 import { useWindowEvents } from './window-events.ts'
 import { Notifications } from './notifications.tsx'
-import { freeze, projectKey, useProjectList, type Project } from './projects.ts'
+import { freeze, pinnedFirst, projectKey, useProjectList, type Project, type Sidebar } from './projects.ts'
+import { PINS, pinsOf, stillListed, type Pin } from './pins.ts'
 import { sidebarIsHidden, showSidebar, type SidebarMode } from './sidebar-mode.ts'
 import { TIGHT, useMedia } from './media.ts'
 import { APP } from '../shared/app-settings.ts'
@@ -42,6 +43,10 @@ type ShellState = {
   openNewThread(start?: NewThreadStart | false): void
   /** Every project, in the sidebar's order; held still while `hold` says so. */
   projects: Project[]
+  /** What the sidebar lists: the pinned threads, then the projects with the rest. */
+  sidebar: Sidebar
+  /** The threads pinned, in their order, as the app setting has them (listed or not). */
+  pins: Pin[]
   /** Hold the order still (the pointer is over the sidebar), or let it follow activity again. */
   hold(held: boolean): void
   /** The thread last shown in a project, by its key. */
@@ -92,10 +97,13 @@ export function useSelection() {
   /** `hidden`: the thread is one no list shows (an extension's own, like Ego's). `listed`: the listed one last selected. */
   return { selection, select, machine, thread, hidden: Boolean(own), listed }
 }
-/** Every project, in the sidebar's order, and the thread last shown in each. */
+/**
+ * Every project, in the sidebar's order, and the thread last shown in each; `sidebar`, what it lists: the pinned
+ * threads, then the projects with the rest; `pins`, the threads pinned.
+ */
 export function useProjects() {
-  const { projects, lastThread, hold } = useShellState()
-  return { projects, lastThread, hold }
+  const { projects, sidebar, pins, lastThread, hold } = useShellState()
+  return { projects, sidebar, pins, lastThread, hold }
 }
 /** Whether the sidebar is hidden, and a way to show or hide it (`show()` the other way). */
 export function useSidebar() {
@@ -156,6 +164,14 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const frozen = useRef(live)
   if (!held) frozen.current = live
   const projects = useMemo(() => held ? freeze(frozen.current, live) : live, [held, live])
+  // Pinned threads go to the top, in the order they were pinned; one no longer listed (archived) leaves the pins.
+  const [pinsValue, setPins] = useAppSetting<Pin[]>(PINS)
+  const pins = useMemo(() => pinsOf(pinsValue), [pinsValue])
+  const sidebar = useMemo(() => pinnedFirst(projects, pins), [projects, pins])
+  useEffect(() => {
+    const kept = stillListed(pins, machines, threads)
+    if (kept.length < pins.length) void setPins(kept).catch((error) => console.error('Unpinning archived threads', error))
+  }, [pins, machines, threads])
   // Each project remembers the thread last shown in it: going back to the project goes back to that thread.
   const [lastThread, setLastThread] = useLocalState<Record<string, string>>('projects.last', {})
   const shown = selection && threads[selection.machine]?.find((t) => t.id === selection.thread)
@@ -197,7 +213,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const exists = (p: Place) => 'settings' in p || Boolean(hiddenAll[p.thread.machine]?.some((t) => t.id === p.thread.thread))
     || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread))
   const value = useMemo<ShellState>(() => ({
-    machines, threads, rejections, selection, settingsOpen, newThread, projects, hold, lastThread, sidebarHidden: sidebarIsHidden(sidebarMode, tight), archived, hidden, hiddenAll, listed,
+    machines, threads, rejections, selection, settingsOpen, newThread, projects, sidebar, pins, hold, lastThread, sidebarHidden: sidebarIsHidden(sidebarMode, tight), archived, hidden, hiddenAll, listed,
     canBack: Boolean(step(history, -1, place, exists)),
     canForward: Boolean(step(history, 1, place, exists)),
     go: (by) => {
@@ -217,7 +233,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setSidebarOpen(next.open)
       setSidebarShownTight(next.shownTight)
     },
-  }), [machines, threads, rejections, selection, settingsOpen, newThread, projects, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, listed])
+  }), [machines, threads, rejections, selection, settingsOpen, newThread, projects, sidebar, pins, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, listed])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onHidden={onHidden} onRejections={onRejections} />)}

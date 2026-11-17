@@ -1,9 +1,24 @@
-// Archiving a thread and bringing it back, as buttons: in the title bar, the composer of an archived thread, and a
-// phone's thread sheet.
+// Pinning a thread, archiving it and bringing it back, as buttons: in the title bar, the composer of an archived
+// thread, and a phone's thread sheet.
 import type { ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowCounterClockwiseIcon, Button, IconButton } from '@superego/ui'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, Button, IconButton, PushPinIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useRegistry } from './registry.tsx'
+import { useProjects } from './state.tsx'
+import { isPinned } from './pins.ts'
+
+/** Pins the thread to the top of the sidebar, or unpins it: filled while it's pinned. Only a thread the sidebar lists. */
+export function PinButton({ machine, thread, className = '' }: { machine: MachineEntry; thread: ThreadInfo; className?: string }) {
+  const dispatch = useRegistry().router.dispatch
+  const pinned = isPinned(useProjects().pins, { machine: machine.id, thread: thread.id })
+  if (thread.hidden || thread.archived) return null
+  return (
+    <IconButton label={pinned ? 'Unpin' : 'Pin'} aria-pressed={pinned} className={`thread__pin ${pinned ? 'is-on' : ''} ${className}`}
+      onClick={() => void dispatch(pinned ? 'thread.unpin' : 'thread.pin', { machine: machine.id, thread: thread.id }, { source: 'header' }).catch((error) => console.error(error))}>
+      <PushPinIcon size={14} weight={pinned ? 'fill' : 'regular'} aria-hidden />
+    </IconButton>
+  )
+}
 
 /** Puts the thread away (⌘⇧E): out of its project, its worktree kept. Not an extension's own hidden thread. */
 export function ArchiveButton({ machine, thread, className = '' }: { machine: MachineEntry; thread: ThreadInfo; className?: string }) {

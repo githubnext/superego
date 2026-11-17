@@ -1,8 +1,8 @@
 // The navigator (⌘L), after Fut's: every project, its threads, and their panes, as one tree to go anywhere from
-// anywhere. Typing searches the whole path ("superego login diff"); without a query the tree is browsable: ← to the parent,
+// anywhere; pinned threads first, as the sidebar lists them. Typing searches the whole path ("superego login diff"); without a query the tree is browsable: ← to the parent,
 // → to the first child. ⌃P, ⌃T and ⌃G show only projects, threads or panes (again: everything). Enter goes there.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { Dialog, StatusGlyph } from '@superego/ui'
+import { Dialog, PushPinIcon, StatusGlyph } from '@superego/ui'
 import type { Status, ThreadInfo } from '@superego/protocol'
 import { score } from './score.ts'
 import { useRegistry } from './registry.tsx'
@@ -25,6 +25,8 @@ type Row = {
   path: string
   /** Where it is: the selected thread's row, or its pane in front. */
   current: boolean
+  /** A pinned thread: listed first, as in the sidebar. */
+  pinned?: boolean
   go(): void
 }
 
@@ -33,7 +35,7 @@ const KINDS: Record<string, Kind> = { p: 'project', t: 'thread', g: 'pane' }
 export function Navigator({ onClose }: { onClose(): void }) {
   const registry = useRegistry()
   const machines = useMachines()
-  const { projects, lastThread } = useProjects()
+  const { projects, sidebar, lastThread } = useProjects()
   const { selection, select } = useSelection()
   const [query, setQuery] = useState('')
   const [only, setOnly] = useState<Kind>()
@@ -41,43 +43,50 @@ export function Navigator({ onClose }: { onClose(): void }) {
 
   const rows = useMemo<Row[]>(() => {
     const several = machines.filter((m) => m.state !== 'disabled').length > 1
+    const where = (project: Project) => several || project.machine.id !== 'local' ? project.machine.label : undefined
     const go = (fn: () => void) => () => { onClose(); fn() }
-    return projects.flatMap((project: Project): Row[] => {
-      const here = project.machine.id === selection?.machine && project.threads.some((t) => t.id === selection.thread)
+    // A thread, a level under its project (or on its own, pinned), and its panes under it.
+    const threadRows = (project: Project, thread: ThreadInfo, depth: number, pinned: boolean): Row[] => {
+      const isOn = project.machine.id === selection?.machine && thread.id === selection.thread
+      const show = () => void dispatch('thread.select', { machine: project.machine.id, thread: thread.id }, { source: 'navigator' })
+      const at = { machine: project.machine.id, thread }
+      // Pinned: where it is. Else its branch, when the worktrees extension gave it one of its own.
+      const detail = pinned ? [project.name, where(project)].filter(Boolean).join(' · ') : branchOf(thread)
       return [
         {
+          key: `${project.key}/${thread.id}`, kind: 'thread', depth, title: thread.title, status: thread.status, pinned,
+          ...(detail ? { detail } : {}),
+          path: `${project.name} ${thread.title}`, current: isOn && !thread.pane,
+          go: go(() => {
+            show()
+            if (thread.pane) void dispatch('pane.focus', { thread: thread.id }, { machine: project.machine.id, source: 'navigator' })
+          }),
+        },
+        ...shownPanes(registry, at).map((pane): Row => ({
+          key: `${project.key}/${thread.id}/${pane.id}`, kind: 'pane', depth: depth + 1, title: paneTitle(registry, pane, at),
+          path: `${project.name} ${thread.title} ${paneTitle(registry, pane, at)}`, current: isOn && thread.pane === pane.id,
+          go: go(() => {
+            show()
+            void dispatch('pane.focus', { thread: thread.id, pane: pane.id }, { machine: project.machine.id, source: 'navigator' })
+            focusColumn(pane.id)
+          }),
+        })),
+      ]
+    }
+    // As the sidebar lists them: the pinned threads first, then every project with the rest of its threads.
+    const rest = new Map(sidebar.projects.map((p) => [p.key, p]))
+    return [
+      ...sidebar.pinned.flatMap(({ project, thread }) => threadRows(project, thread, 0, true)),
+      ...projects.flatMap((project: Project): Row[] => [
+        {
           key: project.key, kind: 'project', depth: 0, title: project.name, status: project.status, path: project.name, current: false,
-          ...(several || project.machine.id !== 'local' ? { detail: project.machine.label } : {}),
+          ...(where(project) ? { detail: where(project) } : {}),
           go: go(() => showProject({ select, lastThread }, project)),
         },
-        ...project.threads.flatMap((thread): Row[] => {
-          const isOn = here && thread.id === selection?.thread
-          const show = () => void dispatch('thread.select', { machine: project.machine.id, thread: thread.id }, { source: 'navigator' })
-          return [
-            {
-              key: `${project.key}/${thread.id}`, kind: 'thread', depth: 1, title: thread.title, status: thread.status,
-              // Its branch, when the worktrees extension gave it one of its own.
-              ...(branchOf(thread) ? { detail: branchOf(thread) } : {}),
-              path: `${project.name} ${thread.title}`, current: isOn && !thread.pane,
-              go: go(() => {
-                show()
-                if (thread.pane) void dispatch('pane.focus', { thread: thread.id }, { machine: project.machine.id, source: 'navigator' })
-              }),
-            },
-            ...shownPanes(registry, { machine: project.machine.id, thread }).map((pane): Row => ({
-              key: `${project.key}/${thread.id}/${pane.id}`, kind: 'pane', depth: 2, title: paneTitle(registry, pane, { machine: project.machine.id, thread }),
-              path: `${project.name} ${thread.title} ${paneTitle(registry, pane, { machine: project.machine.id, thread })}`, current: isOn && thread.pane === pane.id,
-              go: go(() => {
-                show()
-                void dispatch('pane.focus', { thread: thread.id, pane: pane.id }, { machine: project.machine.id, source: 'navigator' })
-                focusColumn(pane.id)
-              }),
-            })),
-          ]
-        }),
-      ]
-    })
-  }, [projects, machines, selection?.machine, selection?.thread, lastThread])
+        ...(rest.get(project.key)?.threads ?? []).flatMap((thread) => threadRows(project, thread, 1, false)),
+      ]),
+    ]
+  }, [projects, sidebar, machines, selection?.machine, selection?.thread, lastThread])
 
   // Searching flattens to the matches, best first; browsing keeps the tree (or one kind of row in it).
   const shown = useMemo(() => {
@@ -126,6 +135,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
             onMouseMove={() => setActive(index)} onClick={row.go}>
             <span className="palette__glyph">{row.status ? <StatusGlyph status={row.status} /> : '▫'}</span>
             <span className="palette__title">{row.title}</span>
+            {row.pinned && <PushPinIcon className="navigator__pin" size={11} weight="fill" aria-label="Pinned" />}
             {!browsing && row.depth > 0 && <span className="navigator__crumb">{row.path.slice(0, row.path.length - row.title.length).trim()}</span>}
             {row.detail && <span className="palette__detail">{row.detail}</span>}
           </li>

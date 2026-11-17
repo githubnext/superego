@@ -63,7 +63,7 @@ function Main() {
   select = selection.select
   registry.router.setContext({
     app, machines, selection: selection.selection, select: selection.select, openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {},
-    showLog() {}, threadOf: () => undefined, projects: [], lastThread: {}, appSetting: () => undefined, toggleSidebar() {}, back() {}, forward() {}, railTabs: () => [],
+    showLog() {}, threadOf: () => undefined, projects: [], sidebar: { pinned: [], projects: [] }, lastThread: {}, appSetting: () => undefined, toggleSidebar() {}, back() {}, forward() {}, railTabs: () => [],
   })
   return useOnboarding() ? h(Onboarding) : h('p', { className: 'empty' }, 'Select or start a thread.')
 }

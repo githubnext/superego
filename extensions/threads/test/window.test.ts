@@ -1,20 +1,24 @@
 // @vitest-environment happy-dom
 // The sidebar in the window drawn whole (superego/testing's mountUi) over a real daemon: its ··· menu (sorting, hiding
 // it), ⌘/ to hide it (the threads as dots in the rail) and show it again, the details beside the thread (⌘I, the model
-// button), the archived threads at its end, a thread another started right under it, and ⌘⇧] ⌘⇧[ down and up the rows.
+// button), the archived threads at its end, a thread another started right under it, ⌘⇧] ⌘⇧[ down and up the rows,
+// and pinned threads at the top, from every project and machine.
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { mountUi, testDaemon, type TestDaemon, type TestWindow } from '@superego/sdk/testing'
+import { daemonMachine, mountUi, testDaemon, type TestDaemon, type TestWindow } from '@superego/sdk/testing'
 import threads from '../src/ui.tsx'
 
 const $ = (selector: string) => document.querySelector<HTMLElement>(selector)
 const $$ = (selector: string) => [...document.querySelectorAll<HTMLElement>(selector)]
 const titled = () => $('.thread__title')?.textContent
-const rows = (within = '.threads-project') => $$(`${within} .superego-list-item`)
+const rows = (within = '.threads-project:not(.threads-pinned)') => $$(`${within} .superego-list-item`)
 const rowOf = (title: string, within?: string) => rows(within).find((li) => li.querySelector('.superego-list-item__body')?.textContent?.startsWith(title))
 const sidebar = () => Boolean($('.app__sidebar'))
 const dots = () => Boolean($('.threads-rail .threads-rail__dot'))
+const pinned = () => rows('.threads-pinned').map((li) => li.querySelector('.threads__title')?.textContent)
+const rightClick = (el: HTMLElement) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10, button: 2 }))
+const appSetting = async (key: string) => ((await window.superego.call('app', 'settings.watch', {})) as { value: { values: Record<string, unknown> } }).value.values[key]
 const menuItem = (text: string) => $$('.superego-menu .superego-menu__item').find((i) => i.textContent?.includes(text))
 
 let daemon: TestDaemon
@@ -120,4 +124,78 @@ it('draws a thread link in your message as the thread it names', async () => {
   ui = await mountUi({ window: true, extensions: [threads], machines: [daemon], select: { thread: thread.id } })
   await daemon.call('thread.send', { thread: thread.id, text: `From [this thread](thread:${thread.id}):\nsee` })
   await ui.until(() => Boolean($$('.msg--user').at(-1)?.querySelector('a.thread-ref')), 'the link drawn as a thread')
+})
+
+it('pins threads from every project and machine to the top, only there, and unpins them; archived, a thread leaves them', async () => {
+  const box = await testDaemon({ model: 'echo' })
+  try {
+    const elsewhere = join(daemon.dataDir, 'elsewhere')
+    await mkdir(elsewhere, { recursive: true })
+    const here = await daemon.thread(undefined, { title: 'here' })
+    const there = await daemon.thread(undefined, { title: 'there', cwd: elsewhere })
+    await daemon.thread(undefined, { title: 'stays', cwd: elsewhere })
+    const far = await box.thread(undefined, { title: 'far' })
+    ui = await mountUi({ window: true, extensions: [threads], machines: [daemon, daemonMachine(box, 'box', 'Build box')], select: { thread: there.id } })
+    await ui.until(() => Boolean(rowOf('here') && rowOf('there') && rowOf('far')), 'the threads listed')
+    expect($('.threads-pinned')).toBeNull()
+
+    // From a row's right-click menu, from the title bar, and from ⌘K's action.
+    rightClick(rowOf('far')!)
+    await ui.until(() => Boolean(menuItem('Pin')), 'the row menu')
+    menuItem('Pin')!.click()
+    await ui.until(() => pinned().join() === 'far', 'pinned, from the other machine')
+    expect(rowOf('far')).toBeUndefined()
+    expect(rowOf('far', '.threads-pinned')?.querySelector('.threads-pinned__where')?.textContent).toMatch(/Build box/)
+    $('.app__titlebar .thread__pin')!.click()
+    await ui.until(() => pinned().join() === 'far,there' && $('.app__titlebar .thread__pin')?.getAttribute('aria-pressed') === 'true', 'the shown one pinned from the title bar')
+    expect(rowOf('there')).toBeUndefined()
+    expect(rowOf('stays')).toBeDefined()
+    await ui.select({ thread: here.id })
+    await ui.key('mod+k')
+    await ui.until(() => Boolean($$('.palette__list li').find((li) => li.textContent?.includes('Pin thread'))), 'Pin thread in the palette')
+    expect($$('.palette__list li').some((li) => li.textContent?.includes('Unpin thread'))).toBe(false)
+    $$('.palette__list li').find((li) => li.textContent?.includes('Pin thread'))!.click()
+    await ui.until(() => pinned().join() === 'far,there,here', 'pinned from the palette, last')
+    expect(await appSetting('app.pins')).toEqual([{ machine: 'box', thread: far.id }, { machine: 'local', thread: there.id }, { machine: 'local', thread: here.id }])
+
+    // ⌘⇧] goes down the pinned first.
+    rowOf('far', '.threads-pinned')!.click()
+    await ui.until(() => titled() === 'far', 'far shown')
+    await ui.key('mod+shift+]')
+    await ui.until(() => titled() === 'there', 'down the pinned')
+
+    // Moved, then unpinned from the menu: back under its project.
+    await ui.dispatch('thread.pin', { machine: 'local', thread: there.id, at: 0 })
+    await ui.until(() => pinned().join() === 'there,far,here', 'moved first')
+    rightClick(rowOf('far', '.threads-pinned')!)
+    await ui.until(() => Boolean(menuItem('Unpin')), 'the pinned row menu')
+    menuItem('Unpin')!.click()
+    await ui.until(() => pinned().join() === 'there,here' && Boolean(rowOf('far')), 'unpinned, back in its project')
+
+    // Archived, it leaves the pins: unarchived, it's not pinned again.
+    await daemon.call('thread.archive', { thread: there.id })
+    await ui.until(() => pinned().join() === 'here', 'the archived one gone from Pinned')
+    await ui.until(async () => (await appSetting('app.pins') as unknown[]).length === 1, 'and from the pins')
+    await daemon.call('thread.unarchive', { thread: there.id })
+    await ui.until(() => Boolean(rowOf('there')), 'unarchived, under its project')
+    expect(pinned().join()).toBe('here')
+
+    // The navigator lists the pinned first, marked, then the projects with the rest.
+    await ui.key('mod+l')
+    await ui.until(() => Boolean($('.navigator__row')), 'the navigator')
+    const first = $('.navigator__row')!
+    expect(first.querySelector('.palette__title')?.textContent).toBe('here')
+    expect(first.querySelector('.navigator__pin')).not.toBeNull()
+    expect($$('.navigator__row--thread .palette__title').filter((t) => t.textContent === 'here')).toHaveLength(1)
+    await ui.key('escape')
+    await ui.until(() => !$('.navigator__row'), 'the navigator closed')
+
+    // The sidebar hidden, the rail's dots show the pinned first.
+    await ui.key('mod+/')
+    await ui.until(() => dots(), 'the dots')
+    expect($('.threads-rail__dot')!.getAttribute('aria-label')).toMatch(/^here,/)
+  } finally {
+    await ui?.unmount()
+    await box.close()
+  }
 })

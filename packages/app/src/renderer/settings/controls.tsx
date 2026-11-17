@@ -47,6 +47,8 @@ export function Setting({ setting, value, apply, mixed, note }: {
     case 'color': control = <ColorField label={setting.title} value={typeof value === 'string' ? value : String(setting.default ?? '')} fallback={String(setting.default ?? '')} disabled={disabled} onChange={set} onInvalid={setError} />; break
     case 'keymap': return <Keymap setting={setting} value={value} apply={apply} />
     case 'layout': control = <LayoutControl />; break
+    // Pinned and unpinned from the threads themselves, never in Settings.
+    case 'pins': return null
     case 'string': control = <TextField type={setting.secret ? 'password' : 'text'} aria-label={setting.title} defaultValue={typeof value === 'string' ? value : ''}
       placeholder={setting.placeholder} disabled={disabled} onBlur={(e) => set(e.target.value)} />; break
   }

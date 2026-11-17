@@ -76,4 +76,14 @@ describe('upsert', () => {
     await expect(settings.set('keys', { 'a.b': 'mod+ k' })).rejects.toMatchObject({ kind: 'invalid_setting' })
     await expect(settings.set('keys', { 'a.b': 3 })).rejects.toMatchObject({ kind: 'invalid_setting' })
   })
+
+  it('takes pins, each a thread by its machine and id', async () => {
+    const settings = new SettingsRegistry()
+    settings.register({ id: 'p', title: 'P', settings: [{ key: 'pins', title: 'Pinned threads', default: [], type: { type: 'pins' } }] })
+    await settings.set('pins', [{ machine: 'local', thread: 'a' }, { machine: 'box', thread: 'b' }])
+    expect(settings.get('pins')).toEqual([{ machine: 'local', thread: 'a' }, { machine: 'box', thread: 'b' }])
+    await expect(settings.set('pins', { machine: 'local', thread: 'a' })).rejects.toMatchObject({ kind: 'invalid_setting' })
+    await expect(settings.set('pins', [{ machine: 'local' }])).rejects.toMatchObject({ kind: 'invalid_setting' })
+    await expect(settings.set('pins', [null])).rejects.toMatchObject({ kind: 'invalid_setting' })
+  })
 })

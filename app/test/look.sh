@@ -1,6 +1,6 @@
 #!/bin/sh
 # The window's layout in the states the design covers, screenshotted:
-# `test/look.sh <dir> [look|focus|panes|composer|images|mcp|web|terminal|titlebar]` (look, unless given), each a script of
+# `test/look.sh <dir> [look|focus|panes|composer|images|mcp|web|terminal|titlebar|pins]` (look, unless given), each a script of
 # that name here:
 # - `look`: the sidebar shown, dragged and hidden, the thread alone and with panes, details, a phone; the first-launch
 #   page, ⌘N's dialog, Settings and its Keyboard;
@@ -12,14 +12,15 @@
 # - `web`: Settings → Web access, pairing and devices and each Tailscale state (a stub `tailscale` on PATH: the machine's
 #   own is never touched);
 # - `terminal`: the terminal pane, reloaded, and in a browser;
-# - `titlebar`: the title bar, a profile's card, the sidebar's heading.
+# - `titlebar`: the title bar, a profile's card, the sidebar's heading;
+# - `pins`: pinned threads at the top of the sidebar, a row's menu, the rail's dots.
 set -e
 cd "$(dirname "$0")/.."
 # A heavy check: it waits for a slot (../scripts/check.ts), is stopped after 8 minutes (SUPEREGO_SHOWCASE_TIMEOUT, in
 # seconds), and builds the app first if its sources changed.
 [ "$SUPEREGO_CHECK_COMMAND" = test/look.sh ] || exec node ../scripts/check.ts --timeout SUPEREGO_SHOWCASE_TIMEOUT=480 test/look.sh "$@"
 node scripts/build.ts
-OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|panes|composer|images|mcp|web|terminal|titlebar]}")" && pwd)/$(basename "$1")"
+OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|panes|composer|images|mcp|web|terminal|titlebar|pins]}")" && pwd)/$(basename "$1")"
 mkdir -p "$OUT"
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_HEADLESS=1 SUPEREGO_SHOWCASE_OUT="$OUT" SUPEREGO_REPLAY_SPEED=0 TZ=Europe/Copenhagen

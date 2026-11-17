@@ -1,19 +1,21 @@
-// threads: the Threads space in the sidebar. Projects (a repository or folder on a machine) and the threads in each; the machine is said on the project,
-// where it isn't this computer. Its views:
+// threads: the Threads space in the sidebar. The pinned threads first, from every project and machine, then projects (a
+// repository or folder on a machine) and the rest of the threads in each; the machine is said on the project, where it
+// isn't this computer. Its views:
 // - the list (`threads.list`), a space: sorted recently active, newest first, or needs you first (an app setting); with
 //   the sidebar hidden, a rail of status glyphs; the key to go anywhere (⌘L) beside its heading, while pointed at. A row's title is followed by other extensions' marks (the
-//   `thread.badge` slot: a worktree's branch, say)
+//   `thread.badge` slot: a worktree's branch, say); a right-click on it pins or unpins it, or archives it. Pinned
+//   rows are dragged to reorder them, and a project's row dragged among them is pinned there
 // - details (`threads.details`): what the thread runs with, spent and touched, then what other extensions say of it (the
 //   `details.section` slot: its MCP servers, say); beside it or not, ⌘I
 // - the model (`threads.model`), in the title bar: a button that shows or hides the details
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are thread-tools'.
-import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { Fragment, useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react'
 import {
-  call, defineAction, defineUiExtension, MachineDrift, RailButton, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
-  type MachineEntry, type Project, type Sort, type SpaceRailProps, type WindowContext,
+  call, defineAction, defineUiExtension, isPinned, MachineDrift, RailButton, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
+  type MachineEntry, type Pin, type Project, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, STATUS_WORDS, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
-import { CaretRightIcon, ChatsIcon, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
+import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, IconButton, List, ListItem, Menu, PlusIcon, StatusGlyph, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
 import { ago } from './ago.ts'
 import { registerLinks, registerRows } from './rows.tsx'
@@ -50,13 +52,12 @@ export default defineUiExtension({
 
 function Threads() {
   const machines = useMachines().filter((m) => m.state !== 'disabled')
-  const { projects, lastThread, hold } = useProjects()
+  const { projects, sidebar, lastThread, hold } = useProjects()
   const { selection, select } = useSelection()
   // While the pointer is over the list, rows keep their places: a thread changing state doesn't move under it. The
   // order is held for the whole window, so ⌘⇧[ and ⌘⇧] go down the rows as they stand.
   useEffect(() => () => hold(false), [])
 
-  const isOn = (project: Project, thread: ThreadInfo) => selection?.machine === project.machine.id && selection.thread === thread.id
   // The machine is a fact about a project, said where it isn't this computer (or there are several to tell apart).
   const several = machines.length > 1
   const where = (project: Project) => project.machine.state !== 'connected'
@@ -64,6 +65,8 @@ function Threads() {
     : several || project.machine.id !== 'local' ? project.machine.label : undefined
   const local = machines.find((m) => m.id === 'local')
   const ready = local?.state === 'connected'
+  // Going to a project goes to the thread last shown in it, pinned or not.
+  const whole = (project: Project) => projects.find((p) => p.key === project.key) ?? project
 
   return (
     <div className={`threads ${ready ? 'is-ready' : ''}`} data-focus-scope onPointerEnter={() => hold(true)} onPointerLeave={() => hold(false)}>
@@ -76,10 +79,11 @@ function Threads() {
         </span>
       </div>
       {projects.length === 0 && <div className="threads__empty">{ready ? 'Start a thread in a folder to see its project here.' : local?.state === 'connecting' || !local?.error ? 'Connecting…' : local.error}</div>}
-      {projects.map((project) => (
+      {sidebar.pinned.length > 0 && <Pinned where={(project) => [project.name, where(project)].filter(Boolean).join(' · ')} />}
+      {sidebar.projects.map((project) => (
         <section key={project.key} className={`threads-project ${project.machine.state !== 'connected' ? 'is-stale' : ''}`}>
           <div className="threads-project__head">
-            <button className="threads-project__name" title={project.root} onClick={() => showProject({ select, lastThread }, project)}>
+            <button className="threads-project__name" title={project.root} onClick={() => showProject({ select, lastThread }, whole(project))}>
               {project.name}
               {where(project) && <em>{where(project)}</em>}
               {project.machine.remote && <MachineDrift machine={project.machine} />}
@@ -87,22 +91,106 @@ function Threads() {
             <NewThreadButton label={`New thread in ${project.name}`} machine={project.machine} cwd={project.root} />
           </div>
           <List>
-            {project.threads.map((thread) => {
-              const level = project.depth[thread.id] ?? 0
-              return (
-                <ListItem key={thread.id} selected={isOn(project, thread)} leading={<StatusGlyph status={thread.status} />}
-                  {...(level ? { className: 'threads-child', style: { '--depth': level } as CSSProperties } : {})}
-                  trailing={waitingForSignIn(thread.status) ? <span className="threads__why threads__why--quiet">Waiting</span> : thread.status.state === 'blocked' ? <span className="threads__why">{STATUS_WORDS.blocked}</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">{STATUS_WORDS.error}</span> : ago(thread.activeAt)} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
-                  <span className="threads__title">{thread.title}</span>
-                  <Slot name="thread.badge" props={{ machine: project.machine, thread }} />
-                </ListItem>
-              )
-            })}
+            {project.threads.map((thread) => (
+              <ThreadRow key={thread.id} machine={project.machine} thread={thread} level={project.depth[thread.id] ?? 0}
+                selected={selection?.machine === project.machine.id && selection.thread === thread.id} />
+            ))}
           </List>
         </section>
       ))}
       <Archived machines={machines} live={projects} />
     </div>
+  )
+}
+
+/** What a dragged row carries: its thread, as a pin. */
+const DRAGGED = 'application/x-superego-thread'
+
+/**
+ * The pinned threads, from every project and machine, in the order they were pinned, each saying where it is. Dragged,
+ * a row moves; a project's row dropped here is pinned where it's dropped.
+ */
+function Pinned({ where }: { where(project: Project): string }) {
+  const { sidebar } = useProjects()
+  const { selection } = useSelection()
+  const dispatch = useDispatch()
+  // The gap a drop would land in: before the row at this index (the count: after the last).
+  const [gap, setGap] = useState<number>()
+  const gapAt = (event: DragEvent) => {
+    const row = (event.target as HTMLElement).closest<HTMLElement>('[data-pin]')
+    if (!row) return sidebar.pinned.length
+    const box = row.getBoundingClientRect()
+    return Number(row.dataset.pin) + (event.clientY > box.top + box.height / 2 ? 1 : 0)
+  }
+  const over = (event: DragEvent) => {
+    if (!event.dataTransfer.types.includes(DRAGGED)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setGap(gapAt(event))
+  }
+  const drop = (event: DragEvent) => {
+    const raw = event.dataTransfer.getData(DRAGGED)
+    setGap(undefined)
+    if (!raw) return
+    event.preventDefault()
+    const pin = JSON.parse(raw) as Pin
+    // Where it lands among the others: past its own place, one less.
+    const from = sidebar.pinned.findIndex(({ project, thread }) => project.machine.id === pin.machine && thread.id === pin.thread)
+    const to = gapAt(event)
+    const at = from >= 0 && from < to ? to - 1 : to
+    if (from === at) return
+    void dispatch('thread.pin', { ...pin, at }, { source: 'threads' }).catch((error) => console.error(error))
+  }
+  return (
+    <section className="threads-project threads-pinned" onDragOver={over} onDrop={drop} onDragLeave={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setGap(undefined)
+    }}>
+      <div className="threads-project__head"><span className="threads-project__name">Pinned</span></div>
+      <List>
+        {sidebar.pinned.map(({ project, thread }, index) => (
+          <ThreadRow key={`${project.machine.id}/${thread.id}`} machine={project.machine} thread={thread} where={where(project)}
+            selected={selection?.machine === project.machine.id && selection.thread === thread.id}
+            className={`${project.machine.state !== 'connected' ? 'is-stale' : ''} ${gap === index ? 'is-drop-before' : ''} ${gap === index + 1 && index === sidebar.pinned.length - 1 ? 'is-drop-after' : ''}`}
+            data-pin={index} />
+        ))}
+      </List>
+    </section>
+  )
+}
+
+/**
+ * A thread's row: its status, title and marks (`thread.badge`), why it waits or when it was last active; pinned, where
+ * it is too. A right-click pins or unpins it, or archives it; it can be dragged into the pinned.
+ */
+function ThreadRow({ machine, thread, selected, level = 0, where, className = '', ...data }: {
+  machine: MachineEntry; thread: ThreadInfo; selected: boolean; level?: number; where?: string; className?: string; 'data-pin'?: number
+}) {
+  const { select } = useSelection()
+  const { pins } = useProjects()
+  const dispatch = useDispatch()
+  const archiveKeys = useShortcut('thread.archive')
+  const at = { machine: machine.id, thread: thread.id }
+  const on = isPinned(pins, at)
+  const run = (id: string, options: { machine?: string } = {}) => () =>
+    void dispatch(id, id === 'thread.archive' ? { thread: thread.id } : at, { source: 'threads', ...options }).catch((error) => console.error(error))
+  return (
+    <ContextMenu.Root>
+      <ContextMenu.Trigger>
+        <ListItem selected={selected} leading={<StatusGlyph status={thread.status} />} draggable {...data}
+          className={`${level ? 'threads-child' : ''} ${className}`} {...(level ? { style: { '--depth': level } as CSSProperties } : {})}
+          onDragStart={(event) => { event.dataTransfer.setData(DRAGGED, JSON.stringify(at)); event.dataTransfer.effectAllowed = 'move' }}
+          trailing={waitingForSignIn(thread.status) ? <span className="threads__why threads__why--quiet">Waiting</span> : thread.status.state === 'blocked' ? <span className="threads__why">{STATUS_WORDS.blocked}</span> : thread.status.state === 'error' ? <span className="threads__why threads__why--error">{STATUS_WORDS.error}</span> : ago(thread.activeAt)}
+          onClick={() => select(at)}>
+          <span className="threads__title">{thread.title}</span>
+          <Slot name="thread.badge" props={{ machine, thread }} />
+          {where && <em className="threads-pinned__where">{where}</em>}
+        </ListItem>
+      </ContextMenu.Trigger>
+      <ContextMenu.Popup className="threads-row-menu">
+        <Menu.Item onClick={run(on ? 'thread.unpin' : 'thread.pin')}>{on ? 'Unpin' : 'Pin'}</Menu.Item>
+        <Menu.Item onClick={run('thread.archive', { machine: machine.id })} hint={archiveKeys}>Archive</Menu.Item>
+      </ContextMenu.Popup>
+    </ContextMenu.Root>
   )
 }
 
@@ -200,11 +288,11 @@ function Options() {
 
 /**
  * In the window's rail: Threads, lit while they're the open space. A click hides the sidebar, the threads then status
- * dots here, and shows the list again; with another space open (or none: Settings, Ego's thread), it shows the list.
+ * dots here (the pinned first, as the list has them), and shows the list again; with another space open (or none: Settings, Ego's thread), it shows the list.
  * Something unread you can't see from here shows as a dot on the button, in the most pressing one's colour.
  */
 function ThreadsRail({ open, sidebarHidden, show }: SpaceRailProps) {
-  const { projects } = useProjects()
+  const { projects, sidebar } = useProjects()
   const { selection, select } = useSelection()
   const hidden = open && sidebarHidden
   const toggleKeys = useShortcut(SIDEBAR)
@@ -212,7 +300,11 @@ function ThreadsRail({ open, sidebarHidden, show }: SpaceRailProps) {
   const waiting = unreadList(projects, selection).map(({ thread }) => thread.status)
   const badge = !hidden && waiting.length ? rollup(waiting).state : undefined
   const click = () => show(!open || hidden)
-  const isOn = (project: Project, thread: ThreadInfo) => selection?.machine === project.machine.id && selection.thread === thread.id
+  // As the sidebar lists them: the pinned first, then each project's.
+  const groups = [
+    ...(sidebar.pinned.length ? [{ key: 'pinned', threads: sidebar.pinned }] : []),
+    ...sidebar.projects.map((project) => ({ key: project.key, threads: project.threads.map((thread) => ({ project, thread })) })),
+  ]
   return (
     <TooltipProvider>
       <Tooltip content={!open ? `Show Threads${tabKeys ? ` (${tabKeys})` : ''}` : `${hidden ? 'Show sidebar' : 'Hide sidebar'}${toggleKeys ? ` (${toggleKeys})` : ''}`} side="right">
@@ -223,12 +315,12 @@ function ThreadsRail({ open, sidebarHidden, show }: SpaceRailProps) {
       </Tooltip>
       {hidden && (
         <nav className="threads-rail" aria-label="Threads">
-          {projects.map((project, index) => (
-            <div key={project.key} className="threads-rail__group">
+          {groups.map((group, index) => (
+            <div key={group.key} className="threads-rail__group">
               {index > 0 && <div className="threads-rail__sep" />}
-              {project.threads.map((thread) => (
-                <Tooltip key={thread.id} side="right" content={<>{thread.title}<small className="threads-rail__tipnote">{waitingForSignIn(thread.status) || thread.status.state === 'blocked' ? statusLabel(thread.status) : ago(thread.activeAt)}</small></>}>
-                  <button className={`threads-rail__dot ${isOn(project, thread) ? 'is-on' : ''} ${project.machine.state !== 'connected' ? 'is-stale' : ''}`}
+              {group.threads.map(({ project, thread }) => (
+                <Tooltip key={`${project.machine.id}/${thread.id}`} side="right" content={<>{thread.title}<small className="threads-rail__tipnote">{waitingForSignIn(thread.status) || thread.status.state === 'blocked' ? statusLabel(thread.status) : ago(thread.activeAt)}</small></>}>
+                  <button className={`threads-rail__dot ${selection?.machine === project.machine.id && selection.thread === thread.id ? 'is-on' : ''} ${project.machine.state !== 'connected' ? 'is-stale' : ''}`}
                     aria-label={`${thread.title}, ${statusLabel(thread.status)}`} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
                     <StatusGlyph status={thread.status} />
                   </button>

@@ -72,6 +72,7 @@ declare module '@phosphor-icons/react/dist/csr/NotePencil' { export const NotePe
 declare module '@phosphor-icons/react/dist/csr/Paperclip' { export const PaperclipIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Pause' { export const PauseIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/PencilSimple' { export const PencilSimpleIcon: import('@phosphor-icons/react').Icon }
+declare module '@phosphor-icons/react/dist/csr/PushPin' { export const PushPinIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Plug' { export const PlugIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/PlugsConnected' { export const PlugsConnectedIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Plus' { export const PlusIcon: import('@phosphor-icons/react').Icon }

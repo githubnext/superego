@@ -1,4 +1,4 @@
-// The thread in the window's title bar: where it is and what it's called (renamed in place), its archive buttons
+// The thread in the window's title bar: where it is and what it's called (renamed in place), its pin and archive buttons
 // (thread-actions.tsx), and what's said about it at the right (where it runs, its profile, extensions' chips, the pane
 // menu).
 import { useRef } from 'react'
@@ -9,13 +9,13 @@ import { useRegistry } from './registry.tsx'
 import { paneMenu, PlacedViews, Slot, useLayout } from './placement.tsx'
 import { ViewContextPopup, withContextMenu } from './view-menu.tsx'
 import { ThreadRef } from './thread-ref.tsx'
-import { ArchiveButton, UnarchiveButton } from './thread-actions.tsx'
+import { ArchiveButton, PinButton, UnarchiveButton } from './thread-actions.tsx'
 import { ProfileChip } from './profile-card.tsx'
 import { startRename, stopRename, useRenaming } from './rename.ts'
 
 /**
  * Where you are, in the window's title bar: the thread's project (and machine, where it isn't this one), then its status
- * and title, with buttons to rename it (or the name being edited) and to archive it (not an extension's own hidden
+ * and title, with buttons to rename it (or the name being edited), to pin it and to archive it (not an extension's own hidden
  * thread, which that extension looks after), or, archived, to bring it back.
  */
 export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
@@ -35,6 +35,7 @@ export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread
             <IconButton label="Rename" className="titlebar__action" onClick={() => startRename(machine.id, thread.id)}>
               <PencilSimpleIcon size={13} aria-hidden />
             </IconButton>
+            <PinButton machine={machine} thread={thread} className="titlebar__action" />
             {!thread.archived && <ArchiveButton machine={machine} thread={thread} className="titlebar__action" />}
           </>
         )}
