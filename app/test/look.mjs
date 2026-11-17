@@ -1,6 +1,6 @@
 // Screenshots of the window's layout (run by test/look.sh): the sidebar shown and hidden (the threads as dots); the thread
 // alone (and dragged narrower) and with Changes beside it (and a file past it); a long title, parent and branch; thread
-// details, their menu and the layout's file beside the thread; a phone, its drawer open, a data view in it, the thread's sheet; a data view
+// details, their menu and the layout's file beside the thread; ⌘U's unread list; a phone, its drawer open, a data view in it, the thread's sheet; a data view
 // as a space; the first-launch page, ⌘N's dialog, Settings and its Keyboard; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
 import { openApp } from './harness.mjs'
 import { threads } from './showcase/threads.mjs'
@@ -44,6 +44,13 @@ await openApp({ name: 'look', timeout: 180_000 }, async (t) => {
     }
   }
   await both('open')
+  // ⌘U: the unread threads (the one left unseen), to pick one.
+  await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'u', metaKey: true, bubbles: true }))`)
+  await until(`!!document.querySelector('.unread-list .unread-list__title')`, 'the unread list')
+  await t.settled()
+  await both('unread')
+  await run(`document.querySelector('.unread-list .palette__input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
+  await until(`!document.querySelector('.unread-list')`, 'the unread list closed')
   // A right-click on a space in the rail: its menu.
   await run(`(() => { const b = document.querySelector('.app__rail .superego-context[data-view="threads.list"] button'); const r = b.getBoundingClientRect()
     b.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })) })()`)

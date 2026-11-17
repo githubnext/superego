@@ -5,7 +5,7 @@
 // The editor pane is this; a profile's own panes use it too (the obsidian profile's notes). Its links, rendered or in
 // live preview, are followed by the link handlers, as a message's are: a thread's profile can claim them its own way.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { history, historyKeymap, standardKeymap } from '@codemirror/commands'
+import { history, historyKeymap, redo, standardKeymap, undo } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { foldGutter, HighlightStyle, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
@@ -55,11 +55,11 @@ const MODES: { mode: Mode; label: string }[] = [{ mode: 'rendered', label: 'Rend
 const places = new Map<string, { top: number; anchor: number; head: number }>()
 /**
  * The editor's keys: typing's own (moving, selecting, deleting, Enter, select all, macOS's Ctrl ones), undo and redo,
- * and find. Not CodeMirror's other defaults (⌘/ comment, ⌘L select line, ⌘I, ⌘[ ⌘], ⌥↑ ⌥↓, …): those keys are the
- * app's, and an editor with the focus would otherwise keep them from it.
+ * and find. Not CodeMirror's other defaults (⌘/ comment, ⌘L select line, ⌘I, ⌘[ ⌘], ⌥↑ ⌥↓, ⌘U ⌘⇧U undo and redo a
+ * selection, …): those keys are the app's, and an editor with the focus would otherwise keep them from it.
  */
 const EDITING_KEYS = [
-  ...standardKeymap, ...historyKeymap,
+  ...standardKeymap, ...historyKeymap.filter((binding) => binding.run === undo || binding.run === redo),
   { key: 'Mod-f', run: openSearchPanel, scope: 'editor search-panel' },
   { key: 'Mod-g', run: findNext, shift: findPrevious, scope: 'editor search-panel', preventDefault: true },
   { key: 'Escape', run: closeSearchPanel, scope: 'editor search-panel' },

@@ -86,6 +86,7 @@ project    a git repository (its worktrees too) or a folder, on a machine
 | `⌘P` | Open a file in the thread's folder |
 | `⌘N` | New thread |
 | `⌘⇧N` | New window |
+| `⌘U` | Unread threads: what needs you, then what failed, then what finished, to type a few letters of one and go there (the bell opens it too) |
 | `⌘.` | Next unread thread (everywhere, or in this project: Settings → Unread) |
 | `⌘⇧[` `⌘⇧]` | Previous / next thread: up or down the sidebar's rows as shown (threads a thread started sit under it), across projects and around |
 | `⌘[` `⌘]` | Back / forward through the threads (and Settings) this window has shown, as a browser goes; the arrows in the title bar and the mouse's back and forward buttons too |
@@ -131,7 +132,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `extensions/web-panes` | Preview, a web page beside the thread (a link it names, opened beside), and Artifact, an HTML file the agent wrote, sandboxed (UI only; the window tells each machine its panes) |
 | `extensions/files` | the file tree beside the editor and quick open (`⌘P`) (daemon + UI) |
 | `extensions/images` | a `show_images` tool; the images in the thread, as one, a grid or a carousel, and a lightbox to zoom (daemon + UI) |
-| `extensions/unread` | the bell with what agents have for you that you haven't seen (in the rail when the sidebar isn't there, beside Settings on a phone), most pressing first; `⌘.` to the next, everywhere or in this project (UI only) |
+| `extensions/unread` | what agents have for you that you haven't seen, most pressing first: `⌘U` lists it to pick from, as does the bell (in the rail when the sidebar isn't there, beside Settings on a phone); `⌘.` to the next, everywhere or in this project (UI only) |
 | `extensions/links` | ⌃O: the links in the thread, newest first, fuzzy filtered; ⏎ follows one, ⌘⏎ opens it in a pane, ⌃1–9 / ⌃⌘1–9 the first nine (UI only) |
 | `extensions/skills` | skills from `~/.agents/skills`: what each is for in the prompt, `$name` completed in the composer and sent with the message, a chip under it, and a data view listing them (daemon + UI) |
 | `extensions/suggestions` | after each answer, a side call to the thread's model for what you might send next; offered over the composer, numbered; ←/→ pick, ⏎ sends, ⇥ takes it to change, ⌃1–9 send that one (daemon + UI) |

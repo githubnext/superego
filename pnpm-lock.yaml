@@ -720,6 +720,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
+      '@superego/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
       '@types/react':
         specifier: ^19
         version: 19.3.0

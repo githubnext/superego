@@ -3,7 +3,22 @@
 .unread-button--done { color: var(--superego-accent); }
 .unread-button--blocked { color: var(--superego-status-blocked); }
 .unread-button--error { color: var(--superego-status-error); }
-.unread-menu { max-width: 360px; }
-.unread-menu__row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.unread-menu__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .unread-button--rail { padding: 3px 5px; }
+
+/* ⌘U: the unread threads, two lines each: the title and where it is, then the recap or question. */
+.unread-list .palette__list li { height: auto; min-height: 34px; padding: 6px 10px; align-items: flex-start; }
+.unread-list .palette__glyph, .unread-list .palette__detail { line-height: 20px; }
+.unread-list .palette__title { display: flex; flex-direction: column; gap: 1px; }
+.unread-list__head { display: flex; align-items: baseline; gap: var(--superego-space-2); min-width: 0; line-height: 20px; }
+.unread-list__title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unread-list__where, .unread-list__msg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--superego-muted); font-size: var(--superego-text-sm); }
+.unread-list__where { flex: 0 10 auto; }
+.unread-list li.is-active :is(.unread-list__where, .unread-list__msg) { color: inherit; opacity: .8; }
+
+/* ⌘U with nothing unread: said for a moment where the list would be. */
+.unread-none {
+  position: fixed; z-index: 51; left: 50%; top: 12vh; transform: translateX(-50%); padding: 8px 14px; border-radius: 999px;
+  background: var(--superego-bg); color: var(--superego-muted); font-size: var(--superego-text-sm); box-shadow: var(--superego-shadow-float);
+  animation: unread-none 1.5s ease both; pointer-events: none;
+}
+@keyframes unread-none { 0% { opacity: 0; transform: translate(-50%, 4px); } 12%, 75% { opacity: 1; transform: translateX(-50%); } 100% { opacity: 0; } }

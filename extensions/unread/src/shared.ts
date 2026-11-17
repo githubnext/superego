@@ -2,7 +2,7 @@
 // `about` among its extensions.
 import type { ExtensionAbout } from '@superego/protocol'
 
-export const about = { name: 'unread', version: '1.0.0', api: '^3', title: 'Unread', description: 'What agents have for you that you haven\'t seen: a bell with a count, and ⌘. to go to the next.' } satisfies ExtensionAbout
+export const about = { name: 'unread', version: '1.0.0', api: '^3', title: 'Unread', description: 'What agents have for you that you haven\'t seen: ⌘U and a bell with a count list them to pick from, and ⌘. goes to the next.' } satisfies ExtensionAbout
 
 /** App setting: where ⌘. looks for the next unread thread (`Scope`). */
 export const SCOPE = 'unread.scope'

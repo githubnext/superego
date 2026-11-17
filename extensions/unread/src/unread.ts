@@ -1,5 +1,6 @@
-// Where ⌘. goes: the next thread in the unread list (the window's `unreadList`, the one rule), in the sidebar's order.
-import { unreadList, type Selection, type Project } from '@superego/app/ui'
+// Where ⌘. goes: the next thread in the unread list (the window's `unreadList`, the one rule), in the sidebar's order;
+// and what ⌘U's list of them shows and matches.
+import { score, unreadList, type Selection, type Project } from '@superego/app/ui'
 import type { Scope } from './shared.ts'
 
 /**
@@ -17,4 +18,29 @@ export function nextUnread(projects: Project[], selection: Selection | undefined
     if (unread.has(key(next.machine, next.thread))) return next
   }
   return undefined
+}
+
+/** One row of the unread list: a thread, its machine and its project. */
+export type Unread = ReturnType<typeof unreadList>[number]
+
+/** The unread threads that match what's typed (in the title, project, machine or status message), in the list's order. */
+export function filterUnread(list: readonly Unread[], query: string): readonly Unread[] {
+  if (!query.trim()) return list
+  return list.filter(({ project, thread }) => score(`${thread.title} ${project.name} ${project.machine.label} ${thread.status.msg ?? ''}`, query) > 0)
+}
+
+/** A status message (Markdown, a line or a few) as one short line: its marks and line breaks gone, cut at `max`. */
+export function shorten(message: string, max = 120): string {
+  const line = message.replace(/[`*_#>|[\]]/g, '').replace(/\s+/g, ' ').trim()
+  return line.length > max ? `${line.slice(0, max - 1).trimEnd()}…` : line
+}
+
+/** How long ago, briefly: now, 5m, 2h, 3d. */
+export function ago(at: number, now = Date.now()): string {
+  const minutes = Math.floor((now - at) / 60_000)
+  if (!Number.isFinite(minutes)) return ''
+  if (minutes < 1) return 'now'
+  if (minutes < 60) return `${minutes}m`
+  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)}h`
+  return `${Math.floor(minutes / 60 / 24)}d`
 }
