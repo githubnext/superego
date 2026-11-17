@@ -1,6 +1,6 @@
 # Working on Superego itself
 
-New to this? Start with [the guide](guide.md) (`superego --skill guide`): the big picture, a first extension end to end, and a cheat sheet.
+New to this? Start with [the guide](guide.md) (`superego --skill guide`): the big picture, a first extension end to end, and testing; and [the cheat sheet](cheatsheet.md) of both halves.
 
 For changes to the Superego repository (github.com/githubnext/superego): the core, or an extension bundled with the app.
 A profile is the way to extend Superego for a project or for yourself; bundle an extension only when every Superego
@@ -90,7 +90,7 @@ export.
 Bundled extensions get more than a profile's:
 
 - **Views in the window's places**, not only a thread's: `superego.view(id, { title, icon, context, fits, default,
-  narrow, withoutSpaces, order, component })` (see "Views and the layout" in `guide.md`). A `space`
+  narrow, withoutSpaces, order, component })` (see [Views and the layout](window.md#views-and-the-layout)). A `space`
   is a rail button (its `icon`, or its own `railButton` component, told `sidebarHidden`) and the sidebar while open;
   `rail` is a button there that
   isn't a space (Ego's, `order: 10`); `drawer` the foot of a phone's drawer, beside Settings; `titlebar` the title
@@ -129,12 +129,11 @@ Bundled extensions get more than a profile's:
   (its manifest), and tells clients again whenever that changes, so `has(machine, 'ext:orders')` says whether a
   machine has it now (a profile's once the profile loads). Watching a value needs no check: it's null until the extension publishes it. The window draws
   none of the UI half for threads on a machine that runs the extension at another major than `about.version`'s; a
-  minor it relies on, check with `has(machine, 'ext:orders@^1.2')`. See "Versions and compatibility" in the guide
-  (`guide.md`).
+  minor it relies on, check with `has(machine, 'ext:orders@^1.2')`. See [Versions and compatibility](lifecycle.md#versions-and-compatibility).
 
 ## Tests
 
-Use `superego/testing` (`@superego/sdk/testing`; "Testing" in `guide.md`): `testDaemon({ extensions:
+Use `superego/testing` (`@superego/sdk/testing`; [Testing](guide.md#testing)): `testDaemon({ extensions:
 [yours], model: [callTool(…), say(…)] })` runs the daemon half against a real daemon with a scripted model, and
 `mountUi({ extensions: [yours], machines: [fakeMachine({ … }) or daemonMachine(daemon)] })` the UI half in the window's
 own registry and shell. No test opens a daemon by hand: `extensions/tasks/test/daemon.test.ts` is a short one to copy,

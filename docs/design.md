@@ -66,7 +66,7 @@ browser ──ws── daemon (hub) ──ssh/via── daemon (box)        agen
 The protocol version is a **generation** (now 2); peers of one generation negotiate by `features`, not by version.
 Within a generation the core only grows: `RELEASED` (`packages/protocol/src/released.ts`) names what it released, and
 `released-actions.json` the params of its actions; a test fails when a daemon no longer answers one or an action's
-params break a caller. The skew policy is in the skill's guide (`superego --skill guide`, "The skew policy").
+params break a caller. The skew policy is in the skill (`superego --skill lifecycle`, "The skew policy").
 
 Reads and streams (`*.list`, `*.watch`) are plain methods. Everything that changes something is an **action**: an id,
 a params schema, where it runs (`window`, `app` or `machine`), who may call it (`expose`), a default shortcut. One

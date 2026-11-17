@@ -20,6 +20,24 @@ machine   a daemon (this computer, or one reached over ssh)
 Everything the app does is an **action** with an id (`thread.start`, `pane.open`, `vault.graph`). The command line,
 the window, keyboard shortcuts and extensions all run actions. `superego actions` lists what a machine offers.
 
+## What to read for a task
+
+Each topic fits in one read: `superego --skill <topic>`, or the file beside this one.
+
+| To… | Read |
+|---|---|
+| give an agent a tool or a prompt section | [tools.md](tools.md) |
+| add a pane beside the thread | [guide.md](guide.md#a-first-extension-end-to-end), then [ui.md](ui.md) |
+| show a view with no UI code (blocks from the daemon) | [window.md](window.md#data-only-views) |
+| put a mark on threads in the sidebar | [ui.md](ui.md#a-mark-in-the-sidebar), with [daemon.md](daemon.md#watching-tool-calls) |
+| draw a board of threads | [ui.md](ui.md#reading-threads) |
+| add an action, a shortcut or a live value | [daemon.md](daemon.md), the [cheat sheet](cheatsheet.md) |
+| test it | [guide.md](guide.md#testing), [tools.md](tools.md#testing-a-tool) |
+| write a profile | [profiles.md](profiles.md) |
+| hand work to other threads, or write a lead profile | [thread-tools.md](thread-tools.md) |
+| act as a thread starts, ends a run or is archived | [lifecycle.md](lifecycle.md#a-threads-life) |
+| find out why it doesn't load or show | [debugging.md](debugging.md) |
+
 ## Extending Superego: start with `extension new`
 
 To give agents a tool, or the window a pane or a view, scaffold a working extension and change it. Don't start from a
@@ -71,10 +89,14 @@ This is the overview. Each topic is a file beside this one (`guide.md`, `ui.md`,
 
 | Topic | Read it when |
 |---|---|
-| `guide` | building an extension: the big picture, one end to end, testing, a cheat sheet of both halves, and examples (`examples/` beside it) |
+| `guide` | building an extension: the big picture, one end to end, the build-queue examples (`examples/` beside it), testing |
+| `cheatsheet` | looking up what either half of an extension can register, a line each |
+| `window` | placing views (spaces, beside the thread, the pane menu, the header), data-only views, links, window events |
+| `lifecycle` | teardown and what needs cleaning up, a thread's hooks (`starting`, `archived`, …), versions and compatibility |
 | `cli` | starting and scripting threads, machines, settings, actions, the daemon |
 | `profiles` | writing `profile.ts`: model, prompt, extensions, panes, allowing, `extends`, when changes apply |
 | `tools` | giving an agent tools and prompt sections (`defineExtension`, `defineTool`, `section`) |
+| `thread-tools` | an agent that starts, reads, messages and archives threads: parameters, reports, worktrees, a lead profile |
 | `daemon` | an extension's daemon half: actions, live values, a thread's blocked status, reaching threads |
 | `ui` | an extension's UI half: panes, slots, tool renderers, reading threads, hooks and components from `superego/ui` |
 | `bundled` | working on Superego itself: a bundled extension in `extensions/`, tests, typecheck |

@@ -1,6 +1,6 @@
 # The daemon half
 
-New to this? Start with [the guide](guide.md) (`superego --skill guide`): the big picture, a first extension end to end, and a cheat sheet.
+New to this? Start with [the guide](guide.md) (`superego --skill guide`): the big picture, a first extension end to end, and testing; and [the cheat sheet](cheatsheet.md) of both halves.
 
 An extension's daemon half runs in the machine's daemon, next to the agents. Beyond tools, it can define **actions** (intents
 the UI and the command line run, and Ego lists), **methods** (reads a pane or list calls), publish **live values** (state

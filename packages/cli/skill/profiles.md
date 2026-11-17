@@ -58,11 +58,12 @@ that loads with one anyway (a key no extension here reads, a `without` naming no
 - **`panes`** describes each pane kind the UI registers, so the agent knows it can open one and with which params.
 - **`without`** takes the names of optional extensions, the ones Settings → Extensions lists (and `superego
   extensions`): the core's `coding-tools` (read, write, edit, bash), `panes` (pane_open) and `agents-md`, and bundled
-  ones such as `thread-tools` (thread_start, thread_read, …), `agent-ui`, `terminal` or `mcp-servers`. Its threads get
+  ones such as `thread-tools` (thread_start, thread_read, …: [thread-tools.md](thread-tools.md)), `agent-ui`, `terminal` or `mcp-servers`. Its threads get
   none of their tools or prompt sections, and the window shows none of their UI there. Required ones (the
   sidebar) can't be left out.
 - **`options`** is what its threads ask extensions for, by name, as `thread.start`'s `options` (a thread's own win):
-  `{ worktrees: true }` gives each a git worktree of its own, in a git repository.
+  `{ worktrees: true }` gives each a git worktree of its own, in a git repository. Not the threads they start: those
+  take their own profile's ([thread-tools.md](thread-tools.md#what-a-child-gets)).
 - **Extensions' keys.** Besides these, a profile takes keys a bundled extension registers (`superego.profileKey`,
   [daemon.md](daemon.md); `defineProfile`'s type lists them); that extension checks them as the profile loads (a problem fails it) and merges them over
   `extends`. The one bundled: **`mcpServers`**, the `mcp-servers` extension's, a list of the MCP servers its threads

@@ -71,7 +71,7 @@ const pageBlocks = async () => (await Promise.all((await readdir(SKILL)).filter(
 
 it("finds the pages' blocks, each checked or skipped on purpose", async () => {
   const blocks = await pageBlocks()
-  expect(blocks.filter((b) => b.page === 'guide.md').length).toBeGreaterThan(10)
+  expect(blocks.filter((b) => b.page === 'guide.md').length).toBeGreaterThan(5)
   for (const block of blocks) expect(['module', 'daemon', 'ui', 'skip'], `the check at ${block.page}:${block.line}`).toContain(block.mode)
 })
 

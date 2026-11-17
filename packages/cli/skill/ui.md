@@ -1,6 +1,6 @@
 # The UI half
 
-New to this? Start with [the guide](guide.md) (`superego --skill guide`): the big picture, a first extension end to end, and a cheat sheet.
+New to this? Start with [the guide](guide.md) (`superego --skill guide`): the big picture, a first extension end to end, and testing; and [the cheat sheet](cheatsheet.md) of both halves.
 
 A profile's UI runs in the window, for that profile's threads only (on the machine it came from): panes, things beside
 a thread, and how its tool calls look in the transcript. List modules in the profile's `ui`; each default-exports

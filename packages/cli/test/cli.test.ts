@@ -293,7 +293,7 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     expect(await superego(['--skill', 'profiles'])).toMatch(/^# Profiles\n/)
     // The guide is one of them (skill.test.ts checks the pages link only to what ships beside them).
     expect(await superego(['--skill', 'guide'])).toMatch(/^# Writing extensions\n/)
-    await expect(superego(['--skill', 'nope'])).rejects.toThrow(/Topics: bundled, cli/)
+    await expect(superego(['--skill', 'nope'])).rejects.toThrow(/Topics: bundled, cheatsheet, cli/)
   })
 
   it('tells which profile extension commands act on: the one you are in, else the default, else how to pick', async () => {
