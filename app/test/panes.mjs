@@ -3,6 +3,9 @@
 // by its shortcut; a pane maximized in each, and restored (Esc, a double click, another pane opening). Checks on the way that a stack never passes the window's edge, and that the last pane's handle is
 // clear of it and drags the pane wider. Light and dark, into
 // $SUPEREGO_SHOWCASE_OUT.
+import { execFileSync } from 'node:child_process'
+import { appendFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { openApp } from './harness.mjs'
 import { threads } from './showcase/threads.mjs'
 
@@ -169,4 +172,27 @@ await openApp({ name: 'panes', timeout: 240_000 }, async (t) => {
   // Its shortcut toggles it back.
   await key({ key: '|', code: 'Backslash', metaKey: true, shiftKey: true })
   await until(`!document.querySelector('.panes--stack')`, 'scrolled again')
+
+  // Changes in a worktree thread: since main by default, its picker offering the uncommitted and the staged too; the
+  // base picked kept in the pane's params.
+  const { id: branchId } = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(project)}, options: { worktrees: true }, title: 'On a branch' })`)
+  const cwd = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${branchId}').cwd)`)
+  const git = (...args) => execFileSync('git', ['-C', cwd, '-c', 'user.name=x', '-c', 'user.email=x@x', ...args])
+  appendFileSync(join(cwd, 'README.md'), '\nCommitted on the branch.\n')
+  git('commit', '-qam', 'branch work')
+  writeFileSync(join(cwd, 'NOTES.md'), 'Staged.\n')
+  git('add', 'NOTES.md')
+  appendFileSync(join(cwd, 'README.md'), 'Not committed yet.\n')
+  await until(`([...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('On a branch'))?.click(), document.querySelector('.thread__title')?.title === 'On a branch')`, 'the branch thread shown')
+  await run(`window.superego.call('local', 'pane.open', { thread: '${branchId}', kind: 'diff' })`)
+  await until(`document.querySelector('.git-base')?.textContent.startsWith('Since ')`, 'Changes since main')
+  await run(`document.querySelector('.git-base').click()`)
+  await until(`document.querySelectorAll('.superego-menu__item').length === 3`, 'the base picker')
+  const bases = await items('.superego-menu')
+  if (!same(bases.slice(0, 2), ['Uncommitted', 'Staged']) || !bases[2].startsWith('Since ')) t.fail(`bases: Uncommitted, Staged, Since main, not ${bases}`)
+  await both('changes-base')
+  await run(`[...document.querySelectorAll('.superego-menu__item')].find((i) => i.textContent.startsWith('Staged')).click()`)
+  await until(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${branchId}').panes[0].params?.base === 'staged')`, 'staged kept in the pane')
+  await until(`!document.querySelector('.superego-menu') && document.querySelector('.git-base')?.textContent === 'Staged' && document.querySelectorAll('.diff-file').length === 1`, 'the staged changes')
+  await both('changes-staged')
 })

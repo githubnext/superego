@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Changes can show what's uncommitted, what's staged, everything since the branch left main, or since its upstream:
+  pick it in the pane's header. A thread on a branch opens on "Since main".
+
 ## 0.1.2
 
 **Upgrading:** extensions now need `api: '^3'`. A profile's own extensions that still ask for `^2` won't load until
