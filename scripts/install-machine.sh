@@ -61,6 +61,7 @@ if [[ -n $release && $(uname -s) == Darwin ]]; then
   fi
   # The CLI the app's Settings installs: the app's Electron, run as Node.
   mkdir -p "$bin"
+  rm -f "$bin/superego" # Not through a symlink (to a checkout's app/bin/superego.ts, as `pnpm link:cli` makes).
   cat > "$bin/superego" << EOF
 #!/bin/sh
 # Written by scripts/install-machine.sh --release
@@ -107,6 +108,7 @@ rm -rf app/out/main app/out/preload
 
 # A wrapper, not a symlink: ssh runs `superego connect --start` in a non-login shell, where mise hasn't set up PATH.
 mkdir -p "$bin"
+rm -f "$bin/superego"
 cat > "$bin/superego" << EOF
 #!/bin/sh
 # Written by $dir/scripts/install-machine.sh
