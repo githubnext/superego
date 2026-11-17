@@ -20,6 +20,7 @@ import { PINS, pinsOf, SHOW_PINNED, stillListed, type Pin } from './pins.ts'
 import { sidebarIsHidden, showSidebar, type SidebarMode } from './sidebar-mode.ts'
 import { TIGHT, useMedia } from './media.ts'
 import { APP } from '../shared/app-settings.ts'
+import { pruneWebViews } from './kept-web-views.ts'
 
 /** The thread the window shows: its machine's id and its own. */
 export type Selection = { machine: string; thread: string }
@@ -225,6 +226,14 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       .then((all) => { if (alive) setArchived(all.find((t) => t.id === selection.thread)) }, () => {})
     return () => { alive = false }
   }, [selection?.machine, selection?.thread, list, Boolean(shown), isHidden, selectedMachine?.state])
+  // A pane's kept web page (kept-web-views.ts) goes as the pane closes or its thread is archived; on a machine whose
+  // threads aren't known (yet, or while it's away), it stays.
+  useEffect(() => pruneWebViews(({ machine, thread, pane }) => {
+    const found = threads[machine]?.find((t) => t.id === thread) ?? hiddenAll[machine]?.find((t) => t.id === thread)
+      ?? (archived?.id === thread ? archived : undefined)
+    if (found) return Boolean(found.panes?.some((p) => p.id === pane))
+    return threads[machine] && hiddenAll[machine] ? false : undefined
+  }), [threads, hiddenAll, archived])
   // History: every place shown is visited, whoever showed it; back and forward move along it first, so showing what
   // they went to is where history already is. Threads no longer listed (archived, deleted) are stepped over; hidden
   // ones are listed, on every machine.

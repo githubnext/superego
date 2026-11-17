@@ -9,7 +9,7 @@ import {
 } from '@superego/protocol'
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '@superego/app/shared'
 import {
-  bound, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, pageApp, PaneBody, paneKind, placedFor, PlacedViews, profileUisLoaded, RegistryProvider, resetProfileUi,
+  bound, closeWebViews, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, pageApp, PaneBody, paneKind, placedFor, PlacedViews, profileUisLoaded, RegistryProvider, resetProfileUi,
   scopedViews, seenIn, setLocalState, Shell as Window, ShellStateProvider, Slot, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, windowRegistry,
   type BehaviourSlot, type Layout, type Place, type Registry, type SlotProps, type UiExtension, type ViewProps,
 } from '@superego/app/internals'
@@ -659,6 +659,8 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       await inAct(async () => { await profileUisLoaded() })
       for (const root of [...roots]) await inAct(async () => root.unmount())
       roots.clear()
+      // The window's web pages go with it, as a real window's do as its page goes.
+      closeWebViews()
       base.container.remove()
       for (const off of offs) off()
       // Every profile's UI torn down; the app's extensions with the registry.

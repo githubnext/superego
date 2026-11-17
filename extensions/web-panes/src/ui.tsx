@@ -2,10 +2,10 @@
 // "preview"), and Artifact, an HTML file the agent wrote, shown as a page. On the desktop each is a page of its own over
 // the pane, as a browser tab is (the app's WebView): its cookies hold, its redirects through other ports and sites
 // work, its history goes back and forward. In a browser they're framed. Both reload from their header; an artifact also
-// whenever the thread moves on, as it may have rewritten it. A preview of `localhost` on another machine than this
+// whenever its file has changed (looked at as the thread moves on). A preview of `localhost` on another machine than this
 // computer loads from that machine's, forwarded here by the app (the bridge's `forward`).
 import { useEffect, useRef, useState } from 'react'
-import { defineUiExtension, hasWebViews, PaneButton, PaneHeader, PaneMessage, PaneNote, WebView, type PaneProps, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
+import { call, defineUiExtension, hasWebViews, PaneButton, PaneHeader, PaneMessage, PaneNote, WebView, type PaneProps, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'
 import { ArrowLeftIcon, ArrowRightIcon, FileTextIcon, GlobeIcon, XIcon } from '@superego/ui'
 import './styles.css'
@@ -108,19 +108,40 @@ const PERMISSIONS: Record<string, string> = {
 function ArtifactPane({ machine, thread, pane }: PaneProps) {
   const { path } = params<{ path?: string }>(pane)
   const view = useRef<WebViewHandle>(null)
-  const first = useRef(true)
   const [waiting, setWaiting] = useState(false)
-  useEffect(() => {
-    if (first.current) { first.current = false; return }
-    view.current?.reload()
-  }, [thread.activeAt])
+  const { revision, error } = useRevision(machine.id, thread, path)
   if (!path) return <PaneMessage>No file given.</PaneMessage>
   const url = window.superego.artifactUrl?.(machine.id, thread.id, path)
   if (!url) return <PaneMessage>Artifacts aren't shown here.</PaneMessage>
   return (
     <div className="web-panes-frame">
-      <PaneHeader><PaneNote title={path} code>{path}</PaneNote>{waiting && <ReturnHint />}<PaneButton onClick={() => view.current?.reload()}>Reload</PaneButton></PaneHeader>
-      <WebView ref={view} src={url} partition="artifact" title={path} sandbox="allow-scripts allow-forms allow-popups" onWaiting={setWaiting} />
+      <PaneHeader>
+        <PaneNote title={path} code>{path}</PaneNote>
+        {error && <span className="web-panes-hint" role="alert" title={error}>Won't reload as it changes: {error}</span>}
+        {waiting && <ReturnHint />}
+        <PaneButton onClick={() => view.current?.reload()}>Reload</PaneButton>
+      </PaneHeader>
+      <WebView ref={view} src={url} partition="artifact" revision={revision} title={path} sandbox="allow-scripts allow-forms allow-popups" onWaiting={setWaiting} />
     </div>
   )
+}
+
+/**
+ * The file's version (its time and size), looked at again whenever the thread moves on, as it may have rewritten it:
+ * the page reloads when it's changed, and only then.
+ */
+function useRevision(machine: string, thread: PaneProps['thread'], path: string | undefined) {
+  const [found, setFound] = useState<{ revision?: string; error?: string }>({})
+  useEffect(() => {
+    if (!path) return
+    let current = true
+    call<{ files: ({ mtimeMs: number; size: number } | null)[] }>(machine, 'file.stat', { thread: thread.id, paths: [path] }).then(({ files: [file] }) => {
+      if (current) setFound({ revision: file ? `${file.mtimeMs}:${file.size}` : 'none' })
+    }, (error: Error) => {
+      console.error(`The artifact ${path}'s version:`, error)
+      if (current) setFound({ error: error.message })
+    })
+    return () => { current = false }
+  }, [machine, thread.id, path, thread.activeAt])
+  return found
 }

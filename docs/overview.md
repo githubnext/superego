@@ -247,8 +247,11 @@ preload); what it asks for (the camera, notifications) is refused and its pane s
 browser; a file it saves goes to Downloads. The view draws above the window's page, so the pane places it
 (`renderer/web-view.tsx`, the app's `WebView`): it follows the pane's box, is hidden when the pane is (behind a stack,
 under a maximized pane), and while any of the window's overlays is over it (a menu, a popover, a dialog: `OVERLAYS`, or
-an extension's `data-superego-overlay`), or the pane is partly out of view, a still of the page stands in its place. In
-a browser (Web access) the page is framed, and the pane says what that can't do.
+an extension's `data-superego-overlay`), or the pane is partly out of view, a still of the page stands in its place. A
+page is kept for its pane, not for what draws it (`renderer/kept-web-views.ts`): leaving the thread (or opening
+Settings) hides it as it was, and coming back shows it again, where the user had taken it; a window keeps the 8 most
+recently shown, and the pane's closing or its thread's archiving closes its page. An artifact reloads when its file
+changes. In a browser (Web access) the page is framed, and the pane says what that can't do.
 
 The daemon takes model keys from the providers' own variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) when none is
 stored in Settings. A restart keeps the environment it was started with and adds that of the shell asking for it. Where

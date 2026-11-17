@@ -109,6 +109,14 @@ it('shows a page in a view of its own on the desktop: placed over the pane, its 
   // A page that doesn't load says why, in the pane.
   view!.listener!({ type: 'state', state: { ...state, url: 'http://localhost:5173/', error: { code: -102, description: 'ERR_CONNECTION_REFUSED', url: 'http://localhost:5173/' } } })
   await vi.waitFor(() => expect(pane.text()).toContain("didn't load: ERR_CONNECTION_REFUSED"))
+  // The pane no longer drawn (its thread left), its page is hidden, not closed; drawn again, it's the same page, as it was.
+  await pane.unmount()
+  expect(view!.closed).toBe(false)
+  expect(view!.ops.at(-1)).toEqual(['place', null, false])
+  const again = await ui.render({ pane: { kind: PREVIEW, params: { url: 'http://localhost:5179/as/mikker' } } })
+  await vi.waitFor(() => expect(again.text()).toContain("didn't load: ERR_CONNECTION_REFUSED"))
+  expect(views).toHaveLength(1)
+  expect(view!.ops.some(([op]) => op === 'load')).toBe(false)
   await ui.unmount()
   ui = undefined
   expect(view!.closed).toBe(true)

@@ -34,6 +34,7 @@ import { BRING_FORWARD, focusRegion } from './focus.ts'
 import { DEFAULT_SHARE, END, endShare, frontOf, GAP, roomFor, scrollWidths, stackWidths } from './pane-layout.ts'
 import { maximizedPane, maximizedStore, restoresOn } from './maximized.ts'
 import { useShortcut } from './keys.ts'
+import { WebViewPane } from './web-view.tsx'
 
 /** The strip's switch between the layouts. */
 const LAYOUTS: SegmentedOption<PaneLayout>[] = [
@@ -422,8 +423,15 @@ export function PaneBody({ machine, thread, pane }: PaneProps) {
   const kind = paneKind(registry, pane.kind, { machine: machine.id, thread })
   if (!kind) return <div className="pane-empty">No pane of kind “{pane.kind}” here{thread.profile ? '' : ' (a profile may add it)'}.</div>
   const Component = kind.component
-  // A view open as a pane is drawn for its thread: its placement hooks read and change that thread's places.
-  return <ViewScopeProvider value={{ machine: machine.id, thread }}><Contained name={whose(kind, pane.kind)}><Component machine={machine} thread={thread} pane={pane} /></Contained></ViewScopeProvider>
+  // A view open as a pane is drawn for its thread: its placement hooks read and change that thread's places. A web page
+  // in it is kept for the pane, drawn or not (kept-web-views.ts).
+  return (
+    <ViewScopeProvider value={{ machine: machine.id, thread }}>
+      <WebViewPane.Provider value={{ machine: machine.id, thread: thread.id, pane: pane.id }}>
+        <Contained name={whose(kind, pane.kind)}><Component machine={machine} thread={thread} pane={pane} /></Contained>
+      </WebViewPane.Provider>
+    </ViewScopeProvider>
+  )
 }
 
 // ── Built-in panes ──────────────────────────────────────────────────────────────────────────────────────────────

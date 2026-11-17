@@ -6,6 +6,9 @@
   longer breaks its thread: it's sent scaled down, and the file you attached stays as it was. One the model still
   refuses is left out from then on, the thread says so, and the message is sent again without it. Threads stuck on such
   an image work again from their next message.
+- Preview and Artifact panes keep their page: switching threads, opening Settings or rearranging panes no longer
+  loads it again. Coming back shows it as it was, at the address you'd navigated to, scroll and state intact.
+- An artifact reloads when its file changes, rather than whenever the thread moves on.
 
 ## 0.1.4
 

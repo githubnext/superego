@@ -8,10 +8,14 @@
 // partly out of view (a view can't be cut short), the pane shows a still of the page in its place and hides the view
 // until it's clear again. A still is taken just before the view is hidden, and again each second while it's shown.
 //
+// A pane's page is kept for the pane, not for the component drawing it (kept-web-views.ts): leaving its thread hides
+// it, as it was, and coming back shows it again; it only goes somewhere else when the pane points it there (`src`).
+//
 // The pane takes the focus as other panes do (⌃Tab, a click on its tab or bar), and keeps it: Return passes it into the
 // page, as a click into the page does. The window's shortcuts (⌃Tab, ⌘W) still work from inside it, and take it out.
-import { useEffect, useImperativeHandle, useRef, useState, type FocusEvent as ReactFocusEvent, type KeyboardEvent, type Ref } from 'react'
+import { createContext, useContext, useEffect, useImperativeHandle, useRef, useState, type FocusEvent as ReactFocusEvent, type KeyboardEvent, type Ref } from 'react'
 import type { BridgeWebView, WebViewEvent, WebViewPartition, WebViewRect, WebViewState } from '../shared/bridge.ts'
+import { holdWebView, type HeldWebView, type PaneRef, type WebViewAsk } from './kept-web-views.ts'
 
 /**
  * What the window draws over its panes: menus, popovers and tooltips (`.superego-layer`), dialogs, the lightbox, the
@@ -27,6 +31,8 @@ export type WebViewProps = {
   src: string
   /** Its cookies and storage: kept between launches, or only while the app runs. */
   partition: WebViewPartition
+  /** A version of what it shows (a file's): when it changes, the page reloads. None (yet) says nothing. */
+  revision?: string | undefined
   /** The page's accessible name. */
   title: string
   /** Framed (in a browser): what the frame may do, as its `sandbox`. */
@@ -37,6 +43,12 @@ export type WebViewProps = {
   onWaiting?(waiting: boolean): void
   ref?: Ref<WebViewHandle>
 }
+
+/**
+ * The pane a WebView is drawn in (set by the window for each pane): on the desktop its page is kept for that pane, not
+ * for the component, so the pane drawn again (its thread shown again, Settings closed) shows it as it was.
+ */
+export const WebViewPane = createContext<PaneRef | undefined>(undefined)
 
 /** Whether pages show in views of their own here (the desktop), with their history to go along, or framed (a browser). */
 export const hasWebViews = () => Boolean(window.superego?.webView)
@@ -69,8 +81,15 @@ function useWaiting(waiting: boolean, onWaiting: WebViewProps['onWaiting']) {
   useEffect(() => () => listener.current?.(false), [])
 }
 
-function FramedWebView({ src, title, sandbox, onWaiting, ref }: WebViewProps) {
+function FramedWebView({ src, title, sandbox, revision, onWaiting, ref }: WebViewProps) {
   const [key, setKey] = useState(0)
+  // What it shows changed: loaded again.
+  const shown = useRef(revision)
+  useEffect(() => {
+    if (revision === undefined || shown.current === revision) return
+    if (shown.current !== undefined) setKey((k) => k + 1)
+    shown.current = revision
+  }, [revision])
   const frame = useRef<HTMLIFrameElement>(null)
   // The box itself has the focus (the page has it once the frame does).
   const [held, setHeld] = useState(false)
@@ -89,9 +108,10 @@ function FramedWebView({ src, title, sandbox, onWaiting, ref }: WebViewProps) {
 
 type Still = { url: string; width: number }
 
-function NativeWebView({ src, partition, onEvent, onWaiting, ref }: WebViewProps) {
+function NativeWebView({ src, partition, revision, onEvent, onWaiting, ref }: WebViewProps) {
   const host = useRef<HTMLDivElement>(null)
-  const view = useRef<BridgeWebView>(undefined)
+  const held = useRef<HeldWebView>(undefined)
+  const view = () => held.current?.view
   const placer = useRef<Placer>(undefined)
   const [still, setStill] = useState<Still>()
   const [error, setError] = useState<WebViewState['error']>()
@@ -99,19 +119,25 @@ function NativeWebView({ src, partition, onEvent, onWaiting, ref }: WebViewProps
   listener.current = onEvent
   // The box has the window's focus (the pane's), and the page has the keyboard: the pane waits for Return while it has
   // the one and not the other.
-  const [held, setHeld] = useState(false)
+  const [hasFocus, setHasFocus] = useState(false)
   const [inPage, setInPage] = useState(false)
-  useWaiting(held && !inPage, onWaiting)
-  const opened = useRef(src)
+  useWaiting(hasFocus && !inPage, onWaiting)
+  // The pane it's in: its page is kept for it (kept-web-views.ts), so drawing it anew shows the page as it was.
+  const pane = useContext(WebViewPane)
+  const paneKey = pane && JSON.stringify([pane.machine, pane.thread, pane.pane])
+  const ask: WebViewAsk = { src, partition, revision }
+  const asked = useRef(ask)
+  asked.current = ask
 
   useEffect(() => {
     const el = host.current!
-    const made = window.superego.webView!({ url: opened.current, partition })
-    view.current = made
-    made.onEvent((event) => {
+    // Kept, it tells its last state at once: whether it failed is kept for the placer, made once there's a view to place.
+    let failed = false
+    const holding = holdWebView(pane, asked.current, (event) => {
       if (event.type === 'state') {
+        failed = Boolean(event.state.error)
         setError(event.state.error)
-        placer.current?.block(Boolean(event.state.error))
+        placer.current?.block(failed)
       }
       // The page has the keyboard (Return, a click into it). Clicked, the pane takes the focus as well, as it would for a
       // frame in it. The window's page doesn't have the keyboard then (the view does), so it doesn't hear its own focus
@@ -125,39 +151,39 @@ function NativeWebView({ src, partition, onEvent, onWaiting, ref }: WebViewProps
       }
       listener.current?.(event)
     })
+    held.current = holding
     // The window's page has the keyboard again (a click on it, a shortcut from the page): the page hasn't.
     const regained = (event: Event) => { if (event.target === window) setInPage(false) }
     window.addEventListener('focus', regained, true)
-    const placing = placeView(el, made, setStill)
+    const placing = placeView(el, holding.view, setStill)
+    placing.block(failed)
     placer.current = placing
     return () => {
       window.removeEventListener('focus', regained, true)
       placing.stop()
-      made.close()
-      view.current = undefined
+      placer.current = undefined
+      holding.release()
+      held.current = undefined
     }
-  }, [partition])
-  useEffect(() => {
-    if (src === opened.current) return
-    opened.current = src
-    view.current?.load(src)
-  }, [src])
-  useImperativeHandle(ref, () => ({ go: (by) => view.current?.go(by), reload: () => view.current?.reload(), reveal: (path) => view.current?.reveal(path) }), [])
+    // The pane by its key: a new object for the same pane is the same pane.
+  }, [paneKey, partition])
+  useEffect(() => { held.current?.ask(asked.current) }, [src, revision])
+  useImperativeHandle(ref, () => ({ go: (by) => view()?.go(by), reload: () => view()?.reload(), reveal: (path) => view()?.reveal(path) }), [])
 
   // Return gives the page the keyboard; the focus moving on to something else in the window takes it back. The window
   // losing the focus (to the page itself, or another app) isn't that.
   const enter = () => {
     setInPage(true)
-    view.current?.focus(true)
+    view()?.focus(true)
   }
   const blur = (event: ReactFocusEvent) => {
-    setHeld(false)
+    setHasFocus(false)
     if (!event.relatedTarget) return
     setInPage(false)
-    view.current?.focus(false)
+    view()?.focus(false)
   }
   return (
-    <div ref={host} className="web-view" tabIndex={-1} data-focus onFocus={() => setHeld(true)} onBlur={blur} onKeyDown={onReturn(enter)}>
+    <div ref={host} className="web-view" tabIndex={-1} data-focus onFocus={() => setHasFocus(true)} onBlur={blur} onKeyDown={onReturn(enter)}>
       {still && !error && <img className="web-view__still" src={still.url} style={{ width: still.width }} alt="" draggable={false} />}
       {error && <div className="pane-empty web-view__error">{error.url ? <code>{error.url}</code> : null} didn't load: {error.description}</div>}
     </div>

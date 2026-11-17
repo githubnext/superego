@@ -1,7 +1,7 @@
 // Preview as a browser tab: a page of its own over its pane. A sign-in that sets a SameSite=Lax cookie on one port and
 // redirects to another holds, and still does after a reload; the header follows the page's address and goes back; a page
 // that refuses frames loads; a link to a new window goes to the browser. The view follows its pane: hidden (a still in its
-// place) under a dialog, hidden at the back of a stack.
+// place) under a dialog, hidden at the back of a stack. It's kept for its pane: drawn again, it's as it was.
 import { createServer } from 'node:http'
 import { shell } from 'electron'
 import { clickInto, home, openRow, pageAt } from './common.mjs'
@@ -93,6 +93,56 @@ export default async function preview(t) {
   await t.click('.strip__layout [aria-label="Scroll panes"]')
   await t.until(`!document.querySelector('.panes--stack')`, 'scrolled again')
   await t.call('pane.close', { thread, pane: (await t.call('thread.list')).find((x) => x.id === thread).panes.find((p) => p.kind === 'editor').id })
+
+  // The page is the pane's, not its drawing's: drawn again (the window resized, the sidebar hidden and shown, Settings
+  // opened and closed, another thread shown and this one again), it's as it was, where the user took it, never loaded
+  // again.
+  let counted = 0
+  const counting = await listen((req, res) => {
+    if (req.url === '/') counted++
+    res.writeHead(200, { 'content-type': 'text/html' })
+    res.end('<title>counted</title><a id="on" href="/on">on</a>')
+  })
+  const countingUrl = `http://127.0.0.1:${counting.address().port}/`
+  await t.call('pane.update', { thread, pane: await previewPane(), params: { url: countingUrl } })
+  await t.until(async () => pageAt(countingUrl)?.isLoading() === false && pageAt(countingUrl).getTitle() === 'counted', 'a page that counts its loads')
+  const counter = pageAt(countingUrl)
+  // Placed over its pane: live, or (the pane cut short, as the row's scroll isn't kept as it's drawn again) a still of it.
+  const counterPlaced = () => t.win().contentView.children.some((v) => v.webContents === counter && v.getVisible())
+  const counterShown = () => t.win().contentView.children.some((v) => v.webContents === counter && v.getVisible() && v.getBounds().x >= 0 && v.getBounds().y >= 0)
+  await counter.executeJavaScript(`document.getElementById('on').click()`, true)
+  const header = (url) => `document.querySelector('.panes__column:has(.web-view) .pane-header__url')?.textContent === ${JSON.stringify(url)}`
+  await t.until(header(`${countingUrl}on`), 'taken along a link')
+  await t.call('pane.focus', { thread, pane: await previewPane() })
+  await t.until(counterShown, 'shown')
+  const [width, height] = t.win().getSize()
+  await t.resize(width - 120, height - 60)
+  await t.resize(width, height)
+  await t.until(counterShown, 'shown after a resize')
+  t.key('/')
+  await t.until(`!document.querySelector('.app__sidebar')`, 'the sidebar hidden')
+  t.key('/')
+  await t.until(`Boolean(document.querySelector('.app__sidebar'))`, 'the sidebar shown')
+  await t.until(counterShown, 'shown with the sidebar')
+  await t.click('.app__settings')
+  await t.until(`Boolean(document.querySelector('.settings'))`, 'Settings open')
+  await t.until(() => !counterPlaced(), 'the page hidden under Settings')
+  t.key('Escape', [])
+  await t.until(`!document.querySelector('.settings')`, 'Settings closed')
+  await t.until(counterPlaced, 'the page placed again after Settings')
+  await t.call('thread.start', { cwd: home, title: 'elsewhere' })
+  await openRow(t, 'elsewhere')
+  await t.until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'another thread shown')
+  await t.until(() => !counterPlaced(), 'the page hidden with its thread')
+  if (counter.isDestroyed()) t.fail('the page closed as its thread was left')
+  await openRow(t, 'signing in')
+  await t.until(`document.querySelector('.thread__title')?.textContent === 'signing in'`, 'the thread shown again')
+  await t.until(counterPlaced, 'the page placed again with its thread')
+  await t.until(header(`${countingUrl}on`), 'where the user took it')
+  if (counter.isDestroyed() || pageAt(countingUrl) !== counter || counted !== 1) t.fail(`the page loaded again (loaded ${counted} times)`)
+  counting.close()
+  clickInto(t, counter)
+  await t.until(`document.activeElement?.matches('.web-view')`, 'the pane focused again')
 
   // A page that refuses frames loads: it isn't framed.
   await t.call('pane.update', { thread, pane: await previewPane(), params: { url: refusingUrl } })

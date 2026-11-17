@@ -5,6 +5,7 @@ export { createRegistry, RegistryProvider, seenIn, type Registry } from './regis
 export { linkHandler, paneKind, toolRow, urlKind } from './lookups.ts'
 export { layoutOf, placedFor, PlacedViews, scopedViews, Slot, ViewScopeProvider } from './placement.tsx'
 export { PaneBody } from './panes.tsx'
+export { closeWebViews } from './kept-web-views.ts'
 export { DescribedCall, describeRun, mainKind } from './tool-rows.tsx'
 export { ShellStateProvider, useAllThreads, useMachines, useSelection } from './state.tsx'
 export { LAYOUT } from '../shared/app-settings.ts'
